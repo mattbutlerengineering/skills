@@ -1,0 +1,13 @@
+{
+  "name": "skills",
+  "owner": {
+    "name": "Matt Butler"
+  },
+  "plugins": [
+    {
+      "name": "idea-to-prod",
+      "source": "./",
+      "description": "Lifecycle-pipeline skills that guide work from raw idea to production."
+    }
+  ]
+}

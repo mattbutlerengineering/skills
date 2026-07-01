@@ -72,11 +72,25 @@ See [CONTEXT.md](./CONTEXT.md) for the canonical vocabulary.
     evidence per entry. No verdict vocabulary or audit scripts until the
     ledger demonstrably drifts.
 
-## Open questions (not yet asked)
+## Resolved at scaffold time (2026-07-01, provisional where noted)
 
-- Repo/plugin name (directory is `skills/`; the plugin needs a real name).
-- License (MIT presumed, matching the adoption bar applied to others' tools).
-- Artifact templates: does each stage ship a template for its artifact?
-- What Operate actually covers for solo projects (monitoring? feedback
-  capture? the loop back to Idea?).
-- Git bootstrap: init, README, first commit.
+13. **Plugin name: `idea-to-prod`** (provisional — picked at scaffold time;
+    repo stays `skills`, marketplace name `skills`). Descriptive,
+    collision-proof, matches the PRD's framing.
+
+14. **License: MIT** — matching the adoption bar applied to others' tools.
+
+15. **Templates: yes.** Every artifact-producing stage ships a TEMPLATE.md in
+    its skill directory; downstream skills orient on template structure.
+
+16. **Operate scope: feedback capture + retrospective + idea seeds.** No
+    monitoring infrastructure. The retro artifact completes the run.
+
+17. **Conditional-UX mechanics refined:** whether UX Design applies is
+    decided at PRD time and recorded as `ux: required | not-applicable` in
+    prd.md frontmatter; Architect echoes a skip into architecture.md
+    frontmatter per decision 4. This keeps orientation unambiguous between
+    "skipped" and "not yet done".
+
+18. **Git bootstrap: done.** Private repo `mattbutlerengineering/skills`,
+    PRD is issue #1 (`ready-for-agent`).
