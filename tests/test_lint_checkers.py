@@ -63,8 +63,13 @@ def make_clean_tree(root):
                    "run_fixture": "evals/fixtures/seeded-run"}],
     }), encoding="utf-8")
 
-    (root / "LEDGER.md").write_text(
-        "".join(f"| {slug} |\n" for slug in ALL_SKILLS), encoding="utf-8")
+    results = root / "evals" / "results"
+    results.mkdir()
+    (results / "trigger-2026-01-01.json").write_text("{}", encoding="utf-8")
+    rows = [f"| {slug} | "
+            "[2026-01-01](evals/results/trigger-2026-01-01.json) |\n"
+            for slug in ALL_SKILLS]
+    (root / "LEDGER.md").write_text("".join(rows), encoding="utf-8")
 
 
 class CheckerTreeTest(unittest.TestCase):
@@ -172,6 +177,32 @@ class TestLedger(CheckerTreeTest):
                     if slug != "operate"), encoding="utf-8")
         self.assertEqual(lint.check_ledger(self.root),
                          ["LEDGER.md has no row for skill 'operate'"])
+
+
+class TestLedgerLinks(CheckerTreeTest):
+    def test_unresolved_eval_link(self):
+        ledger = self.root / "LEDGER.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8")
+            + "| extra | "
+            "[2026-02-02](evals/results/trigger-2026-02-02.json) |\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_ledger_links(self.root),
+            ["LEDGER.md links to missing eval results file "
+             "'evals/results/trigger-2026-02-02.json'"])
+
+    def test_link_to_directory_not_file_is_reported(self):
+        (self.root / "evals" / "results" / "output").mkdir()
+        ledger = self.root / "LEDGER.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8")
+            + "| extra | [2026-03-03](evals/results/output) |\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_ledger_links(self.root),
+            ["LEDGER.md links to missing eval results file "
+             "'evals/results/output'"])
 
 
 if __name__ == "__main__":

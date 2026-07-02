@@ -9,6 +9,7 @@ Every checker takes the repo root as a parameter; the CLI entry passes
 the real repo, the test suite passes fixture trees.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -147,8 +148,23 @@ def check_ledger(root):
             for slug in ALL_SKILLS if slug not in text]
 
 
+EVAL_LINK = re.compile(r"\]\((evals/results/[^)]+)\)")
+
+
+def check_ledger_links(root):
+    """Every eval-evidence link in LEDGER.md resolves to a results file."""
+    path = root / "LEDGER.md"
+    if not path.is_file():
+        return []  # absence already reported by check_ledger
+    text = path.read_text(encoding="utf-8")
+    return [f"LEDGER.md links to missing eval results file {target!r}"
+            for target in EVAL_LINK.findall(text)
+            if not (root / target).is_file()]
+
+
 CHECKERS = (check_manifest, check_skills, check_templates, check_router,
-            check_protocol, check_evals, check_output_evals, check_ledger)
+            check_protocol, check_evals, check_output_evals, check_ledger,
+            check_ledger_links)
 
 
 def main():
