@@ -115,12 +115,58 @@ class TestSkills(CheckerTreeTest):
             ["skills/idea/SKILL.md has no frontmatter block",
              "skills/prd/SKILL.md frontmatter has no description"])
 
+    def test_discovered_dir_outside_taxonomy_gets_both_signals(self):
+        rogue = self.root / "skills" / "rogue"
+        rogue.mkdir()
+        (rogue / "SKILL.md").write_text(
+            "---\nname: notrogue\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_skills(self.root),
+            ["skills/rogue is not in the skill taxonomy "
+             "(protocol.py ALL_SKILLS)",
+             "skills/rogue/SKILL.md frontmatter name is 'notrogue', "
+             "expected 'rogue'"])
+
+    def test_discovered_dir_without_skill_md_is_reported(self):
+        (self.root / "skills" / "empty-dir").mkdir()
+        self.assertEqual(
+            lint.check_skills(self.root),
+            ["skills/empty-dir is not in the skill taxonomy "
+             "(protocol.py ALL_SKILLS)",
+             "missing skills/empty-dir/SKILL.md"])
+
+    def test_valid_discovered_dir_still_flags_missing_registration(self):
+        extra = self.root / "skills" / "extra"
+        extra.mkdir()
+        (extra / "SKILL.md").write_text(
+            "---\nname: extra\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_skills(self.root),
+            ["skills/extra is not in the skill taxonomy "
+             "(protocol.py ALL_SKILLS)"])
+
+    def test_dotdirs_under_skills_are_ignored(self):
+        (self.root / "skills" / ".cache").mkdir()
+        self.assertEqual(lint.check_skills(self.root), [])
+        self.assertEqual(lint.check_ledger(self.root), [])
+
 
 class TestTemplates(CheckerTreeTest):
     def test_missing_template(self):
         (self.root / "skills" / "verify" / "TEMPLATE.md").unlink()
         self.assertEqual(lint.check_templates(self.root),
                          ["missing skills/verify/TEMPLATE.md"])
+
+    def test_discovered_non_stage_skill_needs_no_template(self):
+        extra = self.root / "skills" / "extra"
+        extra.mkdir()
+        (extra / "SKILL.md").write_text(
+            "---\nname: extra\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_templates(self.root), [])
+        self.assertEqual(lint.check_router(self.root), [])
 
 
 class TestRouter(CheckerTreeTest):
@@ -177,6 +223,15 @@ class TestLedger(CheckerTreeTest):
                     if slug != "operate"), encoding="utf-8")
         self.assertEqual(lint.check_ledger(self.root),
                          ["LEDGER.md has no row for skill 'operate'"])
+
+    def test_discovered_skill_needs_a_row_too(self):
+        extra = self.root / "skills" / "extra"
+        extra.mkdir()
+        (extra / "SKILL.md").write_text(
+            "---\nname: extra\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_ledger(self.root),
+                         ["LEDGER.md has no row for skill 'extra'"])
 
 
 class TestLedgerLinks(CheckerTreeTest):
