@@ -77,23 +77,68 @@ def _match_slug(text, name_to_slug):
     return None
 
 
-def _watch_stream(process, name_to_slug, timeout):
-    """Watch claude's stream-json output; return the fired slug or None.
+def detect_fired(events, name_to_slug):
+    """Consume decoded stream-json events; return the fired slug or None.
 
-    Early detection via stream events (content_block_start / input_json_delta)
-    so we can return before tool execution; falls back to the full assistant
-    message for older CLI output shapes.
+    Pure state machine — no process, pipe, or clock in the interface.
+    Early detection via input_json_delta accumulation (returns before
+    tool execution), content_block_stop/message_stop fallbacks, the
+    legacy full assistant message shape for older CLI output, and a
+    non-Skill/Read tool starting first meaning no fire.
     """
-    start_time = time.time()
-    buffer = ""
     pending_tool = None
     accumulated_json = ""
 
+    for event in events:
+        if event.get("type") == "stream_event":
+            se = event.get("event", {})
+            se_type = se.get("type", "")
+            if se_type == "content_block_start":
+                cb = se.get("content_block", {})
+                if cb.get("type") == "tool_use":
+                    if cb.get("name", "") in ("Skill", "Read"):
+                        pending_tool = cb["name"]
+                        accumulated_json = ""
+                    else:
+                        return None  # reached for a different tool first
+            elif se_type == "content_block_delta" and pending_tool:
+                delta = se.get("delta", {})
+                if delta.get("type") == "input_json_delta":
+                    accumulated_json += delta.get("partial_json", "")
+                    slug = _match_slug(accumulated_json, name_to_slug)
+                    if slug:
+                        return slug
+            elif se_type in ("content_block_stop", "message_stop"):
+                if pending_tool:
+                    return _match_slug(accumulated_json, name_to_slug)
+                if se_type == "message_stop":
+                    return None
+
+        elif event.get("type") == "assistant":
+            for item in event.get("message", {}).get("content", []):
+                if item.get("type") != "tool_use":
+                    continue
+                tool_input = item.get("input", {})
+                target = (tool_input.get("skill", "")
+                          if item.get("name") == "Skill"
+                          else tool_input.get("file_path", "")
+                          if item.get("name") == "Read"
+                          else "")
+                return _match_slug(target, name_to_slug)
+
+        elif event.get("type") == "result":
+            return None
+    return None
+
+
+def _stream_events(process, timeout):
+    """Yield decoded stream-json events from a live claude pipe until the
+    process exits, the stream closes, or timeout elapses. Lines that are
+    not valid JSON are skipped."""
+    start_time = time.time()
+    buffer = ""
     while time.time() - start_time < timeout:
         if process.poll() is not None:
-            remaining = process.stdout.read()
-            if remaining:
-                buffer += remaining.decode("utf-8", errors="replace")
             break
 
         ready, _, _ = select.select([process.stdout], [], [], 1.0)
@@ -111,49 +156,14 @@ def _watch_stream(process, name_to_slug, timeout):
             if not line:
                 continue
             try:
-                event = json.loads(line)
+                yield json.loads(line)
             except json.JSONDecodeError:
                 continue
 
-            if event.get("type") == "stream_event":
-                se = event.get("event", {})
-                se_type = se.get("type", "")
-                if se_type == "content_block_start":
-                    cb = se.get("content_block", {})
-                    if cb.get("type") == "tool_use":
-                        if cb.get("name", "") in ("Skill", "Read"):
-                            pending_tool = cb["name"]
-                            accumulated_json = ""
-                        else:
-                            return None  # reached for a different tool first
-                elif se_type == "content_block_delta" and pending_tool:
-                    delta = se.get("delta", {})
-                    if delta.get("type") == "input_json_delta":
-                        accumulated_json += delta.get("partial_json", "")
-                        slug = _match_slug(accumulated_json, name_to_slug)
-                        if slug:
-                            return slug
-                elif se_type in ("content_block_stop", "message_stop"):
-                    if pending_tool:
-                        return _match_slug(accumulated_json, name_to_slug)
-                    if se_type == "message_stop":
-                        return None
 
-            elif event.get("type") == "assistant":
-                for item in event.get("message", {}).get("content", []):
-                    if item.get("type") != "tool_use":
-                        continue
-                    tool_input = item.get("input", {})
-                    target = (tool_input.get("skill", "")
-                              if item.get("name") == "Skill"
-                              else tool_input.get("file_path", "")
-                              if item.get("name") == "Read"
-                              else "")
-                    return _match_slug(target, name_to_slug)
-
-            elif event.get("type") == "result":
-                return None
-    return None
+def _watch_stream(process, name_to_slug, timeout):
+    """Live-pipe adapter: feed the decoded event stream to detect_fired."""
+    return detect_fired(_stream_events(process, timeout), name_to_slug)
 
 
 def run_single_query(query, descriptions, timeout, model, isolate):
