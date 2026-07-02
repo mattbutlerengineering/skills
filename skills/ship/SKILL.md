@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Use when reviewed work is ready to go to production — pre-flight checks, release steps, rollback plan. Produces release.md.
+description: Use when reviewed work is ready to go to production — pre-flight checks, release steps, rollback plan — or when the user asks to ship, release, or deploy the work. Produces release.md.
 ---
 
 # Ship

@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Use when a breakdown exists and it's time to write code — working through work items test-first, checking them off as acceptance criteria are met. The artifact is the code itself; progress lives in breakdown.md's checkboxes.
+description: Use when a breakdown exists and it's time to write code — working through work items test-first, checking them off as acceptance criteria are met — or when the user asks to start building. The artifact is the code itself; progress lives in breakdown.md's checkboxes.
 ---
 
 # Implement
@@ -28,7 +28,7 @@ document — the code is the artifact, and progress is the checkboxes.
    - Refactor with the tests green.
    - Check the item off in `breakdown.md`.
 
-5. **Log deviations.** When reality disagrees with the plan — an item splits,
+5. **Log deviations.** When reality disagrees with the breakdown — an item splits,
    a contract needs adjusting — log it dated under `breakdown.md`'s Notes. A
    design-level disagreement routes back to Architect, not around it.
 
