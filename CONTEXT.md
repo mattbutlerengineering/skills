@@ -30,6 +30,14 @@ A scaled-down pass through the pipeline for a single feature, re-entering at
 Idea or PRD. Its artifacts live under a per-feature directory.
 _Avoid_: iteration, cycle
 
+**Utility skill**:
+A directly-invocable skill acting on the work surrounding the pipeline (e.g.
+address-pr-review, which works reviewer feedback on an authored PR) rather
+than advancing a run's artifacts. No stage artifact, no template, never
+routed to by /next; a full skill for install, lint, ledger, and trigger-eval
+purposes (ADR-0023).
+_Avoid_: helper skill, tool skill
+
 ### Stages
 
 **UX Design**:
@@ -50,8 +58,8 @@ _Avoid_: plan, planning
 ### Evals
 
 **Trigger eval**:
-A routing eval: does the right skill fire for a query, tested with all eleven
-descriptions installed at once (`trigger_eval.py`). Measures discrimination
+A routing eval: does the right skill fire for a query, tested with every
+skill description installed at once (`trigger_eval.py`). Measures discrimination
 between adjacent stages, not one description in isolation.
 _Avoid_: benchmark
 

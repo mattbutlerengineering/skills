@@ -39,3 +39,4 @@ the canonical vocabulary.
 | [0020](0020-hybrid-recall-policy.md) | Hybrid recall policy for skill descriptions | accepted |
 | [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | accepted |
 | [0022](0022-eval-schema-module.md) | One eval-schema module beside the protocol module | accepted |
+| [0023](0023-utility-skills.md) | Utility skills alongside stage skills and the router | provisional |

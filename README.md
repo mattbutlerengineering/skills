@@ -71,6 +71,12 @@ your repo's `docs/` root) and a **feature run** (artifacts under
 | `ship` | `release.md` | checklist-driven |
 | `operate` | `retro.md` | closes the loop → next idea |
 
+Beside the stages, the plugin ships utility skills
+([ADR-0023](docs/adr/0023-utility-skills.md)) that act on the work
+surrounding the pipeline rather than a run's artifacts: `address-pr-review`
+works reviewer feedback on a PR you authored — fix, push, reply, resolve,
+and reconcile with the base branch.
+
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
 
