@@ -38,3 +38,4 @@ the canonical vocabulary.
 | [0019](0019-trigger-and-output-evals.md) | Evals: routing discrimination + on-demand output grading | accepted |
 | [0020](0020-hybrid-recall-policy.md) | Hybrid recall policy for skill descriptions | accepted |
 | [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | accepted |
+| [0022](0022-eval-schema-module.md) | One eval-schema module beside the protocol module | accepted |
