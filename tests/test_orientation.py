@@ -1,5 +1,7 @@
 """Orientation-protocol seam: the artifacts-are-the-state decision table
-(docs/pipeline-protocol.md) verified against fixture docs trees.
+(docs/pipeline-protocol.md) verified against fixture docs trees, pinning
+the protocol module's next_stage directly — the one implementation that
+must agree with the spec in docs/pipeline-protocol.md.
 
 Each fixture under tests/fixtures/orientation/ is one row of the table:
 a `run/` directory holding a run's artifacts, and an `expected` file naming
@@ -12,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from orientation import next_stage  # noqa: E402
+from protocol import next_stage  # noqa: E402
 
 FIXTURES = ROOT / "tests" / "fixtures" / "orientation"
 
