@@ -88,6 +88,6 @@ def next_stage(run_dir):
     if (run_dir / "retro.md").is_file():
         return "complete"
     for stage, artifact in STAGE_ARTIFACTS:
-        if not stage_complete(stage, artifact, run_dir):
+        if not _stage_complete(stage, artifact, run_dir):
             return stage
     return "complete"
