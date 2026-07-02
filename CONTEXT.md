@@ -46,3 +46,23 @@ _Avoid_: design, tech planning
 The stage breaking a finished technical design into milestones, issues, and a
 dependency-ordered sequence. Pure work breakdown — no design decisions.
 _Avoid_: plan, planning
+
+### Evals
+
+**Trigger eval**:
+A routing eval: does the right skill fire for a query, tested with all eleven
+descriptions installed at once (`trigger_eval.py`). Measures discrimination
+between adjacent stages, not one description in isolation.
+_Avoid_: benchmark
+
+**Output eval**:
+Given a seeded run directory and pre-supplied interview answers, does the
+skill produce an artifact meeting objective expectations
+(`evals/output/<slug>.json`, graded per `docs/output-evals.md`).
+_Avoid_: quality test
+
+**Eval fixture**:
+A seed docs tree under `evals/fixtures/` copied into a scratch project before
+an output eval runs. Upstream artifacts pre-answer what the skill would
+otherwise interview for.
+_Avoid_: test data

@@ -1,0 +1,16 @@
+idea-to-prod
+Copyright (c) 2026 Matt Butler
+
+This repository is licensed under the MIT License (see LICENSE), with the
+following exception:
+
+trigger_eval.py contains code derived from the skill-creator plugin
+(scripts/run_eval.py and scripts/utils.py), Copyright Anthropic, PBC,
+licensed under the Apache License, Version 2.0. A copy of that license is
+included at licenses/Apache-2.0.txt.
+
+Modifications from the original (per Apache-2.0 §4b, this file has been
+changed): multi-skill routing detection (all skill descriptions installed
+simultaneously, detecting which one fired), per-run isolated temporary
+project directories, settings-source isolation, and a routing-case eval
+schema with confusion-matrix reporting.
