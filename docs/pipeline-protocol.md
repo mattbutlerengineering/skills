@@ -34,7 +34,7 @@ which artifacts exist in the run directory:
 | UX Design | `ux.md` | file exists, **or** stage skipped (see below) |
 | Architect | `architecture.md` | file exists |
 | Decompose | `breakdown.md` | file exists |
-| Implement | code | every checkbox in `breakdown.md` is checked |
+| Implement | code | every checkbox in `breakdown.md` is checked (a breakdown with no checkboxes is not yet implemented) |
 | Verify | `verification.md` | file exists |
 | Review | `review.md` | file exists |
 | Ship | `release.md` | file exists |
