@@ -16,8 +16,8 @@ there is no always-on gate. Trigger/routing evals are separate: see
   project. Upstream artifacts pre-answer what the skill would otherwise
   interview for; the eval `prompt` pre-supplies the remaining review-step
   answers.
-- `evals/results/output/<slug>-<date>/grading.json` — committed record of a
-  graded run.
+- `evals/results/output/<slug>-<date>[-N]/grading.json` — committed record
+  of a graded run; `-2`, `-3`… suffixes distinguish same-day runs.
 
 ## Workflow (one eval)
 
@@ -88,3 +88,12 @@ tooling (and skill-creator's viewers, if used) depend on them exactly.
 - The grader returns its JSON inside a ```json fence — strip the fence
   before saving grading.json, and validate with `python3 -c "import json;
   json.load(open('grading.json'))"` before committing.
+- A second run of the same skill on the same day gets a `-2` suffix on its
+  results directory (`decompose-2026-07-01-2/`), mirroring the trigger
+  runner's collision convention — results stay append-only, never merged
+  into an existing directory.
+- Headless soft-gate runs can't interview, so the skill picks
+  proceed-with-assumptions itself. "Offers both options" proved ambiguous
+  under that condition, so the expectation was amended (per the policy
+  above) to grade the naming of both paths — with backfill left open —
+  rather than which one was taken.

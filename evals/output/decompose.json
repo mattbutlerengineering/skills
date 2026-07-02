@@ -24,7 +24,7 @@
       "expected_output": "no silent breakdown — the skill names the missing architecture.md and offers the two soft-gate options",
       "expectations": [
         "the response names architecture.md as the missing predecessor artifact",
-        "the response offers both soft-gate options: backfill via a short interview, or proceed while logging assumptions",
+        "the response names both soft-gate options — backfill via a short interview, or proceed while logging assumptions — and leaves the backfill path open (headless runs cannot be interviewed, so picking proceed-with-assumptions unilaterally is acceptable)",
         "the skill does not refuse outright and does not silently produce a full breakdown.md as if architecture.md existed",
         "if a breakdown.md is produced, its frontmatter logs the assumptions made under assumptions:"
       ]
