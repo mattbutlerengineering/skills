@@ -30,6 +30,19 @@ def check_manifest(root):
             if not data.get(field)]
 
 
+def extra_skills(root):
+    """Skill directories on disk that the protocol taxonomy doesn't know —
+    a dir under skills/ installs as a skill, so the frontmatter and ledger
+    checks must see it even before protocol.py registers it (issue #28).
+    Dotdirs are ignored (harnesses don't install them)."""
+    skills_dir = root / "skills"
+    if not skills_dir.is_dir():
+        return []
+    return sorted(p.name for p in skills_dir.iterdir()
+                  if p.is_dir() and not p.name.startswith(".")
+                  and p.name not in ALL_SKILLS)
+
+
 def check_skills(root):
     def problems_for(slug):
         skill = root / "skills" / slug / "SKILL.md"
@@ -45,7 +58,14 @@ def check_skills(root):
             + ([f"skills/{slug}/SKILL.md frontmatter has no description"]
                if not fm.get("description") else [])
         )
-    return [p for slug in ALL_SKILLS for p in problems_for(slug)]
+    # An unregistered dir is itself a problem: taxonomy membership is what
+    # subjects a skill to the routing-coverage policy (ADR-0023). Its
+    # frontmatter is still checked so both defects surface in one run.
+    return [p for slug in ALL_SKILLS for p in problems_for(slug)] + [
+        p for slug in extra_skills(root)
+        for p in ([f"skills/{slug} is not in the skill taxonomy "
+                   "(protocol.py ALL_SKILLS)"] + problems_for(slug))
+    ]
 
 
 def check_templates(root):
@@ -113,7 +133,7 @@ def check_ledger(root):
         return ["missing LEDGER.md"]
     text = path.read_text(encoding="utf-8")
     return [f"LEDGER.md has no row for skill {slug!r}"
-            for slug in ALL_SKILLS if slug not in text]
+            for slug in ALL_SKILLS + extra_skills(root) if slug not in text]
 
 
 EVAL_LINK = re.compile(r"\]\((evals/results/[^)]+)\)")
@@ -140,7 +160,8 @@ def main():
     problems = [p for checker in CHECKERS for p in checker(root)]
     for problem in problems:
         print(f"LINT: {problem}")
-    print(f"lint: {len(problems)} problem(s) across {len(ALL_SKILLS)} skills")
+    checked = len(ALL_SKILLS) + len(extra_skills(root))
+    print(f"lint: {len(problems)} problem(s) across {checked} skills")
     return 1 if problems else 0
 
 
