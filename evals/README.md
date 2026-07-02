@@ -5,9 +5,12 @@ Both cost real model runs and run on demand — CI never invokes them.
 
 ## Layout
 
-- [`routing.json`](routing.json) — the trigger-eval set: routing cases
-  (`{id, kind, expected, query}`) run by [`trigger_eval.py`](../trigger_eval.py)
-  with all eleven skill descriptions installed at once, detecting which fires.
+- [`routing.json`](routing.json) — the trigger-eval set of routing cases,
+  run by [`trigger_eval.py`](../trigger_eval.py) with all eleven skill
+  descriptions installed at once, detecting which fires. The case shape
+  (`{id, kind, expected, query}`), kind vocabulary, and coverage policy are
+  owned by [`eval_schema.py`](../eval_schema.py) (ADR-0022); lint and the
+  runner both validate through it.
 - [`output/`](output/) — per-skill output-eval sets; graded via the documented
   subagent procedure in [`docs/output-evals.md`](../docs/output-evals.md).
 - [`fixtures/`](fixtures/) — eval fixtures: seed docs trees copied into a

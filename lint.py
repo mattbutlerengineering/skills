@@ -13,6 +13,7 @@ import re
 import sys
 from pathlib import Path
 
+import eval_schema
 from protocol import ALL_SKILLS, STAGES, TEMPLATED_STAGES, read_frontmatter
 
 
@@ -68,41 +69,8 @@ def check_protocol(root):
 
 
 def check_evals(root):
-    path = root / "evals" / "routing.json"
-    if not path.is_file():
-        return ["missing evals/routing.json"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
-        return [f"evals/routing.json is not valid JSON: {err}"]
-    if "version" not in data:
-        return ["evals/routing.json missing 'version' field"]
-    cases = data.get("cases", [])
-    kinds = ("direct", "situational", "near-miss", "distractor", "router")
-
-    ids = [c.get("id") for c in cases]
-    problems = (
-        [f"evals/routing.json has duplicate case id {i!r}"
-         for i in sorted({i for i in ids if ids.count(i) > 1})]
-        + [f"evals/routing.json case {c.get('id')!r} has invalid "
-           f"expected {c.get('expected')!r}"
-           for c in cases
-           if c.get("expected") is not None
-           and c.get("expected") not in ALL_SKILLS]
-        + [f"evals/routing.json case {c.get('id')!r} has invalid "
-           f"kind {c.get('kind')!r}"
-           for c in cases if c.get("kind") not in kinds]
-        + [f"evals/routing.json case {c.get('id')!r} has no query"
-           for c in cases if not c.get("query")]
-    )
-
-    coverage = [c.get("expected") for c in cases]
-    problems += [f"evals/routing.json covers skill {slug!r} in only "
-                 f"{coverage.count(slug)} case(s), need >= 3"
-                 for slug in ALL_SKILLS if coverage.count(slug) < 3]
-    if coverage.count(None) < 3:
-        problems += [f"evals/routing.json has only {coverage.count(None)} "
-                     "distractor case(s) (expected: null), need >= 3"]
+    _, problems = eval_schema.load(root / "evals" / "routing.json",
+                                   ALL_SKILLS, label="evals/routing.json")
     return problems
 
 

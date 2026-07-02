@@ -30,10 +30,10 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+import eval_schema
 from protocol import ALL_SKILLS, read_frontmatter
 
 ROOT = Path(__file__).resolve().parent
-KINDS = ("direct", "situational", "near-miss", "distractor", "router")
 
 
 def load_descriptions(skills_dir):
@@ -334,8 +334,12 @@ def main():
                         help="drop --setting-sources project (auth fallback)")
     args = parser.parse_args()
 
-    eval_set = json.loads(Path(args.eval_set).read_text(encoding="utf-8"))
-    cases = eval_set["cases"]
+    cases, problems = eval_schema.load(Path(args.eval_set), ALL_SKILLS,
+                                       label=args.eval_set)
+    if problems:
+        for problem in problems:
+            print(f"error: {problem}", file=sys.stderr)
+        return 1
     if args.only:
         cases = [c for c in cases
                  if c["id"] == args.only or c["expected"] == args.only]
