@@ -6,28 +6,12 @@ skill frontmatter, artifact templates, router references, protocol doc,
 and ledger coverage. Exit 0 = clean, 1 = problems (printed one per line).
 """
 import json
-import re
 import sys
 from pathlib import Path
 
+from protocol import ALL_SKILLS, STAGES, TEMPLATED_STAGES, read_frontmatter
+
 ROOT = Path(__file__).resolve().parent
-STAGES = ["idea", "prd", "ux-design", "architect", "decompose",
-          "implement", "verify", "review", "ship", "operate"]
-# implement's artifact is code itself; every other stage ships a template
-TEMPLATED_STAGES = [s for s in STAGES if s != "implement"]
-ALL_SKILLS = ["next"] + STAGES
-FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
-
-
-def read_frontmatter(path):
-    match = FRONTMATTER.match(path.read_text(encoding="utf-8"))
-    if not match:
-        return None
-    return dict(
-        (line.split(":", 1)[0].strip(), line.split(":", 1)[1].strip())
-        for line in match.group(1).splitlines()
-        if ":" in line
-    )
 
 
 def check_manifest():

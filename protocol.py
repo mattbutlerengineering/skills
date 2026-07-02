@@ -3,8 +3,9 @@
 docs/pipeline-protocol.md is the spec; this module is its one
 implementation. It owns the stage/skill taxonomy, the artifact table,
 artifact-frontmatter reading, the UX conditional, the checkbox rule, the
-retro short-circuit, and next-stage derivation (ADR-0021). Tools are thin
-callers: orientation today; lint and the trigger-eval runner next.
+retro short-circuit, and next-stage derivation (ADR-0021). Tools — the
+orientation CLI, the structural lint, the trigger-eval runner — are thin
+callers.
 """
 import re
 from pathlib import Path

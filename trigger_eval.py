@@ -19,7 +19,6 @@ import argparse
 import datetime
 import json
 import os
-import re
 import select
 import shutil
 import subprocess
@@ -31,12 +30,10 @@ from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+from protocol import ALL_SKILLS, read_frontmatter
+
 ROOT = Path(__file__).resolve().parent
-STAGES = ["idea", "prd", "ux-design", "architect", "decompose",
-          "implement", "verify", "review", "ship", "operate"]
-ALL_SKILLS = ["next"] + STAGES
 KINDS = ("direct", "situational", "near-miss", "distractor", "router")
-FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 
 
 def load_descriptions(skills_dir):
@@ -44,14 +41,9 @@ def load_descriptions(skills_dir):
     descriptions = {}
     for slug in ALL_SKILLS:
         path = skills_dir / slug / "SKILL.md"
-        match = FRONTMATTER.match(path.read_text(encoding="utf-8"))
-        if not match:
+        fields = read_frontmatter(path)
+        if fields is None:
             raise ValueError(f"{path} has no frontmatter block")
-        fields = dict(
-            (line.split(":", 1)[0].strip(), line.split(":", 1)[1].strip())
-            for line in match.group(1).splitlines()
-            if ":" in line
-        )
         if not fields.get("description"):
             raise ValueError(f"{path} frontmatter has no description")
         descriptions[slug] = fields["description"]
