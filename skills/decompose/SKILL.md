@@ -1,6 +1,6 @@
 ---
 name: decompose
-description: Use when a technical design exists and needs breaking into ordered, implementable work items — milestones, issues, dependencies. Drafts from the architecture. Produces breakdown.md.
+description: Use when a technical design exists and needs breaking into ordered, implementable work items — milestones, issues, dependencies — or when the user asks to break the work down. Drafts from the architecture. Produces breakdown.md.
 ---
 
 # Decompose
