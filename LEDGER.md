@@ -17,9 +17,9 @@ Trigger-eval results inform description quality but never graduate maturity
 | ux-design | draft | — | 3/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
 | architect | draft | — | 3/3 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
 | decompose | draft | — | 3/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
-| implement | draft | — | 2/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
+| implement | draft | — | 3/4 — [2026-07-01](evals/results/trigger-2026-07-01-2.json) |
 | verify | draft | — | 2/3 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
-| review | draft | — | 1/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
+| review | draft | — | 3/4 — [2026-07-01](evals/results/trigger-2026-07-01-3.json) |
 | ship | draft | — | 2/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
 | operate | draft | — | 2/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
 

@@ -36,3 +36,4 @@ the canonical vocabulary.
 | [0017](0017-conditional-ux-frontmatter.md) | Conditional-UX mechanics | accepted |
 | [0018](0018-git-bootstrap.md) | Git bootstrap | accepted |
 | [0019](0019-trigger-and-output-evals.md) | Evals: routing discrimination + on-demand output grading | accepted |
+| [0020](0020-hybrid-recall-policy.md) | Hybrid recall policy for skill descriptions | accepted |
