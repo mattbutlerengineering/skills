@@ -1,0 +1,33 @@
+{
+  "skill_name": "decompose",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Use the decompose skill on the csv-export feature run. Interview answers, pre-supplied so you don't need to ask: accept your recommended milestone boundaries and item sizing as-is; keep milestone 1 to a thin end-to-end slice.",
+      "run_fixture": "evals/fixtures/decompose-feature",
+      "run_scale": "feature:csv-export",
+      "expected_output": "breakdown.md in docs/features/csv-export/ with dependency-ordered checkbox work items grouped into milestones, covering every architecture component and PRD success criterion",
+      "expectations": [
+        "breakdown.md exists in docs/features/csv-export/ with YAML frontmatter containing stage: decompose and run: feature:csv-export",
+        "every component named in architecture.md (Export API, Export Scheduler, CSV Generator, Delivery) appears in at least one work item",
+        "every success criterion in prd.md is covered by at least one item's acceptance criterion",
+        "every work item is a markdown checkbox with an explicit acceptance criterion (no item lacks an Accept line)",
+        "items are grouped into milestones and blocking edges between items are stated explicitly",
+        "the breakdown introduces no design decisions absent from architecture.md (no new components, storage choices, or delivery targets)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Use the decompose skill to break the work down for the csv-export feature run.",
+      "run_fixture": "evals/fixtures/decompose-feature-gap",
+      "run_scale": "feature:csv-export",
+      "expected_output": "no silent breakdown — the skill names the missing architecture.md and offers the two soft-gate options",
+      "expectations": [
+        "the response names architecture.md as the missing predecessor artifact",
+        "the response offers both soft-gate options: backfill via a short interview, or proceed while logging assumptions",
+        "the skill does not refuse outright and does not silently produce a full breakdown.md as if architecture.md existed",
+        "if a breakdown.md is produced, its frontmatter logs the assumptions made under assumptions:"
+      ]
+    }
+  ]
+}

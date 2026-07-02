@@ -82,7 +82,11 @@ conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
 - `python3 lint.py` — structural lint (manifest, frontmatter, templates, router refs)
 - `python3 -m unittest discover tests` — orientation decision table vs fixture docs trees
 - `python3 orientation.py <run-dir>` — reference implementation of the orientation table
+- `python3 trigger_eval.py --record` — routing eval: which skill fires for each query in [`evals/routing.json`](evals/routing.json) (needs the `claude` CLI; costs real runs)
+- [`docs/output-evals.md`](docs/output-evals.md) — on-demand output evals grading skill artifacts against expectations
 
 ## License
 
-MIT
+MIT, except `trigger_eval.py`, which is derived from Apache-2.0-licensed code
+from the skill-creator plugin — see [`NOTICE`](NOTICE) and
+[`licenses/Apache-2.0.txt`](licenses/Apache-2.0.txt).
