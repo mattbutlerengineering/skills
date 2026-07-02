@@ -9,9 +9,11 @@ there is no always-on gate. Trigger/routing evals are separate: see
 ## Anatomy
 
 - `evals/output/<slug>.json` — the eval set for one skill:
-  `{"skill_name": "<slug>", "evals": [{id, prompt, run_fixture, run_scale,
-  expected_output, expectations: [...]}]}`. Each expectation is an
-  objectively verifiable statement about the produced artifact or response.
+  `{"skill_name": "<slug>", "evals": [...]}`. The required per-record
+  fields are owned by [`eval_schema.py`](../eval_schema.py)
+  (`OUTPUT_FIELDS`); the structural lint validates every set through it.
+  Each expectation is an objectively verifiable statement about the
+  produced artifact or response.
 - `evals/fixtures/<name>/` — a seed docs tree copied into the scratch
   project. Upstream artifacts pre-answer what the skill would otherwise
   interview for; the eval `prompt` pre-supplies the remaining review-step

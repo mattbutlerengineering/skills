@@ -129,6 +129,75 @@ class TestLoad(unittest.TestCase):
                          ["evals/routing.json missing 'version' field"])
 
 
+def valid_output_record(**overrides):
+    record = {"id": 1, "prompt": "p", "run_fixture": "evals/fixtures/f",
+              "run_scale": "feature:x", "expected_output": "o",
+              "expectations": ["e"]}
+    record.update(overrides)
+    return record
+
+
+def valid_output_data():
+    return {"skill_name": "idea", "evals": [valid_output_record()]}
+
+
+class TestValidateOutput(unittest.TestCase):
+    LABEL = "evals/output/idea.json"
+
+    def test_valid_set_has_no_problems(self):
+        self.assertEqual(
+            eval_schema.validate_output(valid_output_data(), "idea",
+                                        self.LABEL), [])
+
+    def test_every_documented_field_is_required(self):
+        for field in eval_schema.OUTPUT_FIELDS:
+            with self.subTest(field=field):
+                data = valid_output_data()
+                del data["evals"][0][field]
+                problems = eval_schema.validate_output(data, "idea",
+                                                       self.LABEL)
+                expected_id = None if field == "id" else 1
+                self.assertIn(f"evals/output/idea.json eval {expected_id!r} "
+                              f"missing field: {field}", problems)
+
+    def test_falsy_present_values_are_not_missing(self):
+        # id 0 (or any falsy-but-present value) is a value, not a gap —
+        # mirrors validate()'s is-None handling of expected
+        data = valid_output_data()
+        data["evals"][0]["id"] = 0
+        self.assertEqual(
+            eval_schema.validate_output(data, "idea", self.LABEL), [])
+
+    def test_empty_expectations_counts_as_missing(self):
+        data = valid_output_data()
+        data["evals"][0]["expectations"] = []
+        self.assertEqual(
+            eval_schema.validate_output(data, "idea", self.LABEL),
+            ["evals/output/idea.json eval 1 missing field: expectations"])
+
+    def test_skill_name_mismatch(self):
+        data = valid_output_data()
+        data["skill_name"] = "prd"
+        self.assertEqual(
+            eval_schema.validate_output(data, "idea", self.LABEL),
+            ["evals/output/idea.json skill_name is 'prd', expected 'idea'"])
+
+    def test_duplicate_eval_ids(self):
+        data = valid_output_data()
+        data["evals"].append(valid_output_record())
+        self.assertEqual(
+            eval_schema.validate_output(data, "idea", self.LABEL),
+            ["evals/output/idea.json has duplicate eval id 1"])
+
+    def test_label_prefixes_every_problem(self):
+        data = valid_output_data()
+        data["skill_name"] = "prd"
+        del data["evals"][0]["prompt"]
+        problems = eval_schema.validate_output(data, "idea", "other.json")
+        self.assertEqual(
+            [p for p in problems if not p.startswith("other.json")], [])
+
+
 class TestRunnerRefusesMalformedSet(unittest.TestCase):
     """The trigger-eval runner inherits eval_schema's diagnostics: a
     malformed set is refused with lint's problem strings on stderr and

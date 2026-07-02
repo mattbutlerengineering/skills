@@ -59,7 +59,8 @@ def make_clean_tree(root):
     (root / "evals" / "output").mkdir()
     (root / "evals" / "output" / "idea.json").write_text(json.dumps({
         "skill_name": "idea",
-        "evals": [{"id": 1, "expectations": ["x"],
+        "evals": [{"id": 1, "prompt": "p", "run_scale": "feature:x",
+                   "expected_output": "o", "expectations": ["x"],
                    "run_fixture": "evals/fixtures/seeded-run"}],
     }), encoding="utf-8")
 
@@ -206,7 +207,8 @@ class TestOutputEvals(CheckerTreeTest):
         output_dir = self.root / "evals" / "output"
         (output_dir / "idea.json").write_text(json.dumps({
             "skill_name": "prd",
-            "evals": [{"id": 1, "expectations": ["x"],
+            "evals": [{"id": 1, "prompt": "p", "run_scale": "feature:x",
+                       "expected_output": "o", "expectations": ["x"],
                        "run_fixture": "evals/fixtures/absent"}],
         }), encoding="utf-8")
         self.assertEqual(
@@ -214,6 +216,20 @@ class TestOutputEvals(CheckerTreeTest):
             ["evals/output/idea.json skill_name is 'prd', expected 'idea'",
              "evals/output/idea.json eval 1 run_fixture "
              "'evals/fixtures/absent' does not exist"])
+
+    def test_record_missing_documented_fields_is_flagged(self):
+        # the previously silent gap (issue #25): docs promise six fields,
+        # lint used to accept records without prompt/run_scale/expected_output
+        (self.root / "evals" / "output" / "idea.json").write_text(json.dumps({
+            "skill_name": "idea",
+            "evals": [{"id": 1, "expectations": ["x"],
+                       "run_fixture": "evals/fixtures/seeded-run"}],
+        }), encoding="utf-8")
+        self.assertEqual(
+            lint.check_output_evals(self.root),
+            ["evals/output/idea.json eval 1 missing field: prompt",
+             "evals/output/idea.json eval 1 missing field: run_scale",
+             "evals/output/idea.json eval 1 missing field: expected_output"])
 
 
 class TestLedger(CheckerTreeTest):
