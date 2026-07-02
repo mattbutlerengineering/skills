@@ -4,10 +4,31 @@ A Claude Code plugin of lifecycle-pipeline skills that guide work from a raw
 idea all the way to production. Each stage produces an artifact the next stage
 consumes; the artifacts themselves are the pipeline state.
 
-```
-Idea → PRD → UX Design* → Architect → Decompose
-     → Implement → Verify → Review → Ship → Operate
-                                        (*conditional)
+```mermaid
+flowchart LR
+    next{{"🧭 /next<br>the router"}} -. "reads artifact state,<br>hands off to the right stage" .-> idea
+
+    idea("💡 /idea<br>idea.md") --> prd("📝 /prd<br>prd.md")
+    prd --> ux("🎨 /ux-design<br>ux.md")
+    ux --> architect("📐 /architect<br>architecture.md")
+    prd -. "no UI surface" .-> architect
+    architect --> decompose("🧩 /decompose<br>breakdown.md")
+    decompose --> implement("⚙️ /implement<br>code + tests")
+    implement --> verify("✅ /verify<br>verification.md")
+    verify --> review("🔍 /review<br>review.md")
+    review --> ship("🚀 /ship<br>release.md")
+    ship --> operate("📡 /operate<br>retro.md")
+    operate == "retro seeds<br>the next idea" ==> idea
+
+    classDef stage fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
+    classDef conditional fill:#fef3c7,stroke:#d97706,color:#7c2d12,stroke-dasharray:5 4
+    classDef router fill:#e9d5ff,stroke:#9333ea,color:#3b0764
+    classDef closer fill:#dcfce7,stroke:#16a34a,color:#14532d
+
+    class idea,prd,architect,decompose,implement,verify,review,ship stage
+    class ux conditional
+    class next router
+    class operate closer
 ```
 
 ## Install
