@@ -4,6 +4,9 @@
 Checks the things that break an install or the router: manifest validity,
 skill frontmatter, artifact templates, router references, protocol doc,
 and ledger coverage. Exit 0 = clean, 1 = problems (printed one per line).
+
+Every checker takes the repo root as a parameter; the CLI entry passes
+the real repo, the test suite passes fixture trees.
 """
 import json
 import sys
@@ -11,11 +14,9 @@ from pathlib import Path
 
 from protocol import ALL_SKILLS, STAGES, TEMPLATED_STAGES, read_frontmatter
 
-ROOT = Path(__file__).resolve().parent
 
-
-def check_manifest():
-    path = ROOT / ".claude-plugin" / "plugin.json"
+def check_manifest(root):
+    path = root / ".claude-plugin" / "plugin.json"
     if not path.is_file():
         return ["missing .claude-plugin/plugin.json"]
     try:
@@ -27,9 +28,9 @@ def check_manifest():
             if not data.get(field)]
 
 
-def check_skills():
+def check_skills(root):
     def problems_for(slug):
-        skill = ROOT / "skills" / slug / "SKILL.md"
+        skill = root / "skills" / slug / "SKILL.md"
         if not skill.is_file():
             return [f"missing skills/{slug}/SKILL.md"]
         fm = read_frontmatter(skill)
@@ -45,14 +46,14 @@ def check_skills():
     return [p for slug in ALL_SKILLS for p in problems_for(slug)]
 
 
-def check_templates():
+def check_templates(root):
     return [f"missing skills/{slug}/TEMPLATE.md"
             for slug in TEMPLATED_STAGES
-            if not (ROOT / "skills" / slug / "TEMPLATE.md").is_file()]
+            if not (root / "skills" / slug / "TEMPLATE.md").is_file()]
 
 
-def check_router():
-    router = ROOT / "skills" / "next" / "SKILL.md"
+def check_router(root):
+    router = root / "skills" / "next" / "SKILL.md"
     if not router.is_file():
         return []  # absence already reported by check_skills
     text = router.read_text(encoding="utf-8")
@@ -60,13 +61,13 @@ def check_router():
             for slug in STAGES if slug not in text]
 
 
-def check_protocol():
-    path = ROOT / "docs" / "pipeline-protocol.md"
+def check_protocol(root):
+    path = root / "docs" / "pipeline-protocol.md"
     return [] if path.is_file() else ["missing docs/pipeline-protocol.md"]
 
 
-def check_evals():
-    path = ROOT / "evals" / "routing.json"
+def check_evals(root):
+    path = root / "evals" / "routing.json"
     if not path.is_file():
         return ["missing evals/routing.json"]
     try:
@@ -104,7 +105,7 @@ def check_evals():
     return problems
 
 
-def check_output_evals():
+def check_output_evals(root):
     def problems_for(path):
         slug = path.stem
         try:
@@ -128,17 +129,17 @@ def check_output_evals():
                f"{e.get('run_fixture')!r} does not exist"
                for e in evals
                if e.get("run_fixture")
-               and not (ROOT / e["run_fixture"]).is_dir()]
+               and not (root / e["run_fixture"]).is_dir()]
         )
-    output_dir = ROOT / "evals" / "output"
+    output_dir = root / "evals" / "output"
     if not output_dir.is_dir():
         return []
     return [p for path in sorted(output_dir.glob("*.json"))
             for p in problems_for(path)]
 
 
-def check_ledger():
-    path = ROOT / "LEDGER.md"
+def check_ledger(root):
+    path = root / "LEDGER.md"
     if not path.is_file():
         return ["missing LEDGER.md"]
     text = path.read_text(encoding="utf-8")
@@ -146,12 +147,13 @@ def check_ledger():
             for slug in ALL_SKILLS if slug not in text]
 
 
+CHECKERS = (check_manifest, check_skills, check_templates, check_router,
+            check_protocol, check_evals, check_output_evals, check_ledger)
+
+
 def main():
-    problems = [p for checker in (check_manifest, check_skills,
-                                  check_templates, check_router,
-                                  check_protocol, check_evals,
-                                  check_output_evals, check_ledger)
-                for p in checker()]
+    root = Path(__file__).resolve().parent
+    problems = [p for checker in CHECKERS for p in checker(root)]
     for problem in problems:
         print(f"LINT: {problem}")
     print(f"lint: {len(problems)} problem(s) across {len(ALL_SKILLS)} skills")
