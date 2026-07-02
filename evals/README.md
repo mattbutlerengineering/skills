@@ -14,7 +14,8 @@ Both cost real model runs and run on demand — CI never invokes them.
   scratch project so upstream artifacts pre-answer what a stage skill would
   otherwise interview for.
 - [`results/`](results/) — dated, append-only run records: trigger runs as
-  `trigger-<date>.json`, output gradings under `output/<slug>-<date>[-N]/`.
+  `trigger-<date>[-N].json`, output gradings under `output/<slug>-<date>[-N]/`;
+  `-2`, `-3`… suffixes distinguish same-day runs.
   LEDGER.md links these as evidence.
 
 ## Honesty policy

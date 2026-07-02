@@ -1,6 +1,6 @@
 ---
 name: review
-description: Use when verified work needs a quality pass before shipping — examining the change for defects, design decay, and security issues — or when the user asks for a code review of the run's changes. Produces review.md.
+description: Use when verified work needs a quality pass before shipping — examining the change for defects, design decay, and security issues — or when the user asks for a code review of the run's changes or says to give the change a quality check. Produces review.md.
 ---
 
 # Review
