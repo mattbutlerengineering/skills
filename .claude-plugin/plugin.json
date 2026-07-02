@@ -1,6 +1,6 @@
 {
   "name": "idea-to-prod",
-  "description": "Lifecycle-pipeline skills that guide work from raw idea to production: Idea, PRD, UX Design, Architect, Decompose, Implement, Verify, Review, Ship, Operate, plus a /next router.",
+  "description": "Lifecycle-pipeline skills that guide work from raw idea to production: Idea, PRD, UX Design, Architect, Decompose, Implement, Verify, Review, Ship, Operate, plus a /next router and utility skills (address-pr-review).",
   "version": "0.1.0",
   "author": {
     "name": "Matt Butler"

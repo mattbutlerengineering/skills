@@ -14,7 +14,11 @@ STAGES = ["idea", "prd", "ux-design", "architect", "decompose",
           "implement", "verify", "review", "ship", "operate"]
 # implement's artifact is code itself; every other stage ships a template
 TEMPLATED_STAGES = [s for s in STAGES if s != "implement"]
-ALL_SKILLS = ["next"] + STAGES
+# Utility skills act on work surrounding the pipeline (ADR-0023); they
+# have no stage artifact and the router never routes to them, but they are
+# full skills for install, lint, and trigger-eval purposes.
+UTILITY_SKILLS = ["address-pr-review"]
+ALL_SKILLS = ["next"] + STAGES + UTILITY_SKILLS
 
 # (stage, artifact) rows in pipeline order; implement and the UX
 # conditional are handled specially below.

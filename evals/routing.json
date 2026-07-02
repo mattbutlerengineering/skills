@@ -89,6 +89,17 @@
      "query": "The release went out yesterday — check how it's landing with users",
      "notes": "adjacency: ship vs operate"},
 
+    {"id": "apr-1", "kind": "direct", "expected": "address-pr-review",
+     "query": "Address the review comments on my open PR and resolve the threads"},
+    {"id": "apr-2", "kind": "situational", "expected": "address-pr-review",
+     "query": "Reviewers left feedback on my pull request and it now has merge conflicts with main"},
+    {"id": "apr-vs-review-1", "kind": "near-miss", "expected": "address-pr-review",
+     "query": "The PR I put up got review comments — take care of them",
+     "notes": "adjacency: address-pr-review vs review — acting on external feedback, not producing findings"},
+    {"id": "apr-vs-watch-1", "kind": "near-miss", "expected": null,
+     "query": "Keep an eye on my PR and let me know when CI goes green",
+     "notes": "watch-only phrasing must not fire address-pr-review (it acts, never just watches)"},
+
     {"id": "router-1", "kind": "router", "expected": "next",
      "query": "Continue the pipeline"},
     {"id": "router-2", "kind": "router", "expected": "next",
