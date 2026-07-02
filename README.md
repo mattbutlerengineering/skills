@@ -77,7 +77,7 @@ conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
 ## Development
 
 - [`CONTEXT.md`](CONTEXT.md) — canonical vocabulary
-- [`DESIGN.md`](DESIGN.md) — design decisions and their status
+- [`docs/adr/`](docs/adr/) — architecture decision records and their status
 - [`LEDGER.md`](LEDGER.md) — per-skill maturity (draft / used-once / battle-tested)
 - `python3 lint.py` — structural lint (manifest, frontmatter, templates, router refs)
 - `python3 -m unittest discover tests` — orientation decision table vs fixture docs trees
