@@ -95,28 +95,22 @@ def check_evals(root):
 
 
 def check_output_evals(root):
+    """Record shape is owned by eval_schema (issue #25); this checker keeps
+    the filesystem half — file walk, JSON parse, stem naming, fixture stat."""
     def problems_for(path):
         slug = path.stem
+        label = f"evals/output/{path.name}"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as err:
-            return [f"evals/output/{path.name} is not valid JSON: {err}"]
-        evals = data.get("evals", [])
-        ids = [e.get("id") for e in evals]
+            return [f"{label} is not valid JSON: {err}"]
         return (
-            ([f"evals/output/{path.name} stem is not a skill slug"]
+            ([f"{label} stem is not a skill slug"]
              if slug not in ALL_SKILLS else [])
-            + ([f"evals/output/{path.name} skill_name is "
-                f"{data.get('skill_name')!r}, expected {slug!r}"]
-               if data.get("skill_name") != slug else [])
-            + [f"evals/output/{path.name} has duplicate eval id {i!r}"
-               for i in sorted({i for i in ids if ids.count(i) > 1})]
-            + [f"evals/output/{path.name} eval {e.get('id')!r} has no "
-               "expectations"
-               for e in evals if not e.get("expectations")]
-            + [f"evals/output/{path.name} eval {e.get('id')!r} run_fixture "
+            + eval_schema.validate_output(data, slug, label)
+            + [f"{label} eval {e.get('id')!r} run_fixture "
                f"{e.get('run_fixture')!r} does not exist"
-               for e in evals
+               for e in data.get("evals", [])
                if e.get("run_fixture")
                and not (root / e["run_fixture"]).is_dir()]
         )
