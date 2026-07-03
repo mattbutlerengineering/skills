@@ -13,37 +13,52 @@ becomes a logged assumption, never a silent guess.
 
 ## Process
 
-1. **Collect the brief — the only interview.** Ask once, up front:
+1. **Collect the brief — the only interview.** First read
+   `../../docs/pipeline-protocol.md` (relative to this skill's base
+   directory) and apply its run-discovery rule: use (or create) the run
+   directory before writing anything into it. If that directory already
+   holds `autorun-brief.md`, this is a resume — confirm only the gaps,
+   keep the assumptions already logged, and go to step 2. Otherwise ask
+   once, up front:
    - the feature or product description (what and why);
    - run scale (product or feature) and, for a feature, its slug;
-   - the answers the stages will need: target users and problem, scope
-     boundaries (in and out), success criteria, stack or design
+   - the must-haves no stage can proceed without: target users, the
+     problem, and why now (the idea stage's evidence);
+   - scope boundaries (in and out), success criteria, stack or design
      constraints, anything already decided;
-   - **release authorization**: what the project's release mechanism is,
-     and whether this run may execute it. Absent an explicit yes, the
-     default is prepare-and-stop (see step 5).
+   - whether the work has a user-facing surface — this drives the PRD's
+     `ux:` decision;
+   - **release authorization**: the project's release mechanism and
+     versioning convention, and whether this run may execute it. Absent
+     an explicit yes, the default is prepare-and-stop (see step 5).
    If the user has supplied these, confirm only the gaps. Write the brief
-   into the run directory as `autorun-brief.md`.
+   into the run directory as `autorun-brief.md`. The brief is not an
+   artifact: it never counts toward orientation or active-run discovery.
 
-2. **Orient.** Read `../../docs/pipeline-protocol.md` (relative to this
-   skill's base directory) and apply its run-discovery and orientation
-   rules, exactly as the `next` router would. The next stage is the first
-   incomplete one; a fresh run starts at Idea.
+2. **Orient.** Apply the protocol's orientation rules to the run
+   directory fixed in step 1, exactly as the `next` router would. The
+   next stage is the first incomplete one; a fresh run starts at Idea.
 
-3. **Dispatch one subagent for the current stage.** The subagent gets:
+3. **Dispatch one subagent for the current stage.** Where dispatching a
+   fresh agent context isn't supported, run the stage inline instead —
+   either way, the artifacts stay the only state carried between stages.
+   The subagent gets:
    - the stage skill to follow and the run directory;
    - the brief, as the source of interview answers;
    - standing instructions: answer interview questions from the brief;
-     where the brief is silent, take the stage skill's recommended option
-     and log the choice in the stage artifact's frontmatter under
-     `assumptions:` — the protocol's soft-gating convention, and the only
-     place assumptions live; produce the stage artifact per the skill;
-     never fabricate verification evidence — run the real commands.
+     where the brief is silent on a choice-shaped question, take the
+     stage skill's recommended option and log the choice in the stage
+     artifact's frontmatter under `assumptions:` — the protocol's
+     soft-gating convention, and the only place assumptions live; an
+     open question the brief can't answer is stop-and-surface, never a
+     guess; produce the stage artifact per the skill; never fabricate
+     verification evidence — run the real commands.
 
 4. **Gate between stages.** When the subagent returns, confirm the stage
-   artifact exists and is complete per the protocol before advancing. If
-   the same stage fails twice, stop and report — don't route past a
-   broken stage.
+   artifact exists and is complete per the protocol before advancing —
+   an absent or incomplete artifact after dispatch is a failed stage. If
+   the same stage fails twice in this invocation, stop and report —
+   don't route past a broken stage.
 
 5. **Repeat 2–4 through ship** (`release.md`), with ship held to the
    release authorization in the brief. Unless the brief explicitly
@@ -59,7 +74,9 @@ becomes a logged assumption, never a silent guess.
    entries, verification evidence, anything flagged for human review —
    including a release that was prepared but not executed. Aggregate
    every assumption from the artifacts' frontmatter into one list; note
-   that the run was autorun-driven.
+   that the run was autorun-driven. Ship is where autorun stops: the run
+   stays active until `retro.md` exists, and operate remains available
+   once there is feedback to capture.
 
 ## Rules
 
