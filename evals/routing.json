@@ -105,6 +105,16 @@
      "query": "Look over this run's diff for defects before I put up the PR",
      "notes": "adjacency: review vs address-pr-review — a quality pass on our own changes, no PR feedback in play"},
 
+    {"id": "autorun-1", "kind": "direct", "expected": "autorun",
+     "query": "Run the whole pipeline on this feature end to end — here's the brief with my answers, don't stop to interview me"},
+    {"id": "autorun-2", "kind": "situational", "expected": "autorun",
+     "query": "I'm heading out for the afternoon — take this feature description and drive it through every stage to ship, noting anything you had to assume"},
+    {"id": "autorun-3", "kind": "situational", "expected": "autorun",
+     "query": "I don't want to sit through the stage interviews. I've written down the users, scope, and success criteria — take it all the way through and log your assumptions"},
+    {"id": "autorun-vs-next-1", "kind": "near-miss", "expected": "next",
+     "query": "Pick up my run and move it along to the next stage",
+     "notes": "adjacency: next vs autorun — advancing one stage interactively is the router, not an unattended full run"},
+
     {"id": "router-1", "kind": "router", "expected": "next",
      "query": "Continue the pipeline"},
     {"id": "router-2", "kind": "router", "expected": "next",
