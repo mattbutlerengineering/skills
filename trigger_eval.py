@@ -296,14 +296,9 @@ def cli_version():
 
 
 def record(output, results_dir):
-    """Write a dated results file, suffixing -2, -3... on collision."""
+    """Write a dated results file; eval_schema owns the naming grammar."""
     results_dir.mkdir(parents=True, exist_ok=True)
-    date = output["date"]
-    path = results_dir / f"trigger-{date}.json"
-    suffix = 2
-    while path.exists():
-        path = results_dir / f"trigger-{date}-{suffix}.json"
-        suffix += 1
+    path = eval_schema.results_path(results_dir, "trigger", output["date"])
     path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
     return path
 

@@ -40,3 +40,4 @@ the canonical vocabulary.
 | [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | accepted |
 | [0022](0022-eval-schema-module.md) | One eval-schema module beside the protocol module | accepted |
 | [0023](0023-utility-skills.md) | Utility skills alongside stage skills and the router | provisional |
+| [0024](0024-eval-schema-charter.md) | eval_schema's charter covers all eval knowledge, not one file's schema | provisional |

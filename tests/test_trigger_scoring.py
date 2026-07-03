@@ -1,12 +1,18 @@
-"""Trigger-eval scoring seam: the pure half of trigger_eval.py — case dicts
-and fired-slug counts in, scored results, summary, and confusion matrix out.
+"""Trigger-eval seam below the claude CLI: case dicts and fired-slug
+counts in; scored results, summary, confusion matrix, and recorded
+results files out.
 
 No claude CLI, no subprocess. score_case/summarize are tested through the
 interface run_eval uses after orchestration collects fired counts;
 _match_slug is a private detection helper, tested directly because its
-first-match contract is what turns stream text into a fired slug.
+first-match contract is what turns stream text into a fired slug. record
+is pinned against a temp results dir because its collision suffixing is
+the append-only convention LEDGER evidence links depend on.
 """
+import json
+import shutil
 import sys
+import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
@@ -14,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trigger_eval import _match_slug, score_case, summarize  # noqa: E402
+from trigger_eval import _match_slug, record, score_case, summarize  # noqa: E402
 
 
 def case(case_id="c1", kind="direct", expected="prd", query="q"):
@@ -103,6 +109,31 @@ class TestSummarize(unittest.TestCase):
         self.assertEqual(confusion["idea"], {"none": 3, "idea": 2, "prd": 1})
         self.assertEqual(confusion["prd"], {"prd": 3})
         self.assertEqual(confusion["none"], {"none": 3})
+
+
+class TestRecord(unittest.TestCase):
+    def setUp(self):
+        self.results = Path(tempfile.mkdtemp(prefix="trigger-record-"))
+        self.addCleanup(shutil.rmtree, self.results)
+        self.output = {"date": "2026-07-02", "results": []}
+
+    def test_no_collision_writes_unsuffixed_dated_file(self):
+        path = record(self.output, self.results)
+        self.assertEqual(path, self.results / "trigger-2026-07-02.json")
+        self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
+                         self.output)
+
+    def test_collision_suffixes_and_leaves_earlier_runs_untouched(self):
+        first = record(self.output, self.results)
+        second = record(self.output, self.results)
+        third = record(self.output, self.results)
+        self.assertEqual(second, self.results / "trigger-2026-07-02-2.json")
+        self.assertEqual(third, self.results / "trigger-2026-07-02-3.json")
+        self.assertTrue(first.is_file())
+
+    def test_creates_missing_results_dir(self):
+        path = record(self.output, self.results / "evals" / "results")
+        self.assertTrue(path.is_file())
 
 
 if __name__ == "__main__":
