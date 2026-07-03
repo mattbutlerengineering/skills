@@ -1,0 +1,21 @@
+{
+  "run_id": "pinned01",
+  "transcripts": {
+    "skill-fires": {
+      "query": "Write a PRD for the CSV export feature",
+      "fired": "prd",
+      "recorded": "2026-07-02",
+      "cli_version": "2.1.199 (Claude Code)",
+      "model": null,
+      "isolated_settings": true
+    },
+    "no-fire": {
+      "query": "Rename the userId variable to accountId across the codebase",
+      "fired": null,
+      "recorded": "2026-07-02",
+      "cli_version": "2.1.199 (Claude Code)",
+      "model": null,
+      "isolated_settings": true
+    }
+  }
+}
