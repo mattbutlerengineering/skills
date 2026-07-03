@@ -198,6 +198,85 @@ class TestValidateOutput(unittest.TestCase):
             [p for p in problems if not p.startswith("other.json")], [])
 
 
+class TestResultsPath(unittest.TestCase):
+    """One owner for the append-only results naming grammar: trigger runs
+    as trigger-<date>[-N].json, output gradings as output/<slug>-<date>[-N]/,
+    -N starting at 2 on same-day collision."""
+
+    def setUp(self):
+        self.results = Path(tempfile.mkdtemp(prefix="results-naming-"))
+        self.addCleanup(shutil.rmtree, self.results)
+
+    def test_trigger_no_collision_is_unsuffixed(self):
+        self.assertEqual(
+            eval_schema.results_path(self.results, "trigger", "2026-07-02"),
+            self.results / "trigger-2026-07-02.json")
+
+    def test_trigger_collisions_suffix_from_2(self):
+        (self.results / "trigger-2026-07-02.json").write_text(
+            "{}", encoding="utf-8")
+        self.assertEqual(
+            eval_schema.results_path(self.results, "trigger", "2026-07-02"),
+            self.results / "trigger-2026-07-02-2.json")
+        (self.results / "trigger-2026-07-02-2.json").write_text(
+            "{}", encoding="utf-8")
+        self.assertEqual(
+            eval_schema.results_path(self.results, "trigger", "2026-07-02"),
+            self.results / "trigger-2026-07-02-3.json")
+
+    def test_output_no_collision_is_unsuffixed_dir(self):
+        self.assertEqual(
+            eval_schema.results_path(self.results, "output", "2026-07-02",
+                                     slug="decompose"),
+            self.results / "output" / "decompose-2026-07-02")
+
+    def test_output_collision_suffixes_from_2(self):
+        (self.results / "output" / "decompose-2026-07-02").mkdir(parents=True)
+        self.assertEqual(
+            eval_schema.results_path(self.results, "output", "2026-07-02",
+                                     slug="decompose"),
+            self.results / "output" / "decompose-2026-07-02-2")
+
+    def test_output_without_slug_fails_loud(self):
+        with self.assertRaises(ValueError):
+            eval_schema.results_path(self.results, "output", "2026-07-02")
+
+    def test_unknown_kind_fails_loud(self):
+        with self.assertRaises(ValueError):
+            eval_schema.results_path(self.results, "routing", "2026-07-02")
+
+
+class TestValidResultsLink(unittest.TestCase):
+    """LEDGER evidence links must follow the results naming grammar, not
+    merely sit under evals/results/ (the lint validates through this)."""
+
+    def test_trigger_links_with_and_without_suffix_are_valid(self):
+        for target in ("evals/results/trigger-2026-07-01.json",
+                       "evals/results/trigger-2026-07-01-2.json"):
+            with self.subTest(target=target):
+                self.assertTrue(eval_schema.valid_results_link(target))
+
+    def test_output_grading_links_are_valid(self):
+        for target in (
+                "evals/results/output/decompose-2026-07-01/grading.json",
+                "evals/results/output/decompose-2026-07-01-2/grading.json"):
+            with self.subTest(target=target):
+                self.assertTrue(eval_schema.valid_results_link(target))
+
+    def test_off_grammar_links_are_invalid(self):
+        for target in (
+                "evals/results/output",                # bare directory
+                "evals/results/notes.md",              # arbitrary file
+                "evals/results/trigger-2026-07-01",    # missing .json
+                "evals/results/output/decompose-2026-07-01",  # no grading.json
+                "evals/results/trigger-July-1.json",   # not an ISO date
+                "evals/results/trigger-2026-07-01-1.json",   # -N starts at 2
+                "evals/results/trigger-2026-07-01-0.json",
+                "evals/results/output/decompose-2026-07-01-007/grading.json"):
+            with self.subTest(target=target):
+                self.assertFalse(eval_schema.valid_results_link(target))
+
+
 class TestRunnerRefusesMalformedSet(unittest.TestCase):
     """The trigger-eval runner inherits eval_schema's diagnostics: a
     malformed set is refused with lint's problem strings on stderr and

@@ -134,14 +134,22 @@ EVAL_LINK = re.compile(r"\]\((evals/results/[^)]+)\)")
 
 
 def check_ledger_links(root):
-    """Every eval-evidence link in LEDGER.md resolves to a results file."""
+    """Every eval-evidence link in LEDGER.md follows the results naming
+    grammar (eval_schema owns it, issue #26) and resolves to a results
+    file. Both facts are independent, so an off-grammar link to a missing
+    target surfaces both problems in one run."""
     path = root / "LEDGER.md"
     if not path.is_file():
         return []  # absence already reported by check_ledger
-    text = path.read_text(encoding="utf-8")
-    return [f"LEDGER.md links to missing eval results file {target!r}"
-            for target in EVAL_LINK.findall(text)
-            if not (root / target).is_file()]
+    targets = EVAL_LINK.findall(path.read_text(encoding="utf-8"))
+    return (
+        [f"LEDGER.md links to eval results path {target!r} "
+         "that does not match the results naming grammar"
+         for target in targets
+         if not eval_schema.valid_results_link(target)]
+        + [f"LEDGER.md links to missing eval results file {target!r}"
+           for target in targets if not (root / target).is_file()]
+    )
 
 
 CHECKERS = (check_manifest, check_skills, check_templates, check_router,

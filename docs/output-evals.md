@@ -48,8 +48,19 @@ there is no always-on gate. Trigger/routing evals are separate: see
    grader prompt below. It must judge only against the expectations, citing
    evidence for every verdict.
 
-4. **Record.** Save the grader's `grading.json` to
-   `evals/results/output/<slug>-<date>/grading.json` and commit it. If an
+4. **Record.** Allocate the results directory with the naming helper —
+   `eval_schema.results_path` owns the date-suffix collision grammar
+   (`-2`, `-3`… on same-day runs) for both results kinds:
+
+   ```bash
+   dest=$(python3 -c "import datetime, pathlib, eval_schema
+   print(eval_schema.results_path(pathlib.Path('evals/results'), 'output',
+                                  datetime.date.today().isoformat(),
+                                  slug='<slug>'))")
+   mkdir -p "$dest"
+   ```
+
+   Save the grader's `grading.json` into `$dest` and commit it. If an
    expectation turned out ambiguous or non-discriminating, fix the eval
    definition in the same commit and say so in the commit message.
 

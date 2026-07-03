@@ -272,8 +272,38 @@ class TestLedgerLinks(CheckerTreeTest):
             encoding="utf-8")
         self.assertEqual(
             lint.check_ledger_links(self.root),
-            ["LEDGER.md links to missing eval results file "
+            ["LEDGER.md links to eval results path 'evals/results/output' "
+             "that does not match the results naming grammar",
+             "LEDGER.md links to missing eval results file "
              "'evals/results/output'"])
+
+    def test_off_grammar_link_is_reported_even_when_file_exists(self):
+        # issue #26: the check must enforce the naming grammar, not just
+        # that something exists under evals/results/
+        (self.root / "evals" / "results" / "notes.md").write_text(
+            "n\n", encoding="utf-8")
+        ledger = self.root / "LEDGER.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8")
+            + "| extra | [notes](evals/results/notes.md) |\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_ledger_links(self.root),
+            ["LEDGER.md links to eval results path 'evals/results/notes.md' "
+             "that does not match the results naming grammar"])
+
+    def test_valid_output_grading_link_passes(self):
+        grading_dir = (self.root / "evals" / "results" / "output"
+                       / "idea-2026-01-01-2")
+        grading_dir.mkdir(parents=True)
+        (grading_dir / "grading.json").write_text("{}", encoding="utf-8")
+        ledger = self.root / "LEDGER.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8")
+            + "| idea | [2026-01-01]"
+            "(evals/results/output/idea-2026-01-01-2/grading.json) |\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_ledger_links(self.root), [])
 
 
 if __name__ == "__main__":
