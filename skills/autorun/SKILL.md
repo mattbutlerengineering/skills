@@ -55,7 +55,7 @@ becomes a logged assumption, never a silent guess.
      where the brief is silent, apply this test: if the stage skill
      presents named options with a recommended default, take that default
      and log it in the stage artifact's frontmatter under `assumptions:`
-     (the protocol's soft-gating convention, and the only place
+     (the protocol's `assumptions:` convention — the only place
      assumptions live); otherwise — any question with no skill-supplied
      default, including every evidentiary question — stop and surface,
      never guess; produce the stage artifact per the skill; never fabricate
