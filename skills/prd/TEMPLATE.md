@@ -3,6 +3,7 @@ stage: prd
 run: product | feature:<slug>
 date: YYYY-MM-DD
 ux: required | not-applicable
+# ux-reason: <one-line rationale>   (only when ux is not-applicable)
 ---
 
 # PRD: <title>
