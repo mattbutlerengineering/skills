@@ -11,3 +11,10 @@ Implement → Verify → Review → Ship → Operate.
 - Architect = technical design only (architecture, data model, stack, ADRs).
   Decompose = work breakdown only (milestones, issues, sequencing). The names
   deliberately avoid "design" and "plan", which are ambiguous.
+
+## Amendment (2026-07-03)
+
+"Issues" in the Decompose line above is superseded by "work items": Decompose
+produces checkable work items in `breakdown.md`, not tracker issues. "Issue"
+is reserved for items on an external tracker, which a separate issue-tracker
+bridge creates from work items.

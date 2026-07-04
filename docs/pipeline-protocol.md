@@ -15,12 +15,16 @@ Verify → Review → Ship → Operate
   Artifacts live at the target repo's `docs/` root.
 - **Feature run** — a scaled-down pass for one feature, re-entering at Idea
   or PRD. Artifacts live under `docs/features/<slug>/` (kebab-case slug).
+- **Maintenance run** — a scaled-down pass for a defect, regression,
+  refactor, or dependency upgrade, entering at a capture step. Artifacts
+  live under `docs/fixes/<slug>/` (kebab-case slug).
 
 **Run discovery:** candidate run directories are `docs/` plus every
-`docs/features/*/`. A run is *complete* when `retro.md` exists; *active* when
-it has at least one artifact and is not complete. If the user named a feature,
-use (or create) its directory. If exactly one run is active, use it.
-Otherwise, list the candidates and ask which one.
+`docs/features/*/` and every `docs/fixes/*/`. A run is *complete* when
+`retro.md` exists; *active* when it has at least one artifact and is not
+complete. If the user named a feature or fix, use (or create) its directory.
+If exactly one run is active, use it. Otherwise, list the candidates and ask
+which one.
 
 ## Artifacts are the state
 
@@ -46,10 +50,41 @@ which artifacts exist in the run directory:
 
 Whether UX Design applies is decided at PRD time and recorded in `prd.md`
 frontmatter as `ux: required` or `ux: not-applicable` (it depends on the
-feature, not the project). If `not-applicable`, orientation skips straight to
-Architect, and the Architect skill echoes the skip in `architecture.md`
+feature, not the project). If `not-applicable`, the PRD also records a
+one-line rationale as `ux-reason:`, orientation skips straight to Architect,
+and the Architect skill echoes that recorded reason in `architecture.md`
 frontmatter (e.g. `ux: skipped — no UI surface`) so absence is never
 ambiguous downstream.
+
+### Maintenance-run orientation
+
+A maintenance run does not start at Idea. It enters at a **capture step**
+whose seed artifact is `defect.md` — a defect brief (what is broken,
+reproduction evidence, root-cause hypothesis, blast radius). For refactor or
+dependency-upgrade work the same file is a *condition brief* (what is
+degraded, evidence, target state); the filename stays `defect.md`.
+
+Re-entry depth is decided at capture time and recorded in `defect.md`
+frontmatter as `re-entry: implement` (scoped fix) or `re-entry: architect`
+(design-touching), mirroring how `ux:` is decided at PRD time. Orientation
+for a maintenance run is:
+
+| Stage | Artifact | Complete when |
+|-------|----------|---------------|
+| Capture | `defect.md` | file exists |
+| Architect | `architecture.md` | file exists — only when `re-entry: architect`, else skipped |
+| Decompose | `breakdown.md` | file exists — only when `re-entry: architect`, else skipped |
+| Implement | code | every checkbox in the run's breakdown is checked |
+| Verify | `verification.md` | file exists — **never skippable**; the regression test is the point |
+| Review | `review.md` | file exists |
+| Ship | `release.md` | file exists |
+| Operate | `retro.md` | file exists (run complete) |
+
+**Where the breakdown lives:** with `re-entry: implement`, the breakdown is
+inline in `defect.md` as checkboxes — no separate `breakdown.md`. With
+`re-entry: architect`, the run uses the normal `architecture.md` +
+`breakdown.md` chain, and checkboxes live in `breakdown.md`. There is no
+third option.
 
 ## Soft gating
 
@@ -70,7 +105,9 @@ only place assumptions live.
 
 Feature runs scale artifact depth to feature size — a feature PRD is a page,
 not a book; a feature architecture note may be a paragraph. Product runs are
-comprehensive. When in doubt, ask the user how big this really is.
+comprehensive. Maintenance runs scale further down: Review and Ship scale to
+the blast radius recorded in the brief, but Verify never scales away. When
+in doubt, ask the user how big this really is.
 
 ## Artifact frontmatter
 
@@ -79,9 +116,11 @@ Every artifact starts with YAML frontmatter:
 ```yaml
 ---
 stage: prd
-run: feature:dark-mode   # or: product
+run: feature:dark-mode   # or: product, or maintenance:<slug>
 date: 2026-07-01
 # stage-specific fields, e.g. ux: required | not-applicable
+#                          or re-entry: implement | architect (defect.md, at capture time)
+# ux-reason: <one line>   when ux is not-applicable
 # assumptions: [...]      any decision made without live user input
 ---
 ```

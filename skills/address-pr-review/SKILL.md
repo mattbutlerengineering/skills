@@ -31,8 +31,10 @@ fixes and replies; it never just watches.
 4. **Address the actionable comments in code.** Group related asks into
    coherent commits. Run the repo's own verification commands (tests,
    lint — discover them from the repo, don't assume a stack) before
-   pushing. Push to the PR branch; never force-push over history a
-   reviewer has already read.
+   pushing, and push only when they pass. If verification is red, fix it
+   or surface the failure — never push a red build onto a PR under review.
+   Push to the PR branch; never force-push over history a reviewer has
+   already read.
 
 5. **Reply to every unresolved thread, then resolve it.** Each reply states
    what changed (with the commit that changed it) or why no change was
@@ -55,4 +57,5 @@ fixes and replies; it never just watches.
 - Never resolve a thread without a reply on the record.
 - Declining a comment is legitimate; ignoring one is not — every thread
   gets an answer.
-- Verification runs before every push, not just the last one.
+- Verification runs before every push, not just the last one — and a red
+  result blocks the push; fix or surface first.
