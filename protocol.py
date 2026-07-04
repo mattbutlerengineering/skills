@@ -17,7 +17,7 @@ TEMPLATED_STAGES = [s for s in STAGES if s != "implement"]
 # Utility skills act on work surrounding the pipeline (ADR-0023); they
 # have no stage artifact and the router never routes to them, but they are
 # full skills for install, lint, and trigger-eval purposes.
-UTILITY_SKILLS = ["address-pr-review", "autorun"]
+UTILITY_SKILLS = ["address-pr-review", "autorun", "mermaid"]
 ALL_SKILLS = ["next"] + STAGES + UTILITY_SKILLS
 
 # (stage, artifact) rows in pipeline order; implement and the UX
