@@ -85,7 +85,7 @@ conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
 - [`CONTEXT.md`](CONTEXT.md) — canonical vocabulary
 - [`docs/adr/`](docs/adr/) — architecture decision records and their status
 - [`LEDGER.md`](LEDGER.md) — per-skill maturity (draft / used-once / battle-tested)
-- `python3 lint.py` — structural lint (manifest, frontmatter, templates, router refs); runs in CI on every push/PR
+- `python3 lint.py` — structural lint of the install, router, and eval surface (the `CHECKERS` tuple in [`lint.py`](lint.py) is the authoritative list); runs in CI on every push/PR
 - `python3 -m unittest discover tests` — orientation decision table vs fixture docs trees; runs in CI on every push/PR
 - `python3 orientation.py <run-dir>` — CLI adapter over [`protocol.py`](protocol.py), the one implementation of the orientation table
 - `python3 trigger_eval.py --record` — routing eval: which skill fires for each query in [`evals/routing.json`](evals/routing.json) (needs the `claude` CLI; costs real runs)
