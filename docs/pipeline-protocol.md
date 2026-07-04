@@ -46,8 +46,9 @@ which artifacts exist in the run directory:
 
 Whether UX Design applies is decided at PRD time and recorded in `prd.md`
 frontmatter as `ux: required` or `ux: not-applicable` (it depends on the
-feature, not the project). If `not-applicable`, orientation skips straight to
-Architect, and the Architect skill echoes the skip in `architecture.md`
+feature, not the project). If `not-applicable`, the PRD also records a
+one-line rationale as `ux-reason:`, orientation skips straight to Architect,
+and the Architect skill echoes that recorded reason in `architecture.md`
 frontmatter (e.g. `ux: skipped — no UI surface`) so absence is never
 ambiguous downstream.
 
@@ -77,6 +78,7 @@ stage: prd
 run: feature:dark-mode   # or: product
 date: 2026-07-01
 # stage-specific fields, e.g. ux: required | not-applicable
+# ux-reason: <one line>   when ux is not-applicable
 # assumptions: [...]      when produced past a soft gate
 ---
 ```
