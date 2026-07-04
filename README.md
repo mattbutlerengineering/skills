@@ -75,7 +75,9 @@ Beside the stages, the plugin ships utility skills
 ([ADR-0023](docs/adr/0023-utility-skills.md)) that act on the work
 surrounding the pipeline rather than a run's artifacts: `address-pr-review`
 works reviewer feedback on a PR you authored — fix, push, reply, resolve,
-and reconcile with the base branch.
+and reconcile with the base branch. `mermaid` turns a process or system
+into a digestible mermaid diagram with explicit, contrast-safe colors that
+read in both light and dark renderers.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
