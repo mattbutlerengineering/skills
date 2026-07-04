@@ -14,6 +14,9 @@ acceptance criteria are met.
 - [ ] **<Item>** — <what to build, one line>
   - Accept: <checkable acceptance criterion>
   - Blocked by: <item or —>
+- [ ] **<Item imported from the tracker>** — <one line> (tracker: #<id>)
+  - Accept: <criterion — imported items still need one>
+  - Blocked by: <item or —>
 
 ## Milestone 2: <name>
 

@@ -26,6 +26,11 @@ architecture contains the answers; the user reviews the cut lines.
    - Order by dependency; mark the blocking edges explicitly.
    - Every component in the architecture appears in some item; every PRD
      success criterion is covered by some acceptance criterion.
+   - Opt-in tracker import: when the user points at existing issues in the
+     project's issue tracker (or asks to work the backlog), fold them in
+     as work items carrying their issue references in the protocol's
+     `(tracker: #123)` form. Imported items still need acceptance
+     criteria — derive one from the issue and the PRD, or interview.
 
 4. **Review the cut.** Present the draft; the user's judgment calls are the
    milestone boundaries and anything that looks mis-sized. Revise.
@@ -44,3 +49,5 @@ architecture contains the answers; the user reviews the cut lines.
 - No item without an acceptance criterion. "Do the backend" is not an item.
 - Prefer vertical slices (thin end-to-end) over horizontal layers where the
   architecture allows — earlier feedback per item.
+- The project's issue tracker mirrors the breakdown, never replaces it
+  (ADR-0026): imported or exported, the checkboxes here remain the state.
