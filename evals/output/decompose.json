@@ -28,6 +28,21 @@
         "the skill does not refuse outright and does not silently produce a full breakdown.md as if architecture.md existed",
         "if a breakdown.md is produced, its frontmatter logs the assumptions made under assumptions:"
       ]
+    },
+    {
+      "id": 3,
+      "prompt": "Use the decompose skill on the csv-export feature run, and pull the project's open tracker issues into the breakdown as work items — backlog.md at the repo root is the tracker's open-issue list. Interview answers, pre-supplied so you don't need to ask: accept your recommended milestone boundaries and item sizing as-is; for an imported issue lacking an acceptance criterion, derive one from the issue text and the PRD.",
+      "run_fixture": "evals/fixtures/decompose-import",
+      "run_scale": "feature:csv-export",
+      "expected_output": "breakdown.md in docs/features/csv-export/ whose work items include both backlog issues, each carrying its issue reference in the (tracker: #NNN) form and an acceptance criterion",
+      "expectations": [
+        "breakdown.md exists in docs/features/csv-export/ with YAML frontmatter containing stage: decompose and run: feature:csv-export",
+        "backlog issue #341 is folded in as a work item whose checkbox line carries the reference (tracker: #341)",
+        "backlog issue #352 is folded in as a work item whose checkbox line carries the reference (tracker: #352)",
+        "every imported work item has an explicit acceptance criterion — including the item for #352, whose tracker issue records none (one is derived, not omitted)",
+        "work items not imported from the backlog carry no tracker reference (no invented issue numbers)",
+        "the breakdown stays complete: every component named in architecture.md (Export API, Export Scheduler, CSV Generator, Delivery) appears in at least one work item, whether or not a backlog issue touches it"
+      ]
     }
   ]
 }

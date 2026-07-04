@@ -32,6 +32,11 @@ becomes a logged assumption, never a silent guess.
      stage stop-and-surface by design — so collect them up front;
    - scope boundaries (in and out), success criteria, stack or design
      constraints, anything already decided;
+   - whether existing issues from the project's issue tracker should seed
+     the run — if yes, they enter the breakdown as work items carrying
+     their issue references (the protocol's opt-in tracker mirror,
+     ADR-0026); a brief that says nothing about the tracker means no
+     tracker interaction at all;
    - whether the work has a user-facing surface — this drives the PRD's
      `ux:` decision;
    - **release authorization**: the project's release mechanism and
