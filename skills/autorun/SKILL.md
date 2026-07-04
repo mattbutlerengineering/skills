@@ -1,6 +1,6 @@
 ---
 name: autorun
-description: Use when the user wants a whole run driven end to end from a one-time brief — they supply the feature description and answers to the big questions up front, then an orchestrating agent advances the run from idea through ship, one fresh subagent per stage, answering each stage's interview from the brief and logging an assumption wherever the brief runs out. This drives many stages unattended; it is not the router (next advances one stage, interviewing live) and does not skip the pipeline — every stage still produces its artifact.
+description: Use when the user wants a whole run driven end to end from a one-time brief — they supply the feature description and answers to the big questions up front, then an orchestrating agent advances the run from idea through ship, one fresh subagent per stage, answering each stage's interview from the brief and logging an assumption wherever the brief runs out. This drives many stages unattended; it is not the router (next advances one stage, interviewing live) and does not shortcut the pipeline — each stage either produces its artifact or records a protocol-sanctioned skip.
 ---
 
 # Autorun (agent-driven full run)
@@ -22,8 +22,14 @@ becomes a logged assumption, never a silent guess.
    once, up front:
    - the feature or product description (what and why);
    - run scale (product or feature) and, for a feature, its slug;
-   - the must-haves no stage can proceed without: target users, the
-     problem, and why now (the idea stage's evidence);
+   - the inputs the interview-only early stages need, since the brief is
+     their only source — the Idea stage covers all of these (idea/SKILL.md):
+     the problem from the sufferer's view; who has it and how they cope
+     today; why now; what evidence exists the problem is real (anecdote
+     counts, labelled as such); the rough shape of a solution (a hunch,
+     not a design); a one-sentence success statement; and the biggest
+     unknowns or ways this dies. A brief that omits one of these makes that
+     stage stop-and-surface by design — so collect them up front;
    - scope boundaries (in and out), success criteria, stack or design
      constraints, anything already decided;
    - whether the work has a user-facing surface — this drives the PRD's
@@ -46,12 +52,13 @@ becomes a logged assumption, never a silent guess.
    - the stage skill to follow and the run directory;
    - the brief, as the source of interview answers;
    - standing instructions: answer interview questions from the brief;
-     where the brief is silent on a choice-shaped question, take the
-     stage skill's recommended option and log the choice in the stage
-     artifact's frontmatter under `assumptions:` — the protocol's
-     soft-gating convention, and the only place assumptions live; an
-     open question the brief can't answer is stop-and-surface, never a
-     guess; produce the stage artifact per the skill; never fabricate
+     where the brief is silent, apply this test: if the stage skill
+     presents named options with a recommended default, take that default
+     and log it in the stage artifact's frontmatter under `assumptions:`
+     (the protocol's soft-gating convention, and the only place
+     assumptions live); otherwise — any question with no skill-supplied
+     default, including every evidentiary question — stop and surface,
+     never guess; produce the stage artifact per the skill; never fabricate
      verification evidence — run the real commands.
 
 4. **Gate between stages.** When the subagent returns, confirm the stage

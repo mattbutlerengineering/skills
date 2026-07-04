@@ -2,7 +2,7 @@
 stage: architect
 run: product | feature:<slug>
 date: YYYY-MM-DD
-# ux: skipped — <reason>   (only when UX Design was skipped)
+# ux: skipped — <ux-reason from prd.md>   (only when UX Design was skipped)
 ---
 
 # Architecture: <title>

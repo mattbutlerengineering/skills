@@ -29,13 +29,15 @@ lives in the user's head, not in the codebase.
    - **Does this work have a user-facing surface?** The answer sets the
      `ux:` frontmatter field (`required` or `not-applicable`) that decides
      whether the UX Design stage runs. It depends on the feature, not the
-     project.
+     project. If `not-applicable`, also capture a one-line rationale (e.g.
+     "CLI only, no user-facing surface") — it becomes the `ux-reason:`
+     frontmatter field, which Architect echoes when recording the skip.
    - What is out of scope? (Push for real exclusions, not padding.)
    - What open questions remain, and who can answer them?
 
 4. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `prd.md`, with protocol frontmatter including
-   the `ux:` field. Scale to the run: a feature PRD is roughly a page; a
+   the `ux:` field (and `ux-reason:` when `ux: not-applicable`). Scale to the run: a feature PRD is roughly a page; a
    product PRD is comprehensive.
 
 5. **Hand off.** Next stage is UX Design if `ux: required`, otherwise
