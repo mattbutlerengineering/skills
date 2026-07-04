@@ -1,0 +1,89 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "capture-1",
+      "kind": "direct",
+      "expected": "capture",
+      "query": "Checkout has been throwing 500s since yesterday's deploy \u2014 write up the defect brief so we can run the fix as a maintenance run",
+      "fired": {
+        "capture": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "capture-2",
+      "kind": "situational",
+      "expected": "capture",
+      "query": "Users are reporting login times out after the last deploy \u2014 I want to fix it properly, with a regression test, not just patch and pray",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "capture-3",
+      "kind": "situational",
+      "expected": "capture",
+      "query": "We're three major versions behind on our web framework and it's starting to bite \u2014 set the upgrade up as a tracked run with evidence and a target state",
+      "fired": {
+        "capture": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "impl-vs-capture-1",
+      "kind": "near-miss",
+      "expected": "capture",
+      "query": "Checkout started 500ing after this morning's deploy \u2014 jump straight in and fix it",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 4,
+    "passed": 2,
+    "failed": 2,
+    "by_kind": {
+      "direct": {
+        "total": 1,
+        "passed": 1
+      },
+      "situational": {
+        "total": 2,
+        "passed": 1
+      },
+      "near-miss": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "capture": {
+        "total": 4,
+        "passed": 2
+      }
+    }
+  },
+  "confusion": {
+    "capture": {
+      "capture": 6,
+      "none": 6
+    }
+  }
+}

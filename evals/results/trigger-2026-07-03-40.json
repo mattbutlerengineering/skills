@@ -1,0 +1,105 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "verify-direct-1",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Implementation is finished \u2014 verify the work meets the PRD's success criteria and collect the evidence",
+      "fired": {
+        "verify": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "verify-direct-2",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Run the tests and put together verification evidence against the success criteria",
+      "fired": {
+        "none": 1,
+        "verify": 2
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "verify-situational-1",
+      "kind": "situational",
+      "expected": "verify",
+      "query": "All the work items are checked off \u2014 demonstrate the feature meets its success criteria",
+      "fired": {
+        "verify": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "verify-maint-1",
+      "kind": "situational",
+      "expected": "verify",
+      "query": "The checkout fix is coded \u2014 write the regression-test evidence and verification so this defect can't silently return",
+      "fired": {
+        "verify": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "impl-vs-verify-1",
+      "kind": "near-miss",
+      "expected": "verify",
+      "query": "Every checkbox in the defect brief is checked \u2014 prove the bug can't quietly come back",
+      "fired": {
+        "none": 1,
+        "verify": 2
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "by_kind": {
+      "direct": {
+        "total": 2,
+        "passed": 2
+      },
+      "situational": {
+        "total": 2,
+        "passed": 2
+      },
+      "near-miss": {
+        "total": 1,
+        "passed": 1
+      }
+    },
+    "by_skill": {
+      "verify": {
+        "total": 5,
+        "passed": 5
+      }
+    }
+  },
+  "confusion": {
+    "verify": {
+      "verify": 11,
+      "none": 4
+    }
+  }
+}

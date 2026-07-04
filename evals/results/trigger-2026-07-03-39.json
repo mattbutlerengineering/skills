@@ -1,0 +1,115 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "implement-direct-1",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "The breakdown is ready \u2014 let's start building, working through the items test-first",
+      "fired": {
+        "implement": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "implement-direct-2",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "Start coding the work items in the breakdown and check them off as their acceptance criteria pass",
+      "fired": {
+        "implement": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "implement-situational-1",
+      "kind": "situational",
+      "expected": "implement",
+      "query": "breakdown.md is sitting there with unchecked items \u2014 time to write the code",
+      "fired": {
+        "implement": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "decomp-vs-impl-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "Start working through the breakdown",
+      "fired": {
+        "implement": 1,
+        "none": 2
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "capture-vs-implement-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "The defect brief for the login fix is written and its work items are still unchecked \u2014 keep working through them",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "implement-maint-1",
+      "kind": "situational",
+      "expected": "implement",
+      "query": "The defect brief records re-entry: implement and its inline work items are all unchecked \u2014 start on the fix test-first",
+      "fired": {
+        "none": 1,
+        "implement": 2
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 4,
+    "failed": 2,
+    "by_kind": {
+      "direct": {
+        "total": 2,
+        "passed": 2
+      },
+      "situational": {
+        "total": 2,
+        "passed": 2
+      },
+      "near-miss": {
+        "total": 2,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "implement": {
+        "total": 6,
+        "passed": 4
+      }
+    }
+  },
+  "confusion": {
+    "implement": {
+      "implement": 12,
+      "none": 6
+    }
+  }
+}

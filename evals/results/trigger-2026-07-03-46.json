@@ -1,0 +1,46 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "capture-vs-implement-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "The defect brief for the login fix is written and its work items are still unchecked \u2014 keep working through them",
+      "fired": {
+        "none": 4,
+        "implement": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.2,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "by_kind": {
+      "near-miss": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "implement": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "implement": {
+      "none": 4,
+      "implement": 1
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "operate-maint-1",
+      "kind": "situational",
+      "expected": "operate",
+      "query": "The fix shipped last week and error rates have stayed flat \u2014 write the retro, and flag it if this defect class keeps recurring",
+      "fired": {
+        "none": 5
+      },
+      "runs": 5,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "by_kind": {
+      "situational": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "operate": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "operate": {
+      "none": 5
+    }
+  }
+}

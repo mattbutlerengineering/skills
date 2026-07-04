@@ -1,0 +1,44 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "capture-vs-idea-1",
+      "kind": "near-miss",
+      "expected": "idea",
+      "query": "It really bugs me that there's no way to export your data \u2014 we should do something about that",
+      "fired": {
+        "none": 5
+      },
+      "runs": 5,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "by_kind": {
+      "near-miss": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "idea": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "idea": {
+      "none": 5
+    }
+  }
+}
