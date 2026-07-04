@@ -30,6 +30,13 @@ A scaled-down pass through the pipeline for a single feature, re-entering at
 Idea or PRD. Its artifacts live under a per-feature directory.
 _Avoid_: iteration, cycle
 
+**Maintenance run**:
+A scaled-down pass through the pipeline for a defect, regression, refactor,
+or dependency upgrade, entering at a capture step and re-entering the spine
+at the depth recorded in its brief. Its artifacts live under a per-fix
+directory.
+_Avoid_: bugfix run, hotfix run
+
 **Utility skill**:
 A directly-invocable skill acting on the work surrounding the pipeline (e.g.
 address-pr-review, which works reviewer feedback on an authored PR) rather
