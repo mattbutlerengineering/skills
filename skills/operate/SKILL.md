@@ -33,7 +33,11 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
    sharp entries beat an exhaustive ceremony.
 
 6. **Seed the next runs.** Every gap, complaint, and "next time" becomes a
-   one-line idea seed — the natural input to the next Idea-stage run.
+   one-line idea seed — the natural input to the next Idea-stage run. For
+   maintenance runs, the defect or degradation itself becomes a seed for
+   preventive work: if the same bug recurs, the retro asks whether the
+   pipeline missed a regression test, a review finding, or a design
+   constraint that should have been captured earlier.
 
 7. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `retro.md` with protocol frontmatter. This

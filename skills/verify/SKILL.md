@@ -45,3 +45,7 @@ verdict.
 - Evidence is quoted output, command results, or observed behavior — a
   checkbox with no evidence is an assertion, not a verification.
 - Note what was NOT verified and why; silent coverage gaps read as "covered".
+- **Maintenance runs**: Verify is never skippable — the regression test
+  (from the defect brief's reproduction evidence) is the centerpiece. Scale
+  the verification depth to the blast radius in the brief, but never skip
+  the regression.

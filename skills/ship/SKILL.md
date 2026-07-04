@@ -49,3 +49,7 @@ branch.
   log that omits the retry is a lie to the next release.
 - If the release fails midway, the rollback plan runs and the artifact
   records both — a failed ship is a valid, complete `release.md`.
+- **Maintenance runs**: Ship scales to the blast radius recorded in the
+  defect brief — a scoped fix may be a single commit merge; a refactor or
+  upgrade gets the full pre-flight. The rollback plan is always present,
+  even when the release is small.

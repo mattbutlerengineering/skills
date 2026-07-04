@@ -53,3 +53,7 @@ arbitrate severity.
   have written it differently" is not a finding.
 - Deferred findings get a reason logged — deferral is a decision, not a
   shrug.
+- **Maintenance runs**: Review scales to the blast radius recorded in the
+  defect brief — a patch bump gets a lighter pass than a refactor. The
+  regression test from Verify is the floor; don't re-verify what Verify
+  already covered.
