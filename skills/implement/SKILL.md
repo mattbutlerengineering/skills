@@ -26,7 +26,11 @@ document — the code is the artifact, and progress is the checkboxes.
    - Write the minimum implementation that passes, matching the
      architecture's contracts and the codebase's existing style.
    - Refactor with the tests green.
-   - Check the item off in `breakdown.md`.
+       - Check the item off in `breakdown.md`.
+    - If the item carries a `(tracker: #NNN)` reference, close the mirrored
+      issue via the harness's issue tooling when you check it off. Items
+      with no tracker reference close nothing — a run without a tracker
+      mirror is unchanged.
 
 5. **Log deviations.** When reality disagrees with the breakdown — an item splits,
    a contract needs adjusting — log it dated under `breakdown.md`'s Notes. A

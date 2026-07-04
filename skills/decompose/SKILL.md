@@ -30,7 +30,13 @@ architecture contains the answers; the user reviews the cut lines.
      project's issue tracker (or asks to work the backlog), fold them in
      as work items carrying their issue references in the protocol's
      `(tracker: #123)` form. Imported items still need acceptance
-     criteria — derive one from the issue and the PRD, or interview.
+           criteria — derive one from the issue and the PRD, or interview.
+    - Opt-in tracker export: when the user wants the breakdown published
+      to the project's issue tracker, create a tracker issue for each
+      work item (or per milestone, where that reads better), and record
+      the item-to-issue mapping on the checkbox line in the protocol's
+      `(tracker: #123)` form — the same form imported items already carry.
+      The breakdown remains the state; the tracker is the mirror.
 
 4. **Review the cut.** Present the draft; the user's judgment calls are the
    milestone boundaries and anything that looks mis-sized. Revise.
