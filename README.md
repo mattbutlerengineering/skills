@@ -79,7 +79,10 @@ Beside the stages, the plugin ships utility skills
 ([ADR-0023](docs/adr/0023-utility-skills.md)) that act on the work
 surrounding the pipeline rather than a run's artifacts: `address-pr-review`
 works reviewer feedback on a PR you authored — fix, push, reply, resolve,
-and reconcile with the base branch. `mermaid` turns a process or system
+and reconcile with the base branch. `autorun` drives a whole run end to end
+from a one-time brief — one fresh subagent per stage, every brief gap logged
+as an assumption, and, unless the brief explicitly authorizes the release,
+it prepares the release and stops rather than executing it. `mermaid` turns a process or system
 into a digestible mermaid diagram with explicit, contrast-safe colors that
 read in both light and dark renderers.
 

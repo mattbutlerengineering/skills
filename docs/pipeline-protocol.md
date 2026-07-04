@@ -86,6 +86,28 @@ inline in `defect.md` as checkboxes — no separate `breakdown.md`. With
 `breakdown.md` chain, and checkboxes live in `breakdown.md`. There is no
 third option.
 
+### Tracker mirror (optional)
+
+A run MAY mirror its work items to the project's issue tracker
+(ADR-0026). The tracker is a mirror, never the state: orientation never
+reads tracker state, and on a run without a tracker nothing changes.
+Sync happens only at stage boundaries — import at run seeding or
+Decompose drafting (existing tracker issues become work items recording
+their originating issue references), export at Decompose (work items may
+be published as tracker issues, mapping recorded in the breakdown), close
+at Implement item boundaries (completing a work item closes its mirrored
+issue).
+
+A work item mirroring a tracker issue records the reference at the end of
+its checkbox line, in exactly this form:
+
+```markdown
+- [ ] **<Item>** — <one line> (tracker: #123)
+```
+
+`#123` is the issue reference in the tracker's own notation. Items with
+no mirrored issue carry no reference.
+
 ## Soft gating
 
 When your predecessor artifact is missing, never refuse and never silently
