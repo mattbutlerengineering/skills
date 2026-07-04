@@ -13,13 +13,18 @@ from pathlib import Path
 
 STAGES = ["idea", "prd", "ux-design", "architect", "decompose",
           "implement", "verify", "review", "ship", "operate"]
+# Maintenance runs enter at a capture step (ADR-0025). Capture is a
+# stage skill — it owns defect.md and the router routes to it — but it
+# sits outside the product/feature spine, so it is listed separately.
+MAINTENANCE_STAGES = ["capture"]
 # implement's artifact is code itself; every other stage ships a template
-TEMPLATED_STAGES = [s for s in STAGES if s != "implement"]
+TEMPLATED_STAGES = [s for s in STAGES + MAINTENANCE_STAGES
+                    if s != "implement"]
 # Utility skills act on work surrounding the pipeline (ADR-0023); they
 # have no stage artifact and the router never routes to them, but they are
 # full skills for install, lint, and trigger-eval purposes.
 UTILITY_SKILLS = ["address-pr-review", "autorun", "mermaid"]
-ALL_SKILLS = ["next"] + STAGES + UTILITY_SKILLS
+ALL_SKILLS = ["next"] + STAGES + MAINTENANCE_STAGES + UTILITY_SKILLS
 
 # (stage, artifact) rows in pipeline order; implement and the UX
 # conditional are handled specially below.
