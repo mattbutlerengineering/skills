@@ -19,7 +19,7 @@ the canonical vocabulary.
 |-----|----------|--------|
 | [0001](0001-lifecycle-pipeline-spine.md) | Spine: lifecycle pipeline | accepted |
 | [0002](0002-stage-taxonomy.md) | Stage taxonomy (Idea → … → Operate) | accepted |
-| [0003](0003-two-run-scales.md) | Two run scales (product / feature) | accepted |
+| [0003](0003-two-run-scales.md) | Two run scales (product / feature) | superseded in part by ADR-0025 |
 | [0004](0004-artifacts-are-the-state.md) | Artifacts are the state | accepted |
 | [0005](0005-soft-gating.md) | Soft gating | accepted |
 | [0006](0006-plugin-from-day-one.md) | Plugin from day one | accepted |
@@ -41,3 +41,5 @@ the canonical vocabulary.
 | [0022](0022-eval-schema-module.md) | One eval-schema module beside the protocol module | accepted |
 | [0023](0023-utility-skills.md) | Utility skills alongside stage skills and the router | provisional |
 | [0024](0024-eval-schema-charter.md) | eval_schema's charter covers all eval knowledge, not one file's schema | provisional |
+| [0025](0025-maintenance-run-scale.md) | A third run scale: the maintenance run | accepted |
+| [0026](0026-tracker-mirror-one-way.md) | The issue-tracker bridge is an opt-in one-way mirror | accepted |
