@@ -115,6 +115,14 @@
      "query": "Pick up my run and move it along to the next stage",
      "notes": "adjacency: next vs autorun — advancing one stage interactively is the router, not an unattended full run"},
 
+    {"id": "bridge-import-1", "kind": "situational", "expected": "decompose",
+     "query": "The architecture is settled — break the work down, and pull the open issues from our tracker into the breakdown as work items"},
+    {"id": "bridge-autorun-1", "kind": "situational", "expected": "autorun",
+     "query": "Here's my brief with the answers up front — drive the run all the way to ship without stopping to interview me, seeding the breakdown from our existing issue backlog"},
+    {"id": "bridge-vs-decompose-1", "kind": "near-miss", "expected": null,
+     "query": "Go through our issue tracker and close out anything stale",
+     "notes": "tracker housekeeping must not fire decompose — no breakdown in play; the bridge only mirrors work items (ADR-0026)"},
+
     {"id": "mermaid-1", "kind": "direct", "expected": "mermaid",
      "query": "Create a mermaid diagram of our deployment process"},
     {"id": "mermaid-2", "kind": "situational", "expected": "mermaid",
