@@ -1,6 +1,6 @@
 ---
 name: review
-description: Use when verified work needs a quality pass before shipping — examining the change for defects, design decay, and security issues — or when the user asks for a code review of the run's changes or says to give the change a quality check. Produces review.md.
+description: Use when verified work needs a quality pass before shipping — examining the change for defects, design decay, and security issues — or when the user asks for a code review of the run's changes or says to give the change a quality check. Produces review.md. It is not for acting on reviewer comments left on an open PR — addressing that feedback, resolving threads, and readying a PR for merge is address-pr-review.
 ---
 
 # Review

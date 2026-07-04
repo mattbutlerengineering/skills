@@ -1,6 +1,6 @@
 ---
 name: autorun
-description: Use when the user wants a whole run driven end to end from a one-time brief — they supply the feature description and answers to the big questions up front, then an orchestrating agent advances the run from idea through ship, one fresh subagent per stage, answering each stage's interview from the brief and logging an assumption wherever the brief runs out. This drives many stages unattended; it is not the router (next advances one stage, interviewing live) and does not shortcut the pipeline — each stage either produces its artifact or records a protocol-sanctioned skip.
+description: Use whenever the user asks to run, drive, or take a feature through the whole pipeline, every stage, or end to end without stopping to interview them — a hands-off, unattended run from a brief or feature description they hand over. Invoke this before starting any stage work yourself: an orchestrating agent advances the run from idea through ship, one fresh subagent per stage, answering each stage's interview from the brief and logging an assumption wherever the brief runs out. It is not the router (next advances one stage, interviewing live) and does not shortcut the pipeline — each stage either produces its artifact or records a protocol-sanctioned skip.
 ---
 
 # Autorun (agent-driven full run)

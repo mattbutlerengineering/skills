@@ -1,0 +1,74 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "autorun-1",
+      "kind": "direct",
+      "expected": "autorun",
+      "query": "Run the whole pipeline on this feature end to end \u2014 here's the brief with my answers, don't stop to interview me",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "autorun-2",
+      "kind": "situational",
+      "expected": "autorun",
+      "query": "I'm heading out for the afternoon \u2014 take this feature description and drive it through every stage to ship, noting anything you had to assume",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "autorun-3",
+      "kind": "situational",
+      "expected": "autorun",
+      "query": "I don't want to sit through the stage interviews. I've written down the users, scope, and success criteria \u2014 take it all the way through and log your assumptions",
+      "fired": {
+        "none": 2,
+        "autorun": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 0,
+    "failed": 3,
+    "by_kind": {
+      "direct": {
+        "total": 1,
+        "passed": 0
+      },
+      "situational": {
+        "total": 2,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "autorun": {
+        "total": 3,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "autorun": {
+      "none": 8,
+      "autorun": 1
+    }
+  }
+}

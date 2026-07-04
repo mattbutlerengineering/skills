@@ -1,0 +1,90 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "apr-1",
+      "kind": "direct",
+      "expected": "address-pr-review",
+      "query": "Address the review comments on my open PR and resolve the threads",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "apr-2",
+      "kind": "situational",
+      "expected": "address-pr-review",
+      "query": "Reviewers left feedback on my pull request and it now has merge conflicts with main",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "apr-3",
+      "kind": "situational",
+      "expected": "address-pr-review",
+      "query": "CI is green on my open PR but two review threads are still unresolved \u2014 get it ready to merge",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "apr-vs-review-1",
+      "kind": "near-miss",
+      "expected": "address-pr-review",
+      "query": "The PR I put up got review comments \u2014 take care of them",
+      "fired": {
+        "review": 1,
+        "none": 2
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 4,
+    "passed": 0,
+    "failed": 4,
+    "by_kind": {
+      "direct": {
+        "total": 1,
+        "passed": 0
+      },
+      "situational": {
+        "total": 2,
+        "passed": 0
+      },
+      "near-miss": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "address-pr-review": {
+        "total": 4,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "address-pr-review": {
+      "review": 10,
+      "none": 2
+    }
+  }
+}

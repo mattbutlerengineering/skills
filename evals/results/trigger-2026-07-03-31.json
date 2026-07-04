@@ -1,0 +1,105 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "review-direct-1",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Give this run's changes a quality pass for defects and security issues before we ship",
+      "fired": {
+        "review": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "review-direct-2",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Do a code review of the changes from this run and write up the findings",
+      "fired": {
+        "none": 2,
+        "review": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "review-situational-1",
+      "kind": "situational",
+      "expected": "review",
+      "query": "verification.md is in place \u2014 the change still needs a defect and security pass before release",
+      "fired": {
+        "review": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "verify-vs-review-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Give the change a quality check before we ship",
+      "fired": {
+        "none": 1,
+        "review": 2
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "review-vs-apr-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Look over this run's diff for defects before I put up the PR",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 3,
+    "failed": 2,
+    "by_kind": {
+      "direct": {
+        "total": 2,
+        "passed": 1
+      },
+      "situational": {
+        "total": 1,
+        "passed": 1
+      },
+      "near-miss": {
+        "total": 2,
+        "passed": 1
+      }
+    },
+    "by_skill": {
+      "review": {
+        "total": 5,
+        "passed": 3
+      }
+    }
+  },
+  "confusion": {
+    "review": {
+      "review": 7,
+      "none": 8
+    }
+  }
+}

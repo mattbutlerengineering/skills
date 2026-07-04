@@ -1,6 +1,6 @@
 ---
 name: mermaid
-description: Use when the user asks for a mermaid diagram or wants a process, system, or workflow diagrammed — choosing the right diagram type, keeping it digestible, and styling it with explicit colors that hold contrast in light and dark renderers. It is not UX flow or screen design (that's ux-design), not prose documentation, and never adds diagrams nobody asked for.
+description: Use whenever any diagram is asked for — a mermaid diagram, a flowchart, a sequence or architecture diagram, or a wall of prose steps to turn into something readable at a glance. Even when the diagram looks simple enough to write directly, consult this skill first: it chooses the right diagram type, keeps the result digestible, and styles it with explicit colors that hold contrast in light and dark renderers — ad-hoc diagrams miss those rules. It is not UX flow or screen design (that's ux-design), not prose documentation, and never adds diagrams nobody asked for.
 ---
 
 # Mermaid Diagrams
