@@ -41,7 +41,7 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
 
 7. **Write the artifact.** Save as `architecture.md` in the run directory
    with protocol frontmatter. If UX Design was skipped, echo it:
-   `ux: skipped — <reason from prd.md>`.
+   `ux: skipped — <ux-reason from prd.md>`.
 
 8. **Hand off.** Next stage is Decompose.
 

@@ -1,15 +1,18 @@
 # Utility skills alongside stage skills and the router
 
 - Status: provisional
-- Date: 2026-07-02
+- Date: 2026-07-02 (definition broadened 2026-07-03 when `autorun` joined
+  the category)
 
 ADR-0010 gave the plugin two skill kinds: directly-invocable stage skills
-and a thin router. A third kind now exists: **utility skills** — skills
-that act on the work surrounding the pipeline (the first is
-`address-pr-review`, which works reviewer feedback on an authored PR)
-rather than advancing a run's artifacts. This extends ADR-0010's taxonomy
-(itself provisional); it does not contradict it — stages and the router
-are untouched.
+and a thin router. A third kind now exists: **utility skills** —
+directly-invoked skills that own no stage artifact, have no soft gate,
+and are never routed to by /next. They act on the work around a run:
+`address-pr-review` works reviewer feedback on an authored PR; `autorun`
+orchestrates a full run, dispatching a stage subagent per stage (it
+drives the stage artifacts into existence without owning one itself).
+This extends ADR-0010's taxonomy (itself provisional); it does not
+contradict it — stages and the router are untouched.
 
 What a utility skill is and is not:
 
@@ -24,7 +27,10 @@ What a utility skill is and is not:
 - It has **no stage artifact, no `TEMPLATE.md`, no row in the artifact
   table, and no soft gate** — it does not advance `next_stage`, and the
   router never routes to it. Users invoke it directly when its situation
-  arises.
+  arises. A utility skill may still cause artifacts to be produced —
+  `autorun` touches every stage by dispatching the stage skills that own
+  them — but it never owns one itself (autorun's brief file is an input
+  it consumes, not a run artifact).
 - Its content stays harness-neutral (no hard dependency on third-party
   tooling), like every other skill.
 

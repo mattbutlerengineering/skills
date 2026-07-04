@@ -20,6 +20,7 @@ import datetime
 import json
 import os
 import select
+import signal
 import shutil
 import subprocess
 import sys
@@ -195,12 +196,18 @@ def run_single_query(query, descriptions, timeout, model, isolate):
             stderr=subprocess.DEVNULL,
             cwd=project_dir,
             env=env,
+            start_new_session=True,
         )
         return _watch_stream(process, name_to_slug, timeout)
     finally:
-        if process is not None and process.poll() is None:
-            process.kill()
-            process.wait()
+        if process is not None:
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    process.kill()
+                process.wait()
+            process.stdout.close()
         shutil.rmtree(project_dir, ignore_errors=True)
 
 

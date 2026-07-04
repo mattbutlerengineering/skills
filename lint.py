@@ -110,8 +110,9 @@ def check_output_evals(root):
             + eval_schema.validate_output(data, slug, label)
             + [f"{label} eval {e.get('id')!r} run_fixture "
                f"{e.get('run_fixture')!r} does not exist"
-               for e in data.get("evals", [])
-               if e.get("run_fixture")
+               for e in (data.get("evals")
+                         if isinstance(data.get("evals"), list) else [])
+               if isinstance(e, dict) and e.get("run_fixture")
                and not (root / e["run_fixture"]).is_dir()]
         )
     output_dir = root / "evals" / "output"

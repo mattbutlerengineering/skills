@@ -38,12 +38,17 @@ directory.
 _Avoid_: bugfix run, hotfix run
 
 **Utility skill**:
-A directly-invocable skill acting on the work surrounding the pipeline (e.g.
-address-pr-review, which works reviewer feedback on an authored PR) rather
-than advancing a run's artifacts. No stage artifact, no template, never
-routed to by /next; a full skill for install, lint, ledger, and trigger-eval
-purposes (ADR-0023).
+A directly-invoked skill that owns no stage artifact, has no template, and
+is never routed to by /next. It acts on the work around a run: address-pr-review
+works reviewer feedback on an authored PR; autorun orchestrates a full run,
+dispatching a stage subagent per stage without owning an artifact itself. A
+full skill for install, lint, ledger, and trigger-eval purposes (ADR-0023).
 _Avoid_: helper skill, tool skill
+
+**Work item**:
+One checkable unit of a breakdown — one sitting's work with an acceptance
+criterion.
+_Avoid_: issue (reserved for tracker items), task, todo
 
 ### Stages
 
@@ -58,8 +63,8 @@ stack, ADRs. Contains no UX work and no work scheduling.
 _Avoid_: design, tech planning
 
 **Decompose**:
-The stage breaking a finished technical design into milestones, issues, and a
-dependency-ordered sequence. Pure work breakdown — no design decisions.
+The stage breaking a finished technical design into milestones, work items,
+and a dependency-ordered sequence. Pure work breakdown — no design decisions.
 _Avoid_: plan, planning
 
 ### Evals

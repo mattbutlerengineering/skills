@@ -24,6 +24,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | operate | draft | — | 2/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
 | address-pr-review | draft | — | — |
 | autorun | draft | — | — |
+| mermaid | draft | — | — |
 
 Reading of the 2026-07-01 run: all failures are under-triggering (no skill
 fired); zero cases fired the wrong skill. Distractors 5/5 stayed silent.

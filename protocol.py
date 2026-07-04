@@ -17,7 +17,7 @@ TEMPLATED_STAGES = [s for s in STAGES if s != "implement"]
 # Utility skills act on work surrounding the pipeline (ADR-0023); they
 # have no stage artifact and the router never routes to them, but they are
 # full skills for install, lint, and trigger-eval purposes.
-UTILITY_SKILLS = ["address-pr-review", "autorun"]
+UTILITY_SKILLS = ["address-pr-review", "autorun", "mermaid"]
 ALL_SKILLS = ["next"] + STAGES + UTILITY_SKILLS
 
 # (stage, artifact) rows in pipeline order; implement and the UX
@@ -44,16 +44,35 @@ def read_frontmatter(path):
 
     Single error contract: returns None when the file has no frontmatter
     block; a present-but-fieldless block is an empty dict. Callers decide
-    what a missing block means for them.
+    what a missing block means for them. Values may be `|` literal block
+    scalars (following indented lines joined with newlines); CRLF files
+    are normalized before matching.
     """
-    match = _FRONTMATTER.match(path.read_text(encoding="utf-8"))
+    text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    match = _FRONTMATTER.match(text)
     if not match:
         return None
-    return dict(
-        (line.split(":", 1)[0].strip(), line.split(":", 1)[1].strip())
-        for line in match.group(1).splitlines()
-        if ":" in line
-    )
+    fields = {}
+    key = None
+    block_lines = None
+    for line in match.group(1).splitlines():
+        if block_lines is not None and (line.startswith("  ") or not line.strip()):
+            block_lines.append(line[2:])
+            continue
+        if key is not None and block_lines is not None:
+            fields[key] = "\n".join(block_lines).rstrip("\n")
+        key = None
+        block_lines = None
+        if ":" not in line:
+            continue
+        key, value = (part.strip() for part in line.split(":", 1))
+        if value == "|":
+            block_lines = []
+        else:
+            fields[key] = value
+    if key is not None and block_lines is not None:
+        fields[key] = "\n".join(block_lines).rstrip("\n")
+    return fields
 
 
 def _ux_skipped(run_dir):
