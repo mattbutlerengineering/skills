@@ -1,8 +1,9 @@
 # skills — agent notes
 
 Idea-to-prod pipeline skills, vended as a Claude plugin. Artifacts are the
-state: each stage skill reads/writes `docs/runs/<run>/` artifacts, and
-`skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
+state: each stage skill reads/writes run artifacts (product runs at the
+target repo's `docs/` root, feature runs under `docs/features/<slug>/`),
+and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
 ## Verify (CI runs both on every push/PR)
 
