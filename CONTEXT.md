@@ -38,6 +38,11 @@ routed to by /next; a full skill for install, lint, ledger, and trigger-eval
 purposes (ADR-0023).
 _Avoid_: helper skill, tool skill
 
+**Work item**:
+One checkable unit of a breakdown — one sitting's work with an acceptance
+criterion.
+_Avoid_: issue (reserved for tracker items), task, todo
+
 ### Stages
 
 **UX Design**:
@@ -51,8 +56,8 @@ stack, ADRs. Contains no UX work and no work scheduling.
 _Avoid_: design, tech planning
 
 **Decompose**:
-The stage breaking a finished technical design into milestones, issues, and a
-dependency-ordered sequence. Pure work breakdown — no design decisions.
+The stage breaking a finished technical design into milestones, work items,
+and a dependency-ordered sequence. Pure work breakdown — no design decisions.
 _Avoid_: plan, planning
 
 ### Evals
