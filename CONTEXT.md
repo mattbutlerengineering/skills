@@ -31,11 +31,11 @@ Idea or PRD. Its artifacts live under a per-feature directory.
 _Avoid_: iteration, cycle
 
 **Utility skill**:
-A directly-invocable skill acting on the work surrounding the pipeline (e.g.
-address-pr-review, which works reviewer feedback on an authored PR) rather
-than advancing a run's artifacts. No stage artifact, no template, never
-routed to by /next; a full skill for install, lint, ledger, and trigger-eval
-purposes (ADR-0023).
+A directly-invoked skill that owns no stage artifact, has no template, and
+is never routed to by /next. It acts on the work around a run: address-pr-review
+works reviewer feedback on an authored PR; autorun orchestrates a full run,
+dispatching a stage subagent per stage without owning an artifact itself. A
+full skill for install, lint, ledger, and trigger-eval purposes (ADR-0023).
 _Avoid_: helper skill, tool skill
 
 ### Stages
