@@ -96,6 +96,11 @@ proceed. Name the gap, then offer:
 2. **Proceed with assumptions** — continue now, logging every assumption in
    your own artifact's frontmatter under `assumptions:`.
 
+`assumptions:` records any decision made without live user input — proceeding
+past a missing predecessor (above), or taking a skill-recommended default for
+a question the user never answered (e.g. an autorun brief gap). It is the
+only place assumptions live.
+
 ## Run scale
 
 Feature runs scale artifact depth to feature size — a feature PRD is a page,
@@ -116,7 +121,7 @@ date: 2026-07-01
 # stage-specific fields, e.g. ux: required | not-applicable
 #                          or re-entry: implement | architect (defect.md, at capture time)
 # ux-reason: <one line>   when ux is not-applicable
-# assumptions: [...]      when produced past a soft gate
+# assumptions: [...]      any decision made without live user input
 ---
 ```
 
