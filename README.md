@@ -51,9 +51,12 @@ Two ways in:
   mid-stream. If a predecessor artifact is missing, the skill offers a quick
   backfill — it never blocks.
 
-The pipeline runs at two scales: a **product run** (greenfield; artifacts at
-your repo's `docs/` root) and a **feature run** (artifacts under
-`docs/features/<slug>/`, scaled down — a feature PRD is a page, not a book).
+The pipeline runs at three scales: a **product run** (greenfield; artifacts
+at your repo's `docs/` root), a **feature run** (artifacts under
+`docs/features/<slug>/`, scaled down — a feature PRD is a page, not a book),
+and a **maintenance run** (a defect, regression, refactor, or dependency
+upgrade; artifacts under `docs/fixes/<slug>/`, entering at the capture step
+and re-entering the pipeline at the depth recorded in its brief).
 
 ## Stages
 
@@ -70,12 +73,16 @@ your repo's `docs/` root) and a **feature run** (artifacts under
 | `review` | `review.md` | drafts findings |
 | `ship` | `release.md` | checklist-driven |
 | `operate` | `retro.md` | closes the loop → next idea |
+| `capture` | `defect.md` (seeds a maintenance run) | interviews you |
 
 Beside the stages, the plugin ships utility skills
 ([ADR-0023](docs/adr/0023-utility-skills.md)) that act on the work
 surrounding the pipeline rather than a run's artifacts: `address-pr-review`
 works reviewer feedback on a PR you authored — fix, push, reply, resolve,
-and reconcile with the base branch. `mermaid` turns a process or system
+and reconcile with the base branch. `autorun` drives a whole run end to end
+from a one-time brief — one fresh subagent per stage, every brief gap logged
+as an assumption, and, unless the brief explicitly authorizes the release,
+it prepares the release and stops rather than executing it. `mermaid` turns a process or system
 into a digestible mermaid diagram with explicit, contrast-safe colors that
 read in both light and dark renderers.
 
