@@ -19,7 +19,10 @@ arbitrate severity.
    order, and say so in the artifact.
 
 3. **Scope the diff.** The review covers what this run changed — the diff
-   since the run began, not the whole repo.
+   since the run began, not the whole repo. In a maintenance run, scale
+   the pass to the blast radius recorded in `defect.md`: a one-file patch
+   gets a focused correctness-and-regression look, not product-run
+   ceremony; a wide blast radius earns all three passes at full depth.
 
 4. **Review in three passes:**
    - **Correctness** — logic errors, unhandled failure modes, edge cases the
@@ -28,6 +31,9 @@ arbitrate severity.
      hunch, not a finding.
    - **Design** — does the code match `architecture.md`'s contracts and the
      codebase's existing patterns? Undocumented deviations are findings.
+     (A maintenance run with `re-entry: implement` has no
+     `architecture.md` — judge against the codebase's patterns and the
+     brief.)
    - **Security** — inputs validated at boundaries, no secrets in code,
      injection surfaces parameterized, errors don't leak internals.
 

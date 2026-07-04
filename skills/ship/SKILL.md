@@ -21,6 +21,11 @@ branch.
    unfixed critical requires the user to say so explicitly, logged in the
    artifact.
 
+   In a maintenance run, scale the ceremony to the blast radius recorded
+   in `defect.md`: a patch bump still gets the pre-flight, a concrete
+   rollback plan, and the regression evidence — but not a product-run
+   release train. The rollback plan never scales away.
+
 3. **Pre-flight.** Confirm and record each:
    - Verification is green (`verification.md` has no unresolved failures).
    - No secrets in the diff; required configuration exists in the target

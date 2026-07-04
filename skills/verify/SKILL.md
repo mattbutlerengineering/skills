@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Use when implementation is complete and it's time to demonstrate the work meets the PRD's success criteria — running tests and collecting evidence — or when the user asks to verify the work. Produces verification.md.
+description: Use when implementation is complete and it's time to demonstrate the work meets the PRD's success criteria — running tests and collecting evidence — or when the user asks to verify the work or wants regression-test evidence that a fixed defect cannot silently return. Produces verification.md. In a maintenance run this stage is mandatory and the regression test is its centerpiece.
 ---
 
 # Verify
@@ -14,13 +14,22 @@ verdict.
 1. Read `../../docs/pipeline-protocol.md` for run discovery, gating, and
    frontmatter conventions.
 
-2. **Soft gate.** Predecessor: `breakdown.md` with all items checked. If
-   items are open, say which and offer to route back to Implement (or
-   verify the completed subset, noting the gap).
+2. **Soft gate.** Predecessor: the run's breakdown with all items checked
+   (`breakdown.md`, or `defect.md`'s inline items in a maintenance run
+   with `re-entry: implement`). If items are open, say which and offer to
+   route back to Implement (or verify the completed subset, noting the
+   gap).
 
 3. **Build the criteria list.** Every success criterion from `prd.md`, plus
    every acceptance criterion from `breakdown.md` not already covered by a
-   PRD criterion.
+   PRD criterion. In a maintenance run the criteria come from `defect.md`
+   instead: expected behavior restored, the recorded blast radius
+   exercised, and a regression test in place.
+
+   The regression test is the centerpiece: a test that reproduces the
+   defect from the brief's evidence, failed before the fix, and passes
+   now. Without it the same defect can silently return, and the stage is
+   not complete.
 
 4. **Verify each criterion.** Prefer automated evidence (run the test suite;
    quote the relevant results) over manual walkthroughs, but do the manual
@@ -45,3 +54,5 @@ verdict.
 - Evidence is quoted output, command results, or observed behavior — a
   checkbox with no evidence is an assertion, not a verification.
 - Note what was NOT verified and why; silent coverage gaps read as "covered".
+- A maintenance run never skips this stage — the regression test is the
+  point of the fix (see the protocol's maintenance orientation).
