@@ -44,16 +44,35 @@ def read_frontmatter(path):
 
     Single error contract: returns None when the file has no frontmatter
     block; a present-but-fieldless block is an empty dict. Callers decide
-    what a missing block means for them.
+    what a missing block means for them. Values may be `|` literal block
+    scalars (following indented lines joined with newlines); CRLF files
+    are normalized before matching.
     """
-    match = _FRONTMATTER.match(path.read_text(encoding="utf-8"))
+    text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+    match = _FRONTMATTER.match(text)
     if not match:
         return None
-    return dict(
-        (line.split(":", 1)[0].strip(), line.split(":", 1)[1].strip())
-        for line in match.group(1).splitlines()
-        if ":" in line
-    )
+    fields = {}
+    key = None
+    block_lines = None
+    for line in match.group(1).splitlines():
+        if block_lines is not None and (line.startswith("  ") or not line.strip()):
+            block_lines.append(line[2:])
+            continue
+        if key is not None and block_lines is not None:
+            fields[key] = "\n".join(block_lines).rstrip("\n")
+        key = None
+        block_lines = None
+        if ":" not in line:
+            continue
+        key, value = (part.strip() for part in line.split(":", 1))
+        if value == "|":
+            block_lines = []
+        else:
+            fields[key] = value
+    if key is not None and block_lines is not None:
+        fields[key] = "\n".join(block_lines).rstrip("\n")
+    return fields
 
 
 def _ux_skipped(run_dir):
