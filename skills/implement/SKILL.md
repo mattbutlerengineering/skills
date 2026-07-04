@@ -26,7 +26,10 @@ document — the code is the artifact, and progress is the checkboxes.
    - Write the minimum implementation that passes, matching the
      architecture's contracts and the codebase's existing style.
    - Refactor with the tests green.
-   - Check the item off in `breakdown.md`.
+   - Check the item off in `breakdown.md`. If the item's checkbox line
+     carries a `(tracker: #123)` reference, close that mirrored issue now —
+     the item boundary is the only tracker sync point (ADR-0026). Items
+     without a reference mean no tracker interaction.
 
 5. **Log deviations.** When reality disagrees with the breakdown — an item splits,
    a contract needs adjusting — log it dated under `breakdown.md`'s Notes. A
@@ -40,6 +43,9 @@ document — the code is the artifact, and progress is the checkboxes.
 - Surgical scope: touch only what the current item requires. Adjacent smells
   get logged, not fixed.
 - Never check an item whose acceptance criterion you didn't actually verify.
+- The checkboxes are the state, never the tracker (ADR-0026): don't read
+  tracker state to pick items or judge progress, and a breakdown with no
+  tracker references means no tracker interaction at all.
 - Commit at item boundaries with messages naming the item, so the history
   reads like the breakdown.
 - Stuck twice on the same item? Stop and re-read the architecture — the bug

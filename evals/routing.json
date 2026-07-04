@@ -122,6 +122,10 @@
     {"id": "bridge-vs-decompose-1", "kind": "near-miss", "expected": null,
      "query": "Go through our issue tracker and close out anything stale",
      "notes": "tracker housekeeping must not fire decompose — no breakdown in play; the bridge only mirrors work items (ADR-0026)"},
+    {"id": "bridge-export-1", "kind": "situational", "expected": "decompose",
+     "query": "The design is done — break it into work items and publish each one as an issue in our tracker so the team can see the plan"},
+    {"id": "bridge-close-1", "kind": "situational", "expected": "implement",
+     "query": "Keep working through the breakdown — and when you finish an item that's mirrored in the tracker, close its issue as you check it off"},
 
     {"id": "mermaid-1", "kind": "direct", "expected": "mermaid",
      "query": "Create a mermaid diagram of our deployment process"},

@@ -38,6 +38,12 @@ architecture contains the answers; the user reviews the cut lines.
 5. **Write the artifact.** Save as `breakdown.md` in the run directory with
    protocol frontmatter. Items are markdown checkboxes — Implement checks
    them off, and the pipeline reads progress from them.
+   - Opt-in tracker export: when the user asks to publish the breakdown to
+     the project's issue tracker, create one tracker issue per exported
+     work item and record the mapping in the artifact by appending each
+     item's issue reference in the protocol's `(tracker: #123)` form.
+     Export happens once, here at the stage boundary — no background sync.
+     A user who says nothing about the tracker gets no export.
 
 6. **Hand off.** Next stage is Implement.
 
