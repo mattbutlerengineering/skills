@@ -95,6 +95,29 @@ class TestValidate(unittest.TestCase):
         self.assertEqual(
             [p for p in problems if not p.startswith("other/set.json")], [])
 
+    def test_null_cases_is_diagnosed_not_crashed(self):
+        problems = eval_schema.validate(
+            {"version": 1, "cases": None}, SKILLS, LABEL)
+        self.assertIn("evals/routing.json cases is not a list", problems)
+
+    def test_non_object_case_entry_is_diagnosed_not_crashed(self):
+        problems = eval_schema.validate(
+            {"version": 1, "cases": ["oops"]}, SKILLS, LABEL)
+        self.assertIn("evals/routing.json cases entry #0 is not an object",
+                      problems)
+
+    def test_mixed_none_and_string_duplicate_ids_sort_safely(self):
+        # two id-less cases put None in the duplicate set alongside a
+        # duplicated string id — sorted() must not compare None < str
+        data = valid_data()
+        data["cases"][1]["id"] = data["cases"][0]["id"]
+        data["cases"] += [{}, {}]
+        problems = eval_schema.validate(data, SKILLS, LABEL)
+        self.assertIn("evals/routing.json has duplicate case id 'next-0'",
+                      problems)
+        self.assertIn("evals/routing.json has duplicate case id None",
+                      problems)
+
 
 class TestLoad(unittest.TestCase):
     def setUp(self):
@@ -196,6 +219,20 @@ class TestValidateOutput(unittest.TestCase):
         problems = eval_schema.validate_output(data, "idea", "other.json")
         self.assertEqual(
             [p for p in problems if not p.startswith("other.json")], [])
+
+    def test_null_evals_is_diagnosed_not_crashed(self):
+        problems = eval_schema.validate_output(
+            {"skill_name": "decompose", "evals": None}, "decompose",
+            self.LABEL)
+        self.assertIn("evals/output/idea.json evals is not a list", problems)
+
+    def test_non_object_eval_entry_is_diagnosed_not_crashed(self):
+        data = valid_output_data()
+        data["evals"] = ["oops"]
+        problems = eval_schema.validate_output(data, "idea", self.LABEL)
+        self.assertIn(
+            "evals/output/idea.json evals entry #0 is not an object",
+            problems)
 
 
 class TestResultsPath(unittest.TestCase):

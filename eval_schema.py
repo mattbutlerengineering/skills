@@ -61,6 +61,25 @@ def results_path(results_dir, kind, date, slug=None):
     return path
 
 
+def _items(data, key, label):
+    """(list-of-dict entries, shape problems) for the collection data[key].
+
+    An absent key is legitimate: empty list, no problem (the coverage
+    checks in validate() own emptiness). A present non-list — including
+    null — is malformed and yields one problem; non-dict entries are
+    dropped with a problem each, so no downstream .get() ever hits a
+    non-dict. Validators return problem strings; they never raise.
+    """
+    if key not in data:
+        return [], []
+    raw = data[key]
+    if not isinstance(raw, list):
+        return [], [f"{label} {key} is not a list"]
+    problems = [f"{label} {key} entry #{n} is not an object"
+                for n, e in enumerate(raw) if not isinstance(e, dict)]
+    return [e for e in raw if isinstance(e, dict)], problems
+
+
 def _output_field_missing(record, field):
     # expectations must be non-empty (an eval with none checks nothing);
     # any other field is missing only when absent or null — falsy values
@@ -77,14 +96,16 @@ def validate_output(data, slug, label):
     stay with the caller. label prefixes every problem, mirroring
     validate().
     """
-    evals = data.get("evals", [])
+    evals, shape = _items(data, "evals", label)
     ids = [e.get("id") for e in evals]
     return (
-        ([f"{label} skill_name is {data.get('skill_name')!r}, "
-          f"expected {slug!r}"]
-         if data.get("skill_name") != slug else [])
+        shape
+        + ([f"{label} skill_name is {data.get('skill_name')!r}, "
+            f"expected {slug!r}"]
+           if data.get("skill_name") != slug else [])
         + [f"{label} has duplicate eval id {i!r}"
-           for i in sorted({i for i in ids if ids.count(i) > 1})]
+           for i in sorted({i for i in ids if ids.count(i) > 1},
+                           key=lambda i: (i is None, str(i)))]
         + [f"{label} eval {e.get('id')!r} missing field: {field}"
            for e in evals for field in OUTPUT_FIELDS
            if _output_field_missing(e, field)]
@@ -100,12 +121,14 @@ def validate(data, skills, label):
     """
     if "version" not in data:
         return [f"{label} missing 'version' field"]
-    cases = data.get("cases", [])
+    cases, shape = _items(data, "cases", label)
 
     ids = [c.get("id") for c in cases]
     problems = (
-        [f"{label} has duplicate case id {i!r}"
-         for i in sorted({i for i in ids if ids.count(i) > 1})]
+        shape
+        + [f"{label} has duplicate case id {i!r}"
+           for i in sorted({i for i in ids if ids.count(i) > 1},
+                           key=lambda i: (i is None, str(i)))]
         + [f"{label} case {c.get('id')!r} has invalid "
            f"expected {c.get('expected')!r}"
            for c in cases
