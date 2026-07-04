@@ -1,0 +1,44 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "autorun-2",
+      "kind": "situational",
+      "expected": "autorun",
+      "query": "I'm heading out for the afternoon \u2014 take this feature description and drive it through every stage to ship, noting anything you had to assume",
+      "fired": {
+        "none": 5
+      },
+      "runs": 5,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "by_kind": {
+      "situational": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "autorun": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "autorun": {
+      "none": 5
+    }
+  }
+}

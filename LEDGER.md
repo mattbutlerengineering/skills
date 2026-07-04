@@ -23,9 +23,17 @@ Trigger-eval results inform description quality but never graduate maturity
 | ship | draft | — | 2/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
 | operate | draft | — | 2/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
 | capture | draft | — | — |
-| address-pr-review | draft | — | — |
-| autorun | draft | — | — |
-| mermaid | draft | — | — |
+| address-pr-review | draft | — | 0/4 — [2026-07-03](evals/results/trigger-2026-07-03.json), reruns [2026-07-03-9](evals/results/trigger-2026-07-03-9.json)–[12](evals/results/trigger-2026-07-03-12.json) |
+| autorun | draft | — | 1/3 — [2026-07-03](evals/results/trigger-2026-07-03-2.json), reruns [2026-07-03-13](evals/results/trigger-2026-07-03-13.json)–[14](evals/results/trigger-2026-07-03-14.json) |
+| mermaid | draft | — | 1/3 — [2026-07-03](evals/results/trigger-2026-07-03-3.json), mermaid-3 passed rerun [2026-07-03-17](evals/results/trigger-2026-07-03-17.json) |
 
 Reading of the 2026-07-01 run: all failures are under-triggering (no skill
 fired); zero cases fired the wrong skill. Distractors 5/5 stayed silent.
+
+Reading of the 2026-07-03 utility-skill run (15 cases, all failures
+confirmed by 5-run reruns): address-pr-review never fired — its cases
+either stayed silent or misfired to review (apr-2 fired review 3/5 on
+rerun). autorun and mermaid mostly under-trigger. The anticipated
+near-misses against watch/next/docs held (apr-vs-watch-1,
+autorun-vs-next-1, mermaid-vs-docs-1 all passed), but review-vs-apr-1 and
+mermaid-vs-ux-1 under-triggered (expected skill stayed silent).

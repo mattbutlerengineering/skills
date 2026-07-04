@@ -1,0 +1,44 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 1,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "review-vs-apr-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Look over this run's diff for defects before I put up the PR",
+      "fired": {
+        "none": 1
+      },
+      "runs": 1,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "by_kind": {
+      "near-miss": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "review": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "review": {
+      "none": 1
+    }
+  }
+}
