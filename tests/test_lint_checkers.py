@@ -231,6 +231,16 @@ class TestOutputEvals(CheckerTreeTest):
              "evals/output/idea.json eval 1 missing field: run_scale",
              "evals/output/idea.json eval 1 missing field: expected_output"])
 
+    def test_null_evals_is_diagnosed_not_crashed(self):
+        # a present-but-null collection must yield validate_output's
+        # diagnostic, and the run_fixture stat loop must not raise
+        (self.root / "evals" / "output" / "idea.json").write_text(json.dumps({
+            "skill_name": "idea",
+            "evals": None,
+        }), encoding="utf-8")
+        problems = lint.check_output_evals(self.root)
+        self.assertIn("evals/output/idea.json evals is not a list", problems)
+
 
 class TestLedger(CheckerTreeTest):
     def test_missing_row(self):
