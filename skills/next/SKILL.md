@@ -18,13 +18,16 @@ the correct stage skill. This skill never produces an artifact itself.
 
 3. **Orient.** Walk the orientation table: the next stage is the first stage
    in order that is not complete. Honor the UX conditional (`ux:` field in
-   `prd.md` frontmatter) and the Implement checkbox rule.
+   `prd.md` frontmatter), the re-entry conditional (`re-entry:` field in
+   `defect.md` frontmatter, maintenance runs), and the Implement checkbox
+   rule.
 
 4. **Announce.** Tell the user, in one or two sentences: which run this is,
    what exists, what's next, and why. Example: "Feature run `dark-mode`: PRD
    exists and declares a UI surface, no `ux.md` — next stage is UX Design."
 
 5. **Hand off.** Invoke the matching stage skill and follow it:
+   - capture → the `capture` skill (maintenance runs only)
    - idea → the `idea` skill
    - prd → the `prd` skill
    - ux-design → the `ux-design` skill

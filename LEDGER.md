@@ -22,6 +22,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | review | draft | — | 3/4 — [2026-07-01](evals/results/trigger-2026-07-01-3.json) |
 | ship | draft | — | 2/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
 | operate | draft | — | 2/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
+| capture | draft | — | — |
 | address-pr-review | draft | — | — |
 | autorun | draft | — | — |
 | mermaid | draft | — | — |
