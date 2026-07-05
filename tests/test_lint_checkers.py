@@ -28,6 +28,11 @@ def make_clean_tree(root):
     (plugin_dir / "plugin.json").write_text(json.dumps(
         {"name": "t", "description": "t", "version": "0"}), encoding="utf-8")
 
+    (root / "package.json").write_text(json.dumps(
+        {"name": "t", "version": "0", "private": True,
+         "keywords": ["pi-package"], "pi": {"skills": ["./skills"]}}),
+        encoding="utf-8")
+
     for slug in ALL_SKILLS:
         skill_dir = root / "skills" / slug
         skill_dir.mkdir(parents=True)
@@ -96,6 +101,44 @@ class TestManifest(CheckerTreeTest):
                          ["plugin.json missing field: description"])
 
 
+class TestPiPackage(CheckerTreeTest):
+    """The Pi (oh-my-pi) discovery manifest, guarded like the Claude one so
+    the dual-target packaging can't silently drift (ADR-0027)."""
+
+    def test_missing_package_json(self):
+        (self.root / "package.json").unlink()
+        self.assertEqual(lint.check_pi_package(self.root),
+                         ["missing package.json"])
+
+    def test_invalid_json(self):
+        (self.root / "package.json").write_text("{not json", encoding="utf-8")
+        problems = lint.check_pi_package(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "package.json is not valid JSON:"))
+
+    def test_not_private(self):
+        (self.root / "package.json").write_text(json.dumps(
+            {"keywords": ["pi-package"], "pi": {"skills": ["./skills"]}}),
+            encoding="utf-8")
+        self.assertEqual(lint.check_pi_package(self.root),
+                         ["package.json must set private: true"])
+
+    def test_missing_pi_package_keyword(self):
+        (self.root / "package.json").write_text(json.dumps(
+            {"private": True, "pi": {"skills": ["./skills"]}}),
+            encoding="utf-8")
+        self.assertEqual(lint.check_pi_package(self.root),
+                         ["package.json keywords must include 'pi-package'"])
+
+    def test_pi_skills_does_not_point_at_skills_dir(self):
+        (self.root / "package.json").write_text(json.dumps(
+            {"private": True, "keywords": ["pi-package"], "pi": {}}),
+            encoding="utf-8")
+        self.assertEqual(lint.check_pi_package(self.root),
+                         ["package.json pi.skills must include './skills'"])
+
+
 class TestSkills(CheckerTreeTest):
     def test_name_mismatch(self):
         (self.root / "skills" / "idea" / "SKILL.md").write_text(
@@ -152,6 +195,16 @@ class TestSkills(CheckerTreeTest):
         (self.root / "skills" / ".cache").mkdir()
         self.assertEqual(lint.check_skills(self.root), [])
         self.assertEqual(lint.check_ledger(self.root), [])
+
+    def test_description_over_pi_limit_is_flagged(self):
+        # Pi (oh-my-pi) caps a skill description at 1024 chars; a longer one
+        # loads on Claude but silently drops the skill on omp (ADR-0027).
+        (self.root / "skills" / "idea" / "SKILL.md").write_text(
+            f"---\nname: idea\ndescription: {'x' * 1025}\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_skills(self.root),
+            ["skills/idea/SKILL.md description exceeds Pi's 1024-char limit"])
 
 
 class TestTemplates(CheckerTreeTest):

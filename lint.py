@@ -30,6 +30,31 @@ def check_manifest(root):
             if not data.get(field)]
 
 
+def check_pi_package(root):
+    """The oh-my-pi (omp) discovery manifest. Its own packaging layer beside
+    the Claude plugin manifest (ADR-0027): omp finds the skills through a
+    `package.json` `pi.skills` entry. Guarded like check_manifest so the
+    dual-target packaging can't silently drift."""
+    path = root / "package.json"
+    if not path.is_file():
+        return ["missing package.json"]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as err:
+        return [f"package.json is not valid JSON: {err}"]
+    problems = []
+    if data.get("private") is not True:
+        problems.append("package.json must set private: true")
+    keywords = data.get("keywords")
+    if not isinstance(keywords, list) or "pi-package" not in keywords:
+        problems.append("package.json keywords must include 'pi-package'")
+    pi = data.get("pi")
+    skills = pi.get("skills") if isinstance(pi, dict) else None
+    if not isinstance(skills, list) or "./skills" not in skills:
+        problems.append("package.json pi.skills must include './skills'")
+    return problems
+
+
 def extra_skills(root):
     """Skill directories on disk that the protocol taxonomy doesn't know —
     a dir under skills/ installs as a skill, so the frontmatter and ledger
@@ -57,6 +82,10 @@ def check_skills(root):
              if fm.get("name") != slug else [])
             + ([f"skills/{slug}/SKILL.md frontmatter has no description"]
                if not fm.get("description") else [])
+            + ([f"skills/{slug}/SKILL.md description exceeds Pi's "
+                "1024-char limit"]
+               if fm.get("description")
+               and len(fm["description"]) > 1024 else [])
         )
     # An unregistered dir is itself a problem: taxonomy membership is what
     # subjects a skill to the routing-coverage policy (ADR-0023). Its
@@ -153,9 +182,9 @@ def check_ledger_links(root):
     )
 
 
-CHECKERS = (check_manifest, check_skills, check_templates, check_router,
-            check_protocol, check_evals, check_output_evals, check_ledger,
-            check_ledger_links)
+CHECKERS = (check_manifest, check_pi_package, check_skills, check_templates,
+            check_router, check_protocol, check_evals, check_output_evals,
+            check_ledger, check_ledger_links)
 
 
 def main():
