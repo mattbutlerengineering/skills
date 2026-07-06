@@ -55,7 +55,7 @@ acceptance criteria are met. No tracker mirror (opted out).
 
 ## Milestone 3: Seeded for real
 
-- [ ] **Create docs/backlog.md with this session's seeds** — the real
+- [x] **Create docs/backlog.md with this session's seeds** — the real
   orphaned follow-ups, plus this run's own seed marked claimed
   - Accept: file exists with ≥5 real seeds carrying
     `(from: session:2026-07-05)` (omp `skill://` protocol-doc gap,
@@ -72,3 +72,10 @@ None.
 ## Notes
 
 (Deviations discovered during Implement get logged here, dated.)
+
+- 2026-07-06: after two mid-session stalls suspected to come from a
+  live-pipe subprocess test hanging headless, all gate runs were wrapped
+  in a timeout with stdin from `/dev/null` (no `timeout`/`gtimeout` on
+  this machine, so `perl -e 'alarm N; exec @ARGV'`). No test was excluded
+  and no gate ever timed out — the full suite (146 tests) and lint ran
+  clean at every item boundary.
