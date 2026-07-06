@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """Trigger (routing) eval for the idea-to-prod skills.
 
-Installs ALL skill descriptions simultaneously as command files in an
-isolated temporary project, runs each eval query through `claude -p`, and
+Installs ALL skill descriptions simultaneously in an isolated temporary
+project, runs each eval query through the selected harness CLI, and
 detects WHICH skill fired — testing cross-skill discrimination rather than
 one description in isolation. Exit 0 = all cases pass, 1 = failures.
+
+Two harnesses (ADR-0027, ADR-0031): `claude -p` (primary; descriptions
+installed as command files, detection watches the Skill/Read tools) and
+`omp -p --mode json` (second harness; descriptions installed as project
+.claude/skills entries, detection watches the read tool's skill:// URI).
+Results record which harness ran: omp snapshots are named
+trigger-omp-<date>[-N].json, claude snapshots stay trigger-<date>[-N].json.
 
 Derived from the skill-creator plugin's scripts/run_eval.py and
 scripts/utils.py, Copyright Anthropic, PBC, licensed under the Apache
@@ -13,7 +20,8 @@ has been modified from the original: multi-skill routing detection,
 per-run isolated project directories, settings-source isolation, and a
 routing-case schema with confusion-matrix reporting.
 
-POSIX-only (uses select.select on pipes). Requires the `claude` CLI.
+POSIX-only (uses select.select on pipes). Requires the `claude` CLI
+(or the `omp` CLI with --harness omp).
 """
 import argparse
 import datetime
@@ -60,6 +68,33 @@ def build_project_dir(descriptions, run_id):
         indented = "\n  ".join(description.split("\n"))
         (commands_dir / f"{slug}-skill-{run_id}.md").write_text(
             f"---\n"
+            f"description: |\n"
+            f"  {indented}\n"
+            f"---\n\n"
+            f"# {slug}\n\n"
+            f"This skill handles: {description}\n",
+            encoding="utf-8",
+        )
+    return project_dir
+
+
+def build_omp_project_dir(descriptions, run_id):
+    """Create an isolated project dir with one .claude/skills entry per skill.
+
+    omp discovers project skills from .claude/skills/<name>/SKILL.md. The
+    per-run name suffix keeps parallel runs distinct and lets the runner's
+    --skills '*-skill-<run_id>' glob exclude every globally installed
+    skill, so the eval discriminates only among the run's own candidates.
+    """
+    project_dir = Path(tempfile.mkdtemp(prefix="i2p-eval-omp-"))
+    for slug, description in descriptions.items():
+        name = f"{slug}-skill-{run_id}"
+        skill_dir = project_dir / ".claude" / "skills" / name
+        skill_dir.mkdir(parents=True)
+        indented = "\n  ".join(description.split("\n"))
+        (skill_dir / "SKILL.md").write_text(
+            f"---\n"
+            f"name: {name}\n"
             f"description: |\n"
             f"  {indented}\n"
             f"---\n\n"
@@ -137,8 +172,48 @@ def detect_fired(events, name_to_slug):
     return None
 
 
+def _omp_call_slug(tool_name, arguments, name_to_slug):
+    """Fired slug for one completed omp tool call, or None.
+
+    In omp a skill loads through the built-in read tool with a
+    skill://<name> URI (a direct SKILL.md path also matches); any other
+    tool reached first means no skill fired.
+    """
+    if tool_name != "read" or not isinstance(arguments, dict):
+        return None
+    return _match_slug(arguments.get("path") or "", name_to_slug)
+
+
+def detect_omp_fired(events, name_to_slug):
+    """Consume decoded omp --mode json events; return the fired slug or None.
+
+    Pure state machine, detect_fired's omp twin. The first completed tool
+    call decides: toolcall_end (the model finished emitting the call,
+    arguments fully parsed) fires before the tool executes;
+    tool_execution_start is the fallback should the assistant-event shape
+    drift. agent_end without any tool call means no fire.
+    """
+    for event in events:
+        etype = event.get("type")
+        if etype == "message_update":
+            ame = event.get("assistantMessageEvent") or {}
+            if ame.get("type") == "toolcall_end":
+                call = ame.get("toolCall") or {}
+                return _omp_call_slug(call.get("name"),
+                                      call.get("arguments"), name_to_slug)
+        elif etype == "tool_execution_start":
+            return _omp_call_slug(event.get("toolName"),
+                                  event.get("args"), name_to_slug)
+        elif etype == "agent_end":
+            return None
+    return None
+
+
+_DETECTORS = {"claude": detect_fired, "omp": detect_omp_fired}
+
+
 def _stream_events(process, timeout):
-    """Yield decoded stream-json events from a live claude pipe until the
+    """Yield decoded JSON-lines events from a live harness pipe until the
     process exits, the stream closes, or timeout elapses. Lines that are
     not valid JSON are skipped."""
     start_time = time.time()
@@ -167,17 +242,13 @@ def _stream_events(process, timeout):
                 continue
 
 
-def _watch_stream(process, name_to_slug, timeout):
-    """Live-pipe adapter: feed the decoded event stream to detect_fired."""
-    return detect_fired(_stream_events(process, timeout), name_to_slug)
+def _watch_stream(process, name_to_slug, timeout, detect=detect_fired):
+    """Live-pipe adapter: feed the decoded event stream to a detector."""
+    return detect(_stream_events(process, timeout), name_to_slug)
 
 
-def run_single_query(query, descriptions, timeout, model, isolate):
-    """Run one query in a fresh isolated project; return fired slug or None."""
-    run_id = uuid.uuid4().hex[:8]
-    name_to_slug = {f"{slug}-skill-{run_id}": slug for slug in descriptions}
-    project_dir = build_project_dir(descriptions, run_id)
-
+def _claude_invocation(query, descriptions, run_id, model, isolate):
+    """(project_dir, cmd) for one claude -p run."""
     cmd = [
         "claude", "-p", query,
         "--output-format", "stream-json",
@@ -188,6 +259,38 @@ def run_single_query(query, descriptions, timeout, model, isolate):
         cmd.extend(["--setting-sources", "project"])
     if model:
         cmd.extend(["--model", model])
+    return build_project_dir(descriptions, run_id), cmd
+
+
+def _omp_invocation(query, descriptions, run_id, model, isolate):
+    """(project_dir, cmd) for one omp -p run.
+
+    omp has no --setting-sources equivalent, so isolation is always on:
+    --skills restricts discovery to this run's own skills, and
+    --no-extensions/--no-rules/--no-session keep the user's omp
+    environment out of the run (the isolate flag is claude-only).
+    """
+    cmd = [
+        "omp", "--mode", "json", "-p",
+        "--no-session", "--no-extensions", "--no-rules",
+        "--skills", f"*-skill-{run_id}",
+    ]
+    if model:
+        cmd.extend(["--model", model])
+    cmd.append(query)
+    return build_omp_project_dir(descriptions, run_id), cmd
+
+
+_INVOCATIONS = {"claude": _claude_invocation, "omp": _omp_invocation}
+
+
+def run_single_query(query, descriptions, timeout, model, isolate,
+                     harness="claude"):
+    """Run one query in a fresh isolated project; return fired slug or None."""
+    run_id = uuid.uuid4().hex[:8]
+    name_to_slug = {f"{slug}-skill-{run_id}": slug for slug in descriptions}
+    project_dir, cmd = _INVOCATIONS[harness](query, descriptions, run_id,
+                                             model, isolate)
 
     # Remove CLAUDECODE env var to allow nesting claude -p inside a
     # Claude Code session; the guard is for interactive terminal conflicts.
@@ -203,7 +306,8 @@ def run_single_query(query, descriptions, timeout, model, isolate):
             env=env,
             start_new_session=True,
         )
-        return _watch_stream(process, name_to_slug, timeout)
+        return _watch_stream(process, name_to_slug, timeout,
+                             detect=_DETECTORS[harness])
     finally:
         if process is not None:
             if process.poll() is None:
@@ -263,12 +367,12 @@ def summarize(results):
 
 
 def run_eval(cases, descriptions, workers, runs_per_query, timeout,
-             threshold, model, isolate):
+             threshold, model, isolate, harness="claude"):
     """Fan out cases x runs_per_query; return per-case results + summary."""
     with ProcessPoolExecutor(max_workers=workers) as executor:
         future_to_case = {
             executor.submit(run_single_query, case["query"], descriptions,
-                            timeout, model, isolate): case["id"]
+                            timeout, model, isolate, harness): case["id"]
             for case in cases
             for _ in range(runs_per_query)
         }
@@ -298,9 +402,9 @@ def run_eval(cases, descriptions, workers, runs_per_query, timeout,
     return {"results": results, **summarize(results)}
 
 
-def cli_version():
+def cli_version(harness="claude"):
     try:
-        proc = subprocess.run(["claude", "--version"], capture_output=True,
+        proc = subprocess.run([harness, "--version"], capture_output=True,
                               text=True, timeout=15)
         return proc.stdout.strip() or None
     except (OSError, subprocess.TimeoutExpired):
@@ -310,7 +414,8 @@ def cli_version():
 def record(output, results_dir):
     """Write a dated results file; eval_schema owns the naming grammar."""
     results_dir.mkdir(parents=True, exist_ok=True)
-    path = eval_schema.results_path(results_dir, "trigger", output["date"])
+    path = eval_schema.results_path(results_dir, "trigger", output["date"],
+                                    harness=output.get("harness"))
     path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
     return path
 
@@ -332,7 +437,10 @@ def print_report(output):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Cross-skill trigger/routing eval via claude -p")
+        description="Cross-skill trigger/routing eval via claude -p or omp -p")
+    parser.add_argument("--harness", choices=eval_schema.HARNESSES,
+                        default="claude",
+                        help="which CLI drives the queries (ADR-0031)")
     parser.add_argument("--eval-set", default=str(ROOT / "evals" / "routing.json"))
     parser.add_argument("--skills-dir", default=str(ROOT / "skills"))
     parser.add_argument("--num-workers", type=int, default=10)
@@ -346,9 +454,11 @@ def main():
     parser.add_argument("--only", default=None,
                         help="run only cases whose id or expected slug matches")
     parser.add_argument("--record", action="store_true",
-                        help="write evals/results/trigger-<date>.json")
+                        help="write evals/results/trigger[-<harness>]-<date>"
+                             ".json")
     parser.add_argument("--no-isolate-settings", action="store_true",
-                        help="drop --setting-sources project (auth fallback)")
+                        help="drop --setting-sources project (auth fallback; "
+                             "claude harness only)")
     args = parser.parse_args()
 
     cases, problems = eval_schema.load(Path(args.eval_set), ALL_SKILLS,
@@ -370,14 +480,15 @@ def main():
 
     output = {
         "date": datetime.date.today().isoformat(),
+        "harness": args.harness,
         "model": args.model,
-        "cli_version": cli_version(),
+        "cli_version": cli_version(args.harness),
         "runs_per_query": args.runs_per_query,
         "threshold": args.threshold,
         "isolated_settings": isolate,
         **run_eval(cases, descriptions, args.num_workers,
                    args.runs_per_query, args.timeout, args.threshold,
-                   args.model, isolate),
+                   args.model, isolate, args.harness),
     }
 
     print_report(output)

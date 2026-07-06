@@ -17,9 +17,11 @@ Both cost real model runs and run on demand — CI never invokes them.
   scratch project so upstream artifacts pre-answer what a stage skill would
   otherwise interview for.
 - [`results/`](results/) — dated, append-only run records: trigger runs as
-  `trigger-<date>[-N].json`, output gradings under `output/<slug>-<date>[-N]/`;
-  `-2`, `-3`… suffixes distinguish same-day runs.
-  LEDGER.md links these as evidence.
+  `trigger-<date>[-N].json` (claude harness, the default) or
+  `trigger-omp-<date>[-N].json` (`--harness omp`, ADR-0031), output gradings
+  under `output/<slug>-<date>[-N]/`; `-2`, `-3`… suffixes distinguish
+  same-day runs. LEDGER.md links these as evidence (maturity stays keyed
+  to claude runs; omp snapshots are supplementary harness evidence).
 
 ## Honesty policy
 

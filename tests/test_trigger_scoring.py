@@ -135,6 +135,16 @@ class TestRecord(unittest.TestCase):
         path = record(self.output, self.results / "evals" / "results")
         self.assertTrue(path.is_file())
 
+    def test_omp_harness_output_records_under_its_own_stem(self):
+        output = {**self.output, "harness": "omp"}
+        path = record(output, self.results)
+        self.assertEqual(path, self.results / "trigger-omp-2026-07-02.json")
+
+    def test_claude_harness_output_keeps_the_unmarked_stem(self):
+        output = {**self.output, "harness": "claude"}
+        path = record(output, self.results)
+        self.assertEqual(path, self.results / "trigger-2026-07-02.json")
+
 
 if __name__ == "__main__":
     unittest.main()

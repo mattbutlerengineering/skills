@@ -15,13 +15,22 @@ import re
 
 KINDS = ("direct", "situational", "near-miss", "distractor", "router")
 
+# Harnesses a trigger run can drive (ADR-0027, ADR-0031). claude is the
+# primary harness and stays unmarked in results stems — every snapshot
+# recorded before harness identity existed is a claude run — so only the
+# second harness carries its token in the grammar below.
+HARNESSES = ("claude", "omp")
+_MARKED_HARNESSES = tuple(h for h in HARNESSES if h != "claude")
+
 # The append-only results naming grammar as it appears in LEDGER evidence
-# links: trigger-<date>[-N].json files, output/<slug>-<date>[-N]/grading.json,
-# N counting up from 2 (results_path below is the generator).
+# links: trigger[-<harness>]-<date>[-N].json files,
+# output/<slug>-<date>[-N]/grading.json, N counting up from 2
+# (results_path below is the generator).
 _SUFFIX = r"(?:-(?:[2-9]|[1-9]\d+))?"
+_HARNESS = rf"(?:-(?:{'|'.join(_MARKED_HARNESSES)}))?"
 _RESULTS_LINK = re.compile(
     r"^evals/results/(?:"
-    rf"trigger-\d{{4}}-\d{{2}}-\d{{2}}{_SUFFIX}\.json"
+    rf"trigger{_HARNESS}-\d{{4}}-\d{{2}}-\d{{2}}{_SUFFIX}\.json"
     rf"|output/[a-z0-9-]+-\d{{4}}-\d{{2}}-\d{{2}}{_SUFFIX}/grading\.json)$")
 
 
@@ -36,17 +45,23 @@ OUTPUT_FIELDS = ("id", "prompt", "run_fixture", "run_scale",
                  "expected_output", "expectations")
 
 
-def results_path(results_dir, kind, date, slug=None):
+def results_path(results_dir, kind, date, slug=None, harness=None):
     """Next free results path per the append-only naming grammar (#26).
 
-    trigger -> <results_dir>/trigger-<date>[-N].json (the recorded file)
+    trigger -> <results_dir>/trigger[-<harness>]-<date>[-N].json (the
+               recorded file; the primary claude harness stays unmarked,
+               a second harness carries its token — ADR-0031)
     output  -> <results_dir>/output/<slug>-<date>[-N] (the grading dir)
 
     -N starts at 2 and counts past existing same-day results. The path is
     returned, never created — recording stays with the caller.
     """
     if kind == "trigger":
-        base, stem, ext = results_dir, f"trigger-{date}", ".json"
+        if harness is not None and harness not in HARNESSES:
+            raise ValueError(f"unknown trigger harness {harness!r}")
+        head = ("trigger" if harness in (None, "claude")
+                else f"trigger-{harness}")
+        base, stem, ext = results_dir, f"{head}-{date}", ".json"
     elif kind == "output":
         if not slug:
             raise ValueError("output results need a slug")
