@@ -41,7 +41,7 @@ acceptance criteria are met. No tracker mirror (opted out).
     well-formed entry at run close (create the file if absent; never rewrite
     existing lines).
   - Blocked by: Protocol section
-- [ ] **next reads at two moments** — extend `skills/next/SKILL.md`
+- [x] **next reads at two moments** — extend `skills/next/SKILL.md`
   - Accept: the no-active-run branch and the completed-run step both list
     unclaimed seeds and offer to start from one; text states the backlog is
     never read during active-run orientation.
