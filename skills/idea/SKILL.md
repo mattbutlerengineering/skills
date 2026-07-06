@@ -15,7 +15,11 @@ the user's head at this stage, so this skill interviews — it does not draft.
 
 2. **Establish scale.** Is this a new product (product run, artifacts at
    `docs/`) or a feature of an existing one (feature run, artifacts at
-   `docs/features/<slug>/`)? For a feature, agree on the slug now.
+   `docs/features/<slug>/`)? For a feature, agree on the slug now. When
+   starting from a backlog seed, claim it in place — append
+   `(claimed: <run-ref>)` to the seed's line in `docs/backlog.md` per the
+   protocol's seed-backlog section — and record the seed as the origin in
+   `idea.md`.
 
 3. **Interview.** One question at a time, each with your recommended answer
    when you have one. Keep going until every section of the template can be

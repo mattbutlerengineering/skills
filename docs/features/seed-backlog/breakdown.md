@@ -46,7 +46,7 @@ acceptance criteria are met. No tracker mirror (opted out).
     unclaimed seeds and offer to start from one; text states the backlog is
     never read during active-run orientation.
   - Blocked by: Protocol section
-- [ ] **idea claims (+ capture parks)** — extend `skills/idea/SKILL.md` and
+- [x] **idea claims (+ capture parks)** — extend `skills/idea/SKILL.md` and
   `skills/capture/SKILL.md`
   - Accept: idea, when starting from a seed, appends `(claimed: <run-ref>)`
     to the seed line in place and records the origin in `idea.md`; capture
