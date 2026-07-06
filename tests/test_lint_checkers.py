@@ -295,6 +295,40 @@ class TestOutputEvals(CheckerTreeTest):
         self.assertIn("evals/output/idea.json evals is not a list", problems)
 
 
+class TestBacklog(CheckerTreeTest):
+    """The seed backlog is strictly opt-in (ADR-0029): the clean tree has
+    no docs/backlog.md and TestCleanTree already proves absence is zero
+    problems. protocol.check_backlog owns the grammar; this checker keeps
+    the filesystem half."""
+
+    def test_present_backlog_is_validated_against_the_grammar(self):
+        (self.root / "docs" / "backlog.md").write_text(
+            "- good seed (from: feature:x)\n- dangling seed\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_backlog(self.root),
+            ["backlog: line 2: entry does not match "
+             "'- <seed text> (from: <run-ref>)'"])
+
+    def test_conformant_backlog_yields_no_problems(self):
+        (self.root / "docs" / "backlog.md").write_text(
+            "advisory header\n\n"
+            "- a seed (from: session:2026-07-05)\n"
+            "- claimed seed (from: product) (claimed: feature:y)\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_backlog(self.root), [])
+
+    def test_unreadable_backlog_yields_one_problem_string(self):
+        path = self.root / "docs" / "backlog.md"
+        path.write_text("- a seed (from: product)\n", encoding="utf-8")
+        path.chmod(0)
+        self.addCleanup(path.chmod, 0o644)
+        problems = lint.check_backlog(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "backlog: docs/backlog.md is unreadable:"))
+
+
 class TestLedger(CheckerTreeTest):
     def test_missing_row(self):
         (self.root / "LEDGER.md").write_text(

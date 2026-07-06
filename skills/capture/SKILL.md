@@ -56,6 +56,9 @@ interviews — it does not draft.
   never a soft gate — but the protocol read always comes first.
 - A missing capability is a new feature, not a defect — route the user to
   the `idea` skill and a feature run instead.
+- A defect worth remembering but not worth a run today may be parked as a
+  seed in `docs/backlog.md` (the protocol's seed-backlog section) instead
+  of opening a run.
 - Record hypotheses as hypotheses. A guess dressed as a root cause sends
   the fixer down the wrong path with confidence.
 - Ruled-out dead ends are evidence too — capturing them is cheaper than

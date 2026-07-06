@@ -14,7 +14,9 @@ the correct stage skill. This skill never produces an artifact itself.
    directory) — it defines run discovery and the orientation table.
 
 2. **Discover the run.** Apply the protocol's run-discovery rules. If no run
-   exists at all, the next stage is Idea (ask product or feature first).
+   exists at all, the next stage is Idea (ask product or feature first) —
+   and if `docs/backlog.md` exists, list its unclaimed seeds and offer to
+   start from one (the protocol's seed-backlog section).
 
 3. **Orient.** Walk the orientation table: the next stage is the first stage
    in order that is not complete. Honor the UX conditional (`ux:` field in
@@ -44,7 +46,8 @@ the correct stage skill. This skill never produces an artifact itself.
 
 6. **Completed run?** If `retro.md` exists, the run is complete. Offer to
    start the next run — the retro's "seeds for next ideas" section is the
-   natural input to a fresh `idea` invocation.
+   natural input to a fresh `idea` invocation, and if `docs/backlog.md`
+   exists, list its unclaimed seeds and offer to start from one.
 
 ## Rules
 
@@ -53,3 +56,6 @@ the correct stage skill. This skill never produces an artifact itself.
 - If two runs are active and the user's intent is ambiguous, ask — don't
   guess.
 - Keep the announcement short. The router's job is orientation, not summary.
+- The backlog is advisory and read only in the two moments above (steps 2
+  and 6) — never during active-run orientation, which comes from run
+  artifacts alone.

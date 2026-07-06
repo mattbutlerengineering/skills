@@ -37,7 +37,9 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
    maintenance runs, the defect or degradation itself becomes a seed for
    preventive work: if the same bug recurs, the retro asks whether the
    pipeline missed a regression test, a review finding, or a design
-   constraint that should have been captured earlier.
+   constraint that should have been captured earlier. Append each seed to
+   `docs/backlog.md` as a well-formed entry per the protocol's seed-backlog
+   section, creating the file if absent — never rewrite existing lines.
 
 7. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `retro.md` with protocol frontmatter. This
