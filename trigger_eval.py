@@ -71,10 +71,15 @@ def build_project_dir(descriptions, run_id):
 
 
 def _match_slug(text, name_to_slug):
-    """Return the slug whose command name appears in text, if any."""
-    for clean_name, slug in name_to_slug.items():
+    """Return the slug whose command name appears in text, if any.
+
+    Longest name first: review-skill-<id> is a substring of
+    address-pr-review-skill-<id>, so a shorter name checked earlier
+    would shadow the longer one and misattribute the fire.
+    """
+    for clean_name in sorted(name_to_slug, key=len, reverse=True):
         if clean_name in text:
-            return slug
+            return name_to_slug[clean_name]
     return None
 
 

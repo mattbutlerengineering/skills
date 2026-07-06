@@ -1,6 +1,6 @@
 ---
 name: operate
-description: Use when shipped work has been in users' hands and it's time to capture feedback and run a retrospective — closing the loop into the next idea. Produces retro.md, completing the run.
+description: Use when shipped work has been in users' hands and it's time to capture feedback and run a retrospective — closing the loop into the next idea — or when the user asks how the release is landing or doing in production, or what we learned post-launch. Produces retro.md, completing the run.
 ---
 
 # Operate

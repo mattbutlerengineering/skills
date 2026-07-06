@@ -1,6 +1,6 @@
 ---
 name: address-pr-review
-description: Use after you've authored a pull request and reviewer feedback needs acting on — fixing what review comments ask, pushing the changes, replying to and resolving every thread, and merging the base branch (usually main) into yours when behind or conflicting. This works the feedback on an existing PR; it is not a quality review of the run's changes (that's review) and not passive watching of a PR's checks.
+description: Use the moment reviewer feedback exists on an open pull request — review comments to address, threads to resolve, requested changes, or merge conflicts with the base branch. "Address the comments on my PR", "reviewers left feedback", "resolve the threads", "get my PR ready to merge" all belong here, not to the review skill — review is a quality pass on our own changes, while this skill acts on feedback others left on an existing PR. It fixes what the comments ask, pushes, replies to and resolves every thread, and merges the base branch (usually main) into the PR branch when behind or conflicting. It never just watches a PR's checks without acting.
 ---
 
 # Address PR Review
