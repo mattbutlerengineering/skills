@@ -47,3 +47,4 @@ the canonical vocabulary.
 | [0028](0028-brownfield-adoption-onramp.md) | Brownfield adoption on-ramp (adopt/onboard entry) | provisional |
 | [0029](0029-backlog-seed-inbox.md) | A derived, advisory backlog (seed inbox) | provisional |
 | [0030](0030-incident-fastlane-and-tracker-intake.md) | Incident fast lane and tracker intake | provisional |
+| [0031](0031-omp-trigger-eval-adapter.md) | The trigger eval drives omp too; results are harness-marked | accepted |

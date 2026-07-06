@@ -282,6 +282,36 @@ class TestResultsPath(unittest.TestCase):
         with self.assertRaises(ValueError):
             eval_schema.results_path(self.results, "routing", "2026-07-02")
 
+    def test_omp_harness_marks_the_trigger_stem(self):
+        self.assertEqual(
+            eval_schema.results_path(self.results, "trigger", "2026-07-02",
+                                     harness="omp"),
+            self.results / "trigger-omp-2026-07-02.json")
+
+    def test_omp_collisions_suffix_from_2_without_touching_claude(self):
+        (self.results / "trigger-omp-2026-07-02.json").write_text(
+            "{}", encoding="utf-8")
+        self.assertEqual(
+            eval_schema.results_path(self.results, "trigger", "2026-07-02",
+                                     harness="omp"),
+            self.results / "trigger-omp-2026-07-02-2.json")
+        # the same-day claude stem is a different name, so no collision
+        self.assertEqual(
+            eval_schema.results_path(self.results, "trigger", "2026-07-02",
+                                     harness="claude"),
+            self.results / "trigger-2026-07-02.json")
+
+    def test_claude_harness_stays_unmarked(self):
+        self.assertEqual(
+            eval_schema.results_path(self.results, "trigger", "2026-07-02",
+                                     harness="claude"),
+            self.results / "trigger-2026-07-02.json")
+
+    def test_unknown_harness_fails_loud(self):
+        with self.assertRaises(ValueError):
+            eval_schema.results_path(self.results, "trigger", "2026-07-02",
+                                     harness="opencode")
+
 
 class TestValidResultsLink(unittest.TestCase):
     """LEDGER evidence links must follow the results naming grammar, not
@@ -300,6 +330,12 @@ class TestValidResultsLink(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertTrue(eval_schema.valid_results_link(target))
 
+    def test_omp_trigger_links_with_and_without_suffix_are_valid(self):
+        for target in ("evals/results/trigger-omp-2026-07-01.json",
+                       "evals/results/trigger-omp-2026-07-01-2.json"):
+            with self.subTest(target=target):
+                self.assertTrue(eval_schema.valid_results_link(target))
+
     def test_off_grammar_links_are_invalid(self):
         for target in (
                 "evals/results/output",                # bare directory
@@ -309,6 +345,10 @@ class TestValidResultsLink(unittest.TestCase):
                 "evals/results/trigger-July-1.json",   # not an ISO date
                 "evals/results/trigger-2026-07-01-1.json",   # -N starts at 2
                 "evals/results/trigger-2026-07-01-0.json",
+                # claude is the unmarked primary; unknown harness tokens
+                # are off-grammar too
+                "evals/results/trigger-claude-2026-07-01.json",
+                "evals/results/trigger-opencode-2026-07-01.json",
                 "evals/results/output/decompose-2026-07-01-007/grading.json"):
             with self.subTest(target=target):
                 self.assertFalse(eval_schema.valid_results_link(target))
