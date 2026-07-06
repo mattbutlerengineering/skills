@@ -153,3 +153,8 @@ Skill content must stay harness-neutral: plain process, file conventions, and
 questions. Anything specific to one harness (Claude Code invocation
 mechanics, plugin paths) belongs in packaging (README, manifests), not in
 stage skill instructions.
+
+This is not hypothetical: the skills run on two harnesses — Claude Code
+(primary) and oh-my-pi/omp (ADR-0027) — from a single neutral body. Each
+harness has its own packaging (`.claude-plugin/` manifests vs the root
+`package.json` `pi.skills` entry); the stage instructions know about neither.

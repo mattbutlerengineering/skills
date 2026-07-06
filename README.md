@@ -33,23 +33,38 @@ flowchart LR
 
 ## Install
 
+**Claude Code** (primary):
+
 ```
 /plugin marketplace add mattbutlerengineering/skills
 /plugin install idea-to-prod@skills
 ```
 
-Every skill works on a bare Claude Code install — no third-party tools, MCP
-servers, or other plugins required.
+**oh-my-pi (omp):** the skills also run under [omp](https://omp.sh). The root
+`package.json` declares them as a Pi package (`pi.skills`), so omp discovers all
+of them once the repo is on its package path:
+
+```
+git clone https://github.com/mattbutlerengineering/skills
+omp --skill ./skills/next          # or add the cloned dir as a Pi package
+```
+
+Fallbacks: omp inherits `.claude` skills on first run, or copy `skills/*` into
+`~/.pi/agent/skills/`.
+
+Every skill works on a bare install of either harness — no third-party tools,
+MCP servers, or other plugins required.
 
 ## Usage
 
 Two ways in:
 
-- **Guided:** invoke `/next`. It reads your repo's artifact state, tells you
-  where the run stands, and hands off to the right stage skill.
-- **Direct:** invoke any stage skill (`/prd`, `/architect`, …) to enter
-  mid-stream. If a predecessor artifact is missing, the skill offers a quick
-  backfill — it never blocks.
+- **Guided:** invoke `/next` (Claude Code) or `/skill:next` (omp). It reads your
+  repo's artifact state, tells you where the run stands, and hands off to the
+  right stage skill.
+- **Direct:** invoke any stage skill (`/prd`, `/architect`, … — `/skill:prd` on
+  omp) to enter mid-stream. If a predecessor artifact is missing, the skill
+  offers a quick backfill — it never blocks.
 
 The pipeline runs at three scales: a **product run** (greenfield; artifacts
 at your repo's `docs/` root), a **feature run** (artifacts under

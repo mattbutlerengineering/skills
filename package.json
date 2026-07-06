@@ -1,0 +1,9 @@
+{
+  "name": "idea-to-prod",
+  "version": "0.1.0",
+  "private": true,
+  "keywords": ["pi-package"],
+  "pi": {
+    "skills": ["./skills"]
+  }
+}

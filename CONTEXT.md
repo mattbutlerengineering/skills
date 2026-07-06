@@ -37,6 +37,14 @@ at the depth recorded in its brief. Its artifacts live under a per-fix
 directory.
 _Avoid_: bugfix run, hotfix run
 
+**Harness**:
+The agent runtime a skill runs inside. The skills are dual-target: **Claude
+Code** (primary — marketplace plugin, `claude`-CLI evals, LEDGER maturity) and
+**oh-my-pi / omp** (a supported second harness; ADR-0027). Skill bodies name no
+harness; each harness has its own packaging (`.claude-plugin/` manifests vs the
+root `package.json` `pi.skills` entry).
+_Avoid_: platform, runtime, agent (bare)
+
 **Utility skill**:
 A directly-invoked skill that owns no stage artifact, has no template, and
 is never routed to by /next. It acts on the work around a run: address-pr-review
