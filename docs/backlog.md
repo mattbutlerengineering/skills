@@ -7,3 +7,7 @@ Seed inbox — advisory only, never orientation state; grammar and read moments 
 - Ship should include a changelog / release-notes step (from: session:2026-07-05)
 - Deprecation/sunset runs — the pipeline has no way to retire shipped work (from: session:2026-07-05)
 - A durable home for idea seeds between runs (from: session:2026-07-05) (claimed: feature:seed-backlog)
+- Make artifact-commit an explicit stage step so run docs can't be left untracked (from: feature:seed-backlog)
+- Reconcile skills' one-question-at-a-time interview rule with harnesses that batch questions natively (from: feature:seed-backlog)
+- Tighten backlog grammar to reject a mis-ordered `(claimed:)` marker absorbed into seed text (from: feature:seed-backlog)
+- Repo-wide lint read_text error policy (decode/OS errors) instead of per-checker handling (from: feature:seed-backlog)
