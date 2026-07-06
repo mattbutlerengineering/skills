@@ -184,3 +184,62 @@ def next_stage(run_dir):
         if not complete(stage, artifact, run_dir):
             return stage
     return "complete"
+
+
+# The seed-backlog entry grammar (ADR-0029): docs/backlog.md is an
+# advisory bullet list, one seed per line, each carrying its origin
+# run-ref and optionally the run that claimed it. Only `- ` bullets are
+# held to the grammar; the run-ref forms mirror the protocol doc's
+# "Seed backlog (optional)" section.
+_BACKLOG_RUN_REF = re.compile(
+    r"product|feature:[a-z0-9-]+|maintenance:[a-z0-9-]+"
+    r"|session:\d{4}-\d{2}-\d{2}")
+_BACKLOG_ENTRY = re.compile(
+    r"- (?P<text>.+?) \(from: (?P<origin>[^()]+)\)"
+    r"(?: \(claimed: (?P<claimed>[^()]+)\))?")
+
+
+def _backlog_refs(match):
+    """The (marker, run-ref) pairs a matched entry carries; claimed may
+    be absent."""
+    return [(marker, match.group(marker))
+            for marker in ("origin", "claimed")
+            if match.group(marker) is not None]
+
+
+def parse_backlog(text):
+    """Parse backlog text into entries {text, origin, claimed} (claimed
+    is None on unclaimed seeds). Never raises: malformed bullets and
+    non-bullet lines are skipped — check_backlog is where they become
+    problems."""
+    entries = []
+    for line in text.splitlines():
+        match = _BACKLOG_ENTRY.fullmatch(line)
+        if not match or not all(_BACKLOG_RUN_REF.fullmatch(ref)
+                                for _, ref in _backlog_refs(match)):
+            continue
+        entries.append({"text": match.group("text"),
+                        "origin": match.group("origin"),
+                        "claimed": match.group("claimed")})
+    return entries
+
+
+def check_backlog(text):
+    """Problem strings (`backlog: line N: ...`) for every bullet line
+    that breaks the entry grammar; [] when conformant. Non-bullet lines
+    (header, blanks, prose) are ignored, and malformed input yields
+    problem strings, never exceptions."""
+    problems = []
+    for number, line in enumerate(text.splitlines(), 1):
+        if not line.startswith("- "):
+            continue
+        match = _BACKLOG_ENTRY.fullmatch(line)
+        if not match:
+            problems.append(f"backlog: line {number}: entry does not "
+                            "match '- <seed text> (from: <run-ref>)'")
+            continue
+        problems.extend(
+            f"backlog: line {number}: invalid run-ref {ref!r}"
+            for _, ref in _backlog_refs(match)
+            if not _BACKLOG_RUN_REF.fullmatch(ref))
+    return problems

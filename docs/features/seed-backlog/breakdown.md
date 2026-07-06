@@ -20,7 +20,7 @@ acceptance criteria are met. No tracker mirror (opted out).
     ("orientation never reads backlog state"), phrased parallel to the
     tracker-mirror section.
   - Blocked by: —
-- [ ] **Backlog grammar in protocol.py** — `parse_backlog(text)` and
+- [x] **Backlog grammar in protocol.py** — `parse_backlog(text)` and
   `check_backlog(text)`
   - Accept: parse returns entries `{text, origin, claimed}` (claimed may be
     None) and skips malformed lines; check returns `backlog: line N: …`
