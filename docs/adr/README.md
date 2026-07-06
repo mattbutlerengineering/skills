@@ -43,3 +43,4 @@ the canonical vocabulary.
 | [0024](0024-eval-schema-charter.md) | eval_schema's charter covers all eval knowledge, not one file's schema | provisional |
 | [0025](0025-maintenance-run-scale.md) | A third run scale: the maintenance run | accepted |
 | [0026](0026-tracker-mirror-one-way.md) | The issue-tracker bridge is an opt-in one-way mirror | accepted |
+| [0029](0029-backlog-seed-inbox.md) | A derived, advisory backlog (seed inbox) | provisional |
