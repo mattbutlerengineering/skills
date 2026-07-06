@@ -1,6 +1,6 @@
 # A derived, advisory backlog (seed inbox)
 
-- Status: provisional
+- Status: accepted (shipped by feature:seed-backlog, 2026-07-06)
 - Date: 2026-07-05
 
 ## Context

@@ -45,6 +45,6 @@ the canonical vocabulary.
 | [0026](0026-tracker-mirror-one-way.md) | The issue-tracker bridge is an opt-in one-way mirror | accepted |
 | [0027](0027-oh-my-pi-second-harness.md) | oh-my-pi is a supported second harness (Claude primary) | accepted |
 | [0028](0028-brownfield-adoption-onramp.md) | Brownfield adoption on-ramp (adopt/onboard entry) | provisional |
-| [0029](0029-backlog-seed-inbox.md) | A derived, advisory backlog (seed inbox) | provisional |
+| [0029](0029-backlog-seed-inbox.md) | A derived, advisory backlog (seed inbox) | accepted |
 | [0030](0030-incident-fastlane-and-tracker-intake.md) | Incident fast lane and tracker intake | provisional |
 | [0031](0031-omp-trigger-eval-adapter.md) | The trigger eval drives omp too; results are harness-marked | accepted |
