@@ -36,7 +36,7 @@ acceptance criteria are met. No tracker mirror (opted out).
 
 ## Milestone 2: Skills carry the loop
 
-- [ ] **operate appends** — extend `skills/operate/SKILL.md` step 6
+- [x] **operate appends** — extend `skills/operate/SKILL.md` step 6
   - Accept: instructs appending each retro seed to `docs/backlog.md` as a
     well-formed entry at run close (create the file if absent; never rewrite
     existing lines).
