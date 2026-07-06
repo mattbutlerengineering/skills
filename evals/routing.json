@@ -45,6 +45,9 @@
      "query": "What's next for the dark-mode run?"},
     {"id": "next-direct-2", "kind": "direct", "expected": "next",
      "query": "Where are we in the pipeline for this feature?"},
+    {"id": "next-maintenance-1", "kind": "direct", "expected": "next",
+     "query": "The login-timeout fix run is mid-flight — what's next?",
+     "notes": "maintenance runs are routed by next too, not only product/feature runs"},
 
     {"id": "idea-situational-1", "kind": "situational", "expected": "idea",
      "query": "Something feels off about our onboarding funnel — I think there's a product opportunity here but nothing concrete yet"},

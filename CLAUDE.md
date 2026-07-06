@@ -8,7 +8,7 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 ## Verify (CI runs both on every push/PR)
 
 - `python3 -m unittest discover tests`
-- `python3 lint.py` — exit 0 / `lint: 0 problem(s) across 13 skills`
+- `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
 
 On demand only (real model runs, costs money, never CI):
 `python3 trigger_eval.py` (needs the `claude` CLI).
