@@ -28,7 +28,7 @@ acceptance criteria are met. No tracker mirror (opted out).
     conformant, malformed-bullet, bad-run-ref, claimed, and non-bullet-line
     inputs through the public functions.
   - Blocked by: Protocol section
-- [ ] **Lint checker** — register `check_backlog` in `lint.py` `CHECKERS`
+- [x] **Lint checker** — register `check_backlog` in `lint.py` `CHECKERS`
   - Accept: `docs/backlog.md` validated when present; absent file yields no
     problems; unreadable file yields one problem string; exact-string tests
     in `tests/test_lint_checkers.py`; `python3 lint.py` exits 0 on the repo.

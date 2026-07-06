@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import eval_schema
+import protocol
 from protocol import ALL_SKILLS, STAGES, TEMPLATED_STAGES, read_frontmatter
 
 
@@ -160,6 +161,21 @@ def check_ledger(root):
             for slug in ALL_SKILLS + extra_skills(root) if slug not in text]
 
 
+def check_backlog(root):
+    """The seed backlog is strictly opt-in (ADR-0029): an absent
+    docs/backlog.md is no problem. protocol.check_backlog owns the entry
+    grammar; this checker keeps the filesystem half — existence and
+    readability."""
+    path = root / "docs" / "backlog.md"
+    if not path.is_file():
+        return []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as err:
+        return [f"backlog: docs/backlog.md is unreadable: {err}"]
+    return protocol.check_backlog(text)
+
+
 EVAL_LINK = re.compile(r"\]\((evals/results/[^)]+)\)")
 
 
@@ -183,8 +199,8 @@ def check_ledger_links(root):
 
 
 CHECKERS = (check_manifest, check_pi_package, check_skills, check_templates,
-            check_router, check_protocol, check_evals, check_output_evals,
-            check_ledger, check_ledger_links)
+            check_router, check_protocol, check_backlog, check_evals,
+            check_output_evals, check_ledger, check_ledger_links)
 
 
 def main():
