@@ -1,0 +1,46 @@
+{
+  "date": "2026-07-05",
+  "model": null,
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "next-maintenance-1",
+      "kind": "direct",
+      "expected": "next",
+      "query": "The login-timeout fix run is mid-flight \u2014 what's next?",
+      "fired": {
+        "none": 2,
+        "next": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "by_kind": {
+      "direct": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "next": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "next": {
+      "none": 2,
+      "next": 1
+    }
+  }
+}

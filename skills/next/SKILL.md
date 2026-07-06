@@ -1,6 +1,6 @@
 ---
 name: next
-description: Use when the user wants to continue the pipeline, asks "what's next", or wants to start or resume a product/feature run without naming a stage. Reads artifact state and routes to the right stage skill.
+description: Use when the user wants to continue the pipeline, asks "what's next", or wants to start or resume a product, feature, or maintenance run without naming a stage. Reads artifact state and routes to the right stage skill.
 ---
 
 # Next (pipeline router)
