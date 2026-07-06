@@ -108,6 +108,38 @@ its checkbox line, in exactly this form:
 `#123` is the issue reference in the tracker's own notation. Items with
 no mirrored issue carry no reference.
 
+### Seed backlog (optional)
+
+A target repo MAY keep a seed inbox at `docs/backlog.md` (ADR-0029).
+The backlog is advisory, never the state: orientation never reads
+backlog state, and on a repo without one nothing changes. It is not a
+run artifact — it carries no frontmatter, never appears in the
+orientation tables, and deleting it changes no orientation outcome.
+Ordering is the prioritization: top of file = propose first. One line
+per seed, in exactly these forms:
+
+```markdown
+- <seed text> (from: <run-ref>)
+- <seed text> (from: <run-ref>) (claimed: <run-ref>)
+```
+
+`<run-ref>` is `product`, `feature:<slug>`, `maintenance:<slug>`, or
+`session:<YYYY-MM-DD>` — the `session:` form covers a seed captured
+mid-session with no run closing.
+
+**Producers:** Operate appends its retro's idea seeds at run close
+(creating the file if absent), and Capture may append a consciously
+deferred defect. Producers append well-formed entries only and never
+rewrite existing lines.
+
+**Consumers:** `next` reads the backlog in exactly two moments — when
+asked what's next with no active run, and at its completed-run step —
+and never during active-run orientation. `idea` (or `capture`), when
+starting a run from a seed, claims it in place by appending
+`(claimed: <run-ref>)` to the seed's line — the origin marker is never
+rewritten — and records the seed as the new run's origin. No other
+skill reads the backlog.
+
 ## Soft gating
 
 When your predecessor artifact is missing, never refuse and never silently

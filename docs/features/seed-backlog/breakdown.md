@@ -11,7 +11,7 @@ acceptance criteria are met. No tracker mirror (opted out).
 
 ## Milestone 1: Convention is checkable — lint validates a backlog file
 
-- [ ] **Protocol section** — add "Seed backlog (optional)" to
+- [x] **Protocol section** — add "Seed backlog (optional)" to
   `docs/pipeline-protocol.md`
   - Accept: section defines location (`docs/backlog.md`), both entry forms,
     all four `run-ref` forms (`product` | `feature:<slug>` |
