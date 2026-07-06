@@ -85,6 +85,28 @@ class TestEarlyDetection(unittest.TestCase):
         self.assertEqual(detect_fired(iter(events), NAMES), "prd")
 
 
+class TestSubstringShadowing(unittest.TestCase):
+    """review-skill-<id> is a substring of address-pr-review-skill-<id>,
+    and ALL_SKILLS lists review first — so first-substring-match
+    misattributes every address-pr-review fire to review (observed in
+    the 2026-07-03 recorded runs). The longer command name must win."""
+
+    SHADOWED = {"review-skill-abc123": "review",
+                "address-pr-review-skill-abc123": "address-pr-review"}
+
+    def test_longer_command_name_wins_over_its_substring(self):
+        events = [block_start("Skill"),
+                  delta('{"skill": "address-pr-review-skill-abc123"}')]
+        self.assertEqual(detect_fired(iter(events), self.SHADOWED),
+                         "address-pr-review")
+
+    def test_shorter_name_still_matches_when_actually_fired(self):
+        events = [block_start("Skill"),
+                  delta('{"skill": "review-skill-abc123"}')]
+        self.assertEqual(detect_fired(iter(events), self.SHADOWED),
+                         "review")
+
+
 class TestStopFallbacks(unittest.TestCase):
     def test_content_block_stop_with_no_match_returns_none(self):
         events = exploding_events([
