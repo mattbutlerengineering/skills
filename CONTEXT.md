@@ -95,3 +95,34 @@ A seed docs tree under `evals/fixtures/` copied into a scratch project before
 an output eval runs. Upstream artifacts pre-answer what the skill would
 otherwise interview for.
 _Avoid_: test data
+
+### Factory (ADR-0032, ADR-0033, ADR-0034)
+
+**Work order**:
+A work item promoted for dispatch: carries a typed ID (WO-####), a size
+class and budget, and is mirrored one-way to a tracker issue so an
+unattended agent can execute it.
+_Avoid_: ticket, task
+
+**Knowledge plane**:
+The run artifacts as source of truth (ADR-0004, restated for the factory).
+Offline detectors gate it; orientation reads only this plane.
+_Avoid_: docs, wiki
+
+**Dispatch plane**:
+The work queue — work-order issues plus the dependency graph — mirrored
+one-way from breakdown rows and never authoritative over the knowledge
+plane.
+_Avoid_: backlog (reserved for the seed inbox), tracker state
+
+**Gate**:
+One of exactly three human decision points (PRD approval, blueprint/ADR
+approval, PR merge), each physically enforced. Everything between gates
+runs unattended.
+_Avoid_: checkpoint, sign-off, approval step
+
+**Charter**:
+The definition of one agent role: mission, owned stages, entry/exit
+criteria, actions, tool grants, escalation rules. Encoded as a skill plus
+a subagent definition.
+_Avoid_: persona, job description
