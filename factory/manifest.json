@@ -1,0 +1,7 @@
+{
+  "plugin": "idea-to-prod",
+  "files": {
+    "templates/Makefile": "4f76165345c0e7d28afa03ba80907f61782f37c40391b1bb28121119ae46d042",
+    "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d"
+  }
+}

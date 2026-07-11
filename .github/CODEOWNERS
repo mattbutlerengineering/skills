@@ -1,0 +1,8 @@
+# Human gates (ADR-0033): required code-owner review makes the merged PR
+# the approval record. The explicit doc paths are the gate-1/gate-2
+# surfaces; the fallback keeps every merge owner-reviewed until classes
+# graduate to auto-merge on data.
+* @mattbutlerengineering
+docs/adr/ @mattbutlerengineering
+docs/features/ @mattbutlerengineering
+docs/design/ @mattbutlerengineering

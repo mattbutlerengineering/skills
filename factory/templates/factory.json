@@ -1,0 +1,14 @@
+{
+  "budgets_usd": {
+    "S": 5,
+    "M": 15,
+    "L": 40
+  },
+  "routing": {
+    "mechanical": "claude-haiku-4-5",
+    "implementation": "claude-sonnet-5",
+    "architecture_review": "claude-fable-5"
+  },
+  "wip_cap": 3,
+  "monthly_cap_usd": 300
+}
