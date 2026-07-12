@@ -25,7 +25,7 @@ per ADR-0032 after each row exists here first.
   - Accept: a PR body missing the work-order citation fails B in event context and SKIPs locally; a unit test pins Makefile and CI steps in lockstep.
 - [ ] **WO-0004** validator.yml (check + tests + merged-label step + review job) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #109)
   - Accept: every PR runs detectors and tests; closing a merged PR flips the lifecycle label; the review job posts findings from a non-authoring actor.
-- [ ] **WO-0013** minimal charters first: SWE, Reviewer, Planner (agents + SKILL.md) — size:M, blocked by: WO-0001 (PRD-0001 §Actors) (tracker: #118)
+- [x] **WO-0013** minimal charters first: SWE, Reviewer, Planner (agents + SKILL.md) — size:M, blocked by: WO-0001 (PRD-0001 §Actors) (tracker: #118)
   - Accept: three agent files with `name:` frontmatter plus their SKILL.md charters load cleanly; structural lint passes.
 
 ## Milestone B: AFK dispatch (first fully unattended work order lands as a PR)
@@ -93,3 +93,22 @@ ADR-0033, and ADR-0034 (all accepted).
   YAML parser, so detector L could never have read a `.yml` taxonomy without
   a third-party dependency; JSON is also what `gh label list --json` returns,
   so the desired and live shapes match.
+- 2026-07-12: open gap — the charters (WO-0013, PRD-0001 §Actors) have
+  **no load path**. They live at `factory/agents/*.md` +
+  `factory/skills/<role>/SKILL.md`, but Claude Code discovers subagents
+  only under `.claude/agents/` or `<plugin-root>/agents/`; nothing
+  discovers or stamps this path today, so the charters are inert and no
+  row owns wiring them up. They stay out of `factory/templates/**`
+  deliberately: detector E checksum-pins that tree, and the full charter
+  set (WO-0014, PRD-0001 §Actors) will churn them heavily. The assembler
+  order (WO-0005, PRD-0001 §Solution) is the natural owner — it builds the
+  dispatched run's environment — and the charter regression replays
+  (WO-0016, PRD-0001 §Actors) presuppose the load path it would create.
+  To be settled when the assembler is implemented; no row is invented
+  here (ADR-0032, one-way mirror).
+- 2026-07-12: charters carry a routing *band* (`route: implementation` or
+  `architecture_review`), never a model id — the band resolves through
+  `factory.json`'s routing table, which the routing order
+  (WO-0007, PRD-0001 §Solution) wires up. A `model:` in a charter would be
+  a second routing source of truth (ADR-0004), which is the drift this
+  factory exists to catch.
