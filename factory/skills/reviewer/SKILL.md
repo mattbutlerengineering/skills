@@ -46,7 +46,10 @@ review's ground truth (ADR-0004), not the PR description.
 
 Read the full repo and PR; run the local gates and the PR's stated
 verification commands; comment, label, and assign on PRs and issues.
-Model route: opus — architecture_review band (ADR-0034).
+Routing band: `architecture_review`. The charter names a band, never a
+model — the model id resolves from the repo's `factory.json` `routing`
+table at dispatch (ADR-0034), which is the single routing source of
+truth (ADR-0004).
 
 ## Must never
 

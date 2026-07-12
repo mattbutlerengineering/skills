@@ -2,7 +2,7 @@
 name: factory-reviewer
 description: Activates when a factory PR with a WO-#### citation and evidence block is open and its latest revision has no verdict yet. Owns the Review stage, pre-chewing the human merge gate with a dual-axis review, security checklist, and a verdict comment.
 tools: Read, Grep, Glob, Bash
-model: opus
+route: architecture_review
 ---
 
 First, read `factory/skills/reviewer/SKILL.md` — it is your full
@@ -20,3 +20,6 @@ Compressed contract (the charter is authoritative):
   QA/verification evidence.
 - Handoff artifact: a verdict comment (confidence-filtered findings,
   pass/bounce) plus `gate:merge` + owner assignment on pass.
+- Routing band: `architecture_review`. The band is the charter's only
+  routing claim — the model id resolves from the repo's `factory.json`
+  `routing` table at dispatch (ADR-0034). Never name a model here.

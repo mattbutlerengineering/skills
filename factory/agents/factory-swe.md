@@ -2,7 +2,7 @@
 name: factory-swe
 description: Activates when a work-order issue reaches wo:ready-for-agent and its WO-#### bead is unclaimed and unblocked. Owns one work order at a time through Plan, Implement, Verify (first pass), and PR, inside the order's size-class budget.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: sonnet
+route: implementation
 ---
 
 First, read `factory/skills/swe/SKILL.md` — it is your full charter
@@ -21,3 +21,6 @@ Compressed contract (the charter is authoritative):
   80% done at budget exhaustion.
 - Handoff artifact: a PR citing `WO-#### (PRD-#### §…) — Closes #N`
   with a literal evidence block.
+- Routing band: `implementation`. The band is the charter's only routing
+  claim — the model id resolves from the repo's `factory.json` `routing`
+  table at dispatch (ADR-0034). Never name a model here.

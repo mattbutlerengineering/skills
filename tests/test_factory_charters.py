@@ -5,7 +5,14 @@ a charter that fails these checks is silently undispatchable. Each role
 is encoded as two files (agent stub + full charter in
 factory/skills/<role>/SKILL.md); tests assert the exact paths and fields
 the dispatch plane (ADR-0032) depends on.
+
+Charters carry a routing *band* (`route:`), never a model id: the band
+resolves to a model through the per-repo `factory.json` routing table
+(ADR-0034), which is the single routing source of truth (ADR-0004).
+Resolution itself is WO-0007's job — these tests only pin that the
+charters name a real band and assert no model of their own.
 """
+import json
 import unittest
 from pathlib import Path
 
@@ -15,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 ROLES = ("swe", "reviewer", "planner")
 
-REQUIRED_FIELDS = ("description", "tools", "model")
+REQUIRED_FIELDS = ("description", "tools", "route")
 
 
 def agent_path(role):
@@ -24,6 +31,14 @@ def agent_path(role):
 
 def skill_path(role):
     return REPO_ROOT / "factory" / "skills" / role / "SKILL.md"
+
+
+def routing_bands():
+    """The band names defined by the factory config's routing table."""
+    config = json.loads(
+        (REPO_ROOT / "factory" / "templates" / "factory.json")
+        .read_text(encoding="utf-8"))
+    return set(config["routing"])
 
 
 def agent_body(role):
@@ -65,6 +80,20 @@ class TestAgentStubs(unittest.TestCase):
             with self.subTest(role=role):
                 self.assertIn(f"factory/skills/{role}/SKILL.md",
                               agent_body(role))
+
+    def test_route_names_a_band_the_factory_config_defines(self):
+        bands = routing_bands()
+        for role in ROLES:
+            with self.subTest(role=role):
+                fields = protocol.read_frontmatter(agent_path(role)) or {}
+                self.assertIn(fields.get("route"), bands)
+
+    def test_no_stub_hardcodes_a_model(self):
+        """A `model:` in a stub is a second routing source (ADR-0004)."""
+        for role in ROLES:
+            with self.subTest(role=role):
+                fields = protocol.read_frontmatter(agent_path(role)) or {}
+                self.assertNotIn("model", fields)
 
 
 class TestCharterSkills(unittest.TestCase):

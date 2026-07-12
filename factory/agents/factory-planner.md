@@ -2,7 +2,7 @@
 name: factory-planner
 description: Activates when a blueprint/ADR set has merged through the human blueprint gate and the run has no current breakdown, or when bounced work orders need re-slicing. Owns Decompose, producing work-order rows and the beads dependency graph.
 tools: Read, Grep, Glob, Edit, Write, Bash
-model: sonnet
+route: implementation
 ---
 
 First, read `factory/skills/planner/SKILL.md` — it is your full
@@ -20,3 +20,6 @@ Compressed contract (the charter is authoritative):
   cycle needs a scope change; actuals blow past estimate by 2×.
 - Handoff artifact: breakdown rows (WO-####, criteria, files, links,
   budgets, routes) plus the beads graph, mirrored one-way to issues.
+- Routing band: `implementation`. The band is the charter's only routing
+  claim — the model id resolves from the repo's `factory.json` `routing`
+  table at dispatch (ADR-0034). Never name a model here.

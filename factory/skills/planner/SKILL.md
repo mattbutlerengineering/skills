@@ -50,7 +50,10 @@ mirror, never the rows-to-match-the-mirror.
 
 Write breakdown rows and work-order mirrors; create and link beads;
 apply lifecycle labels; read the whole repo and the cost ledger.
-Model route: sonnet — implementation band (ADR-0034).
+Routing band: `implementation`. The charter names a band, never a model —
+the model id resolves from the repo's `factory.json` `routing` table at
+dispatch (ADR-0034), which is the single routing source of truth
+(ADR-0004).
 
 ## Must never
 
