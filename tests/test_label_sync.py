@@ -8,6 +8,7 @@ touches the network.
 import contextlib
 import io
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,6 +61,24 @@ class RecordingRunner:
 
     def __call__(self, args):
         self.calls.append(list(args))
+        if args[:2] == ["label", "list"]:
+            return json.dumps(self.listing)
+        return ""
+
+
+class FailingRunner(RecordingRunner):
+    """Injected gh runner that fails the way a real gh does: raises the
+    exception `subprocess.run(check=True)` / a missing binary would."""
+
+    def __init__(self, listing, error, failing=("label", "list")):
+        super().__init__(listing)
+        self.error = error
+        self.failing = list(failing)
+
+    def __call__(self, args):
+        self.calls.append(list(args))
+        if list(args[:len(self.failing)]) == self.failing:
+            raise self.error
         if args[:2] == ["label", "list"]:
             return json.dumps(self.listing)
         return ""
@@ -148,6 +167,22 @@ class TestLoadLabels(unittest.TestCase):
                 " description"])
             self.assertEqual([label["name"] for label in labels], ["size:S"])
 
+    def test_duplicate_name_is_flagged_and_excluded(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", json.dumps(
+                [{"name": "size:S", "color": "f9d0c4",
+                  "description": "Budget class S (~$5)"},
+                 {"name": "size:M", "color": "f9d0c4",
+                  "description": "Budget class M (~$15)"},
+                 {"name": "size:S", "color": "ffffff",
+                  "description": "second definition wins on GitHub"}]))
+            labels, problems = label_sync.load_labels(tree.root)
+            self.assertEqual(problems, [
+                "L: .github/labels.json[2] duplicate label name size:S"])
+            self.assertEqual([label["name"] for label in labels],
+                             ["size:S", "size:M"])
+
 
 class TestPlan(unittest.TestCase):
     def test_empty_current_recreates_the_full_taxonomy(self):
@@ -174,6 +209,14 @@ class TestPlan(unittest.TestCase):
         self.assertEqual(label_sync.plan(current, desired), [
             "L: label needs-human description 'oops',"
             " want 'Flag: agent escalation'"])
+
+    def test_color_case_is_not_drift(self):
+        # GitHub returns whatever case the color was created with — this
+        # repo already carries 0E8A16 — so hex case alone must not drift.
+        desired = taxonomy()
+        current = [dict(label, color=label["color"].upper())
+                   for label in desired]
+        self.assertEqual(label_sync.plan(current, desired), [])
 
     def test_non_taxonomy_labels_are_ignored(self):
         desired = taxonomy()
@@ -245,6 +288,43 @@ class TestSync(unittest.TestCase):
                 "L: .github/labels.json must be a non-empty JSON array"
                 " of label entries"])
             self.assertEqual(runner.calls, [])
+
+    def test_failing_gh_list_reports_stderr_not_a_traceback(self):
+        # gh present but unauthenticated / rate-limited: check=True raises.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree_with_template(tmp)
+            runner = FailingRunner([], subprocess.CalledProcessError(
+                1, ["gh", "label", "list"],
+                stderr="gh: Bad credentials (HTTP 401)\n"))
+            problems = label_sync.sync(tree.root, run=runner)
+            self.assertEqual(problems, [
+                "L: gh label list failed: gh: Bad credentials (HTTP 401)"])
+            self.assertEqual(runner.calls, [self.LIST_CALL])
+
+    def test_missing_gh_binary_reports_the_os_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree_with_template(tmp)
+            error = FileNotFoundError(2, "No such file or directory")
+            error.filename = "gh"
+            runner = FailingRunner([], error)
+            problems = label_sync.sync(tree.root, run=runner)
+            self.assertEqual(problems, [
+                f"L: gh label list failed: {error}"])
+
+    def test_failing_gh_create_reports_per_label_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree_with_template(tmp)
+            runner = FailingRunner(
+                [self.DESIRED[1]],
+                subprocess.CalledProcessError(
+                    1, ["gh", "label", "create"],
+                    stderr="HTTP 403: rate limit exceeded\n"),
+                failing=("label", "create"))
+            problems = label_sync.sync(tree.root, apply=True, run=runner)
+            self.assertEqual(problems, [
+                "L: missing label wo:draft",
+                "L: gh label create wo:draft failed:"
+                " HTTP 403: rate limit exceeded"])
 
 
 class TestCli(unittest.TestCase):

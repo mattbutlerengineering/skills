@@ -41,7 +41,7 @@ def load_labels(root):
     if not isinstance(data, list) or not data:
         return [], [f"L: {rel} must be a non-empty JSON array"
                     " of label entries"]
-    labels, problems = [], []
+    labels, problems, seen = [], [], set()
     for index, entry in enumerate(data):
         fields = entry if isinstance(entry, dict) else {}
         lacking = [field for field in LABEL_FIELDS
@@ -50,7 +50,11 @@ def load_labels(root):
         if lacking:
             problems.append(
                 f"L: {rel}[{index}] entry lacks {', '.join(lacking)}")
+        elif fields["name"] in seen:
+            problems.append(
+                f"L: {rel}[{index}] duplicate label name {fields['name']}")
         else:
+            seen.add(fields["name"])
             labels.append({field: fields[field] for field in LABEL_FIELDS})
     return labels, problems
 
@@ -58,7 +62,9 @@ def load_labels(root):
 def plan(current, desired):
     """PURE drift computation: the L: problems that make current match
     desired. Labels outside the taxonomy are ignored (GitHub defaults are
-    not drift), so an empty desired plans nothing."""
+    not drift), so an empty desired plans nothing. Color compares
+    case-insensitively — GitHub stores hex either way (this repo already
+    carries `0E8A16`), and case alone is not drift."""
     have = {label.get("name"): label for label in current}
     problems = []
     for want in desired:
@@ -66,7 +72,7 @@ def plan(current, desired):
         if got is None:
             problems.append(f"L: missing label {want['name']}")
             continue
-        if got.get("color") != want["color"]:
+        if str(got.get("color") or "").lower() != want["color"].lower():
             problems.append(f"L: label {want['name']} color"
                             f" {got.get('color')}, want {want['color']}")
         if got.get("description") != want["description"]:
@@ -77,30 +83,51 @@ def plan(current, desired):
 
 
 def gh_runner(args):
-    """Default runner: shell out to gh, return stdout. Tests inject a fake
-    so they never touch the network."""
+    """Default runner: shell out to gh, return stdout. A missing (OSError),
+    unauthenticated, or rate-limited (CalledProcessError) gh raises — sync
+    turns that into an L: problem string, never a traceback. Tests inject a
+    fake so they never touch the network."""
     return subprocess.run(["gh", *args], check=True, capture_output=True,
                           text=True).stdout
+
+
+GH_FAILURES = (subprocess.CalledProcessError, OSError)
+
+
+def gh_detail(err):
+    """One-line detail for the L: problem string of a failed gh call:
+    gh's own stderr when it ran, else the OS error (e.g. gh not installed)."""
+    stderr = (getattr(err, "stderr", None) or "").strip()
+    return stderr.splitlines()[-1] if stderr else str(err)
 
 
 def sync(root, apply=False, run=gh_runner):
     """Report drift between the live label set and the taxonomy; with
     apply=True, force-create each drifted label (gh treats create --force
     on an existing name as an update). A broken labels.json short-circuits
-    before any network call."""
+    before any network call; a failing gh call becomes an L: problem string
+    (this detector runs in a scheduled sweep, where a traceback is noise)."""
     desired, problems = load_labels(root)
     if problems:
         return problems
-    current = json.loads(run(["label", "list", "--json",
-                              "name,color,description", "--limit", "1000"]))
+    try:
+        current = json.loads(run(["label", "list", "--json",
+                                  "name,color,description",
+                                  "--limit", "1000"]))
+    except GH_FAILURES as err:
+        return [f"L: gh label list failed: {gh_detail(err)}"]
     problems = []
     for want in desired:
         drift = plan(current, [want])
         problems.extend(drift)
         if apply and drift:
-            run(["label", "create", want["name"], "--force",
-                 "--color", want["color"],
-                 "--description", want["description"]])
+            try:
+                run(["label", "create", want["name"], "--force",
+                     "--color", want["color"],
+                     "--description", want["description"]])
+            except GH_FAILURES as err:
+                problems.append(f"L: gh label create {want['name']} failed:"
+                                f" {gh_detail(err)}")
     return problems
 
 
