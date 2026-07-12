@@ -72,7 +72,10 @@ ADR-0033, and ADR-0034 (all accepted).
 
 - 2026-07-12: PRD open question "beads adoption timing" answered here —
   adopted at mirror time; the dependency graph above is recorded in beads
-  when rows are mirrored to the tracker.
+  when rows are mirrored to the tracker. **Superseded by ADR-0035
+  (2026-07-12):** GitHub issues are the single work-order mirror; beads is
+  not a work-order mirror. The dependency graph rides the GitHub issues and
+  the blocking-edge tokens on the rows, not beads.
 - 2026-07-12: the template payload carries machine-copied mirrors of
   `gates.py` and `protocol.py` (stamped detectors import their sibling
   frontmatter seam; refreshed by `factory_init.py update-manifest`,

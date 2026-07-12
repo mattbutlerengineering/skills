@@ -51,3 +51,4 @@ the canonical vocabulary.
 | [0032](0032-factory-dispatch-plane.md) | Factory dispatch plane: issues mirror breakdown rows one-way | accepted |
 | [0033](0033-three-human-gates.md) | Three human gates: PRD, blueprint, merge | accepted |
 | [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | accepted |
+| [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | accepted |
