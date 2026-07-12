@@ -30,13 +30,54 @@ import gates
 # real repo path.
 FILENAME_TOKEN = re.compile(r"\b[\w-]+\.(?:py|yml|yaml|md|json)\b")
 
+# A breakdown row is a checkbox bullet; the WO its FIRST token names owns the
+# block that follows until the next such bullet. Same grammar assembler.ROW
+# reads — the Accept:/Notes sub-bullets under a row are NOT checkbox bullets,
+# so they belong to their work order's block, which is where this repo's rows
+# actually cite ADRs (the bullet line cites only the PRD section).
+ROW = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s")
 
-def cited_adrs(row):
-    """ADR numbers the row cites, in citation order, deduplicated. Same
-    grammar gates.ADR_TOKEN reads elsewhere in the knowledge plane (detector
-    C's link integrity, detector D's blueprint drift) — a row that names no
-    ADR cites none; that is a fact about the row, not a gap here."""
-    return list(dict.fromkeys(gates.ADR_TOKEN.findall(row)))
+
+def wo_block(root, wo):
+    """The full breakdown block a work order owns — its checkbox bullet PLUS
+    the indented Accept:/Notes sub-bullets beneath it, up to the next
+    work-order bullet or heading — or None when no row names it.
+
+    This is why ADR-bundling actually fires: in this repo's row grammar the
+    bullet line cites only `PRD-#### §section`; the ADRs a work order builds
+    on are named in the sub-bullets below it (or nowhere). Scanning only the
+    bullet, as an earlier cut did, bundled zero ADRs for every real row.
+    Still repo-file-sourced (the knowledge plane), never an issue body — the
+    ADR-0032 boundary holds: a broader slice of the SAME breakdown.md, not a
+    new, attacker-reachable input."""
+    for run in gates.run_dirs(root):
+        breakdown = run / "breakdown.md"
+        if not breakdown.is_file():
+            continue
+        lines = breakdown.read_text(encoding="utf-8").splitlines()
+        for index, line in enumerate(lines):
+            if not (ROW.match(line) and gates.WO_TOKEN.search(line)):
+                continue
+            if gates.WO_TOKEN.findall(line)[0] != wo:
+                continue
+            block = [line]
+            for nxt in lines[index + 1:]:
+                if (ROW.match(nxt) and gates.WO_TOKEN.search(nxt)) \
+                        or nxt.startswith("#"):
+                    break
+                block.append(nxt)
+            return "\n".join(block).strip()
+    return None
+
+
+def cited_adrs(text):
+    """ADR numbers a breakdown block cites, in citation order, deduplicated.
+    Same grammar gates.ADR_TOKEN reads elsewhere in the knowledge plane
+    (detector C's link integrity, detector D's blueprint drift) — a block
+    that names no ADR cites none; that is a fact about the block, not a gap
+    here. Callers pass the work order's full block (see wo_block), not just
+    its bullet line, because that is where the citations live."""
+    return list(dict.fromkeys(gates.ADR_TOKEN.findall(text)))
 
 
 def adr_path(root, number):
@@ -60,8 +101,16 @@ def _resolve_file(root, name):
 
 def _python_structure(path):
     """(docstring headline, [top-level def/class names]) for a .py file,
-    read via ast so nothing executes."""
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    read via ast so nothing executes. A file that cannot be read or parsed
+    (syntax error, non-UTF-8) degrades to (message, None) rather than
+    raising — the codegraph is best-effort orientation, and one unparseable
+    file a row names must not crash the assembler CLI (the repo's
+    problem-string/degrade convention, not a traceback)."""
+    try:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+    except (OSError, ValueError, SyntaxError) as err:
+        return f"(could not be parsed: {err.__class__.__name__})", None
     doc = ast.get_docstring(tree)
     headline = doc.strip().splitlines()[0] if doc else "(no module docstring)"
     names = [node.name for node in tree.body
@@ -70,49 +119,61 @@ def _python_structure(path):
     return headline, names
 
 
-def codegraph_summary(root, row):
-    """A lightweight structural map of the repo files a breakdown row names:
-    for a .py file, its module docstring headline and top-level def/class
-    names (via ast — nothing executes); for anything else, just that it
-    exists in the tree. Pure over `root` + `row`, stdlib-only, no dependency
-    graph — the minimum that lets a dispatched agent orient before reading
-    blind."""
+def codegraph_summary(root, text):
+    """A lightweight structural map of the repo files a breakdown block
+    names: for a .py file, its module docstring headline and top-level
+    def/class names (via ast — nothing executes; an unparseable file
+    degrades to a note, never a crash); for anything else, just that it
+    exists in the tree. Pure over `root` + `text`, stdlib-only, no
+    dependency graph — the minimum that lets a dispatched agent orient
+    before reading blind."""
     root = Path(root)
     lines = []
-    for name in dict.fromkeys(FILENAME_TOKEN.findall(row)):
+    for name in dict.fromkeys(FILENAME_TOKEN.findall(text)):
         path = _resolve_file(root, name)
         if path is None:
             continue
         rel = path.relative_to(root).as_posix()
         if path.suffix == ".py":
             headline, names = _python_structure(path)
-            listing = ", ".join(names) if names else "(no top-level defs)"
-            lines.append(f"- {rel} — {headline}\n  {listing}")
+            if names is None:
+                lines.append(f"- {rel} — {headline}")
+            else:
+                listing = ", ".join(names) if names else "(no top-level defs)"
+                lines.append(f"- {rel} — {headline}\n  {listing}")
         else:
             lines.append(f"- {rel}")
     if not lines:
-        return "(no repo files named on this row were found)"
+        return "(no repo files named on this block were found)"
     return "\n".join(lines)
 
 
 def orientation_pack(root, wo, row):
-    """The orientation pack for a dispatched work order: CONTEXT.md, the
-    ADRs the row cites, and a codegraph summary of the files it names — the
-    knowledge-plane context WO-0015 promises the assembler prompt. Pure over
-    `root` + `row`: every byte is a repo file reached from the
-    repo-controlled breakdown row, never an issue body (ADR-0032's
-    prompt-injection boundary — this function does not even accept one)."""
+    """The orientation pack for a dispatched work order: CONTEXT.md, the ADRs
+    the work order's breakdown block cites, and a codegraph summary of the
+    files it names — the knowledge-plane context WO-0015 promises the
+    assembler prompt. Pure over `root` + `wo` + `row`: every byte is a repo
+    file reached from the repo-controlled breakdown, never an issue body
+    (ADR-0032's prompt-injection boundary — this function does not even
+    accept one).
+
+    The ADR/codegraph scan reads the work order's full block (bullet PLUS
+    its Accept:/Notes sub-bullets, via wo_block) rather than the bullet
+    `row` alone, because that block is where this repo's rows cite ADRs. The
+    bullet `row` remains the fallback when no breakdown names this WO (e.g.
+    a hand call), so the pack still degrades cleanly."""
     root = Path(root)
+    block = wo_block(root, wo) or row
     context_path = root / "CONTEXT.md"
     context = (context_path.read_text(encoding="utf-8")
                if context_path.is_file() else "(no CONTEXT.md at repo root)")
     parts = [f"## Orientation pack: {wo}\n", "### CONTEXT.md\n", context]
-    for number in cited_adrs(row):
+    for number in cited_adrs(block):
         path = adr_path(root, number)
         if path is None:
             continue
         parts.append(f"### ADR-{number}: {path.stem}\n")
         parts.append(path.read_text(encoding="utf-8"))
     parts.append("### Codegraph summary\n")
-    parts.append(codegraph_summary(root, row))
+    parts.append(codegraph_summary(root, block))
     return "\n".join(parts)

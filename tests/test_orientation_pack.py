@@ -26,6 +26,35 @@ ROW_WITH_ADR = (
     " (ADR-0032) (tracker: #999)")
 ROW_NO_ADR = "- [ ] **WO-0098** demo — size:S, blocked by: — (PRD-0001 §Solution)"
 
+# This repo's REAL row grammar: the checkbox bullet cites only a PRD section,
+# and the ADRs a work order builds on live in its indented Accept: sub-bullet
+# (copied in shape from docs/features/software-factory/breakdown.md — 0/18 of
+# its rows carry an ADR token on the bullet line). The bundling mechanism must
+# scan the block, not just the bullet, or it delivers zero ADRs for every real
+# dispatch.
+REALISTIC_BREAKDOWN = (
+    "# Breakdown\n"
+    "\n"
+    "## Milestone B\n"
+    "\n"
+    "- [ ] **WO-0090** earlier row — size:S, blocked by: — (PRD-0001 §Solution)"
+    " (tracker: #990)\n"
+    "  - Accept: unrelated, cites ADR-0033 in ITS block, not WO-0091's.\n"
+    "- [ ] **WO-0091** dispatch guard — size:S, blocked by: WO-0090"
+    " (PRD-0001 §Solution) (tracker: #991)\n"
+    "  - Accept: the guard honors the dispatch boundary from ADR-0032.\n"
+    "\n"
+    "## Milestone C\n"
+    "\n"
+    "- [ ] **WO-0092** later row — size:S, blocked by: WO-0091"
+    " (PRD-0001 §Solution) (tracker: #992)\n"
+)
+# WO-0091's bullet line ALONE — what resolve_row hands assemble_prompt as the
+# prompt substrate. It carries no ADR token; the citation is in the block.
+BULLET_0091 = (
+    "- [ ] **WO-0091** dispatch guard — size:S, blocked by: WO-0090"
+    " (PRD-0001 §Solution) (tracker: #991)")
+
 
 class FixtureTree:
     def __init__(self, root):
@@ -61,6 +90,36 @@ class TestCitedAdrs(unittest.TestCase):
         self.assertEqual(orientation_pack.cited_adrs(row), ["0032", "0033"])
 
 
+class TestWoBlock(unittest.TestCase):
+    """The work order's full breakdown block — bullet PLUS its Accept:/Notes
+    sub-bullets — is where this repo's rows cite ADRs, so wo_block is what
+    makes ADR-bundling fire under the real grammar."""
+
+    def tree(self, tmp):
+        tree = FixtureTree(tmp)
+        tree.write("docs/features/demo/breakdown.md", REALISTIC_BREAKDOWN)
+        return tree
+
+    def test_the_block_includes_the_accept_sub_bullet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            block = orientation_pack.wo_block(self.tree(tmp).root, "WO-0091")
+        self.assertIn("dispatch guard", block)
+        self.assertIn("ADR-0032", block)
+
+    def test_the_block_stops_before_the_next_work_order(self):
+        """WO-0090's Accept sub-bullet cites ADR-0033; WO-0091's block must
+        NOT absorb it, or it would bundle a neighbour's ADR."""
+        with tempfile.TemporaryDirectory() as tmp:
+            block = orientation_pack.wo_block(self.tree(tmp).root, "WO-0091")
+        self.assertNotIn("ADR-0033", block)
+        self.assertNotIn("later row", block)
+
+    def test_an_unknown_work_order_has_no_block(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(
+                orientation_pack.wo_block(self.tree(tmp).root, "WO-9999"))
+
+
 class TestAdrPath(unittest.TestCase):
     def test_a_cited_number_resolves_to_its_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -83,7 +142,7 @@ class TestCodegraphSummary(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             summary = orientation_pack.codegraph_summary(tmp, "prose only")
             self.assertEqual(
-                summary, "(no repo files named on this row were found)")
+                summary, "(no repo files named on this block were found)")
 
     def test_a_python_file_lists_its_docstring_and_top_level_defs(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -105,6 +164,17 @@ class TestCodegraphSummary(unittest.TestCase):
             summary = orientation_pack.codegraph_summary(
                 tmp, "assembler.yml + guards")
             self.assertIn(".github/workflows/assembler.yml", summary)
+
+    def test_an_unparseable_python_file_degrades_and_does_not_crash(self):
+        """A row naming a .py file with a syntax error must not crash the
+        assembler CLI — the codegraph degrades to a note (the repo's
+        problem-string/degrade convention), never a traceback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("broken.py", "def oops(:\n    this is not python\n")
+            summary = orientation_pack.codegraph_summary(tmp, "broken.py")
+            self.assertIn("broken.py", summary)
+            self.assertIn("could not be parsed", summary)
 
 
 class TestOrientationPack(unittest.TestCase):
@@ -131,6 +201,24 @@ class TestOrientationPack(unittest.TestCase):
             pack = orientation_pack.orientation_pack(
                 tree.root, "WO-0098", ROW_NO_ADR)
         self.assertNotIn("Factory dispatch plane", pack)
+        self.assertNotIn("Human gates", pack)
+
+    def test_bundles_adrs_cited_in_the_accept_sub_bullet_not_the_bullet(self):
+        """The acceptance criterion under the REAL row grammar: the ADR lives
+        in WO-0091's Accept sub-bullet, and the bullet `row` handed in
+        (BULLET_0091) carries no ADR token — yet the pack still bundles
+        ADR-0032, because it scans the work order's full breakdown block. It
+        must NOT bundle ADR-0033, which belongs to the neighbouring WO-0090's
+        block."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).orientation()
+            tree.write("docs/features/demo/breakdown.md", REALISTIC_BREAKDOWN)
+            pack = orientation_pack.orientation_pack(
+                tree.root, "WO-0091", BULLET_0091)
+        self.assertNotIn("ADR-0032", BULLET_0091)  # guard: bullet is clean
+        self.assertIn("### ADR-0032", pack)
+        self.assertIn("Factory dispatch plane", pack)
+        self.assertNotIn("### ADR-0033", pack)
         self.assertNotIn("Human gates", pack)
 
     def test_includes_a_codegraph_summary_section(self):
