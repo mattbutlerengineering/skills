@@ -4,7 +4,7 @@
   "files": {
     "templates/Makefile": "4f76165345c0e7d28afa03ba80907f61782f37c40391b1bb28121119ae46d042",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/gates.py": "e6aebaeab6d664ca7518aa4135ac1de96350a213ff23a8059c5dd923546d67fe",
+    "templates/tools/factory/gates.py": "8fb2555243a26589cd415e7eecab98aed39758e161690958ff7559e049bf61a3",
     "templates/tools/factory/protocol.py": "8cc202a7e7c88dbf3d17675bece7fc4609e10d2bdd3827ff8073c147fd73fd62"
   }
 }

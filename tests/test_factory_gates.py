@@ -131,6 +131,136 @@ class TestConfigShape(unittest.TestCase):
                 f"F: {rel} monthly_cap_usd must be a positive number"])
 
 
+class TestPrTraceability(unittest.TestCase):
+    def event_env(self, tmp, event):
+        path = Path(tmp) / "event.json"
+        path.write_text(json.dumps(event), encoding="utf-8")
+        return {"GITHUB_EVENT_PATH": str(path)}
+
+    def pr_env(self, tmp, title, body):
+        return self.event_env(tmp, {"pull_request":
+                                    {"title": title, "body": body}})
+
+    def test_no_event_path_skips_silently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env={}), [])
+
+    def test_non_pr_event_skips_silently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.event_env(tmp, {"ref": "refs/heads/main"})
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [])
+
+    def test_uncited_body_fires_both_problems(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "fix: something", "no tokens here")
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [
+                    "B: PR body cites no work-order id",
+                    "B: PR body has no Closes #N link"])
+
+    def test_null_body_fires_both_problems(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "fix: something", None)
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [
+                    "B: PR body cites no work-order id",
+                    "B: PR body has no Closes #N link"])
+
+    def test_well_formed_body_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "WO-0003: detector B",
+                              "WO-0003 (PRD-0001 §X) — Closes #108")
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [])
+
+    def test_every_github_closing_keyword_is_accepted(self):
+        forms = ("close #7", "closes #7", "closed #7", "Closes: #7",
+                 "fix #7", "fixes #7", "fixed #7", "Fixes: #7",
+                 "resolve #7", "resolves #7", "resolved #7", "Resolves: #7",
+                 "CLOSES  #7")
+        with tempfile.TemporaryDirectory() as tmp:
+            for form in forms:
+                env = self.pr_env(tmp, "WO-0003: detector B",
+                                  f"WO-0003 per breakdown; {form}")
+                self.assertEqual(
+                    gates.check_pr_traceability(Path(tmp), env=env), [],
+                    f"{form!r} should be accepted as a closing keyword")
+
+    def test_non_closing_keyword_reference_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for form in ("see #7", "closes issue 7", "refs #7"):
+                env = self.pr_env(tmp, "WO-0003: detector B",
+                                  f"WO-0003 per breakdown; {form}")
+                self.assertEqual(
+                    gates.check_pr_traceability(Path(tmp), env=env),
+                    ["B: PR body has no Closes #N link"],
+                    f"{form!r} is not a closing keyword link")
+
+    def test_unreadable_event_file_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = str(Path(tmp) / "nope" / "event.json")
+            problems = gates.check_pr_traceability(
+                Path(tmp), env={"GITHUB_EVENT_PATH": missing})
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"B: cannot read GITHUB_EVENT_PATH {missing}:"), problems)
+
+    def test_malformed_event_file_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_text("{not json", encoding="utf-8")
+            problems = gates.check_pr_traceability(
+                Path(tmp), env={"GITHUB_EVENT_PATH": str(path)})
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"B: cannot read GITHUB_EVENT_PATH {path}:"), problems)
+
+
+class TestRunAll(unittest.TestCase):
+    def test_run_all_threads_env_to_the_pr_detector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            event = tree.write("event.json", json.dumps(
+                {"pull_request": {"title": "x", "body": "nothing"}}))
+            problems = gates.run_all(
+                tree.root, env={"GITHUB_EVENT_PATH": str(event)})
+            self.assertIn("B: PR body cites no work-order id", problems)
+
+    def test_run_all_with_empty_env_skips_the_pr_detector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.assertEqual(
+                [p for p in gates.run_all(tree.root, env={})
+                 if p.startswith("B:")], [])
+
+
+class TestLockstep(unittest.TestCase):
+    """Makefile <-> CI lockstep (origin: WO-0003): the canonical check set
+    in .github/workflows/checks.yml and the stamped product-repo Makefile
+    template must not drift apart silently."""
+
+    REPO = Path(__file__).resolve().parents[1]
+
+    def test_ci_workflow_runs_the_canonical_check_set(self):
+        text = (self.REPO / ".github" / "workflows"
+                / "checks.yml").read_text(encoding="utf-8")
+        for command in ("python3 lint.py",
+                        "python3 gates.py",
+                        "python3 gates.py --selftest",
+                        "python3 -m unittest discover tests"):
+            self.assertIn(command, text)
+
+    def test_template_makefile_check_target_matches_ci(self):
+        text = (self.REPO / "factory" / "templates"
+                / "Makefile").read_text(encoding="utf-8")
+        for command in ("python3 tools/factory/gates.py",
+                        "python3 tools/factory/gates.py --selftest",
+                        "python3 -m unittest discover"):
+            self.assertIn(command, text)
+
+
 class TestSelftest(unittest.TestCase):
     def test_selftest_passes(self):
         self.assertEqual(gates.selftest(), 0)
