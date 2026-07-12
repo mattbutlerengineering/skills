@@ -1,6 +1,6 @@
 # Work-order budgets and model routing
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-11
 
 Unattended agents burn tokens with nobody watching; 8090 itself reported

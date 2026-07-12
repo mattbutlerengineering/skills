@@ -1,6 +1,6 @@
 # Three human gates
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-11
 
 The factory's goal is maximum AFK execution, but unbounded autonomy is

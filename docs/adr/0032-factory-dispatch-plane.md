@@ -1,6 +1,6 @@
 # Factory dispatch plane
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-11
 
 The software factory (PRD-0001) needs unattended agents to pick up work.
