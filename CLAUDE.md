@@ -10,7 +10,7 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 - `python3 -m unittest discover tests`
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
 - `python3 gates.py && python3 gates.py --selftest` — factory drift
-  detectors (A/C/E/F), output matching `gates: 0 problem(s)`
+  detectors (A/C/D/E/F/G/I), output matching `gates: 0 problem(s)`
 
 On demand only (real model runs, costs money, never CI):
 `python3 trigger_eval.py` (needs the `claude` CLI).
