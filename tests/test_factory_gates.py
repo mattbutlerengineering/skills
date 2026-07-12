@@ -4,7 +4,9 @@ Same discipline as test_lint_checkers: every checker is exercised through
 its public interface against a temp fixture tree, and tests assert the
 exact problem strings callers will print.
 """
+import contextlib
 import hashlib
+import io
 import json
 import tempfile
 import unittest
@@ -129,6 +131,93 @@ class TestConfigShape(unittest.TestCase):
                 " implementation, architecture_review",
                 f"F: {rel} wip_cap must be a positive integer",
                 f"F: {rel} monthly_cap_usd must be a positive number"])
+
+
+class TestPrTraceability(unittest.TestCase):
+    def event_env(self, tmp, event):
+        path = Path(tmp) / "event.json"
+        path.write_text(json.dumps(event), encoding="utf-8")
+        return {"GITHUB_EVENT_PATH": str(path)}
+
+    def pr_env(self, tmp, title, body):
+        return self.event_env(tmp, {"pull_request":
+                                    {"title": title, "body": body}})
+
+    def test_no_event_path_skips_silently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env={}), [])
+
+    def test_non_pr_event_skips_silently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.event_env(tmp, {"ref": "refs/heads/main"})
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [])
+
+    def test_uncited_body_fires_both_problems(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "fix: something", "no tokens here")
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [
+                    "B: PR body cites no work-order id",
+                    "B: PR body has no Closes #N link"])
+
+    def test_null_body_fires_both_problems(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "fix: something", None)
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [
+                    "B: PR body cites no work-order id",
+                    "B: PR body has no Closes #N link"])
+
+    def test_well_formed_body_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "WO-0003: detector B",
+                              "WO-0003 (PRD-0001 §X) — Closes #108")
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [])
+
+    def test_closes_link_is_case_insensitive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "WO-0003: detector B",
+                              "WO-0003 per breakdown; closes #7")
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [])
+
+    def test_exempt_title_is_clean_but_logged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "[factory-exempt] bump deps", "")
+            log = io.StringIO()
+            with contextlib.redirect_stdout(log):
+                problems = gates.check_pr_traceability(Path(tmp), env=env)
+            self.assertEqual(problems, [])
+            self.assertEqual(log.getvalue(),
+                             "B: factory-exempt PR (logged)\n")
+
+
+class TestLockstep(unittest.TestCase):
+    """Makefile <-> CI lockstep (origin: WO-0003): the canonical check set
+    in .github/workflows/checks.yml and the stamped product-repo Makefile
+    template must not drift apart silently."""
+
+    REPO = Path(__file__).resolve().parents[1]
+
+    def test_ci_workflow_runs_the_canonical_check_set(self):
+        text = (self.REPO / ".github" / "workflows"
+                / "checks.yml").read_text(encoding="utf-8")
+        for command in ("python3 lint.py",
+                        "python3 gates.py",
+                        "python3 gates.py --selftest",
+                        "python3 -m unittest discover tests"):
+            self.assertIn(command, text)
+
+    def test_template_makefile_check_target_matches_ci(self):
+        text = (self.REPO / "factory" / "templates"
+                / "Makefile").read_text(encoding="utf-8")
+        for command in ("python3 tools/factory/gates.py",
+                        "python3 tools/factory/gates.py --selftest",
+                        "python3 -m unittest discover"):
+            self.assertIn(command, text)
 
 
 class TestSelftest(unittest.TestCase):
