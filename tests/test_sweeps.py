@@ -142,6 +142,14 @@ class TestSanitize(unittest.TestCase):
     def test_none_becomes_empty(self):
         self.assertEqual(sweeps.sanitize(None), "")
 
+    def test_unicode_bidi_and_zero_width_are_stripped(self):
+        # These render as nothing but reorder or hide text; the
+        # C0-only strip let them through. RLO (U+202E), ZWSP
+        # (U+200B), isolate (U+2066), BOM (U+FEFF).
+        for forbidden in ("\u202e", "\u200b", "\u2066", "\ufeff"):
+            dirty = f"a{forbidden}b{forbidden}c"
+            self.assertNotIn(forbidden, sweeps.sanitize(dirty))
+
 
 class TestSentryIntakes(unittest.TestCase):
     def test_payload_becomes_a_triaged_plan(self):
@@ -511,6 +519,36 @@ class TestCli(unittest.TestCase):
         labels = [create[i + 1] for i, arg in enumerate(create)
                   if arg == "--label"]
         self.assertEqual(labels, ["source:sweep", "type:chore"])
+
+    def test_a_mixed_payload_files_the_good_and_reports_the_bad(self):
+        # The availability invariant: malformed entries in a Sentry payload
+        # (routine in real data) must not suppress the valid intake. The good
+        # plans are filed AND the bad entries surface as problems (nonzero
+        # exit is the signal — but the good ones were filed first).
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = ["not-an-object",
+                       {"title": "no short id"},
+                       dict(SENTRY_ENTRY, shortId="PROJ-1"),
+                       dict(SENTRY_ENTRY, shortId="PROJ-2"),
+                       dict(SENTRY_ENTRY, shortId="PROJ-3")]
+            path = FixtureTree(tmp).write("sentry.json", json.dumps(payload))
+            runner = RecordingRunner()
+            code, out = self.run_main(["sentry", "--payload", str(path)],
+                                      runner)
+            filed_titles = [create[create.index("--title") + 1]
+                            for create in runner.created()]
+            self.assertEqual(sorted(filed_titles), [
+                "[sentry] PROJ-1: TypeError: cannot read property 'id' of"
+                " undefined",
+                "[sentry] PROJ-2: TypeError: cannot read property 'id' of"
+                " undefined",
+                "[sentry] PROJ-3: TypeError: cannot read property 'id' of"
+                " undefined"])
+            self.assertEqual(code, 1)
+            self.assertIn("sweeps: sentry[0] is not an object", out)
+            self.assertIn(
+                "sweeps: sentry[1] lacks a usable shortId or title", out)
+            self.assertIn("sweeps: 3 issue(s) filed, 2 problem(s)", out)
 
     def test_a_bad_payload_exits_nonzero_without_filing(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -53,7 +53,12 @@ SENTRY_FIELDS = ("shortId", "title", "culprit", "level", "count",
                  "lastSeen", "permalink")
 
 WO_TOKEN = re.compile(r"\bWO-\d{4}\b")
-CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+# ASCII C0/DEL plus the Unicode format characters that render as nothing but
+# reorder or hide text: zero-width (U+200B-200D), bidi marks and overrides
+# (U+200E-200F, U+202A-202E), directional isolates (U+2066-2069) and the BOM.
+CONTROL = re.compile(
+    "[\x00-\x08\x0b-\x1f\x7f\u200b-\u200f\u202a-\u202e"
+    "\u2066-\u2069\ufeff]")
 FENCE = re.compile(r"`{3,}")
 UNSAFE_KEY = re.compile(r"[^A-Za-z0-9_.:-]")
 REDACTED_WO = "WO-[redacted]"
@@ -163,27 +168,58 @@ def drift_intake(drift):
         labels=(source, work_type))
 
 
+def plan_problems(names, intake):
+    """The per-plan invariants: every label is a real taxonomy label, no plan
+    carries a `wo:*` lifecycle label, and no plan names a work order. Returns
+    the problems for a single plan (empty when it may be filed) — a plan that
+    could do any of these would make the dispatch plane authoritative, the
+    failure ADR-0032 exists to prevent."""
+    problems = []
+    for label in intake.labels:
+        if label not in names:
+            problems.append(f"sweeps: {intake.key} would apply unknown"
+                            f" label {label}")
+        elif label.startswith("wo:"):
+            problems.append(f"sweeps: {intake.key} would apply lifecycle"
+                            f" label {label} (intake is not a work order)")
+    if WO_TOKEN.search(intake.title) or WO_TOKEN.search(intake.body):
+        problems.append(f"sweeps: {intake.key} names a work order"
+                        " (a sweep may not mint WO ids)")
+    return problems
+
+
 def check(root, intakes):
-    """The invariants, enforced before a single network call: every label is
-    a real taxonomy label, no plan carries a `wo:*` lifecycle label, and no
-    plan names a work order. A sweep that could do either would make the
-    dispatch plane authoritative — the failure ADR-0032 exists to prevent."""
+    """The invariants, enforced before a single network call, as one flat
+    problem list across every plan. A broken taxonomy short-circuits — no
+    label can be trusted, so nothing is validated blind."""
     known, problems = label_sync.load_labels(root)
     if problems:
         return problems
     names = {label["name"] for label in known}
     for intake in intakes:
-        for label in intake.labels:
-            if label not in names:
-                problems.append(f"sweeps: {intake.key} would apply unknown"
-                                f" label {label}")
-            elif label.startswith("wo:"):
-                problems.append(f"sweeps: {intake.key} would apply lifecycle"
-                                f" label {label} (intake is not a work order)")
-        if WO_TOKEN.search(intake.title) or WO_TOKEN.search(intake.body):
-            problems.append(f"sweeps: {intake.key} names a work order"
-                            " (a sweep may not mint WO ids)")
+        problems.extend(plan_problems(names, intake))
     return problems
+
+
+def screen(root, intakes):
+    """Partition plans by the invariants before any network call:
+    (fileable plans, rejection problems). A plan that violates an invariant is
+    dropped and reported, but never suppresses the plans that pass — one
+    malformed or hostile entry must not stop the valid intake from being
+    filed. A broken taxonomy still short-circuits (no fileable plans, the
+    loader's own problem), because no label can be trusted."""
+    known, problems = label_sync.load_labels(root)
+    if problems:
+        return [], problems
+    names = {label["name"] for label in known}
+    fileable, problems = [], []
+    for intake in intakes:
+        rejected = plan_problems(names, intake)
+        if rejected:
+            problems.extend(rejected)
+        else:
+            fileable.append(intake)
+    return fileable, problems
 
 
 def open_keys(run=gh_runner):
@@ -204,16 +240,17 @@ def open_keys(run=gh_runner):
 
 
 def file_issues(root, intakes, run=gh_runner):
-    """Create one issue per intake plan no open issue already carries.
-    Returns (filed keys, problems)."""
-    problems = check(root, intakes)
-    if problems or not intakes:
+    """Create one issue per fileable intake plan no open issue already
+    carries. A plan that fails an invariant is dropped and reported, but never
+    suppresses the plans that pass. Returns (filed keys, problems)."""
+    fileable, problems = screen(root, intakes)
+    if not fileable:
         return [], problems
-    keys, problems = open_keys(run)
-    if problems:
-        return [], problems
+    keys, list_problems = open_keys(run)
+    if list_problems:
+        return [], problems + list_problems
     filed = []
-    for intake in intakes:
+    for intake in fileable:
         if intake.key in keys:
             continue
         args = ["issue", "create", "--title", intake.title,
@@ -286,9 +323,12 @@ def main(argv, run=gh_runner):
         intakes, problems = sentry(path)
     else:
         intakes, problems = label_drift(root, run=run)
-    filed = []
-    if not problems:
-        filed, problems = file_issues(root, intakes, run=run)
+    # File the good plans even when some entries were unusable: a malformed or
+    # rejected entry is reported (below, nonzero exit), but must not suppress
+    # the valid intake — a signal nobody files is an outage nobody notices.
+    # With no plans (bad JSON, non-array, failed gh) file_issues is a no-op.
+    filed, file_problems = file_issues(root, intakes, run=run)
+    problems = problems + file_problems
     for problem in problems:
         print(problem)
     for key in filed:
