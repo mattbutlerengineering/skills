@@ -23,6 +23,8 @@ ai-tooling suite where the rule is the same idea):
   G COST-LEDGER    — docs/factory/costs.jsonl lines carry the ADR-0034
                      fields and every merged (checked) work-order row has
                      one; an absent ledger is silent (no runs recorded yet)
+  H EVIDENCE-HONESTY — every verification.md criterion that asserts a
+                     verdict shows literal output or discloses NOT RUN
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
 
@@ -78,6 +80,21 @@ MERGED_ROW = re.compile(r"^\s*-\s*\[x\]", re.IGNORECASE)
 # Markdown links to repo paths; URLs, autolinks and bare anchors are not.
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
 URL_TARGET = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
+
+# H reads verification.md the way the verify skill writes it: markdown
+# headings delimit criteria, a "Result:" line asserts the verdict, fenced
+# blocks carry the literal output, and prose may disclose a check as NOT RUN.
+HEADING_LINE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
+FENCE_LINE = re.compile(r"^\s*(?:```|~~~)")
+RESULT_LINE = re.compile(r"^\s*[-*+]?\s*\**\s*Result\**\s*:\s*(\S.*?)\s*$",
+                         re.IGNORECASE)
+# The disclaimer must be explicit; hedging prose ("partially checked") is
+# not a disclosure and must not buy a criterion out of showing its output.
+NOT_RUN_TOKEN = re.compile(
+    r"\bnot[\s-]+(?:run|ran|verified|executed|checked|tested)\b",
+    re.IGNORECASE)
+# An unfilled template placeholder (`<actual output ...>`) is not output.
+PLACEHOLDER_LINE = re.compile(r"^\s*<.+>\s*$")
 
 
 def run_dirs(root):
@@ -486,9 +503,80 @@ def check_config_shape(root):
     return problems
 
 
+def _verification_sections(text):
+    """Split a verification artifact into heading-delimited sections, each
+    recording whether it shows literal output, discloses a check as NOT RUN,
+    and what verdicts it asserts. Fenced content is inert: a heading quoted
+    inside evidence output does not open a new section."""
+    sections = []
+    current = {"title": "(untitled)", "evidence": False, "not_run": False,
+               "results": []}
+    in_fence = False
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if FENCE_LINE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            if line.strip() and not PLACEHOLDER_LINE.match(line):
+                current["evidence"] = True
+            continue
+        heading = HEADING_LINE.match(line)
+        if heading:
+            sections.append(current)
+            title = heading.group(2) or "(untitled)"
+            current = {"title": title, "evidence": False,
+                       "not_run": bool(NOT_RUN_TOKEN.search(title)),
+                       "results": []}
+            continue
+        if NOT_RUN_TOKEN.search(line):
+            current["not_run"] = True
+        result = RESULT_LINE.match(line)
+        if result:
+            current["results"].append((lineno, result.group(1)))
+    sections.append(current)
+    return sections
+
+
+def check_evidence_honesty(root):
+    """H: a criterion that asserts a verdict must show literal output or
+    disclose that the check was NOT RUN. Prose confidence is not evidence
+    (PRD-0001: a change whose verification is asserted but not evidenced
+    fails the build)."""
+    problems = []
+    for run in run_dirs(root):
+        artifact = run / "verification.md"
+        if not artifact.is_file():
+            continue
+        rel = artifact.relative_to(root)
+        try:
+            text = artifact.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as err:
+            problems.append(f"H: {rel} cannot be read: {err}")
+            continue
+        sections = _verification_sections(text)
+        asserted = False
+        for section in sections:
+            for lineno, verdict in section["results"]:
+                asserted = True
+                if section["evidence"] or section["not_run"]:
+                    continue
+                problems.append(
+                    f'H: {rel}:{lineno} criterion "{section["title"]}"'
+                    f" asserts {verdict} with neither literal evidence"
+                    " nor a NOT-RUN disclaimer")
+        # An artifact that asserts no verdict at all escapes the per-criterion
+        # rule; it still owes the reader output or a disclosure.
+        if not asserted and not any(
+                s["evidence"] or s["not_run"] for s in sections):
+            problems.append(
+                f"H: {rel}:1 verification artifact shows neither literal"
+                " evidence nor a NOT-RUN disclaimer")
+    return problems
+
+
 CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
             check_blueprint_drift, check_scaffold_sync, check_config_shape,
-            check_cost_ledger, check_staleness)
+            check_cost_ledger, check_evidence_honesty, check_staleness)
 
 
 def run_all(root, env=None):
@@ -604,6 +692,20 @@ def selftest():
             "body": "WO-0003 (PRD-0001) Fixes: #108"}}), encoding="utf-8")
         expect_clean("B clean", check_pr_traceability(root, env))
 
+        (run / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "### Suite is green\n\n- Check: ran it, all good.\n"
+            "- Result: PASS\n", encoding="utf-8")
+        prose = root / "docs" / "features" / "prose"
+        prose.mkdir()
+        (prose / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "Everything works; the criteria are comfortably met.\n",
+            encoding="utf-8")
+        expect("H", check_evidence_honesty(root),
+               'criterion "Suite is green" asserts PASS with neither',
+               "artifact shows neither literal evidence")
+
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         run = root / "docs" / "features" / "demo"
@@ -626,6 +728,20 @@ def selftest():
             json.dumps({"wo": "WO-0001", "run_id": "r1", "model": "m",
                         "tokens": 1200, "cost": 0.42, "outcome": "merged"})
             + "\n", encoding="utf-8")
+        evidenced = root / "docs" / "features" / "evidenced"
+        evidenced.mkdir(parents=True)
+        (evidenced / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "### Suite is green\n\n- Evidence:\n  ```\n  Ran 212 tests\n"
+            "\n  OK\n  ```\n- Result: PASS\n", encoding="utf-8")
+        disclosed = root / "docs" / "features" / "disclosed"
+        disclosed.mkdir()
+        (disclosed / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "### Non-owner dispatch does not fire\n\n"
+            "- Check: NOT RUN — needs a second GitHub account.\n"
+            "- Result: NOT VERIFIED\n", encoding="utf-8")
+        expect_clean("H honest", check_evidence_honesty(root))
         payload = root / "factory" / "templates"
         payload.mkdir(parents=True)
         (payload / "factory.json").write_text(json.dumps(

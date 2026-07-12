@@ -442,6 +442,132 @@ class TestPrTraceability(unittest.TestCase):
                 f"B: cannot read GITHUB_EVENT_PATH {path}:"), problems)
 
 
+class TestEvidenceHonesty(unittest.TestCase):
+    """H (origin: WO-0011): a criterion that asserts a verdict must show
+    literal output or disclose that the check was NOT RUN."""
+
+    HEAD = "---\nstage: verify\nrun: feature:demo\n---\n\n# Verification\n\n"
+
+    def verification(self, tmp, body):
+        tree = FixtureTree(tmp)
+        tree.write("docs/features/demo/verification.md", self.HEAD + body)
+        return tree
+
+    def test_criterion_with_literal_output_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Criteria & evidence\n\n"
+                "### Suite is green\n\n"
+                "- Check: `python3 -m unittest discover tests`\n"
+                "- Evidence:\n"
+                "  ```\n"
+                "  Ran 212 tests in 4.0s\n\n"
+                "  OK\n"
+                "  ```\n"
+                "- Result: PASS\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_criterion_with_not_run_disclaimer_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Non-owner dispatch does not fire\n\n"
+                "- Check: NOT RUN — needs a second GitHub account.\n"
+                "- Result: NOT VERIFIED\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_asserted_but_unevidenced_criterion_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Suite is green\n\n"
+                "- Check: ran the tests, everything looks correct.\n"
+                "- Result: PASS\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                'H: docs/features/demo/verification.md:11 criterion'
+                ' "Suite is green" asserts PASS with neither literal'
+                ' evidence nor a NOT-RUN disclaimer'])
+
+    def test_empty_and_placeholder_fences_are_not_evidence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Empty fence\n\n"
+                "- Evidence:\n"
+                "  ```\n"
+                "  ```\n"
+                "- Result: PASS\n\n"
+                "### Unfilled template\n\n"
+                "- Evidence:\n"
+                "  ```\n"
+                "  <actual output — quoted, not summarized>\n"
+                "  ```\n"
+                "- Result: PASS | FAIL\n"))
+            rel = "docs/features/demo/verification.md"
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                f'H: {rel}:13 criterion "Empty fence" asserts PASS with'
+                ' neither literal evidence nor a NOT-RUN disclaimer',
+                f'H: {rel}:21 criterion "Unfilled template" asserts'
+                ' PASS | FAIL with neither literal evidence nor a NOT-RUN'
+                ' disclaimer'])
+
+    def test_evidence_does_not_leak_across_criteria(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Evidenced\n\n"
+                "- Evidence:\n"
+                "  ```\n"
+                "  OK\n"
+                "  ```\n"
+                "- Result: PASS\n\n"
+                "### Bare\n\n"
+                "- Result: PASS\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                'H: docs/features/demo/verification.md:18 criterion "Bare"'
+                ' asserts PASS with neither literal evidence nor a NOT-RUN'
+                ' disclaimer'])
+
+    def test_headings_inside_a_fence_do_not_split_the_criterion(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Report renders\n\n"
+                "- Evidence:\n"
+                "  ```\n"
+                "  ### Weekly report\n"
+                "  3 work orders merged\n"
+                "  ```\n"
+                "- Result: PASS\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_prose_only_artifact_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Summary\n\n"
+                "Everything works; all criteria are comfortably met.\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                "H: docs/features/demo/verification.md:1 verification"
+                " artifact shows neither literal evidence nor a NOT-RUN"
+                " disclaimer"])
+
+    def test_unreadable_artifact_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = tree.write("docs/features/demo/verification.md", "")
+            path.write_bytes(b"\xff\xfe not utf-8 \xff")
+            problems = gates.check_evidence_honesty(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "H: docs/features/demo/verification.md cannot be read:"),
+                problems)
+
+    def test_tree_without_a_verification_artifact_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/features/demo/prd.md", "# PRD\n")
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_repo_verification_artifacts_are_honest(self):
+        problems = gates.check_evidence_honesty(TestLockstep.REPO)
+        self.assertEqual(problems, [])
+
+
 class TestRunAll(unittest.TestCase):
     def test_run_all_threads_env_to_the_pr_detector(self):
         with tempfile.TemporaryDirectory() as tmp:
