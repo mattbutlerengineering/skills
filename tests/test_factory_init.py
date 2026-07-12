@@ -21,6 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 EXPECTED_RELS = {
     "templates/.github/workflows/validator.yml",
     "templates/.github/workflows/assembler.yml",
+    "templates/.github/workflows/design.yml",
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
@@ -36,6 +37,8 @@ EXPECTED_INSTALLS = {
         ".github/workflows/validator.yml",
     "templates/.github/workflows/assembler.yml":
         ".github/workflows/assembler.yml",
+    "templates/.github/workflows/design.yml":
+        ".github/workflows/design.yml",
     "templates/Makefile": "Makefile",
     "templates/factory.json": ".github/factory.json",
     "templates/tools/factory/gates.py": "tools/factory/gates.py",
@@ -74,6 +77,8 @@ def make_factory_repo(root):
                "name: validator\njobs: {}\n")
     tree.write(".github/workflows/assembler.yml",
                "name: assembler\njobs: {}\n")
+    tree.write(".github/workflows/design.yml",
+               "name: design\njobs: {}\n")
     tree.write(".claude-plugin/plugin.json",
                json.dumps({"name": "software-factory", "version": "1.2.3"}))
     tree.write("factory/templates/Makefile",

@@ -47,7 +47,7 @@ per ADR-0032 after each row exists here first.
   - Accept: the weekly report issue posts numbers recomputed from costs.jsonl; a simulated cap breach sets FACTORY_PAUSED.
 - [x] **WO-0010** sweeps.yml + sentry-intake stamping — size:M, blocked by: WO-0002 (PRD-0001 §Success criteria) (tracker: #115)
   - Accept: a sweep files a triaged draft issue with source and type labels applied, no human transcription.
-- [ ] **WO-0011** Detector H (evidence honesty) — size:S, blocked by: WO-0003 (PRD-0001 §Success criteria) (tracker: #116)
+- [x] **WO-0011** Detector H (evidence honesty) — size:S, blocked by: WO-0003 (PRD-0001 §Success criteria) (tracker: #116)
   - Accept: a verification artifact with neither literal command output nor an explicit NOT-RUN disclaimer fails the build; selftest covers both branches.
 - [ ] **WO-0012** design pipeline: docs/design template + playwright/web-quality job — size:M, blocked by: WO-0004 (PRD-0001 §Solution) (tracker: #117)
   - Accept: a PR touching design docs triggers the playwright + web-quality job; the design-system seed ships in the template payload.
@@ -72,7 +72,10 @@ ADR-0033, and ADR-0034 (all accepted).
 
 - 2026-07-12: PRD open question "beads adoption timing" answered here —
   adopted at mirror time; the dependency graph above is recorded in beads
-  when rows are mirrored to the tracker.
+  when rows are mirrored to the tracker. **Superseded by ADR-0035
+  (2026-07-12):** GitHub issues are the single work-order mirror; beads is
+  not a work-order mirror. The dependency graph rides the GitHub issues and
+  the blocking-edge tokens on the rows, not beads.
 - 2026-07-12: the template payload carries machine-copied mirrors of
   `gates.py` and `protocol.py` (stamped detectors import their sibling
   frontmatter seam; refreshed by `factory_init.py update-manifest`,

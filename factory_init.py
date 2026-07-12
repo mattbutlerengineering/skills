@@ -41,6 +41,7 @@ MIRRORS = {
     "assembler.py": "tools/factory/assembler.py",
     ".github/workflows/validator.yml": ".github/workflows/validator.yml",
     ".github/workflows/assembler.yml": ".github/workflows/assembler.yml",
+    ".github/workflows/design.yml": ".github/workflows/design.yml",
 }
 
 # Manifest rel -> install destination; anything unmapped strips "templates/".

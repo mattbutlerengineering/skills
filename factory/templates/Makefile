@@ -6,7 +6,7 @@
 # (its tools sit at the root, these under tools/factory/, and the plugin's
 # structural lint has no product-repo counterpart).
 
-.PHONY: check review wo-merged assembler
+.PHONY: check review wo-merged assembler web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
@@ -26,3 +26,18 @@ wo-merged:
 
 assembler:
 	python3 tools/factory/assembler.py resolve
+
+# The design pipeline's job body (.github/workflows/design.yml; ADR-0033
+# gate 2), run when a PR touches docs/design/**. Playwright drives the UI
+# quality / accessibility / Core Web Vitals checks. It SKIPS gracefully when
+# the repo has no web app to test (no playwright.config.*) — this factory repo
+# has none, and the target is for stamped product repos that do. Same
+# skip-when-absent shape as the sweeps sentry job. Path-agnostic, so both
+# Makefiles carry it verbatim.
+web-quality:
+	@if ls playwright.config.* >/dev/null 2>&1; then \
+		npx --yes playwright install --with-deps; \
+		npx --yes playwright test; \
+	else \
+		echo "web-quality: no playwright.config.* — skipping (no web app to test)"; \
+	fi
