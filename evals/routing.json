@@ -152,6 +152,16 @@
      "query": "The defect brief for the login fix is written and its work items are still unchecked — keep working through them",
      "notes": "adjacency: capture vs implement — the brief exists; working its checkboxes is implement"},
 
+    {"id": "factory-init-1", "kind": "direct", "expected": "factory-init",
+     "query": "Run factory-init on the new billing repo so it can take factory work orders"},
+    {"id": "factory-init-2", "kind": "situational", "expected": "factory-init",
+     "query": "I just created a fresh product repo — stamp the factory tooling into it so make check and the gate detectors run there"},
+    {"id": "factory-init-3", "kind": "situational", "expected": "factory-init",
+     "query": "I edited the factory templates and now detector E is failing the build — regenerate the checksum manifest"},
+    {"id": "factory-init-vs-idea-1", "kind": "near-miss", "expected": "idea",
+     "query": "Set up a run for the new invoicing product we want to build",
+     "notes": "adjacency: factory-init vs idea — starting a run is the pipeline entry, not repo tooling setup"},
+
     {"id": "router-1", "kind": "router", "expected": "next",
      "query": "Continue the pipeline"},
     {"id": "router-2", "kind": "router", "expected": "next",
