@@ -1,0 +1,78 @@
+# The weekly cost report + monthly circuit breaker (PRD-0001; ADR-0034).
+#
+# Mirrored VERBATIM into the template payload by `factory_init.py
+# update-manifest`, so a stamped product repo runs this same file — which is
+# why it names no commands of its own. The one step that needs judgment goes
+# through `make cost-report` (cost_report.py, unit-tested offline); this
+# workflow only MUTATES: it posts the report issue and, on a PAUSE verdict,
+# sets the FACTORY_PAUSED repo variable. Editing this file means re-running
+# update-manifest; detector E fails the build otherwise.
+#
+# FACTORY_PAUSED is a GitHub Actions repository VARIABLE (vars.*), the same
+# convention sweeps.yml's Sentry job (vars.SENTRY_ORG) and validator.yml
+# (vars.FACTORY_REVIEW_LOGIN) already use: free to read from any workflow's
+# `if:` (e.g. a future assembler.yml guard on `vars.FACTORY_PAUSED != 'true'`),
+# repo-wide by construction (ADR-0034: the circuit breaker "pauses dispatch
+# repo-wide"), and it needs no commit — an instant, repo-scoped flip.
+#
+# Writing a repo variable is NOT something the default GITHUB_TOKEN can do
+# (the Actions variables API needs a PAT with the repo scope, or a GitHub
+# App token) — the same reason validator.yml's review job carries its own
+# FACTORY_REVIEW_TOKEN. With no FACTORY_PAUSE_TOKEN secret configured, a cap
+# breach fails loudly (never a silent no-op — a breach nobody can act on is
+# a safety failure, not a missing feature like the optional Sentry sweep).
+name: cost-report
+
+on:
+  schedule:
+    # Mondays, 07:17 UTC (off the hour — GitHub's cron peaks are lossy; an
+    # hour after sweeps.yml's 06:17 slot so the two scheduled jobs don't
+    # contend for the same runner minute).
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cost-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Recompute spend from docs/factory/costs.jsonl and decide PAUSE/
+      # CONTINUE against factory.json's monthly_cap_usd. Emits title/body/
+      # pause/reason to $GITHUB_OUTPUT; makes no gh call itself.
+      - name: Recompute spend and decide against the monthly cap
+        id: report
+        run: make cost-report
+      - name: Post the weekly cost report issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT_TITLE: ${{ steps.report.outputs.title }}
+          REPORT_BODY: ${{ steps.report.outputs.body }}
+        run: gh issue create --title "$REPORT_TITLE" --body "$REPORT_BODY"
+      # A cap breach that cannot be enforced is a safety failure, not a
+      # missing optional feature — so this names the cause and fails loudly
+      # rather than skipping gracefully (unlike the Sentry sweep's vars.*
+      # skip, there is no "unconfigured, working as intended" reading here).
+      - name: Pause dispatch on a cap breach
+        if: steps.report.outputs.pause == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_PAUSE_TOKEN }}
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "cost-report: the monthly cap was breached but" \
+                 "FACTORY_PAUSE_TOKEN is not set — FACTORY_PAUSED could NOT" \
+                 "be set; add the secret (a PAT with the repo scope, able to" \
+                 "write repo variables) or pause dispatch by hand" >&2
+            exit 1
+          fi
+          gh variable set FACTORY_PAUSED --body true
