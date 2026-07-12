@@ -104,9 +104,9 @@ in the breakdown, no code).
   **F** CONFIG-SHAPE (`factory.json` parses; every field is a valid token).
 - Unbuilt: **D** blueprint-drift, **G** cost-ledger, **I** staleness (WO-0008);
   **H** evidence-honesty (WO-0011).
-- Collaborators: `protocol.py` (frontmatter read), `checks.yml`, the stamped
-  `Makefile`, `factory_init.py` (which calls `check_scaffold_sync` before
-  stamping).
+- Collaborators: `protocol.py` (frontmatter read), the root `Makefile` and its
+  stamped twin (both reached through `make check`), `validator.yml`,
+  `factory_init.py` (which calls `check_scaffold_sync` before stamping).
 - `--selftest` runs every built detector against fixture trees: each must catch
   its planted defect *and* stay silent on a clean tree. The selftest is the
   detector suite's own test suite and runs in CI beside it.
@@ -132,10 +132,12 @@ in the breakdown, no code).
   into a product repo, refusing a drifted source and any existing destination
   file (no partial stamps, no overwrites).
 - Collaborators: detector E pins the result — a hand-edited template fails CI.
-- Honest note: this repo **is not itself stamped**. It self-hosts by running the
-  root scripts directly from `checks.yml`; there is no `Makefile`, no
-  `tools/factory/`, no `.github/factory.json` here. `stamp` has been exercised
-  only against scratch trees in tests, never against a real product repo.
+- Honest note: this repo **is not itself stamped**. It self-hosts: WO-0004 gave
+  it a root `Makefile` and `validator.yml`, so CI here calls the same `make
+  check` target a stamped repo does — but the Makefile points at the root
+  scripts, not `tools/factory/`, and there is no `tools/factory/` and no
+  `.github/factory.json` here. `stamp` has been exercised only against scratch
+  trees in tests, never against a real product repo.
 
 ### Factory config — `factory.json` (PARTIAL)
 
@@ -183,24 +185,27 @@ in the breakdown, no code).
 ### Human-gate surface — CODEOWNERS + CI (PARTIAL)
 
 - Responsibility: make the three gates of ADR-0033 physical. `.github/CODEOWNERS`
-  exists here and ships in the payload; `checks.yml` runs lint, the detector
-  suite, the selftest, and the tests on every push and PR.
+  exists here and ships in the payload; `validator.yml`'s `check` job runs `make
+  check` — lint, the detector suite, the selftest, and the tests — on every push
+  and PR.
 - Honest note: **CODEOWNERS without branch protection requests reviewers; it does
   not require them.** Branch protection needs a paid plan or a public repo, and
   this is a private free-plan repo. So all three gates are today *convention plus
   CI*, not platform controls. See *Divergences*.
 
-### Execution half — assembler, budget guard, handoff, ledger, reports (UNBUILT)
+### Execution half — assembler, budget guard, handoff, ledger, reports (PARTIAL)
 
-- `assembler.yml` + claude-code-action + owner/pause/WIP guards (WO-0005);
-  `budget_guard.py` + `handoff.py` + `costs.jsonl` (WO-0006); routing resolution
-  (WO-0007); `validator.yml` incl. the non-authoring review job (WO-0004);
-  `cost-report.yml` + monthly circuit breaker (WO-0009); `sweeps.yml` +
-  intake stamping (WO-0010); gate-queue digest (WO-0017); rejection mining
-  (WO-0018); design pipeline (WO-0012); charter regression replays (WO-0016).
-- This is the half that makes the factory a factory. **None of it exists.** The
-  PRD's headline capability — dispatch a work order, walk away, return to a
-  reviewed PR — is not achievable today by any path.
+- Built: `validator.yml` incl. the non-authoring review job and the `wo:merged`
+  lifecycle flip (WO-0004); charter regression replays (WO-0016).
+- Unbuilt: `assembler.yml` + claude-code-action + owner/pause/WIP guards
+  (WO-0005); `budget_guard.py` + `handoff.py` + `costs.jsonl` (WO-0006); routing
+  resolution (WO-0007); `cost-report.yml` + monthly circuit breaker (WO-0009);
+  `sweeps.yml` + intake stamping (WO-0010); gate-queue digest (WO-0017);
+  rejection mining (WO-0018); design pipeline (WO-0012).
+- The factory can now *verify* and *close out* a work order, but it still cannot
+  *start* one: **the dispatcher (WO-0005) does not exist.** The PRD's headline
+  capability — dispatch a work order, walk away, return to a reviewed PR — is
+  not achievable today by any path.
 
 ## Data model
 
@@ -346,9 +351,12 @@ already depend on it)
   spend), labels `budget-exhausted needs-human wo:failed`. The dispatcher then
   refuses the order until the owner clears the label: no self-retry loops.
 
-### `make check` (stamped repos) == `checks.yml` (this repo)
+### `make check` (this repo) == `make check` (stamped repos)
 
-- The same three commands in both places, pinned in lockstep by a unit test:
+- Since WO-0004 there is one entry point in both places. `validator.yml` names no
+  commands of its own — it calls `make check`, and the Makefile knows where that
+  repo keeps its tools (root here, `tools/factory/` there). The root `Makefile`
+  and `factory/templates/Makefile` are pinned in lockstep by a unit test:
   `gates.py`, `gates.py --selftest`, `unittest discover tests` (plus `lint.py`
   here). A local green must mean a CI green.
 
