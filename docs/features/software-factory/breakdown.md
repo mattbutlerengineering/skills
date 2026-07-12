@@ -56,7 +56,7 @@ per ADR-0032 after each row exists here first.
 
 ## Milestone D: Charter maturity (full role set, regression CI, feedback mining)
 
-- [ ] **WO-0014** full 9-role charter set + CHARTERS.md + gate checklists — size:L, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #119)
+- [x] **WO-0014** full 9-role charter set + CHARTERS.md + gate checklists — size:L, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #119)
   - Accept: all nine agent+skill charter pairs exist; CHARTERS.md indexes them with the three gate checklists; structural lint passes.
 - [ ] **WO-0016** charter regression suite (golden fixture replays) — size:M, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #121)
   - Accept: golden fixture work orders replay on plugin PRs via a cheap model; a deliberately degraded charter fails the suite.
@@ -112,3 +112,21 @@ ADR-0033, and ADR-0034 (all accepted).
   (WO-0007, PRD-0001 §Solution) wires up. A `model:` in a charter would be
   a second routing source of truth (ADR-0004), which is the drift this
   factory exists to catch.
+- 2026-07-12: the charter index ships as `factory/CHARTERS.md`, beside the
+  charters it indexes, not at the repo root — it is factory-internal, and
+  the same reasoning keeps the whole set out of `factory/templates/**`
+  (detector E checksum-pins that tree; charters churn). The load-path gap
+  noted above is unchanged: nine charters now exist and still nothing
+  discovers them (WO-0005's assembler, PRD-0001 §Solution, remains the
+  natural owner).
+- 2026-07-12: bands are assigned by work class, not by seniority —
+  `architecture_review` for the roles whose artifact a human gate approves
+  as judgment (PM at gate 1, architect and UX at gate 2) plus the review
+  that pre-chews gate 3; `implementation` for planner, engineer, QA,
+  toolsmith; `mechanical` for support, whose intake and label plumbing is
+  the class ADR-0034 names for the cheap model.
+- 2026-07-12: the six charters added beyond the first three carry
+  `UNRATED` loadout tiers. The `MEASURED`/`RUN` tiers in the first three
+  come from the ai-tooling evidence base; no such result exists for the new
+  picks, and inventing one would be fabricated evidence (CLAUDE.md). They
+  graduate only on a real run.
