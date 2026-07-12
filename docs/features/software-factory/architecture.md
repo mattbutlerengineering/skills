@@ -13,6 +13,27 @@ assumptions:
 
 # Architecture: Software factory v1 (self-host)
 
+## Tree claims (machine-checked)
+
+This doc describes two trees — this repo, and the repo the payload stamps — and
+it also names files that are *planned*. Detector D therefore cannot infer which
+of its file mentions are assertions about the tree as it stands **today**, so
+the ones that are get declared here and are checked against the tree on every
+run. A claim below that stops being true fails the build: that is the point.
+
+Prose already stating an absence ("there is no ..., ... here") or a presence
+("... exists here") around a backticked path is checked where it stands and
+needs no entry below. Note the corollary: D cannot tell a claim from a quoted
+*example* of one, so an example belongs in a fenced block, where D treats it as
+inert.
+
+```tree-claims
+# This repo is not itself stamped: it self-hosts by running the root scripts
+# from CI directly. If that changes, these two lines are what fail first.
+exists: .github/workflows/checks.yml
+absent: Makefile
+```
+
 ## Preamble: what this artifact is
 
 This is the Architect artifact for `feature:software-factory` (PRD-0001),
