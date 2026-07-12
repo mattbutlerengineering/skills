@@ -74,6 +74,230 @@ class TestLinkIntegrity(unittest.TestCase):
                 " docs/features/demo/prd.md, docs/features/other/prd.md"])
 
 
+class TestBlueprintDrift(unittest.TestCase):
+    """D (origin: WO-0008): the approved blueprint is docs/adr — its files,
+    its index, and the artifacts that cite it must agree."""
+
+    INDEX_HEAD = ("# ADRs\n\n| ADR | Decision | Status |\n"
+                  "|-----|----------|--------|\n")
+
+    def build(self, tmp, *rows):
+        tree = FixtureTree(tmp)
+        tree.write("docs/adr/README.md", self.INDEX_HEAD + "".join(rows))
+        return tree
+
+    def test_indexed_and_cited_blueprint_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp,
+                "| [0001](0001-spine.md) | Spine | accepted |\n",
+                "| [0002](0002-old.md) | Old | superseded in part by"
+                " ADR-0001 |\n")
+            tree.write("docs/adr/0001-spine.md",
+                       "# Spine\n\n- Status: accepted\n")
+            tree.write("docs/adr/0002-old.md",
+                       "# Old\n\n- Status: superseded in part by ADR-0001\n")
+            tree.write("CONTEXT.md", "Per ADR-0001 and ADR-0002.\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_no_adr_dir_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(gates.check_blueprint_drift(Path(tmp)), [])
+
+    def test_shipping_annotation_does_not_count_as_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, "| [0001](0001-spine.md) | Spine | accepted |\n")
+            tree.write("docs/adr/0001-spine.md",
+                       "# Spine\n\n- Status: accepted (shipped 2026-07-06)\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_missing_index_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/adr/0001-spine.md",
+                       "# Spine\n\n- Status: accepted\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                "D: docs/adr/README.md is missing"
+                " (ADR files present, no blueprint index)"])
+
+    def test_unstated_and_unknown_status_are_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp,
+                "| [0001](0001-spine.md) | Spine | accepted |\n",
+                "| [0002](0002-typo.md) | Typo | aproved |\n")
+            tree.write("docs/adr/0001-spine.md", "# Spine\n\nNo status.\n")
+            tree.write("docs/adr/0002-typo.md",
+                       "# Typo\n\n- Status: aproved\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                "D: docs/adr/0001-spine.md declares no Status line",
+                "D: docs/adr/0002-typo.md:3 unknown ADR status 'aproved'"])
+
+    def test_unindexed_adr_and_index_row_without_a_file_are_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, "| [0009](0009-ghost.md) | Ghost | accepted |\n")
+            tree.write("docs/adr/0001-spine.md",
+                       "# Spine\n\n- Status: accepted\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                "D: docs/adr/README.md:5 index row ADR-0009 links to"
+                " missing file 0009-ghost.md",
+                "D: docs/adr/README.md has no index row for ADR-0001"])
+
+    def test_index_status_out_of_step_with_the_file_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, "| [0001](0001-spine.md) | Spine | accepted |\n")
+            tree.write("docs/adr/0001-spine.md",
+                       "# Spine\n\n- Status: superseded by ADR-0002\n")
+            tree.write("docs/adr/0002-new.md",
+                       "# New\n\n- Status: accepted\n")
+            problems = gates.check_blueprint_drift(tree.root)
+            self.assertIn(
+                "D: docs/adr/README.md:5 ADR-0001 index status 'accepted'"
+                " does not match the file's 'superseded by ADR-0002'",
+                problems)
+
+    def test_artifact_citing_a_superseded_decision_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp,
+                "| [0001](0001-old.md) | Old | superseded by ADR-0002 |\n",
+                "| [0002](0002-new.md) | New | accepted |\n")
+            tree.write("docs/adr/0001-old.md",
+                       "# Old\n\n- Status: superseded by ADR-0002\n")
+            tree.write("docs/adr/0002-new.md",
+                       "# New\n\n- Status: accepted\n\nSupersedes ADR-0001.\n")
+            tree.write("docs/features/demo/breakdown.md",
+                       "- [ ] WO-0001 build it per ADR-0001 (PRD-0001)\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                "D: docs/features/demo/breakdown.md:1 cites ADR-0001,"
+                " superseded by ADR-0002 (blueprint drift)"])
+
+
+class TestCostLedger(unittest.TestCase):
+    """G (origin: WO-0008, ADR-0034): the append-only cost ledger is the
+    factory's measurement substrate; a merged order missing from it is a
+    gating finding, and an absent ledger means no runs are recorded yet."""
+
+    LINE = {"wo": "WO-0001", "run_id": "r-1", "model": "m",
+            "tokens": 1200, "cost": 0.42, "outcome": "merged"}
+
+    def build(self, tmp, *lines, row="- [x] WO-0001 slice (PRD-0001)\n"):
+        tree = FixtureTree(tmp)
+        tree.write("docs/features/demo/breakdown.md", row)
+        if lines:
+            tree.write("docs/factory/costs.jsonl",
+                       "".join(json.dumps(line) + "\n" for line in lines))
+        return tree
+
+    def test_absent_ledger_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp)
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+    def test_well_formed_ledger_covering_merged_orders_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp, self.LINE)
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+    def test_merged_order_with_no_ledger_line_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                row="- [x] WO-0001 one (PRD-0001)\n"
+                    "- [x] WO-0002 two (PRD-0001)\n"
+                    "- [ ] WO-0003 unmerged (PRD-0001)\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/features/demo/breakdown.md:2 merged work order"
+                " WO-0002 has no line in docs/factory/costs.jsonl"])
+
+    def test_malformed_line_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp, self.LINE)
+            tree.write("docs/factory/costs.jsonl",
+                       json.dumps(self.LINE) + "\n{not json\n[1, 2]\n")
+            problems = gates.check_cost_ledger(tree.root)
+            self.assertEqual(len(problems), 2, problems)
+            self.assertTrue(problems[0].startswith(
+                "G: docs/factory/costs.jsonl:2 is not valid JSON:"), problems)
+            self.assertEqual(
+                problems[1],
+                "G: docs/factory/costs.jsonl:3 is not a JSON object")
+
+    def test_wrong_fields_are_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, {"wo": "WO-0001", "run_id": "r-1", "model": "m",
+                      "tokens": 1, "cost": 0.1, "outcome": "merged",
+                      "note": "extra"},
+                {"wo": "WO-0001", "model": "m", "outcome": "merged"})
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/factory/costs.jsonl:1 ledger line has unknown"
+                " field(s): note",
+                "G: docs/factory/costs.jsonl:2 ledger line is missing"
+                " field(s): cost, run_id, tokens"])
+
+    def test_bad_field_values_are_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, {"wo": "WO-0009", "run_id": "", "model": "m",
+                      "tokens": -1, "cost": "free", "outcome": "merged"})
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/factory/costs.jsonl:1 wo WO-0009 has no breakdown"
+                " row",
+                "G: docs/factory/costs.jsonl:1 run_id must be a non-empty"
+                " string",
+                "G: docs/factory/costs.jsonl:1 tokens must be a non-negative"
+                " integer",
+                "G: docs/factory/costs.jsonl:1 cost must be a non-negative"
+                " number",
+                "G: docs/features/demo/breakdown.md:1 merged work order"
+                " WO-0001 has no line in docs/factory/costs.jsonl"])
+
+    def test_untyped_wo_field_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, {"wo": "nope", "run_id": "r", "model": "m",
+                      "tokens": 0, "cost": 0, "outcome": "failed"})
+            problems = gates.check_cost_ledger(tree.root)
+            self.assertIn(
+                "G: docs/factory/costs.jsonl:1 wo 'nope' is not a WO-####"
+                " token", problems)
+
+    def test_blank_lines_are_tolerated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp, self.LINE)
+            tree.write("docs/factory/costs.jsonl",
+                       json.dumps(self.LINE) + "\n\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+
+class TestStaleness(unittest.TestCase):
+    """I (origin: WO-0008): a doc that points at a path which no longer
+    exists is stale — the knowledge plane has moved on without it."""
+
+    def test_resolving_links_are_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/adr/0001-spine.md", "# Spine\n")
+            tree.write("CONTEXT.md", "See [spine](docs/adr/0001-spine.md).\n")
+            tree.write("docs/guide.md",
+                       "[up](../CONTEXT.md), [dir](adr), [anchor](#x),\n"
+                       "[web](https://example.com/gone.md), [rooted](/docs)\n")
+            self.assertEqual(gates.check_staleness(tree.root), [])
+
+    def test_stale_links_are_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/guide.md",
+                       "[moved](../ARCHIVE.md) and [gone](adr/0009-x.md#why)\n")
+            self.assertEqual(gates.check_staleness(tree.root), [
+                "I: docs/guide.md:1 stale link ../ARCHIVE.md (no such path)",
+                "I: docs/guide.md:1 stale link adr/0009-x.md (no such path)"])
+
+
 class TestScaffoldSync(unittest.TestCase):
     def manifested_tree(self, tmp, payload="check:\n"):
         tree = FixtureTree(tmp)

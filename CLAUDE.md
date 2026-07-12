@@ -10,10 +10,16 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 - `python3 -m unittest discover tests`
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
 - `python3 gates.py && python3 gates.py --selftest` — factory drift
-  detectors (A/C/E/F), output matching `gates: 0 problem(s)`
+  detectors (A/C/D/E/F/G/I), output matching `gates: 0 problem(s)`
 
-On demand only (real model runs, costs money, never CI):
-`python3 trigger_eval.py` (needs the `claude` CLI).
+On demand only (real model runs, costs money, never CI; both need the
+`claude` CLI):
+
+- `python3 trigger_eval.py` — routing eval
+- `python3 charter_replay.py` — charter regression suite: golden fixture
+  work orders replayed against the role charters. Its scoring seam is pure
+  and injected, so CI covers degradation detection offline with recorded
+  transcripts; only the live replay costs money.
 
 ## Hard conventions
 

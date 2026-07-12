@@ -41,7 +41,7 @@ per ADR-0032 after each row exists here first.
 
 ## Milestone C: Self-observation (weekly report, sweeps, honesty gates)
 
-- [ ] **WO-0008** Detectors D (blueprint-drift) + G (cost-ledger) + I (staleness) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #113)
+- [x] **WO-0008** Detectors D (blueprint-drift) + G (cost-ledger) + I (staleness) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #113)
   - Accept: planted drift, ledger-gap, and stale-doc fixtures are each caught by selftest; the clean tree stays silent.
 - [ ] **WO-0009** cost-report.yml + monthly circuit breaker — size:S, blocked by: WO-0006 (PRD-0001 §User stories) (tracker: #114)
   - Accept: the weekly report issue posts numbers recomputed from costs.jsonl; a simulated cap breach sets FACTORY_PAUSED.
@@ -56,9 +56,9 @@ per ADR-0032 after each row exists here first.
 
 ## Milestone D: Charter maturity (full role set, regression CI, feedback mining)
 
-- [ ] **WO-0014** full 9-role charter set + CHARTERS.md + gate checklists — size:L, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #119)
+- [x] **WO-0014** full 9-role charter set + CHARTERS.md + gate checklists — size:L, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #119)
   - Accept: all nine agent+skill charter pairs exist; CHARTERS.md indexes them with the three gate checklists; structural lint passes.
-- [ ] **WO-0016** charter regression suite (golden fixture replays) — size:M, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #121)
+- [x] **WO-0016** charter regression suite (golden fixture replays) — size:M, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #121)
   - Accept: golden fixture work orders replay on plugin PRs via a cheap model; a deliberately degraded charter fails the suite.
 - [ ] **WO-0018** rejection mining into the toolsmith queue — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #123)
   - Accept: a weekly job harvests gate rejections and PR change-requests into the toolsmith/claude-reflect queue.
@@ -115,9 +115,40 @@ ADR-0033, and ADR-0034 (all accepted).
   `checks.yml` is gone — it was the check job, now `make check`. A root
   Makefile is new here, and the template Makefile's "exactly what CI runs"
   comment is finally true.
+- 2026-07-12: charter-regression deviation — the golden-fixture replays
+  (WO-0016, PRD-0001 §Actors) run **on demand** (`python3
+  charter_replay.py`) and through a manual `workflow_dispatch` job, never
+  automatically on plugin PRs as that row's accept line says. A replay is a
+  real model run, and never-real-models-in-CI is a hard convention
+  (CLAUDE.md; `trigger_eval.py` is the precedent) — a PR-triggered replay
+  would spend money on every push, and the owner ruled the convention wins
+  over the accept line's wording. What CI does cover is the suite's pure
+  scoring seam: the model runner is injected, so the transcripts a
+  deliberately degraded charter produces are replayed offline in
+  `tests/test_charter_replay.py` and fail the suite with no model in the
+  loop. The live model↔charter link itself is only observable in an
+  on-demand replay, and no such run has been recorded yet.
 - 2026-07-12: charters carry a routing *band* (`route: implementation` or
   `architecture_review`), never a model id — the band resolves through
   `factory.json`'s routing table, which the routing order
   (WO-0007, PRD-0001 §Solution) wires up. A `model:` in a charter would be
   a second routing source of truth (ADR-0004), which is the drift this
   factory exists to catch.
+- 2026-07-12: the charter index ships as `factory/CHARTERS.md`, beside the
+  charters it indexes, not at the repo root — it is factory-internal, and
+  the same reasoning keeps the whole set out of `factory/templates/**`
+  (detector E checksum-pins that tree; charters churn). The load-path gap
+  noted above is unchanged: nine charters now exist and still nothing
+  discovers them (WO-0005's assembler, PRD-0001 §Solution, remains the
+  natural owner).
+- 2026-07-12: bands are assigned by work class, not by seniority —
+  `architecture_review` for the roles whose artifact a human gate approves
+  as judgment (PM at gate 1, architect and UX at gate 2) plus the review
+  that pre-chews gate 3; `implementation` for planner, engineer, QA,
+  toolsmith; `mechanical` for support, whose intake and label plumbing is
+  the class ADR-0034 names for the cheap model.
+- 2026-07-12: the six charters added beyond the first three carry
+  `UNRATED` loadout tiers. The `MEASURED`/`RUN` tiers in the first three
+  come from the ai-tooling evidence base; no such result exists for the new
+  picks, and inventing one would be fabricated evidence (CLAUDE.md). They
+  graduate only on a real run.
