@@ -83,6 +83,43 @@ MERGED_ROW = re.compile(r"^\s*-\s*\[x\]", re.IGNORECASE)
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
 URL_TARGET = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 
+# architecture.md is a blueprint too (#142). D stayed green while a PR added a
+# root Makefile and deleted checks.yml, leaving architecture.md asserting the
+# opposite of the tree it describes. A doc that describes the tree is
+# checkable against the tree, and a doc that has stopped describing it is
+# stale — the finding is the drift, not the file.
+#
+# The hard part is that architecture.md describes TWO trees: this repo, and
+# the repo the payload stamps. It also names files that are PLANNED and do not
+# exist yet (a roadmap line naming `validator.yml` before WO-0004 lands). So
+# "every path it mentions must exist" is not the rule — it would false-positive
+# on an honest doc, which is the failure that killed two attempts at detector
+# H. Only two things are read as claims about the CURRENT tree:
+#
+#   1. PROSE, on a CLOSED keyword vocabulary, anchored so that the code span
+#      ends a clause. "there is no `Makefile`," asserts absence; "no `gates.py`
+#      change is needed" modifies a NOUN and asserts nothing. "`X` exists here"
+#      asserts presence, and "here" is the doc's OWN word for "in this repo"
+#      (it writes "no `Makefile` ... here", "`.github/CODEOWNERS` exists here")
+#      — which is exactly what separates a claim about this tree from a claim
+#      about a stamped one. Missing a hedged claim is the safe error; firing on
+#      an honest sentence is not.
+#   2. A DECLARED claim block, which is the only way to pin a presence claim
+#      that prose states behaviourally ("`checks.yml` runs lint..." asserts the
+#      file exists, but no keyword says so). Declaring it follows the same rule
+#      the review token's provenance does: what is not declared is not assumed.
+ARCH_ABSENT_PROSE = re.compile(
+    r"\bno\s+`(?P<path>[^`\n]+)`(?:\s+here)?\s*(?=[,.;:)]|$)")
+ARCH_EXISTS_PROSE = re.compile(r"`(?P<path>[^`\n]+)`\s+exists\s+here\b")
+ARCH_CLAIMS_FENCE = re.compile(r"^\s*```\s*tree-claims\s*$")
+ARCH_FENCE = re.compile(r"^\s*(?:```|~~~)")
+ARCH_CLAIM = re.compile(
+    r"^\s*(?P<verb>exists|absent)\s*:\s*(?P<path>\S+)\s*$", re.IGNORECASE)
+# A claim must name a plain repo path. A glob or a `..` is not resolvable
+# against the tree, and quietly resolving it anyway is how a detector starts
+# reporting things it did not check.
+ARCH_PLAIN_PATH = re.compile(r"^[\w.@/-]+$")
+
 
 def run_dirs(root):
     """Candidate run directories per the pipeline protocol."""
@@ -236,16 +273,110 @@ def _status_head(text):
     return match.group(1) if match else None
 
 
+def _claim_path(root, raw):
+    """(resolved path, problem-suffix). A claim must name a plain repo path;
+    anything else is refused rather than resolved."""
+    cleaned = raw.strip().rstrip("/")
+    if not cleaned or ".." in cleaned.split("/") \
+            or not ARCH_PLAIN_PATH.match(cleaned):
+        return None, (f"tree claim '{raw}' is not a plain repo path"
+                      " (no globs, no '..')")
+    return root / cleaned, None
+
+
+def _declared_claims(root, rel, lineno, line):
+    """Problems for one line inside a ```tree-claims block."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return []
+    claim = ARCH_CLAIM.match(line)
+    if not claim:
+        return [f"D: {rel}:{lineno} unreadable tree claim '{stripped}'"
+                " (expected 'exists: <path>' or 'absent: <path>')"]
+    raw = claim.group("path")
+    path, refused = _claim_path(root, raw)
+    if refused:
+        return [f"D: {rel}:{lineno} {refused}"]
+    name = raw.strip().rstrip("/")
+    exists = path.exists()
+    if claim.group("verb").lower() == "exists" and not exists:
+        return [f"D: {rel}:{lineno} claims {name} exists, but it does not"
+                " (architecture.md is stale)"]
+    if claim.group("verb").lower() == "absent" and exists:
+        return [f"D: {rel}:{lineno} claims {name} is absent, but it exists"
+                " (architecture.md is stale)"]
+    return []
+
+
+def _prose_claims(root, rel, lineno, line):
+    """Problems for the existence claims a prose line makes about this tree.
+    An unresolvable path (a glob, a `make check` command span) is not a claim
+    and is skipped — in prose, silence is the safe reading."""
+    problems = []
+    for match in ARCH_ABSENT_PROSE.finditer(line):
+        raw = match.group("path")
+        path, refused = _claim_path(root, raw)
+        if path is not None and path.exists():
+            problems.append(
+                f"D: {rel}:{lineno} says there is no {raw.rstrip('/')}, but"
+                " it exists (architecture.md is stale)")
+    for match in ARCH_EXISTS_PROSE.finditer(line):
+        raw = match.group("path")
+        path, refused = _claim_path(root, raw)
+        if path is not None and not path.exists():
+            problems.append(
+                f"D: {rel}:{lineno} says {raw.rstrip('/')} exists, but it"
+                " does not (architecture.md is stale)")
+    return problems
+
+
+def _architecture_drift(root):
+    """D: every file architecture.md names as present or absent in THIS repo
+    must agree with the tree. Fenced examples are inert — a doc quoting a
+    claim is not making it — except for the ```tree-claims block, which is
+    where a claim prose can only state behaviourally gets declared."""
+    problems = []
+    for run in run_dirs(root):
+        arch = run / "architecture.md"
+        if not arch.is_file():
+            continue
+        rel = arch.relative_to(root)
+        fence = None  # None | "tree-claims" | "other"
+        for lineno, line in enumerate(
+                arch.read_text(encoding="utf-8").splitlines(), 1):
+            if fence is not None:
+                if ARCH_FENCE.match(line):
+                    fence = None
+                elif fence == "tree-claims":
+                    problems.extend(
+                        _declared_claims(root, rel, lineno, line))
+                continue
+            if ARCH_CLAIMS_FENCE.match(line):
+                fence = "tree-claims"
+                continue
+            if ARCH_FENCE.match(line):
+                fence = "other"
+                continue
+            problems.extend(_prose_claims(root, rel, lineno, line))
+    return problems
+
+
 def check_blueprint_drift(root):
     """D: docs/adr is the approved blueprint (ADR-0033's second gate). It
     must describe itself consistently — every ADR carries a known status
     and is indexed with that status — and no artifact outside docs/adr may
     build on a decision the blueprint has retired (ADR-0032: disagreement
-    resolves in the knowledge plane's favour)."""
+    resolves in the knowledge plane's favour).
+
+    A run's architecture.md is a blueprint too, and it drifts the same way:
+    it goes on describing a tree that has moved out from under it (#142). So
+    a file it names as present or absent in this repo must agree with the
+    tree, on the same principle — the doc does not get to disagree with what
+    is there."""
+    problems = _architecture_drift(root)
     adr_dir = root / "docs" / "adr"
     if not adr_dir.is_dir():
-        return []
-    problems = []
+        return problems
     statuses = {}  # ADR number -> status text (None when unusable)
     retired = {}   # ADR number -> the ADR number that superseded it
     for path in sorted(adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md")):
