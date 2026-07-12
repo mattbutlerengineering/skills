@@ -23,6 +23,13 @@ ai-tooling suite where the rule is the same idea):
   G COST-LEDGER    — docs/factory/costs.jsonl lines carry the ADR-0034
                      fields and every merged (checked) work-order row has
                      one; an absent ledger is silent (no runs recorded yet)
+  H EVIDENCE-HONESTY — every verification.md section that asserts a LABELLED
+                     verdict (Result/Verdict/Outcome/Status) shows literal
+                     fenced output or discloses NOT RUN, in its OWN section
+                     scope (an appendix fence vouches for nothing; a scoped
+                     hedge is not a disclaimer; there is no roll-up excuse);
+                     and an artifact with neither output nor a written
+                     NOT-RUN disclaimer anywhere fails outright
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
 
@@ -95,6 +102,122 @@ MERGED_ROW = re.compile(r"^\s*-\s*\[x\]", re.IGNORECASE)
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
 URL_TARGET = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 
+# H reads verification.md the way the verify skill writes it: markdown
+# headings delimit criteria, a LABELLED line asserts the verdict, fenced
+# blocks carry the literal output, and prose may disclose a check as NOT RUN.
+# Every one of those signals is read IN THE SECTION THAT CARRIES IT — the
+# rule H enforces is per-criterion, so its evidence test must be too.
+HEADING_LINE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
+# CommonMark's other heading syntax: a title underlined with === or ---.
+# GitHub renders it identically to ATX, so a splitter that reads only ATX is
+# blind to sections a human reviewer plainly sees (the #147 bypass). The `---`
+# underline is ambiguous — it also writes a thematic break and closes the
+# frontmatter fence — so a title must be a non-blank line that is not itself a
+# list item, block quote, or underline.
+SETEXT_UNDERLINE = re.compile(r"^\s{0,3}(?:=+|-+)\s*$")
+NOT_A_SETEXT_TITLE = re.compile(r"^\s{0,3}(?:[-*+>]|\d+[.)])\s")
+# Only a LABELLED verdict line asserts a verdict. The label is not just
+# "Result": a criterion is just as asserted under "Verdict:", "Outcome:",
+# "Conclusion:", "Assessment:", "Finding:" — so the rule engages on the whole
+# verdict-noun vocabulary (case-insensitive, with an optional list bullet and
+# bold markers, and a non-empty value). A four-label whitelist was itself the
+# gate's escape hatch: a lying section only had to relabel its verdict line to
+# become invisible, which is the same "rename it and the gate goes quiet" move
+# the roll-up excuse allowed. The vocabulary below is the closed set of words
+# that ASSERT A JUDGEMENT. Words that introduce an INPUT or an aside —
+# "Check:", "Command:", "Note:", "Caveat:", "Evidence:" — are deliberately NOT
+# verdicts: they carry no claim, and reading them as claims false-positives on
+# every honest artifact that documents what it ran.
+#
+# Nothing else asserts anything. Unlabelled prose and heading text are read
+# as prose: an author may open a note with "Done.", title a section "all
+# checks pass", and — decisively — write TEMPLATE.md's `## Summary` as the
+# narrative roll-up it is meant to be, all without owing output. Reading
+# prose and headings as verdicts is what forced the previous roll-up EXCUSE
+# ("a section named Summary/Results/… need not evidence itself, provided
+# some other section does"), and that excuse was the gate's own escape
+# hatch: rename the lying section, or park one throwaway evidenced leaf
+# beside it, and the gate went quiet. With only labelled lines asserting, no
+# excuse is needed and none exists — every labelled verdict is backed IN ITS
+# OWN SECTION, wherever it is written.
+# The leading-marker class is deliberately wide. A verdict is just as asserted
+# under a blockquote (`> Result: PASS`) or an ordered-list item (`1. Result:
+# PASS`) as under a `-` bullet, and GitHub renders all three as visible verdict
+# text — so a marker-only whitelist was itself an escape hatch (an independent
+# review smuggled a fake PASS past the `-*+`-only form under `>` and `1.`).
+# Any run of list/quote markers may lead the line; the verdict noun is what
+# makes it a verdict, not the marker.
+RESULT_LINE = re.compile(
+    r"^\s*(?:(?:[-*+>]|\d+[.)])\s*)*\**\s*(?:result|verdict|outcome|status"
+    r"|conclusion|assessment|finding|determination|evaluation|judge?ment"
+    r"|disposition|decision|ruling|appraisal)\**"
+    r"\s*:\s*(\S.*?)\s*$",
+    re.IGNORECASE)
+# YAML frontmatter is METADATA, not the author's assertion. `status: draft` is
+# a stage field, and reading it as a labelled verdict both false-positived on
+# an honest artifact ("(untitled)" asserts draft) and — worse — parked a
+# `results` entry in the artifact, which switched the artifact-wide backstop
+# off entirely. The frontmatter block is skipped, not scanned.
+FRONTMATTER_FENCE = re.compile(r"^---\s*$")
+# CommonMark fences, tracked as a stack of one — NOT a parity toggle. An
+# opening fence records its marker character and length; only a fence of the
+# SAME character, AT LEAST as long, and carrying NO info string closes it. So
+# evidence that quotes markdown (a ```bash block inside a ~~~ block, a ```
+# inside a ````) stays content instead of desyncing the scanner and silently
+# swallowing every criterion below it, and an unclosed fence is reported.
+# Deliberate deviation from CommonMark: the indent is unbounded, because
+# verification evidence is nested under `- Evidence:` list items, where the
+# fence is indented to the item's content column. We do not track containers,
+# and false-positiving on honest nested evidence is the worse error.
+FENCE_OPEN = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})(?P<info>.*)$")
+FENCE_CLOSE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})[ \t]*$")
+# The disclaimer must be explicit, and it must be WRITTEN: read from body
+# text, never from a heading. TEMPLATE.md ships a `## Not verified` slot in
+# EVERY artifact, so a heading that counted as a disclosure would let the
+# template alone excuse a wholly fabricated, zero-output artifact. What
+# discloses a gap is what the author writes under the slot, not the slot.
+# A scoped hedge ("not tested on Windows", "not verified in Safari") admits
+# the check DID run, just not everywhere — the negative lookahead drops it so
+# it cannot disarm the rule the way an unqualified "NOT RUN" legitimately does.
+NOT_RUN_TOKEN = re.compile(
+    r"\bnot[\s-]+(?:run|ran|verified|executed|checked|tested|attempted)\b"
+    r"(?!\s+(?:on|in|for|under|with|against|across|when|beyond|outside)\b)",
+    re.IGNORECASE)
+# A verdict that claims nothing IS the disclosure and owes no output. Every
+# other verdict is a CLAIM and owes literal evidence in its own section — and
+# a disclosure sitting NEXT TO a claim buys it nothing. That distinction is
+# what stops "(the retry path was not run)" from being a two-word licence to
+# fabricate any verdict: a section's prose "not run" disarms nothing it does
+# not itself claim. (Body prose still counts for the artifact-wide backstop:
+# an artifact that ran nothing and says so is honest.)
+#
+# The test is ANCHORED at the head of the verdict, never a substring search.
+# Searching the whole value let a claim disarm ITSELF by appending a hedge —
+# "PASS - every criterion met, full suite green (soak test not run)" asserted
+# PASS, showed nothing, and passed in silence. What a verdict asserts is its
+# HEAD: lead with a disclosure and you have disclosed; lead with PASS and you
+# have claimed, whatever you append. A trailing reason is welcome — an honest
+# "NOT RUN — the CI runner was offline" is still a disclosure — and a scoped
+# hedge ("not tested on Windows") is still not one, because it concedes the
+# check DID run: the preposition lookahead drops it here exactly as it does in
+# the body scan.
+DISCLOSURE_VERDICT = re.compile(
+    r"^(?:n/?a|skip(?:ped)?|defer(?:red)?|untested|unverified|pending|todo|tbd"
+    r"|not[\s-]+(?:run|ran|verified|executed|checked|tested|attempted)"
+    r"(?!\s+(?:on|in|for|under|with|against|across|when|beyond|outside)\b))"
+    r"(?![\w/-])",
+    re.IGNORECASE)
+# Emphasis and brackets are formatting, not claim: `**NOT RUN**` and `(N/A)`
+# are the disclosures they look like, so the head is read past them.
+VERDICT_LEAD = re.compile(r"^[\s*_`\"'“‘([]+")
+# Unfilled TEMPLATE filler is not output — matched by its filler TEXT, not by
+# the shape `<...>`. That shape is also real evidence (a DOM dump's `<html>`,
+# a Python repr like `<class 'app.models.User'>`), and discarding it
+# false-positived on authors who had pasted exactly what H asks for.
+PLACEHOLDER_TEXT = (r"paste|actual\s+output|fill[\s-]*in|to[\s-]?do|tbd|xxx"
+                    r"|insert|example\s+output|output\s+here|your\s")
+PLACEHOLDER_LINE = re.compile(
+    r"^\s*<\s*(?:" + PLACEHOLDER_TEXT + r")[^>]*>\s*$", re.IGNORECASE)
 # architecture.md is a blueprint too (#142). D stayed green while a PR added a
 # root Makefile and deleted checks.yml, leaving architecture.md asserting the
 # opposite of the tree it describes. A doc that describes the tree is
@@ -646,9 +769,174 @@ def check_config_shape(root):
     return problems
 
 
+def _is_setext_title(lines, idx):
+    """True when lines[idx] is a Setext heading title — a non-blank line with a
+    ===/--- underline beneath it. Callers rule out fenced content first. A list
+    item or block quote is not a title: `- item` over `---` is a list followed
+    by a thematic break, not a heading."""
+    if idx + 1 >= len(lines) or not SETEXT_UNDERLINE.match(lines[idx + 1]):
+        return False
+    line = lines[idx]
+    if not line.strip() or SETEXT_UNDERLINE.match(line):
+        return False
+    return not (HEADING_LINE.match(line) or NOT_A_SETEXT_TITLE.match(line))
+
+
+def _is_disclosure(verdict):
+    """Does this labelled verdict claim nothing — i.e. does it LEAD with the
+    NOT-RUN disclaimer ("NOT VERIFIED", "SKIPPED", "N/A", "NOT RUN — reason")?
+    Anything else is a claim, and a claim owes literal evidence. The head is
+    what asserts: a hedge appended to a claim is still a claim."""
+    return bool(DISCLOSURE_VERDICT.match(VERDICT_LEAD.sub("", verdict)))
+
+
+def _fence_open(line):
+    """(marker char, marker length) if `line` opens a fence, else None."""
+    match = FENCE_OPEN.match(line)
+    if not match:
+        return None
+    marker, info = match.group("marker"), match.group("info")
+    # CommonMark: a backtick fence's info string may not contain a backtick.
+    if marker[0] == "`" and "`" in info:
+        return None
+    return marker[0], len(marker)
+
+
+def _fence_closes(line, char, length):
+    """Does `line` close a fence opened with `length` copies of `char`?"""
+    match = FENCE_CLOSE.match(line)
+    if not match:
+        return False
+    marker = match.group("marker")
+    return marker[0] == char and len(marker) >= length
+
+
+def _verification_sections(text):
+    """Split a verification artifact into heading-delimited sections, each
+    recording — IN ITS OWN SCOPE — whether it shows literal output, discloses
+    a check as NOT RUN, and what verdicts it asserts. Scope is the point:
+    evidence parked in an appendix does not vouch for a criterion three
+    headings away. Fenced content is inert: a heading, a `Result:` line, or a
+    "not run" quoted inside evidence is output, not the author's assertion.
+
+    A section asserts a verdict exactly one way: `results` holds its LABELLED
+    verdict lines (the verdict-noun vocabulary — see RESULT_LINE). Prose and
+    heading text assert nothing. YAML frontmatter is metadata and is skipped
+    outright, so a `status:` field is never mistaken for an author's verdict.
+
+    Returns (sections, unclosed), where `unclosed` is the line number of a
+    fence that is never closed, or None."""
+    sections = []
+
+    def blank(title, lineno):
+        return {"title": title, "lineno": lineno, "evidence": False,
+                "not_run": False, "results": []}
+
+    lines = text.splitlines()
+    body = 0
+    if lines and FRONTMATTER_FENCE.match(lines[0]):
+        for index in range(1, len(lines)):
+            if FRONTMATTER_FENCE.match(lines[index]):
+                body = index + 1
+                break
+        # An unterminated opener is not frontmatter: scan the whole file.
+
+    current = blank("(untitled)", body + 1)
+    fence = None  # (marker char, marker length, opening line number)
+    underlined = False
+    for lineno, line in enumerate(lines[body:], body + 1):
+        if fence is not None:
+            if _fence_closes(line, fence[0], fence[1]):
+                fence = None
+            elif line.strip() and not PLACEHOLDER_LINE.match(line):
+                current["evidence"] = True
+            continue
+        if underlined:  # the ===/--- under a Setext title, already consumed
+            underlined = False
+            continue
+        opened = _fence_open(line)
+        if opened:
+            fence = (opened[0], opened[1], lineno)
+            continue
+        heading = HEADING_LINE.match(line)
+        if heading:
+            title = heading.group(2) or "(untitled)"
+        elif _is_setext_title(lines, lineno - 1):
+            title, underlined = line.strip(), True
+        else:
+            title = None
+        if title is not None:
+            sections.append(current)
+            current = blank(title, lineno)
+            continue
+        if NOT_RUN_TOKEN.search(line):
+            current["not_run"] = True
+        result = RESULT_LINE.match(line)
+        if result:
+            current["results"].append((lineno, result.group(1)))
+    sections.append(current)
+    return sections, (fence[2] if fence else None)
+
+
+def check_evidence_honesty(root):
+    """H: a criterion that asserts a verdict must show literal output or
+    disclose that the check was NOT RUN. Prose confidence is not evidence
+    (PRD-0001: a change whose verification is asserted but not evidenced
+    fails the build).
+
+    The rule is per-criterion, uniform, and UNEXCUSED: every section holding
+    a labelled verdict line carries its own evidence or its own disclaimer.
+    There is no roll-up exemption to buy by renaming a section, and no "some
+    other section is honest" test to satisfy with one throwaway leaf.
+
+    An artifact that asserts no labelled verdict anywhere escapes that rule
+    but still owes the reader something, so the backstop demands exactly what
+    the acceptance criterion demands: literal command output, or an explicit
+    NOT-RUN disclaimer. Neither one present means the build fails."""
+    problems = []
+    for run in run_dirs(root):
+        artifact = run / "verification.md"
+        if not artifact.is_file():
+            continue
+        rel = artifact.relative_to(root)
+        try:
+            text = artifact.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as err:
+            problems.append(f"H: {rel} cannot be read: {err}")
+            continue
+        sections, unclosed = _verification_sections(text)
+        if unclosed is not None:
+            problems.append(
+                f"H: {rel}:{unclosed} unclosed code fence — every criterion"
+                " after it is unread")
+        for section in sections:
+            if section["evidence"]:
+                continue
+            claims = [(lineno, verdict)
+                      for lineno, verdict in section["results"]
+                      if not _is_disclosure(verdict)]
+            if not claims:
+                continue
+            lineno, verdict = claims[0]
+            problems.append(
+                f'H: {rel}:{lineno} criterion "{section["title"]}"'
+                f" asserts {verdict} with neither literal evidence nor a"
+                " NOT-RUN disclaimer (evidence must be a fenced code block"
+                " in this section)")
+        # An artifact that asserts no verdict at all escapes the per-criterion
+        # rule; it still owes the reader output or a disclosure.
+        if not any(s["results"] for s in sections) and not any(
+                s["evidence"] or s["not_run"] for s in sections):
+            problems.append(
+                f"H: {rel}:1 verification artifact shows neither literal"
+                " evidence nor a NOT-RUN disclaimer (evidence must be a"
+                " fenced code block)")
+    return problems
+
+
 CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
             check_blueprint_drift, check_scaffold_sync, check_config_shape,
-            check_cost_ledger, check_staleness)
+            check_cost_ledger, check_evidence_honesty, check_staleness)
 
 
 def run_all(root, env=None):
@@ -764,6 +1052,59 @@ def selftest():
             "body": "WO-0003 (PRD-0001) Fixes: #108"}}), encoding="utf-8")
         expect_clean("B clean", check_pr_traceability(root, env))
 
+        (run / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "### Suite is green\n\n- Check: ran it, all good.\n"
+            "- Result: PASS\n", encoding="utf-8")
+        # A wholly fabricated, TEMPLATE-shaped artifact with ZERO command
+        # output. The `## Not verified` slot ships in every artifact, so its
+        # LABEL cannot be the disclosure — only what the author writes is.
+        fabricated = root / "docs" / "features" / "fabricated"
+        fabricated.mkdir()
+        (fabricated / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "## Summary\n\n6/6 criteria pass. Verdict: ship it.\n\n"
+            "## Criteria & evidence\n\n### Test suite\n\n"
+            "- Check: ran the full suite; everything passed.\n\n"
+            "## Failures\n\nNone.\n\n"
+            "## Not verified\n\nNothing; everything was checked.\n",
+            encoding="utf-8")
+        # The gaming shapes H exists to stop: a lying roll-up RENAMED to dodge
+        # the (now deleted) roll-up excuse, one throwaway evidenced leaf trying
+        # to launder it, a relabelled verdict dodging the "Result:" token, a
+        # scoped hedge posing as a NOT-RUN disclaimer, and an unrelated
+        # appendix fence standing in for per-criterion evidence. Each fires in
+        # its own section's scope.
+        gamed = root / "docs" / "features" / "gamed"
+        gamed.mkdir()
+        (gamed / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "### Grammar parses\n\n- Evidence:\n  ```\n  .\n  ```\n"
+            "- Result: PASS\n\n"
+            "## Results\n\n- Result: all 6 criteria PASS\n\n"
+            "### Budget guard holds\n\n- Verdict: PASS\n\n"
+            "### Router picks the model\n\n- Result: PASS\n"
+            "Note: not tested on Windows.\n\n"
+            "### Retry path\n\n- Result: PASS\n"
+            "- (the retry path itself was not run)\n\n"
+            "## Appendix\n\n```\ngit log --oneline -3\n```\n",
+            encoding="utf-8")
+        # An unclosed fence must be reported, never silently absorb the tail.
+        unclosed = root / "docs" / "features" / "unclosed"
+        unclosed.mkdir()
+        (unclosed / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "### Report renders\n\n- Evidence:\n  ```\n  3 orders merged\n"
+            "- Result: PASS\n", encoding="utf-8")
+        expect("H", check_evidence_honesty(root),
+               'criterion "Suite is green" asserts PASS with neither',
+               "artifact shows neither literal evidence",
+               'criterion "Results" asserts all 6 criteria PASS with neither',
+               'criterion "Budget guard holds" asserts PASS with neither',
+               'criterion "Router picks the model" asserts PASS with neither',
+               'criterion "Retry path" asserts PASS with neither',
+               "unclosed code fence")
+
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         run = root / "docs" / "features" / "demo"
@@ -786,6 +1127,31 @@ def selftest():
             json.dumps({"wo": "WO-0001", "run_id": "r1", "model": "m",
                         "tokens": 1200, "cost": 0.42, "outcome": "merged"})
             + "\n", encoding="utf-8")
+        evidenced = root / "docs" / "features" / "evidenced"
+        evidenced.mkdir(parents=True)
+        (evidenced / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "### Suite is green\n\n- Evidence:\n  ```\n  Ran 212 tests\n"
+            "\n  OK\n  ```\n- Result: PASS\n", encoding="utf-8")
+        disclosed = root / "docs" / "features" / "disclosed"
+        disclosed.mkdir()
+        (disclosed / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "### Non-owner dispatch does not fire\n\n"
+            "- Check: NOT RUN — needs a second GitHub account.\n"
+            "- Result: NOT VERIFIED\n", encoding="utf-8")
+        # A roll-up summary narrates the verdicts the criteria below evidence.
+        # It is not itself a criterion, and H must not read it as one.
+        rollup = root / "docs" / "features" / "rollup"
+        rollup.mkdir()
+        (rollup / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "## Summary\n\n4/4 criteria pass; suite and lint green on the\n"
+            "branch. Verdict: the feature demonstrably works.\n\n"
+            "## Criteria & evidence\n\n### Suite is green\n\n- Evidence:\n"
+            "  ```\n  Ran 222 tests\n\n  OK\n  ```\n- Result: PASS\n",
+            encoding="utf-8")
+        expect_clean("H honest", check_evidence_honesty(root))
         payload = root / "factory" / "templates"
         payload.mkdir(parents=True)
         (payload / "factory.json").write_text(json.dumps(
