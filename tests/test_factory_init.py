@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Every rel key update_manifest must record for the minimal fixture repo.
 EXPECTED_RELS = {
     "templates/.github/workflows/validator.yml",
+    "templates/.github/workflows/design.yml",
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
@@ -32,6 +33,8 @@ EXPECTED_RELS = {
 EXPECTED_INSTALLS = {
     "templates/.github/workflows/validator.yml":
         ".github/workflows/validator.yml",
+    "templates/.github/workflows/design.yml":
+        ".github/workflows/design.yml",
     "templates/Makefile": "Makefile",
     "templates/factory.json": ".github/factory.json",
     "templates/tools/factory/gates.py": "tools/factory/gates.py",
@@ -66,6 +69,8 @@ def make_factory_repo(root):
     tree.write("validator.py", "# validator stub\nVALIDATOR = 1\n")
     tree.write(".github/workflows/validator.yml",
                "name: validator\njobs: {}\n")
+    tree.write(".github/workflows/design.yml",
+               "name: design\njobs: {}\n")
     tree.write(".claude-plugin/plugin.json",
                json.dumps({"name": "software-factory", "version": "1.2.3"}))
     tree.write("factory/templates/Makefile",

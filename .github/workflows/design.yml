@@ -1,0 +1,37 @@
+# The design pipeline (PRD-0001; ADR-0033 gate 2 — blueprint/design approval).
+#
+# A pull request that touches docs/design/** runs the web-quality job:
+# playwright-driven UI quality, accessibility, and Core Web Vitals checks over
+# the product's web surface.
+#
+# Mirrored VERBATIM into the template payload by `factory_init.py
+# update-manifest`, so a stamped product repo runs this same file — which is
+# why it names no commands of its own. Every step goes through a `make` target,
+# and the Makefile knows where that repo keeps its tools. Editing this file
+# means re-running update-manifest; detector E fails the build otherwise.
+#
+# The job SKIPS GRACEFULLY when the repo has no web app to test (no
+# playwright.config.*): the make target detects the absence, prints why, and
+# exits 0 — the same skip-when-absent shape sweeps.yml uses for its Sentry job.
+# This factory repo has no web UI, so the target no-ops here; it is primarily
+# for stamped product repos that DO have a web surface.
+name: design
+
+on:
+  pull_request:
+    paths:
+      - docs/design/**
+
+permissions:
+  contents: read
+
+jobs:
+  web-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Web-quality checks (playwright; skips when there is no web app)
+        run: make web-quality
