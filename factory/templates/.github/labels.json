@@ -1,0 +1,137 @@
+[
+  {
+    "name": "wo:draft",
+    "color": "ededed",
+    "description": "WO lifecycle: mirrored, awaiting PRD approval"
+  },
+  {
+    "name": "wo:prd-approved",
+    "color": "c2e0c6",
+    "description": "WO lifecycle: PRD gate passed"
+  },
+  {
+    "name": "wo:blueprint-approved",
+    "color": "bfd4f2",
+    "description": "WO lifecycle: blueprint/ADR gate passed"
+  },
+  {
+    "name": "wo:ready-for-agent",
+    "color": "0e8a16",
+    "description": "WO lifecycle: owner-dispatched to the assembler"
+  },
+  {
+    "name": "wo:in-progress",
+    "color": "fbca04",
+    "description": "WO lifecycle: agent executing"
+  },
+  {
+    "name": "wo:needs-review",
+    "color": "d93f0b",
+    "description": "WO lifecycle: PR open, awaiting merge gate"
+  },
+  {
+    "name": "wo:merged",
+    "color": "5319e7",
+    "description": "WO lifecycle: done, PR merged"
+  },
+  {
+    "name": "wo:failed",
+    "color": "b60205",
+    "description": "WO lifecycle: gates red or budget exhausted"
+  },
+  {
+    "name": "wo:blocked",
+    "color": "7a7a7a",
+    "description": "WO lifecycle: unmet dependency"
+  },
+  {
+    "name": "size:S",
+    "color": "f9d0c4",
+    "description": "Budget class S (~$5)"
+  },
+  {
+    "name": "size:M",
+    "color": "f4a261",
+    "description": "Budget class M (~$15)"
+  },
+  {
+    "name": "size:L",
+    "color": "e76f51",
+    "description": "Budget class L (~$40)"
+  },
+  {
+    "name": "risk:low",
+    "color": "d4f0d0",
+    "description": "Auto-merge graduation unit"
+  },
+  {
+    "name": "risk:med",
+    "color": "fff3bf",
+    "description": "Auto-merge graduation unit"
+  },
+  {
+    "name": "risk:high",
+    "color": "ffd6d6",
+    "description": "Never auto-merges"
+  },
+  {
+    "name": "type:feature",
+    "color": "1d76db",
+    "description": "Work type"
+  },
+  {
+    "name": "type:defect",
+    "color": "ee0701",
+    "description": "Work type"
+  },
+  {
+    "name": "type:chore",
+    "color": "c5def5",
+    "description": "Work type"
+  },
+  {
+    "name": "type:support",
+    "color": "d4c5f9",
+    "description": "Work type"
+  },
+  {
+    "name": "type:sweep",
+    "color": "bfe5bf",
+    "description": "Work type"
+  },
+  {
+    "name": "source:human",
+    "color": "e0e0e0",
+    "description": "Intake provenance"
+  },
+  {
+    "name": "source:sentry",
+    "color": "e0e0e0",
+    "description": "Intake provenance"
+  },
+  {
+    "name": "source:validator",
+    "color": "e0e0e0",
+    "description": "Intake provenance"
+  },
+  {
+    "name": "source:sweep",
+    "color": "e0e0e0",
+    "description": "Intake provenance"
+  },
+  {
+    "name": "budget-exhausted",
+    "color": "b60205",
+    "description": "Flag: hard stop hit; owner must clear to re-dispatch"
+  },
+  {
+    "name": "needs-human",
+    "color": "d93f0b",
+    "description": "Flag: agent escalation"
+  },
+  {
+    "name": "blueprint-drift",
+    "color": "d93f0b",
+    "description": "Flag: code changed outside any accepted blueprint"
+  }
+]

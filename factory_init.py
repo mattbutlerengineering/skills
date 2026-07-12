@@ -5,12 +5,12 @@ and regenerate the checksum manifest that pins it (PRD-0001; ADR-0032).
 Conventions match lint.py/gates.py: functions return label-prefixed
 problem strings; the CLI prints them and exits nonzero.
 
-  update-manifest   refresh the tool mirrors (gates.py, protocol.py) under
-                    factory/templates/tools/factory/ from the repo root,
-                    then rewrite factory/manifest.json (plugin name +
-                    version from .claude-plugin/plugin.json, sha256 per
-                    template file). Detector E pins the result: templates
-                    are never hand-edited without re-running this.
+  update-manifest   refresh the tool mirrors (gates.py, protocol.py,
+                    label_sync.py) under factory/templates/tools/factory/
+                    from the repo root, then rewrite factory/manifest.json
+                    (plugin name + version from .claude-plugin/plugin.json,
+                    sha256 per template file). Detector E pins the result:
+                    templates are never hand-edited without re-running this.
   stamp <target>    copy the payload into <target>: a pristine mirror
                     under factory/ (manifest + templates, what detector E
                     checks there) plus installed copies (Makefile at the
@@ -26,9 +26,10 @@ from pathlib import Path
 
 import gates
 
-# Root scripts mirrored into the payload so the stamped detector suite is
-# self-contained in a product repo (gates.py imports its sibling protocol).
-TOOL_MIRRORS = ("gates.py", "protocol.py")
+# Root scripts mirrored into the payload so the stamped tool suite is
+# self-contained in a product repo (gates.py imports its sibling protocol;
+# label_sync.py is the sweeps-only network detector L).
+TOOL_MIRRORS = ("gates.py", "protocol.py", "label_sync.py")
 
 # Manifest rel -> install destination; anything unmapped strips "templates/".
 INSTALL_MAP = {"templates/factory.json": ".github/factory.json"}
