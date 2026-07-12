@@ -22,6 +22,7 @@ EXPECTED_RELS = {
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
+    "templates/tools/factory/label_sync.py",
     "templates/tools/factory/protocol.py",
 }
 
@@ -30,6 +31,7 @@ EXPECTED_INSTALLS = {
     "templates/Makefile": "Makefile",
     "templates/factory.json": ".github/factory.json",
     "templates/tools/factory/gates.py": "tools/factory/gates.py",
+    "templates/tools/factory/label_sync.py": "tools/factory/label_sync.py",
     "templates/tools/factory/protocol.py": "tools/factory/protocol.py",
 }
 
@@ -54,6 +56,7 @@ def make_factory_repo(root):
     tree = FixtureTree(root)
     tree.write("gates.py", "# gates stub\nGATE = 1\n")
     tree.write("protocol.py", "# protocol stub\nPROTOCOL = 1\n")
+    tree.write("label_sync.py", "# label_sync stub\nLABEL_SYNC = 1\n")
     tree.write(".claude-plugin/plugin.json",
                json.dumps({"name": "software-factory", "version": "1.2.3"}))
     tree.write("factory/templates/Makefile",

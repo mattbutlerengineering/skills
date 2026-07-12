@@ -11,3 +11,4 @@ Seed inbox — advisory only, never orientation state; grammar and read moments 
 - Reconcile skills' one-question-at-a-time interview rule with harnesses that batch questions natively (from: feature:seed-backlog)
 - Tighten backlog grammar to reject a mis-ordered `(claimed:)` marker absorbed into seed text (from: feature:seed-backlog)
 - Repo-wide lint read_text error policy (decode/OS errors) instead of per-checker handling (from: feature:seed-backlog)
+- The CODEOWNERS template hardcodes `* @mattbutlerengineering` and factory-init stamps it byte-for-byte, so in a repo where that handle is not a collaborator GitHub ignores the entry and the ADR-0033 code-owner gate goes inert — factory-init needs an owner-handle substitution (from: feature:software-factory)

@@ -19,7 +19,7 @@ per ADR-0032 after each row exists here first.
 
 - [x] **WO-0001** factory-init skill + template payload + manifest regeneration — size:M, blocked by: — (PRD-0001 §Solution) (tracker: #106)
   - Accept: factory-init stamps the full template payload into a scratch repo; a manifest regen command exists and detector E passes on the stamped tree.
-- [ ] **WO-0002** labels.yml + label-sync (detector L) + CODEOWNERS template — size:S, blocked by: WO-0001 (PRD-0001 §Solution) (tracker: #107)
+- [x] **WO-0002** labels.json + label-sync (detector L) + CODEOWNERS template — size:S, blocked by: WO-0001 (PRD-0001 §Solution) (tracker: #107)
   - Accept: label-sync recreates the 27-label taxonomy on a bare repo and reports drift; CODEOWNERS ships in the template payload.
 - [x] **WO-0003** Detector B (PR-traceability) + Makefile↔validator lockstep test — size:S, blocked by: WO-0001 (PRD-0001 §Success criteria) (tracker: #108)
   - Accept: a PR body missing the work-order citation fails B in event context and SKIPs locally; a unit test pins Makefile and CI steps in lockstep.
@@ -84,3 +84,12 @@ ADR-0033, and ADR-0034 (all accepted).
 - 2026-07-12: merge-gate enforcement remains convention + CI on this
   private free-plan repo (PRD open question); physical branch protection
   activates when the repo goes Pro or public.
+- 2026-07-12: label-taxonomy deviation — the taxonomy ships as
+  `labels.json`, not the `labels.yml` the Milestone A label-sync row
+  originally named (the row title is renamed to match what shipped; this
+  note is written without the work-order token because detector A reads any
+  line carrying one as a row needing a PRD citation). Stdlib-only is the
+  first hard convention (CLAUDE.md) and Python's standard library has no
+  YAML parser, so detector L could never have read a `.yml` taxonomy without
+  a third-party dependency; JSON is also what `gh label list --json` returns,
+  so the desired and live shapes match.
