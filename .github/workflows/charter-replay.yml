@@ -1,0 +1,49 @@
+name: charter-replay
+
+# Manual only, and deliberately so. A replay is a real model run: it costs
+# money and never runs in CI (CLAUDE.md's hard convention, the same stance
+# trigger_eval.py takes). WO-0016's accept line said these replays would run
+# "on plugin PRs"; the owner ruled the convention wins, so the trigger below
+# is workflow_dispatch and nothing else. Adding push/pull_request here also
+# breaks tests/test_charter_replay.py, on purpose.
+#
+# The suite's scoring logic — including detection of a degraded charter — is
+# covered offline by checks.yml with no model in the loop.
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Model to replay with (cheap by default)
+        required: false
+        default: haiku
+      only:
+        description: Replay only this case id or role (blank = all)
+        required: false
+        default: ""
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the claude CLI
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Replay golden fixture work orders against the charters
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODEL: ${{ inputs.model }}
+          ONLY: ${{ inputs.only }}
+        run: |
+          args=(--model "$MODEL" --record)
+          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+          python3 charter_replay.py "${args[@]}"
+      - name: Upload the replay snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: charter-replay-results
+          path: evals/results/charter-*.json
+          if-no-files-found: ignore
