@@ -58,6 +58,18 @@ WO_TOKEN = re.compile(r"\bWO-\d{4}\b")
 CLOSES_TOKEN = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#(\d+)\b",
     re.IGNORECASE)
+# Not every factory PR implements a work order: a governance or chore PR
+# (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
+# `WO-####`. Such a PR declares that EXPLICITLY — the same "declared, never
+# assumed" rule the architecture tree-claims and the review-token provenance
+# follow — and the declaration owes a reason, so a bare marker waives nothing.
+# A work-order PR that simply omits its WO still fails: only an explicit,
+# reasoned "no work order" claim exempts, and claiming it falsely is a
+# deliberate lie the same as any other gamed gate. The Closes-#N audit link is
+# still required in both cases. (ADR-0033, amended: merge stays gated, but the
+# gate no longer assumes every PR is a work order.)
+NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
+                               re.IGNORECASE)
 
 CONFIG_ROUTES = ("mechanical", "implementation", "architecture_review")
 
@@ -300,7 +312,9 @@ def pr_event(env):
 def check_pr_traceability(root, env=None):
     """B: a PR whose body cites no work order and closes no issue breaks
     the audit trail from code back to scope. Reads the CI event payload;
-    SKIPs silently outside a PR run. No exemptions."""
+    SKIPs silently outside a PR run. A PR that implements no work order may
+    say so explicitly (`No work order: <reason>`) to waive the WO-id
+    requirement; the Closes-#N link is required regardless."""
     if env is None:
         env = os.environ
     pr, error = pr_event(env)
@@ -310,7 +324,7 @@ def check_pr_traceability(root, env=None):
         return []
     body = pr.get("body") or ""
     problems = []
-    if not WO_TOKEN.search(body):
+    if not WO_TOKEN.search(body) and not NO_WO_DECLARATION.search(body):
         problems.append("B: PR body cites no work-order id")
     if not CLOSES_TOKEN.search(body):
         problems.append("B: PR body has no Closes #N link")
