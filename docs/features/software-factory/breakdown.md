@@ -128,9 +128,22 @@ ADR-0033, and ADR-0034 (all accepted).
   workflows when those orders build them.
 - 2026-07-12: sweeps file **intake**, never work orders (ADR-0032). The
   triage table maps a sweep kind to exactly one `source:*` plus one `type:*`
-  label and can express no `wo:*` lifecycle label; a pre-flight check
-  re-verifies every label against `labels.json` and rejects any plan naming
+  label and can express no `wo:*` lifecycle label; a pre-flight screen
+  re-verifies every label against `labels.json` and drops any plan naming
   a work-order id, so the dispatch plane cannot run ahead of a breakdown row.
+- 2026-07-12: a sweep cannot file until the labels it stamps exist —
+  `gh issue create --label X` resolves X server-side and aborts on an unknown
+  one, which would have left the label-drift sweep unable to report the very
+  drift that silenced it. `sweeps.py ensure-labels` runs as its own step
+  before both sweeps and creates only the *absent* triage labels, so the rest
+  of the taxonomy stays drifted for the sweep to report to a human rather
+  than being healed away behind its back.
+- 2026-07-12: the sweeps order's acceptance criterion (WO-0010, PRD-0001
+  §Success criteria) is demonstrated by the offline suite alone
+  (`tests/test_sweeps.py`, gh runner injected) — **no scheduled sweep has yet
+  run against GitHub**, so no intake issue has been filed by the workflow
+  itself. The first Monday run is the live evidence; until then the criterion
+  is proven in principle, not in production.
 - 2026-07-12: charters carry a routing *band* (`route: implementation` or
   `architecture_review`), never a model id — the band resolves through
   `factory.json`'s routing table, which the routing order

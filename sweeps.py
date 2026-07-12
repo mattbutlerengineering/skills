@@ -3,25 +3,30 @@
 intake issue with no human transcription (PRD-0001 §Success criteria;
 ADR-0030 tracker intake, ADR-0032 two planes).
 
-Two sweeps ship, both driven by .github/workflows/sweeps.yml:
+Two sweeps ship, both driven by .github/workflows/sweeps.yml, plus the
+bootstrap step that must run before either of them can file anything:
 
+  python3 sweeps.py ensure-labels             create the triage labels a
+                                              sweep stamps, if missing
   python3 sweeps.py sentry [--payload PATH]   PATH or stdin: the Sentry
                                               issues JSON the workflow fetched
   python3 sweeps.py label-drift               detector L (network-bound, so
                                               sweeps-only) -> one intake issue
 
-Conventions match label_sync.py/gates.py: functions return `sweeps:`-prefixed
-problem strings, the CLI prints them and exits nonzero, and the gh runner is
-injected so tests never touch the network. The Sentry HTTP call lives in the
-workflow, not here: the token stays out of this process and every sweep stays
-offline-testable.
+Conventions match label_sync.py/gates.py: functions return problem strings
+(`sweeps:`-prefixed for this module's own; the `L:`-prefixed strings from
+label_sync.load_labels() are forwarded as they arrive, since a broken taxonomy
+is that detector's finding, not ours), the CLI prints them and exits nonzero,
+and the gh runner is injected so tests never touch the network. The Sentry HTTP
+call lives in the workflow, not here: the token stays out of this process and
+every sweep stays offline-testable.
 
 Two invariants, mechanical rather than conventional:
 
 - **Intake is never a work order** (ADR-0032). TRIAGE maps a sweep kind to
   exactly one `source:*` and one `type:*` label; it can express no `wo:*`
-  lifecycle label. Before anything is filed, `check()` re-verifies every
-  label against the shipped taxonomy and rejects any plan naming a WO id.
+  lifecycle label. Before anything is filed, `screen()` re-verifies every
+  label against the shipped taxonomy and drops any plan naming a WO id.
   A work order exists only once a `breakdown.md` row exists — a sweep cannot
   run the dispatch plane ahead of the knowledge plane.
 - **Signal text is data, never instructions.** Everything arriving from
@@ -47,6 +52,15 @@ TRIAGE = {
     "label-drift": ("source:sweep", "type:chore"),
 }
 
+# Every label a sweep can stamp — derived from TRIAGE, so a new sweep kind
+# cannot ship a label the bootstrap forgets to create (see ensure_labels).
+TRIAGE_LABELS = tuple(sorted({label for labels in TRIAGE.values()
+                              for label in labels}))
+
+# ensure-labels is a bootstrap, not a sweep: it owns no source:*/type:* pair,
+# files no issue, and is never routed to as one.
+COMMANDS = tuple(TRIAGE) + ("ensure-labels",)
+
 # Fields copied out of a Sentry issue object. An allowlist, not a dump:
 # unknown keys never reach the issue body (ADR-0030, copy vs reference).
 SENTRY_FIELDS = ("shortId", "title", "culprit", "level", "count",
@@ -66,8 +80,13 @@ REDACTED_WO = "WO-[redacted]"
 TITLE_LIMIT = 100
 FIELD_LIMIT = 300
 KEY_LIMIT = 64
-# A signal source having a bad day must not open 500 issues.
+# A signal source having a bad day must not open 500 issues. The cap is on how
+# many NEW issues one sweep may file — applied after dedupe (file_issues),
+# never to the incoming payload, or it would cap LIFETIME intake instead.
 MAX_INTAKE = 10
+# How far back the dedupe listing can see. gh windows the listing silently, so
+# a full window is reported rather than trusted (known_keys).
+LIST_WINDOW = 500
 
 MARKER = "intake-key:"
 
@@ -115,13 +134,14 @@ def render(kind, key, summary, fields):
 def sentry_intakes(payload):
     """PURE: a Sentry issues payload -> (intake plans, problems). Every field
     is untrusted. An entry with no short id cannot be deduped, so it is
-    reported rather than guessed at; the payload is capped so one noisy
-    deploy cannot flood the tracker."""
+    reported rather than guessed at. EVERY entry becomes a plan: the cap on
+    how many issues a sweep may file is applied to what is new, after dedupe
+    (file_issues) — capping the payload here would cap lifetime intake."""
     if not isinstance(payload, list):
         return [], ["sweeps: sentry payload must be a JSON array of issues"]
     source, work_type = TRIAGE["sentry"]
     intakes, problems, seen = [], [], set()
-    for index, entry in enumerate(payload[:MAX_INTAKE]):
+    for index, entry in enumerate(payload):
         if not isinstance(entry, dict):
             problems.append(f"sweeps: sentry[{index}] is not an object")
             continue
@@ -188,16 +208,44 @@ def plan_problems(names, intake):
     return problems
 
 
-def check(root, intakes):
-    """The invariants, enforced before a single network call, as one flat
-    problem list across every plan. A broken taxonomy short-circuits — no
-    label can be trusted, so nothing is validated blind."""
-    known, problems = label_sync.load_labels(root)
+def ensure_labels(root, run=gh_runner):
+    """The bootstrap, run as its own step before either sweep: create any
+    triage label that is missing from the live repo. `gh issue create --label
+    X` resolves X server-side and ABORTS when it does not exist, so a sweep on
+    a repo whose triage labels are missing files nothing at all — including,
+    circularly, the label-drift sweep's own report that they are missing.
+
+    Deliberately narrow, in two ways. It creates only TRIAGE_LABELS, not the
+    whole taxonomy: force-syncing all 27 would leave the label-drift sweep with
+    nothing left to report, healing away the very drift it exists to put in
+    front of a human. And it creates only labels that are ABSENT: a live label
+    whose color or description has drifted can still be stamped, so that drift
+    stays the label-drift sweep's to report. One-way, like label_sync: nothing
+    is ever deleted or renamed."""
+    desired, problems = label_sync.load_labels(root)
     if problems:
         return problems
-    names = {label["name"] for label in known}
-    for intake in intakes:
-        problems.extend(plan_problems(names, intake))
+    want = {label["name"]: label for label in desired}
+    try:
+        live = {label.get("name") for label in label_sync.live_labels(run)}
+    except GH_FAILURES as err:
+        return [f"sweeps: gh label list failed: {gh_detail(err)}"]
+    problems = []
+    for name in TRIAGE_LABELS:
+        if name in live:
+            continue
+        label = want.get(name)
+        if label is None:
+            problems.append(f"sweeps: triage label {name} is not in the"
+                            " label taxonomy")
+            continue
+        try:
+            run(["label", "create", name, "--force",
+                 "--color", label["color"],
+                 "--description", label["description"]])
+        except GH_FAILURES as err:
+            problems.append(f"sweeps: gh label create {name} failed:"
+                            f" {gh_detail(err)}")
     return problems
 
 
@@ -222,37 +270,66 @@ def screen(root, intakes):
     return fileable, problems
 
 
-def open_keys(run=gh_runner):
-    """Intake keys already carried by an open issue, read from the dedupe
-    marker in each body. Re-filing what is already on the board is the
-    "human transcription" this sweep exists to remove, in reverse."""
+def known_keys(run=gh_runner):
+    """Intake keys already on the board, read from the dedupe marker in each
+    issue body. Returns (keys, problems), or (None, problems) when the listing
+    failed — dedupe is then impossible, and filing blind would duplicate
+    everything, so the caller must not file.
+
+    EVERY state, not just open. A maintainer who triages `[sentry] PROJ-7K` and
+    closes it (wontfix, known, tracked elsewhere) has answered it — but Sentry
+    still calls the error unresolved, so it leads the payload again next week.
+    Deduping against open issues alone would re-file it every Monday, forever:
+    exactly the human-transcription churn this sweep exists to remove, inverted.
+
+    The listing is windowed and gh truncates it silently, so a full window is
+    reported: past it, old keys are invisible and their intake is re-filed as a
+    duplicate — which would otherwise look just like a clean sweep."""
     try:
-        issues = json.loads(run(["issue", "list", "--state", "open",
-                                 "--json", "number,body", "--limit", "500"]))
+        issues = json.loads(run(["issue", "list", "--state", "all",
+                                 "--json", "number,body",
+                                 "--limit", str(LIST_WINDOW)]))
     except GH_FAILURES as err:
-        return set(), [f"sweeps: gh issue list failed: {gh_detail(err)}"]
+        return None, [f"sweeps: gh issue list failed: {gh_detail(err)}"]
+    issues = issues if isinstance(issues, list) else []
+    problems = []
+    if len(issues) >= LIST_WINDOW:
+        problems.append(f"sweeps: gh issue list returned a full {LIST_WINDOW}"
+                        "-issue window; intake keys older than it are"
+                        " invisible and would be re-filed as duplicates")
     keys = set()
-    for issue in issues if isinstance(issues, list) else []:
+    for issue in issues:
         for line in (issue.get("body") or "").splitlines():
             if line.startswith(MARKER):
                 keys.add(line[len(MARKER):].strip())
-    return keys, []
+    return keys, problems
 
 
-def file_issues(root, intakes, run=gh_runner):
-    """Create one issue per fileable intake plan no open issue already
-    carries. A plan that fails an invariant is dropped and reported, but never
-    suppresses the plans that pass. Returns (filed keys, problems)."""
+def file_issues(root, intakes, run=gh_runner, notify=print):
+    """Create one issue per fileable intake plan not already on the board. A
+    plan that fails an invariant is dropped and reported, but never suppresses
+    the plans that pass. Returns (filed keys, problems).
+
+    The cap is applied to what is NEW — after dedupe, never to the incoming
+    payload. Capping the payload would cap LIFETIME intake: the same unresolved
+    signals lead the payload every week, so the slice would fill with issues
+    already on the board, dedupe would drop all of them, and nothing behind
+    them would ever be filed. Over the cap, the remainder is deferred to the
+    next sweep and said out loud — never silently dropped."""
     fileable, problems = screen(root, intakes)
     if not fileable:
         return [], problems
-    keys, list_problems = open_keys(run)
-    if list_problems:
-        return [], problems + list_problems
+    keys, key_problems = known_keys(run)
+    problems = problems + key_problems
+    if keys is None:
+        return [], problems
+    new = [intake for intake in fileable if intake.key not in keys]
+    filing, deferred = new[:MAX_INTAKE], new[MAX_INTAKE:]
+    if deferred:
+        notify(f"sweeps: {len(new)} new signal(s); filing {MAX_INTAKE} (cap),"
+               f" deferring {len(deferred)} to the next sweep")
     filed = []
-    for intake in fileable:
-        if intake.key in keys:
-            continue
+    for intake in filing:
         args = ["issue", "create", "--title", intake.title,
                 "--body", intake.body]
         for label in intake.labels:
@@ -298,14 +375,13 @@ def load_payload(path):
         return None, [f"sweeps: payload is not valid JSON: {err}"]
 
 
-def sentry(path, notify=print):
-    """The sentry sweep: the fetched payload -> intake plans."""
+def sentry(path):
+    """The sentry sweep: the fetched payload -> intake plans, one per entry.
+    The cap is not applied here — it belongs after dedupe (file_issues), so
+    that a signal behind it is deferred to the next sweep, not starved."""
     payload, problems = load_payload(path)
     if problems:
         return [], problems
-    if isinstance(payload, list) and len(payload) > MAX_INTAKE:
-        notify(f"sweeps: {len(payload)} signal(s) in payload; filing the"
-               f" first {MAX_INTAKE} (cap)")
     return sentry_intakes(payload)
 
 
@@ -315,10 +391,16 @@ def main(argv, run=gh_runner):
     path = None
     if kind == "sentry" and len(rest) == 2 and rest[0] == "--payload":
         path, rest = rest[1], []
-    if kind not in TRIAGE or rest:
+    if kind not in COMMANDS or rest:
         print(__doc__.strip())
         return 2
     root = repo_root()
+    if kind == "ensure-labels":
+        problems = ensure_labels(root, run=run)
+        for problem in problems:
+            print(problem)
+        print(f"sweeps: {len(problems)} problem(s)")
+        return 1 if problems else 0
     if kind == "sentry":
         intakes, problems = sentry(path)
     else:

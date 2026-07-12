@@ -42,6 +42,17 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # Always BEFORE the sweep: `gh issue create --label X` resolves X
+      # server-side and aborts when it does not exist, so a repo whose triage
+      # labels are missing files nothing at all — including, circularly, this
+      # sweep's own report that they are missing. It creates only the labels a
+      # sweep stamps, and only when absent, so real taxonomy drift survives for
+      # the sweep below to report. tests/test_sweeps.py pins both that
+      # narrowness and this ordering.
+      - name: Ensure the triage labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 sweeps.py ensure-labels
       - name: Label-drift sweep
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -61,6 +72,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Ensure the triage labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 sweeps.py ensure-labels
       - name: Fetch unresolved Sentry issues
         env:
           SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
@@ -68,8 +83,20 @@ jobs:
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
         run: |
-          curl --fail --silent --show-error --retry 3 --output sentry.json \
-            --header "Authorization: Bearer ${SENTRY_TOKEN}" \
+          # The job's if: can gate on vars but NOT on a secret, so a repo that
+          # sets SENTRY_ORG/SENTRY_PROJECT and forgets the token would fail
+          # every Monday on a bare 401. Name the cause instead.
+          if [ -z "${SENTRY_TOKEN}" ]; then
+            echo "sweeps: the SENTRY_TOKEN secret is missing but SENTRY_ORG" \
+                 "and SENTRY_PROJECT are set — add the secret, or unset the" \
+                 "vars to switch the sentry sweep off" >&2
+            exit 1
+          fi
+          # The token goes in on stdin (--header @-), never on curl's argv:
+          # argv is world-readable to every process on the runner.
+          printf 'Authorization: Bearer %s\n' "${SENTRY_TOKEN}" \
+          | curl --fail --silent --show-error --retry 3 --output sentry.json \
+            --header @- \
             --get \
             --data-urlencode "query=is:unresolved" \
             --data-urlencode "statsPeriod=14d" \

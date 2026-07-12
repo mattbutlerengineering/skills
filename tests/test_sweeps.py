@@ -10,6 +10,7 @@ data, never as instructions.
 import contextlib
 import io
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -23,8 +24,10 @@ TAXONOMY = json.loads(
     .read_text(encoding="utf-8"))
 LABEL_NAMES = {label["name"] for label in TAXONOMY}
 
-LIST_CALL = ["issue", "list", "--state", "open", "--json", "number,body",
-             "--limit", "500"]
+# --state all, not open: an intake a maintainer triaged and CLOSED must not be
+# re-filed next Monday (that is the churn the sweep exists to remove, inverted).
+LIST_CALL = ["issue", "list", "--state", "all", "--json", "number,body",
+             "--limit", str(sweeps.LIST_WINDOW)]
 
 # A Sentry issues payload entry, shaped like the real API response.
 SENTRY_ENTRY = {
@@ -70,6 +73,10 @@ class RecordingRunner:
 
     def created(self):
         return [call for call in self.calls if call[:2] == ["issue", "create"]]
+
+    def created_labels(self):
+        return [call[2] for call in self.calls
+                if call[:2] == ["label", "create"]]
 
 
 class FailingRunner(RecordingRunner):
@@ -192,12 +199,17 @@ class TestSentryIntakes(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(len(intakes), 1)
 
-    def test_payload_is_capped(self):
+    def test_the_whole_payload_becomes_plans_the_cap_is_not_applied_here(self):
+        # The cap belongs AFTER dedupe (file_issues), never to the incoming
+        # payload: the same unresolved errors lead the payload every week, so
+        # capping here would fill the slice with signals that are already on
+        # the board, dedupe them all away, and file NOTHING — everything behind
+        # them would be starved out of intake for good.
         payload = [dict(SENTRY_ENTRY, shortId=f"PROJ-{n}")
                    for n in range(sweeps.MAX_INTAKE + 5)]
         intakes, problems = sweeps.sentry_intakes(payload)
         self.assertEqual(problems, [])
-        self.assertEqual(len(intakes), sweeps.MAX_INTAKE)
+        self.assertEqual(len(intakes), sweeps.MAX_INTAKE + 5)
 
 
 class TestUntrustedInputBoundary(unittest.TestCase):
@@ -261,8 +273,10 @@ class TestDriftIntake(unittest.TestCase):
         self.assertIn("intake-key: sweep:label-drift", intake.body)
 
 
-class TestCheck(unittest.TestCase):
-    """The pre-flight invariants — a plan that violates them is never filed."""
+class TestScreen(unittest.TestCase):
+    """The pre-flight invariants — a plan that violates them is never filed.
+    screen() is the only enforcement point (file_issues calls it); these are
+    the ADR-0032 invariants, so they are tested where they actually run."""
 
     def plan(self, **kwargs):
         fields = dict(key="sentry:X", title="t", body="b",
@@ -273,41 +287,133 @@ class TestCheck(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
-            self.assertEqual(sweeps.check(tree.root, intakes), [])
+            self.assertEqual(sweeps.screen(tree.root, intakes), (intakes, []))
 
     def test_unknown_label_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             self.assertEqual(
-                sweeps.check(tree.root,
-                             [self.plan(labels=("source:invented",))]),
-                ["sweeps: sentry:X would apply unknown label"
-                 " source:invented"])
+                sweeps.screen(tree.root,
+                              [self.plan(labels=("source:invented",))]),
+                ([], ["sweeps: sentry:X would apply unknown label"
+                      " source:invented"]))
 
     def test_lifecycle_label_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             self.assertEqual(
-                sweeps.check(tree.root,
-                             [self.plan(labels=("wo:ready-for-agent",))]),
-                ["sweeps: sentry:X would apply lifecycle label"
-                 " wo:ready-for-agent (intake is not a work order)"])
+                sweeps.screen(tree.root,
+                              [self.plan(labels=("wo:ready-for-agent",))]),
+                ([], ["sweeps: sentry:X would apply lifecycle label"
+                      " wo:ready-for-agent (intake is not a work order)"]))
 
     def test_a_plan_naming_a_work_order_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             self.assertEqual(
-                sweeps.check(tree.root, [self.plan(body="implements WO-0010")]),
-                ["sweeps: sentry:X names a work order"
-                 " (a sweep may not mint WO ids)"])
+                sweeps.screen(tree.root,
+                              [self.plan(body="implements WO-0010")]),
+                ([], ["sweeps: sentry:X names a work order"
+                      " (a sweep may not mint WO ids)"]))
 
     def test_a_broken_taxonomy_file_short_circuits(self):
         # No taxonomy to check against means no label can be trusted: the
         # loader's own problem is returned, and nothing is validated blind.
+        # (An L:-prefixed string, forwarded from label_sync.load_labels.)
         with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(sweeps.check(Path(tmp), [self.plan()]), [
-                "L: missing labels.json (.github/labels.json or"
-                " factory/templates/.github/labels.json)"])
+            self.assertEqual(sweeps.screen(Path(tmp), [self.plan()]), (
+                [], ["L: missing labels.json (.github/labels.json or"
+                     " factory/templates/.github/labels.json)"]))
+
+
+class TestEnsureLabels(unittest.TestCase):
+    """The bootstrap. `gh issue create --label X` resolves X server-side and
+    ABORTS when it does not exist, so a sweep on a repo whose triage labels
+    are missing files nothing at all — including, circularly, the label-drift
+    sweep's own report that the labels are missing."""
+
+    def test_missing_triage_labels_are_created(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            runner = RecordingRunner(labels=[])
+            self.assertEqual(sweeps.ensure_labels(tree.root, run=runner), [])
+            self.assertEqual(sorted(runner.created_labels()),
+                             sorted(sweeps.TRIAGE_LABELS))
+
+    def test_it_creates_only_the_labels_a_sweep_must_stamp(self):
+        # Deliberately NOT the whole taxonomy: force-syncing all 27 labels
+        # here would leave the label-drift sweep with nothing to report, ever
+        # — it would heal the drift it exists to surface to a human.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            runner = RecordingRunner(labels=[])
+            sweeps.ensure_labels(tree.root, run=runner)
+            created = set(runner.created_labels())
+            self.assertNotIn("wo:draft", created)
+            self.assertNotIn("size:S", created)
+            self.assertEqual(created, set(sweeps.TRIAGE_LABELS))
+
+    def test_a_live_taxonomy_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            runner = RecordingRunner()  # every label already live
+            self.assertEqual(sweeps.ensure_labels(tree.root, run=runner), [])
+            self.assertEqual(runner.created_labels(), [])
+
+    def test_the_created_label_carries_its_taxonomy_color_and_description(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            want = next(label for label in TAXONOMY
+                        if label["name"] == "source:sweep")
+            runner = RecordingRunner(labels=[])
+            sweeps.ensure_labels(tree.root, run=runner)
+            [create] = [call for call in runner.calls
+                        if call[:3] == ["label", "create", "source:sweep"]]
+            self.assertEqual(create, [
+                "label", "create", "source:sweep", "--force",
+                "--color", want["color"],
+                "--description", want["description"]])
+
+    def test_a_failing_gh_create_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            runner = FailingRunner(
+                subprocess.CalledProcessError(
+                    1, ["gh", "label", "create"],
+                    stderr="HTTP 403: Resource not accessible by integration\n"),
+                failing=("label", "create"), labels=[])
+            problems = sweeps.ensure_labels(tree.root, run=runner)
+            self.assertIn(
+                "sweeps: gh label create source:sentry failed:"
+                " HTTP 403: Resource not accessible by integration", problems)
+            self.assertEqual(len(problems), len(sweeps.TRIAGE_LABELS))
+
+    def test_a_failing_gh_list_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            runner = FailingRunner(
+                subprocess.CalledProcessError(
+                    1, ["gh", "label", "list"], stderr="HTTP 401\n"),
+                failing=("label", "list"))
+            self.assertEqual(sweeps.ensure_labels(tree.root, run=runner),
+                             ["sweeps: gh label list failed: HTTP 401"])
+
+    def test_a_broken_taxonomy_file_short_circuits_before_the_network(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", "[]")
+            runner = RecordingRunner()
+            self.assertEqual(sweeps.ensure_labels(tree.root, run=runner), [
+                "L: .github/labels.json must be a non-empty JSON array"
+                " of label entries"])
+            self.assertEqual(runner.calls, [])
+
+    def test_every_label_a_sweep_can_stamp_is_ensured(self):
+        # TRIAGE_LABELS is derived from TRIAGE, so a new sweep kind cannot
+        # ship a label the bootstrap forgets to create.
+        stampable = {label for labels in sweeps.TRIAGE.values()
+                     for label in labels}
+        self.assertEqual(set(sweeps.TRIAGE_LABELS), stampable)
 
 
 class TestFileIssues(unittest.TestCase):
@@ -339,6 +445,92 @@ class TestFileIssues(unittest.TestCase):
                                                  run=runner)
             self.assertEqual((filed, problems), ([], []))
             self.assertEqual(runner.created(), [])
+
+    def test_a_closed_issue_with_the_same_key_is_not_refiled(self):
+        # A maintainer who triages [sentry] PROJ-7K and closes it (wontfix,
+        # known, tracked elsewhere) has ANSWERED it. Sentry still calls the
+        # error unresolved, so it leads the payload every week — dedupe that
+        # only looked at open issues would re-file it every Monday, forever.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
+            runner = RecordingRunner(issues=[
+                {"number": 3, "state": "CLOSED",
+                 "body": "intake-key: sentry:PROJ-7K\n"}])
+            filed, problems = sweeps.file_issues(tree.root, intakes,
+                                                 run=runner)
+            self.assertEqual((filed, problems), ([], []))
+            self.assertEqual(runner.created(), [])
+            self.assertEqual(runner.calls, [LIST_CALL])
+
+    def test_the_dedupe_listing_asks_for_every_state(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
+            runner = RecordingRunner()
+            sweeps.file_issues(tree.root, intakes, run=runner)
+            self.assertEqual(runner.calls[0], LIST_CALL)
+            self.assertNotIn("open", runner.calls[0])
+
+    def test_a_full_listing_window_is_reported_not_silently_truncated(self):
+        # Past the window old keys fall out of view and their intake is
+        # re-filed as a duplicate. Silent truncation would make that look
+        # exactly like a clean sweep.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
+            runner = RecordingRunner(issues=[
+                {"number": n, "body": f"intake-key: old:{n}\n"}
+                for n in range(sweeps.LIST_WINDOW)])
+            filed, problems = sweeps.file_issues(tree.root, intakes,
+                                                 run=runner)
+            self.assertEqual(problems, [
+                f"sweeps: gh issue list returned a full {sweeps.LIST_WINDOW}"
+                "-issue window; intake keys older than it are invisible and"
+                " would be re-filed as duplicates"])
+            # Loud, but not fatal: the new signal is still filed. A signal
+            # nobody files is an outage nobody notices.
+            self.assertEqual(filed, ["sentry:PROJ-7K"])
+
+    def test_the_cap_applies_to_what_is_new_not_to_the_payload(self):
+        # Week 1 of the 15-unresolved-error scenario: 15 plans, none on the
+        # board. The cap files 10 and DEFERS 5 — it does not drop them.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            payload = [dict(SENTRY_ENTRY, shortId=f"PROJ-{n}")
+                       for n in range(sweeps.MAX_INTAKE + 5)]
+            intakes, _ = sweeps.sentry_intakes(payload)
+            runner = RecordingRunner()
+            notes = []
+            filed, problems = sweeps.file_issues(tree.root, intakes,
+                                                 run=runner,
+                                                 notify=notes.append)
+            self.assertEqual(problems, [])
+            self.assertEqual(len(filed), sweeps.MAX_INTAKE)
+            self.assertEqual(notes, [
+                f"sweeps: {sweeps.MAX_INTAKE + 5} new signal(s); filing"
+                f" {sweeps.MAX_INTAKE} (cap), deferring 5 to the next sweep"])
+
+    def test_the_deferred_signals_are_filed_by_the_next_sweep(self):
+        # Week 2: the same 15 errors are still unresolved, so they still lead
+        # the payload — and the 10 already filed are still open. Capping the
+        # PAYLOAD would take those same 10, dedupe them all away and file
+        # ZERO, starving errors 11-15 out of intake forever. The cap is
+        # applied to what is NEW, so week 2 files exactly the remaining 5.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            payload = [dict(SENTRY_ENTRY, shortId=f"PROJ-{n}")
+                       for n in range(sweeps.MAX_INTAKE + 5)]
+            intakes, _ = sweeps.sentry_intakes(payload)
+            already = [{"number": n, "body": f"intake-key: sentry:PROJ-{n}\n"}
+                       for n in range(sweeps.MAX_INTAKE)]
+            runner = RecordingRunner(issues=already)
+            filed, problems = sweeps.file_issues(tree.root, intakes,
+                                                 run=runner)
+            self.assertEqual(problems, [])
+            self.assertEqual(filed, [f"sentry:PROJ-{n}" for n in
+                                     range(sweeps.MAX_INTAKE,
+                                           sweeps.MAX_INTAKE + 5)])
 
     def test_no_plans_makes_no_network_call(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -466,18 +658,16 @@ class TestLoadPayload(unittest.TestCase):
             self.assertTrue(problems[0].startswith(
                 "sweeps: payload is not valid JSON:"))
 
-    def test_an_oversized_payload_notifies_about_the_cap(self):
+    def test_an_oversized_payload_plans_every_entry(self):
+        # The cap lives in file_issues, after dedupe — the sweep reads the
+        # whole payload, so a signal behind the cap is deferred, not dropped.
         with tempfile.TemporaryDirectory() as tmp:
             payload = [dict(SENTRY_ENTRY, shortId=f"PROJ-{n}")
                        for n in range(sweeps.MAX_INTAKE + 2)]
             path = FixtureTree(tmp).write("sentry.json", json.dumps(payload))
-            notes = []
-            intakes, problems = sweeps.sentry(str(path), notify=notes.append)
+            intakes, problems = sweeps.sentry(str(path))
             self.assertEqual(problems, [])
-            self.assertEqual(len(intakes), sweeps.MAX_INTAKE)
-            self.assertEqual(notes, [
-                f"sweeps: {sweeps.MAX_INTAKE + 2} signal(s) in payload;"
-                f" filing the first {sweeps.MAX_INTAKE} (cap)"])
+            self.assertEqual(len(intakes), sweeps.MAX_INTAKE + 2)
 
 
 class TestCli(unittest.TestCase):
@@ -566,6 +756,26 @@ class TestCli(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("sweeps", out)
 
+    def test_ensure_labels_creates_the_missing_triage_labels(self):
+        runner = RecordingRunner(labels=[])
+        code, out = self.run_main(["ensure-labels"], runner)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "sweeps: 0 problem(s)\n")
+        self.assertEqual(sorted(runner.created_labels()),
+                         sorted(sweeps.TRIAGE_LABELS))
+        self.assertEqual(runner.created(), [])  # it files no issues
+
+    def test_ensure_labels_exits_nonzero_when_it_cannot_create_them(self):
+        runner = FailingRunner(
+            subprocess.CalledProcessError(
+                1, ["gh", "label", "create"], stderr="HTTP 403\n"),
+            failing=("label", "create"), labels=[])
+        code, out = self.run_main(["ensure-labels"], runner)
+        self.assertEqual(code, 1)
+        self.assertIn("sweeps: gh label create source:sentry failed: HTTP 403",
+                      out)
+        self.assertIn(f"sweeps: {len(sweeps.TRIAGE_LABELS)} problem(s)", out)
+
     def test_no_sweep_ever_creates_a_work_order_issue(self):
         # The invariant, asserted over what actually reached the runner:
         # across every sweep, no created issue names a WO id or carries a
@@ -593,6 +803,71 @@ class TestSweepsWorkflow(unittest.TestCase):
 
     TEXT = (REPO_ROOT / ".github" / "workflows" / "sweeps.yml").read_text(
         encoding="utf-8")
+
+    def commands(self):
+        """{job: [python3 command, ...]} in step order. Enough to assert step
+        ORDER without a YAML parser (stdlib only, like every script here)."""
+        jobs, job, in_jobs = {}, None, False
+        for line in self.TEXT.splitlines():
+            if line.rstrip() == "jobs:":
+                in_jobs = True
+            elif not in_jobs:
+                continue
+            elif re.match(r"^  [\w-]+:$", line):
+                job = line.strip().rstrip(":")
+                jobs[job] = []
+            elif job is not None and "python3 " in line:
+                jobs[job].append(line.split("python3 ", 1)[1].strip())
+        return jobs
+
+    def curl_argv(self):
+        """The curl invocation's lines — its argv, in other words."""
+        argv, collecting = [], False
+        for line in self.TEXT.splitlines():
+            collecting = collecting or "curl " in line
+            if collecting:
+                argv.append(line)
+                if not line.rstrip().endswith("\\"):
+                    break
+        return argv
+
+    def test_the_triage_labels_are_ensured_before_any_sweep_runs(self):
+        # The bootstrap ordering, pinned. `gh issue create --label X` aborts
+        # on a label that does not exist, so a sweep that runs before the
+        # taxonomy exists files NOTHING — including the label-drift sweep's
+        # own report that the taxonomy is missing. Every job that runs a
+        # sweep must ensure the labels first.
+        jobs = self.commands()
+        self.assertTrue(jobs)
+        for job, commands in jobs.items():
+            sweeping = [index for index, command in enumerate(commands)
+                        if command.startswith("sweeps.py")
+                        and not command.startswith("sweeps.py ensure-labels")]
+            if not sweeping:
+                continue
+            self.assertIn("sweeps.py ensure-labels", commands, job)
+            self.assertLess(commands.index("sweeps.py ensure-labels"),
+                            min(sweeping), job)
+
+    def test_every_sweep_job_ensures_the_labels(self):
+        for job, commands in self.commands().items():
+            self.assertIn("sweeps.py ensure-labels", commands, job)
+
+    def test_the_sentry_token_never_reaches_curls_argv(self):
+        # argv is world-readable to every process on the runner; the token
+        # goes in on stdin instead (curl --header @-).
+        argv = self.curl_argv()
+        self.assertTrue(argv)
+        for line in argv:
+            self.assertNotIn("SENTRY_TOKEN", line)
+        self.assertIn("--header @-", self.TEXT)
+
+    def test_a_missing_sentry_token_names_its_own_cause(self):
+        # The job gates on vars.SENTRY_ORG/SENTRY_PROJECT but CANNOT gate on
+        # a secret: a repo that sets the vars and forgets the secret would
+        # otherwise get a weekly red job from a bare 401.
+        self.assertIn('if [ -z "${SENTRY_TOKEN}" ]', self.TEXT)
+        self.assertIn("SENTRY_TOKEN secret", self.TEXT)
 
     def test_the_workflow_is_scheduled(self):
         self.assertIn("schedule:", self.TEXT)
