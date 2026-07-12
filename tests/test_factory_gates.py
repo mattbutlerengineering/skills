@@ -673,6 +673,109 @@ class TestEvidenceHonesty(unittest.TestCase):
                              [self.bare("Results", "all 6 PRD criteria PASS")
                               % 18])
 
+    def test_a_hedge_appended_to_a_claim_does_not_disarm_it(self):
+        """BYPASS 5. Reading the NOT-RUN token as a SUBSTRING of the verdict
+        let a claim buy itself out by appending a hedge: "PASS ... (soak test
+        not run)" asserted PASS and showed nothing, in silence. A verdict is
+        a disclosure only when the WHOLE value is one."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Criterion 1 - payment capture\n\n"
+                "- Result: PASS - every acceptance criterion met, full suite"
+                " green (soak test not run).\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                self.bare("Criterion 1 - payment capture",
+                          "PASS - every acceptance criterion met, full suite"
+                          " green (soak test not run).") % 10])
+
+    def test_a_disclosure_may_give_its_reason(self):
+        """The other side of anchoring it: an honest disclosure names why the
+        check did not run, and that reason must not turn it into a claim."""
+        for verdict in ("NOT RUN — the CI runner was offline",
+                        "NOT VERIFIED (needs a second GitHub account)",
+                        "N/A — no payment provider in this environment",
+                        "SKIPPED: covered by the nightly soak",
+                        "**NOT RUN**"):
+            with self.subTest(verdict=verdict), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = self.verification(tmp, (
+                    "### Soak test\n\n"
+                    f"- Result: {verdict}\n"))
+                self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_verdict_labels_beyond_the_original_four_engage_the_rule(self):
+        """BYPASS 6. The label whitelist (Result/Verdict/Outcome/Status) was
+        itself the escape hatch: a lying section headed `Conclusion:` was
+        invisible. Every verdict noun asserts."""
+        for label in ("Conclusion", "Assessment", "Finding", "Determination",
+                      "Evaluation", "Judgement", "Judgment", "Disposition",
+                      "Decision", "Ruling", "Appraisal"):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                tree = self.verification(tmp, (
+                    "### Payments capture\n\n"
+                    "- Check: eyeballed the dashboard.\n"
+                    f"- {label}: PASS\n"))
+                self.assertEqual(gates.check_evidence_honesty(tree.root),
+                                 [self.bare("Payments capture", "PASS") % 11])
+
+    def test_one_honest_fence_does_not_launder_relabelled_lies(self):
+        """BYPASS 6, as reported: one real fence (lint) satisfied the
+        artifact-wide backstop, and the two fabricated criteria beside it used
+        labels outside the whitelist, so the whole artifact passed silently.
+        Each lying section now owes evidence in its own right."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Criterion 0 - lint\n\n"
+                "- Evidence:\n"
+                "  ```\n"
+                "  lint: 0 problem(s)\n"
+                "  ```\n\n"
+                "## Criterion 1 - payments\n\n"
+                "- Conclusion: PASS. All 12 criteria met, full suite green.\n\n"
+                "## Criterion 2 - retries\n\n"
+                "- Assessment: works correctly under load. Ship it.\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                self.bare("Criterion 1 - payments",
+                          "PASS. All 12 criteria met, full suite green.") % 17,
+                self.bare("Criterion 2 - retries",
+                          "works correctly under load. Ship it.") % 21])
+
+    def test_frontmatter_fields_are_not_verdicts(self):
+        """BYPASS 6, sibling finding. YAML frontmatter is metadata, not the
+        author's assertion: `status: draft` was read as a labelled verdict
+        claiming "draft" in an untitled section — a false positive on an
+        honest artifact, and (worse) a `results` entry that disarmed the
+        artifact-wide backstop."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/features/demo/verification.md", (
+                "---\nstage: verify\nstatus: draft\nrun: feature:demo\n---\n\n"
+                "# Verification\n\n"
+                "### Suite is green\n\n"
+                "- Evidence:\n"
+                "  ```\n"
+                "  OK\n"
+                "  ```\n"
+                "- Result: PASS\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_frontmatter_status_does_not_buy_off_the_backstop(self):
+        """The same bug from the other side: a prose-only artifact whose
+        frontmatter carries `status:` had a `results` entry, so the
+        artifact-wide backstop never ran and the artifact passed with zero
+        evidence."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/features/demo/verification.md", (
+                "---\nstage: verify\nstatus: done\nrun: feature:demo\n---\n\n"
+                "# Verification\n\n"
+                "## Summary\n\n"
+                "Everything works; all criteria are comfortably met.\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                f"H: {self.REL}:1 verification artifact shows neither literal"
+                " evidence nor a NOT-RUN disclaimer (evidence must be a"
+                " fenced code block)"])
+
     # ---- the fence scanner (CommonMark, not a parity toggle) -----------
 
     def test_longer_fence_quoting_a_shorter_one_stays_one_block(self):

@@ -93,9 +93,17 @@ URL_TARGET = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 # rule H enforces is per-criterion, so its evidence test must be too.
 HEADING_LINE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 # Only a LABELLED verdict line asserts a verdict. The label is not just
-# "Result": a criterion is just as asserted under "Verdict:", "Outcome:", or
-# "Status:", so the rule engages on any of them (case-insensitive, with an
-# optional list bullet and bold markers, and a non-empty value).
+# "Result": a criterion is just as asserted under "Verdict:", "Outcome:",
+# "Conclusion:", "Assessment:", "Finding:" — so the rule engages on the whole
+# verdict-noun vocabulary (case-insensitive, with an optional list bullet and
+# bold markers, and a non-empty value). A four-label whitelist was itself the
+# gate's escape hatch: a lying section only had to relabel its verdict line to
+# become invisible, which is the same "rename it and the gate goes quiet" move
+# the roll-up excuse allowed. The vocabulary below is the closed set of words
+# that ASSERT A JUDGEMENT. Words that introduce an INPUT or an aside —
+# "Check:", "Command:", "Note:", "Caveat:", "Evidence:" — are deliberately NOT
+# verdicts: they carry no claim, and reading them as claims false-positives on
+# every honest artifact that documents what it ran.
 #
 # Nothing else asserts anything. Unlabelled prose and heading text are read
 # as prose: an author may open a note with "Done.", title a section "all
@@ -109,9 +117,17 @@ HEADING_LINE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 # excuse is needed and none exists — every labelled verdict is backed IN ITS
 # OWN SECTION, wherever it is written.
 RESULT_LINE = re.compile(
-    r"^\s*[-*+]?\s*\**\s*(?:result|verdict|outcome|status)\**"
+    r"^\s*[-*+]?\s*\**\s*(?:result|verdict|outcome|status|conclusion"
+    r"|assessment|finding|determination|evaluation|judge?ment|disposition"
+    r"|decision|ruling|appraisal)\**"
     r"\s*:\s*(\S.*?)\s*$",
     re.IGNORECASE)
+# YAML frontmatter is METADATA, not the author's assertion. `status: draft` is
+# a stage field, and reading it as a labelled verdict both false-positived on
+# an honest artifact ("(untitled)" asserts draft) and — worse — parked a
+# `results` entry in the artifact, which switched the artifact-wide backstop
+# off entirely. The frontmatter block is skipped, not scanned.
+FRONTMATTER_FENCE = re.compile(r"^---\s*$")
 # CommonMark fences, tracked as a stack of one — NOT a parity toggle. An
 # opening fence records its marker character and length; only a fence of the
 # SAME character, AT LEAST as long, and carrying NO info string closes it. So
@@ -143,9 +159,26 @@ NOT_RUN_TOKEN = re.compile(
 # fabricate any verdict: a section's prose "not run" disarms nothing it does
 # not itself claim. (Body prose still counts for the artifact-wide backstop:
 # an artifact that ran nothing and says so is honest.)
-NO_CLAIM_VERDICT = re.compile(
-    r"^(?:n/?a|skip(?:ped)?|defer(?:red)?|untested|pending|todo|tbd)\b",
+#
+# The test is ANCHORED at the head of the verdict, never a substring search.
+# Searching the whole value let a claim disarm ITSELF by appending a hedge —
+# "PASS - every criterion met, full suite green (soak test not run)" asserted
+# PASS, showed nothing, and passed in silence. What a verdict asserts is its
+# HEAD: lead with a disclosure and you have disclosed; lead with PASS and you
+# have claimed, whatever you append. A trailing reason is welcome — an honest
+# "NOT RUN — the CI runner was offline" is still a disclosure — and a scoped
+# hedge ("not tested on Windows") is still not one, because it concedes the
+# check DID run: the preposition lookahead drops it here exactly as it does in
+# the body scan.
+DISCLOSURE_VERDICT = re.compile(
+    r"^(?:n/?a|skip(?:ped)?|defer(?:red)?|untested|unverified|pending|todo|tbd"
+    r"|not[\s-]+(?:run|ran|verified|executed|checked|tested|attempted)"
+    r"(?!\s+(?:on|in|for|under|with|against|across|when|beyond|outside)\b))"
+    r"(?![\w/-])",
     re.IGNORECASE)
+# Emphasis and brackets are formatting, not claim: `**NOT RUN**` and `(N/A)`
+# are the disclosures they look like, so the head is read past them.
+VERDICT_LEAD = re.compile(r"^[\s*_`\"'“‘([]+")
 # Unfilled TEMPLATE filler is not output — matched by its filler TEXT, not by
 # the shape `<...>`. That shape is also real evidence (a DOM dump's `<html>`,
 # a Python repr like `<class 'app.models.User'>`), and discarding it
@@ -563,11 +596,11 @@ def check_config_shape(root):
 
 
 def _is_disclosure(verdict):
-    """Does this labelled verdict claim nothing — i.e. is it itself the
-    NOT-RUN disclaimer ("NOT VERIFIED", "SKIPPED", "N/A")? Anything else is a
-    claim, and a claim owes literal evidence."""
-    return bool(NOT_RUN_TOKEN.search(verdict)
-                or NO_CLAIM_VERDICT.match(verdict))
+    """Does this labelled verdict claim nothing — i.e. does it LEAD with the
+    NOT-RUN disclaimer ("NOT VERIFIED", "SKIPPED", "N/A", "NOT RUN — reason")?
+    Anything else is a claim, and a claim owes literal evidence. The head is
+    what asserts: a hedge appended to a claim is still a claim."""
+    return bool(DISCLOSURE_VERDICT.match(VERDICT_LEAD.sub("", verdict)))
 
 
 def _fence_open(line):
@@ -600,8 +633,9 @@ def _verification_sections(text):
     "not run" quoted inside evidence is output, not the author's assertion.
 
     A section asserts a verdict exactly one way: `results` holds its LABELLED
-    verdict lines (Result/Verdict/Outcome/Status). Prose and heading text
-    assert nothing — see RESULT_LINE.
+    verdict lines (the verdict-noun vocabulary — see RESULT_LINE). Prose and
+    heading text assert nothing. YAML frontmatter is metadata and is skipped
+    outright, so a `status:` field is never mistaken for an author's verdict.
 
     Returns (sections, unclosed), where `unclosed` is the line number of a
     fence that is never closed, or None."""
@@ -611,9 +645,18 @@ def _verification_sections(text):
         return {"title": title, "lineno": lineno, "evidence": False,
                 "not_run": False, "results": []}
 
-    current = blank("(untitled)", 1)
+    lines = text.splitlines()
+    body = 0
+    if lines and FRONTMATTER_FENCE.match(lines[0]):
+        for index in range(1, len(lines)):
+            if FRONTMATTER_FENCE.match(lines[index]):
+                body = index + 1
+                break
+        # An unterminated opener is not frontmatter: scan the whole file.
+
+    current = blank("(untitled)", body + 1)
     fence = None  # (marker char, marker length, opening line number)
-    for lineno, line in enumerate(text.splitlines(), 1):
+    for lineno, line in enumerate(lines[body:], body + 1):
         if fence is not None:
             if _fence_closes(line, fence[0], fence[1]):
                 fence = None
