@@ -9,6 +9,8 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
 - `python3 -m unittest discover tests`
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
+- `python3 gates.py && python3 gates.py --selftest` — factory drift
+  detectors (A/C/E/F), output matching `gates: 0 problem(s)`
 
 On demand only (real model runs, costs money, never CI):
 `python3 trigger_eval.py` (needs the `claude` CLI).
@@ -31,6 +33,13 @@ On demand only (real model runs, costs money, never CI):
   label-prefixed problem strings; callers print and exit nonzero. Tests
   assert the exact strings through public interfaces (see
   `tests/test_lint_checkers.py`).
+- **Factory templates are checksum-pinned**: any edit under
+  `factory/templates/**` must update the sha256 in `factory/manifest.json`
+  in the same commit (detector E gates; no regen command exists yet).
+- **Dispatch mirrors one-way** (ADR-0032): never create a `WO-####` issue
+  before its `breakdown.md` row exists.
+- **Typed IDs live in run-artifact frontmatter** (`id: PRD-0001`), never a
+  parallel `docs/prd/` tree (ADR-0004).
 
 ## Eval honesty (non-negotiable)
 
