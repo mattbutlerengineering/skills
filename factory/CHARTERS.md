@@ -123,6 +123,20 @@ Handed up by the **SWE**, pre-chewed by **QA** and the **Reviewer**.
 - [ ] Required status checks are green; none was bypassed.
 - [ ] QA's verification record shows, per acceptance criterion, literal
       command output — or an explicit **NOT RUN** with a reason.
+- [ ] **The Reviewer RE-EXECUTED that record — it did not read it.** The
+      verdict carries the command the Reviewer ran and the literal output
+      the Reviewer got, per criterion, or an explicit **NOT RE-EXECUTED**
+      naming what could not be driven. Green CI plus a checked box is not
+      evidence a criterion holds; it is evidence someone said it does. An
+      agent's claim to have verified something is a claim, not evidence,
+      and is verified by execution, never by reading the diff. (2026-07-11:
+      an honesty gate reported a table claiming its own bypasses "now
+      fire"; an independent reviewer re-ran the identical artifacts and
+      every one passed silently.)
+- [ ] Every place re-execution contradicted the author's self-report is
+      recorded on the PR, and was escalated — a false self-certification
+      impeaches the author's *other* claims, so the whole PR is suspect,
+      not just the claim that broke.
 - [ ] No test was weakened, skipped, or deleted to reach green.
 - [ ] The Reviewer's verdict is posted and every security finding is
       closed or explicitly escalated.

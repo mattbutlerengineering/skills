@@ -8,7 +8,7 @@ name: charter-replay
 # breaks tests/test_charter_replay.py, on purpose.
 #
 # The suite's scoring logic — including detection of a degraded charter — is
-# covered offline by checks.yml with no model in the loop.
+# covered offline by validator.yml's `make check` with no model in the loop.
 on:
   workflow_dispatch:
     inputs:

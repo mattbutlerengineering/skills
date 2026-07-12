@@ -27,7 +27,8 @@ ai-tooling suite where the rule is the same idea):
                      exists on disk
 
 `--selftest` runs the checkers against fixture trees and exits nonzero
-on a failing assertion. Both run in CI (checks.yml) on every push/PR.
+on a failing assertion. Both run in CI (validator.yml, via `make check`)
+on every push/PR.
 """
 import hashlib
 import json
@@ -43,9 +44,12 @@ PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
 ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
 WO_TOKEN = re.compile(r"\bWO-\d{4}\b")
 # GitHub's issue-closing keywords, with the optional colon form
-# ("Closes: #12") and any run of whitespace before the issue number.
+# ("Closes: #12") and any run of whitespace before the issue number. The
+# number is captured: detector B only asks whether a link exists, but
+# validator.py asks WHICH issues a PR closes (it is how a merged PR names
+# the one work order it implements), and the closing grammar lives here.
 CLOSES_TOKEN = re.compile(
-    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#\d+\b",
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#(\d+)\b",
     re.IGNORECASE)
 
 CONFIG_ROUTES = ("mechanical", "implementation", "architecture_review")
@@ -154,20 +158,31 @@ def check_wo_citation(root):
     return problems
 
 
+def pr_event(env):
+    """(the pull_request payload, error): the PR this CI run is about, read
+    from the event file. (None, None) outside a PR run — every caller SKIPs
+    silently there. Callers label the error string themselves, so this stays
+    detector-agnostic (validator.py is the second caller)."""
+    event_path = env.get("GITHUB_EVENT_PATH")
+    if not event_path:
+        return None, None
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        return None, f"cannot read GITHUB_EVENT_PATH {event_path}: {err}"
+    pr = event.get("pull_request") if isinstance(event, dict) else None
+    return (pr if isinstance(pr, dict) else None), None
+
+
 def check_pr_traceability(root, env=None):
     """B: a PR whose body cites no work order and closes no issue breaks
     the audit trail from code back to scope. Reads the CI event payload;
     SKIPs silently outside a PR run. No exemptions."""
     if env is None:
         env = os.environ
-    event_path = env.get("GITHUB_EVENT_PATH")
-    if not event_path:
-        return []
-    try:
-        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as err:
-        return [f"B: cannot read GITHUB_EVENT_PATH {event_path}: {err}"]
-    pr = event.get("pull_request") if isinstance(event, dict) else None
+    pr, error = pr_event(env)
+    if error:
+        return [f"B: {error}"]
     if pr is None:
         return []
     body = pr.get("body") or ""

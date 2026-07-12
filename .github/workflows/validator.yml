@@ -1,0 +1,99 @@
+# The factory validator (PRD-0001; ADR-0032, ADR-0033).
+#
+# Mirrored VERBATIM into the template payload by `factory_init.py
+# update-manifest`, so a stamped product repo runs this same file — which is
+# why it names no commands of its own. Every step goes through a `make`
+# target, and the Makefile knows where that repo keeps its tools (root here,
+# tools/factory/ there). Editing this file means re-running update-manifest;
+# detector E fails the build otherwise.
+name: validator
+
+on:
+  push:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: read
+
+jobs:
+  # Gate 3's status check (ADR-0033): detectors and tests on every push and
+  # every PR. Nothing else in this workflow can fail the build.
+  check:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Detectors and tests
+        run: make check
+
+  # The agent reviewer (ADR-0033) pre-chews every PR so the human gate is
+  # judgment, not linting. PRD-0001 forbids the actor that produced the work
+  # from verifying it: validator.py compares the PR author with the identity
+  # the review TOKEN actually posts as — asking the token who it is (gh api
+  # user), not trusting a variable that declares it. Give the reviewer its own
+  # identity with the FACTORY_REVIEW_TOKEN secret (a PAT for a login that does
+  # not author PRs); with no secret set, GH_TOKEN is this workflow's own
+  # GITHUB_TOKEN, which GitHub fixes to github-actions[bot]. Both env values
+  # below are driven by that ONE condition, so the token and the identity
+  # cannot disagree. FACTORY_REVIEW_LOGIN is an optional cross-check only: set
+  # it and a token that posts as anyone else refuses to post.
+  # ANY other caller of `make review` (an assembler re-review job, say) must
+  # declare FACTORY_REVIEW_TOKEN_SET the same way: an absent flag is not
+  # "false", it refuses to post. A caller that hands over a bot's PAT while
+  # saying nothing would otherwise be assumed to post as github-actions[bot].
+  # Fork PRs are skipped — their GITHUB_TOKEN is read-only, and reaching for
+  # pull_request_target to work around that would run untrusted code with a
+  # write token.
+  review:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.action != 'closed'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Collect findings
+        run: |
+          set +e
+          make check > findings.txt 2>&1
+          echo "FINDINGS_RC=$?" >> "$GITHUB_ENV"
+          exit 0
+      - name: Post findings as a non-authoring actor
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_REVIEW_TOKEN || secrets.GITHUB_TOKEN }}
+          FACTORY_REVIEW_TOKEN_SET: ${{ secrets.FACTORY_REVIEW_TOKEN != '' }}
+          FACTORY_REVIEW_LOGIN: ${{ vars.FACTORY_REVIEW_LOGIN }}
+        run: make review FINDINGS=findings.txt STATUS="$FINDINGS_RC"
+
+  # Merging the PR is gate 3 itself (ADR-0033), and it is the work order's
+  # terminal state: flip the mirrored issue to wo:merged (ADR-0032 — exactly
+  # one lifecycle label at a time). The issue number comes from the breakdown
+  # row, so the mirror stays one-way.
+  merged-label:
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.action == 'closed'
+      && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Flip the work order to wo:merged
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make wo-merged
