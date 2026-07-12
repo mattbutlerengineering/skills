@@ -577,6 +577,34 @@ class TestPrTraceability(unittest.TestCase):
                     ["B: PR body has no Closes #N link"],
                     f"{form!r} is not a closing keyword link")
 
+    def test_governance_pr_declaring_no_work_order_is_exempt(self):
+        """A governance/chore PR implements no work order (e.g. #139's
+        merge-auth fix). It declares that explicitly and is exempt from the
+        WO-id requirement — but must still close an issue for the audit trail."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "docs: governance",
+                              "No work order: docs-only governance fix."
+                              " Closes #139")
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env), [])
+
+    def test_no_work_order_declaration_still_requires_a_closes_link(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "docs: governance",
+                              "No work order: docs-only governance fix.")
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env),
+                ["B: PR body has no Closes #N link"])
+
+    def test_empty_no_work_order_declaration_does_not_exempt(self):
+        """The declaration owes a reason, like every other explicit claim in
+        this codebase — a bare 'No work order:' does not waive traceability."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = self.pr_env(tmp, "docs: x", "No work order:\nCloses #7")
+            self.assertEqual(
+                gates.check_pr_traceability(Path(tmp), env=env),
+                ["B: PR body cites no work-order id"])
+
     def test_unreadable_event_file_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             missing = str(Path(tmp) / "nope" / "event.json")
