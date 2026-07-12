@@ -31,6 +31,7 @@ EXPECTED_RELS = {
     "templates/tools/factory/assembler.py",
     "templates/tools/factory/budget_guard.py",
     "templates/tools/factory/handoff.py",
+    "templates/tools/factory/orientation_pack.py",
 }
 
 # install_path(rel) for every manifested rel, in target-relative form.
@@ -51,6 +52,8 @@ EXPECTED_INSTALLS = {
     "templates/tools/factory/budget_guard.py":
         "tools/factory/budget_guard.py",
     "templates/tools/factory/handoff.py": "tools/factory/handoff.py",
+    "templates/tools/factory/orientation_pack.py":
+        "tools/factory/orientation_pack.py",
 }
 
 TAMPER_PROBLEM = (
@@ -80,6 +83,8 @@ def make_factory_repo(root):
     tree.write("assembler.py", "# assembler stub\nASSEMBLER = 1\n")
     tree.write("budget_guard.py", "# budget_guard stub\nBUDGET_GUARD = 1\n")
     tree.write("handoff.py", "# handoff stub\nHANDOFF = 1\n")
+    tree.write("orientation_pack.py",
+               "# orientation_pack stub\nORIENTATION_PACK = 1\n")
     tree.write(".github/workflows/validator.yml",
                "name: validator\njobs: {}\n")
     tree.write(".github/workflows/assembler.yml",

@@ -228,11 +228,24 @@ class TestResolveModel(unittest.TestCase):
 
 class TestAssemblePrompt(unittest.TestCase):
     def test_the_prompt_is_the_row_and_points_at_the_charter(self):
-        prompt = assembler.assemble_prompt(
-            "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml")
+        with tempfile.TemporaryDirectory() as tmp:
+            prompt = assembler.assemble_prompt(
+                "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
         self.assertIn("WO-0005", prompt)
         self.assertIn("assembler.yml", prompt)
         self.assertIn("factory/skills/swe/SKILL.md", prompt)
+
+    def test_the_prompt_bundles_the_orientation_pack(self):
+        """WO-0015: assemble_prompt now folds in CONTEXT.md, the row's cited
+        ADRs, and a codegraph summary — see tests/test_orientation_pack.py
+        for orientation_pack.py's own contract."""
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "CONTEXT.md").write_text("# Context\n", encoding="utf-8")
+            prompt = assembler.assemble_prompt(
+                "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
+        self.assertIn("Orientation pack: WO-0005", prompt)
+        self.assertIn("# Context", prompt)
+        self.assertIn("Codegraph summary", prompt)
 
 
 class TestRunResolve(unittest.TestCase):
