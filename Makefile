@@ -7,7 +7,7 @@
 # this file's product-repo twin (tools under tools/factory/, no plugin
 # lint); tests/test_factory_gates.py::TestLockstep pins the pair.
 
-.PHONY: check review wo-merged
+.PHONY: check review wo-merged assembler
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
@@ -25,3 +25,6 @@ review:
 
 wo-merged:
 	python3 validator.py lifecycle --label wo:merged
+
+assembler:
+	python3 assembler.py resolve

@@ -6,7 +6,7 @@
 # (its tools sit at the root, these under tools/factory/, and the plugin's
 # structural lint has no product-repo counterpart).
 
-.PHONY: check review wo-merged
+.PHONY: check review wo-merged assembler
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
@@ -23,3 +23,6 @@ review:
 
 wo-merged:
 	python3 tools/factory/validator.py lifecycle --label wo:merged
+
+assembler:
+	python3 tools/factory/assembler.py resolve

@@ -634,6 +634,7 @@ def product_form(command):
     live under tools/factory/ there, and the stamped test run is quiet."""
     return (command.replace("python3 gates.py", "python3 tools/factory/gates.py")
             .replace("python3 validator.py", "python3 tools/factory/validator.py")
+            .replace("python3 assembler.py", "python3 tools/factory/assembler.py")
             .replace("unittest discover tests", "unittest discover -q tests"))
 
 
@@ -651,8 +652,12 @@ class TestLockstep(unittest.TestCase):
     WORKFLOW = REPO / ".github" / "workflows" / "validator.yml"
     PAYLOAD_WORKFLOW = (REPO / "factory" / "templates" / ".github"
                         / "workflows" / "validator.yml")
+    ASSEMBLER_WORKFLOW = REPO / ".github" / "workflows" / "assembler.yml"
+    PAYLOAD_ASSEMBLER_WORKFLOW = (REPO / "factory" / "templates" / ".github"
+                                  / "workflows" / "assembler.yml")
     MAKEFILE = REPO / "Makefile"
     TEMPLATE_MAKEFILE = REPO / "factory" / "templates" / "Makefile"
+    ASSEMBLER_TARGET = ["python3 assembler.py resolve"]
 
     # The one canonical check set. `lint.py` is the plugin's structural lint
     # and has no product-repo counterpart, so only the root Makefile runs it.
@@ -708,6 +713,36 @@ class TestLockstep(unittest.TestCase):
         text = self.WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("github.event.action == 'closed'", text)
         self.assertIn("github.event.pull_request.merged == true", text)
+
+    def test_both_makefiles_expose_the_assembler_target(self):
+        self.assertEqual(self.recipes(self.MAKEFILE, "assembler"),
+                         self.ASSEMBLER_TARGET)
+        self.assertEqual(self.recipes(self.TEMPLATE_MAKEFILE, "assembler"),
+                         [product_form(c) for c in self.ASSEMBLER_TARGET])
+
+    def test_the_assembler_workflow_names_no_command_of_its_own(self):
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("make assembler", text)
+        for tool in ("gates.py", "validator.py", "assembler.py", "unittest"):
+            self.assertNotIn(
+                f"python3 {tool}", text,
+                f"{tool} is invoked directly in CI; it belongs in a make"
+                " target, or the two repos' CI will diverge")
+
+    def test_the_payload_assembler_workflow_is_the_mirror_of_this_repo_s(self):
+        self.assertEqual(self.PAYLOAD_ASSEMBLER_WORKFLOW.read_bytes(),
+                         self.ASSEMBLER_WORKFLOW.read_bytes())
+
+    def test_the_assembler_gate_is_the_owner_and_the_ready_label(self):
+        """ADR-0032's two security invariants, pinned physically in the
+        workflow: the job runs only for wo:ready-for-agent applied by the repo
+        owner, and the agent step skips gracefully with no API key (never a
+        fabricated run)."""
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("github.event.label.name == 'wo:ready-for-agent'", text)
+        self.assertIn(
+            "github.event.sender.login == github.repository_owner", text)
+        self.assertIn("env.ANTHROPIC_API_KEY != ''", text)
 
 
 class TestSelftest(unittest.TestCase):

@@ -20,24 +20,29 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # Every rel key update_manifest must record for the minimal fixture repo.
 EXPECTED_RELS = {
     "templates/.github/workflows/validator.yml",
+    "templates/.github/workflows/assembler.yml",
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
     "templates/tools/factory/label_sync.py",
     "templates/tools/factory/protocol.py",
     "templates/tools/factory/validator.py",
+    "templates/tools/factory/assembler.py",
 }
 
 # install_path(rel) for every manifested rel, in target-relative form.
 EXPECTED_INSTALLS = {
     "templates/.github/workflows/validator.yml":
         ".github/workflows/validator.yml",
+    "templates/.github/workflows/assembler.yml":
+        ".github/workflows/assembler.yml",
     "templates/Makefile": "Makefile",
     "templates/factory.json": ".github/factory.json",
     "templates/tools/factory/gates.py": "tools/factory/gates.py",
     "templates/tools/factory/label_sync.py": "tools/factory/label_sync.py",
     "templates/tools/factory/protocol.py": "tools/factory/protocol.py",
     "templates/tools/factory/validator.py": "tools/factory/validator.py",
+    "templates/tools/factory/assembler.py": "tools/factory/assembler.py",
 }
 
 TAMPER_PROBLEM = (
@@ -64,8 +69,11 @@ def make_factory_repo(root):
     tree.write("protocol.py", "# protocol stub\nPROTOCOL = 1\n")
     tree.write("label_sync.py", "# label_sync stub\nLABEL_SYNC = 1\n")
     tree.write("validator.py", "# validator stub\nVALIDATOR = 1\n")
+    tree.write("assembler.py", "# assembler stub\nASSEMBLER = 1\n")
     tree.write(".github/workflows/validator.yml",
                "name: validator\njobs: {}\n")
+    tree.write(".github/workflows/assembler.yml",
+               "name: assembler\njobs: {}\n")
     tree.write(".claude-plugin/plugin.json",
                json.dumps({"name": "software-factory", "version": "1.2.3"}))
     tree.write("factory/templates/Makefile",

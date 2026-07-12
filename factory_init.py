@@ -38,7 +38,9 @@ MIRRORS = {
     "protocol.py": "tools/factory/protocol.py",
     "label_sync.py": "tools/factory/label_sync.py",
     "validator.py": "tools/factory/validator.py",
+    "assembler.py": "tools/factory/assembler.py",
     ".github/workflows/validator.yml": ".github/workflows/validator.yml",
+    ".github/workflows/assembler.yml": ".github/workflows/assembler.yml",
 }
 
 # Manifest rel -> install destination; anything unmapped strips "templates/".

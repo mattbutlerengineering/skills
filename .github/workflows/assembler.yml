@@ -1,0 +1,78 @@
+# The factory assembler (PRD-0001; ADR-0032 dispatch plane, ADR-0033 gates,
+# ADR-0034 routing bands).
+#
+# Mirrored VERBATIM into the template payload by `factory_init.py
+# update-manifest`, so a stamped product repo runs this same file — which is
+# why it names no commands of its own. The one step that needs judgment goes
+# through `make assembler` (assembler.py, unit-tested offline); the agent it
+# dispatches is a `uses:` action, not a command. Editing this file means
+# re-running update-manifest; detector E fails the build otherwise.
+#
+# Two guards here are security properties, not conveniences (ADR-0032):
+#   - only the repo owner may apply wo:ready-for-agent — the job if: enforces
+#     it (a non-owner never spins the job up), and assembler.actor_is_owner
+#     re-checks it as the tested authority, failing closed;
+#   - the dispatched agent's prompt substrate is the repo-controlled breakdown
+#     ROW, never the raw issue body (the prompt-injection boundary). The issue
+#     body never leaves this workflow — assembler.py resolves the row instead.
+name: assembler
+
+on:
+  issues:
+    types: [labeled]
+
+# Don't dispatch the same work order twice if the label event repeats.
+concurrency:
+  group: assembler-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    # The whole gate, physical not conventional (ADR-0032): the applied label
+    # is wo:ready-for-agent AND the labeler is the repo owner. A label from
+    # anyone or anything else is inert — the job simply never runs.
+    if: >-
+      github.event.label.name == 'wo:ready-for-agent'
+      && github.event.sender.login == github.repository_owner
+    runs-on: ubuntu-latest
+    # The chartered agent branches, pushes, and opens a PR; the human still
+    # merges (gate 3, ADR-0033). No merge permission is granted here.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    env:
+      # Job-level so a step if: can gate on the secret's PRESENCE — secrets are
+      # not readable in an if:, but an env sourced from one is. This is our
+      # equivalent of the sweeps sentry job's `vars.* != ''` graceful skip:
+      # no key configured -> the agent step is skipped, never a fabricated run.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Resolve the dispatch from the REPO-CONTROLLED breakdown row (never the
+      # issue body). Re-runs the owner check as the tested authority and emits
+      # dispatch/charter/band/model/prompt to $GITHUB_OUTPUT. A non-owner or
+      # non-ready label resolves to dispatch=false; a misconfiguration (a ready
+      # label on an issue with no work-order row) fails the run so it is seen.
+      - name: Resolve the work order from its breakdown row
+        id: resolve
+        env:
+          FACTORY_REPO_OWNER: ${{ github.repository_owner }}
+        run: make assembler
+      # The chartered agent, on the model its charter's band routes to. Skips
+      # gracefully when no API key is configured (the graceful-skip pattern):
+      # nothing is dispatched and nothing is faked.
+      - name: Run the chartered agent
+        if: steps.resolve.outputs.dispatch == 'true' && env.ANTHROPIC_API_KEY != ''
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: ${{ steps.resolve.outputs.prompt }}
+          claude_args: --model ${{ steps.resolve.outputs.model }}
