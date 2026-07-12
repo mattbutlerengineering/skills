@@ -33,9 +33,10 @@ On demand only (real model runs, costs money, never CI):
   label-prefixed problem strings; callers print and exit nonzero. Tests
   assert the exact strings through public interfaces (see
   `tests/test_lint_checkers.py`).
-- **Factory templates are checksum-pinned**: any edit under
-  `factory/templates/**` must update the sha256 in `factory/manifest.json`
-  in the same commit (detector E gates; no regen command exists yet).
+- **Factory templates are checksum-pinned**: after any edit under
+  `factory/templates/**` (or to `gates.py`/`protocol.py`, which are
+  mirrored into the payload), run `python3 factory_init.py update-manifest`
+  and commit the manifest with the change (detector E gates).
 - **Dispatch mirrors one-way** (ADR-0032): never create a `WO-####` issue
   before its `breakdown.md` row exists.
 - **Typed IDs live in run-artifact frontmatter** (`id: PRD-0001`), never a
