@@ -23,7 +23,7 @@ per ADR-0032 after each row exists here first.
   - Accept: label-sync recreates the 27-label taxonomy on a bare repo and reports drift; CODEOWNERS ships in the template payload.
 - [x] **WO-0003** Detector B (PR-traceability) + Makefile↔validator lockstep test — size:S, blocked by: WO-0001 (PRD-0001 §Success criteria) (tracker: #108)
   - Accept: a PR body missing the work-order citation fails B in event context and SKIPs locally; a unit test pins Makefile and CI steps in lockstep.
-- [ ] **WO-0004** validator.yml (check + tests + merged-label step + review job) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #109)
+- [x] **WO-0004** validator.yml (check + tests + merged-label step + review job) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #109)
   - Accept: every PR runs detectors and tests; closing a merged PR flips the lifecycle label; the review job posts findings from a non-authoring actor.
 - [x] **WO-0013** minimal charters first: SWE, Reviewer, Planner (agents + SKILL.md) — size:M, blocked by: WO-0001 (PRD-0001 §Actors) (tracker: #118)
   - Accept: three agent files with `name:` frontmatter plus their SKILL.md charters load cleanly; structural lint passes.
@@ -45,7 +45,7 @@ per ADR-0032 after each row exists here first.
   - Accept: planted drift, ledger-gap, and stale-doc fixtures are each caught by selftest; the clean tree stays silent.
 - [ ] **WO-0009** cost-report.yml + monthly circuit breaker — size:S, blocked by: WO-0006 (PRD-0001 §User stories) (tracker: #114)
   - Accept: the weekly report issue posts numbers recomputed from costs.jsonl; a simulated cap breach sets FACTORY_PAUSED.
-- [ ] **WO-0010** sweeps.yml + sentry-intake stamping — size:M, blocked by: WO-0002 (PRD-0001 §Success criteria) (tracker: #115)
+- [x] **WO-0010** sweeps.yml + sentry-intake stamping — size:M, blocked by: WO-0002 (PRD-0001 §Success criteria) (tracker: #115)
   - Accept: a sweep files a triaged draft issue with source and type labels applied, no human transcription.
 - [x] **WO-0011** Detector H (evidence honesty) — size:S, blocked by: WO-0003 (PRD-0001 §Success criteria) (tracker: #116)
   - Accept: a verification artifact with neither literal command output nor an explicit NOT-RUN disclaimer fails the build; selftest covers both branches.
@@ -106,6 +106,15 @@ ADR-0033, and ADR-0034 (all accepted).
   (WO-0016, PRD-0001 §Actors) presuppose the load path it would create.
   To be settled when the assembler is implemented; no row is invented
   here (ADR-0032, one-way mirror).
+- 2026-07-12: the validator workflow (WO-0004, PRD-0001 §Solution) is BOTH
+  this repo's CI and the payload's — one file, machine-mirrored root →
+  `factory/templates/.github/workflows/`, joining `gates.py`/`protocol.py`
+  in `factory_init.MIRRORS`. It can be one file because it names no command
+  of its own: every step calls a `make` target, and each repo's Makefile
+  knows where its tools live (root here, `tools/factory/` there). The old
+  `checks.yml` is gone — it was the check job, now `make check`. A root
+  Makefile is new here, and the template Makefile's "exactly what CI runs"
+  comment is finally true.
 - 2026-07-12: charter-regression deviation — the golden-fixture replays
   (WO-0016, PRD-0001 §Actors) run **on demand** (`python3
   charter_replay.py`) and through a manual `workflow_dispatch` job, never
@@ -119,6 +128,31 @@ ADR-0033, and ADR-0034 (all accepted).
   `tests/test_charter_replay.py` and fail the suite with no model in the
   loop. The live model↔charter link itself is only observable in an
   on-demand replay, and no such run has been recorded yet.
+- 2026-07-12: the sweeps order (WO-0010, PRD-0001 §Success criteria) ships
+  self-hosted only — `sweeps.py` and `.github/workflows/sweeps.yml` live at
+  the repo root, not in `factory/templates/**`. No workflow is in the
+  template payload yet (the validator and assembler orders own the first
+  ones), and stamping a sweep tool without the workflow that calls it would
+  put a half-feature under detector E's checksum pin. The payload gains the
+  workflows when those orders build them.
+- 2026-07-12: sweeps file **intake**, never work orders (ADR-0032). The
+  triage table maps a sweep kind to exactly one `source:*` plus one `type:*`
+  label and can express no `wo:*` lifecycle label; a pre-flight screen
+  re-verifies every label against `labels.json` and drops any plan naming
+  a work-order id, so the dispatch plane cannot run ahead of a breakdown row.
+- 2026-07-12: a sweep cannot file until the labels it stamps exist —
+  `gh issue create --label X` resolves X server-side and aborts on an unknown
+  one, which would have left the label-drift sweep unable to report the very
+  drift that silenced it. `sweeps.py ensure-labels` runs as its own step
+  before both sweeps and creates only the *absent* triage labels, so the rest
+  of the taxonomy stays drifted for the sweep to report to a human rather
+  than being healed away behind its back.
+- 2026-07-12: the sweeps order's acceptance criterion (WO-0010, PRD-0001
+  §Success criteria) is demonstrated by the offline suite alone
+  (`tests/test_sweeps.py`, gh runner injected) — **no scheduled sweep has yet
+  run against GitHub**, so no intake issue has been filed by the workflow
+  itself. The first Monday run is the live evidence; until then the criterion
+  is proven in principle, not in production.
 - 2026-07-12: charters carry a routing *band* (`route: implementation` or
   `architecture_review`), never a model id — the band resolves through
   `factory.json`'s routing table, which the routing order

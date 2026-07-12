@@ -536,6 +536,58 @@ class TestEvidenceHonesty(unittest.TestCase):
                 "- Result: PASS\n"))
             self.assertEqual(gates.check_evidence_honesty(tree.root), [])
 
+    # The bypass in #147: the splitter was ATX-only, so a Setext-headed
+    # artifact collapsed into one section and a single honest fence
+    # disarmed every lying verdict in it. GitHub renders the two
+    # identically, so the artifact a reviewer reads looks the same.
+    SETEXT_BODY = (
+        "Criterion 0 - lint\n------------------\n"
+        "- Evidence:\n  ```\n  lint: 0 problem(s)\n  ```\n\n"
+        "Criterion 1 - payments\n----------------------\n"
+        "- Result: PASS. All 12 acceptance criteria met.\n\n"
+        "Criterion 2 - soak\n------------------\n"
+        "- Verdict: PASS. 72h soak clean.\n")
+
+    ATX_BODY = (
+        "## Criterion 0 - lint\n"
+        "- Evidence:\n  ```\n  lint: 0 problem(s)\n  ```\n\n"
+        "## Criterion 1 - payments\n"
+        "- Result: PASS. All 12 acceptance criteria met.\n\n"
+        "## Criterion 2 - soak\n"
+        "- Verdict: PASS. 72h soak clean.\n")
+
+    def test_setext_headings_split_sections_like_atx(self):
+        """The bypass: one honest fence under criterion 0 silenced criteria 1
+        and 2 because the Setext-headed artifact never split into sections.
+        The two syntaxes render identically on GitHub, so they must gate
+        identically — same criteria named, same verdicts caught."""
+        with tempfile.TemporaryDirectory() as tmp:
+            setext = self.verification(tmp, self.SETEXT_BODY)
+            problems = gates.check_evidence_honesty(setext.root)
+        with tempfile.TemporaryDirectory() as tmp:
+            atx = self.verification(tmp, self.ATX_BODY)
+            control = gates.check_evidence_honesty(atx.root)
+
+        named = lambda ps: sorted(p.split("criterion ")[1] for p in ps)
+        self.assertEqual(len(problems), 2)  # criterion 0 is honestly evidenced
+        self.assertEqual(named(problems), named(control))
+        self.assertEqual(named(problems), sorted([
+            '"Criterion 1 - payments" asserts PASS. All 12 acceptance criteria'
+            ' met. with neither literal evidence nor a NOT-RUN disclaimer',
+            '"Criterion 2 - soak" asserts PASS. 72h soak clean. with neither'
+            ' literal evidence nor a NOT-RUN disclaimer']))
+
+    def test_setext_underline_is_not_confused_with_frontmatter_or_rule(self):
+        """`---` opens the frontmatter fence and also writes a thematic break.
+        Neither is a heading; only an underline under a non-blank line is."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Criterion\n\n"
+                "---\n\n"
+                "- Evidence:\n  ```\n  ok\n  ```\n"
+                "- Result: PASS\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
     def test_prose_only_artifact_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.verification(tmp, (
@@ -715,29 +767,99 @@ class TestRunAll(unittest.TestCase):
                  if p.startswith("B:")], [])
 
 
+def make_recipe(text, target):
+    """The command lines of one make target (tab-indented recipe lines)."""
+    lines, capturing = [], False
+    for line in text.splitlines():
+        if line.startswith(f"{target}:"):
+            capturing = True
+        elif capturing:
+            if line.startswith("\t"):
+                lines.append(line.strip())
+            elif line.strip():
+                break
+    return lines
+
+
+def product_form(command):
+    """A root command as its product-repo twin spells it: the factory tools
+    live under tools/factory/ there, and the stamped test run is quiet."""
+    return (command.replace("python3 gates.py", "python3 tools/factory/gates.py")
+            .replace("python3 validator.py", "python3 tools/factory/validator.py")
+            .replace("unittest discover tests", "unittest discover -q tests"))
+
+
 class TestLockstep(unittest.TestCase):
-    """Makefile <-> CI lockstep (origin: WO-0003): the canonical check set
-    in .github/workflows/checks.yml and the stamped product-repo Makefile
-    template must not drift apart silently."""
+    """Makefile <-> CI lockstep (origin: WO-0003, tightened by WO-0004).
+
+    The old version asserted *membership* — every canonical command appears
+    somewhere — so drift by ADDITION was invisible: a step added to CI and
+    not to the Makefile passed. These assert exact, ordered equality of the
+    command sets, and that the workflow names no command of its own (it goes
+    through `make`), which is what lets one workflow file serve both this
+    repo and every stamped product repo."""
 
     REPO = Path(__file__).resolve().parents[1]
+    WORKFLOW = REPO / ".github" / "workflows" / "validator.yml"
+    PAYLOAD_WORKFLOW = (REPO / "factory" / "templates" / ".github"
+                        / "workflows" / "validator.yml")
+    MAKEFILE = REPO / "Makefile"
+    TEMPLATE_MAKEFILE = REPO / "factory" / "templates" / "Makefile"
 
-    def test_ci_workflow_runs_the_canonical_check_set(self):
-        text = (self.REPO / ".github" / "workflows"
-                / "checks.yml").read_text(encoding="utf-8")
-        for command in ("python3 lint.py",
-                        "python3 gates.py",
-                        "python3 gates.py --selftest",
-                        "python3 -m unittest discover tests"):
-            self.assertIn(command, text)
+    # The one canonical check set. `lint.py` is the plugin's structural lint
+    # and has no product-repo counterpart, so only the root Makefile runs it.
+    CANONICAL_CHECK = ["python3 gates.py",
+                       "python3 gates.py --selftest",
+                       "python3 -m unittest discover tests"]
+    ROOT_ONLY_CHECK = ["python3 lint.py"]
+    VALIDATOR_TARGETS = {
+        "review": ["python3 validator.py review --findings $(FINDINGS)"
+                   " --status $(STATUS)"],
+        "wo-merged": ["python3 validator.py lifecycle --label wo:merged"],
+    }
 
-    def test_template_makefile_check_target_matches_ci(self):
-        text = (self.REPO / "factory" / "templates"
-                / "Makefile").read_text(encoding="utf-8")
-        for command in ("python3 tools/factory/gates.py",
-                        "python3 tools/factory/gates.py --selftest",
-                        "python3 -m unittest discover"):
+    def recipes(self, path, target):
+        return make_recipe(path.read_text(encoding="utf-8"), target)
+
+    def test_root_makefile_check_is_exactly_the_canonical_set(self):
+        self.assertEqual(self.recipes(self.MAKEFILE, "check"),
+                         self.ROOT_ONLY_CHECK + self.CANONICAL_CHECK)
+
+    def test_template_makefile_check_is_exactly_the_canonical_set(self):
+        self.assertEqual(self.recipes(self.TEMPLATE_MAKEFILE, "check"),
+                         [product_form(c) for c in self.CANONICAL_CHECK])
+
+    def test_both_makefiles_expose_the_same_validator_targets(self):
+        for target, commands in self.VALIDATOR_TARGETS.items():
+            self.assertEqual(self.recipes(self.MAKEFILE, target), commands,
+                             f"root Makefile target {target}")
+            self.assertEqual(
+                self.recipes(self.TEMPLATE_MAKEFILE, target),
+                [product_form(c) for c in commands],
+                f"template Makefile target {target}")
+
+    def test_the_workflow_names_no_command_of_its_own(self):
+        """Every check runs through `make`, so CI cannot drift from the local
+        gate by adding a step — there is nowhere to add one."""
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        for command in ("make check", "make review", "make wo-merged"):
             self.assertIn(command, text)
+        for tool in ("lint.py", "gates.py", "validator.py", "unittest"):
+            self.assertNotIn(
+                f"python3 {tool}", text,
+                f"{tool} is invoked directly in CI; it belongs in a make"
+                " target, or the two repos' CI will diverge")
+
+    def test_the_payload_workflow_is_the_mirror_of_this_repo_s(self):
+        """One workflow, two repos: the payload copy is a machine mirror
+        (factory_init update-manifest), never a hand-maintained fork."""
+        self.assertEqual(self.PAYLOAD_WORKFLOW.read_bytes(),
+                         self.WORKFLOW.read_bytes())
+
+    def test_the_merged_label_job_fires_only_on_a_merged_pull_request(self):
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("github.event.action == 'closed'", text)
+        self.assertIn("github.event.pull_request.merged == true", text)
 
 
 class TestSelftest(unittest.TestCase):

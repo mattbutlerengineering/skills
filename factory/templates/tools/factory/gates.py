@@ -31,7 +31,8 @@ ai-tooling suite where the rule is the same idea):
                      exists on disk
 
 `--selftest` runs the checkers against fixture trees and exits nonzero
-on a failing assertion. Both run in CI (checks.yml) on every push/PR.
+on a failing assertion. Both run in CI (validator.yml, via `make check`)
+on every push/PR.
 """
 import hashlib
 import json
@@ -47,9 +48,12 @@ PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
 ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
 WO_TOKEN = re.compile(r"\bWO-\d{4}\b")
 # GitHub's issue-closing keywords, with the optional colon form
-# ("Closes: #12") and any run of whitespace before the issue number.
+# ("Closes: #12") and any run of whitespace before the issue number. The
+# number is captured: detector B only asks whether a link exists, but
+# validator.py asks WHICH issues a PR closes (it is how a merged PR names
+# the one work order it implements), and the closing grammar lives here.
 CLOSES_TOKEN = re.compile(
-    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#\d+\b",
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#(\d+)\b",
     re.IGNORECASE)
 
 CONFIG_ROUTES = ("mechanical", "implementation", "architecture_review")
@@ -90,6 +94,14 @@ URL_TARGET = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 # rule H enforces is per-criterion, so its evidence test must be too.
 HEADING_LINE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 FENCE_LINE = re.compile(r"^\s*(?:```|~~~)")
+# CommonMark's other heading syntax: a title underlined with === or ---.
+# GitHub renders it identically to ATX, so a splitter that reads only ATX is
+# blind to sections a human reviewer plainly sees (the #147 bypass). The `---`
+# underline is ambiguous — it also writes a thematic break and closes the
+# frontmatter fence — so a title must be a non-blank line that is not itself a
+# list item, block quote, or underline.
+SETEXT_UNDERLINE = re.compile(r"^\s{0,3}(?:=+|-+)\s*$")
+NOT_A_SETEXT_TITLE = re.compile(r"^\s{0,3}(?:[-*+>]|\d+[.)])\s")
 # A labelled verdict line. The label is not just "Result": a criterion is
 # just as asserted under "Verdict:", "Outcome:", or "Status:", so the
 # per-criterion rule must engage on any of them (all case-insensitive, with
@@ -168,20 +180,31 @@ def check_wo_citation(root):
     return problems
 
 
+def pr_event(env):
+    """(the pull_request payload, error): the PR this CI run is about, read
+    from the event file. (None, None) outside a PR run — every caller SKIPs
+    silently there. Callers label the error string themselves, so this stays
+    detector-agnostic (validator.py is the second caller)."""
+    event_path = env.get("GITHUB_EVENT_PATH")
+    if not event_path:
+        return None, None
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        return None, f"cannot read GITHUB_EVENT_PATH {event_path}: {err}"
+    pr = event.get("pull_request") if isinstance(event, dict) else None
+    return (pr if isinstance(pr, dict) else None), None
+
+
 def check_pr_traceability(root, env=None):
     """B: a PR whose body cites no work order and closes no issue breaks
     the audit trail from code back to scope. Reads the CI event payload;
     SKIPs silently outside a PR run. No exemptions."""
     if env is None:
         env = os.environ
-    event_path = env.get("GITHUB_EVENT_PATH")
-    if not event_path:
-        return []
-    try:
-        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as err:
-        return [f"B: cannot read GITHUB_EVENT_PATH {event_path}: {err}"]
-    pr = event.get("pull_request") if isinstance(event, dict) else None
+    pr, error = pr_event(env)
+    if error:
+        return [f"B: {error}"]
     if pr is None:
         return []
     body = pr.get("body") or ""
@@ -537,6 +560,32 @@ def check_config_shape(root):
     return problems
 
 
+def _is_setext_title(lines, idx):
+    """True when lines[idx] is a Setext heading title — a non-blank line with a
+    ===/--- underline beneath it. Callers rule out fenced content first. A list
+    item or block quote is not a title: `- item` over `---` is a list followed
+    by a thematic break, not a heading."""
+    if idx + 1 >= len(lines) or not SETEXT_UNDERLINE.match(lines[idx + 1]):
+        return False
+    line = lines[idx]
+    if not line.strip() or SETEXT_UNDERLINE.match(line):
+        return False
+    return not (HEADING_LINE.match(line) or NOT_A_SETEXT_TITLE.match(line))
+
+
+def _frontmatter_end(lines):
+    """Index of the first line after a leading `---` frontmatter block, or 0.
+    The block is skipped whole: its closing `---` sits under a non-blank key
+    line and would otherwise read as a Setext underline, and its keys
+    (`status: draft`) would otherwise read as labelled verdicts."""
+    if not lines or lines[0].strip() != "---":
+        return 0
+    for idx in range(1, len(lines)):
+        if lines[idx].strip() == "---":
+            return idx + 1
+    return 0
+
+
 def _verification_sections(text):
     """Split a verification artifact into heading-delimited sections, each
     recording — IN ITS OWN SCOPE — whether it shows literal output,
@@ -556,9 +605,15 @@ def _verification_sections(text):
                 "not_run": bool(NOT_RUN_TOKEN.search(title)),
                 "results": [], "prose": []}
 
+    lines = text.splitlines()
     current = blank("(untitled)", 1)
     in_fence = False
-    for lineno, line in enumerate(text.splitlines(), 1):
+    underlined = False
+    for idx in range(_frontmatter_end(lines), len(lines)):
+        line, lineno = lines[idx], idx + 1
+        if underlined:  # the ===/--- under a Setext title, already consumed
+            underlined = False
+            continue
         if FENCE_LINE.match(line):
             in_fence = not in_fence
             continue
@@ -568,8 +623,13 @@ def _verification_sections(text):
             continue
         heading = HEADING_LINE.match(line)
         if heading:
-            sections.append(current)
             title = heading.group(2) or "(untitled)"
+        elif _is_setext_title(lines, idx):
+            title, underlined = line.strip(), True
+        else:
+            title = None
+        if title is not None:
+            sections.append(current)
             current = blank(title, lineno)
             if HEADING_VERDICT.search(title):
                 current["prose"].append((lineno, "a verdict"))

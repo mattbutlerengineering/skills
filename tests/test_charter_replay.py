@@ -350,7 +350,7 @@ class TestReplayIsNeverAutomatic(unittest.TestCase):
         self.assertNotIn("schedule", triggers)
 
     def test_ci_checks_never_invoke_the_replay(self):
-        checks = (ROOT / ".github" / "workflows" / "checks.yml").read_text(
+        checks = (ROOT / ".github" / "workflows" / "validator.yml").read_text(
             encoding="utf-8")
         self.assertNotIn("charter_replay.py", checks)
 
