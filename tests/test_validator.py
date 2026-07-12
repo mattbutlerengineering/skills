@@ -195,6 +195,14 @@ class TestActorConflict(unittest.TestCase):
             "V: the reviewing actor is unnamed — no identity was resolved"
             " from the review token"])
 
+    def test_unnamed_author_is_refused(self):
+        """Symmetry: an author who cannot be named cannot be shown to DIFFER
+        from the reviewer either — an empty string compares unequal to every
+        login, so the guard would pass on nothing."""
+        self.assertEqual(validator.actor_conflict("", "github-actions[bot]"), [
+            "V: the PR's author is unnamed — an author who cannot be named"
+            " cannot be shown to differ from the reviewer"])
+
 
 class TestReviewerLogin(unittest.TestCase):
     """The reviewing identity is derived from the TOKEN, never declared: a
@@ -203,14 +211,40 @@ class TestReviewerLogin(unittest.TestCase):
     it compares. Anything unresolved fails CLOSED — never fall through to
     posting."""
 
-    def test_without_a_review_token_the_identity_is_the_workflows_own_bot(self):
-        """No FACTORY_REVIEW_TOKEN means GH_TOKEN is the workflow's own
+    def test_an_undeclared_provenance_fails_closed(self):
+        """An ABSENT flag must not read as "false". Inside the pinned workflow
+        both env values are set in one step, but any OTHER caller of `make
+        review` in a stamped repo — WO-0005's assembler running a re-review
+        job with its PAT in GH_TOKEN and no flag set — would otherwise
+        reintroduce the original bug verbatim: the reviewer ASSERTED to be
+        github-actions[bot] while actually posting as factory-bot. Detector E
+        pins factory/templates/**, not a downstream repo's other workflows,
+        so nothing else catches it."""
+        run = RecordingRunner(login="factory-bot")
+        self.assertEqual(validator.reviewer_login({}, run), (
+            None, ["V: the review step did not declare the token's provenance"
+                   " (FACTORY_REVIEW_TOKEN_SET) — refusing to post"]))
+        self.assertEqual(run.calls, [])
+
+    def test_a_garbled_provenance_fails_closed(self):
+        run = RecordingRunner(login="factory-bot")
+        self.assertEqual(
+            validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "yes"}, run),
+            (None, ["V: the review step did not declare the token's"
+                    " provenance (FACTORY_REVIEW_TOKEN_SET) — refusing to"
+                    " post"]))
+        self.assertEqual(run.calls, [])
+
+    def test_a_declared_absence_of_a_review_token_is_the_workflows_own_bot(self):
+        """FACTORY_REVIEW_TOKEN_SET=false means GH_TOKEN is the workflow's own
         GITHUB_TOKEN, whose posting identity GitHub fixes — that is derived
         from the token's provenance, not from a human-maintained variable, so
         there is nothing to ask."""
         run = RecordingRunner(login="never-asked")
-        self.assertEqual(validator.reviewer_login({}, run),
-                         ("github-actions[bot]", []))
+        self.assertEqual(
+            validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "false"},
+                                     run),
+            ("github-actions[bot]", []))
         self.assertEqual(run.calls, [])
 
     def test_a_review_token_is_asked_who_it_actually_is(self):
@@ -290,10 +324,30 @@ class TestRunReview(unittest.TestCase):
         return tree
 
     def env(self, tmp, author="mattb", login="github-actions[bot]"):
+        """The workflow's default review step: no FACTORY_REVIEW_TOKEN, and
+        the step SAYS so — the provenance is always declared explicitly."""
         env = pr_env(tmp, number=42, body="WO-0004 (PRD-0001) Closes #109",
                      user={"login": author})
         env["FACTORY_REVIEW_LOGIN"] = login
+        env["FACTORY_REVIEW_TOKEN_SET"] = "false"
         return env
+
+    def test_a_caller_that_declares_no_provenance_posts_nothing(self):
+        """The hardening case: a stamped repo wires up another caller of
+        `make review` (an assembler re-review job) with its PAT in GH_TOKEN
+        and no FACTORY_REVIEW_TOKEN_SET. The guard must refuse, not assume
+        github-actions[bot] and post as the bot that authored the PR."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp, author="factory-bot", login="")
+            del env["FACTORY_REVIEW_TOKEN_SET"]
+            run = RecordingRunner(login="factory-bot")
+            problems = validator.run_review(
+                tree.root, tree.root / "findings.txt", 0, env=env, run=run)
+            self.assertEqual(problems, [
+                "V: the review step did not declare the token's provenance"
+                " (FACTORY_REVIEW_TOKEN_SET) — refusing to post"])
+            self.assertEqual(run.calls, [])
 
     def test_posts_findings_as_the_non_authoring_actor(self):
         with tempfile.TemporaryDirectory() as tmp:

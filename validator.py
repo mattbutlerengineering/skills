@@ -96,16 +96,30 @@ def reviewer_login(env, run):
     two different strings, posts, and reports success — while the bot reviews
     its own PR.
 
-    Two token provenances, both derived:
-      - no FACTORY_REVIEW_TOKEN: GH_TOKEN is the workflow's own GITHUB_TOKEN,
-        whose posting identity GitHub fixes at GITHUB_TOKEN_LOGIN. Asking it
-        is pointless — `gh api user` needs a user-scoped token.
-      - FACTORY_REVIEW_TOKEN set: ask the token who it is.
+    Two token provenances, both derived, and the caller must DECLARE which:
+      - FACTORY_REVIEW_TOKEN_SET=false: GH_TOKEN is the workflow's own
+        GITHUB_TOKEN, whose posting identity GitHub fixes at
+        GITHUB_TOKEN_LOGIN. Asking it is pointless — `gh api user` needs a
+        user-scoped token.
+      - FACTORY_REVIEW_TOKEN_SET=true: ask the token who it is.
+    An ABSENT flag is not "false". Inside validator.yml both env values come
+    from one condition and cannot disagree, but any OTHER caller of `make
+    review` in a stamped repo (WO-0005's assembler running a re-review job
+    with its PAT in GH_TOKEN) would otherwise reintroduce the original bug
+    verbatim: a reviewer ASSERTED to be github-actions[bot] while posting as
+    factory-bot. Detector E pins factory/templates/**, not a downstream
+    repo's other workflows, so nothing else would catch it.
+
     An identity that cannot be resolved fails CLOSED — the caller posts
     nothing. A reviewer who cannot be named cannot be shown to differ from
     the author, and an unnamed reviewer is exactly the failure this guards.
     """
-    if env.get("FACTORY_REVIEW_TOKEN_SET", "").strip().lower() != "true":
+    provenance = env.get("FACTORY_REVIEW_TOKEN_SET", "").strip().lower()
+    if provenance not in ("true", "false"):
+        return None, ["V: the review step did not declare the token's"
+                      " provenance (FACTORY_REVIEW_TOKEN_SET) — refusing"
+                      " to post"]
+    if provenance == "false":
         return GITHUB_TOKEN_LOGIN, []
     try:
         login = run(["api", "user", "--jq", ".login"]).strip()
@@ -121,11 +135,15 @@ def reviewer_login(env, run):
 
 def actor_conflict(author, reviewer):
     """PRD-0001: no work is verified by the agent that produced it. An
-    unnamed reviewer is a conflict too — an anonymous posting identity
-    cannot be shown to differ from the author."""
+    unnamed actor on EITHER side is a conflict too — a name that is not there
+    compares unequal to every login, so the guard would pass on nothing
+    rather than on a demonstrated difference."""
     if not reviewer.strip():
         return ["V: the reviewing actor is unnamed — no identity was resolved"
                 " from the review token"]
+    if not author.strip():
+        return ["V: the PR's author is unnamed — an author who cannot be"
+                " named cannot be shown to differ from the reviewer"]
     if author.strip().lower() == reviewer.strip().lower():
         return [f"V: {author} authored this PR and cannot review it —"
                 " generation and verification must be separate actors (give"

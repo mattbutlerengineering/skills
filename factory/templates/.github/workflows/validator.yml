@@ -41,6 +41,10 @@ jobs:
   # below are driven by that ONE condition, so the token and the identity
   # cannot disagree. FACTORY_REVIEW_LOGIN is an optional cross-check only: set
   # it and a token that posts as anyone else refuses to post.
+  # ANY other caller of `make review` (an assembler re-review job, say) must
+  # declare FACTORY_REVIEW_TOKEN_SET the same way: an absent flag is not
+  # "false", it refuses to post. A caller that hands over a bot's PAT while
+  # saying nothing would otherwise be assumed to post as github-actions[bot].
   # Fork PRs are skipped — their GITHUB_TOKEN is read-only, and reaching for
   # pull_request_target to work around that would run untrusted code with a
   # write token.
