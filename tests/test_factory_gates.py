@@ -298,6 +298,161 @@ class TestStaleness(unittest.TestCase):
                 "I: docs/guide.md:1 stale link adr/0009-x.md (no such path)"])
 
 
+class TestArchitectureDrift(unittest.TestCase):
+    """D (origin: #142): architecture.md is a blueprint too. A file it names
+    as present or absent must agree with the tree, or the doc has gone stale
+    and the build fails. Regression fixtures are the real drift PR #133
+    caused: it added a root Makefile and deleted checks.yml while
+    architecture.md still asserted the opposite, and D stayed green."""
+
+    ARCH = "docs/features/software-factory/architecture.md"
+
+    # --- declared claims block: the only way to pin a PRESENCE claim, because
+    # architecture.md also names files that are planned and do not exist yet.
+    def test_declared_claims_that_match_the_tree_are_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/workflows/checks.yml", "on: push\n")
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```tree-claims\n"
+                       "exists: .github/workflows/checks.yml\n"
+                       "absent: Makefile\n```\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_declared_exists_claim_for_a_deleted_file_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)  # checks.yml deleted, as PR #133 does
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```tree-claims\n"
+                       "exists: .github/workflows/checks.yml\n```\n")
+            self.assertEqual(
+                gates.check_blueprint_drift(tree.root),
+                [f"D: {self.ARCH}:4 claims .github/workflows/checks.yml"
+                 " exists, but it does not (architecture.md is stale)"])
+
+    def test_declared_absent_claim_for_a_created_file_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("Makefile", "check:\n\tpython3 gates.py\n")
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```tree-claims\n"
+                       "absent: Makefile\n```\n")
+            self.assertEqual(
+                gates.check_blueprint_drift(tree.root),
+                [f"D: {self.ARCH}:4 claims Makefile is absent, but it"
+                 " exists (architecture.md is stale)"])
+
+    def test_unparseable_claim_line_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```tree-claims\n"
+                       "probably: Makefile\n```\n")
+            self.assertEqual(
+                gates.check_blueprint_drift(tree.root),
+                [f"D: {self.ARCH}:4 unreadable tree claim 'probably:"
+                 " Makefile' (expected 'exists: <path>' or"
+                 " 'absent: <path>')"])
+
+    def test_blank_lines_and_comments_in_the_block_are_allowed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```tree-claims\n"
+                       "# this repo is not itself stamped\n\n"
+                       "absent: Makefile\n```\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_a_glob_or_traversal_claim_is_refused_not_resolved(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```tree-claims\n"
+                       "exists: factory/templates/**\n```\n")
+            self.assertEqual(
+                gates.check_blueprint_drift(tree.root),
+                [f"D: {self.ARCH}:4 tree claim 'factory/templates/**' is not"
+                 " a plain repo path (no globs, no '..')"])
+
+    # --- prose claims: a closed keyword vocabulary, anchored at a clause end.
+    def test_prose_absence_claim_contradicted_by_the_tree_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("Makefile", "check:\n")
+            tree.write(self.ARCH,
+                       "# Architecture\n\nIt self-hosts by running the root"
+                       " scripts directly; there is no `Makefile`, no"
+                       " `tools/factory/` here.\n")
+            self.assertEqual(
+                gates.check_blueprint_drift(tree.root),
+                [f"D: {self.ARCH}:3 says there is no Makefile, but it exists"
+                 " (architecture.md is stale)"])
+
+    def test_prose_absence_claim_that_holds_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(self.ARCH,
+                       "# Architecture\n\nthere is no `Makefile`, no"
+                       " `tools/factory/`, no `.github/factory.json` here.\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_prose_presence_claim_contradicted_by_the_tree_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(self.ARCH,
+                       "# Architecture\n\n`.github/CODEOWNERS` exists here"
+                       " and ships in the payload.\n")
+            self.assertEqual(
+                gates.check_blueprint_drift(tree.root),
+                [f"D: {self.ARCH}:3 says .github/CODEOWNERS exists, but it"
+                 " does not (architecture.md is stale)"])
+
+    def test_prose_presence_claim_that_holds_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/CODEOWNERS", "* @owner\n")
+            tree.write(self.ARCH,
+                       "# Architecture\n\n`.github/CODEOWNERS` exists here"
+                       " and ships in the payload.\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    # --- the false-positive class. A code span that is not an existence
+    # claim must stay silent, or this detector dies the way H's attempts 1-2
+    # did. "no X change is needed" modifies a NOUN; it asserts nothing.
+    def test_no_followed_by_a_noun_is_not_an_absence_claim(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("gates.py", "print()\n")
+            tree.write(self.ARCH,
+                       "# Architecture\n\nno `gates.py` change is needed,"
+                       " and no `protocol.py` rewrite either.\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_a_bare_mention_of_a_planned_file_is_not_a_claim(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(self.ARCH,
+                       "# Architecture\n\nRoadmap: `validator.yml` incl. the"
+                       " non-authoring review job (WO-0004); `checks.yml` runs"
+                       " lint and the detector suite.\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_claims_inside_a_fenced_example_are_inert(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("Makefile", "check:\n")
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```\nthere is no `Makefile`.\n"
+                       "```\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_no_architecture_md_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/adr/README.md", "# ADRs\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+
 class TestScaffoldSync(unittest.TestCase):
     def manifested_tree(self, tmp, payload="check:\n"):
         tree = FixtureTree(tmp)
