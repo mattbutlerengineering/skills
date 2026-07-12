@@ -5,9 +5,9 @@ and regenerate the checksum manifest that pins it (PRD-0001; ADR-0032).
 Conventions match lint.py/gates.py: functions return label-prefixed
 problem strings; the CLI prints them and exits nonzero.
 
-  update-manifest   refresh the tool mirrors (gates.py, protocol.py,
-                    label_sync.py) under factory/templates/tools/factory/
-                    from the repo root, then rewrite factory/manifest.json
+  update-manifest   refresh the mirrors (the factory tools and the
+                    validator workflow — see MIRRORS) from the repo root
+                    into factory/templates/, then rewrite factory/manifest.json
                     (plugin name + version from .claude-plugin/plugin.json,
                     sha256 per template file). Detector E pins the result:
                     templates are never hand-edited without re-running this.
@@ -26,10 +26,20 @@ from pathlib import Path
 
 import gates
 
-# Root scripts mirrored into the payload so the stamped tool suite is
-# self-contained in a product repo (gates.py imports its sibling protocol;
-# label_sync.py is the sweeps-only network detector L).
-TOOL_MIRRORS = ("gates.py", "protocol.py", "label_sync.py")
+# Root files mirrored verbatim into the payload (repo-root path -> path
+# under factory/templates/), so a stamped product repo runs the same tools
+# and the same CI as this one — one source of truth, never a hand-maintained
+# second copy. gates.py imports its sibling protocol; label_sync.py is the
+# sweeps-only network detector L; validator.py is the validator workflow's
+# brain. validator.yml is path-agnostic (it runs `make` targets), which is
+# what lets it be mirrored byte-for-byte instead of forked per repo.
+MIRRORS = {
+    "gates.py": "tools/factory/gates.py",
+    "protocol.py": "tools/factory/protocol.py",
+    "label_sync.py": "tools/factory/label_sync.py",
+    "validator.py": "tools/factory/validator.py",
+    ".github/workflows/validator.yml": ".github/workflows/validator.yml",
+}
 
 # Manifest rel -> install destination; anything unmapped strips "templates/".
 INSTALL_MAP = {"templates/factory.json": ".github/factory.json"}
@@ -45,22 +55,22 @@ def install_path(rel):
 
 
 def update_manifest(root):
-    """Refresh tool mirrors and rewrite the checksum manifest."""
+    """Refresh the payload mirrors and rewrite the checksum manifest."""
     root = Path(root)
     problems = []
     plugin_meta = root / ".claude-plugin" / "plugin.json"
     if not plugin_meta.is_file():
         problems.append("factory-init: missing .claude-plugin/plugin.json")
     problems += [f"factory-init: missing {name} at repo root"
-                 for name in TOOL_MIRRORS if not (root / name).is_file()]
+                 for name in MIRRORS if not (root / name).is_file()]
     if problems:
         return problems
     meta = json.loads(plugin_meta.read_text(encoding="utf-8"))
-    tools = root / "factory" / "templates" / "tools" / "factory"
-    tools.mkdir(parents=True, exist_ok=True)
-    for name in TOOL_MIRRORS:
-        shutil.copyfile(root / name, tools / name)
     templates = root / "factory" / "templates"
+    for name, rel in MIRRORS.items():
+        mirror = templates / rel
+        mirror.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(root / name, mirror)
     files = {p.relative_to(root / "factory").as_posix(): _sha256(p)
              for p in sorted(templates.rglob("*")) if p.is_file()}
     manifest = {"plugin": meta.get("name"), "version": meta.get("version"),
