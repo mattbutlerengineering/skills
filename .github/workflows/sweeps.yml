@@ -1,0 +1,82 @@
+# Scheduled signal intake (PRD-0001; ADR-0030, ADR-0032). Each sweep turns
+# an external signal into a triaged INTAKE issue — source:* and type:* labels
+# already applied, so nothing is retyped by a human. Intake is never a work
+# order: no wo:* label is ever applied here and no WO id is ever minted (a
+# work order needs a breakdown.md row first). All stamping logic lives in
+# sweeps.py, unit-tested offline; this workflow only schedules it and fetches
+# the payload, so the Sentry token never enters the stamping process.
+name: sweeps
+
+on:
+  schedule:
+    # Mondays, 06:17 UTC (off the hour — GitHub's cron peaks are lossy).
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      sweep:
+        description: Which sweep to run
+        type: choice
+        default: all
+        options:
+          - all
+          - label-drift
+          - sentry
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: sweeps
+  cancel-in-progress: false
+
+jobs:
+  # Detector L is network-bound (it reads the live label set through gh), so
+  # it is never wired into the offline gates — a scheduled sweep is its only
+  # home. Drift becomes one source:sweep / type:chore intake issue.
+  label-drift:
+    if: github.event.inputs.sweep == null || github.event.inputs.sweep == 'all' || github.event.inputs.sweep == 'label-drift'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Label-drift sweep
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 sweeps.py label-drift
+
+  # Skips entirely until the repo is configured for Sentry (the vars context,
+  # unlike secrets, is readable in a job-level if). Every unresolved error
+  # becomes one source:sentry / type:defect intake issue.
+  sentry:
+    if: >-
+      (github.event.inputs.sweep == null || github.event.inputs.sweep == 'all'
+       || github.event.inputs.sweep == 'sentry')
+      && vars.SENTRY_ORG != '' && vars.SENTRY_PROJECT != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch unresolved Sentry issues
+        env:
+          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+          SENTRY_HOST: ${{ vars.SENTRY_HOST || 'sentry.io' }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT }}
+        run: |
+          curl --fail --silent --show-error --retry 3 --output sentry.json \
+            --header "Authorization: Bearer ${SENTRY_TOKEN}" \
+            --get \
+            --data-urlencode "query=is:unresolved" \
+            --data-urlencode "statsPeriod=14d" \
+            "https://${SENTRY_HOST}/api/0/projects/${SENTRY_ORG}/${SENTRY_PROJECT}/issues/"
+      # The payload is untrusted data: sweeps.py sanitizes every field and
+      # quotes it inside a fenced block. It is never a prompt.
+      - name: Stamp Sentry intake issues
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 sweeps.py sentry --payload sentry.json

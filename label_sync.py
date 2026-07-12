@@ -93,6 +93,16 @@ def gh_runner(args):
 
 GH_FAILURES = (subprocess.CalledProcessError, OSError)
 
+LIST_ARGS = ("label", "list", "--json", "name,color,description",
+             "--limit", "1000")
+
+
+def live_labels(run=gh_runner):
+    """The live label set through gh. Raises GH_FAILURES when gh is missing,
+    unauthenticated, or rate-limited — each caller (sync here, the label-drift
+    sweep in sweeps.py) turns that into its own problem string."""
+    return json.loads(run(list(LIST_ARGS)))
+
 
 def gh_detail(err):
     """One-line detail for the L: problem string of a failed gh call:
@@ -111,9 +121,7 @@ def sync(root, apply=False, run=gh_runner):
     if problems:
         return problems
     try:
-        current = json.loads(run(["label", "list", "--json",
-                                  "name,color,description",
-                                  "--limit", "1000"]))
+        current = live_labels(run)
     except GH_FAILURES as err:
         return [f"L: gh label list failed: {gh_detail(err)}"]
     problems = []
