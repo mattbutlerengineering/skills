@@ -12,10 +12,12 @@ problem strings; the CLI prints them and exits nonzero.
   python3 validator.py review --findings <file> [--status <rc>]
         Post the check run's output on the PR as review findings, from an
         actor that is not the PR's author — PRD-0001: no work is verified by
-        the agent that produced it. Refuses to post (nonzero, nothing said)
-        when the posting identity is the author. Red findings are posted and
-        do NOT fail the review job: failing the build is the check job's
-        work, and a reviewer that goes silent on red is useless.
+        the agent that produced it. The reviewing identity is derived from
+        the TOKEN (see reviewer_login), not from a variable that declares it;
+        anything unresolved or self-reviewing refuses to post (nonzero,
+        nothing said). Red findings are posted and do NOT fail the review
+        job: failing the build is the check job's work, and a reviewer that
+        goes silent on red is useless.
 
   python3 validator.py lifecycle --label wo:merged
         Make <label> the only wo: lifecycle label on the work order's
@@ -40,6 +42,10 @@ ROW = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s")
 TRACKER = re.compile(r"\(tracker:\s*#(\d+)\)")
 REVIEW_MARKER = "<!-- factory-review -->"
 MAX_FINDINGS_CHARS = 12000
+# Who a workflow's own GITHUB_TOKEN posts as. GitHub fixes this — it is a
+# property of the token, not a setting, which is what makes it safe to assume
+# when no FACTORY_REVIEW_TOKEN was supplied.
+GITHUB_TOKEN_LOGIN = "github-actions[bot]"
 
 
 def lifecycle_labels(root):
@@ -79,17 +85,64 @@ def transition(current, lifecycle, label):
     return add, remove
 
 
+def reviewer_login(env, run):
+    """(the login the review token actually posts as, problems).
+
+    The TOKEN is the authority, never a human-maintained variable. A declared
+    login proves nothing about who the token posts as, and the moment the two
+    disagree PRD-0001's non-authoring property lapses SILENTLY: point
+    FACTORY_REVIEW_TOKEN at the assembler bot's PAT, leave FACTORY_REVIEW_LOGIN
+    unset, and a guard that compares the author against the declaration sees
+    two different strings, posts, and reports success — while the bot reviews
+    its own PR.
+
+    Two token provenances, both derived:
+      - no FACTORY_REVIEW_TOKEN: GH_TOKEN is the workflow's own GITHUB_TOKEN,
+        whose posting identity GitHub fixes at GITHUB_TOKEN_LOGIN. Asking it
+        is pointless — `gh api user` needs a user-scoped token.
+      - FACTORY_REVIEW_TOKEN set: ask the token who it is.
+    An identity that cannot be resolved fails CLOSED — the caller posts
+    nothing. A reviewer who cannot be named cannot be shown to differ from
+    the author, and an unnamed reviewer is exactly the failure this guards.
+    """
+    if env.get("FACTORY_REVIEW_TOKEN_SET", "").strip().lower() != "true":
+        return GITHUB_TOKEN_LOGIN, []
+    try:
+        login = run(["api", "user", "--jq", ".login"]).strip()
+    except label_sync.GH_FAILURES as err:
+        return None, ["V: cannot resolve the reviewing identity from"
+                      " FACTORY_REVIEW_TOKEN (gh api user failed:"
+                      f" {label_sync.gh_detail(err)}) — refusing to post"]
+    if not login:
+        return None, ["V: FACTORY_REVIEW_TOKEN resolves to no login —"
+                      " refusing to post"]
+    return login, []
+
+
 def actor_conflict(author, reviewer):
     """PRD-0001: no work is verified by the agent that produced it. An
     unnamed reviewer is a conflict too — an anonymous posting identity
     cannot be shown to differ from the author."""
     if not reviewer.strip():
-        return ["V: the reviewing actor is unnamed (set FACTORY_REVIEW_LOGIN)"]
+        return ["V: the reviewing actor is unnamed — no identity was resolved"
+                " from the review token"]
     if author.strip().lower() == reviewer.strip().lower():
         return [f"V: {author} authored this PR and cannot review it —"
-                " generation and verification must be separate actors (set"
-                " FACTORY_REVIEW_TOKEN and FACTORY_REVIEW_LOGIN to a"
-                " non-authoring identity)"]
+                " generation and verification must be separate actors (give"
+                " the reviewer its own identity: FACTORY_REVIEW_TOKEN)"]
+    return []
+
+
+def declared_conflict(declared, reviewer):
+    """FACTORY_REVIEW_LOGIN, if set, is an optional cross-check on the
+    identity the token resolved to — never the authority. When it disagrees,
+    the configuration is lying about who reviews, and a guard that cannot
+    trust its own configuration stops rather than posts."""
+    declared = declared.strip()
+    if declared and declared.lower() != reviewer.strip().lower():
+        return [f"V: FACTORY_REVIEW_LOGIN declares {declared} but the review"
+                f" token posts as {reviewer} — refusing to post until the"
+                " declaration matches the token"]
     return []
 
 
@@ -123,13 +176,45 @@ def _pull_request(env):
     return pr, []
 
 
-def _work_order(pr):
-    """(the work order the PR cites, problems). Detector B already fails a
-    PR that cites none, so reaching here without one is a real break."""
-    match = gates.WO_TOKEN.search(pr.get("body") or "")
-    if not match:
+def cited_work_order(root, body):
+    """(the work order this PR implements, problems).
+
+    NOT "the first WO token in the body": the body is author-controlled prose
+    that legitimately NAMES other work orders — a blocking edge ("builds on
+    WO-0004"), a quoted Accept line — and taking the first token would flip
+    the WRONG issue's lifecycle label on merge. The citation is structural
+    instead: the work order a PR implements is the one whose breakdown row is
+    mirrored to an issue the PR closes. Detector B already requires both
+    halves of that (a WO token AND a Closes #N link), and the issue number
+    still comes from the row, never from the body — ADR-0032's mirror stays
+    one-way. Ambiguity fails CLOSED: nothing is labelled.
+    """
+    cited = list(dict.fromkeys(gates.WO_TOKEN.findall(body)))
+    if not cited:
         return None, ["V: PR body cites no work-order id"]
-    return match.group(0), []
+    closes = sorted({int(n) for n in gates.CLOSES_TOKEN.findall(body)})
+    if not closes:
+        return None, ["V: PR body has no Closes #N link, so the work order it"
+                      " implements cannot be told from the ones it only"
+                      " mentions"]
+    matched = [wo for wo in cited if tracker_issue(root, wo)[0] in closes]
+    if len(matched) == 1:
+        return matched[0], []
+    if len(matched) > 1:
+        return None, ["V: this PR closes the mirrored issues of more than one"
+                      f" work order ({', '.join(matched)}); a work order is"
+                      " one PR"]
+    if len(cited) == 1:
+        # One citation and it did not resolve: say why (no row, no tracker)
+        # rather than hiding the reason behind "nothing matched".
+        problems = tracker_issue(root, cited[0])[1]
+        if problems:
+            return None, problems
+    closed = ", ".join(f"#{n}" for n in closes)
+    return None, [f"V: none of the work orders this PR cites"
+                  f" ({', '.join(cited)}) is mirrored to an issue it closes"
+                  f" ({closed}) — a PR implements the work order whose"
+                  " breakdown row it closes"]
 
 
 def post_review(number, body, run):
@@ -156,17 +241,26 @@ def run_review(root, findings, status, env, run=label_sync.gh_runner):
     pr, problems = _pull_request(env)
     if problems:
         return problems
+    reviewer, problems = reviewer_login(env, run)
+    if problems:
+        return problems
     author = (pr.get("user") or {}).get("login") or ""
-    problems = actor_conflict(author, env.get("FACTORY_REVIEW_LOGIN", ""))
+    problems = (actor_conflict(author, reviewer)
+                + declared_conflict(env.get("FACTORY_REVIEW_LOGIN", ""),
+                                    reviewer))
     if problems:
         return problems
     try:
         output = Path(findings).read_text(encoding="utf-8")
     except OSError as err:
         return [f"V: cannot read findings file {findings}: {err}"]
-    wo, _ = _work_order(pr)
-    body = render_findings(wo or "(no work order cited)", author,
-                           env["FACTORY_REVIEW_LOGIN"], output, status)
+    # The heading is cosmetic. An unresolvable citation must not silence the
+    # reviewer (the findings are the point) — but it must not name a work
+    # order this PR may not implement either. Only the merged-label step,
+    # which MUTATES an issue, is strict about it.
+    wo, _ = cited_work_order(root, pr.get("body") or "")
+    body = render_findings(wo or "(no work order resolved)", author, reviewer,
+                           output, status)
     return post_review(pr.get("number"), body, run)
 
 
@@ -180,7 +274,7 @@ def run_lifecycle(root, label, env, run=label_sync.gh_runner):
     pr, problems = _pull_request(env)
     if problems:
         return problems
-    wo, problems = _work_order(pr)
+    wo, problems = cited_work_order(root, pr.get("body") or "")
     if problems:
         return problems
     number, problems = tracker_issue(root, wo)

@@ -4,12 +4,12 @@
   "files": {
     "templates/.github/CODEOWNERS": "419b0f05d7f1ee6e1660b1017e7528b76a3ca13f5e48ae8885cfa76070e321e4",
     "templates/.github/labels.json": "2c3c0e2d9da71d76799194bfb8a04f5e3258ea0854d0d01176988149cdb664b5",
-    "templates/.github/workflows/validator.yml": "2007167623fe93fb66d83815bdc6bb2adb9581bbd8e57ccd004687d5fdfa1324",
+    "templates/.github/workflows/validator.yml": "d612bb04d2b55a44de500c001bbdf9c900e0a5a40815e20c5291f7ffe748eff4",
     "templates/Makefile": "d94771fcad655e3d72f41d1e3f32523bbe86c652ac6814f32892d30e25646b42",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/gates.py": "f45e14b1100a3ec65d502ef236c773fb195392e280f284be16cf99023e76dd55",
+    "templates/tools/factory/gates.py": "03a46b5d43af2ab2e5b6203d0aa6621eb21e5df15ff44db5c8c9ffa3678e412a",
     "templates/tools/factory/label_sync.py": "fe83319be34a763ccd5bb2fbc0ccf84dade1fd18b1d7980ec036f650a365c271",
     "templates/tools/factory/protocol.py": "8cc202a7e7c88dbf3d17675bece7fc4609e10d2bdd3827ff8073c147fd73fd62",
-    "templates/tools/factory/validator.py": "408929add8f2a697c937318fde8a961195afc7d817d0cba7a3ba44c2812904f2"
+    "templates/tools/factory/validator.py": "0410a106e6d9339423882b3b5991f120b92ca908623f36e894e06f5d19465d87"
   }
 }

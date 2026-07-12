@@ -56,10 +56,12 @@ class FixtureTree:
 class RecordingRunner:
     """Injected gh runner: records every call (resolving --body-file to its
     content, which the real gh reads before the caller deletes it), answers
-    `issue view` with a canned label set, and never touches the network."""
+    `issue view` with a canned label set and `api user` with the login the
+    token actually posts as, and never touches the network."""
 
-    def __init__(self, labels=()):
+    def __init__(self, labels=(), login="github-actions[bot]"):
         self.labels = list(labels)
+        self.login = login
         self.calls = []
 
     def __call__(self, args):
@@ -71,6 +73,8 @@ class RecordingRunner:
         if call[:2] == ["issue", "view"]:
             return json.dumps(
                 {"labels": [{"name": name} for name in self.labels]})
+        if call[:2] == ["api", "user"]:
+            return f"{self.login}\n"
         return ""
 
     def called(self, *prefix):
@@ -81,8 +85,9 @@ class FailingRunner(RecordingRunner):
     """Injected gh runner that fails the way a real gh does on a chosen
     subcommand: raises what subprocess.run(check=True) would raise."""
 
-    def __init__(self, labels=(), error=None, failing=()):
-        super().__init__(labels)
+    def __init__(self, labels=(), error=None, failing=(),
+                 login="github-actions[bot]"):
+        super().__init__(labels, login)
         self.error = error or subprocess.CalledProcessError(1, "gh")
         self.failing = list(failing)
 
@@ -182,12 +187,73 @@ class TestActorConflict(unittest.TestCase):
     def test_self_review_is_refused_case_insensitively(self):
         self.assertEqual(validator.actor_conflict("MattB", "mattb"), [
             "V: MattB authored this PR and cannot review it — generation and"
-            " verification must be separate actors (set FACTORY_REVIEW_TOKEN"
-            " and FACTORY_REVIEW_LOGIN to a non-authoring identity)"])
+            " verification must be separate actors (give the reviewer its own"
+            " identity: FACTORY_REVIEW_TOKEN)"])
 
     def test_unnamed_reviewer_is_refused(self):
         self.assertEqual(validator.actor_conflict("mattb", ""), [
-            "V: the reviewing actor is unnamed (set FACTORY_REVIEW_LOGIN)"])
+            "V: the reviewing actor is unnamed — no identity was resolved"
+            " from the review token"])
+
+
+class TestReviewerLogin(unittest.TestCase):
+    """The reviewing identity is derived from the TOKEN, never declared: a
+    variable that *says* who the token is proves nothing about who it posts
+    as, and PRD-0001's non-authoring property is only as good as the identity
+    it compares. Anything unresolved fails CLOSED — never fall through to
+    posting."""
+
+    def test_without_a_review_token_the_identity_is_the_workflows_own_bot(self):
+        """No FACTORY_REVIEW_TOKEN means GH_TOKEN is the workflow's own
+        GITHUB_TOKEN, whose posting identity GitHub fixes — that is derived
+        from the token's provenance, not from a human-maintained variable, so
+        there is nothing to ask."""
+        run = RecordingRunner(login="never-asked")
+        self.assertEqual(validator.reviewer_login({}, run),
+                         ("github-actions[bot]", []))
+        self.assertEqual(run.calls, [])
+
+    def test_a_review_token_is_asked_who_it_actually_is(self):
+        run = RecordingRunner(login="factory-bot")
+        self.assertEqual(
+            validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "true"}, run),
+            ("factory-bot", []))
+        self.assertEqual(run.called("api", "user"),
+                         [["api", "user", "--jq", ".login"]])
+
+    def test_an_unresolvable_identity_fails_closed(self):
+        run = FailingRunner(error=OSError("gh: not found"),
+                            failing=["api", "user"])
+        self.assertEqual(
+            validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "true"}, run),
+            (None, ["V: cannot resolve the reviewing identity from"
+                    " FACTORY_REVIEW_TOKEN (gh api user failed: gh: not"
+                    " found) — refusing to post"]))
+
+    def test_an_empty_login_fails_closed(self):
+        run = RecordingRunner(login="")
+        self.assertEqual(
+            validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "true"}, run),
+            (None, ["V: FACTORY_REVIEW_TOKEN resolves to no login —"
+                    " refusing to post"]))
+
+
+class TestDeclaredConflict(unittest.TestCase):
+    """FACTORY_REVIEW_LOGIN survives only as an optional cross-check."""
+
+    def test_an_unset_declaration_is_silent(self):
+        self.assertEqual(validator.declared_conflict("", "factory-bot"), [])
+
+    def test_a_declaration_the_token_confirms_is_silent(self):
+        self.assertEqual(
+            validator.declared_conflict("Factory-Bot", "factory-bot"), [])
+
+    def test_a_declaration_the_token_contradicts_refuses_to_post(self):
+        self.assertEqual(
+            validator.declared_conflict("github-actions[bot]", "factory-bot"),
+            ["V: FACTORY_REVIEW_LOGIN declares github-actions[bot] but the"
+             " review token posts as factory-bot — refusing to post until the"
+             " declaration matches the token"])
 
 
 class TestRenderFindings(unittest.TestCase):
@@ -245,19 +311,70 @@ class TestRunReview(unittest.TestCase):
             self.assertIn("PASS", body)
 
     def test_author_cannot_review_their_own_pr_and_nothing_is_posted(self):
+        """The default token posts as github-actions[bot]; a PR that bot
+        authored is one it cannot review."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             run = RecordingRunner()
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0,
-                env=self.env(tmp, author="factory-bot", login="factory-bot"),
+                env=self.env(tmp, author="github-actions[bot]", login=""),
                 run=run)
             self.assertEqual(problems, [
+                "V: github-actions[bot] authored this PR and cannot review"
+                " it — generation and verification must be separate actors"
+                " (give the reviewer its own identity: FACTORY_REVIEW_TOKEN)"])
+            self.assertEqual(run.called("pr", "comment"), [])
+
+    def test_a_token_that_is_the_author_never_posts_however_it_is_declared(self):
+        """The exact case WO-0005's assembler creates: the bot's PAT is set
+        as FACTORY_REVIEW_TOKEN and FACTORY_REVIEW_LOGIN is left unset (so it
+        used to default to github-actions[bot]). Comparing the author against
+        that DECLARATION saw two different strings and posted — the bot
+        reviewing its own PR while the guard reported success. The identity
+        that matters is the one the TOKEN posts as."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp, author="factory-bot",
+                           login="github-actions[bot]")
+            env["FACTORY_REVIEW_TOKEN_SET"] = "true"
+            run = RecordingRunner(login="factory-bot")
+            problems = validator.run_review(
+                tree.root, tree.root / "findings.txt", 0, env=env, run=run)
+            self.assertIn(
                 "V: factory-bot authored this PR and cannot review it —"
-                " generation and verification must be separate actors (set"
-                " FACTORY_REVIEW_TOKEN and FACTORY_REVIEW_LOGIN to a"
-                " non-authoring identity)"])
-            self.assertEqual(run.calls, [])
+                " generation and verification must be separate actors (give"
+                " the reviewer its own identity: FACTORY_REVIEW_TOKEN)",
+                problems)
+            self.assertEqual(run.called("pr", "comment"), [])
+
+    def test_an_unresolvable_reviewing_identity_posts_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp)
+            env["FACTORY_REVIEW_TOKEN_SET"] = "true"
+            run = FailingRunner(error=OSError("gh: not found"),
+                                failing=["api", "user"])
+            problems = validator.run_review(
+                tree.root, tree.root / "findings.txt", 0, env=env, run=run)
+            self.assertEqual(problems, [
+                "V: cannot resolve the reviewing identity from"
+                " FACTORY_REVIEW_TOKEN (gh api user failed: gh: not found) —"
+                " refusing to post"])
+            self.assertEqual(run.called("pr", "comment"), [])
+
+    def test_the_comment_names_the_identity_the_token_posts_as(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp, author="mattb", login="")
+            env["FACTORY_REVIEW_TOKEN_SET"] = "true"
+            run = RecordingRunner(login="factory-bot")
+            problems = validator.run_review(
+                tree.root, tree.root / "findings.txt", 0, env=env, run=run)
+            self.assertEqual(problems, [])
+            posted = run.called("pr", "comment", "42")[-1]
+            self.assertIn("`factory-bot`",
+                          posted[posted.index("--body-file") + 1])
 
     def test_red_findings_still_post_and_do_not_fail_the_review_job(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -318,6 +435,85 @@ class TestRunReview(unittest.TestCase):
             self.assertEqual(run.calls, [])
 
 
+class TestCitedWorkOrder(unittest.TestCase):
+    """Which work order a PR implements. The merged-label step flips THAT
+    work order's issue, so a body that merely MENTIONS another one ("builds
+    on WO-0004", a quoted Accept line) must not redirect the label. The
+    citation is structural, not positional: the work order is the one whose
+    breakdown row is mirrored to an issue the PR closes."""
+
+    def tree(self, tmp):
+        tree = FixtureTree(tmp)
+        tree.write("docs/features/demo/breakdown.md", BREAKDOWN)
+        return tree
+
+    def cited(self, tmp, body):
+        return validator.cited_work_order(self.tree(tmp).root, body)
+
+    def test_the_work_order_is_the_one_whose_tracker_the_pr_closes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                self.cited(tmp, "WO-0005 assembler (PRD-0001)\n\nCloses #110"),
+                ("WO-0005", []))
+
+    def test_a_mention_before_the_citation_does_not_redirect_the_label(self):
+        """The regression: WO-0005's PR body opens by naming WO-0004 (its
+        blocking edge). Taking the FIRST token would flip WO-0004's issue."""
+        with tempfile.TemporaryDirectory() as tmp:
+            body = ('Builds on WO-0004 — Accept: "…the review job posts'
+                    ' findings from a non-authoring actor."\n\n'
+                    "This is WO-0005 (PRD-0001 §Solution).\n\nCloses #110\n")
+            self.assertEqual(self.cited(tmp, body), ("WO-0005", []))
+
+    def test_a_body_citing_no_work_order_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self.cited(tmp, "no tokens\nCloses #110"),
+                             (None, ["V: PR body cites no work-order id"]))
+
+    def test_a_body_with_no_closes_link_cannot_be_disambiguated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                self.cited(tmp, "WO-0004 (PRD-0001), which unblocks WO-0005."),
+                (None, ["V: PR body has no Closes #N link, so the work order"
+                        " it implements cannot be told from the ones it only"
+                        " mentions"]))
+
+    def test_closing_no_cited_work_orders_issue_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                self.cited(tmp, "WO-0004 unblocks WO-0005\nCloses #999"),
+                (None, ["V: none of the work orders this PR cites (WO-0004,"
+                        " WO-0005) is mirrored to an issue it closes (#999) —"
+                        " a PR implements the work order whose breakdown row"
+                        " it closes"]))
+
+    def test_closing_two_work_orders_issues_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                self.cited(tmp, "WO-0004 and WO-0005\nCloses #109\nCloses #110"),
+                (None, ["V: this PR closes the mirrored issues of more than"
+                        " one work order (WO-0004, WO-0005); a work order is"
+                        " one PR"]))
+
+    def test_a_lone_citation_reports_why_its_row_did_not_resolve(self):
+        """WO-0007's row has no (tracker: #N): say so, rather than hiding it
+        behind a generic "nothing matched"."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                self.cited(tmp, "WO-0007 (PRD-0001)\nCloses #199"),
+                (None, ["V: WO-0007 has no (tracker: #N) mirror on its"
+                        " breakdown row"]))
+
+    def test_a_lone_citation_that_closes_the_wrong_issue_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                self.cited(tmp, "WO-0004 (PRD-0001)\nCloses #999"),
+                (None, ["V: none of the work orders this PR cites (WO-0004)"
+                        " is mirrored to an issue it closes (#999) — a PR"
+                        " implements the work order whose breakdown row it"
+                        " closes"]))
+
+
 class TestRunLifecycle(unittest.TestCase):
     def tree(self, tmp):
         tree = FixtureTree(tmp)
@@ -373,6 +569,22 @@ class TestRunLifecycle(unittest.TestCase):
                                         run=run),
                 ["V: PR body cites no work-order id"])
             self.assertEqual(run.calls, [])
+
+    def test_a_mentioned_work_order_does_not_get_the_merged_label(self):
+        """End to end for the merged-label step: WO-0005's PR names WO-0004
+        first. #109 (WO-0004's issue) must not be touched — #110 is."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = RecordingRunner(labels=["wo:in-progress"])
+            body = ("Builds on WO-0004. This is WO-0005 (PRD-0001).\n\n"
+                    "Closes #110\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body), run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "110",
+                "--add-label", "wo:merged",
+                "--remove-label", "wo:in-progress"]])
 
     def test_a_failing_gh_call_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:

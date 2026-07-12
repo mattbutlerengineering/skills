@@ -44,9 +44,12 @@ PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
 ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
 WO_TOKEN = re.compile(r"\bWO-\d{4}\b")
 # GitHub's issue-closing keywords, with the optional colon form
-# ("Closes: #12") and any run of whitespace before the issue number.
+# ("Closes: #12") and any run of whitespace before the issue number. The
+# number is captured: detector B only asks whether a link exists, but
+# validator.py asks WHICH issues a PR closes (it is how a merged PR names
+# the one work order it implements), and the closing grammar lives here.
 CLOSES_TOKEN = re.compile(
-    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#\d+\b",
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#(\d+)\b",
     re.IGNORECASE)
 
 CONFIG_ROUTES = ("mechanical", "implementation", "architecture_review")

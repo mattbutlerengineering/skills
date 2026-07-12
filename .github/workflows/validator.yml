@@ -32,10 +32,15 @@ jobs:
 
   # The agent reviewer (ADR-0033) pre-chews every PR so the human gate is
   # judgment, not linting. PRD-0001 forbids the actor that produced the work
-  # from verifying it: validator.py compares the posting identity with the PR
-  # author and refuses to post if they are the same. Give the reviewer its
-  # own identity by setting the FACTORY_REVIEW_TOKEN secret and the matching
-  # FACTORY_REVIEW_LOGIN variable; the default posts as github-actions[bot].
+  # from verifying it: validator.py compares the PR author with the identity
+  # the review TOKEN actually posts as — asking the token who it is (gh api
+  # user), not trusting a variable that declares it. Give the reviewer its own
+  # identity with the FACTORY_REVIEW_TOKEN secret (a PAT for a login that does
+  # not author PRs); with no secret set, GH_TOKEN is this workflow's own
+  # GITHUB_TOKEN, which GitHub fixes to github-actions[bot]. Both env values
+  # below are driven by that ONE condition, so the token and the identity
+  # cannot disagree. FACTORY_REVIEW_LOGIN is an optional cross-check only: set
+  # it and a token that posts as anyone else refuses to post.
   # Fork PRs are skipped — their GITHUB_TOKEN is read-only, and reaching for
   # pull_request_target to work around that would run untrusted code with a
   # write token.
@@ -62,7 +67,8 @@ jobs:
       - name: Post findings as a non-authoring actor
         env:
           GH_TOKEN: ${{ secrets.FACTORY_REVIEW_TOKEN || secrets.GITHUB_TOKEN }}
-          FACTORY_REVIEW_LOGIN: ${{ vars.FACTORY_REVIEW_LOGIN || 'github-actions[bot]' }}
+          FACTORY_REVIEW_TOKEN_SET: ${{ secrets.FACTORY_REVIEW_TOKEN != '' }}
+          FACTORY_REVIEW_LOGIN: ${{ vars.FACTORY_REVIEW_LOGIN }}
         run: make review FINDINGS=findings.txt STATUS="$FINDINGS_RC"
 
   # Merging the PR is gate 3 itself (ADR-0033), and it is the work order's
