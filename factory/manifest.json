@@ -7,7 +7,7 @@
     "templates/.github/workflows/validator.yml": "8cda6dec96132d6da94ebe2c0bb28f235af610534a6f12df37edd2dc06ed3f85",
     "templates/Makefile": "d94771fcad655e3d72f41d1e3f32523bbe86c652ac6814f32892d30e25646b42",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/gates.py": "0d1de1ae2ae07ec15bdc7cf44be21870e131273e2dfa48a008ea1b80c530c253",
+    "templates/tools/factory/gates.py": "7c435234569212d8364fea8f077aea904bb6c7a32f91bf7d01bb6cc8b6fe7a24",
     "templates/tools/factory/label_sync.py": "2f03cb9974defd318a53ceb8ce6f3819207090ad26b224f4b21cad32034fc483",
     "templates/tools/factory/protocol.py": "8cc202a7e7c88dbf3d17675bece7fc4609e10d2bdd3827ff8073c147fd73fd62",
     "templates/tools/factory/validator.py": "d698c04ff7c0b0310382bba36bbeb3d1d1efec04c29848179200d1fed9839922"
