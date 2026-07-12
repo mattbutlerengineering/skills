@@ -5,9 +5,10 @@ this module owns the kind vocabulary, the case shape, the coverage
 policy, and load-plus-validate (ADR-0022). evals/output/<slug>.json
 holds output-eval records; this module owns their required field set
 (issue #25). evals/results/ is append-only; this module owns its naming
-grammar — dated stems with -N collision suffixes — for both results
-kinds (issue #26, ADR-0024). The structural lint and the trigger-eval
-runner are thin callers. Deliberately separate from protocol.py: this
+grammar — dated stems with -N collision suffixes — for every results
+kind (issue #26, ADR-0024), including the factory's charter-regression
+replays. The structural lint, the trigger-eval runner, and the charter
+replay are thin callers. Deliberately separate from protocol.py: this
 is eval knowledge, not pipeline-protocol knowledge.
 """
 import json
@@ -52,6 +53,9 @@ def results_path(results_dir, kind, date, slug=None, harness=None):
                recorded file; the primary claude harness stays unmarked,
                a second harness carries its token — ADR-0031)
     output  -> <results_dir>/output/<slug>-<date>[-N] (the grading dir)
+    charter -> <results_dir>/charter-<date>[-N].json (a charter-regression
+               replay, charter_replay.py; factory evidence, not skill
+               maturity, so it is not LEDGER-linkable evidence below)
 
     -N starts at 2 and counts past existing same-day results. The path is
     returned, never created — recording stays with the caller.
@@ -62,6 +66,8 @@ def results_path(results_dir, kind, date, slug=None, harness=None):
         head = ("trigger" if harness in (None, "claude")
                 else f"trigger-{harness}")
         base, stem, ext = results_dir, f"{head}-{date}", ".json"
+    elif kind == "charter":
+        base, stem, ext = results_dir, f"charter-{date}", ".json"
     elif kind == "output":
         if not slug:
             raise ValueError("output results need a slug")

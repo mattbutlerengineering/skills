@@ -274,6 +274,17 @@ class TestResultsPath(unittest.TestCase):
                                      slug="decompose"),
             self.results / "output" / "decompose-2026-07-02-2")
 
+    def test_charter_replay_snapshot_is_dated_and_suffixed(self):
+        """charter_replay.py records through the same grammar (WO-0016)."""
+        self.assertEqual(
+            eval_schema.results_path(self.results, "charter", "2026-07-12"),
+            self.results / "charter-2026-07-12.json")
+        (self.results / "charter-2026-07-12.json").write_text(
+            "{}", encoding="utf-8")
+        self.assertEqual(
+            eval_schema.results_path(self.results, "charter", "2026-07-12"),
+            self.results / "charter-2026-07-12-2.json")
+
     def test_output_without_slug_fails_loud(self):
         with self.assertRaises(ValueError):
             eval_schema.results_path(self.results, "output", "2026-07-02")

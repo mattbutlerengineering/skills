@@ -58,7 +58,7 @@ per ADR-0032 after each row exists here first.
 
 - [x] **WO-0014** full 9-role charter set + CHARTERS.md + gate checklists — size:L, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #119)
   - Accept: all nine agent+skill charter pairs exist; CHARTERS.md indexes them with the three gate checklists; structural lint passes.
-- [ ] **WO-0016** charter regression suite (golden fixture replays) — size:M, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #121)
+- [x] **WO-0016** charter regression suite (golden fixture replays) — size:M, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #121)
   - Accept: golden fixture work orders replay on plugin PRs via a cheap model; a deliberately degraded charter fails the suite.
 - [ ] **WO-0018** rejection mining into the toolsmith queue — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #123)
   - Accept: a weekly job harvests gate rejections and PR change-requests into the toolsmith/claude-reflect queue.
@@ -106,6 +106,19 @@ ADR-0033, and ADR-0034 (all accepted).
   (WO-0016, PRD-0001 §Actors) presuppose the load path it would create.
   To be settled when the assembler is implemented; no row is invented
   here (ADR-0032, one-way mirror).
+- 2026-07-12: charter-regression deviation — the golden-fixture replays
+  (WO-0016, PRD-0001 §Actors) run **on demand** (`python3
+  charter_replay.py`) and through a manual `workflow_dispatch` job, never
+  automatically on plugin PRs as that row's accept line says. A replay is a
+  real model run, and never-real-models-in-CI is a hard convention
+  (CLAUDE.md; `trigger_eval.py` is the precedent) — a PR-triggered replay
+  would spend money on every push, and the owner ruled the convention wins
+  over the accept line's wording. What CI does cover is the suite's pure
+  scoring seam: the model runner is injected, so the transcripts a
+  deliberately degraded charter produces are replayed offline in
+  `tests/test_charter_replay.py` and fail the suite with no model in the
+  loop. The live model↔charter link itself is only observable in an
+  on-demand replay, and no such run has been recorded yet.
 - 2026-07-12: charters carry a routing *band* (`route: implementation` or
   `architecture_review`), never a model id — the band resolves through
   `factory.json`'s routing table, which the routing order
