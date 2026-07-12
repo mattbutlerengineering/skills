@@ -6,7 +6,7 @@
 # (its tools sit at the root, these under tools/factory/, and the plugin's
 # structural lint has no product-repo counterpart).
 
-.PHONY: check review wo-merged web-quality
+.PHONY: check review wo-merged assembler web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
@@ -23,6 +23,9 @@ review:
 
 wo-merged:
 	python3 tools/factory/validator.py lifecycle --label wo:merged
+
+assembler:
+	python3 tools/factory/assembler.py resolve
 
 # The design pipeline's job body (.github/workflows/design.yml; ADR-0033
 # gate 2), run when a PR touches docs/design/**. Playwright drives the UI
