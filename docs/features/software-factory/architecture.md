@@ -111,15 +111,16 @@ in the breakdown, no code).
   its planted defect *and* stay silent on a clean tree. The selftest is the
   detector suite's own test suite and runs in CI beside it.
 
-### Network detector — `label_sync.py` (PARTIAL)
+### Network detector — `label_sync.py` (BUILT)
 
 - Responsibility: detector **L** (LABEL-SYNC) — the live GitHub label set must
   match `labels.json`. Reads through the `gh` CLI; `--apply` force-creates
   drifted labels; drift is one-way (labels outside the taxonomy are never
   deleted).
-- Collaborators: none that run it. It is deliberately **never** in `gates.py`'s
-  `CHECKERS` — the offline suite must stay hermetic — and the sweep that was to
-  call it (WO-0010) does not exist. Today it is a correct detector nobody runs.
+- Collaborators: `sweeps.yml` (WO-0010) is the only thing that runs it. It is
+  deliberately **never** in `gates.py`'s `CHECKERS` — the offline suite must
+  stay hermetic — so the network detector runs on the sweep's schedule, not in
+  the per-PR gate.
 
 ### Template payload + `factory_init.py` (BUILT)
 
@@ -196,12 +197,13 @@ in the breakdown, no code).
 ### Execution half — assembler, budget guard, handoff, ledger, reports (PARTIAL)
 
 - Built: `validator.yml` incl. the non-authoring review job and the `wo:merged`
-  lifecycle flip (WO-0004); charter regression replays (WO-0016).
+  lifecycle flip (WO-0004); `sweeps.yml` + sentry-intake stamping (WO-0010);
+  charter regression replays (WO-0016).
 - Unbuilt: `assembler.yml` + claude-code-action + owner/pause/WIP guards
   (WO-0005); `budget_guard.py` + `handoff.py` + `costs.jsonl` (WO-0006); routing
   resolution (WO-0007); `cost-report.yml` + monthly circuit breaker (WO-0009);
-  `sweeps.yml` + intake stamping (WO-0010); gate-queue digest (WO-0017);
-  rejection mining (WO-0018); design pipeline (WO-0012).
+  gate-queue digest (WO-0017); rejection mining (WO-0018); design pipeline
+  (WO-0012).
 - The factory can now *verify* and *close out* a work order, but it still cannot
   *start* one: **the dispatcher (WO-0005) does not exist.** The PRD's headline
   capability — dispatch a work order, walk away, return to a reviewed PR — is
