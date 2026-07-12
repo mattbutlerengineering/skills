@@ -28,14 +28,14 @@ orientation or active-run discovery.
   pre-flight checks and write `release.md` recording readiness and the
   exact release steps; execute no externally visible release action — no
   deploy, publish, tag, or version bump. The operator pulls the trigger.
-- **Merge gate: NO.** PR merge stays a human gate (ADR-0033). The run
-  prepares PRs — CI green, an independent (non-authoring) reviewer pass —
-  and stops at the merge boundary. A brief cannot grant its own merge
-  authority; only the operator merges, in their own words, per PR. (An
-  earlier version of this brief recorded a self-granted, agent-written
-  merge authorization; that was removed per #139 — an agent recording its
-  own permission through a guard an agent can break makes the human gate
-  decorative.)
+- **Merge gate.** An agent may merge a work-order PR once its required
+  status checks pass **and** an independent (non-authoring) review passes —
+  the authority for that comes from **ADR-0036** (the repository owner's
+  decision, amending ADR-0033), not from this brief. A brief cannot grant
+  its own merge authority: an earlier version recorded a self-granted,
+  agent-written authorization, removed per #139. Gate changes and PRs that
+  touch `docs/adr/**`, `prd.md`, `architecture.md`, or `docs/design/**`
+  still require a human code-owner merge (ADR-0033 gates 1–2, ADR-0036).
 - **Tracker.** Issues #106..#123 already mirror the breakdown rows
   one-way (ADR-0032). No new work-order issues may be created.
 - **UX.** `prd.md` already records `ux: not-applicable`. No UI surface.
