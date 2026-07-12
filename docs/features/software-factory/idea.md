@@ -25,9 +25,10 @@ one session at a time, and carrying all coordination in his head.
   practical and auditable.
 - The ai-tooling evidence base (33 MEASURED evals) has settled per-stage
   tool picks; the open question is orchestration, not tooling.
-- 8090.ai validates the shape commercially (Refinery → Foundry → Planner →
-  Assembler → Validator; humans own requirements and architecture, agents
-  execute, full audit trail).
+- 8090.ai validates the shape commercially (current modules: Requirements
+  → Blueprints → Work Orders → Tests → Feedback; humans own requirements
+  and architecture, agents execute, full audit trail — and execution
+  itself is de-named to “IDE / agent of choice”).
 
 ## Evidence
 
@@ -37,6 +38,12 @@ one session at a time, and carrying all coordination in his head.
 - The recipe has produced real merged work end-to-end (ai-tooling issues
   #172–#174 built the methodology docs through it) — a real run, not an
   anecdote.
+- A six-platform survey (ai-tooling `methodologies/software-factories.md`,
+  2026-07-11: factory.ai, 8090, EY.ai PDLC, tembo, Qodo, Planview) shows
+  the category converging on exactly this skeleton — signal intake, spec
+  before code, codebase-tied work units, commodity execution slot,
+  independent verification, human-gated ship, telemetry closing the loop,
+  a traceability spine. None of the six auto-merges to production.
 
 ## Solution hunch
 

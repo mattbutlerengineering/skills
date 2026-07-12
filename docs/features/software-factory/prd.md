@@ -25,11 +25,21 @@ A factory layered onto the existing pipeline, proven on this repo first
 away, and return to a reviewed, budgeted, fully traceable pull request
 waiting at his merge queue:
 
+- Work enters as signals, not only as Matt's ideas: a production error, a
+  filed issue, or a scheduled sweep becomes a triaged, traceable work
+  item without Matt transcribing it.
 - Work orders are dispatchable: an approved, decomposed unit of work can
   be handed to an unattended agent with a single owner action.
-- Every dispatched run has a hard spending limit; running out produces a
-  clean handoff (work-in-progress preserved, remaining work stated), not
-  a runaway or a loss.
+- The dispatch contract is agent-agnostic: a work order carries
+  everything needed to execute it, so the coding agent behind the slot is
+  swappable — the factory is never coupled to one agent.
+- Every dispatched run has a hard spending limit and no more access than
+  its work class grants; running out produces a clean handoff
+  (work-in-progress preserved, remaining work stated), not a runaway or a
+  loss.
+- No work is verified or approved by the agent that produced it —
+  generation and verification are separate actors producing separate
+  artifacts, and verification is evidence, not assertion.
 - Exactly three human decisions bound the line — requirements approval,
   design approval, and merge — and each is enforced by the platform, not
   by convention.
@@ -38,7 +48,8 @@ waiting at his merge queue:
   waiting for a human to notice.
 - The factory reports on itself weekly: how much of its work is accepted,
   how much gets rewritten, what escapes to defects, what each unit of
-  work costs, and how long work waits on Matt.
+  work costs, and how long work waits on Matt. Spend rolls up per
+  requirement, so "was this feature worth what it cost?" has an answer.
 
 ## Actors
 
@@ -76,6 +87,10 @@ waiting at his merge queue:
 - [ ] A dispatch attempted by anyone other than Matt does not run
       (verified, not assumed).
 - [ ] A deliberately broken requirement→work-order link fails the build.
+- [ ] A change whose verification is asserted but not evidenced fails the
+      build.
+- [ ] At least one automated signal (error, sweep, or filed issue)
+      becomes a triaged work item with no human transcription.
 - [ ] The first weekly report posts with every merged work order present
       in the cost ledger.
 
