@@ -32,10 +32,12 @@ import gates
 # second copy. gates.py imports its sibling protocol; label_sync.py is the
 # sweeps-only network detector L; validator.py is the validator workflow's
 # brain; budget_guard.py/handoff.py are the ADR-0034 dollar-budget stop and
-# its hard-stop handoff, run ad hoc by a dispatched agent, not by a
-# workflow step of their own. validator.yml is path-agnostic (it runs
-# `make` targets), which is what lets it be mirrored byte-for-byte instead
-# of forked per repo.
+# its hard-stop handoff, run ad hoc by a dispatched agent, not by a workflow
+# step of their own. orientation_pack.py is assembler.py's sibling import
+# (WO-0015 — the orientation pack folded into the dispatched prompt),
+# mirrored alongside it for the same reason. validator.yml is path-agnostic
+# (it runs `make` targets), which is what lets it be mirrored byte-for-byte
+# instead of forked per repo.
 MIRRORS = {
     "gates.py": "tools/factory/gates.py",
     "protocol.py": "tools/factory/protocol.py",
@@ -44,6 +46,7 @@ MIRRORS = {
     "assembler.py": "tools/factory/assembler.py",
     "budget_guard.py": "tools/factory/budget_guard.py",
     "handoff.py": "tools/factory/handoff.py",
+    "orientation_pack.py": "tools/factory/orientation_pack.py",
     ".github/workflows/validator.yml": ".github/workflows/validator.yml",
     ".github/workflows/assembler.yml": ".github/workflows/assembler.yml",
     ".github/workflows/design.yml": ".github/workflows/design.yml",

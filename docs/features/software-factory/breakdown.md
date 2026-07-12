@@ -36,8 +36,8 @@ per ADR-0032 after each row exists here first.
   - Accept: a deliberately over-budget run hard-stops, pushes WIP, posts a handoff naming remaining work, and appends a costs.jsonl line.
 - [ ] **WO-0007** model routing table + resolution — size:S, blocked by: WO-0006 (PRD-0001 §Solution) (tracker: #112)
   - Accept: each type label resolves to a model id from factory config; a unit test covers all three routes.
-- [ ] **WO-0015** orientation pack in assembler prompt — size:S, blocked by: WO-0005 (PRD-0001 §User stories) (tracker: #120)
-  - Accept: the assembler prompt bundles CONTEXT.md, cited ADRs, and a codegraph summary for the dispatched work order via orientation.py.
+- [x] **WO-0015** orientation pack in assembler prompt — size:S, blocked by: WO-0005 (PRD-0001 §User stories) (tracker: #120)
+  - Accept: the assembler prompt bundles CONTEXT.md, cited ADRs, and a codegraph summary for the dispatched work order via orientation_pack.py.
 
 ## Milestone C: Self-observation (weekly report, sweeps, honesty gates)
 
@@ -180,3 +180,14 @@ ADR-0033, and ADR-0034 (all accepted).
   come from the ai-tooling evidence base; no such result exists for the new
   picks, and inventing one would be fabricated evidence (CLAUDE.md). They
   graduate only on a real run.
+- 2026-07-12: orientation-module deviation — the orientation pack
+  (WO-0015, PRD-0001 §User stories) ships as `orientation_pack.py`, not
+  the `orientation.py` this row's accept line originally named. The repo root
+  already carries an unrelated `orientation.py` — ADR-0021's CLI adapter
+  over `protocol.py`'s `next_stage`, the idea-to-prod pipeline's "which
+  stage is next" tool, with its own `tests/test_orientation.py` and
+  `tests/fixtures/orientation/` — because the factory's tools and the
+  idea-to-prod skills share this repo's root namespace. Renaming avoided
+  overwriting a shipped, tested, unrelated feature; the row's accept line
+  is amended to match what shipped, same as the labels.json deviation
+  above.
