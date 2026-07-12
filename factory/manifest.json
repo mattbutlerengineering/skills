@@ -12,7 +12,9 @@
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
     "templates/tools/factory/assembler.py": "0e00a25206c51d4e0af8d7913a54c794ea62a58602572f5f19e15e0895710a15",
+    "templates/tools/factory/budget_guard.py": "a22d7ac6b98a62706b4c29a8eea82ab0da2e54a168b9fc5fae08ef185ff88de7",
     "templates/tools/factory/gates.py": "d859a9aff81fd9611d0695a017bb49bf5238ce2df49471a749bb77bbba6f57ce",
+    "templates/tools/factory/handoff.py": "47aa8da53a88cc7e00dd01ed29bc3f32d0b8ea40341cebb495b81aaf3b49f370",
     "templates/tools/factory/label_sync.py": "2f03cb9974defd318a53ceb8ce6f3819207090ad26b224f4b21cad32034fc483",
     "templates/tools/factory/protocol.py": "8cc202a7e7c88dbf3d17675bece7fc4609e10d2bdd3827ff8073c147fd73fd62",
     "templates/tools/factory/validator.py": "d698c04ff7c0b0310382bba36bbeb3d1d1efec04c29848179200d1fed9839922"
