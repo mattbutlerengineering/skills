@@ -6,7 +6,7 @@
     "templates/.github/labels.json": "2c3c0e2d9da71d76799194bfb8a04f5e3258ea0854d0d01176988149cdb664b5",
     "templates/Makefile": "4f76165345c0e7d28afa03ba80907f61782f37c40391b1bb28121119ae46d042",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/gates.py": "f0da5bd38a9c17735dce2a6c30c8a1b89b17304f42ffbf574e509865320ab361",
+    "templates/tools/factory/gates.py": "673d617589f1294ebca8aa6ee2d7bc8743fd1356adc2727175f05e79d05b5eca",
     "templates/tools/factory/label_sync.py": "fe83319be34a763ccd5bb2fbc0ccf84dade1fd18b1d7980ec036f650a365c271",
     "templates/tools/factory/protocol.py": "8cc202a7e7c88dbf3d17675bece7fc4609e10d2bdd3827ff8073c147fd73fd62"
   }

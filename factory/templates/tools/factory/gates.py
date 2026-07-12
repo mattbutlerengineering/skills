@@ -24,7 +24,9 @@ ai-tooling suite where the rule is the same idea):
                      fields and every merged (checked) work-order row has
                      one; an absent ledger is silent (no runs recorded yet)
   H EVIDENCE-HONESTY — every verification.md criterion that asserts a
-                     verdict shows literal output or discloses NOT RUN
+                     verdict shows literal output or discloses NOT RUN, in
+                     its OWN section scope (an appendix fence vouches for
+                     nothing; a scoped hedge is not a disclaimer)
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
 
@@ -82,16 +84,48 @@ MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
 URL_TARGET = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 
 # H reads verification.md the way the verify skill writes it: markdown
-# headings delimit criteria, a "Result:" line asserts the verdict, fenced
+# headings delimit criteria, a labelled line asserts the verdict, fenced
 # blocks carry the literal output, and prose may disclose a check as NOT RUN.
+# Every one of those signals is read IN THE SECTION THAT CARRIES IT — the
+# rule H enforces is per-criterion, so its evidence test must be too.
 HEADING_LINE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 FENCE_LINE = re.compile(r"^\s*(?:```|~~~)")
-RESULT_LINE = re.compile(r"^\s*[-*+]?\s*\**\s*Result\**\s*:\s*(\S.*?)\s*$",
-                         re.IGNORECASE)
+# A labelled verdict line. The label is not just "Result": a criterion is
+# just as asserted under "Verdict:", "Outcome:", or "Status:", so the
+# per-criterion rule must engage on any of them (all case-insensitive, with
+# an optional list bullet and bold markers and a non-empty value).
+RESULT_LINE = re.compile(
+    r"^\s*[-*+]?\s*\**\s*(?:result|verdict|outcome|status)\**"
+    r"\s*:\s*(\S.*?)\s*$",
+    re.IGNORECASE)
+# Verdict words that assert a pass/fail conclusion even without a labelled
+# line. A section whose heading or whose prose opens with one of these reads
+# as a criterion. Anchored at the head of a line (after an optional bullet)
+# so a verdict word buried mid-sentence in a roll-up summary — "4/4 criteria
+# pass … lint green …" — does not turn that summary into a criterion.
+VERDICT_WORDS = (r"confirmed|confirms|works|working|pass(?:es|ed|ing)?|"
+                 r"verified|verifies|succeed(?:s|ed)?|green|done|ok")
+PROSE_VERDICT_LINE = re.compile(
+    r"^\s*[-*+]?\s*\**\s*(?:" + VERDICT_WORDS + r")\b", re.IGNORECASE)
+HEADING_VERDICT = re.compile(r"\b(?:" + VERDICT_WORDS + r")\b", re.IGNORECASE)
+# TEMPLATE.md gives the artifact a `## Summary` holding "the one-sentence
+# verdict" — a roll-up that narrates what the criteria below demonstrate.
+# Narration is honest exactly when the thing narrated is: a roll-up is
+# excused only when the artifact HAS criteria and every one of them carries
+# its own evidence or its own disclaimer. A roll-up standing alone, or
+# standing over unevidenced criteria, is a bare assertion like any other and
+# fails — so "call the gaming section Summary" is not an escape hatch.
+ROLLUP_HEADING = re.compile(
+    r"^\s*(?:summary|overview|conclusion|verdict|outcome|results?)\b",
+    re.IGNORECASE)
 # The disclaimer must be explicit; hedging prose ("partially checked") is
 # not a disclosure and must not buy a criterion out of showing its output.
+# A scoped hedge ("not tested on Windows", "not verified in Safari") admits
+# the check DID run, just not everywhere — the negative lookahead drops it so
+# it cannot disarm the rule the way an unqualified "NOT RUN" legitimately does.
 NOT_RUN_TOKEN = re.compile(
-    r"\bnot[\s-]+(?:run|ran|verified|executed|checked|tested)\b",
+    r"\bnot[\s-]+(?:run|ran|verified|executed|checked|tested|attempted)\b"
+    r"(?!\s+(?:on|in|for|under|with|against|across|when|beyond|outside)\b)",
     re.IGNORECASE)
 # An unfilled template placeholder (`<actual output ...>`) is not output.
 PLACEHOLDER_LINE = re.compile(r"^\s*<.+>\s*$")
@@ -505,12 +539,24 @@ def check_config_shape(root):
 
 def _verification_sections(text):
     """Split a verification artifact into heading-delimited sections, each
-    recording whether it shows literal output, discloses a check as NOT RUN,
-    and what verdicts it asserts. Fenced content is inert: a heading quoted
-    inside evidence output does not open a new section."""
+    recording — IN ITS OWN SCOPE — whether it shows literal output,
+    discloses a check as NOT RUN, and what verdicts it asserts. Scope is
+    the point: evidence parked in an appendix does not vouch for a criterion
+    three headings away. Fenced content is inert: a heading quoted inside
+    evidence output does not open a new section.
+
+    A section asserts a verdict two ways: `results` holds labelled verdict
+    lines (Result/Verdict/Outcome/Status), and `prose` holds unlabelled
+    assertions — a heading or a line that opens with a verdict word
+    ("Confirmed working"). Either shape makes the section a criterion."""
     sections = []
-    current = {"title": "(untitled)", "evidence": False, "not_run": False,
-               "results": []}
+
+    def blank(title, lineno):
+        return {"title": title, "lineno": lineno, "evidence": False,
+                "not_run": bool(NOT_RUN_TOKEN.search(title)),
+                "results": [], "prose": []}
+
+    current = blank("(untitled)", 1)
     in_fence = False
     for lineno, line in enumerate(text.splitlines(), 1):
         if FENCE_LINE.match(line):
@@ -524,15 +570,17 @@ def _verification_sections(text):
         if heading:
             sections.append(current)
             title = heading.group(2) or "(untitled)"
-            current = {"title": title, "evidence": False,
-                       "not_run": bool(NOT_RUN_TOKEN.search(title)),
-                       "results": []}
+            current = blank(title, lineno)
+            if HEADING_VERDICT.search(title):
+                current["prose"].append((lineno, "a verdict"))
             continue
         if NOT_RUN_TOKEN.search(line):
             current["not_run"] = True
         result = RESULT_LINE.match(line)
         if result:
             current["results"].append((lineno, result.group(1)))
+        elif PROSE_VERDICT_LINE.match(line):
+            current["prose"].append((lineno, "a verdict"))
     sections.append(current)
     return sections
 
@@ -541,7 +589,12 @@ def check_evidence_honesty(root):
     """H: a criterion that asserts a verdict must show literal output or
     disclose that the check was NOT RUN. Prose confidence is not evidence
     (PRD-0001: a change whose verification is asserted but not evidenced
-    fails the build)."""
+    fails the build).
+
+    The rule is per-criterion and so is the backstop: each verdict-asserting
+    section must carry its own evidence or its own disclaimer. An artifact
+    that asserts nothing anywhere still owes the reader output or a
+    disclosure, so a purely prose-confident artifact fails too."""
     problems = []
     for run in run_dirs(root):
         artifact = run / "verification.md"
@@ -554,19 +607,28 @@ def check_evidence_honesty(root):
             problems.append(f"H: {rel} cannot be read: {err}")
             continue
         sections = _verification_sections(text)
-        asserted = False
-        for section in sections:
-            for lineno, verdict in section["results"]:
-                asserted = True
-                if section["evidence"] or section["not_run"]:
-                    continue
-                problems.append(
-                    f'H: {rel}:{lineno} criterion "{section["title"]}"'
-                    f" asserts {verdict} with neither literal evidence"
-                    " nor a NOT-RUN disclaimer")
+        # A labelled verdict names its own value ("PASS"); an unlabelled one
+        # is reported generically. Labelled wins when a section has both.
+        criteria = [s for s in sections if s["results"] or s["prose"]]
+        leaves = [s for s in criteria
+                  if not ROLLUP_HEADING.match(s["title"])]
+        # Vacuous truth would make a lone roll-up self-excusing, so demand
+        # that real criteria exist before a roll-up may lean on them.
+        leaves_are_honest = bool(leaves) and all(
+            s["evidence"] or s["not_run"] for s in leaves)
+        for section in criteria:
+            if section["evidence"] or section["not_run"]:
+                continue
+            if leaves_are_honest and ROLLUP_HEADING.match(section["title"]):
+                continue
+            lineno, verdict = (section["results"] or section["prose"])[0]
+            problems.append(
+                f'H: {rel}:{lineno} criterion "{section["title"]}"'
+                f" asserts {verdict} with neither literal evidence"
+                " nor a NOT-RUN disclaimer")
         # An artifact that asserts no verdict at all escapes the per-criterion
         # rule; it still owes the reader output or a disclosure.
-        if not asserted and not any(
+        if not criteria and not any(
                 s["evidence"] or s["not_run"] for s in sections):
             problems.append(
                 f"H: {rel}:1 verification artifact shows neither literal"
@@ -702,9 +764,26 @@ def selftest():
             "---\nstage: verify\n---\n# Verification\n\n"
             "Everything works; the criteria are comfortably met.\n",
             encoding="utf-8")
+        # The three gaming shapes H exists to stop: an unrelated appendix
+        # fence standing in for per-criterion evidence, a relabelled verdict
+        # dodging the "Result:" token, and a scoped hedge posing as a NOT-RUN
+        # disclaimer. Each must fire in its own section's scope.
+        gamed = root / "docs" / "features" / "gamed"
+        gamed.mkdir()
+        (gamed / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "### Dispatch fires\n\nConfirmed working.\n\n"
+            "### Budget guard holds\n\n- Verdict: PASS\n\n"
+            "### Router picks the model\n\n- Result: PASS\n"
+            "Note: not tested on Windows.\n\n"
+            "## Appendix\n\n```\ngit log --oneline -3\n```\n",
+            encoding="utf-8")
         expect("H", check_evidence_honesty(root),
                'criterion "Suite is green" asserts PASS with neither',
-               "artifact shows neither literal evidence")
+               "artifact shows neither literal evidence",
+               'criterion "Dispatch fires" asserts a verdict with neither',
+               'criterion "Budget guard holds" asserts PASS with neither',
+               'criterion "Router picks the model" asserts PASS with neither')
 
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -741,6 +820,17 @@ def selftest():
             "### Non-owner dispatch does not fire\n\n"
             "- Check: NOT RUN — needs a second GitHub account.\n"
             "- Result: NOT VERIFIED\n", encoding="utf-8")
+        # A roll-up summary narrates the verdicts the criteria below evidence.
+        # It is not itself a criterion, and H must not read it as one.
+        rollup = root / "docs" / "features" / "rollup"
+        rollup.mkdir()
+        (rollup / "verification.md").write_text(
+            "---\nstage: verify\n---\n# Verification\n\n"
+            "## Summary\n\n4/4 criteria pass; suite and lint green on the\n"
+            "branch. Verdict: the feature demonstrably works.\n\n"
+            "## Criteria & evidence\n\n### Suite is green\n\n- Evidence:\n"
+            "  ```\n  Ran 222 tests\n\n  OK\n  ```\n- Result: PASS\n",
+            encoding="utf-8")
         expect_clean("H honest", check_evidence_honesty(root))
         payload = root / "factory" / "templates"
         payload.mkdir(parents=True)

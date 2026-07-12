@@ -546,6 +546,135 @@ class TestEvidenceHonesty(unittest.TestCase):
                 " artifact shows neither literal evidence nor a NOT-RUN"
                 " disclaimer"])
 
+    def test_appendix_fence_does_not_vouch_for_prose_criteria(self):
+        """Former bypass: prose verdicts with no `Result:` line anywhere, plus
+        one throwaway fence in an unrelated appendix, silenced the whole
+        artifact. Evidence is section-scoped; an appendix vouches for nothing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Dispatch fires\n\n"
+                "Confirmed working.\n\n"
+                "### Budget guard holds\n\n"
+                "Works as designed.\n\n"
+                "### Router picks the model\n\n"
+                "Passes.\n\n"
+                "## Appendix: branch log\n\n"
+                "```\n"
+                "git log --oneline -3\n"
+                "```\n"))
+            rel = "docs/features/demo/verification.md"
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                f'H: {rel}:10 criterion "Dispatch fires" asserts a verdict'
+                ' with neither literal evidence nor a NOT-RUN disclaimer',
+                f'H: {rel}:14 criterion "Budget guard holds" asserts a'
+                ' verdict with neither literal evidence nor a NOT-RUN'
+                ' disclaimer',
+                f'H: {rel}:18 criterion "Router picks the model" asserts a'
+                ' verdict with neither literal evidence nor a NOT-RUN'
+                ' disclaimer'])
+
+    def test_relabelled_verdict_lines_still_engage_the_rule(self):
+        """Former bypass: the rule only knew the literal token `Result`, so
+        `Verdict:` / `Outcome:` / `Status:` slipped past unevidenced."""
+        for label in ("Verdict", "Outcome", "Status", "result"):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                tree = self.verification(tmp, (
+                    "### Dispatch fires\n\n"
+                    "- Check: eyeballed the run.\n"
+                    f"- {label}: PASS\n"))
+                self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                    'H: docs/features/demo/verification.md:11 criterion'
+                    ' "Dispatch fires" asserts PASS with neither literal'
+                    ' evidence nor a NOT-RUN disclaimer'])
+
+    def test_scoped_hedge_is_not_a_not_run_disclaimer(self):
+        """Former bypass: any "not tested" phrase — even "not tested on
+        Windows", which concedes the check DID run — disarmed the rule. A
+        scoped hedge is partial coverage, not a disclosure."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Suite is green\n\n"
+                "- Check: ran the suite.\n"
+                "- Result: PASS\n"
+                "- Caveat: not tested on Windows.\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                'H: docs/features/demo/verification.md:11 criterion'
+                ' "Suite is green" asserts PASS with neither literal'
+                ' evidence nor a NOT-RUN disclaimer'])
+
+    def test_scoped_hedge_does_not_disarm_the_whole_artifact_backstop(self):
+        """The same hedge in a prose-confident artifact used to satisfy the
+        artifact-wide backstop. It must not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Summary\n\n"
+                "Everything is fine; the criteria are comfortably met.\n"
+                "(Not tested on Windows, but that is out of scope.)\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                "H: docs/features/demo/verification.md:1 verification"
+                " artifact shows neither literal evidence nor a NOT-RUN"
+                " disclaimer"])
+
+    def test_unqualified_not_run_disclaimer_still_excuses_its_criterion(self):
+        """The hedge fix must not break the genuine disclosure it protects."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Cap breach pauses the factory\n\n"
+                "- Check: not run — needs a month of real cost data.\n"
+                "- Verdict: NOT VERIFIED\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_roll_up_summary_is_not_read_as_a_criterion(self):
+        """Guard against the obvious overcorrection: a summary narrating the
+        verdicts that the criteria below evidence owes no evidence itself."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Summary\n\n"
+                "4/4 criteria pass; suite and lint green on the branch.\n"
+                "Verdict: the feature demonstrably works.\n\n"
+                "## Criteria & evidence\n\n"
+                "### Suite is green\n\n"
+                "- Evidence:\n"
+                "  ```\n"
+                "  Ran 222 tests in 4.1s\n\n"
+                "  OK\n"
+                "  ```\n"
+                "- Result: PASS\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_rollup_heading_is_not_an_escape_hatch(self):
+        """The roll-up excuse leans on real criteria being honest. A lone
+        roll-up has none to lean on — even with an appendix fence to satisfy
+        any artifact-wide evidence test — so it fails like any assertion."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Summary\n\n"
+                "- Verdict: all criteria pass.\n\n"
+                "## Appendix: branch log\n\n"
+                "```\n"
+                "git log --oneline -3\n"
+                "```\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                'H: docs/features/demo/verification.md:10 criterion'
+                ' "Summary" asserts all criteria pass. with neither literal'
+                ' evidence nor a NOT-RUN disclaimer'])
+
+    def test_rollup_over_unevidenced_criteria_fails_with_them(self):
+        """A roll-up standing over criteria that are themselves bare is not
+        narration of demonstrated work — it fails alongside them."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Summary\n\n"
+                "- Verdict: PASS\n\n"
+                "### Dispatch fires\n\n"
+                "Confirmed working.\n"))
+            rel = "docs/features/demo/verification.md"
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                f'H: {rel}:10 criterion "Summary" asserts PASS with neither'
+                ' literal evidence nor a NOT-RUN disclaimer',
+                f'H: {rel}:14 criterion "Dispatch fires" asserts a verdict'
+                ' with neither literal evidence nor a NOT-RUN disclaimer'])
+
     def test_unreadable_artifact_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
