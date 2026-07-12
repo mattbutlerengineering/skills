@@ -1137,6 +1137,47 @@ class TestEvidenceHonesty(unittest.TestCase):
                 "> Result: NOT RUN — no staging card\n"))
             self.assertEqual(gates.check_evidence_honesty(tree.root), [])
 
+    # #151: two further wrappers GitHub renders as a visible verdict slipped
+    # the splitter after the blockquote/ordered-list fix — a single-row table
+    # cell (`| Result: PASS |`, a row a human reads as PASS) and an inline
+    # `<summary>` (`<summary>Result: PASS</summary>`, an always-visible
+    # clickable verdict). Beside one honestly evidenced criterion (so the
+    # artifact-wide backstop stays quiet), the smuggled fake PASS was silent.
+    def test_table_cell_verdict_still_asserts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, self.EVIDENCED_NEIGHBOUR + (
+                "## Criterion B - payments\n"
+                "| Result: PASS |\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                "H: docs/features/demo/verification.md:16 criterion"
+                ' "Criterion B - payments" asserts PASS with neither literal'
+                " evidence nor a NOT-RUN disclaimer (evidence must be a fenced"
+                " code block in this section)"])
+
+    def test_summary_tag_verdict_still_asserts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, self.EVIDENCED_NEIGHBOUR + (
+                "## Criterion B - payments\n"
+                "<summary>Result: PASS</summary>\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                "H: docs/features/demo/verification.md:16 criterion"
+                ' "Criterion B - payments" asserts PASS with neither literal'
+                " evidence nor a NOT-RUN disclaimer (evidence must be a fenced"
+                " code block in this section)"])
+
+    def test_table_and_summary_not_run_still_disclose(self):
+        """The fix widens the wrapper class, not the claim test: a NOT-RUN
+        disclaimer inside a table cell or a `<summary>` is still a disclosure,
+        owing no output — the captured value drops the trailing `|` /
+        `</summary>` so `_is_disclosure` reads the verdict's true head."""
+        for verdict_line in ("| Result: NOT RUN — no staging card |",
+                             "<summary>Result: NOT VERIFIED</summary>"):
+            with self.subTest(line=verdict_line), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = self.verification(tmp, (
+                    "## Criterion B - payments\n" + verdict_line + "\n"))
+                self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
     def test_verdict_line_inside_a_fence_is_not_a_criterion(self):
         """Quoted output that happens to contain `Result: PASS` is evidence,
         not an assertion of the author's own."""
@@ -1171,6 +1212,38 @@ class TestEvidenceHonesty(unittest.TestCase):
                 "  <class 'app.models.User'>\n"
                 "  ```\n"
                 "- Result: PASS\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_table_of_evidenced_results_stays_silent(self):
+        """#151 guard: a table cell verdict is just another wrapper, but a
+        section that shows its literal output owes nothing. A table that
+        tabulates real evidenced results (a fenced block in the same section)
+        must not fire."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Suite is green\n\n"
+                "- Evidence:\n"
+                "  ```\n"
+                "  Ran 212 tests in 4.0s\n\n"
+                "  OK\n"
+                "  ```\n"
+                "| Result: PASS |\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
+    def test_details_folding_real_output_stays_silent(self):
+        """#151 guard: `<details><summary>…</summary>` folding a real fenced
+        block is honest evidence — the summary verdict is backed by the output
+        it hides, so the section stays silent."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "### Suite is green\n\n"
+                "<details>\n"
+                "<summary>Result: PASS</summary>\n\n"
+                "```\n"
+                "Ran 212 tests in 4.0s\n\n"
+                "OK\n"
+                "```\n\n"
+                "</details>\n"))
             self.assertEqual(gates.check_evidence_honesty(tree.root), [])
 
     def test_honest_prose_and_headings_are_not_criteria(self):

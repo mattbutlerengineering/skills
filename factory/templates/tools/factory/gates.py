@@ -146,12 +146,19 @@ NOT_A_SETEXT_TITLE = re.compile(r"^\s{0,3}(?:[-*+>]|\d+[.)])\s")
 # text — so a marker-only whitelist was itself an escape hatch (an independent
 # review smuggled a fake PASS past the `-*+`-only form under `>` and `1.`).
 # Any run of list/quote markers may lead the line; the verdict noun is what
-# makes it a verdict, not the marker.
+# makes it a verdict, not the marker. Two more wrappers GitHub renders as a
+# visible verdict join the leading class (#151): a table cell's leading pipe
+# (`| Result: PASS |`, a row a human reads as PASS) and an inline `<summary>`
+# open tag (`<summary>Result: PASS</summary>`, an always-visible clickable
+# verdict). Both close with a trailing delimiter — ` |` / `</summary>` — that
+# the value capture drops OUTSIDE the group, so `_is_disclosure` still reads
+# the verdict's true head (a table-cell `NOT VERIFIED` still discloses).
 RESULT_LINE = re.compile(
-    r"^\s*(?:(?:[-*+>]|\d+[.)])\s*)*\**\s*(?:result|verdict|outcome|status"
+    r"^\s*(?:(?:[-*+>]|\d+[.)]|\||<summary[^>]*>)\s*)*"
+    r"\**\s*(?:result|verdict|outcome|status"
     r"|conclusion|assessment|finding|determination|evaluation|judge?ment"
     r"|disposition|decision|ruling|appraisal)\**"
-    r"\s*:\s*(\S.*?)\s*$",
+    r"\s*:\s*(\S.*?)\s*(?:\|\s*|</summary>\s*)?$",
     re.IGNORECASE)
 # YAML frontmatter is METADATA, not the author's assertion. `status: draft` is
 # a stage field, and reading it as a labelled verdict both false-positived on
