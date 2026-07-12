@@ -128,10 +128,17 @@ NOT_A_SETEXT_TITLE = re.compile(r"^\s{0,3}(?:[-*+>]|\d+[.)])\s")
 # beside it, and the gate went quiet. With only labelled lines asserting, no
 # excuse is needed and none exists — every labelled verdict is backed IN ITS
 # OWN SECTION, wherever it is written.
+# The leading-marker class is deliberately wide. A verdict is just as asserted
+# under a blockquote (`> Result: PASS`) or an ordered-list item (`1. Result:
+# PASS`) as under a `-` bullet, and GitHub renders all three as visible verdict
+# text — so a marker-only whitelist was itself an escape hatch (an independent
+# review smuggled a fake PASS past the `-*+`-only form under `>` and `1.`).
+# Any run of list/quote markers may lead the line; the verdict noun is what
+# makes it a verdict, not the marker.
 RESULT_LINE = re.compile(
-    r"^\s*[-*+]?\s*\**\s*(?:result|verdict|outcome|status|conclusion"
-    r"|assessment|finding|determination|evaluation|judge?ment|disposition"
-    r"|decision|ruling|appraisal)\**"
+    r"^\s*(?:(?:[-*+>]|\d+[.)])\s*)*\**\s*(?:result|verdict|outcome|status"
+    r"|conclusion|assessment|finding|determination|evaluation|judge?ment"
+    r"|disposition|decision|ruling|appraisal)\**"
     r"\s*:\s*(\S.*?)\s*$",
     re.IGNORECASE)
 # YAML frontmatter is METADATA, not the author's assertion. `status: draft` is

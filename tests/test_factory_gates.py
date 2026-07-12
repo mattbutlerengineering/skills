@@ -914,6 +914,46 @@ class TestEvidenceHonesty(unittest.TestCase):
                 "- Result: PASS\n"))
             self.assertEqual(gates.check_evidence_honesty(tree.root), [])
 
+    # Independent-review finding on this branch: RESULT_LINE tolerated only a
+    # leading unordered bullet, so a verdict written under any other leading
+    # CommonMark construct GitHub still renders as visible text — a blockquote
+    # or an ordered-list item — slipped past the splitter. Beside one honestly
+    # evidenced criterion (so the artifact-wide backstop stays quiet), the
+    # smuggled fake PASS produced no problem at all.
+    EVIDENCED_NEIGHBOUR = (
+        "## Criterion A - login\n"
+        "- Evidence:\n  ```\n  1 passed\n  ```\n"
+        "- Result: PASS\n\n")
+
+    def test_blockquoted_verdict_still_asserts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, self.EVIDENCED_NEIGHBOUR + (
+                "## Criterion B - payments\n"
+                "> Result: PASS\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                "H: docs/features/demo/verification.md:16 criterion"
+                ' "Criterion B - payments" asserts PASS with neither literal'
+                " evidence nor a NOT-RUN disclaimer (evidence must be a fenced"
+                " code block in this section)"])
+
+    def test_ordered_list_verdict_still_asserts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, self.EVIDENCED_NEIGHBOUR + (
+                "## Criterion B - payments\n"
+                "1. Result: PASS\n"))
+            problems = gates.check_evidence_honesty(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertIn('"Criterion B - payments" asserts PASS', problems[0])
+
+    def test_blockquoted_not_run_still_discloses(self):
+        """The fix widens the marker class, not the claim test: a blockquoted
+        NOT-RUN disclaimer is still a disclosure, owing no output."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.verification(tmp, (
+                "## Criterion B - payments\n"
+                "> Result: NOT RUN — no staging card\n"))
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+
     def test_verdict_line_inside_a_fence_is_not_a_criterion(self):
         """Quoted output that happens to contain `Result: PASS` is evidence,
         not an assertion of the author's own."""
