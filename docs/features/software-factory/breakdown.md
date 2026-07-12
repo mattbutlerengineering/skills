@@ -23,7 +23,7 @@ per ADR-0032 after each row exists here first.
   - Accept: label-sync recreates the 27-label taxonomy on a bare repo and reports drift; CODEOWNERS ships in the template payload.
 - [x] **WO-0003** Detector B (PR-traceability) + Makefile↔validator lockstep test — size:S, blocked by: WO-0001 (PRD-0001 §Success criteria) (tracker: #108)
   - Accept: a PR body missing the work-order citation fails B in event context and SKIPs locally; a unit test pins Makefile and CI steps in lockstep.
-- [ ] **WO-0004** validator.yml (check + tests + merged-label step + review job) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #109)
+- [x] **WO-0004** validator.yml (check + tests + merged-label step + review job) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #109)
   - Accept: every PR runs detectors and tests; closing a merged PR flips the lifecycle label; the review job posts findings from a non-authoring actor.
 - [x] **WO-0013** minimal charters first: SWE, Reviewer, Planner (agents + SKILL.md) — size:M, blocked by: WO-0001 (PRD-0001 §Actors) (tracker: #118)
   - Accept: three agent files with `name:` frontmatter plus their SKILL.md charters load cleanly; structural lint passes.
@@ -106,6 +106,15 @@ ADR-0033, and ADR-0034 (all accepted).
   (WO-0016, PRD-0001 §Actors) presuppose the load path it would create.
   To be settled when the assembler is implemented; no row is invented
   here (ADR-0032, one-way mirror).
+- 2026-07-12: the validator workflow (WO-0004, PRD-0001 §Solution) is BOTH
+  this repo's CI and the payload's — one file, machine-mirrored root →
+  `factory/templates/.github/workflows/`, joining `gates.py`/`protocol.py`
+  in `factory_init.MIRRORS`. It can be one file because it names no command
+  of its own: every step calls a `make` target, and each repo's Makefile
+  knows where its tools live (root here, `tools/factory/` there). The old
+  `checks.yml` is gone — it was the check job, now `make check`. A root
+  Makefile is new here, and the template Makefile's "exactly what CI runs"
+  comment is finally true.
 - 2026-07-12: charter-regression deviation — the golden-fixture replays
   (WO-0016, PRD-0001 §Actors) run **on demand** (`python3
   charter_replay.py`) and through a manual `workflow_dispatch` job, never
