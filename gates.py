@@ -8,9 +8,8 @@ Lettered detectors (audit-evals.py style, letters shared with the
 ai-tooling suite where the rule is the same idea):
 
   A WO-CITATION    — every breakdown work-order row cites a PRD id
-  B PR-TRACEABILITY — PR body carries a WO id and Closes #N
-                     (event-payload; SKIP locally; [factory-exempt]
-                     logged)
+  B PR-TRACEABILITY — PR body carries a WO id and a closing keyword
+                     (event-payload; SKIP locally)
   C LINK-INTEGRITY — every PRD-####/ADR-####/WO-#### token resolves;
                      duplicate PRD ids fail
   E SCAFFOLD-SYNC  — factory/manifest.json checksums match the template
@@ -21,9 +20,7 @@ ai-tooling suite where the rule is the same idea):
 `--selftest` runs the checkers against fixture trees and exits nonzero
 on a failing assertion. Both run in CI (checks.yml) on every push/PR.
 """
-import contextlib
 import hashlib
-import io
 import json
 import os
 import re
@@ -36,7 +33,11 @@ from protocol import read_frontmatter
 PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
 ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
 WO_TOKEN = re.compile(r"\bWO-\d{4}\b")
-CLOSES_TOKEN = re.compile(r"\bCloses #\d+\b", re.IGNORECASE)
+# GitHub's issue-closing keywords, with the optional colon form
+# ("Closes: #12") and any run of whitespace before the issue number.
+CLOSES_TOKEN = re.compile(
+    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#\d+\b",
+    re.IGNORECASE)
 
 CONFIG_ROUTES = ("mechanical", "implementation", "architecture_review")
 
@@ -81,22 +82,20 @@ def check_wo_citation(root):
 def check_pr_traceability(root, env=None):
     """B: a PR whose body cites no work order and closes no issue breaks
     the audit trail from code back to scope. Reads the CI event payload;
-    SKIPs silently outside a PR run. [factory-exempt] titles pass but are
-    logged so exemptions stay visible and countable in CI logs."""
+    SKIPs silently outside a PR run. No exemptions."""
     if env is None:
         env = os.environ
     event_path = env.get("GITHUB_EVENT_PATH")
     if not event_path:
         return []
-    event = json.loads(Path(event_path).read_text(encoding="utf-8"))
-    pr = event.get("pull_request")
+    try:
+        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        return [f"B: cannot read GITHUB_EVENT_PATH {event_path}: {err}"]
+    pr = event.get("pull_request") if isinstance(event, dict) else None
     if pr is None:
         return []
-    title = pr.get("title") or ""
     body = pr.get("body") or ""
-    if title.startswith("[factory-exempt]"):
-        print("B: factory-exempt PR (logged)")
-        return []
     problems = []
     if not WO_TOKEN.search(body):
         problems.append("B: PR body cites no work-order id")
@@ -245,10 +244,18 @@ CHECKERS = (check_wo_citation, check_pr_traceability,
             check_link_integrity, check_scaffold_sync, check_config_shape)
 
 
-def run_all(root):
+def run_all(root, env=None):
+    """Run every detector. `env` (default os.environ) is threaded to the
+    checkers that read the process environment, so callers can stay
+    hermetic without mutating global state."""
+    if env is None:
+        env = os.environ
     problems = []
     for checker in CHECKERS:
-        problems.extend(checker(root))
+        if checker is check_pr_traceability:
+            problems.extend(checker(root, env))
+        else:
+            problems.extend(checker(root))
     return problems
 
 
@@ -313,22 +320,15 @@ def selftest():
             encoding="utf-8")
         expect("B", check_pr_traceability(root, env),
                "cites no work-order id", "no Closes #N link")
-        event.write_text(json.dumps({"pull_request": {
-            "title": "[factory-exempt] deps", "body": ""}}),
-            encoding="utf-8")
-        log = io.StringIO()
-        with contextlib.redirect_stdout(log):
-            problems = check_pr_traceability(root, env)
-        expect_clean("B exempt", problems)
-        if "factory-exempt PR (logged)" not in log.getvalue():
-            failures.append("B exempt: expected the logged line,"
-                            f" got {log.getvalue()!r}")
+        expect("B unreadable", check_pr_traceability(
+            root, {"GITHUB_EVENT_PATH": str(root / "missing.json")}),
+            "cannot read GITHUB_EVENT_PATH")
         event.write_text(json.dumps({"ref": "refs/heads/main"}),
                          encoding="utf-8")
         expect_clean("B non-PR", check_pr_traceability(root, env))
         event.write_text(json.dumps({"pull_request": {
             "title": "WO-0003: detector B",
-            "body": "WO-0003 (PRD-0001) Closes #108"}}), encoding="utf-8")
+            "body": "WO-0003 (PRD-0001) Fixes: #108"}}), encoding="utf-8")
         expect_clean("B clean", check_pr_traceability(root, env))
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -345,12 +345,7 @@ def selftest():
             (payload / "factory.json").read_bytes()).hexdigest()
         (root / "factory" / "manifest.json").write_text(json.dumps(
             {"files": {"templates/factory.json": digest}}), encoding="utf-8")
-        saved = os.environ.pop("GITHUB_EVENT_PATH", None)
-        try:
-            expect_clean("clean tree", run_all(root))
-        finally:
-            if saved is not None:
-                os.environ["GITHUB_EVENT_PATH"] = saved
+        expect_clean("clean tree", run_all(root, env={}))
 
     for failure in failures:
         print(failure)

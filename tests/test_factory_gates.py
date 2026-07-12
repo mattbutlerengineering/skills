@@ -4,9 +4,7 @@ Same discipline as test_lint_checkers: every checker is exercised through
 its public interface against a temp fixture tree, and tests assert the
 exact problem strings callers will print.
 """
-import contextlib
 import hashlib
-import io
 import json
 import tempfile
 import unittest
@@ -177,22 +175,65 @@ class TestPrTraceability(unittest.TestCase):
             self.assertEqual(
                 gates.check_pr_traceability(Path(tmp), env=env), [])
 
-    def test_closes_link_is_case_insensitive(self):
+    def test_every_github_closing_keyword_is_accepted(self):
+        forms = ("close #7", "closes #7", "closed #7", "Closes: #7",
+                 "fix #7", "fixes #7", "fixed #7", "Fixes: #7",
+                 "resolve #7", "resolves #7", "resolved #7", "Resolves: #7",
+                 "CLOSES  #7")
         with tempfile.TemporaryDirectory() as tmp:
-            env = self.pr_env(tmp, "WO-0003: detector B",
-                              "WO-0003 per breakdown; closes #7")
-            self.assertEqual(
-                gates.check_pr_traceability(Path(tmp), env=env), [])
+            for form in forms:
+                env = self.pr_env(tmp, "WO-0003: detector B",
+                                  f"WO-0003 per breakdown; {form}")
+                self.assertEqual(
+                    gates.check_pr_traceability(Path(tmp), env=env), [],
+                    f"{form!r} should be accepted as a closing keyword")
 
-    def test_exempt_title_is_clean_but_logged(self):
+    def test_non_closing_keyword_reference_is_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
-            env = self.pr_env(tmp, "[factory-exempt] bump deps", "")
-            log = io.StringIO()
-            with contextlib.redirect_stdout(log):
-                problems = gates.check_pr_traceability(Path(tmp), env=env)
-            self.assertEqual(problems, [])
-            self.assertEqual(log.getvalue(),
-                             "B: factory-exempt PR (logged)\n")
+            for form in ("see #7", "closes issue 7", "refs #7"):
+                env = self.pr_env(tmp, "WO-0003: detector B",
+                                  f"WO-0003 per breakdown; {form}")
+                self.assertEqual(
+                    gates.check_pr_traceability(Path(tmp), env=env),
+                    ["B: PR body has no Closes #N link"],
+                    f"{form!r} is not a closing keyword link")
+
+    def test_unreadable_event_file_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = str(Path(tmp) / "nope" / "event.json")
+            problems = gates.check_pr_traceability(
+                Path(tmp), env={"GITHUB_EVENT_PATH": missing})
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"B: cannot read GITHUB_EVENT_PATH {missing}:"), problems)
+
+    def test_malformed_event_file_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_text("{not json", encoding="utf-8")
+            problems = gates.check_pr_traceability(
+                Path(tmp), env={"GITHUB_EVENT_PATH": str(path)})
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"B: cannot read GITHUB_EVENT_PATH {path}:"), problems)
+
+
+class TestRunAll(unittest.TestCase):
+    def test_run_all_threads_env_to_the_pr_detector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            event = tree.write("event.json", json.dumps(
+                {"pull_request": {"title": "x", "body": "nothing"}}))
+            problems = gates.run_all(
+                tree.root, env={"GITHUB_EVENT_PATH": str(event)})
+            self.assertIn("B: PR body cites no work-order id", problems)
+
+    def test_run_all_with_empty_env_skips_the_pr_detector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.assertEqual(
+                [p for p in gates.run_all(tree.root, env={})
+                 if p.startswith("B:")], [])
 
 
 class TestLockstep(unittest.TestCase):
