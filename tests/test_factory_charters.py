@@ -9,8 +9,10 @@ the dispatch plane (ADR-0032) depends on.
 Charters carry a routing *band* (`route:`), never a model id: the band
 resolves to a model through the per-repo `factory.json` routing table
 (ADR-0034), which is the single routing source of truth (ADR-0004).
-Resolution itself is WO-0007's job — these tests only pin that the
-charters name a real band and assert no model of their own.
+Resolution itself is `assembler.resolve_model` (band -> model id),
+pinned end to end against the real charter files here by WO-0007's
+tests/test_model_routing.py — these tests only pin that the charters
+name a real band and assert no model of their own.
 
 The nine roles are the ones PRD-0001 §Actors names (PM, architect, UX
 designer, planner, engineer, QA, reviewer, support, toolsmith); the
