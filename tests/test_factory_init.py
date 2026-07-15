@@ -22,6 +22,7 @@ EXPECTED_RELS = {
     "templates/.github/workflows/validator.yml",
     "templates/.github/workflows/assembler.yml",
     "templates/.github/workflows/design.yml",
+    "templates/.github/workflows/cost-report.yml",
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
@@ -32,6 +33,7 @@ EXPECTED_RELS = {
     "templates/tools/factory/budget_guard.py",
     "templates/tools/factory/handoff.py",
     "templates/tools/factory/orientation_pack.py",
+    "templates/tools/factory/cost_report.py",
 }
 
 # install_path(rel) for every manifested rel, in target-relative form.
@@ -42,6 +44,8 @@ EXPECTED_INSTALLS = {
         ".github/workflows/assembler.yml",
     "templates/.github/workflows/design.yml":
         ".github/workflows/design.yml",
+    "templates/.github/workflows/cost-report.yml":
+        ".github/workflows/cost-report.yml",
     "templates/Makefile": "Makefile",
     "templates/factory.json": ".github/factory.json",
     "templates/tools/factory/gates.py": "tools/factory/gates.py",
@@ -54,6 +58,7 @@ EXPECTED_INSTALLS = {
     "templates/tools/factory/handoff.py": "tools/factory/handoff.py",
     "templates/tools/factory/orientation_pack.py":
         "tools/factory/orientation_pack.py",
+    "templates/tools/factory/cost_report.py": "tools/factory/cost_report.py",
 }
 
 TAMPER_PROBLEM = (
@@ -85,12 +90,15 @@ def make_factory_repo(root):
     tree.write("handoff.py", "# handoff stub\nHANDOFF = 1\n")
     tree.write("orientation_pack.py",
                "# orientation_pack stub\nORIENTATION_PACK = 1\n")
+    tree.write("cost_report.py", "# cost_report stub\nCOST_REPORT = 1\n")
     tree.write(".github/workflows/validator.yml",
                "name: validator\njobs: {}\n")
     tree.write(".github/workflows/assembler.yml",
                "name: assembler\njobs: {}\n")
     tree.write(".github/workflows/design.yml",
                "name: design\njobs: {}\n")
+    tree.write(".github/workflows/cost-report.yml",
+               "name: cost-report\njobs: {}\n")
     tree.write(".claude-plugin/plugin.json",
                json.dumps({"name": "software-factory", "version": "1.2.3"}))
     tree.write("factory/templates/Makefile",

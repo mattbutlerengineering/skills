@@ -35,9 +35,13 @@ import gates
 # its hard-stop handoff, run ad hoc by a dispatched agent, not by a workflow
 # step of their own. orientation_pack.py is assembler.py's sibling import
 # (WO-0015 — the orientation pack folded into the dispatched prompt),
-# mirrored alongside it for the same reason. validator.yml is path-agnostic
-# (it runs `make` targets), which is what lets it be mirrored byte-for-byte
-# instead of forked per repo.
+# mirrored alongside it for the same reason. cost_report.py is the ADR-0034
+# weekly rollup and monthly circuit breaker (WO-0009): unlike budget_guard,
+# it IS driven by its own scheduled workflow step (`make cost-report` in
+# cost-report.yml), but the same compute/mutate split holds — it computes
+# only, the workflow is the one that mutates (gh issue create, gh variable
+# set). validator.yml is path-agnostic (it runs `make` targets), which is
+# what lets it be mirrored byte-for-byte instead of forked per repo.
 MIRRORS = {
     "gates.py": "tools/factory/gates.py",
     "protocol.py": "tools/factory/protocol.py",
@@ -47,9 +51,11 @@ MIRRORS = {
     "budget_guard.py": "tools/factory/budget_guard.py",
     "handoff.py": "tools/factory/handoff.py",
     "orientation_pack.py": "tools/factory/orientation_pack.py",
+    "cost_report.py": "tools/factory/cost_report.py",
     ".github/workflows/validator.yml": ".github/workflows/validator.yml",
     ".github/workflows/assembler.yml": ".github/workflows/assembler.yml",
     ".github/workflows/design.yml": ".github/workflows/design.yml",
+    ".github/workflows/cost-report.yml": ".github/workflows/cost-report.yml",
 }
 
 # Manifest rel -> install destination; anything unmapped strips "templates/".
