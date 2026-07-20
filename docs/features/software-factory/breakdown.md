@@ -30,11 +30,11 @@ per ADR-0032 after each row exists here first.
 
 ## Milestone B: AFK dispatch (first fully unattended work order lands as a PR)
 
-- [ ] **WO-0005** assembler.yml + claude-code-action + guards — size:L, blocked by: WO-0002, WO-0004 (PRD-0001 §Solution) (tracker: #110)
+- [x] **WO-0005** assembler.yml + claude-code-action + guards — size:L, blocked by: WO-0002, WO-0004 (PRD-0001 §Solution) (tracker: #110)
   - Accept: an owner-applied ready label triggers a run that opens a PR carrying the work-order citation; a non-owner label does not fire; FACTORY_PAUSED and WIP-cap guards hold.
-- [ ] **WO-0006** budget_guard.py + handoff.py + cost ledger — size:M, blocked by: WO-0005 (PRD-0001 §Success criteria) (tracker: #111)
+- [x] **WO-0006** budget_guard.py + handoff.py + cost ledger — size:M, blocked by: WO-0005 (PRD-0001 §Success criteria) (tracker: #111)
   - Accept: a deliberately over-budget run hard-stops, pushes WIP, posts a handoff naming remaining work, and appends a costs.jsonl line.
-- [ ] **WO-0007** model routing table + resolution — size:S, blocked by: WO-0006 (PRD-0001 §Solution) (tracker: #112)
+- [x] **WO-0007** model routing table + resolution — size:S, blocked by: WO-0006 (PRD-0001 §Solution) (tracker: #112)
   - Accept: each type label resolves to a model id from factory config; a unit test covers all three routes.
 - [x] **WO-0015** orientation pack in assembler prompt — size:S, blocked by: WO-0005 (PRD-0001 §User stories) (tracker: #120)
   - Accept: the assembler prompt bundles CONTEXT.md, cited ADRs, and a codegraph summary for the dispatched work order via orientation_pack.py.
@@ -43,13 +43,13 @@ per ADR-0032 after each row exists here first.
 
 - [x] **WO-0008** Detectors D (blueprint-drift) + G (cost-ledger) + I (staleness) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #113)
   - Accept: planted drift, ledger-gap, and stale-doc fixtures are each caught by selftest; the clean tree stays silent.
-- [ ] **WO-0009** cost-report.yml + monthly circuit breaker — size:S, blocked by: WO-0006 (PRD-0001 §User stories) (tracker: #114)
+- [x] **WO-0009** cost-report.yml + monthly circuit breaker — size:S, blocked by: WO-0006 (PRD-0001 §User stories) (tracker: #114)
   - Accept: the weekly report issue posts numbers recomputed from costs.jsonl; a simulated cap breach sets FACTORY_PAUSED.
 - [x] **WO-0010** sweeps.yml + sentry-intake stamping — size:M, blocked by: WO-0002 (PRD-0001 §Success criteria) (tracker: #115)
   - Accept: a sweep files a triaged draft issue with source and type labels applied, no human transcription.
 - [x] **WO-0011** Detector H (evidence honesty) — size:S, blocked by: WO-0003 (PRD-0001 §Success criteria) (tracker: #116)
   - Accept: a verification artifact with neither literal command output nor an explicit NOT-RUN disclaimer fails the build; selftest covers both branches.
-- [ ] **WO-0012** design pipeline: docs/design template + playwright/web-quality job — size:M, blocked by: WO-0004 (PRD-0001 §Solution) (tracker: #117)
+- [x] **WO-0012** design pipeline: docs/design template + playwright/web-quality job — size:M, blocked by: WO-0004 (PRD-0001 §Solution) (tracker: #117)
   - Accept: a PR touching design docs triggers the playwright + web-quality job; the design-system seed ships in the template payload.
 - [ ] **WO-0017** gate-queue daily digest + gate-latency capture — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #122)
   - Accept: a pinned digest lists items waiting at each gate; gate-latency rows land in costs.jsonl.
@@ -191,3 +191,8 @@ ADR-0033, and ADR-0034 (all accepted).
   overwriting a shipped, tested, unrelated feature; the row's accept line
   is amended to match what shipped, same as the labels.json deviation
   above.
+- 2026-07-19: checkbox reconciliation — five orders merged without their rows
+  being ticked (PRs #153, #156, #157, #158, and #152); the boxes above are
+  corrected to match `main`. Git is authoritative for merge state; the
+  checkboxes are the convenience that had drifted, and only the two open orders
+  (trackers #122 and #123) are genuinely unbuilt.

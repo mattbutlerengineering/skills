@@ -56,6 +56,19 @@ manifest), WO-0002 (labels + label-sync + CODEOWNERS template), WO-0003
 else in `breakdown.md` is open. The factory's **knowledge plane is largely
 built; its dispatch plane is not** — nothing executes a work order today.
 
+**Update (2026-07-19).** The snapshot above and the BUILT / PARTIAL / UNBUILT
+labels throughout this artifact are the authoring-time reading and are not
+maintained inline; live build state is the checkboxes in `breakdown.md`. Since
+authoring, the dispatch plane has been built and merged — the assembler and its
+guards (WO-0005), the budget guard, handoff, and cost-ledger writer (WO-0006),
+model routing (WO-0007), the weekly cost report and monthly circuit breaker
+(WO-0009), the orientation pack (WO-0015), and the design pipeline (WO-0012),
+along with detectors D, G, and I (WO-0008) and detector H (WO-0011). Of the
+eighteen orders only WO-0017 and WO-0018 remain unbuilt. What has not happened is
+a live run: no factory dispatch has executed end-to-end, the cost ledger
+(`docs/factory/costs.jsonl`) has never been written, and the PRD success criteria
+are still unproven in production.
+
 ## Approach
 
 The factory is a **layer on top of the existing pipeline, not a replacement for
