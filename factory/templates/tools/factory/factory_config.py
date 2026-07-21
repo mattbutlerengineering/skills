@@ -51,6 +51,13 @@ def resolve_model(band, config):
     return model, []
 
 
+def _positive_number(value):
+    """True for a positive int/float that is not a bool — True is an int
+    in Python, and a bool where a dollar amount belongs is a typo."""
+    return (not isinstance(value, bool)
+            and isinstance(value, (int, float)) and value > 0)
+
+
 def resolve_budget(size, config):
     """(budget_usd, problems): <size>'s dollar ceiling from factory.json's
     budgets_usd table (ADR-0034). A size the table does not cover, or a
@@ -58,20 +65,46 @@ def resolve_budget(size, config):
     budgets = config.get("budgets_usd")
     if not isinstance(budgets, dict):
         return None, ["config: factory.json has no budgets_usd table"]
-    budget = budgets.get(size)
-    if isinstance(budget, bool) or not isinstance(budget, (int, float)) \
-            or budget <= 0:
+    if not _positive_number(budgets.get(size)):
         return None, [
             f"config: factory.json names no positive budget for size {size!r}"]
-    return budget, []
+    return budgets[size], []
 
 
 def resolve_cap(config):
     """(cap_usd, problems): factory.json's monthly_cap_usd — the single
     repo-wide ceiling ADR-0034's circuit breaker checks total spend
     against, same fail-closed shape as resolve_budget's per-size lookup."""
-    cap = config.get("monthly_cap_usd")
-    if isinstance(cap, bool) or not isinstance(cap, (int, float)) \
-            or cap <= 0:
+    if not _positive_number(config.get("monthly_cap_usd")):
         return None, ["config: factory.json names no positive monthly_cap_usd"]
-    return cap, []
+    return config["monthly_cap_usd"], []
+
+
+def config_problems(config):
+    """Field-grammar problems for a parsed factory config, unprefixed.
+
+    The one home for what a valid field VALUE is (twin of
+    cost_ledger.line_problems): the resolve_* accessors above apply the
+    same rules fail-closed per lookup, and gates' detector F prefixes
+    these problems and layers its whole-shape key-set cross-checks
+    (exactly S/M/L, exactly the routed bands) on top. Key-set
+    completeness stays with the gate — a missing entry is a shape
+    concern, not a value one.
+    """
+    problems = []
+    budgets = config.get("budgets_usd")
+    if isinstance(budgets, dict):
+        problems += [f"budgets_usd.{size} must be a positive number"
+                     for size, value in budgets.items()
+                     if not _positive_number(value)]
+    routing = config.get("routing")
+    if isinstance(routing, dict):
+        problems += [f"routing.{route} must name a model id"
+                     for route, model in routing.items()
+                     if not isinstance(model, str) or not model]
+    wip = config.get("wip_cap")
+    if isinstance(wip, bool) or not isinstance(wip, int) or wip < 1:
+        problems.append("wip_cap must be a positive integer")
+    if not _positive_number(config.get("monthly_cap_usd")):
+        problems.append("monthly_cap_usd must be a positive number")
+    return problems

@@ -16,6 +16,7 @@ import gates
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling helper import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from factory_fixture import CONFIG  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 from make_parse import make_recipe  # noqa: E402
 
@@ -544,16 +545,28 @@ class TestManifestFiles(unittest.TestCase):
 
 
 class TestConfigShape(unittest.TestCase):
-    GOOD = {"budgets_usd": {"S": 5, "M": 15, "L": 40},
-            "routing": {"mechanical": "m", "implementation": "i",
-                        "architecture_review": "a"},
-            "wip_cap": 3, "monthly_cap_usd": 300}
-
-    def test_valid_config_is_silent(self):
+    def test_the_shipped_config_is_silent(self):
+        # the config we actually ship, not a synthetic twin — the valid
+        # case doubles as the pin that factory.json stays F-clean
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
-            tree.write("factory/templates/factory.json", json.dumps(self.GOOD))
+            tree.write("factory/templates/factory.json", json.dumps(CONFIG))
             self.assertEqual(gates.check_config_shape(tree.root), [])
+
+    def test_bool_fields_are_flagged(self):
+        """True is an int, so a plain isinstance check waves bools
+        through — while the runtime accessors reject them and hard-stop
+        every dispatch. The gate must be at least as strict."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", json.dumps(
+                dict(CONFIG, budgets_usd={"S": True, "M": 15, "L": 40},
+                     wip_cap=True, monthly_cap_usd=True)))
+            rel = "factory/templates/factory.json"
+            self.assertEqual(gates.check_config_shape(tree.root), [
+                f"F: {rel} budgets_usd.S must be a positive number",
+                f"F: {rel} wip_cap must be a positive integer",
+                f"F: {rel} monthly_cap_usd must be a positive number"])
 
     def test_invalid_fields_are_each_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:

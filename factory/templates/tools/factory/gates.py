@@ -50,6 +50,7 @@ import tempfile
 from pathlib import Path
 
 import cost_ledger
+import factory_config
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
                              breakdown_files, repo_root, run_dirs)
@@ -691,29 +692,19 @@ def check_config_shape(root):
         except json.JSONDecodeError as err:
             problems.append(f"F: {rel} is not valid JSON: {err}")
             continue
+        # key-set completeness is this gate's whole-shape concern; the
+        # field-VALUE grammar is factory_config.config_problems — one
+        # home shared with the runtime accessors, so the gate can never
+        # again pass a value the dispatch path rejects
         budgets = config.get("budgets_usd")
         if not isinstance(budgets, dict) or sorted(budgets) != ["L", "M", "S"]:
             problems.append(f"F: {rel} budgets_usd must map exactly S, M, L")
-        else:
-            for size, value in budgets.items():
-                if not isinstance(value, (int, float)) or value <= 0:
-                    problems.append(
-                        f"F: {rel} budgets_usd.{size} must be a positive number")
         routing = config.get("routing")
         if not isinstance(routing, dict) or sorted(routing) != sorted(CONFIG_ROUTES):
             expected = ", ".join(CONFIG_ROUTES)
             problems.append(f"F: {rel} routing must map exactly {expected}")
-        else:
-            for route, model in routing.items():
-                if not isinstance(model, str) or not model:
-                    problems.append(
-                        f"F: {rel} routing.{route} must name a model id")
-        wip = config.get("wip_cap")
-        if not isinstance(wip, int) or wip < 1:
-            problems.append(f"F: {rel} wip_cap must be a positive integer")
-        cap = config.get("monthly_cap_usd")
-        if not isinstance(cap, (int, float)) or cap <= 0:
-            problems.append(f"F: {rel} monthly_cap_usd must be a positive number")
+        problems += [f"F: {rel} {problem}"
+                     for problem in factory_config.config_problems(config)]
     return problems
 
 

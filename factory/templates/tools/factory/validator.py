@@ -27,7 +27,6 @@ problem strings; the CLI prints them and exits nonzero.
 """
 import json
 import os
-import re
 import sys
 import tempfile
 from pathlib import Path
@@ -37,12 +36,12 @@ import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             repo_root, row_work_order)
+                             repo_root, row_tracker_issue, row_work_order)
 
 LIFECYCLE_PREFIX = "wo:"
-# The row grammar itself is knowledge_plane.ROW/row_work_order — the same
-# rule the assembler dispatches with, so the two cannot diverge.
-TRACKER = re.compile(r"\(tracker:\s*#(\d+)\)")
+# The row and tracker-mirror grammars are knowledge_plane's — the same
+# rules the assembler dispatches with, so the two cannot diverge
+# (ADR-0039).
 REVIEW_MARKER = "<!-- factory-review -->"
 MAX_FINDINGS_CHARS = 12000
 # Who a workflow's own GITHUB_TOKEN posts as. GitHub fixes this — it is a
@@ -67,9 +66,9 @@ def tracker_issue(root, wo):
         for line in lines:
             if row_work_order(line) != wo:
                 continue
-            match = TRACKER.search(line)
-            if match:
-                return int(match.group(1)), []
+            issue = row_tracker_issue(line)
+            if issue is not None:
+                return issue, []
             return None, [f"V: {wo} has no (tracker: #N) mirror on its"
                           " breakdown row"]
     return None, [f"V: {wo} has no breakdown row"]

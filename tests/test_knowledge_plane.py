@@ -98,6 +98,26 @@ class TestRunDirs(unittest.TestCase):
             self.assertEqual(run_dirs(Path(tmp)), [])
 
 
+class TestRowTrackerIssue(unittest.TestCase):
+    """The WO<->issue mirror grammar, one home (ADR-0039): both mirror
+    directions (assembler issue#->row, validator row->issue#) read the
+    row's `(tracker: #N)` through this accessor."""
+
+    def test_a_mirrored_row_yields_its_issue_number(self):
+        row = ("- [ ] **WO-0004** validator.yml — size:M"
+               " (PRD-0001 §Solution) (tracker: #109)")
+        self.assertEqual(knowledge_plane.row_tracker_issue(row), 109)
+
+    def test_an_unmirrored_row_yields_none(self):
+        self.assertIsNone(knowledge_plane.row_tracker_issue(
+            "- [ ] WO-0008 unmirrored row (PRD-0001 §Solution)"))
+
+    def test_a_non_row_line_yields_none_even_with_a_marker(self):
+        # a Notes bullet is prose, not a row — the mirror never reads it
+        self.assertIsNone(knowledge_plane.row_tracker_issue(
+            "2026-07-12: a note naming WO-0005 (tracker: #110)"))
+
+
 class TestBreakdownFiles(unittest.TestCase):
     def test_yields_each_runs_breakdown_with_its_lines(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -35,7 +35,6 @@ import argparse
 import datetime
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -328,9 +327,7 @@ def claude_runner(root, model, timeout):
                 encoding="utf-8"))
         cmd = ["claude", "-p", prompt, "--output-format", "stream-json",
                "--verbose", "--model", model, "--setting-sources", "project"]
-        # CLAUDECODE is stripped so a replay can nest inside a session; the
-        # guard exists for interactive terminal conflicts.
-        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        env = cli.child_env()
         try:
             proc = subprocess.run(cmd, cwd=scratch, env=env, timeout=timeout,
                                   capture_output=True, text=True)

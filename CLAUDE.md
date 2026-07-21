@@ -10,7 +10,8 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 - `python3 -m unittest discover tests`
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
 - `python3 gates.py && python3 gates.py --selftest` — factory drift
-  detectors (A/C/D/E/F/G/H/I), output matching `gates: 0 problem(s)`
+  detectors (A–I; B skips locally without a PR event payload, but the
+  selftest exercises it), output matching `gates: 0 problem(s)`
 
 On demand only (real model runs, costs money, never CI; both need the
 `claude` CLI):

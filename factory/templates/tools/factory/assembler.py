@@ -31,22 +31,20 @@ Two invariants here are security properties, not conveniences (ADR-0032):
 """
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
 import factory_config
 import orientation_pack
-from knowledge_plane import (ROW, breakdown_files, repo_root,
-                             row_work_order)
+from knowledge_plane import (breakdown_files, repo_root,
+                             row_tracker_issue, row_work_order)
 from protocol import read_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
 
-# The row grammar itself is knowledge_plane.ROW/row_work_order — one rule
+# The row and tracker-mirror grammars are knowledge_plane's — one rule
 # for the whole dispatch plane (validator and orientation_pack read the
-# same one).
-TRACKER = re.compile(r"\(tracker:\s*#(\d+)\)")
+# same ones; ADR-0039).
 
 # Which charter owns a ready work order, keyed on its type: label. A work
 # order reaching wo:ready-for-agent is implementation work; the SWE owns
@@ -104,10 +102,7 @@ def resolve_row(root, issue_number):
     ran ahead of the breakdown, which ADR-0032 forbids) — say so."""
     for _, lines in breakdown_files(root):
         for line in lines:
-            if not ROW.match(line):
-                continue
-            match = TRACKER.search(line)
-            if not match or int(match.group(1)) != issue_number:
+            if row_tracker_issue(line) != issue_number:
                 continue
             wo = row_work_order(line)
             if not wo:

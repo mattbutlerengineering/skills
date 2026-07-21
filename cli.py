@@ -10,11 +10,21 @@ port (gh_runner returns stdout, git_runner the CompletedProcess) and its
 own problem-string label. Tests inject a fake runner so they never touch
 a real CLI.
 """
+import os
 import subprocess
 
 # A failed or missing binary raises one of these; callers turn that into
 # a label-prefixed problem string instead of a traceback.
 CLI_FAILURES = (subprocess.CalledProcessError, OSError)
+
+
+def child_env():
+    """The environment for a harness child process: the caller's environ
+    minus CLAUDECODE, so an eval run or charter replay can nest
+    `claude -p` inside a Claude Code session — the guard exists for
+    interactive terminal conflicts, not child runs. Returns a copy;
+    mutating it never touches os.environ."""
+    return {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
 
 def detail(err):

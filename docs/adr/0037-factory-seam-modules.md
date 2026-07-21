@@ -1,6 +1,6 @@
 # Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger
 
-- Status: accepted
+- Status: amended by ADR-0039
 - Date: 2026-07-20
 
 Amends the "two seam modules" convention (ADR-0021 protocol.py, ADR-0022

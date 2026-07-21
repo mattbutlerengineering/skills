@@ -4,8 +4,10 @@ suites (label_sync, validator, budget_guard) keep testing their
 composition — problem-string labels around a failing runner — without
 each re-proving what detail() does.
 """
+import os
 import subprocess
 import unittest
+from unittest import mock
 
 import cli
 
@@ -34,6 +36,20 @@ class TestFailureVocabulary(unittest.TestCase):
                                    cli.CLI_FAILURES))
         self.assertTrue(issubclass(FileNotFoundError, cli.CLI_FAILURES))
         self.assertFalse(issubclass(ValueError, cli.CLI_FAILURES))
+
+
+class TestChildEnv(unittest.TestCase):
+    def test_strips_the_nesting_guard_and_keeps_the_rest(self):
+        with mock.patch.dict(os.environ, {"CLAUDECODE": "1",
+                                          "KEEP_ME": "x"}):
+            env = cli.child_env()
+        self.assertNotIn("CLAUDECODE", env)
+        self.assertEqual(env["KEEP_ME"], "x")
+
+    def test_returns_a_copy_not_the_environ(self):
+        env = cli.child_env()
+        env["MUTATED"] = "locally"
+        self.assertNotIn("MUTATED", os.environ)
 
 
 class TestVersion(unittest.TestCase):

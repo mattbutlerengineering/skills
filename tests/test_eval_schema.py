@@ -373,6 +373,34 @@ class TestResultsPath(unittest.TestCase):
                                      harness="opencode")
 
 
+class TestResultsGrammarRoundTrip(unittest.TestCase):
+    """The '-N starts at 2' collision rule is encoded twice inside this
+    module — the _SUFFIX regex (validator side) and the results_path
+    counter (generator side). This round-trip pins them together: every
+    path the generator mints must be a link the validator accepts."""
+
+    def setUp(self):
+        self.results = Path(tempfile.mkdtemp(prefix="results-roundtrip-"))
+        self.addCleanup(shutil.rmtree, self.results)
+
+    def link(self, path):
+        return f"evals/results/{path.relative_to(self.results).as_posix()}"
+
+    def test_generated_trigger_paths_validate_through_collisions(self):
+        for _ in range(3):  # unsuffixed, -2, -3
+            path = eval_schema.results_path(self.results, "trigger",
+                                            "2026-07-21")
+            path.write_text("{}", encoding="utf-8")
+            self.assertTrue(eval_schema.valid_results_link(self.link(path)),
+                            self.link(path))
+
+    def test_a_generated_output_grading_validates(self):
+        path = eval_schema.results_path(self.results, "output",
+                                        "2026-07-21", slug="idea")
+        link = self.link(path) + "/grading.json"
+        self.assertTrue(eval_schema.valid_results_link(link), link)
+
+
 class TestValidResultsLink(unittest.TestCase):
     """LEDGER evidence links must follow the results naming grammar, not
     merely sit under evals/results/ (the lint validates through this)."""

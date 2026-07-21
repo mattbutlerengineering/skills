@@ -302,9 +302,7 @@ def run_single_query(query, descriptions, timeout, model, isolate,
     project_dir, cmd = adapter.invocation(query, descriptions, run_id,
                                           model, isolate)
 
-    # Remove CLAUDECODE env var to allow nesting claude -p inside a
-    # Claude Code session; the guard is for interactive terminal conflicts.
-    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    env = cli.child_env()
 
     process = None
     try:

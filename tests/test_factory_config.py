@@ -53,6 +53,41 @@ class TestLoad(unittest.TestCase):
                 "config: .github/factory.json is not valid JSON:"), problems)
 
 
+class TestConfigProblems(unittest.TestCase):
+    """The whole-config field grammar, owned here (twin of
+    cost_ledger.line_problems): detector F prefixes these and layers its
+    key-set cross-checks on top, so gate and runtime accessors can never
+    diverge on what a valid field is."""
+
+    def test_the_shipped_config_is_clean(self):
+        self.assertEqual(factory_config.config_problems(CONFIG), [])
+
+    def test_a_bool_budget_is_flagged(self):
+        # True is an int in Python; the accessors reject it, so the
+        # grammar must too — this was detector F's hole.
+        config = dict(CONFIG, budgets_usd={"S": True, "M": 15, "L": 40})
+        self.assertEqual(factory_config.config_problems(config),
+                         ["budgets_usd.S must be a positive number"])
+
+    def test_a_bool_cap_and_bool_wip_cap_are_flagged(self):
+        config = dict(CONFIG, wip_cap=True, monthly_cap_usd=True)
+        self.assertEqual(factory_config.config_problems(config),
+                         ["wip_cap must be a positive integer",
+                          "monthly_cap_usd must be a positive number"])
+
+    def test_an_empty_routing_model_is_flagged(self):
+        routing = dict(CONFIG["routing"], mechanical="")
+        config = dict(CONFIG, routing=routing)
+        self.assertEqual(factory_config.config_problems(config),
+                         ["routing.mechanical must name a model id"])
+
+    def test_key_set_completeness_stays_with_detector_f(self):
+        # a missing size/band is the gate's whole-shape concern, not
+        # field grammar — the accessors fail closed per lookup instead
+        config = dict(CONFIG, budgets_usd={"S": 5})
+        self.assertEqual(factory_config.config_problems(config), [])
+
+
 class TestResolveModel(unittest.TestCase):
     """band -> model through the repo's factory.json routing table, the
     single routing source of truth (ADR-0004/0034)."""

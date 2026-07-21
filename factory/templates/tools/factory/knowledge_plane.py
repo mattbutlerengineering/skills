@@ -49,6 +49,24 @@ def row_work_order(line):
     return tokens[0] if tokens else None
 
 
+# The dispatch mirror's marker on a breakdown row (ADR-0032: the row,
+# never the issue, is authoritative). One grammar for both mirror
+# directions (ADR-0039): the assembler resolves issue# -> row, the
+# validator row -> issue#, each through the accessor below.
+TRACKER = re.compile(r"\(tracker:\s*#(\d+)\)")
+
+
+def row_tracker_issue(line):
+    """The issue number a breakdown row mirrors to — its `(tracker: #N)`
+    marker — or None when the line is not a checkbox row or carries no
+    marker. Sibling of row_work_order: the mirror grammar lives here,
+    each caller keeps its own lookup direction."""
+    if not ROW.match(line):
+        return None
+    match = TRACKER.search(line)
+    return int(match.group(1)) if match else None
+
+
 def run_dirs(root):
     """Candidate run directories per the pipeline protocol."""
     dirs = [root / "docs"]
