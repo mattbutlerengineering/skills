@@ -32,14 +32,18 @@ permissions:
 jobs:
   dispatch:
     # The whole gate, physical not conventional (ADR-0032): the applied label
-    # is wo:ready-for-agent AND the labeler is the repo owner. A label from
+    # is wo:ready-for-agent AND the labeler is the repo owner AND the monthly
+    # circuit breaker has not tripped (cost-report.yml sets FACTORY_PAUSED on
+    # a cap breach — ADR-0034; this term is its one reader). A label from
     # anyone or anything else is inert — the job simply never runs.
     if: >-
       github.event.label.name == 'wo:ready-for-agent'
       && github.event.sender.login == github.repository_owner
+      && vars.FACTORY_PAUSED != 'true'
     runs-on: ubuntu-latest
-    # The chartered agent branches, pushes, and opens a PR; the human still
-    # merges (gate 3, ADR-0033). No merge permission is granted here.
+    # The chartered agent branches, pushes, and opens a PR; it never merges
+    # its own PR — gate 3 requires an independent, non-authoring reviewer
+    # (ADR-0033, amended by ADR-0036). No merge permission is granted here.
     permissions:
       contents: write
       pull-requests: write

@@ -7,7 +7,11 @@ one that supersedes it and update the old one's status line.
 
 Statuses: **accepted** (explicitly confirmed), **provisional** (recommended
 answer adopted while awaiting confirmation — pivot freely),
-**superseded by ADR-NNNN**.
+**superseded by ADR-NNNN** (fully retired — citing it is drift),
+**superseded in part by ADR-NNNN**, and **amended by ADR-NNNN** (both
+partial: the decision stays live and citable). The machine-readable
+authority is `ADR_STATUS` in `gates.py`, which also allows a
+parenthesized annotation after any head.
 
 ADRs 0001–0018 were migrated from the former `DESIGN.md`, which captured the
 initial design interview (2026-07-01). See [CONTEXT.md](../../CONTEXT.md) for

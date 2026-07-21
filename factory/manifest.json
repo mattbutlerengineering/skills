@@ -4,7 +4,7 @@
   "files": {
     "templates/.github/CODEOWNERS": "419b0f05d7f1ee6e1660b1017e7528b76a3ca13f5e48ae8885cfa76070e321e4",
     "templates/.github/labels.json": "b243dba1ded4003aeda499a0b95357c54179cb9b112af0781a2f6078b6bdb2dd",
-    "templates/.github/workflows/assembler.yml": "183ad9dd1fb98c3d30aa35c75864d8530decd50a021a995e0e25ed35d61181d0",
+    "templates/.github/workflows/assembler.yml": "4ec254303c2ce405c0218a69662dece45d15bc098989b145e96babd93f3de2b0",
     "templates/.github/workflows/cost-report.yml": "80832e94a4ae6c15a0ef3b0962ec5cd924482e7c7cab7b6bf9567468d1c0cd97",
     "templates/.github/workflows/design.yml": "82ec78469c569c6659fb67e672d13fbd0bec41b4c18581cf3cfa5db484f23723",
     "templates/.github/workflows/validator.yml": "8cda6dec96132d6da94ebe2c0bb28f235af610534a6f12df37edd2dc06ed3f85",
@@ -12,18 +12,18 @@
     "templates/docs/design/TEMPLATE.md": "e1f91e3f34bb0f742ca40e2390e5dfbeaaca585eddb69437b9a71b56708500a0",
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/assembler.py": "26ef15533f2663c1cc211ab4cc715d753fbf725c1984c11143272d465c075e0d",
+    "templates/tools/factory/assembler.py": "6c85c234e925f557d2c088e933cd0e86bd36773eb06b57bca35753a475535090",
     "templates/tools/factory/budget_guard.py": "6d489221632d0d8d0eac1f193b2b46b501b7fd0035703286b0d06aca01855d61",
-    "templates/tools/factory/cli.py": "81834bca255f46fd430ce5677dbc3fe2c4859c06ce0c5f57ddb39e3a5f51f607",
+    "templates/tools/factory/cli.py": "56e15774cc7c7bcfe401d5e42bc33502f99b0b4c46aa6c01bdb27c9ffd543f86",
     "templates/tools/factory/cost_ledger.py": "bd6e7ebe7519803e797caf69240e10d036bf9c7384939d50b493b454147226df",
     "templates/tools/factory/cost_report.py": "a16c77e5f316a0a788de56aad348e142b21b0d7bccdb41b81aef514d10b97428",
     "templates/tools/factory/factory_config.py": "e2fb8ef27348521a9f43952e93dc660719956b81303c889eb62083f6a7748f77",
-    "templates/tools/factory/gates.py": "c7919f5b16e14a6f5a8317485c0a7f8c076fa4fb95c8871bce455e01b2c917a6",
-    "templates/tools/factory/handoff.py": "2c430edc96092233bbec86181c3aa2e96a35b2662dd6bad8add11d11c73ecd9d",
-    "templates/tools/factory/knowledge_plane.py": "bb893c8da8a6e7322cd19a1845cc480e546514b2e97b8badb98e6b8c3de71858",
+    "templates/tools/factory/gates.py": "c23471bcd2b2952152359056ce65e11d5b021cace1160b118d52e22989dce6ab",
+    "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
+    "templates/tools/factory/knowledge_plane.py": "3918b16a67f67b6db5d7f558cba45f9e739680b19cd7db62db05eba76aaff9ef",
     "templates/tools/factory/label_sync.py": "556a37c73981496ad44adc437a2f7867a47d9d71ea39291c65ae34c169c7a242",
-    "templates/tools/factory/orientation_pack.py": "a6546a3c241c327349d5c7d2bd9b03ae0dc446984a791db326cfa582ca2849e9",
+    "templates/tools/factory/orientation_pack.py": "5c6b70f047641f92f9ddaf4ea0df9e9fac4fb435c0f501211395ee22000527ec",
     "templates/tools/factory/protocol.py": "bf64826b09ed0aef3f5a040cc36f07c92ec8916ae968ce353b68dc4aa253ce12",
-    "templates/tools/factory/validator.py": "dbe842611115b607e7c2d1155c54cc166653868db9bdbfd3e3a76164d4686260"
+    "templates/tools/factory/validator.py": "f7fc8e7bb11de91728df686ae355f886724ee3de3d4ba8d3f5a35113829578b8"
   }
 }

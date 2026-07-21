@@ -52,7 +52,7 @@ from pathlib import Path
 import cost_ledger
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             repo_root, run_dirs)
+                             breakdown_files, repo_root, run_dirs)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
@@ -267,12 +267,8 @@ def _scannable_files(root):
 def check_wo_citation(root):
     """A: a work-order row that cites no PRD section is untraceable scope."""
     problems = []
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if not breakdown.is_file():
-            continue
-        for lineno, line in enumerate(
-                breakdown.read_text(encoding="utf-8").splitlines(), 1):
+    for breakdown, lines in breakdown_files(root):
+        for lineno, line in enumerate(lines, 1):
             wo = WO_TOKEN.search(line)
             if wo and not PRD_TOKEN.search(line):
                 rel = breakdown.relative_to(root)
@@ -337,11 +333,9 @@ def collect_prd_ids(root):
 def collect_wo_rows(root):
     """Set of WO tokens that appear in any breakdown.md row."""
     rows = set()
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if breakdown.is_file():
-            rows.update(WO_TOKEN.findall(
-                breakdown.read_text(encoding="utf-8")))
+    for _, lines in breakdown_files(root):
+        for line in lines:
+            rows.update(WO_TOKEN.findall(line))
     return rows
 
 
@@ -570,13 +564,9 @@ def merged_wo_rows(root):
     """(breakdown path, lineno, WO token) for every checked breakdown row —
     the artifact-side record that a work order merged (ADR-0004)."""
     rows = []
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if not breakdown.is_file():
-            continue
+    for breakdown, lines in breakdown_files(root):
         rel = breakdown.relative_to(root)
-        for lineno, line in enumerate(
-                breakdown.read_text(encoding="utf-8").splitlines(), 1):
+        for lineno, line in enumerate(lines, 1):
             wo = WO_TOKEN.search(line)
             if MERGED_ROW.match(line) and wo:
                 rows.append((rel, lineno, wo.group(0)))

@@ -148,6 +148,24 @@ class TestAgentStubs(unittest.TestCase):
                 fields = protocol.read_frontmatter(agent_path(role)) or {}
                 self.assertNotIn("model", fields)
 
+    def test_the_index_band_column_matches_each_stubs_route(self):
+        """The CHARTERS.md Band column restates the stub's route for the
+        human reader — pinned to the frontmatter so it cannot drift into
+        a third, silently divergent band source."""
+        text = CHARTERS_INDEX.read_text(encoding="utf-8")
+        for role in ROLES:
+            with self.subTest(role=role):
+                row = next((line for line in text.splitlines()
+                            if f"factory/agents/factory-{role}.md" in line),
+                           None)
+                self.assertIsNotNone(row, "CHARTERS.md has no table row"
+                                          f" naming factory-{role}")
+                band = row.rstrip().rstrip("|").rsplit("|", 1)[-1].strip()
+                fields = protocol.read_frontmatter(agent_path(role)) or {}
+                self.assertEqual(band.strip("`"), fields.get("route"),
+                                 f"CHARTERS.md Band for {role} disagrees"
+                                 " with the stub's route")
+
 
 class TestCharterSkills(unittest.TestCase):
     def test_skill_file_exists(self):

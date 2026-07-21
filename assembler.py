@@ -37,7 +37,8 @@ from pathlib import Path
 
 import factory_config
 import orientation_pack
-from knowledge_plane import ROW, repo_root, row_work_order, run_dirs
+from knowledge_plane import (ROW, breakdown_files, repo_root,
+                             row_work_order)
 from protocol import read_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
@@ -101,11 +102,8 @@ def resolve_row(root, issue_number):
     plane, not the issue, decides which work order an issue carries. A
     ready-for-agent issue with no row is a real misconfiguration (the mirror
     ran ahead of the breakdown, which ADR-0032 forbids) — say so."""
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if not breakdown.is_file():
-            continue
-        for line in breakdown.read_text(encoding="utf-8").splitlines():
+    for _, lines in breakdown_files(root):
+        for line in lines:
             if not ROW.match(line):
                 continue
             match = TRACKER.search(line)

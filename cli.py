@@ -25,6 +25,21 @@ def detail(err):
     return stderr.splitlines()[-1] if stderr else str(err)
 
 
+def version(binary):
+    """The binary's --version line, or None when the probe fails.
+
+    Provenance metadata for results snapshots, not a dependency check —
+    a missing or hanging binary must never turn the probe into a crash,
+    so failure is None rather than a CLI_FAILURES raise.
+    """
+    try:
+        proc = subprocess.run([binary, "--version"], capture_output=True,
+                              text=True, timeout=15)
+        return proc.stdout.strip() or None
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
 def runner(binary):
     """A run(args) callable shelling out to `binary`, returning the
     CompletedProcess. A failed or missing binary raises CLI_FAILURES —

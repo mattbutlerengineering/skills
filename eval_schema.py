@@ -82,7 +82,7 @@ def results_path(results_dir, kind, date, slug=None, harness=None):
     return path
 
 
-def _items(data, key, label):
+def entries(data, key, label):
     """(list-of-dict entries, shape problems) for the collection data[key].
 
     An absent key is legitimate: empty list, no problem (the coverage
@@ -90,6 +90,8 @@ def _items(data, key, label):
     null — is malformed and yields one problem; non-dict entries are
     dropped with a problem each, so no downstream .get() ever hits a
     non-dict. Validators return problem strings; they never raise.
+    Public: every case-set validator (routing, output, and the charter
+    replay's) opens its collection through this one envelope.
     """
     if key not in data:
         return [], []
@@ -99,6 +101,37 @@ def _items(data, key, label):
     problems = [f"{label} {key} entry #{n} is not an object"
                 for n, e in enumerate(raw) if not isinstance(e, dict)]
     return [e for e in raw if isinstance(e, dict)], problems
+
+
+def duplicate_id_problems(items, label, noun="case"):
+    """One "{label} has duplicate <noun> id" problem per repeated id.
+
+    The sort key puts None-id duplicates after string ids and orders the
+    rest by string form, so mixed-type ids never hit an unorderable
+    comparison and problem order stays deterministic.
+    """
+    ids = [e.get("id") for e in items]
+    return [f"{label} has duplicate {noun} id {i!r}"
+            for i in sorted({i for i in ids if ids.count(i) > 1},
+                            key=lambda i: (i is None, str(i)))]
+
+
+def load_case_set(path, label, validate):
+    """Read a JSON case set, validate, return (cases, problems).
+
+    validate is a callable data -> problem list. Any problem means the
+    set is unusable: cases is [] so callers cannot half-run an invalid
+    set, and problems carries the diagnostics. The routing loader below
+    and the charter replay's are thin callers.
+    """
+    if not path.is_file():
+        return [], [f"missing {label}"]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as err:
+        return [], [f"{label} is not valid JSON: {err}"]
+    problems = validate(data)
+    return ([], problems) if problems else (data.get("cases", []), [])
 
 
 def _output_field_missing(record, field):
@@ -117,7 +150,7 @@ def fixture_refs(data):
     key — the lint checks each ref's existence, a filesystem fact that
     stays with it. Records without a fixture are skipped (validate_output
     owns that complaint), and malformed shapes yield nothing rather than
-    raising, mirroring _items.
+    raising, mirroring entries.
     """
     evals = data.get("evals")
     if not isinstance(evals, list):
@@ -133,16 +166,13 @@ def validate_output(data, slug, label):
     stay with the caller. label prefixes every problem, mirroring
     validate().
     """
-    evals, shape = _items(data, "evals", label)
-    ids = [e.get("id") for e in evals]
+    evals, shape = entries(data, "evals", label)
     return (
         shape
         + ([f"{label} skill_name is {data.get('skill_name')!r}, "
             f"expected {slug!r}"]
            if data.get("skill_name") != slug else [])
-        + [f"{label} has duplicate eval id {i!r}"
-           for i in sorted({i for i in ids if ids.count(i) > 1},
-                           key=lambda i: (i is None, str(i)))]
+        + duplicate_id_problems(evals, label, "eval")
         + [f"{label} eval {e.get('id')!r} missing field: {field}"
            for e in evals for field in OUTPUT_FIELDS
            if _output_field_missing(e, field)]
@@ -158,14 +188,11 @@ def validate(data, skills, label):
     """
     if "version" not in data:
         return [f"{label} missing 'version' field"]
-    cases, shape = _items(data, "cases", label)
+    cases, shape = entries(data, "cases", label)
 
-    ids = [c.get("id") for c in cases]
     problems = (
         shape
-        + [f"{label} has duplicate case id {i!r}"
-           for i in sorted({i for i in ids if ids.count(i) > 1},
-                           key=lambda i: (i is None, str(i)))]
+        + duplicate_id_problems(cases, label)
         + [f"{label} case {c.get('id')!r} has invalid "
            f"expected {c.get('expected')!r}"
            for c in cases
@@ -195,16 +222,6 @@ def validate(data, skills, label):
 
 
 def load(path, skills, label):
-    """Read and validate an eval set; return (cases, problems).
-
-    Any problem means the set is unusable: cases is [] so callers cannot
-    half-run an invalid set, and problems carries the diagnostics.
-    """
-    if not path.is_file():
-        return [], [f"missing {label}"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
-        return [], [f"{label} is not valid JSON: {err}"]
-    problems = validate(data, skills, label)
-    return ([], problems) if problems else (data.get("cases", []), [])
+    """Read and validate the routing eval set; return (cases, problems)."""
+    return load_case_set(path, label,
+                         lambda data: validate(data, skills, label))

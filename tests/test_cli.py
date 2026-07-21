@@ -36,6 +36,16 @@ class TestFailureVocabulary(unittest.TestCase):
         self.assertFalse(issubclass(ValueError, cli.CLI_FAILURES))
 
 
+class TestVersion(unittest.TestCase):
+    def test_a_missing_binary_probes_to_none(self):
+        self.assertIsNone(cli.version("definitely-not-a-binary-xyzzy"))
+
+    def test_a_present_binary_reports_its_version_line(self):
+        # echo prints its argv back, so the probe sees non-empty stdout;
+        # asserting truthiness keeps this portable across BSD/GNU echo.
+        self.assertTrue(cli.version("echo"))
+
+
 class TestRunner(unittest.TestCase):
     def test_a_missing_binary_raises_into_the_vocabulary(self):
         run = cli.runner("definitely-not-a-binary-xyzzy")

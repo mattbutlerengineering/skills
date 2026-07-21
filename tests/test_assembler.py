@@ -22,11 +22,10 @@ from pathlib import Path
 import assembler
 
 # discover puts tests/ on sys.path; selective package-style runs need it
-# added for the sibling fixture_tree import
+# added for the sibling factory_fixture import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fixture_tree import FixtureTree as BaseFixtureTree  # noqa: E402
 import cli_contract  # noqa: E402
-from factory_fixture import CONFIG as CONFIG_DICT  # noqa: E402
+from factory_fixture import FixtureTree as FactoryFixtureTree  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -58,21 +57,20 @@ SWE_STUB = (
     "\nFirst, read the charter.\n"
 )
 
-CONFIG = json.dumps(CONFIG_DICT)
-
 OWNER = "mattbutlerengineering"
 
 
-class FixtureTree(BaseFixtureTree):
+class FixtureTree(FactoryFixtureTree):
     def factory(self):
         """A tree wired like the real repo: a breakdown, the SWE and support
-        stubs, and a factory.json in the template payload."""
+        stubs, and the canonical factory.json in the template payload
+        (written by the factory_fixture base)."""
+        super().factory()
         self.write("docs/features/demo/breakdown.md", BREAKDOWN)
         self.write("factory/agents/factory-swe.md", SWE_STUB)
         self.write("factory/agents/factory-support.md",
                    SWE_STUB.replace("factory-swe", "factory-support")
                    .replace("route: implementation", "route: mechanical"))
-        self.write("factory/templates/factory.json", CONFIG)
         return self
 
 

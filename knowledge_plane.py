@@ -59,6 +59,22 @@ def run_dirs(root):
     return [d for d in dirs if d.is_dir()]
 
 
+def breakdown_files(root):
+    """(breakdown path, its lines) per run that has a breakdown.md.
+
+    The layout walk in one place: every dispatch-plane reader of
+    work-order rows — the assembler, the validator, orientation_pack,
+    and gates' detectors — opens the same files in the same run order.
+    Row and slice grammar stay with each caller (ADR-0037: this
+    concentrates layout knowledge, not row-reading policy).
+    """
+    for run in run_dirs(root):
+        breakdown = run / "breakdown.md"
+        if breakdown.is_file():
+            yield breakdown, breakdown.read_text(
+                encoding="utf-8").splitlines()
+
+
 def repo_root():
     """Nearest ancestor containing .git (dir or worktree file): correct at
     the factory repo root and stamped at tools/factory/ in a product repo."""

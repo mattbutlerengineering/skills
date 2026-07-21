@@ -170,6 +170,25 @@ class TestUpdateManifest(unittest.TestCase):
                 (tree.root / "factory/templates/tools").exists())
 
 
+class TestRealTreeMirrors(unittest.TestCase):
+    """Detector E diffs the manifest against the PAYLOAD only, so a root
+    tool edited without `python3 factory_init.py update-manifest` leaves
+    a stale payload self-consistent with its stale checksum: build green,
+    stamped repos run old code. This pins payload <-> ROOT in this
+    checkout, closing that direction in CI."""
+
+    REPO = Path(__file__).resolve().parents[1]
+
+    def test_every_mirrored_root_file_matches_its_payload_copy(self):
+        for name, rel in factory_init.MIRRORS.items():
+            with self.subTest(mirror=name):
+                self.assertEqual(
+                    (self.REPO / name).read_bytes(),
+                    (self.REPO / "factory" / "templates" / rel).read_bytes(),
+                    f"{name} differs from factory/templates/{rel} — run"
+                    " python3 factory_init.py update-manifest")
+
+
 class TestInstallPath(unittest.TestCase):
     def test_factory_json_installs_under_dot_github(self):
         self.assertEqual(factory_init.install_path("templates/factory.json"),

@@ -39,6 +39,7 @@ from collections import Counter, namedtuple
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
+import cli
 import eval_schema
 from protocol import ALL_SKILLS, read_frontmatter
 
@@ -411,15 +412,6 @@ def run_eval(cases, descriptions, workers, runs_per_query, timeout,
     return {"results": results, **summarize(results)}
 
 
-def cli_version(harness="claude"):
-    try:
-        proc = subprocess.run([harness, "--version"], capture_output=True,
-                              text=True, timeout=15)
-        return proc.stdout.strip() or None
-    except (OSError, subprocess.TimeoutExpired):
-        return None
-
-
 def record(output, results_dir):
     """Write a dated results file; eval_schema owns the naming grammar."""
     results_dir.mkdir(parents=True, exist_ok=True)
@@ -491,7 +483,7 @@ def main():
         "date": datetime.date.today().isoformat(),
         "harness": args.harness,
         "model": args.model,
-        "cli_version": cli_version(args.harness),
+        "cli_version": cli.version(args.harness),
         "runs_per_query": args.runs_per_query,
         "threshold": args.threshold,
         "isolated_settings": isolate,

@@ -34,8 +34,10 @@ from pathlib import Path
 
 import gates
 import label_sync
-from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, repo_root,
-                             row_work_order, run_dirs)
+from cli import CLI_FAILURES as GH_FAILURES
+from cli import detail as gh_detail
+from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
+                             repo_root, row_work_order)
 
 LIFECYCLE_PREFIX = "wo:"
 # The row grammar itself is knowledge_plane.ROW/row_work_order — the same
@@ -61,11 +63,8 @@ def tracker_issue(root, wo):
     """(the work order's mirrored issue number, problems), read from its
     breakdown row — ADR-0032: the dispatch mirror is one-way, so the
     knowledge plane, not the issue, says which issue a work order owns."""
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if not breakdown.is_file():
-            continue
-        for line in breakdown.read_text(encoding="utf-8").splitlines():
+    for _, lines in breakdown_files(root):
+        for line in lines:
             if row_work_order(line) != wo:
                 continue
             match = TRACKER.search(line)
@@ -123,10 +122,10 @@ def reviewer_login(env, run):
         return GITHUB_TOKEN_LOGIN, []
     try:
         login = run(["api", "user", "--jq", ".login"]).strip()
-    except label_sync.GH_FAILURES as err:
+    except GH_FAILURES as err:
         return None, ["V: cannot resolve the reviewing identity from"
                       " FACTORY_REVIEW_TOKEN (gh api user failed:"
-                      f" {label_sync.gh_detail(err)}) — refusing to post"]
+                      f" {gh_detail(err)}) — refusing to post"]
     if not login:
         return None, ["V: FACTORY_REVIEW_TOKEN resolves to no login —"
                       " refusing to post"]
@@ -247,10 +246,10 @@ def post_review(number, body, run):
         try:
             try:
                 run([*args[:3], "--edit-last", *args[3:]])
-            except label_sync.GH_FAILURES:
+            except GH_FAILURES:
                 run(args)
-        except label_sync.GH_FAILURES as err:
-            return [f"V: gh pr comment failed: {label_sync.gh_detail(err)}"]
+        except GH_FAILURES as err:
+            return [f"V: gh pr comment failed: {gh_detail(err)}"]
     return []
 
 
@@ -301,9 +300,9 @@ def run_lifecycle(root, label, env, run=label_sync.gh_runner):
     try:
         current = json.loads(
             run(["issue", "view", str(number), "--json", "labels"]))
-    except label_sync.GH_FAILURES as err:
+    except GH_FAILURES as err:
         return [f"V: gh issue view {number} failed:"
-                f" {label_sync.gh_detail(err)}"]
+                f" {gh_detail(err)}"]
     names = [entry.get("name") for entry in current.get("labels", [])]
     add, remove = transition(names, lifecycle, label)
     if not add and not remove:
@@ -315,9 +314,9 @@ def run_lifecycle(root, label, env, run=label_sync.gh_runner):
         args += ["--remove-label", name]
     try:
         run(args)
-    except label_sync.GH_FAILURES as err:
+    except GH_FAILURES as err:
         return [f"V: gh issue edit {number} failed:"
-                f" {label_sync.gh_detail(err)}"]
+                f" {gh_detail(err)}"]
     return []
 
 

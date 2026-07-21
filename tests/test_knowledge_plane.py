@@ -8,7 +8,8 @@ from pathlib import Path
 
 import knowledge_plane
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, ROW,
-                             WO_TOKEN, repo_root, row_work_order, run_dirs)
+                             WO_TOKEN, breakdown_files, repo_root,
+                             row_work_order, run_dirs)
 
 
 class TestTokens(unittest.TestCase):
@@ -95,6 +96,29 @@ class TestRunDirs(unittest.TestCase):
     def test_a_tree_without_docs_walks_to_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(run_dirs(Path(tmp)), [])
+
+
+class TestBreakdownFiles(unittest.TestCase):
+    def test_yields_each_runs_breakdown_with_its_lines(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs/features/a").mkdir(parents=True)
+            (root / "docs/features/b").mkdir(parents=True)
+            (root / "docs/breakdown.md").write_text(
+                "- [ ] WO-0001 root row\n", encoding="utf-8")
+            (root / "docs/features/b/breakdown.md").write_text(
+                "- [x] WO-0002 done\n- [ ] WO-0003 open\n",
+                encoding="utf-8")
+            # features/a has no breakdown.md — walked past, not yielded
+            self.assertEqual(list(breakdown_files(root)), [
+                (root / "docs/breakdown.md", ["- [ ] WO-0001 root row"]),
+                (root / "docs/features/b/breakdown.md",
+                 ["- [x] WO-0002 done", "- [ ] WO-0003 open"]),
+            ])
+
+    def test_a_tree_without_docs_walks_to_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(list(breakdown_files(Path(tmp))), [])
 
 
 class TestRepoRoot(unittest.TestCase):

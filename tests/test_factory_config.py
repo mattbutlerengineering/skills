@@ -19,27 +19,20 @@ import factory_config
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling factory_fixture import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from factory_fixture import CONFIG  # noqa: E402
+from factory_fixture import CONFIG, FixtureTree  # noqa: E402
 
 
 class TestLoad(unittest.TestCase):
-    def write(self, root, rel, text):
-        path = Path(root) / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-
     def test_loads_the_template_payload_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
-            self.write(tmp, "factory/templates/factory.json",
-                       json.dumps(CONFIG))
+            FixtureTree(tmp).factory()
             self.assertEqual(factory_config.load(tmp), (CONFIG, []))
 
     def test_an_installed_config_wins_over_the_template(self):
         with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
             installed = dict(CONFIG, monthly_cap_usd=50)
-            self.write(tmp, ".github/factory.json", json.dumps(installed))
-            self.write(tmp, "factory/templates/factory.json",
-                       json.dumps(CONFIG))
+            tree.write(".github/factory.json", json.dumps(installed))
             config, problems = factory_config.load(tmp)
             self.assertEqual(problems, [])
             self.assertEqual(config["monthly_cap_usd"], 50)
@@ -52,7 +45,7 @@ class TestLoad(unittest.TestCase):
 
     def test_invalid_json_is_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
-            self.write(tmp, ".github/factory.json", "not json")
+            FixtureTree(tmp).write(".github/factory.json", "not json")
             config, problems = factory_config.load(tmp)
             self.assertIsNone(config)
             self.assertEqual(len(problems), 1)

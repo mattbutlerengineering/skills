@@ -42,7 +42,10 @@ from collections import namedtuple
 from pathlib import Path
 
 import label_sync
-from label_sync import GH_FAILURES, gh_detail, gh_runner, repo_root
+from cli import CLI_FAILURES as GH_FAILURES
+from cli import detail as gh_detail
+from knowledge_plane import WO_TOKEN, repo_root
+from label_sync import gh_runner
 
 # Sweep kind -> the two taxonomy labels its intake carries. Closed by
 # construction: the triage a sweep can express is source + type, never a
@@ -66,7 +69,6 @@ COMMANDS = tuple(TRIAGE) + ("ensure-labels",)
 SENTRY_FIELDS = ("shortId", "title", "culprit", "level", "count",
                  "lastSeen", "permalink")
 
-WO_TOKEN = re.compile(r"\bWO-\d{4}\b")
 # ASCII C0/DEL plus the Unicode format characters that render as nothing but
 # reorder or hide text: zero-width (U+200B-200D), bidi marks and overrides
 # (U+200E-200F, U+202A-202E), directional isolates (U+2066-2069) and the BOM.

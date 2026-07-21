@@ -172,6 +172,44 @@ class TestBlueprintDrift(unittest.TestCase):
                 " superseded by ADR-0002 (blueprint drift)"])
 
 
+class TestAdrStatusVocabulary(unittest.TestCase):
+    """The ADR README's Statuses prose must name every head that
+    gates.ADR_STATUS accepts. The regex is the authority (detector D
+    enforces it); the README is where a human learns the vocabulary, and
+    the two heads it used to omit — "superseded in part by" and "amended
+    by" — are load-bearing precisely because they do NOT retire a
+    decision."""
+
+    README = (Path(__file__).resolve().parents[1]
+              / "docs" / "adr" / "README.md")
+    HEADS = ("accepted", "provisional", "superseded by ADR-",
+             "superseded in part by ADR-", "amended by ADR-")
+
+    def statuses_paragraph(self):
+        text = self.README.read_text(encoding="utf-8")
+        start = text.index("Statuses:")
+        return text[start:text.index("\n\n", start)]
+
+    def test_readme_names_every_status_head(self):
+        prose = self.statuses_paragraph()
+        for head in self.HEADS:
+            self.assertIn(head, prose)
+
+    def test_readme_names_the_authority(self):
+        self.assertIn("ADR_STATUS", self.statuses_paragraph())
+
+    def test_every_named_head_matches_the_regex(self):
+        for example, retired in (
+                ("accepted", False),
+                ("provisional", False),
+                ("superseded by ADR-0042", True),
+                ("superseded in part by ADR-0042", False),
+                ("amended by ADR-0042", False)):
+            match = gates.ADR_STATUS.match(example)
+            self.assertIsNotNone(match, example)
+            self.assertEqual(bool(match.group("retired")), retired, example)
+
+
 class TestCostLedger(unittest.TestCase):
     """G (origin: WO-0008, ADR-0034): the append-only cost ledger is the
     factory's measurement substrate; a merged order missing from it is a
@@ -1541,6 +1579,14 @@ class TestLockstep(unittest.TestCase):
         self.assertIn(
             "github.event.sender.login == github.repository_owner", text)
         self.assertIn("env.ANTHROPIC_API_KEY != ''", text)
+
+    def test_the_assembler_gate_honors_the_circuit_breaker(self):
+        """ADR-0034's monthly breaker: cost-report.yml sets the
+        FACTORY_PAUSED repo variable, and the dispatch job is its one
+        reader — without this term the breaker is a variable nobody
+        reads and the documented repo-wide pause is inert."""
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("vars.FACTORY_PAUSED != 'true'", text)
 
 
 class TestSelftest(unittest.TestCase):

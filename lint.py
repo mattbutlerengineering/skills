@@ -15,7 +15,8 @@ from pathlib import Path
 
 import eval_schema
 import protocol
-from protocol import ALL_SKILLS, STAGES, TEMPLATED_STAGES, read_frontmatter
+from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
+                      TEMPLATED_STAGES, read_frontmatter)
 
 
 def check_manifest(root):
@@ -109,8 +110,11 @@ def check_router(root):
     if not router.is_file():
         return []  # absence already reported by check_skills
     text = router.read_text(encoding="utf-8")
+    # the full routed taxonomy: the spine plus maintenance entry points
+    # (ADR-0025) — utility skills are excluded because the router never
+    # routes to them (ADR-0023)
     return [f"router never mentions stage skill {slug!r}"
-            for slug in STAGES if slug not in text]
+            for slug in STAGES + MAINTENANCE_STAGES if slug not in text]
 
 
 def check_protocol(root):

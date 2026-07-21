@@ -5,10 +5,11 @@ remain, and how to resume. Pure compose function, no IO: callers decide
 where the text goes (print, or their own gh/issue call).
 
 Deliberately takes STRUCTURED fields — short criterion strings the run
-itself tracked, never a raw issue or PR body. This mirrors the
-prompt-injection boundary assembler.assemble_prompt draws (ADR-0032):
-compose()'s signature is the boundary, not a sanitizer bolted on after
-the fact.
+itself tracked, never a raw issue or PR body. The ADR-0032 boundary is
+drawn by the CALLER: budget_guard.hard_stop passes only structured
+done/remaining criteria, the same discipline as assembler's
+repo-controlled prompt substrate. compose() is a formatter behind that
+boundary — it enforces nothing itself.
 
   python3 handoff.py <wo> <reason> <done_csv> <remaining_csv> <resume>
         Compose and print a handoff for <wo>. <done_csv>/<remaining_csv>

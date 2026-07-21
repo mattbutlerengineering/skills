@@ -22,7 +22,7 @@ import ast
 import re
 from pathlib import Path
 
-from knowledge_plane import ADR_TOKEN, row_work_order, run_dirs
+from knowledge_plane import ADR_TOKEN, breakdown_files, row_work_order
 
 # Bare filenames a breakdown row names in prose ("assembler.yml + guards",
 # "budget_guard.py + handoff.py + cost ledger") — a best-effort scan of the
@@ -49,11 +49,7 @@ def wo_block(root, wo):
     Still repo-file-sourced (the knowledge plane), never an issue body — the
     ADR-0032 boundary holds: a broader slice of the SAME breakdown.md, not a
     new, attacker-reachable input."""
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if not breakdown.is_file():
-            continue
-        lines = breakdown.read_text(encoding="utf-8").splitlines()
+    for _, lines in breakdown_files(root):
         for index, line in enumerate(lines):
             if row_work_order(line) != wo:
                 continue
