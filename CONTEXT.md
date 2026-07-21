@@ -53,8 +53,7 @@ works reviewer feedback on an authored PR; autorun orchestrates a full run
 without owning an artifact itself; factory-init stamps a product repo with
 the factory scaffold; mermaid turns processes and systems into digestible,
 contrast-safe diagrams. The living roster is `protocol.py`'s
-`UTILITY_SKILLS` (ADR-0023). A full skill for install, lint, ledger, and
-trigger-eval purposes.
+`UTILITY_SKILLS` (ADR-0023).
 _Avoid_: helper skill, tool skill
 
 **Work item**:

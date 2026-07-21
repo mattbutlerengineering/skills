@@ -6,10 +6,38 @@ each re-proving what detail() does.
 """
 import os
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import cli
+
+
+class TestWriteOutputs(unittest.TestCase):
+    def test_multiline_values_use_a_heredoc_delimiter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out.txt"
+            cli.write_outputs(
+                {"GITHUB_OUTPUT": str(out)},
+                {"dispatch": "true", "prompt": "line one\nline two"})
+            text = out.read_text(encoding="utf-8")
+            self.assertIn("dispatch=true", text)
+            self.assertIn("prompt<<", text)
+            self.assertIn("line one\nline two", text)
+
+    def test_the_delimiter_carries_no_tool_branding(self):
+        # The seam serves every tool that writes step outputs (assembler,
+        # cost_report); the delimiter must not name one of them.
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out.txt"
+            cli.write_outputs({"GITHUB_OUTPUT": str(out)},
+                              {"prompt": "a\nb"})
+            self.assertNotIn("ASM", out.read_text(encoding="utf-8"))
+
+    def test_no_github_output_is_a_silent_no_op(self):
+        # Local/hand runs have no GITHUB_OUTPUT; nothing to write, no error.
+        cli.write_outputs({}, {"dispatch": "false"})
 
 
 class TestDetail(unittest.TestCase):

@@ -16,7 +16,6 @@ Usage (from the repo root, with an authenticated claude CLI):
 """
 import datetime
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -26,8 +25,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 
-from trigger_eval import (HARNESSES, cli_version,  # noqa: E402
-                          load_descriptions)
+import cli  # noqa: E402
+from trigger_eval import HARNESSES, load_descriptions  # noqa: E402
 
 ADAPTER = HARNESSES["claude"]
 
@@ -43,7 +42,7 @@ def record(name, query):
     # (and provenance.json records below)
     project_dir, cmd = ADAPTER.invocation(query, descriptions, RUN_ID,
                                           None, True)
-    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    env = cli.child_env()
     lines = []
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL, cwd=project_dir,
@@ -79,7 +78,7 @@ def record(name, query):
         "query": query,
         "fired": fired,
         "recorded": datetime.date.today().isoformat(),
-        "cli_version": cli_version(),
+        "cli_version": cli.version("claude"),
         # invocation facts, mirroring what trigger-eval results record
         "model": None,
         "isolated_settings": True,

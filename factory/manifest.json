@@ -12,18 +12,18 @@
     "templates/docs/design/TEMPLATE.md": "e1f91e3f34bb0f742ca40e2390e5dfbeaaca585eddb69437b9a71b56708500a0",
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/assembler.py": "1990f8681e5d50784a7da7a943f302b92b4c390e14cea65f5d9d11b9710f3238",
+    "templates/tools/factory/assembler.py": "123f0e5da98e2963d9d16ce659314ec0283d8ae6a1be488f77183a684339d8b6",
     "templates/tools/factory/budget_guard.py": "6d489221632d0d8d0eac1f193b2b46b501b7fd0035703286b0d06aca01855d61",
-    "templates/tools/factory/cli.py": "0fc423c5dd4a487cb6a07107edd202783da4a83b5ac2b1d3297c39360f98d328",
+    "templates/tools/factory/cli.py": "f96a4b252f1b0cded48f6c087c8dc99070c8dc58213138b390ecd05b04bfb169",
     "templates/tools/factory/cost_ledger.py": "bd6e7ebe7519803e797caf69240e10d036bf9c7384939d50b493b454147226df",
-    "templates/tools/factory/cost_report.py": "a16c77e5f316a0a788de56aad348e142b21b0d7bccdb41b81aef514d10b97428",
+    "templates/tools/factory/cost_report.py": "fd6190ad8033bcde8b972d8791b2e82c0617713ef13aa58b1ae0bd2da819e43d",
     "templates/tools/factory/factory_config.py": "2abe251d5bee968b6355ef7e09c3d160b63ec80a19e9ee04e785c49bfbfcad0d",
     "templates/tools/factory/gates.py": "c371c96941ca0c2bc0c9c579fbcdaf5f3db646447693233bef01b55229e21489",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/knowledge_plane.py": "1d3f7d809325e58c523dc9fd9e886dd2b3e17249ae8945a385d3c2fc20087739",
     "templates/tools/factory/label_sync.py": "556a37c73981496ad44adc437a2f7867a47d9d71ea39291c65ae34c169c7a242",
     "templates/tools/factory/orientation_pack.py": "5c6b70f047641f92f9ddaf4ea0df9e9fac4fb435c0f501211395ee22000527ec",
-    "templates/tools/factory/protocol.py": "bf64826b09ed0aef3f5a040cc36f07c92ec8916ae968ce353b68dc4aa253ce12",
+    "templates/tools/factory/protocol.py": "d74d1b2c28e3d118a80ed88607b710b65b7caf5187f2827024c7d79d87579460",
     "templates/tools/factory/validator.py": "9ff9441b559f646b83396df385120e794f3d1cbed825e81acf6cd066bfd9ee56"
   }
 }

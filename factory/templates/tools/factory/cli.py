@@ -9,6 +9,11 @@ vocabulary and its formatting live here once; each caller keeps its own
 port (gh_runner returns stdout, git_runner the CompletedProcess) and its
 own problem-string label. Tests inject a fake runner so they never touch
 a real CLI.
+
+The harness-IO conventions live here for the same reason: child_env
+(nesting a harness under Claude Code), version (provenance probes), and
+write_outputs (the $GITHUB_OUTPUT heredoc form assembler.py and
+cost_report.py both emit).
 """
 import os
 import subprocess
@@ -48,6 +53,25 @@ def version(binary):
         return proc.stdout.strip() or None
     except (OSError, subprocess.TimeoutExpired):
         return None
+
+
+def write_outputs(env, outputs):
+    """Append outputs to $GITHUB_OUTPUT for the workflow's downstream steps.
+    Multiline values (e.g. the assembler's prompt) use GitHub's heredoc
+    form. No GITHUB_OUTPUT (a hand or local run) is a silent no-op."""
+    path = env.get("GITHUB_OUTPUT")
+    if not path:
+        return
+    chunks = []
+    for key, value in outputs.items():
+        text = str(value)
+        if "\n" in text:
+            delim = f"__{key.upper()}_EOF__"
+            chunks.append(f"{key}<<{delim}\n{text}\n{delim}")
+        else:
+            chunks.append(f"{key}={text}")
+    with open(path, "a", encoding="utf-8") as handle:
+        handle.write("\n".join(chunks) + "\n")
 
 
 def runner(binary):

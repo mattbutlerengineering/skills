@@ -36,6 +36,7 @@ from pathlib import Path
 
 import factory_config
 import orientation_pack
+from cli import write_outputs
 from knowledge_plane import (breakdown_files, repo_root,
                              row_tracker_issue, row_work_order)
 from protocol import read_frontmatter
@@ -203,25 +204,6 @@ def run_resolve(root, env, agents_dir=None):
     return ({"dispatch": "true", "wo": wo, "charter": role, "band": band,
              "model": model,
              "prompt": assemble_prompt(role, wo, row, root)}, [])
-
-
-def write_outputs(env, outputs):
-    """Append outputs to $GITHUB_OUTPUT for the workflow's downstream steps.
-    Multiline values (the prompt) use GitHub's heredoc form. No GITHUB_OUTPUT
-    (a hand or local run) is a silent no-op."""
-    path = env.get("GITHUB_OUTPUT")
-    if not path:
-        return
-    chunks = []
-    for key, value in outputs.items():
-        text = str(value)
-        if "\n" in text:
-            delim = f"__ASM_{key.upper()}_EOF__"
-            chunks.append(f"{key}<<{delim}\n{text}\n{delim}")
-        else:
-            chunks.append(f"{key}={text}")
-    with open(path, "a", encoding="utf-8") as handle:
-        handle.write("\n".join(chunks) + "\n")
 
 
 def main(argv, env=None):

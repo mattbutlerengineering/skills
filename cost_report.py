@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 
 import cost_ledger
 import factory_config
-from assembler import write_outputs
+from cli import write_outputs
 from knowledge_plane import repo_root
 
 PAUSE = "PAUSE"
