@@ -59,4 +59,5 @@ the canonical vocabulary.
 | [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | accepted |
 | [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | amended by ADR-0039 |
 | [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | accepted |
-| [0039](0039-tracker-grammar-joins-the-knowledge-plane.md) | Tracker-mirror grammar joins the knowledge plane | accepted |
+| [0039](0039-tracker-grammar-joins-the-knowledge-plane.md) | Tracker-mirror grammar joins the knowledge plane | amended by ADR-0040 |
+| [0040](0040-write-outputs-joins-the-cli-seam.md) | write_outputs joins the cli seam | accepted |

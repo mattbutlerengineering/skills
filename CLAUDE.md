@@ -30,10 +30,10 @@ On demand only (real model runs, costs money, never CI; both need the
   (ADR-0021 — taxonomy, artifact table, frontmatter, next-stage),
   `eval_schema.py` (ADR-0022, ADR-0024 — all eval knowledge: routing
   eval-set shape/kinds/validation, output-eval record shape, results
-  naming grammar), and the four factory seams (ADR-0037 —
-  `knowledge_plane.py` typed-ID grammar + run walk, `cli.py` subprocess
-  adapter, `factory_config.py` factory.json reader/resolvers,
-  `cost_ledger.py` cost-ledger shape). A new shared module needs multiple
+  naming grammar), and the four factory seams (ADR-0037, ADR-0039,
+  ADR-0040 — `knowledge_plane.py` typed-ID grammar + run walk, `cli.py`
+  external-CLI + harness-IO conventions, `factory_config.py` factory.json
+  reader/resolvers, `cost_ledger.py` cost-ledger shape). A new shared module needs multiple
   real callers AND observed divergence between their copies — anticipated
   reuse doesn't qualify.
 - **Three skill kinds**: stage skills (own a run artifact, routed to by

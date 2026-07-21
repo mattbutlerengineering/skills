@@ -1,6 +1,6 @@
 # The tracker-mirror grammar joins the knowledge plane
 
-- Status: accepted
+- Status: amended by ADR-0040
 - Date: 2026-07-21
 
 Amends ADR-0037. Its final carve-out read: "The ROW/TRACKER breakdown-row

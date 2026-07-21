@@ -99,7 +99,9 @@ from a one-time brief — one fresh subagent per stage, every brief gap logged
 as an assumption, and, unless the brief explicitly authorizes the release,
 it prepares the release and stops rather than executing it. `mermaid` turns a process or system
 into a digestible mermaid diagram with explicit, contrast-safe colors that
-read in both light and dark renderers.
+read in both light and dark renderers. `factory-init` stamps a product repo
+with the factory scaffold — offline gates, dispatch workflows, and the cost
+ledger — so promoted work orders can run there unattended.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
@@ -110,7 +112,7 @@ conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
 - [`docs/adr/`](docs/adr/) — architecture decision records and their status
 - [`LEDGER.md`](LEDGER.md) — per-skill maturity (draft / used-once / battle-tested)
 - `python3 lint.py` — structural lint of the install, router, and eval surface (the `CHECKERS` tuple in [`lint.py`](lint.py) is the authoritative list); runs in CI on every push/PR
-- `python3 -m unittest discover tests` — orientation decision table vs fixture docs trees; runs in CI on every push/PR
+- `python3 -m unittest discover tests` — the full offline suite: pipeline protocol, eval seams, and the factory tools, all against fixture trees; runs in CI on every push/PR
 - `python3 orientation.py <run-dir>` — CLI adapter over [`protocol.py`](protocol.py), the one implementation of the orientation table
 - `python3 trigger_eval.py --record` — routing eval: which skill fires for each query in [`evals/routing.json`](evals/routing.json) (needs the `claude` CLI; costs real runs)
 - [`docs/output-evals.md`](docs/output-evals.md) — on-demand output evals grading skill artifacts against expectations

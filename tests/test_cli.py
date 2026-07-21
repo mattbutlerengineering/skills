@@ -1,8 +1,10 @@
-"""cli seam tests (ADR-0037): the failure vocabulary and the one-line
-detail formatter, asserted at the seam's own interface. The caller
-suites (label_sync, validator, budget_guard) keep testing their
-composition — problem-string labels around a failing runner — without
-each re-proving what detail() does.
+"""cli seam tests (ADR-0037, ADR-0040): the failure vocabulary, the
+one-line detail formatter, and the harness-IO trio — child_env, version,
+write_outputs — asserted at the seam's own interface. The caller suites
+(label_sync, validator, budget_guard, trigger_eval, charter_replay,
+assembler, cost_report) keep testing their composition — problem-string
+labels around a failing runner, step outputs a workflow consumes —
+without each re-proving what the seam does.
 """
 import os
 import subprocess
