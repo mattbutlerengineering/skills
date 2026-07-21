@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """cost_report: the ADR-0034 weekly rollup and monthly circuit breaker.
-Recomputes spend numbers from docs/factory/costs.jsonl — the same
-append-only ledger budget_guard.py writes and detector G (gates.py
-check_cost_ledger) validates the shape of — and decides whether total
-spend has crossed factory.json's monthly_cap_usd. Conventions match
-budget_guard.py: functions return cr:-prefixed problem strings; the CLI
-prints them and exits nonzero.
+Recomputes spend numbers from docs/factory/costs.jsonl — read through
+cost_ledger.read, the same line grammar detector G gates in CI (ADR-0037),
+so the report's reader cannot diverge from the CI rule — and decides
+whether total spend has crossed factory.json's monthly_cap_usd.
+Conventions match budget_guard.py: functions return cr:-prefixed problem
+strings (ledger problems keep cost_ledger's ledger: prefix, the same way
+validator.py surfaces label_sync's L: strings); the CLI prints them and
+exits nonzero.
 
 This module COMPUTES ONLY: aggregate the ledger, decide PAUSE/CONTINUE
 against the cap, and compose the report text. All IO is injected (the
@@ -26,74 +28,23 @@ mutations, so they stay in the YAML, never here.
         or unresolvable cap decides PAUSE and still exits nonzero, so a
         broken config can never silently wave spend through unpaused).
 """
-import json
 import os
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
-import gates
-from assembler import load_config, write_outputs
-from gates import COST_LEDGER
+import cost_ledger
+import factory_config
+from assembler import write_outputs
+from knowledge_plane import repo_root
 
 PAUSE = "PAUSE"
 CONTINUE = "CONTINUE"
 
 
-def read_ledger(root, ledger_path=None):
-    """(entries, problems): parse docs/factory/costs.jsonl (or an injected
-    ledger_path, for tests) into a list of already-parsed dicts. Same
-    append-only file budget_guard.append_ledger_line writes; this module
-    trusts that shape but does not re-validate it in full (detector G
-    already gates the full ledger shape in CI — reimplementing its rules
-    here would risk diverging from them). It only checks what THIS module
-    needs to sum honestly: a line must parse as JSON, be an object, and
-    carry a usable non-negative cost/tokens/wo — anything else is excluded
-    from entries and reported as a problem, never silently dropped, because
-    an unaccountable line must not silently undercount spend (fail closed,
-    same discipline as budget_guard._validate_spend). An absent ledger is
-    silent (no runs yet), matching detector G's own "the ledger is created
-    by the first run" convention."""
-    path = Path(ledger_path) if ledger_path else Path(root) / COST_LEDGER
-    if not path.is_file():
-        return [], []
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as err:
-        return [], [f"cr: cannot read {COST_LEDGER}: {err}"]
-    entries, problems = [], []
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if not line.strip():
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError as err:
-            problems.append(
-                f"cr: {COST_LEDGER}:{lineno} is not valid JSON: {err}")
-            continue
-        if not isinstance(entry, dict):
-            problems.append(f"cr: {COST_LEDGER}:{lineno} is not a JSON"
-                            " object")
-            continue
-        cost, tokens, wo = entry.get("cost"), entry.get("tokens"), \
-            entry.get("wo")
-        usable = (isinstance(cost, (int, float))
-                  and not isinstance(cost, bool) and cost >= 0
-                  and isinstance(tokens, int) and not isinstance(tokens, bool)
-                  and tokens >= 0
-                  and isinstance(wo, str) and bool(wo))
-        if not usable:
-            problems.append(f"cr: {COST_LEDGER}:{lineno} ledger line is not"
-                            " usable for cost aggregation (wo/cost/tokens)")
-            continue
-        entries.append(entry)
-    return entries, problems
-
-
 def aggregate(entries):
     """PURE: recompute the weekly report's numbers from already-parsed
     ledger entries — total spend, total tokens, run count, and spend by
-    work order. Trusts the wo/cost/tokens shape read_ledger already
+    work order. Trusts the full ledger shape cost_ledger.read already
     established (coding-style.md: no defensive re-validation of an
     invariant enforced one call up)."""
     total_cost = 0.0
@@ -110,17 +61,6 @@ def aggregate(entries):
         "run_count": len(entries),
         "by_wo": {wo: round(cost, 2) for wo, cost in by_wo.items()},
     }
-
-
-def resolve_cap(config):
-    """(cap_usd, problems): factory.json's monthly_cap_usd — the single
-    repo-wide ceiling ADR-0034's circuit breaker checks total spend
-    against, same shape as budget_guard.resolve_budget's per-size lookup."""
-    cap = config.get("monthly_cap_usd")
-    if isinstance(cap, bool) or not isinstance(cap, (int, float)) \
-            or cap <= 0:
-        return None, ["cr: factory.json names no positive monthly_cap_usd"]
-    return cap, []
 
 
 def decide(total_cost, cap):
@@ -143,17 +83,17 @@ def guard(root, config=None, ledger_path=None):
     the cap is treated as over it (same discipline as budget_guard.guard).
     totals is always the best-effort aggregate of what WAS readable, even
     on a failing path, so a human reading the report still sees something."""
-    entries, problems = read_ledger(root, ledger_path=ledger_path)
+    entries, problems = cost_ledger.read(root, ledger_path=ledger_path)
     totals = aggregate(entries)
     if problems:
         return PAUSE, "cr: unreadable ledger — failing closed", totals, \
             None, problems
     if config is None:
-        config, problems = load_config(root)
+        config, problems = factory_config.load(root)
         if problems:
             return (PAUSE, "cr: no monthly cap could be resolved — failing"
                     " closed", totals, None, problems)
-    cap, problems = resolve_cap(config)
+    cap, problems = factory_config.resolve_cap(config)
     if problems:
         return (PAUSE, "cr: no monthly cap could be resolved — failing"
                 " closed", totals, None, problems)
@@ -214,7 +154,7 @@ def run_report(root, clock=None, ledger_path=None):
 
 def main(argv, env=None, clock=None):
     env = os.environ if env is None else env
-    root = gates.repo_root()
+    root = repo_root()
     if argv == ["report"]:
         outputs, problems = run_report(root, clock=clock)
         write_outputs(env, outputs)

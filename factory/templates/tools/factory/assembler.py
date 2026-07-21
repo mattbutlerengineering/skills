@@ -35,8 +35,9 @@ import re
 import sys
 from pathlib import Path
 
-import gates
+import factory_config
 import orientation_pack
+from knowledge_plane import WO_TOKEN, repo_root, run_dirs
 
 READY_LABEL = "wo:ready-for-agent"
 
@@ -101,7 +102,7 @@ def resolve_row(root, issue_number):
     plane, not the issue, decides which work order an issue carries. A
     ready-for-agent issue with no row is a real misconfiguration (the mirror
     ran ahead of the breakdown, which ADR-0032 forbids) — say so."""
-    for run in gates.run_dirs(root):
+    for run in run_dirs(root):
         breakdown = run / "breakdown.md"
         if not breakdown.is_file():
             continue
@@ -111,7 +112,7 @@ def resolve_row(root, issue_number):
             match = TRACKER.search(line)
             if not match or int(match.group(1)) != issue_number:
                 continue
-            tokens = gates.WO_TOKEN.findall(line)
+            tokens = WO_TOKEN.findall(line)
             if not tokens:
                 return None, None, [
                     f"asm: issue #{issue_number}'s breakdown row names no"
@@ -161,37 +162,6 @@ def _frontmatter(text):
             return body
         body.append(line)
     return []
-
-
-def resolve_model(band, config):
-    """(the model id for this band, problems) through factory.json's routing
-    table — the single routing source of truth (ADR-0004/0034). A band the
-    table does not cover is a problem, never a silent default."""
-    routing = config.get("routing")
-    if not isinstance(routing, dict):
-        return None, ["asm: factory.json has no routing table"]
-    model = routing.get(band)
-    if not isinstance(model, str) or not model:
-        return None, [f"asm: factory.json routes no model to the {band} band"]
-    return model, []
-
-
-def load_config(root):
-    """(the factory config, problems): the installed .github/factory.json
-    when stamped, else the template payload copy — same fallback shape as
-    label_sync.load_labels."""
-    root = Path(root)
-    candidates = (root / ".github" / "factory.json",
-                  root / "factory" / "templates" / "factory.json")
-    path = next((p for p in candidates if p.is_file()), None)
-    if path is None:
-        return None, ["asm: missing factory.json (.github/factory.json or"
-                      " factory/templates/factory.json)"]
-    try:
-        return json.loads(path.read_text(encoding="utf-8")), []
-    except json.JSONDecodeError as err:
-        rel = path.relative_to(root).as_posix()
-        return None, [f"asm: {rel} is not valid JSON: {err}"]
 
 
 def assemble_prompt(role, wo, row, root):
@@ -246,10 +216,10 @@ def run_resolve(root, env, agents_dir=None):
     band, problems = charter_band(agents_dir, role)
     if problems:
         return {"dispatch": "false"}, problems
-    config, problems = load_config(root)
+    config, problems = factory_config.load(root)
     if problems:
         return {"dispatch": "false"}, problems
-    model, problems = resolve_model(band, config)
+    model, problems = factory_config.resolve_model(band, config)
     if problems:
         return {"dispatch": "false"}, problems
     return ({"dispatch": "true", "wo": wo, "charter": role, "band": band,
@@ -278,7 +248,7 @@ def write_outputs(env, outputs):
 
 def main(argv, env=None):
     env = os.environ if env is None else env
-    root = gates.repo_root()
+    root = repo_root()
     if argv == ["resolve"]:
         outputs, problems = run_resolve(root, env)
         write_outputs(env, outputs)

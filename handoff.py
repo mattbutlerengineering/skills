@@ -2,7 +2,7 @@
 """handoff: composes the structured handoff a hard-stopped run leaves behind
 (ADR-0034) — why it stopped, which acceptance criteria are done, which
 remain, and how to resume. Pure compose function, no IO: callers decide
-where the text goes (post_handoff, or their own gh/issue call).
+where the text goes (print, or their own gh/issue call).
 
 Deliberately takes STRUCTURED fields — short criterion strings the run
 itself tracked, never a raw issue or PR body. This mirrors the
@@ -36,14 +36,6 @@ def compose(wo, reason, done, remaining, resume):
     return "\n".join(lines) + "\n"
 
 
-def post_handoff(text, post=print):
-    """Hand the composed text to `post` (default: print to stdout, the
-    fallback for a local or hand run). Decouples "where a handoff goes"
-    (a gh issue comment, in the real workflow) from "what it says"
-    (compose), so tests can capture it without touching the network."""
-    post(text)
-
-
 def main(argv):
     if len(argv) != 5:
         print(__doc__.strip())
@@ -51,7 +43,7 @@ def main(argv):
     wo, reason, done_csv, remaining_csv, resume = argv
     done = [item for item in done_csv.split(",") if item]
     remaining = [item for item in remaining_csv.split(",") if item]
-    post_handoff(compose(wo, reason, done, remaining, resume))
+    print(compose(wo, reason, done, remaining, resume))
     return 0
 
 

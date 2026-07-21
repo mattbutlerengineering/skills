@@ -77,7 +77,7 @@ class FixtureTree:
 
 class TestCitedAdrs(unittest.TestCase):
     """ADR numbers a breakdown row cites, in citation order — the same
-    grammar gates.ADR_TOKEN reads for detectors C and D."""
+    grammar knowledge_plane.ADR_TOKEN reads for detectors C and D."""
 
     def test_a_row_citing_an_adr_names_it(self):
         self.assertEqual(orientation_pack.cited_adrs(ROW_WITH_ADR), ["0032"])

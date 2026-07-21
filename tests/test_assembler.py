@@ -201,31 +201,6 @@ class TestCharterBand(unittest.TestCase):
                 None, ["asm: charter factory-swe declares no route: band"]))
 
 
-class TestResolveModel(unittest.TestCase):
-    """band -> model through the repo's factory.json routing table, the
-    single routing source of truth (ADR-0004/0034)."""
-
-    def config(self):
-        return json.loads(CONFIG)
-
-    def test_each_band_resolves_to_its_model(self):
-        for band, model in (("mechanical", "claude-haiku-4-5"),
-                            ("implementation", "claude-sonnet-5"),
-                            ("architecture_review", "claude-fable-5")):
-            self.assertEqual(assembler.resolve_model(band, self.config()),
-                             (model, []), band)
-
-    def test_a_band_the_table_does_not_route_is_a_problem(self):
-        self.assertEqual(assembler.resolve_model("mechanical", {"routing": {}}),
-                         (None, ["asm: factory.json routes no model to the"
-                                 " mechanical band"]))
-
-    def test_a_config_without_a_routing_table_is_a_problem(self):
-        self.assertEqual(
-            assembler.resolve_model("implementation", {}),
-            (None, ["asm: factory.json has no routing table"]))
-
-
 class TestAssemblePrompt(unittest.TestCase):
     def test_the_prompt_is_the_row_and_points_at_the_charter(self):
         with tempfile.TemporaryDirectory() as tmp:

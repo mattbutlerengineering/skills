@@ -26,6 +26,10 @@ EXPECTED_RELS = {
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
+    "templates/tools/factory/knowledge_plane.py",
+    "templates/tools/factory/cli.py",
+    "templates/tools/factory/factory_config.py",
+    "templates/tools/factory/cost_ledger.py",
     "templates/tools/factory/label_sync.py",
     "templates/tools/factory/protocol.py",
     "templates/tools/factory/validator.py",
@@ -49,6 +53,13 @@ EXPECTED_INSTALLS = {
     "templates/Makefile": "Makefile",
     "templates/factory.json": ".github/factory.json",
     "templates/tools/factory/gates.py": "tools/factory/gates.py",
+    "templates/tools/factory/knowledge_plane.py":
+        "tools/factory/knowledge_plane.py",
+    "templates/tools/factory/cli.py": "tools/factory/cli.py",
+    "templates/tools/factory/factory_config.py":
+        "tools/factory/factory_config.py",
+    "templates/tools/factory/cost_ledger.py":
+        "tools/factory/cost_ledger.py",
     "templates/tools/factory/label_sync.py": "tools/factory/label_sync.py",
     "templates/tools/factory/protocol.py": "tools/factory/protocol.py",
     "templates/tools/factory/validator.py": "tools/factory/validator.py",
@@ -83,6 +94,12 @@ def make_factory_repo(root):
     tree = FixtureTree(root)
     tree.write("gates.py", "# gates stub\nGATE = 1\n")
     tree.write("protocol.py", "# protocol stub\nPROTOCOL = 1\n")
+    tree.write("knowledge_plane.py",
+               "# knowledge_plane stub\nKNOWLEDGE_PLANE = 1\n")
+    tree.write("cli.py", "# cli stub\nCLI = 1\n")
+    tree.write("factory_config.py",
+               "# factory_config stub\nFACTORY_CONFIG = 1\n")
+    tree.write("cost_ledger.py", "# cost_ledger stub\nCOST_LEDGER = 1\n")
     tree.write("label_sync.py", "# label_sync stub\nLABEL_SYNC = 1\n")
     tree.write("validator.py", "# validator stub\nVALIDATOR = 1\n")
     tree.write("assembler.py", "# assembler stub\nASSEMBLER = 1\n")

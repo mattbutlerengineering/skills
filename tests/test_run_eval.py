@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trigger_eval import run_eval  # noqa: E402
+from trigger_eval import _claude_invocation, run_eval  # noqa: E402
 
 # Query protocol: "fire:<slug>" -> emit that slug's command stem;
 # "fire:none" -> emit nothing tool-related.
@@ -98,6 +98,38 @@ class FakeClaudeTest(unittest.TestCase):
             timeout=10, threshold=0.5, model=None, isolate=False)
         self.assertEqual([r["id"] for r in output["results"]],
                          [c["id"] for c in cases])
+
+
+class TestClaudeInvocation(unittest.TestCase):
+    """The isolation-critical flags of the claude invocation, pinned.
+
+    An eval run's whole validity rests on these flags: without
+    --setting-sources project, the user's global skills leak into the run
+    and the eval discriminates among the wrong candidates. The e2e fakes
+    above never see the flags (the fake claude ignores them), so an
+    accidental deletion would pass every other test — this is the internal
+    seam test that would catch it."""
+
+    def invoke(self, isolate):
+        project_dir, cmd = _claude_invocation(
+            "a query", {"idea": "d"}, "run1234", None, isolate)
+        self.addCleanup(shutil.rmtree, project_dir, ignore_errors=True)
+        return cmd
+
+    def test_isolate_pins_setting_sources_to_project(self):
+        cmd = self.invoke(isolate=True)
+        index = cmd.index("--setting-sources")
+        self.assertEqual(cmd[index + 1], "project")
+
+    def test_no_isolate_omits_setting_sources(self):
+        self.assertNotIn("--setting-sources", self.invoke(isolate=False))
+
+    def test_a_model_lands_after_its_flag(self):
+        project_dir, cmd = _claude_invocation(
+            "a query", {"idea": "d"}, "run1234", "claude-haiku-4-5", True)
+        self.addCleanup(shutil.rmtree, project_dir, ignore_errors=True)
+        index = cmd.index("--model")
+        self.assertEqual(cmd[index + 1], "claude-haiku-4-5")
 
 
 class TestWorkerExceptionBucketsAsNone(unittest.TestCase):

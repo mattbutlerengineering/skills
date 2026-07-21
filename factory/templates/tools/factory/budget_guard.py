@@ -9,10 +9,10 @@ dispatched run (token budget, max-turns cap, wall-clock timeout) — the
 dollar-budget stop, checked against the run's own running spend. Exhaustion
 is a HANDOFF, not a failure (ADR-0034): hard_stop pushes whatever is on
 disk (push_wip), composes and posts a handoff naming the remaining
-acceptance criteria (handoff.compose / handoff.post_handoff), and appends
-the run's line to the append-only cost ledger (ledger_entry /
-append_ledger_line) — RESILIENTLY, so a WIP-push failure (the normal
-no-upstream case) still leaves the handoff and ledger behind. See
+acceptance criteria (handoff.compose), and appends the run's line to the
+append-only cost ledger (cost_ledger.entry / cost_ledger.append) —
+RESILIENTLY, so a WIP-push failure (the normal no-upstream case) still
+leaves the handoff and ledger behind. See
 docs/adr/0034-work-order-budgets-and-routing.md.
 
   python3 budget_guard.py check <size> <spend_usd>
@@ -22,40 +22,19 @@ docs/adr/0034-work-order-budgets-and-routing.md.
         HARD-STOP and still exits nonzero, so a broken config can never
         silently wave a run through).
 """
-import json
 import math
-import subprocess
 import sys
-from pathlib import Path
 
-import gates
+import cost_ledger
+import factory_config
 import handoff
-from assembler import load_config
-from gates import COST_LEDGER, LEDGER_FIELDS
+from cli import CLI_FAILURES as GIT_FAILURES
+from cli import detail as _git_detail
+from cli import runner
+from knowledge_plane import repo_root
 
 CONTINUE = "CONTINUE"
 HARD_STOP = "HARD-STOP"
-
-# A failed or missing git raises one of these; push_wip turns them into a
-# bg: problem string instead of a traceback (same discipline as
-# label_sync.GH_FAILURES).
-GIT_FAILURES = (subprocess.CalledProcessError, OSError)
-
-
-def resolve_budget(size, config):
-    """(budget_usd, problems): <size>'s dollar ceiling from factory.json's
-    budgets_usd table (ADR-0034) — the single routing source of truth, same
-    shape as assembler.resolve_model. A size the table does not cover, or a
-    non-positive budget, is a problem, never a silent default."""
-    budgets = config.get("budgets_usd")
-    if not isinstance(budgets, dict):
-        return None, ["bg: factory.json has no budgets_usd table"]
-    budget = budgets.get(size)
-    if isinstance(budget, bool) or not isinstance(budget, (int, float)) \
-            or budget <= 0:
-        return None, [
-            f"bg: factory.json names no positive budget for size {size!r}"]
-    return budget, []
 
 
 def _validate_spend(spend_usd):
@@ -95,11 +74,11 @@ def guard(root, size, spend_usd, config=None):
     if problems:
         return HARD_STOP, "bg: invalid spend — failing closed", problems
     if config is None:
-        config, problems = load_config(root)
+        config, problems = factory_config.load(root)
         if problems:
             return (HARD_STOP, "bg: no budget could be resolved — failing"
                     " closed", problems)
-    budget_usd, problems = resolve_budget(size, config)
+    budget_usd, problems = factory_config.resolve_budget(size, config)
     if problems:
         return (HARD_STOP, "bg: no budget could be resolved — failing"
                 " closed", problems)
@@ -107,19 +86,10 @@ def guard(root, size, spend_usd, config=None):
     return verdict, reason, []
 
 
-def git_runner(args):
-    """The real git CLI, same shape as label_sync.gh_runner: a failed or
-    missing git raises (GIT_FAILURES), and push_wip turns that into a bg:
-    problem string rather than a traceback."""
-    return subprocess.run(["git", *args], check=True, capture_output=True,
-                          text=True)
-
-
-def _git_detail(err):
-    """One-line detail for a failed git call's bg: problem string: git's own
-    stderr when it ran, else the OS error (mirrors label_sync.gh_detail)."""
-    stderr = (getattr(err, "stderr", None) or "").strip()
-    return stderr.splitlines()[-1] if stderr else str(err)
+# The real git CLI (cli.runner): a failed or missing git raises
+# GIT_FAILURES, and push_wip turns that into a bg: problem string rather
+# than a traceback.
+git_runner = runner("git")
 
 
 def push_wip(wo, run=git_runner):
@@ -161,29 +131,10 @@ def hard_stop(root, wo, reason, done, remaining, resume, *, run_id, model,
     done/remaining are short acceptance-criterion strings the run tracked,
     never a raw issue body — handoff.compose draws that ADR-0032 boundary."""
     problems = push_wip(wo, run=run)
-    handoff.post_handoff(
-        handoff.compose(wo, reason, done, remaining, resume), post=post)
-    append_ledger_line(root, ledger_entry(
+    post(handoff.compose(wo, reason, done, remaining, resume))
+    cost_ledger.append(root, cost_ledger.entry(
         wo, run_id, model, tokens, cost, outcome))
     return problems
-
-
-def ledger_entry(wo, run_id, model, tokens, cost, outcome):
-    """A well-formed docs/factory/costs.jsonl record (ADR-0034), built from
-    gates.LEDGER_FIELDS so the field set cannot drift from what detector G
-    checks — the single place a caller assembles one."""
-    return dict(zip(LEDGER_FIELDS, (wo, run_id, model, tokens, cost, outcome)))
-
-
-def append_ledger_line(root, entry):
-    """Append one line to docs/factory/costs.jsonl. APPEND ONLY: opens in
-    "a" mode and never reads or rewrites existing lines — the ledger is the
-    factory's measurement substrate and gets the same append-only
-    discipline as evals/results/ (CLAUDE.md eval honesty)."""
-    ledger = Path(root) / COST_LEDGER
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    with open(ledger, "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry) + "\n")
 
 
 def main(argv):
@@ -195,7 +146,7 @@ def main(argv):
             print(f"bg: {spend_raw!r} is not a number")
             print("budget_guard: 1 problem(s)")
             return 1
-        root = gates.repo_root()
+        root = repo_root()
         verdict, reason, problems = guard(root, size, spend_usd)
         print(reason)
         for problem in problems:

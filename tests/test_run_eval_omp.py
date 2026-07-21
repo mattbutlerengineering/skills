@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trigger_eval import run_eval  # noqa: E402
+from trigger_eval import _omp_invocation, run_eval  # noqa: E402
 
 # Query protocol: "fire:<slug>" -> emit a read of that slug's skill://
 # URI; "fire:none" -> emit a tool-free agent_end. The query is the last
@@ -89,6 +89,40 @@ class FakeOmpTest(unittest.TestCase):
         self.assertEqual(result["fired"], {"idea": 3})
         self.assertFalse(result["pass"])
         self.assertEqual(output["confusion"]["prd"], {"idea": 3})
+
+
+class TestOmpInvocation(unittest.TestCase):
+    """The isolation-critical flags of the omp invocation, pinned.
+
+    omp has no --setting-sources equivalent, so its isolation is ALWAYS
+    on: --no-session/--no-extensions/--no-rules keep the user's omp
+    environment out, and the --skills glob restricts discovery to this
+    run's own candidates. The e2e fake above ignores every flag, so an
+    accidental deletion would pass every other test — this is the
+    internal seam test that would catch it."""
+
+    def invoke(self, isolate):
+        project_dir, cmd = _omp_invocation(
+            "a query", {"idea": "d"}, "run1234", None, isolate)
+        self.addCleanup(shutil.rmtree, project_dir, ignore_errors=True)
+        return cmd
+
+    def test_isolation_flags_are_always_on(self):
+        for isolate in (True, False):
+            cmd = self.invoke(isolate)
+            for flag in ("--no-session", "--no-extensions", "--no-rules"):
+                self.assertIn(flag, cmd, isolate)
+
+    def test_the_skills_glob_names_this_runs_suffix(self):
+        cmd = self.invoke(isolate=True)
+        index = cmd.index("--skills")
+        self.assertEqual(cmd[index + 1], "*-skill-run1234")
+
+    def test_the_query_is_the_last_argument(self):
+        # The fake omp reads the query as the LAST argument; pin that
+        # contract so a flag appended after the query cannot silently
+        # swallow it.
+        self.assertEqual(self.invoke(isolate=True)[-1], "a query")
 
 
 if __name__ == "__main__":

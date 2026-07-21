@@ -23,6 +23,7 @@ import unittest
 from pathlib import Path
 
 import budget_guard
+import cost_ledger
 import gates
 import handoff
 
@@ -49,37 +50,6 @@ class FixtureTree:
     def factory(self):
         self.write("factory/templates/factory.json", json.dumps(CONFIG))
         return self
-
-
-class TestResolveBudget(unittest.TestCase):
-    def test_each_size_resolves_to_its_dollar_ceiling(self):
-        for size, dollars in (("S", 5), ("M", 15), ("L", 40)):
-            self.assertEqual(budget_guard.resolve_budget(size, CONFIG),
-                             (dollars, []), size)
-
-    def test_an_uncovered_size_is_a_problem(self):
-        self.assertEqual(
-            budget_guard.resolve_budget("XL", CONFIG),
-            (None, ["bg: factory.json names no positive budget for size"
-                    " 'XL'"]))
-
-    def test_a_config_without_a_budgets_table_is_a_problem(self):
-        self.assertEqual(
-            budget_guard.resolve_budget("S", {}),
-            (None, ["bg: factory.json has no budgets_usd table"]))
-
-    def test_a_non_positive_budget_is_a_problem(self):
-        self.assertEqual(
-            budget_guard.resolve_budget("S", {"budgets_usd": {"S": 0}}),
-            (None, ["bg: factory.json names no positive budget for size"
-                    " 'S'"]))
-
-    def test_a_bool_budget_is_a_problem(self):
-        # bool is an int subclass in Python; True/False must not pass as $.
-        self.assertEqual(
-            budget_guard.resolve_budget("S", {"budgets_usd": {"S": True}}),
-            (None, ["bg: factory.json names no positive budget for size"
-                    " 'S'"]))
 
 
 class TestDecide(unittest.TestCase):
@@ -134,7 +104,7 @@ class TestGuard(unittest.TestCase):
                              "bg: no budget could be resolved — failing"
                              " closed")
             self.assertTrue(problems)
-            self.assertTrue(problems[0].startswith("asm: missing"),
+            self.assertTrue(problems[0].startswith("config: missing"),
                             problems)
 
     def test_an_unbudgeted_size_fails_closed(self):
@@ -144,8 +114,8 @@ class TestGuard(unittest.TestCase):
                 tree.root, "XL", 0.0)
             self.assertEqual(verdict, budget_guard.HARD_STOP)
             self.assertEqual(problems,
-                             ["bg: factory.json names no positive budget for"
-                              " size 'XL'"])
+                             ["config: factory.json names no positive budget"
+                              " for size 'XL'"])
 
     def test_a_negative_spend_fails_closed_not_continue(self):
         # Fix 2 (review): `budget_guard.py check S -1` must NOT silently
@@ -306,41 +276,6 @@ class TestHardStop(unittest.TestCase):
                 encoding="utf-8").splitlines()), 1)
 
 
-class TestLedgerEntry(unittest.TestCase):
-    def test_builds_exactly_the_gates_ledger_fields(self):
-        entry = budget_guard.ledger_entry(
-            "WO-0006", "r-1", "claude-sonnet-5", 9000, 16.25,
-            "budget-exhausted")
-        self.assertEqual(set(entry), set(gates.LEDGER_FIELDS))
-        self.assertEqual(entry["wo"], "WO-0006")
-        self.assertEqual(entry["cost"], 16.25)
-        self.assertEqual(entry["outcome"], "budget-exhausted")
-
-
-class TestAppendLedgerLine(unittest.TestCase):
-    def test_appends_one_line_creating_the_ledger(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            entry = budget_guard.ledger_entry(
-                "WO-0006", "r-1", "m", 100, 1.0, "merged")
-            budget_guard.append_ledger_line(tmp, entry)
-            ledger = Path(tmp) / "docs" / "factory" / "costs.jsonl"
-            self.assertEqual(
-                ledger.read_text(encoding="utf-8"),
-                json.dumps(entry) + "\n")
-
-    def test_appends_without_touching_existing_lines(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            first = budget_guard.ledger_entry(
-                "WO-0001", "r-1", "m", 100, 1.0, "merged")
-            second = budget_guard.ledger_entry(
-                "WO-0002", "r-2", "m", 200, 2.0, "budget-exhausted")
-            budget_guard.append_ledger_line(tmp, first)
-            budget_guard.append_ledger_line(tmp, second)
-            ledger = Path(tmp) / "docs" / "factory" / "costs.jsonl"
-            lines = ledger.read_text(encoding="utf-8").splitlines()
-            self.assertEqual(lines, [json.dumps(first), json.dumps(second)])
-
-
 class TestAcceptanceScenario(unittest.TestCase):
     """WO-0006's acceptance criterion, wired end to end from the public
     interfaces of budget_guard.py and handoff.py: a deliberately
@@ -371,15 +306,15 @@ class TestAcceptanceScenario(unittest.TestCase):
                 done=["budget_guard.decide", "handoff.compose"],
                 remaining=["cost ledger append", "factory_init mirrors"],
                 resume="rerun budget_guard.py check M <spend> after review")
-            handoff.post_handoff(text, post=posted.append)
+            posted.append(text)
             self.assertEqual(posted, [text])
             self.assertIn("cost ledger append", text)
             self.assertIn("factory_init mirrors", text)
             self.assertIn("$16.40", text)
 
             # Hard-stop: append the run's line to the cost ledger.
-            budget_guard.append_ledger_line(
-                tree.root, budget_guard.ledger_entry(
+            cost_ledger.append(
+                tree.root, cost_ledger.entry(
                     "WO-0006", "r-over-budget", "claude-sonnet-5",
                     9500, 16.40, "budget-exhausted"))
             ledger = tree.root / "docs" / "factory" / "costs.jsonl"

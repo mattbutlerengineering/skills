@@ -34,6 +34,7 @@ from pathlib import Path
 
 import gates
 import label_sync
+from knowledge_plane import CLOSES_TOKEN, WO_TOKEN, repo_root, run_dirs
 
 LIFECYCLE_PREFIX = "wo:"
 # A breakdown row is a checkbox line; its work order is its FIRST WO token
@@ -60,12 +61,12 @@ def tracker_issue(root, wo):
     """(the work order's mirrored issue number, problems), read from its
     breakdown row — ADR-0032: the dispatch mirror is one-way, so the
     knowledge plane, not the issue, says which issue a work order owns."""
-    for run in gates.run_dirs(root):
+    for run in run_dirs(root):
         breakdown = run / "breakdown.md"
         if not breakdown.is_file():
             continue
         for line in breakdown.read_text(encoding="utf-8").splitlines():
-            tokens = gates.WO_TOKEN.findall(line)
+            tokens = WO_TOKEN.findall(line)
             if not ROW.match(line) or not tokens or tokens[0] != wo:
                 continue
             match = TRACKER.search(line)
@@ -207,10 +208,10 @@ def cited_work_order(root, body):
     still comes from the row, never from the body — ADR-0032's mirror stays
     one-way. Ambiguity fails CLOSED: nothing is labelled.
     """
-    cited = list(dict.fromkeys(gates.WO_TOKEN.findall(body)))
+    cited = list(dict.fromkeys(WO_TOKEN.findall(body)))
     if not cited:
         return None, ["V: PR body cites no work-order id"]
-    closes = sorted({int(n) for n in gates.CLOSES_TOKEN.findall(body)})
+    closes = sorted({int(n) for n in CLOSES_TOKEN.findall(body)})
     if not closes:
         return None, ["V: PR body has no Closes #N link, so the work order it"
                       " implements cannot be told from the ones it only"
@@ -344,7 +345,7 @@ def parse(argv):
 
 def main(argv, env=None, run=label_sync.gh_runner):
     env = os.environ if env is None else env
-    root = gates.repo_root()
+    root = repo_root()
     command, options = parse(argv)
     if command == "review":
         problems = run_review(root, options["findings"], options["status"],

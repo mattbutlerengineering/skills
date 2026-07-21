@@ -36,6 +36,10 @@ ai-tooling suite where the rule is the same idea):
 `--selftest` runs the checkers against fixture trees and exits nonzero
 on a failing assertion. Both run in CI (validator.yml, via `make check`)
 on every push/PR.
+
+The knowledge plane's shared grammar (typed-ID tokens, run_dirs,
+repo_root) lives in knowledge_plane.py, and the cost ledger's shape in
+cost_ledger.py (ADR-0037) — this module keeps only the detectors.
 """
 import hashlib
 import json
@@ -45,19 +49,11 @@ import sys
 import tempfile
 from pathlib import Path
 
+import cost_ledger
+from cost_ledger import COST_LEDGER
+from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
+                             repo_root, run_dirs)
 from protocol import read_frontmatter
-
-PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
-ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
-WO_TOKEN = re.compile(r"\bWO-\d{4}\b")
-# GitHub's issue-closing keywords, with the optional colon form
-# ("Closes: #12") and any run of whitespace before the issue number. The
-# number is captured: detector B only asks whether a link exists, but
-# validator.py asks WHICH issues a PR closes (it is how a merged PR names
-# the one work order it implements), and the closing grammar lives here.
-CLOSES_TOKEN = re.compile(
-    r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#(\d+)\b",
-    re.IGNORECASE)
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
 # `WO-####`. Such a PR declares that EXPLICITLY — the same "declared, never
@@ -89,11 +85,6 @@ ADR_INDEX_ROW = re.compile(
     r"^\|\s*\[(?P<num>\d{4})\]\((?P<file>[^)]+)\)\s*\|[^|]*\|"
     r"\s*(?P<status>[^|]*?)\s*\|")
 
-# The append-only cost ledger (ADR-0034). The outcome vocabulary is
-# deliberately open — ADR-0034 fixes the field set, not its values.
-COST_LEDGER = "docs/factory/costs.jsonl"
-LEDGER_FIELDS = ("wo", "run_id", "model", "tokens", "cost", "outcome")
-LEDGER_TEXT_FIELDS = ("run_id", "model", "outcome")
 # A merged work order is a checked breakdown row (ADR-0004: the artifact,
 # not the tracker, is the state).
 MERGED_ROW = re.compile(r"^\s*-\s*\[x\]", re.IGNORECASE)
@@ -261,16 +252,6 @@ ARCH_CLAIM = re.compile(
 # against the tree, and quietly resolving it anyway is how a detector starts
 # reporting things it did not check.
 ARCH_PLAIN_PATH = re.compile(r"^[\w.@/-]+$")
-
-
-def run_dirs(root):
-    """Candidate run directories per the pipeline protocol."""
-    dirs = [root / "docs"]
-    for parent in ("features", "fixes"):
-        base = root / "docs" / parent
-        if base.is_dir():
-            dirs.extend(p for p in sorted(base.iterdir()) if p.is_dir())
-    return [d for d in dirs if d.is_dir()]
 
 
 def _scannable_files(root):
@@ -601,46 +582,19 @@ def merged_wo_rows(root):
     return rows
 
 
-def _ledger_line(entry, lineno, wo_rows, recorded):
-    """Field-level problems for one parsed ledger record (ADR-0034)."""
-    problems = []
-    for field in LEDGER_FIELDS:
-        if field not in entry:
-            continue
-        value = entry[field]
-        if field == "wo":
-            if isinstance(value, str) and WO_TOKEN.fullmatch(value):
-                recorded.add(value)
-                if value not in wo_rows:
-                    problems.append(f"G: {COST_LEDGER}:{lineno} wo {value}"
-                                    " has no breakdown row")
-            else:
-                problems.append(f"G: {COST_LEDGER}:{lineno} wo {value!r}"
-                                " is not a WO-#### token")
-        elif field in LEDGER_TEXT_FIELDS:
-            if not isinstance(value, str) or not value.strip():
-                problems.append(f"G: {COST_LEDGER}:{lineno} {field} must be"
-                                " a non-empty string")
-        elif field == "tokens":
-            if isinstance(value, bool) or not isinstance(value, int) \
-                    or value < 0:
-                problems.append(f"G: {COST_LEDGER}:{lineno} tokens must be"
-                                " a non-negative integer")
-        elif field == "cost":
-            if isinstance(value, bool) or not isinstance(value, (int, float)) \
-                    or value < 0:
-                problems.append(f"G: {COST_LEDGER}:{lineno} cost must be"
-                                " a non-negative number")
-    return problems
-
-
 def check_cost_ledger(root):
     """G: every run appends {wo, run_id, model, tokens, cost, outcome} to
     the append-only docs/factory/costs.jsonl, and a merged work order with
     no ledger line is a gating finding (ADR-0034). An absent ledger is
     silent, not a finding: the ledger is created by the first run that
     records into it, so a freshly stamped repo has no runs to account for
-    — the rule bites once the ledger exists."""
+    — the rule bites once the ledger exists.
+
+    The line grammar itself is cost_ledger.parse — the same rule the
+    weekly report reads with (ADR-0037), so the two cannot diverge. What
+    stays here is G's own work: the cross-checks between ledger and
+    breakdown (a recorded wo must have a row; a merged row must be
+    recorded)."""
     ledger = root / "docs" / "factory" / "costs.jsonl"
     if not ledger.is_file():
         return []
@@ -651,27 +605,15 @@ def check_cost_ledger(root):
     problems = []
     wo_rows = collect_wo_rows(root)
     recorded = set()
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if not line.strip():
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError as err:
-            problems.append(
-                f"G: {COST_LEDGER}:{lineno} is not valid JSON: {err}")
-            continue
-        if not isinstance(entry, dict):
-            problems.append(f"G: {COST_LEDGER}:{lineno} is not a JSON object")
-            continue
-        missing = sorted(set(LEDGER_FIELDS) - set(entry))
-        if missing:
-            problems.append(f"G: {COST_LEDGER}:{lineno} ledger line is"
-                            f" missing field(s): {', '.join(missing)}")
-        unknown = sorted(set(entry) - set(LEDGER_FIELDS))
-        if unknown:
-            problems.append(f"G: {COST_LEDGER}:{lineno} ledger line has"
-                            f" unknown field(s): {', '.join(unknown)}")
-        problems.extend(_ledger_line(entry, lineno, wo_rows, recorded))
+    for lineno, entry, suffixes in cost_ledger.parse(text):
+        problems.extend(f"G: {COST_LEDGER}:{lineno} {suffix}"
+                        for suffix in suffixes)
+        wo = cost_ledger.wo_token(entry) if entry is not None else None
+        if wo:
+            recorded.add(wo)
+            if wo not in wo_rows:
+                problems.append(f"G: {COST_LEDGER}:{lineno} wo {wo}"
+                                " has no breakdown row")
     for rel, lineno, wo in merged_wo_rows(root):
         if wo not in recorded:
             problems.append(f"G: {rel}:{lineno} merged work order {wo} has"
@@ -1176,16 +1118,6 @@ def selftest():
         print(failure)
     print(f"selftest: {'FAIL' if failures else 'ok'}")
     return 1 if failures else 0
-
-
-def repo_root():
-    """Nearest ancestor containing .git (dir or worktree file): correct at
-    the factory repo root and stamped at tools/factory/ in a product repo."""
-    here = Path(__file__).resolve().parent
-    for candidate in (here, *here.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return here
 
 
 def main(argv):

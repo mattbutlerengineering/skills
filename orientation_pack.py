@@ -22,7 +22,7 @@ import ast
 import re
 from pathlib import Path
 
-import gates
+from knowledge_plane import ADR_TOKEN, WO_TOKEN, run_dirs
 
 # Bare filenames a breakdown row names in prose ("assembler.yml + guards",
 # "budget_guard.py + handoff.py + cost ledger") — a best-effort scan of the
@@ -50,19 +50,19 @@ def wo_block(root, wo):
     Still repo-file-sourced (the knowledge plane), never an issue body — the
     ADR-0032 boundary holds: a broader slice of the SAME breakdown.md, not a
     new, attacker-reachable input."""
-    for run in gates.run_dirs(root):
+    for run in run_dirs(root):
         breakdown = run / "breakdown.md"
         if not breakdown.is_file():
             continue
         lines = breakdown.read_text(encoding="utf-8").splitlines()
         for index, line in enumerate(lines):
-            if not (ROW.match(line) and gates.WO_TOKEN.search(line)):
+            if not (ROW.match(line) and WO_TOKEN.search(line)):
                 continue
-            if gates.WO_TOKEN.findall(line)[0] != wo:
+            if WO_TOKEN.findall(line)[0] != wo:
                 continue
             block = [line]
             for nxt in lines[index + 1:]:
-                if (ROW.match(nxt) and gates.WO_TOKEN.search(nxt)) \
+                if (ROW.match(nxt) and WO_TOKEN.search(nxt)) \
                         or nxt.startswith("#"):
                     break
                 block.append(nxt)
@@ -72,12 +72,12 @@ def wo_block(root, wo):
 
 def cited_adrs(text):
     """ADR numbers a breakdown block cites, in citation order, deduplicated.
-    Same grammar gates.ADR_TOKEN reads elsewhere in the knowledge plane
-    (detector C's link integrity, detector D's blueprint drift) — a block
-    that names no ADR cites none; that is a fact about the block, not a gap
-    here. Callers pass the work order's full block (see wo_block), not just
-    its bullet line, because that is where the citations live."""
-    return list(dict.fromkeys(gates.ADR_TOKEN.findall(text)))
+    Same grammar knowledge_plane.ADR_TOKEN reads elsewhere in the knowledge
+    plane (detector C's link integrity, detector D's blueprint drift) — a
+    block that names no ADR cites none; that is a fact about the block, not
+    a gap here. Callers pass the work order's full block (see wo_block), not
+    just its bullet line, because that is where the citations live."""
+    return list(dict.fromkeys(ADR_TOKEN.findall(text)))
 
 
 def adr_path(root, number):

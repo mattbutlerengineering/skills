@@ -40,11 +40,18 @@ import gates
 # it IS driven by its own scheduled workflow step (`make cost-report` in
 # cost-report.yml), but the same compute/mutate split holds — it computes
 # only, the workflow is the one that mutates (gh issue create, gh variable
-# set). validator.yml is path-agnostic (it runs `make` targets), which is
-# what lets it be mirrored byte-for-byte instead of forked per repo.
+# set). knowledge_plane.py, cli.py, factory_config.py, and cost_ledger.py
+# are the ADR-0037 seam modules the tools above import as siblings —
+# mirrored for the same reason protocol.py is. validator.yml is
+# path-agnostic (it runs `make` targets), which is what lets it be mirrored
+# byte-for-byte instead of forked per repo.
 MIRRORS = {
     "gates.py": "tools/factory/gates.py",
     "protocol.py": "tools/factory/protocol.py",
+    "knowledge_plane.py": "tools/factory/knowledge_plane.py",
+    "cli.py": "tools/factory/cli.py",
+    "factory_config.py": "tools/factory/factory_config.py",
+    "cost_ledger.py": "tools/factory/cost_ledger.py",
     "label_sync.py": "tools/factory/label_sync.py",
     "validator.py": "tools/factory/validator.py",
     "assembler.py": "tools/factory/assembler.py",

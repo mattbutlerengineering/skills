@@ -4,18 +4,19 @@ WO-0007's acceptance criterion is "each type label resolves to a model id
 from factory config; a unit test covers all three routes." That resolver
 already exists: dispatching a work order (WO-0005, assembler.py) has to
 turn a charter's routing *band* into a model id before it can run the
-chartered agent, so `assembler.resolve_model` (band -> model, through
+chartered agent, so `factory_config.resolve_model` (band -> model, through
 factory.json's `routing` table — the single routing source of truth per
-ADR-0004/ADR-0034) and its coverage (tests/test_assembler.py
-TestResolveModel) landed as part of WO-0005, ahead of this work order.
+ADR-0004/ADR-0034; landed with WO-0005 in assembler.py, moved to the
+factory_config seam by ADR-0037) and its coverage
+(tests/test_factory_config.py TestResolveModel) predate this work order.
 
 This file is WO-0007's own citable acceptance evidence, not a second
 resolver: a `model_routing` module reimplementing band -> model would
 itself be a second routing source of truth (ADR-0004) — the exact drift
 ADR-0034 exists to catch (see tests/test_factory_charters.py
 TestNoSecondRoutingSource, docs/features/software-factory/breakdown.md's
-2026-07-12 note). assembler.py is the natural home WO-0005 already built;
-this module exercises it end to end — through the REPO'S OWN factory.json
+2026-07-12 note). factory_config.py is the resolver's one home; this
+module exercises it end to end — through the REPO'S OWN factory.json
 and its real charter stubs, not fixture copies — rather than
 reimplementing it.
 
@@ -27,6 +28,7 @@ import unittest
 from pathlib import Path
 
 import assembler
+import factory_config
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = REPO_ROOT / "factory" / "agents"
@@ -35,7 +37,7 @@ ROUTES = ("mechanical", "implementation", "architecture_review")
 
 
 def real_config():
-    config, problems = assembler.load_config(REPO_ROOT)
+    config, problems = factory_config.load(REPO_ROOT)
     assert not problems, problems
     return config
 
@@ -48,7 +50,7 @@ class TestThreeRoutesAgainstTheRealConfig(unittest.TestCase):
         config = real_config()
         for band in ROUTES:
             with self.subTest(band=band):
-                model, problems = assembler.resolve_model(band, config)
+                model, problems = factory_config.resolve_model(band, config)
                 self.assertEqual(problems, [])
                 self.assertIsInstance(model, str)
                 self.assertTrue(model)
@@ -61,14 +63,14 @@ class TestTypeLabelToModelEndToEnd(unittest.TestCase):
     """The full chain a `type:` label travels to reach a model id:
     charter selection (assembler.select_charter) -> the charter's routing
     band, read from its real stub (assembler.charter_band) -> the model
-    (assembler.resolve_model) — exercised against the real charter files
-    WO-0014 shipped, not fixtures."""
+    (factory_config.resolve_model) — exercised against the real charter
+    files WO-0014 shipped, not fixtures."""
 
     def resolve(self, labels):
         role = assembler.select_charter(labels)
         band, problems = assembler.charter_band(AGENTS_DIR, role)
         self.assertEqual(problems, [])
-        model, problems = assembler.resolve_model(band, real_config())
+        model, problems = factory_config.resolve_model(band, real_config())
         self.assertEqual(problems, [])
         return role, band, model
 
@@ -100,7 +102,7 @@ class TestTypeLabelToModelEndToEnd(unittest.TestCase):
         the other two."""
         band, problems = assembler.charter_band(AGENTS_DIR, "architect")
         self.assertEqual((band, problems), ("architecture_review", []))
-        model, problems = assembler.resolve_model(band, real_config())
+        model, problems = factory_config.resolve_model(band, real_config())
         self.assertEqual(problems, [])
         self.assertEqual(model, real_config()["routing"]["architecture_review"])
 
@@ -111,10 +113,10 @@ class TestUnknownBandFailsClosed(unittest.TestCase):
 
     def test_an_unrouted_band_is_a_problem_not_a_silent_default(self):
         config = {"routing": {"implementation": "claude-sonnet-5"}}
-        model, problems = assembler.resolve_model("ghost-band", config)
+        model, problems = factory_config.resolve_model("ghost-band", config)
         self.assertIsNone(model)
         self.assertEqual(problems, [
-            "asm: factory.json routes no model to the ghost-band band"])
+            "config: factory.json routes no model to the ghost-band band"])
 
 
 if __name__ == "__main__":

@@ -245,14 +245,14 @@ class TestCostLedger(unittest.TestCase):
                 tmp, {"wo": "WO-0009", "run_id": "", "model": "m",
                       "tokens": -1, "cost": "free", "outcome": "merged"})
             self.assertEqual(gates.check_cost_ledger(tree.root), [
-                "G: docs/factory/costs.jsonl:1 wo WO-0009 has no breakdown"
-                " row",
                 "G: docs/factory/costs.jsonl:1 run_id must be a non-empty"
                 " string",
                 "G: docs/factory/costs.jsonl:1 tokens must be a non-negative"
                 " integer",
                 "G: docs/factory/costs.jsonl:1 cost must be a non-negative"
                 " number",
+                "G: docs/factory/costs.jsonl:1 wo WO-0009 has no breakdown"
+                " row",
                 "G: docs/features/demo/breakdown.md:1 merged work order"
                 " WO-0001 has no line in docs/factory/costs.jsonl"])
 

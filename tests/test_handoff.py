@@ -54,19 +54,6 @@ class TestCompose(unittest.TestCase):
         self.assertIn(poison, text)
 
 
-class TestPostHandoff(unittest.TestCase):
-    def test_default_post_is_print(self):
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            handoff.post_handoff("hello")
-        self.assertEqual(out.getvalue(), "hello\n")
-
-    def test_an_injected_post_captures_the_text(self):
-        captured = []
-        handoff.post_handoff("the handoff text", post=captured.append)
-        self.assertEqual(captured, ["the handoff text"])
-
-
 class TestMain(unittest.TestCase):
     def run_cli(self, argv):
         out = io.StringIO()

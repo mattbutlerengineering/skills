@@ -21,8 +21,8 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
+import cost_ledger
 import cost_report
-import gates
 
 CONFIG = {
     "budgets_usd": {"S": 5, "M": 15, "L": 40},
@@ -36,9 +36,9 @@ CONFIG = {
 
 def entry(wo, run_id, model, tokens, cost, outcome):
     """One well-formed docs/factory/costs.jsonl record, built from
-    gates.LEDGER_FIELDS so a fixture line can never silently drift from the
-    real ledger shape (same discipline as budget_guard.ledger_entry)."""
-    return dict(zip(gates.LEDGER_FIELDS,
+    cost_ledger.LEDGER_FIELDS so a fixture line can never silently drift
+    from the real ledger shape (same discipline as cost_ledger.entry)."""
+    return dict(zip(cost_ledger.LEDGER_FIELDS,
                     (wo, run_id, model, tokens, cost, outcome)))
 
 
@@ -69,83 +69,6 @@ class FixtureTree:
         return self
 
 
-class TestReadLedger(unittest.TestCase):
-    def test_a_missing_ledger_is_empty_not_a_problem(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(cost_report.read_ledger(tmp), ([], []))
-
-    def test_parses_well_formed_lines(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            e1 = entry("WO-0001", "r-1", "m", 100, 1.5, "merged")
-            e2 = entry("WO-0002", "r-2", "m", 200, 2.5, "merged")
-            tree.ledger([e1, e2])
-            entries, problems = cost_report.read_ledger(tmp)
-            self.assertEqual(entries, [e1, e2])
-            self.assertEqual(problems, [])
-
-    def test_blank_lines_are_skipped(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            e1 = entry("WO-0001", "r-1", "m", 100, 1.5, "merged")
-            tree.write("docs/factory/costs.jsonl", json.dumps(e1) + "\n\n")
-            entries, problems = cost_report.read_ledger(tmp)
-            self.assertEqual(entries, [e1])
-            self.assertEqual(problems, [])
-
-    def test_invalid_json_is_a_problem_and_excluded(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write("docs/factory/costs.jsonl", "not json\n")
-            entries, problems = cost_report.read_ledger(tmp)
-            self.assertEqual(entries, [])
-            self.assertEqual(len(problems), 1)
-            self.assertTrue(problems[0].startswith(
-                "cr: docs/factory/costs.jsonl:1 is not valid JSON:"),
-                problems)
-
-    def test_a_non_object_line_is_a_problem(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write("docs/factory/costs.jsonl", "[1, 2, 3]\n")
-            entries, problems = cost_report.read_ledger(tmp)
-            self.assertEqual(entries, [])
-            self.assertEqual(problems, [
-                "cr: docs/factory/costs.jsonl:1 is not a JSON object"])
-
-    def test_an_entry_missing_a_usable_cost_is_excluded_and_flagged(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            bad = {"wo": "WO-0001", "run_id": "r-1", "model": "m",
-                   "tokens": 100, "outcome": "merged"}  # no cost field
-            tree.write("docs/factory/costs.jsonl", json.dumps(bad) + "\n")
-            entries, problems = cost_report.read_ledger(tmp)
-            self.assertEqual(entries, [])
-            self.assertEqual(problems, [
-                "cr: docs/factory/costs.jsonl:1 ledger line is not usable"
-                " for cost aggregation (wo/cost/tokens)"])
-
-    def test_a_negative_cost_is_excluded_and_flagged(self):
-        # Fail closed: a negative cost would silently pull the total spend
-        # DOWN, exactly the direction that could mask a real cap breach.
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            bad = entry("WO-0001", "r-1", "m", 100, -5.0, "merged")
-            tree.write("docs/factory/costs.jsonl", json.dumps(bad) + "\n")
-            entries, problems = cost_report.read_ledger(tmp)
-            self.assertEqual(entries, [])
-            self.assertEqual(len(problems), 1)
-
-    def test_an_injected_ledger_path_overrides_the_repo_default(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            custom = Path(tmp) / "custom.jsonl"
-            e1 = entry("WO-0001", "r-1", "m", 100, 1.5, "merged")
-            custom.write_text(json.dumps(e1) + "\n", encoding="utf-8")
-            entries, problems = cost_report.read_ledger(
-                "/does/not/exist", ledger_path=custom)
-            self.assertEqual((entries, problems), ([e1], []))
-
-
 class TestAggregate(unittest.TestCase):
     def test_recomputes_totals_from_a_fixture(self):
         entries = [
@@ -164,27 +87,6 @@ class TestAggregate(unittest.TestCase):
         self.assertEqual(cost_report.aggregate([]), {
             "total_cost": 0.0, "total_tokens": 0, "run_count": 0,
             "by_wo": {}})
-
-
-class TestResolveCap(unittest.TestCase):
-    def test_resolves_the_configured_cap(self):
-        self.assertEqual(cost_report.resolve_cap(CONFIG), (300, []))
-
-    def test_a_config_without_a_cap_is_a_problem(self):
-        self.assertEqual(
-            cost_report.resolve_cap({}),
-            (None, ["cr: factory.json names no positive monthly_cap_usd"]))
-
-    def test_a_non_positive_cap_is_a_problem(self):
-        self.assertEqual(
-            cost_report.resolve_cap({"monthly_cap_usd": 0}),
-            (None, ["cr: factory.json names no positive monthly_cap_usd"]))
-
-    def test_a_bool_cap_is_a_problem(self):
-        # bool is an int subclass in Python; True/False must not pass as $.
-        self.assertEqual(
-            cost_report.resolve_cap({"monthly_cap_usd": True}),
-            (None, ["cr: factory.json names no positive monthly_cap_usd"]))
 
 
 class TestDecide(unittest.TestCase):
@@ -259,7 +161,8 @@ class TestGuard(unittest.TestCase):
                 "cr: no monthly cap could be resolved — failing closed")
             self.assertIsNone(cap)
             self.assertTrue(problems)
-            self.assertTrue(problems[0].startswith("asm: missing"), problems)
+            self.assertTrue(problems[0].startswith("config: missing"),
+                            problems)
 
     def test_an_uncapped_config_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -270,7 +173,7 @@ class TestGuard(unittest.TestCase):
                 tree.root)
             self.assertEqual(verdict, cost_report.PAUSE)
             self.assertEqual(problems, [
-                "cr: factory.json names no positive monthly_cap_usd"])
+                "config: factory.json names no positive monthly_cap_usd"])
 
     def test_an_unparseable_ledger_line_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

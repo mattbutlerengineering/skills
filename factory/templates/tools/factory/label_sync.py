@@ -15,9 +15,13 @@ Drift is one-way: labels outside the taxonomy are ignored (GitHub's
 default labels are not drift), so --apply never deletes anything.
 """
 import json
-import subprocess
 import sys
 from pathlib import Path
+
+from cli import CLI_FAILURES as GH_FAILURES
+from cli import detail as gh_detail
+from cli import runner
+from knowledge_plane import repo_root
 
 LABEL_FIELDS = ("name", "color", "description")
 
@@ -82,16 +86,17 @@ def plan(current, desired):
     return problems
 
 
+_gh = runner("gh")
+
+
 def gh_runner(args):
-    """Default runner: shell out to gh, return stdout. A missing (OSError),
-    unauthenticated, or rate-limited (CalledProcessError) gh raises — sync
-    turns that into an L: problem string, never a traceback. Tests inject a
-    fake so they never touch the network."""
-    return subprocess.run(["gh", *args], check=True, capture_output=True,
-                          text=True).stdout
+    """Default runner: shell out to gh (cli.runner), return stdout. A
+    missing (OSError), unauthenticated, or rate-limited
+    (CalledProcessError) gh raises GH_FAILURES — sync turns that into an
+    L: problem string, never a traceback. Tests inject a fake so they
+    never touch the network."""
+    return _gh(args).stdout
 
-
-GH_FAILURES = (subprocess.CalledProcessError, OSError)
 
 LIST_ARGS = ("label", "list", "--json", "name,color,description",
              "--limit", "1000")
@@ -102,13 +107,6 @@ def live_labels(run=gh_runner):
     unauthenticated, or rate-limited — each caller (sync here, the label-drift
     sweep in sweeps.py) turns that into its own problem string."""
     return json.loads(run(list(LIST_ARGS)))
-
-
-def gh_detail(err):
-    """One-line detail for the L: problem string of a failed gh call:
-    gh's own stderr when it ran, else the OS error (e.g. gh not installed)."""
-    stderr = (getattr(err, "stderr", None) or "").strip()
-    return stderr.splitlines()[-1] if stderr else str(err)
 
 
 def sync(root, apply=False, run=gh_runner):
@@ -137,16 +135,6 @@ def sync(root, apply=False, run=gh_runner):
                 problems.append(f"L: gh label create {want['name']} failed:"
                                 f" {gh_detail(err)}")
     return problems
-
-
-def repo_root():
-    """Nearest ancestor containing .git (dir or worktree file): correct at
-    the factory repo root and stamped at tools/factory/ in a product repo."""
-    here = Path(__file__).resolve().parent
-    for candidate in (here, *here.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return here
 
 
 def main(argv, run=gh_runner):
