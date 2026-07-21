@@ -110,6 +110,22 @@ def _output_field_missing(record, field):
     return record.get(field) is None
 
 
+def fixture_refs(data):
+    """(eval id, run_fixture) per record that names a fixture.
+
+    The accessor callers use instead of reaching into records by string
+    key — the lint checks each ref's existence, a filesystem fact that
+    stays with it. Records without a fixture are skipped (validate_output
+    owns that complaint), and malformed shapes yield nothing rather than
+    raising, mirroring _items.
+    """
+    evals = data.get("evals")
+    if not isinstance(evals, list):
+        return []
+    return [(e.get("id"), e["run_fixture"]) for e in evals
+            if isinstance(e, dict) and e.get("run_fixture")]
+
+
 def validate_output(data, slug, label):
     """Return problem strings for a parsed output-eval set; [] means valid.
 
@@ -160,6 +176,12 @@ def validate(data, skills, label):
            for c in cases if c.get("kind") not in KINDS]
         + [f"{label} case {c.get('id')!r} has no query"
            for c in cases if not c.get("query")]
+        # id presence matters as much as query presence: every runner
+        # report subscripts case["id"], so an id-less case must be
+        # refused here, not become a KeyError mid-run. is-None mirrors
+        # the expected/OUTPUT_FIELDS handling: falsy ids are values.
+        + [f"{label} case {c.get('id')!r} has no id"
+           for c in cases if c.get("id") is None]
     )
 
     coverage = [c.get("expected") for c in cases]

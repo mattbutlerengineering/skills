@@ -35,7 +35,7 @@ import sys
 import tempfile
 import time
 import uuid
-from collections import Counter
+from collections import Counter, namedtuple
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -209,9 +209,6 @@ def detect_omp_fired(events, name_to_slug):
     return None
 
 
-_DETECTORS = {"claude": detect_fired, "omp": detect_omp_fired}
-
-
 def _stream_events(process, timeout):
     """Yield decoded JSON-lines events from a live harness pipe until the
     process exits, the stream closes, or timeout elapses. Lines that are
@@ -281,7 +278,18 @@ def _omp_invocation(query, descriptions, run_id, model, isolate):
     return build_omp_project_dir(descriptions, run_id), cmd
 
 
-_INVOCATIONS = {"claude": _claude_invocation, "omp": _omp_invocation}
+# One registration per harness (ADR-0038): everything harness-specific
+# the runner — or a transcript recorder — needs, as one adapter. The
+# invocation composes the project builder with the CLI flags, so
+# (project_dir, cmd) can only come from the tested path; detect is the
+# matching stream detector. Keys are pinned to eval_schema.HARNESSES,
+# the vocabulary owner, by test.
+Harness = namedtuple("Harness", ("invocation", "detect"))
+
+HARNESSES = {
+    "claude": Harness(_claude_invocation, detect_fired),
+    "omp": Harness(_omp_invocation, detect_omp_fired),
+}
 
 
 def run_single_query(query, descriptions, timeout, model, isolate,
@@ -289,8 +297,9 @@ def run_single_query(query, descriptions, timeout, model, isolate,
     """Run one query in a fresh isolated project; return fired slug or None."""
     run_id = uuid.uuid4().hex[:8]
     name_to_slug = {f"{slug}-skill-{run_id}": slug for slug in descriptions}
-    project_dir, cmd = _INVOCATIONS[harness](query, descriptions, run_id,
-                                             model, isolate)
+    adapter = HARNESSES[harness]
+    project_dir, cmd = adapter.invocation(query, descriptions, run_id,
+                                          model, isolate)
 
     # Remove CLAUDECODE env var to allow nesting claude -p inside a
     # Claude Code session; the guard is for interactive terminal conflicts.
@@ -307,7 +316,7 @@ def run_single_query(query, descriptions, timeout, model, isolate,
             start_new_session=True,
         )
         return _watch_stream(process, name_to_slug, timeout,
-                             detect=_DETECTORS[harness])
+                             detect=adapter.detect)
     finally:
         if process is not None:
             if process.poll() is None:

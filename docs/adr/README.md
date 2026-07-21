@@ -54,3 +54,4 @@ the canonical vocabulary.
 | [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | accepted |
 | [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | accepted |
 | [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | accepted |
+| [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | accepted |

@@ -18,7 +18,8 @@ mirror, never the rows-to-match-the-mirror.
 - Exit: every WO-#### row cites a resolving `PRD-#### §section`
   (ADR-0032 detectors enforce this), carries acceptance criteria,
   touched files, and links; each order is sized S/M/L with budget and
-  model route (S≈$5 / M≈$15 / L≈$40, ADR-0034); the beads graph is
+  model route (dollar caps live once, in `factory.json`
+  `budgets_usd` — ADR-0034); the beads graph is
   cycle-free; dispatchable orders are labeled `wo:ready-for-agent`.
 
 ## Actions per cycle

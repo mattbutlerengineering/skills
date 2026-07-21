@@ -6,15 +6,20 @@ exercised through its public interface, tests assert the EXACT problem
 strings callers will print, and the gh runner is injected so no test ever
 touches the network.
 """
-import contextlib
-import io
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import validator
+
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling fixture_tree import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fixture_tree import FixtureTree  # noqa: E402
+import cli_contract  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -40,17 +45,6 @@ BREAKDOWN = (
 LIFECYCLE = ["wo:draft", "wo:prd-approved", "wo:blueprint-approved",
              "wo:ready-for-agent", "wo:in-progress", "wo:needs-review",
              "wo:merged", "wo:failed", "wo:blocked"]
-
-
-class FixtureTree:
-    def __init__(self, root):
-        self.root = Path(root)
-
-    def write(self, rel, text):
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
 
 
 class RecordingRunner:
@@ -652,26 +646,19 @@ class TestRunLifecycle(unittest.TestCase):
                 ["V: gh issue view 109 failed: gh: not found"])
 
 
-class TestMain(unittest.TestCase):
-    def main(self, argv):
-        """(exit code, stdout) — the CLI's printed contract, captured so the
-        test run stays quiet."""
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            code = validator.main(argv, env={}, run=RecordingRunner())
-        return code, out.getvalue()
+class TestMain(cli_contract.CliContract, unittest.TestCase):
+    usage_fragment = "python3 validator.py review"
 
-    def test_unknown_subcommand_prints_usage(self):
-        code, out = self.main(["nonsense"])
-        self.assertEqual(code, 2)
-        self.assertIn("python3 validator.py review", out)
+    def run_cli(self, argv):
+        return cli_contract.capture(validator.main, argv, env={},
+                                    run=RecordingRunner())
 
     def test_a_non_numeric_status_is_a_usage_error(self):
         self.assertEqual(
-            self.main(["review", "--status", "red"])[0], 2)
+            self.run_cli(["review", "--status", "red"])[0], 2)
 
     def test_review_outside_an_event_exits_nonzero_with_the_problem(self):
-        code, out = self.main(["review", "--findings", "findings.txt"])
+        code, out = self.run_cli(["review", "--findings", "findings.txt"])
         self.assertEqual(code, 1)
         self.assertIn("V: no pull_request in the CI event payload", out)
         self.assertIn("validator: 1 problem(s)", out)

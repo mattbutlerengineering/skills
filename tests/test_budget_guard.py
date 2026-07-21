@@ -13,11 +13,9 @@ the remaining work, and appends a costs.jsonl line that satisfies detector
 G's own shape check (gates.check_cost_ledger) — not a re-implementation of
 G's rules, a cross-check against the real one.
 """
-import contextlib
-import io
-import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,29 +25,11 @@ import cost_ledger
 import gates
 import handoff
 
-CONFIG = {
-    "budgets_usd": {"S": 5, "M": 15, "L": 40},
-    "routing": {"mechanical": "claude-haiku-4-5",
-                "implementation": "claude-sonnet-5",
-                "architecture_review": "claude-fable-5"},
-    "wip_cap": 3,
-    "monthly_cap_usd": 300,
-}
-
-
-class FixtureTree:
-    def __init__(self, root):
-        self.root = Path(root)
-
-    def write(self, rel, text):
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
-
-    def factory(self):
-        self.write("factory/templates/factory.json", json.dumps(CONFIG))
-        return self
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling factory_fixture import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from factory_fixture import CONFIG, FixtureTree  # noqa: E402
+import cli_contract  # noqa: E402
 
 
 class TestDecide(unittest.TestCase):
@@ -327,17 +307,11 @@ class TestAcceptanceScenario(unittest.TestCase):
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
 
-class TestMain(unittest.TestCase):
-    def run_cli(self, argv):
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            code = budget_guard.main(argv)
-        return code, out.getvalue()
+class TestMain(cli_contract.CliContract, unittest.TestCase):
+    usage_fragment = "python3 budget_guard.py check"
 
-    def test_unknown_subcommand_prints_usage(self):
-        code, out = self.run_cli(["nonsense"])
-        self.assertEqual(code, 2)
-        self.assertIn("python3 budget_guard.py check", out)
+    def run_cli(self, argv):
+        return cli_contract.capture(budget_guard.main, argv)
 
     def test_a_non_numeric_spend_is_a_problem(self):
         code, out = self.run_cli(["check", "S", "lots"])

@@ -9,20 +9,17 @@ TestResolveBudget (test_budget_guard), TestResolveCap (test_cost_report) —
 one schema, one home, one test file.
 """
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import factory_config
 
-CONFIG = {
-    "budgets_usd": {"S": 5, "M": 15, "L": 40},
-    "routing": {"mechanical": "claude-haiku-4-5",
-                "implementation": "claude-sonnet-5",
-                "architecture_review": "claude-fable-5"},
-    "wip_cap": 3,
-    "monthly_cap_usd": 300,
-}
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling factory_fixture import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from factory_fixture import CONFIG  # noqa: E402
 
 
 class TestLoad(unittest.TestCase):

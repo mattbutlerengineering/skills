@@ -74,6 +74,22 @@ class TestValidate(unittest.TestCase):
         self.assertIn("evals/routing.json case 'next-0' has no query",
                       problems)
 
+    def test_missing_id(self):
+        # The runner subscripts case["id"] everywhere it reports; an
+        # id-less case must be refused here with lint's diagnostics, not
+        # surface as a KeyError mid-run (ADR-0022's whole point)
+        data = valid_data()
+        del data["cases"][0]["id"]
+        problems = eval_schema.validate(data, SKILLS, LABEL)
+        self.assertIn("evals/routing.json case None has no id", problems)
+
+    def test_falsy_present_id_is_a_value_not_a_gap(self):
+        # id 0 mirrors validate_output's is-None handling
+        data = valid_data()
+        data["cases"][0]["id"] = 0
+        self.assertNotIn("evals/routing.json case 0 has no id",
+                         eval_schema.validate(data, SKILLS, LABEL))
+
     def test_thin_skill_coverage(self):
         data = valid_data()
         data["cases"] = [c for c in data["cases"] if c["id"] != "idea-0"]
@@ -233,6 +249,39 @@ class TestValidateOutput(unittest.TestCase):
         self.assertIn(
             "evals/output/idea.json evals entry #0 is not an object",
             problems)
+
+
+class TestFixtureRefs(unittest.TestCase):
+    """The output-eval record shape belongs to eval_schema (ADR-0024);
+    fixture_refs is the accessor that keeps callers (the lint's
+    fixture-existence check) from reaching into records by string key."""
+
+    def test_yields_id_and_fixture_per_record(self):
+        data = {"evals": [valid_output_record(),
+                          valid_output_record(id=2, run_fixture="evals/g")]}
+        self.assertEqual(eval_schema.fixture_refs(data),
+                         [(1, "evals/fixtures/f"), (2, "evals/g")])
+
+    def test_records_without_a_fixture_are_skipped(self):
+        # absent and empty both mean "no fixture to check" — matching
+        # _output_field_missing, where validate_output owns the complaint
+        data = {"evals": [valid_output_record(run_fixture=None),
+                          valid_output_record(id=2, run_fixture="")]}
+        self.assertEqual(eval_schema.fixture_refs(data), [])
+
+    def test_missing_id_is_carried_as_none(self):
+        record = valid_output_record()
+        del record["id"]
+        self.assertEqual(eval_schema.fixture_refs({"evals": [record]}),
+                         [(None, "evals/fixtures/f")])
+
+    def test_malformed_shapes_yield_nothing(self):
+        # shape complaints belong to validate_output; the accessor just
+        # never crashes on what validate_output will already flag
+        for data in ({}, {"evals": None}, {"evals": "oops"},
+                     {"evals": ["oops"]}):
+            with self.subTest(data=data):
+                self.assertEqual(eval_schema.fixture_refs(data), [])
 
 
 class TestResultsPath(unittest.TestCase):

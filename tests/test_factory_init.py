@@ -15,6 +15,11 @@ from pathlib import Path
 import factory_init
 import gates
 
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling fixture_tree import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fixture_tree import FixtureTree  # noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Every rel key update_manifest must record for the minimal fixture repo.
@@ -77,45 +82,18 @@ TAMPER_PROBLEM = (
     " (re-run manifest update, never hand-edit)")
 
 
-class FixtureTree:
-    def __init__(self, root):
-        self.root = Path(root)
-
-    def write(self, rel, text):
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
-
-
 def make_factory_repo(root):
-    """Minimal factory repo: a stub per mirrored root file, plugin.json, and
-    two templates that are authored in place (not mirrored)."""
+    """Minimal factory repo: a stub per mirrored root file (driven by
+    factory_init.MIRRORS, so a newly mirrored tool is covered here without
+    another hand-written stub), plugin.json, and two templates that are
+    authored in place (not mirrored)."""
     tree = FixtureTree(root)
-    tree.write("gates.py", "# gates stub\nGATE = 1\n")
-    tree.write("protocol.py", "# protocol stub\nPROTOCOL = 1\n")
-    tree.write("knowledge_plane.py",
-               "# knowledge_plane stub\nKNOWLEDGE_PLANE = 1\n")
-    tree.write("cli.py", "# cli stub\nCLI = 1\n")
-    tree.write("factory_config.py",
-               "# factory_config stub\nFACTORY_CONFIG = 1\n")
-    tree.write("cost_ledger.py", "# cost_ledger stub\nCOST_LEDGER = 1\n")
-    tree.write("label_sync.py", "# label_sync stub\nLABEL_SYNC = 1\n")
-    tree.write("validator.py", "# validator stub\nVALIDATOR = 1\n")
-    tree.write("assembler.py", "# assembler stub\nASSEMBLER = 1\n")
-    tree.write("budget_guard.py", "# budget_guard stub\nBUDGET_GUARD = 1\n")
-    tree.write("handoff.py", "# handoff stub\nHANDOFF = 1\n")
-    tree.write("orientation_pack.py",
-               "# orientation_pack stub\nORIENTATION_PACK = 1\n")
-    tree.write("cost_report.py", "# cost_report stub\nCOST_REPORT = 1\n")
-    tree.write(".github/workflows/validator.yml",
-               "name: validator\njobs: {}\n")
-    tree.write(".github/workflows/assembler.yml",
-               "name: assembler\njobs: {}\n")
-    tree.write(".github/workflows/design.yml",
-               "name: design\njobs: {}\n")
-    tree.write(".github/workflows/cost-report.yml",
-               "name: cost-report\njobs: {}\n")
+    for src in factory_init.MIRRORS:
+        stem = Path(src).stem
+        if src.endswith(".py"):
+            tree.write(src, f"# {stem} stub\n{stem.upper()} = 1\n")
+        else:
+            tree.write(src, f"name: {stem}\njobs: {{}}\n")
     tree.write(".claude-plugin/plugin.json",
                json.dumps({"name": "software-factory", "version": "1.2.3"}))
     tree.write("factory/templates/Makefile",

@@ -20,7 +20,8 @@ not the PR description and not the implementer's summary.
   criterion is either (a) met, with the literal command and its literal
   output pasted, or (b) explicitly **NOT RUN**, with the reason. A
   met/not-met verdict is posted for the Reviewer. Merge is never QA's —
-  it is human gate 3 (ADR-0033).
+  gate 3 belongs to an independent, non-authoring reviewer or the human
+  owner (ADR-0033, amended by ADR-0036), and QA attested the evidence.
 
 ## Actions per cycle
 
@@ -66,7 +67,9 @@ routing source of truth (ADR-0004).
 
 - Write or fix the implementation it verifies — the moment QA edits the
   code, the independent pass is gone.
-- Merge — merge is human gate 3 (ADR-0033).
+- Merge — gate 3 belongs to an independent, non-authoring reviewer or
+  the human owner (ADR-0033, amended by ADR-0036); the role that
+  attested the evidence is never that reviewer.
 - Mark a criterion met on an unrun command, a paraphrased result, a
   cached run, or a "should pass".
 - Fabricate, trim, or prettify command output. Evidence is literal or it
@@ -78,7 +81,8 @@ routing source of truth (ADR-0004).
 A verification record: per criterion, the literal command and its literal
 output, or **NOT RUN** plus the reason — followed by an explicit met /
 not-met verdict. The Reviewer reads it as the evidence axis of the review;
-the human reads it at gate 3.
+whoever holds gate 3 — the merging Reviewer or the human owner
+(ADR-0036) — reads it there.
 
 ## Escalation
 

@@ -65,5 +65,5 @@ interviews — it does not draft.
   re-investigating them.
 - The reproduction evidence captured here becomes the regression test:
   Verify is never skippable in a maintenance run.
-- Blast radius drives scale downstream — Review and Ship scale to what is
-  recorded here, so be concrete about who is affected.
+- Blast radius recorded here drives downstream scale (the protocol's
+  Run scale section), so be concrete about who is affected.

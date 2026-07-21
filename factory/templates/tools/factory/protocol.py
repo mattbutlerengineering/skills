@@ -59,7 +59,11 @@ MAINTENANCE_STAGE_ARTIFACTS = [
 ]
 
 _FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
-_CHECKBOX = re.compile(r"^\s*[-*+] \[([ xX])\]", re.MULTILINE)
+# Bullet-and-whitespace shape aligned with knowledge_plane.ROW (the
+# dispatch-plane row grammar) so completion counting and dispatch agree
+# about the same line; separate owner by design — this seam stays
+# factory-agnostic and captures the checked state.
+_CHECKBOX = re.compile(r"^\s*[-*+]\s+\[([ xX])\]", re.MULTILINE)
 
 
 def read_frontmatter(path):

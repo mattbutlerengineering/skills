@@ -86,8 +86,9 @@ ADR_INDEX_ROW = re.compile(
     r"\s*(?P<status>[^|]*?)\s*\|")
 
 # A merged work order is a checked breakdown row (ADR-0004: the artifact,
-# not the tracker, is the state).
-MERGED_ROW = re.compile(r"^\s*-\s*\[x\]", re.IGNORECASE)
+# not the tracker, is the state). Bullet-and-whitespace shape aligned with
+# knowledge_plane.ROW; separate owner because only the checked form counts.
+MERGED_ROW = re.compile(r"^\s*[-*+]\s+\[x\]", re.IGNORECASE)
 
 # Markdown links to repo paths; URLs, autolinks and bare anchors are not.
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
@@ -645,6 +646,21 @@ def check_staleness(root):
     return problems
 
 
+def manifest_files(root):
+    """{rel: sha256} for every file in the template payload, keyed
+    relative to factory/ in posix form — the ONE statement of the
+    manifest's walk-hash-key grammar. update_manifest (factory_init.py)
+    writes exactly this map and check_scaffold_sync diffs the manifest
+    against it, so writer and verifier cannot diverge — the same
+    discipline detector G borrows from cost_ledger.parse."""
+    payload = root / "factory" / "templates"
+    if not payload.is_dir():
+        return {}
+    return {p.relative_to(root / "factory").as_posix():
+            hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(payload.rglob("*")) if p.is_file()}
+
+
 def check_scaffold_sync(root):
     """E: the template payload must match its checksum manifest exactly."""
     manifest_path = root / "factory" / "manifest.json"
@@ -658,23 +674,16 @@ def check_scaffold_sync(root):
     if not isinstance(files, dict) or not files:
         return ["E: factory/manifest.json has no files map"]
     problems = []
+    actual = manifest_files(root)
     for rel, expected in sorted(files.items()):
-        path = root / "factory" / rel
-        if not path.is_file():
+        if rel not in actual:
             problems.append(f"E: manifest lists missing file factory/{rel}")
-            continue
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if digest != expected:
+        elif actual[rel] != expected:
             problems.append(
                 f"E: factory/{rel} does not match its manifest checksum"
                 " (re-run manifest update, never hand-edit)")
-    payload = root / "factory" / "templates"
-    if payload.is_dir():
-        for path in sorted(payload.rglob("*")):
-            if path.is_file():
-                rel = str(path.relative_to(root / "factory"))
-                if rel not in files:
-                    problems.append(f"E: factory/{rel} is not in the manifest")
+    problems += [f"E: factory/{rel} is not in the manifest"
+                 for rel in sorted(actual) if rel not in files]
     return problems
 
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Record a real omp -p --mode json transcript for detection pinning.
 
-Mirrors the trigger-eval runner's omp invocation — the same flags, env
-strip, and isolated project layout as run_single_query with
-harness="omp" (keep them in sync when the runner's invocation changes;
-nothing pins the two) — while teeing every raw stdout line to
-<name>.jsonl in this directory. Like the runner, it stops as soon as
-detect_omp_fired decides, then writes the outcome, query, date, CLI
+The project layout, flags, and detector come from the runner's own
+harness adapter (trigger_eval.HARNESSES["omp"], ADR-0038), so the
+recording and run_single_query cannot drift — this script adds only the
+tee of every raw stdout line to <name>.jsonl in this directory. Like
+the runner, it stops as soon as the detector decides, then writes the
+outcome, query, date, CLI
 version, and invocation facts into provenance.json. See README.md here
 for when to re-record; transcripts are never edited by hand.
 
@@ -26,8 +26,10 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 
-from trigger_eval import (build_omp_project_dir, cli_version,  # noqa: E402
-                          detect_omp_fired, load_descriptions)
+from trigger_eval import (HARNESSES, cli_version,  # noqa: E402
+                          load_descriptions)
+
+ADAPTER = HARNESSES["omp"]
 
 # Fixed so the committed transcripts' skill names are reproducible; the
 # replay test rebuilds name_to_slug from provenance.json's copy of this.
@@ -41,12 +43,10 @@ MODEL = "claude-sonnet-5"
 def record(name, query):
     descriptions = load_descriptions(ROOT / "skills")
     name_to_slug = {f"{slug}-skill-{RUN_ID}": slug for slug in descriptions}
-    project_dir = build_omp_project_dir(descriptions, RUN_ID)
-    cmd = ["omp", "--mode", "json", "-p",
-           "--no-session", "--no-extensions", "--no-rules",
-           "--skills", f"*-skill-{RUN_ID}",
-           "--model", MODEL,
-           query]
+    # isolate is claude-only (omp isolation is always on); MODEL pins the
+    # model the same way the invocation's --model flag does for the runner
+    project_dir, cmd = ADAPTER.invocation(query, descriptions, RUN_ID,
+                                          MODEL, True)
     env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
     lines = []
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
@@ -65,7 +65,7 @@ def record(name, query):
                 continue
 
     try:
-        fired = detect_omp_fired(teed_events(), name_to_slug)
+        fired = ADAPTER.detect(teed_events(), name_to_slug)
     finally:
         if process.poll() is None:
             process.kill()

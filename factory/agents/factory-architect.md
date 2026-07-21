@@ -15,7 +15,8 @@ Compressed contract (the charter is authoritative):
   repo and its codegraph; open the blueprint PR.
 - Must never: merge the blueprint PR (human gate 2, ADR-0033); rewrite
   an accepted ADR — supersede it with a new one; implement the design;
-  change the PRD's scope to fit a design.
+  change the PRD's scope to fit a design; stand up a second source of
+  truth for anything the repo already tracks once (ADR-0004).
 - Escalate when: a PRD requirement is infeasible as written; two
   accepted ADRs conflict; a design needs a second source of truth
   (ADR-0004 says it does not get one).

@@ -17,8 +17,8 @@ and the row disagree, the row wins.
   lifecycle) and the WO-#### bead is unclaimed with no open blockers.
 - Exit: bead claimed; a micro-plan (steps, test list, files, risks)
   covers every acceptance criterion on the row; the budget class
-  (S≈$5 / M≈$15 / L≈$40 per `factory.json`, ADR-0034) is noted as the
-  stop rule for the cycle.
+  (dollar caps per `factory.json` `budgets_usd`, ADR-0034) is noted
+  as the stop rule for the cycle.
 
 ### Implement
 - Entry: micro-plan exists.
@@ -36,8 +36,10 @@ and the row disagree, the row wins.
 - Entry: evidence block exists.
 - Exit: PR open from a feature branch with the citation line
   `WO-#### (PRD-#### §…) — Closes #N`, links to the breakdown row, and
-  the evidence block verbatim. Merge is a human gate (ADR-0033) — the
-  cycle ends at the open PR, never at a merge.
+  the evidence block verbatim. Gate 3 belongs to an independent,
+  non-authoring reviewer or the human owner (ADR-0033, amended by
+  ADR-0036) — never the author — so the cycle ends at the open PR,
+  never at a merge.
 
 ## Actions per cycle
 
@@ -76,8 +78,9 @@ dispatch (ADR-0034), which is the single routing source of truth
 
 ## Must never
 
-- Push to main or merge anything — merge is one of the three human
-  gates (ADR-0033).
+- Push to main or merge anything — gate 3 requires an independent,
+  non-authoring reviewer or the human owner (ADR-0033, amended by
+  ADR-0036), and the author is never that reviewer.
 - Expand scope beyond the work order's row.
 - Weaken, skip, or delete a failing test to get green.
 - Run past the budget: exhaustion is a handoff, not a failure to hide

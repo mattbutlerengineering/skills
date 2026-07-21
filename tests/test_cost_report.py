@@ -13,9 +13,9 @@ FACTORY_PAUSED` step reads from $GITHUB_OUTPUT (this module only computes;
 the workflow is the one that mutates, per the compute/mutate boundary in
 its own header comment).
 """
-import contextlib
-import io
 import json
+import re
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -24,22 +24,17 @@ from pathlib import Path
 import cost_ledger
 import cost_report
 
-CONFIG = {
-    "budgets_usd": {"S": 5, "M": 15, "L": 40},
-    "routing": {"mechanical": "claude-haiku-4-5",
-                "implementation": "claude-sonnet-5",
-                "architecture_review": "claude-fable-5"},
-    "wip_cap": 3,
-    "monthly_cap_usd": 300,
-}
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling factory_fixture import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from factory_fixture import CONFIG, FixtureTree as FactoryTree  # noqa: E402
+import cli_contract  # noqa: E402
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
-def entry(wo, run_id, model, tokens, cost, outcome):
-    """One well-formed docs/factory/costs.jsonl record, built from
-    cost_ledger.LEDGER_FIELDS so a fixture line can never silently drift
-    from the real ledger shape (same discipline as cost_ledger.entry)."""
-    return dict(zip(cost_ledger.LEDGER_FIELDS,
-                    (wo, run_id, model, tokens, cost, outcome)))
+# fixture records come from the ledger seam itself — no local twin to
+# drift from the real shape
+entry = cost_ledger.entry
 
 
 def fixed_clock(iso_date):
@@ -49,20 +44,7 @@ def fixed_clock(iso_date):
     return lambda: dt
 
 
-class FixtureTree:
-    def __init__(self, root):
-        self.root = Path(root)
-
-    def write(self, rel, text):
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
-
-    def factory(self):
-        self.write("factory/templates/factory.json", json.dumps(CONFIG))
-        return self
-
+class FixtureTree(FactoryTree):
     def ledger(self, entries):
         text = "".join(json.dumps(e) + "\n" for e in entries)
         self.write("docs/factory/costs.jsonl", text)
@@ -265,17 +247,13 @@ class TestRunReport(unittest.TestCase):
             self.assertIn(today, outputs["title"])
 
 
-class TestMain(unittest.TestCase):
-    def run_cli(self, argv, env=None):
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            code = cost_report.main(argv, env=env if env is not None else {})
-        return code, out.getvalue()
+class TestMain(cli_contract.CliContract, unittest.TestCase):
+    usage_fragment = "python3 cost_report.py report"
 
-    def test_unknown_subcommand_prints_usage(self):
-        code, out = self.run_cli(["nonsense"])
-        self.assertEqual(code, 2)
-        self.assertIn("python3 cost_report.py report", out)
+    def run_cli(self, argv, env=None):
+        return cli_contract.capture(
+            cost_report.main, argv,
+            env=env if env is not None else {})
 
     def test_check_against_the_real_repo_config_exits_zero(self):
         # No docs/factory/costs.jsonl in this repo yet: $0 spend, well under
@@ -301,6 +279,37 @@ class TestMain(unittest.TestCase):
         # Local/hand runs have no GITHUB_OUTPUT; nothing to write, no error.
         code, out = self.run_cli(["report"], {})
         self.assertEqual(code, 0)
+
+
+class TestWorkflowOutputLockstep(unittest.TestCase):
+    """The $GITHUB_OUTPUT seam, cost-report side: run_report's output keys
+    and cost-report.yml's steps.report.outputs.<name> references are a
+    split contract with no other bridge — a renamed key would silently
+    post an empty report title or, worse, never trip the FACTORY_PAUSED
+    gate. Same idiom as test_assembler.TestWorkflowOutputLockstep."""
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "cost-report.yml"
+    REFS = re.compile(r"steps\.report\.outputs\.(\w+)")
+
+    def yaml_refs(self):
+        refs = set(self.REFS.findall(
+            self.WORKFLOW.read_text(encoding="utf-8")))
+        self.assertTrue(refs, "cost-report.yml references no report outputs")
+        return refs
+
+    def emitted_keys(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            outputs, problems = cost_report.run_report(
+                tree.root, clock=fixed_clock("2026-07-20"))
+            self.assertEqual(problems, [])
+            return set(outputs)
+
+    def test_every_yaml_output_ref_is_an_emitted_key(self):
+        self.assertLessEqual(self.yaml_refs(), self.emitted_keys())
+
+    def test_the_workflow_consumes_the_circuit_breaker_keys(self):
+        self.assertLessEqual({"pause", "title", "body"}, self.yaml_refs())
 
 
 class TestAcceptanceScenario(unittest.TestCase):

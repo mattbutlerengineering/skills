@@ -18,7 +18,6 @@ problem strings; the CLI prints them and exits nonzero.
                     a drifted source payload and any existing destination
                     file — no partial stamps, no overwrites.
 """
-import hashlib
 import json
 import shutil
 import sys
@@ -69,10 +68,6 @@ MIRRORS = {
 INSTALL_MAP = {"templates/factory.json": ".github/factory.json"}
 
 
-def _sha256(path):
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def install_path(rel):
     """Destination of a manifest entry in a product repo."""
     return INSTALL_MAP.get(rel, rel[len("templates/"):])
@@ -95,10 +90,10 @@ def update_manifest(root):
         mirror = templates / rel
         mirror.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(root / name, mirror)
-    files = {p.relative_to(root / "factory").as_posix(): _sha256(p)
-             for p in sorted(templates.rglob("*")) if p.is_file()}
+    # the walk-hash-key grammar is gates.manifest_files — the same map
+    # detector E diffs against, so writer and verifier cannot diverge
     manifest = {"plugin": meta.get("name"), "version": meta.get("version"),
-                "files": files}
+                "files": gates.manifest_files(root)}
     (root / "factory" / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return []

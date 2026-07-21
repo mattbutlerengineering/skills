@@ -17,7 +17,9 @@ Compressed contract (the charter is authoritative):
 - Must never: fix the defect it triages — intake routes, it does not
   implement; edit `prd.md`, `architecture.md`, or `docs/adr/**` (both
   sit behind human gates, ADR-0033); close a signal without a decision
-  on the record; transcribe a signal by hand into a second tracker.
+  on the record; transcribe a signal by hand into a second tracker, or invent a
+  work-order row (rows come from the Planner; the mirror is one-way,
+  ADR-0032); report a metric it did not compute from the ledger.
 - Escalate when: a signal implies a scope change; severity looks like an
   incident (user-visible breakage, data loss, security); the same signal
   recurs after a fix was merged.

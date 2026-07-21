@@ -6,11 +6,16 @@ the prompt-injection boundary — compose()'s signature takes short
 criterion strings, never a raw issue/PR body, so nothing resembling the
 assembler's poisoned-body test is even expressible here.
 """
-import contextlib
-import io
+import sys
 import unittest
+from pathlib import Path
 
 import handoff
+
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling cli_contract import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
 
 
 class TestCompose(unittest.TestCase):
@@ -54,17 +59,12 @@ class TestCompose(unittest.TestCase):
         self.assertIn(poison, text)
 
 
-class TestMain(unittest.TestCase):
-    def run_cli(self, argv):
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            code = handoff.main(argv)
-        return code, out.getvalue()
+class TestMain(cli_contract.CliContract, unittest.TestCase):
+    usage_fragment = "python3 handoff.py"
+    bad_argv = ("WO-0006",)  # wrong arity — the tool has no subcommands
 
-    def test_wrong_arity_prints_usage(self):
-        code, out = self.run_cli(["WO-0006"])
-        self.assertEqual(code, 2)
-        self.assertIn("python3 handoff.py", out)
+    def run_cli(self, argv):
+        return cli_contract.capture(handoff.main, argv)
 
     def test_composes_and_prints_the_handoff(self):
         code, out = self.run_cli([

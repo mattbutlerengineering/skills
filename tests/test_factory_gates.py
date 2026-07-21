@@ -6,22 +6,18 @@ exact problem strings callers will print.
 """
 import hashlib
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import gates
 
-
-class FixtureTree:
-    def __init__(self, root):
-        self.root = Path(root)
-
-    def write(self, rel, text):
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling helper import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fixture_tree import FixtureTree  # noqa: E402
+from make_parse import make_recipe  # noqa: E402
 
 
 class TestWoCitation(unittest.TestCase):
@@ -481,6 +477,32 @@ class TestScaffoldSync(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(gates.check_scaffold_sync(Path(tmp)),
                              ["E: missing factory/manifest.json"])
+
+
+class TestManifestFiles(unittest.TestCase):
+    """The one statement of the manifest's walk-hash-key grammar: what
+    update_manifest writes IS what check_scaffold_sync diffs against, so
+    the writer/verifier pair cannot diverge (the detector-G discipline,
+    applied to detector E)."""
+
+    def test_walks_the_payload_with_posix_keys_and_sha256_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/Makefile", "check:\n")
+            tree.write("factory/templates/tools/factory/gates.py", "G = 1\n")
+            tree.write("factory/manifest.json", "{}")  # not payload: excluded
+            files = gates.manifest_files(tree.root)
+            self.assertEqual(
+                sorted(files),
+                ["templates/Makefile", "templates/tools/factory/gates.py"])
+            self.assertEqual(
+                files["templates/Makefile"],
+                hashlib.sha256(b"check:\n").hexdigest())
+            self.assertNotIn("\\", "".join(files))
+
+    def test_no_payload_dir_is_an_empty_map(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(gates.manifest_files(Path(tmp)), {})
 
 
 class TestConfigShape(unittest.TestCase):
@@ -1377,26 +1399,14 @@ class TestRunAll(unittest.TestCase):
                  if p.startswith("B:")], [])
 
 
-def make_recipe(text, target):
-    """The command lines of one make target (tab-indented recipe lines)."""
-    lines, capturing = [], False
-    for line in text.splitlines():
-        if line.startswith(f"{target}:"):
-            capturing = True
-        elif capturing:
-            if line.startswith("\t"):
-                lines.append(line.strip())
-            elif line.strip():
-                break
-    return lines
-
-
 def product_form(command):
     """A root command as its product-repo twin spells it: the factory tools
     live under tools/factory/ there, and the stamped test run is quiet."""
     return (command.replace("python3 gates.py", "python3 tools/factory/gates.py")
             .replace("python3 validator.py", "python3 tools/factory/validator.py")
             .replace("python3 assembler.py", "python3 tools/factory/assembler.py")
+            .replace("python3 cost_report.py",
+                     "python3 tools/factory/cost_report.py")
             .replace("unittest discover tests", "unittest discover -q tests"))
 
 
@@ -1420,6 +1430,12 @@ class TestLockstep(unittest.TestCase):
     MAKEFILE = REPO / "Makefile"
     TEMPLATE_MAKEFILE = REPO / "factory" / "templates" / "Makefile"
     ASSEMBLER_TARGET = ["python3 assembler.py resolve"]
+    COST_REPORT_WORKFLOW = (REPO / ".github" / "workflows"
+                            / "cost-report.yml")
+    PAYLOAD_COST_REPORT_WORKFLOW = (REPO / "factory" / "templates"
+                                    / ".github" / "workflows"
+                                    / "cost-report.yml")
+    COST_REPORT_TARGET = ["python3 cost_report.py report"]
 
     # The one canonical check set. `lint.py` is the plugin's structural lint
     # and has no product-repo counterpart, so only the root Makefile runs it.
@@ -1494,6 +1510,26 @@ class TestLockstep(unittest.TestCase):
     def test_the_payload_assembler_workflow_is_the_mirror_of_this_repo_s(self):
         self.assertEqual(self.PAYLOAD_ASSEMBLER_WORKFLOW.read_bytes(),
                          self.ASSEMBLER_WORKFLOW.read_bytes())
+
+    def test_both_makefiles_expose_the_cost_report_target(self):
+        self.assertEqual(self.recipes(self.MAKEFILE, "cost-report"),
+                         self.COST_REPORT_TARGET)
+        self.assertEqual(
+            self.recipes(self.TEMPLATE_MAKEFILE, "cost-report"),
+            [product_form(c) for c in self.COST_REPORT_TARGET])
+
+    def test_the_cost_report_workflow_names_no_command_of_its_own(self):
+        text = self.COST_REPORT_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("make cost-report", text)
+        for tool in ("cost_report.py", "gates.py", "unittest"):
+            self.assertNotIn(
+                f"python3 {tool}", text,
+                f"{tool} is invoked directly in CI; it belongs in a make"
+                " target, or the two repos' CI will diverge")
+
+    def test_the_payload_cost_report_workflow_is_the_mirror_of_this_repo_s(self):
+        self.assertEqual(self.PAYLOAD_COST_REPORT_WORKFLOW.read_bytes(),
+                         self.COST_REPORT_WORKFLOW.read_bytes())
 
     def test_the_assembler_gate_is_the_owner_and_the_ready_label(self):
         """ADR-0032's two security invariants, pinned physically in the

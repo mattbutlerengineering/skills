@@ -69,8 +69,14 @@ Tiers graduate only on a real run.
 # The three human gates
 
 Exactly three, each a physical control rather than a norm (ADR-0033).
-Everything between them runs unattended. No agent may merge at any of
-them; no charter may move them.
+Everything between them runs unattended. Gates 1 and 2 merge only by
+the human code owner. At gate 3, ADR-0036 amends ADR-0033: the
+independent, non-authoring Reviewer may merge when required checks are
+green on the merge result, its re-executed review is recorded on the
+PR, and the PR is not a gate change — gate-change PRs (`docs/adr/**`,
+a run's `prd.md`, `architecture.md`, `docs/design/**`) stay with the
+human owner, and authoring agents never self-merge. No charter may
+move the gates.
 
 Rejections at a gate are **comments, never silent edits** — the
 correction stream is the raw material the toolsmith mines into charter
@@ -114,9 +120,11 @@ un-approved. Handed up by the **architect** and the **UX designer**.
 ## Gate 3 — PR merge
 
 Branch protection on main: required status checks (the detector suite and
-tests) plus code-owner review. Review is asynchronous and batched, and
-agent review pre-chews every PR so this check is judgment, not linting.
-Handed up by the **SWE**, pre-chewed by **QA** and the **Reviewer**.
+tests), with code-owner review on the gate-change paths. Agent review
+pre-chews every PR so this gate is judgment, not linting — and under
+ADR-0036's conditions the independent Reviewer completes the merge
+itself; the human owner merges the rest and audits post-merge. Handed up
+by the **SWE**, pre-chewed by **QA** and the **Reviewer**.
 
 - [ ] The PR body cites `WO-#### (PRD-#### §…)` and closes its issue
       (detector B) — the audit trail from code back to scope holds.
@@ -144,8 +152,10 @@ Handed up by the **SWE**, pre-chewed by **QA** and the **Reviewer**.
       to the Planner.
 - [ ] The run's cost line landed in the ledger (ADR-0034) — autonomy
       graduation has no data without it.
-- [ ] Merging is mine. No agent merges, and no graduation happens except
-      as a deliberate, evidence-backed, owner-applied config change.
+- [ ] Merging is mine or the independent Reviewer's under ADR-0036's
+      conditions — never the author's, and gate-change PRs are mine
+      alone. No graduation happens except as a deliberate,
+      evidence-backed, owner-applied config change.
 
 ## Dormant fourth gate
 

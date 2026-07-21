@@ -1,6 +1,6 @@
-"""run_eval's omp harness path (issue #88), tested end-to-end through
-the public interface with a fake `omp` executable on PATH (no real CLI,
-no API calls) — test_run_eval.py's twin for the second harness.
+"""run_eval's omp harness path (issue #88): the shared contract lives in
+harness_contract.RunEvalContract; this twin supplies the fake `omp`
+executable and the omp-only invocation seam tests.
 
 The fake lists the isolated project's .claude/skills/ dir
 (run_single_query sets it as cwd, build_omp_project_dir populates it)
@@ -8,20 +8,19 @@ and emits an omp-shaped toolcall_end event reading the skill named in
 the query via its skill:// URI, driving the real omp detection state
 machine.
 """
-import os
 import shutil
-import stat
 import sys
-import tempfile
 import unittest
-from contextlib import redirect_stderr
-from io import StringIO
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling harness_contract import
+sys.path.insert(0, str(ROOT / "tests"))
 
-from trigger_eval import _omp_invocation, run_eval  # noqa: E402
+from harness_contract import RunEvalContract  # noqa: E402
+from trigger_eval import _omp_invocation  # noqa: E402
 
 # Query protocol: "fire:<slug>" -> emit a read of that slug's skill://
 # URI; "fire:none" -> emit a tool-free agent_end. The query is the last
@@ -42,53 +41,10 @@ printf '%s%s%s\n' "$prefix" "$name" "$suffix"
 """
 
 
-def case(case_id, expected, query, kind="direct"):
-    return {"id": case_id, "kind": kind, "expected": expected, "query": query}
-
-
-class FakeOmpTest(unittest.TestCase):
-    def setUp(self):
-        self.dir = Path(tempfile.mkdtemp(prefix="run-eval-omp-"))
-        fake = self.dir / "omp"
-        fake.write_text(FAKE_OMP, encoding="utf-8")
-        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
-        self.old_path = os.environ["PATH"]
-        os.environ["PATH"] = f"{self.dir}:{self.old_path}"
-        self.addCleanup(self._cleanup)
-
-    def _cleanup(self):
-        os.environ["PATH"] = self.old_path
-        shutil.rmtree(self.dir, ignore_errors=True)
-
-    def run_quiet(self, cases, descriptions, **kwargs):
-        with redirect_stderr(StringIO()) as err:
-            output = run_eval(cases, descriptions, harness="omp", **kwargs)
-        return output, err.getvalue()
-
-    def test_counts_every_run_and_scores_per_case(self):
-        cases = [case("a", "idea", "fire:idea"),
-                 case("b", None, "fire:none", kind="distractor")]
-        output, _ = self.run_quiet(
-            cases, {"idea": "d", "prd": "d"}, workers=2, runs_per_query=2,
-            timeout=10, threshold=0.5, model=None, isolate=False)
-        by_id = {r["id"]: r for r in output["results"]}
-        self.assertEqual(by_id["a"]["fired"], {"idea": 2})
-        self.assertEqual(by_id["a"]["runs"], 2)
-        self.assertTrue(by_id["a"]["pass"])
-        self.assertEqual(by_id["b"]["fired"], {"none": 2})
-        self.assertTrue(by_id["b"]["pass"])
-        self.assertEqual(output["summary"]["total"], 2)
-        self.assertEqual(output["summary"]["passed"], 2)
-
-    def test_wrong_slug_fires_into_confusion_not_pass(self):
-        cases = [case("a", "prd", "fire:idea")]
-        output, _ = self.run_quiet(
-            cases, {"idea": "d", "prd": "d"}, workers=1, runs_per_query=3,
-            timeout=10, threshold=0.5, model=None, isolate=False)
-        result = output["results"][0]
-        self.assertEqual(result["fired"], {"idea": 3})
-        self.assertFalse(result["pass"])
-        self.assertEqual(output["confusion"]["prd"], {"idea": 3})
+class FakeOmpTest(RunEvalContract, unittest.TestCase):
+    BINARY = "omp"
+    FAKE = FAKE_OMP
+    HARNESS = "omp"
 
 
 class TestOmpInvocation(unittest.TestCase):

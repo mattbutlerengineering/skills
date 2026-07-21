@@ -34,12 +34,12 @@ from pathlib import Path
 
 import gates
 import label_sync
-from knowledge_plane import CLOSES_TOKEN, WO_TOKEN, repo_root, run_dirs
+from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, repo_root,
+                             row_work_order, run_dirs)
 
 LIFECYCLE_PREFIX = "wo:"
-# A breakdown row is a checkbox line; its work order is its FIRST WO token
-# (later ones are blocking edges). Notes are prose, never rows.
-ROW = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s")
+# The row grammar itself is knowledge_plane.ROW/row_work_order — the same
+# rule the assembler dispatches with, so the two cannot diverge.
 TRACKER = re.compile(r"\(tracker:\s*#(\d+)\)")
 REVIEW_MARKER = "<!-- factory-review -->"
 MAX_FINDINGS_CHARS = 12000
@@ -66,8 +66,7 @@ def tracker_issue(root, wo):
         if not breakdown.is_file():
             continue
         for line in breakdown.read_text(encoding="utf-8").splitlines():
-            tokens = WO_TOKEN.findall(line)
-            if not ROW.match(line) or not tokens or tokens[0] != wo:
+            if row_work_order(line) != wo:
                 continue
             match = TRACKER.search(line)
             if match:

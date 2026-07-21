@@ -172,6 +172,60 @@ class TestCharterSkills(unittest.TestCase):
                 text = skill_path(role).read_text(encoding="utf-8")
                 self.assertIn("ADR-0033", text)
 
+    def test_merge_authority_tracks_the_amendment(self):
+        """ADR-0036 amended ADR-0033's gate 3: the independent,
+        non-authoring Reviewer merges when checks are green on the merge
+        result, its review is recorded on the PR, and the PR is not a
+        gate change — gate-change PRs and gates 1-2 stay human, and
+        authors still never self-merge. A charter surface still claiming
+        merge is unconditionally human trains the fleet against the
+        accepted amendment, so the pre-amendment shorthands are pinned
+        out and the surfaces that state merge authority cite ADR-0036.
+        Text is whitespace-flattened first: charters hard-wrap prose, so
+        a stale phrase can straddle a line break."""
+        stale = ("human gate 3", "merge (human gate", "human merge gate",
+                 "agents never merge", "no agent may merge",
+                 "no agent merges", "merge is a human gate",
+                 "merge is one of the three human gates",
+                 "the human reads it at gate 3")
+        surfaces = ([CHARTERS_INDEX]
+                    + [skill_path(role) for role in ROLES]
+                    + [agent_path(role) for role in ROLES])
+        for path in surfaces:
+            flat = " ".join(
+                path.read_text(encoding="utf-8").split()).lower()
+            for phrase in stale:
+                with self.subTest(path=path.name, phrase=phrase):
+                    self.assertNotIn(phrase, flat)
+        for path in (skill_path("reviewer"), agent_path("reviewer"),
+                     CHARTERS_INDEX):
+            with self.subTest(path=path.name, cites="ADR-0036"):
+                self.assertIn("ADR-0036",
+                              path.read_text(encoding="utf-8"))
+
+    def test_stub_contract_keeps_the_load_bearing_rules(self):
+        """The stub's compressed contract is a cache of the charter; a
+        cache that silently drops an integrity rule is false, and the
+        agent reading only the stub inherits the gap. Pin the rules this
+        audit found dropped (2026-07-20): each phrase names a charter
+        Must-never obligation the stub must keep carrying, in any
+        wording that preserves the phrase."""
+        keeps = {
+            "pm": ("manufacture",),
+            "architect": ("second source of truth",),
+            "ux": ("report it as done",),
+            "swe": ("weaken, skip, or delete",),
+            "qa": ("fabricate", "weaken a criterion"),
+            "support": ("invent a work-order row", "metric"),
+            "toolsmith": ("fabricate", "eval, or test"),
+        }
+        for role, phrases in keeps.items():
+            flat = " ".join(
+                agent_path(role).read_text(encoding="utf-8").split()).lower()
+            for phrase in phrases:
+                with self.subTest(role=role, phrase=phrase):
+                    self.assertIn(phrase, flat)
+
     def test_charter_and_stub_agree_on_the_band(self):
         for role in ROLES:
             with self.subTest(role=role):

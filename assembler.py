@@ -37,15 +37,14 @@ from pathlib import Path
 
 import factory_config
 import orientation_pack
-from knowledge_plane import WO_TOKEN, repo_root, run_dirs
+from knowledge_plane import ROW, repo_root, row_work_order, run_dirs
+from protocol import read_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
 
-# A breakdown row is a checkbox line; its work order is its FIRST WO token
-# (later tokens are blocking edges). Notes are prose, never rows. Same grammar
-# validator.py reads — a one-line regex per file is cheaper than a shared
-# module with one caller each (CLAUDE.md: reuse needs callers AND divergence).
-ROW = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s")
+# The row grammar itself is knowledge_plane.ROW/row_work_order — one rule
+# for the whole dispatch plane (validator and orientation_pack read the
+# same one).
 TRACKER = re.compile(r"\(tracker:\s*#(\d+)\)")
 
 # Which charter owns a ready work order, keyed on its type: label. A work
@@ -112,12 +111,12 @@ def resolve_row(root, issue_number):
             match = TRACKER.search(line)
             if not match or int(match.group(1)) != issue_number:
                 continue
-            tokens = WO_TOKEN.findall(line)
-            if not tokens:
+            wo = row_work_order(line)
+            if not wo:
                 return None, None, [
                     f"asm: issue #{issue_number}'s breakdown row names no"
                     " work order"]
-            return tokens[0], line.strip(), []
+            return wo, line.strip(), []
     return None, None, [
         f"asm: no breakdown row mirrors issue #{issue_number} — a"
         " wo:ready-for-agent issue without a work-order row is not"
@@ -135,33 +134,19 @@ def select_charter(labels):
 
 def charter_band(agents_dir, role):
     """(the charter's route: band, problems), read from its agent stub
-    frontmatter. A charter names a band, never a model id (ADR-0034); the
-    band is the charter's only routing claim, so this is where routing
-    begins. A missing stub or a stub without a band fails closed."""
+    frontmatter via protocol.read_frontmatter — the one parser (ADR-0021),
+    so any form the charter tests accept is a form dispatch accepts. A
+    charter names a band, never a model id (ADR-0034); the band is the
+    charter's only routing claim, so this is where routing begins. A
+    missing stub or a stub without a band fails closed."""
     stub = Path(agents_dir) / f"factory-{role}.md"
     if not stub.is_file():
         return None, [f"asm: charter stub {stub} is missing"]
-    text = stub.read_text(encoding="utf-8")
-    front = _frontmatter(text)
-    for line in front:
-        if line.strip().startswith("route:"):
-            band = line.split(":", 1)[1].strip()
-            if band:
-                return band, []
+    fields = read_frontmatter(stub) or {}
+    band = (fields.get("route") or "").strip()
+    if band:
+        return band, []
     return None, [f"asm: charter factory-{role} declares no route: band"]
-
-
-def _frontmatter(text):
-    """The lines inside the leading --- fenced frontmatter block, or []."""
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return []
-    body = []
-    for line in lines[1:]:
-        if line.strip() == "---":
-            return body
-        body.append(line)
-    return []
 
 
 def assemble_prompt(role, wo, row, root):

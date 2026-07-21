@@ -22,7 +22,7 @@ import ast
 import re
 from pathlib import Path
 
-from knowledge_plane import ADR_TOKEN, WO_TOKEN, run_dirs
+from knowledge_plane import ADR_TOKEN, row_work_order, run_dirs
 
 # Bare filenames a breakdown row names in prose ("assembler.yml + guards",
 # "budget_guard.py + handoff.py + cost ledger") — a best-effort scan of the
@@ -30,12 +30,11 @@ from knowledge_plane import ADR_TOKEN, WO_TOKEN, run_dirs
 # real repo path.
 FILENAME_TOKEN = re.compile(r"\b[\w-]+\.(?:py|yml|yaml|md|json)\b")
 
-# A breakdown row is a checkbox bullet; the WO its FIRST token names owns the
-# block that follows until the next such bullet. Same grammar assembler.ROW
-# reads — the Accept:/Notes sub-bullets under a row are NOT checkbox bullets,
-# so they belong to their work order's block, which is where this repo's rows
+# The row grammar is knowledge_plane.row_work_order — the WO a row's FIRST
+# token names owns the block that follows until the next work-order row.
+# The Accept:/Notes sub-bullets under a row are NOT checkbox rows, so they
+# belong to their work order's block, which is where this repo's rows
 # actually cite ADRs (the bullet line cites only the PRD section).
-ROW = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s")
 
 
 def wo_block(root, wo):
@@ -56,14 +55,11 @@ def wo_block(root, wo):
             continue
         lines = breakdown.read_text(encoding="utf-8").splitlines()
         for index, line in enumerate(lines):
-            if not (ROW.match(line) and WO_TOKEN.search(line)):
-                continue
-            if WO_TOKEN.findall(line)[0] != wo:
+            if row_work_order(line) != wo:
                 continue
             block = [line]
             for nxt in lines[index + 1:]:
-                if (ROW.match(nxt) and WO_TOKEN.search(nxt)) \
-                        or nxt.startswith("#"):
+                if row_work_order(nxt) or nxt.startswith("#"):
                     break
                 block.append(nxt)
             return "\n".join(block).strip()
@@ -91,11 +87,24 @@ def adr_path(root, number):
 
 
 def _resolve_file(root, name):
-    """The first repo file matching a bare filename a row names, or None.
-    Rows name files without a path ("assembler.yml"), so this is a search,
-    not a lookup; sorted() keeps it deterministic when a name is not
-    unique."""
-    matches = sorted(Path(root).rglob(name))
+    """The canonical repo file matching a bare filename a row names, or
+    None. Rows name files without a path ("assembler.yml"), so this is a
+    search, not a lookup. Copies under dot-directories (agent worktrees,
+    editor state — but not .github, the workflows' real home) or the
+    template payload are mirrors, never the file a row means, so they
+    are skipped; among the rest the shallowest match wins (the root copy
+    over any nested one), with sorted order breaking ties
+    deterministically."""
+    root = Path(root)
+    payload = root / "factory" / "templates"
+
+    def hidden(path):
+        return any(part.startswith(".") and part != ".github"
+                   for part in path.relative_to(root).parts[:-1])
+
+    matches = [p for p in root.rglob(name)
+               if not hidden(p) and not p.is_relative_to(payload)]
+    matches.sort(key=lambda p: (len(p.relative_to(root).parts), p))
     return matches[0] if matches else None
 
 
