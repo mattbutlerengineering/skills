@@ -16,9 +16,9 @@ from pathlib import Path
 import cost_ledger
 
 
-def entry(wo, run_id, model, tokens, cost, outcome):
-    return dict(zip(cost_ledger.LEDGER_FIELDS,
-                    (wo, run_id, model, tokens, cost, outcome)))
+# fixture records come from the seam under test — entry() itself is
+# covered by TestEntry, so building fixtures with it is not circular
+entry = cost_ledger.entry
 
 
 class TestEntry(unittest.TestCase):

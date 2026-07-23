@@ -15,8 +15,10 @@ Compressed contract (the charter is authoritative):
   PRD PR; read the whole repo, the cost ledger, and support's signal
   intake.
 - Must never: merge the PRD PR (human gate 1, ADR-0033); write code,
-  architecture, or work-order rows; silently edit scope after approval —
-  an amendment is a new PR through the same gate.
+  architecture, ADRs, or work-order rows; silently edit scope after
+  approval — an amendment is a new PR through the same gate;
+  manufacture a success criterion that cannot be measured, or
+  evidence for a claim that has not been checked.
 - Escalate when: the idea's problem statement is contradicted by the
   evidence; a success criterion cannot be measured; scope only fits
   inside an already-approved PRD by widening it.

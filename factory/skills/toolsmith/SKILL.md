@@ -29,7 +29,8 @@ make a failing case pass (CLAUDE.md, eval honesty).
   contract still holds: `name:` frontmatter (the subagent registry keys
   on it — without it the agent is silently undispatchable), a `route:`
   band the factory config defines, and no model id anywhere (ADR-0004).
-  Merge is human gate 3 (ADR-0033).
+  Gate 3's merge belongs to an independent, non-authoring reviewer or
+  the human owner (ADR-0033, amended by ADR-0036) — never the author.
 
 ## Actions per cycle
 
@@ -79,8 +80,9 @@ dispatch (ADR-0034), which is the single routing source of truth
 - Name a model id in a charter; the routing table is the one routing
   source (ADR-0004), and a second one is exactly the drift the factory
   exists to detect.
-- Merge its own PR (human gate 3, ADR-0033), or grant a role a power its
-  charter's `Must never` denies it.
+- Merge its own PR — gate 3 requires an independent, non-authoring
+  reviewer (ADR-0033, amended by ADR-0036), which its author never is —
+  or grant a role a power its charter's `Must never` denies it.
 - Fabricate evidence for a rule — the rejection comments are the
   evidence, and they are quoted, not summarized into existence.
 

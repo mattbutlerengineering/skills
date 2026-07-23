@@ -35,7 +35,6 @@ import argparse
 import datetime
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -43,6 +42,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import cli
 import eval_schema
 
 ROOT = Path(__file__).resolve().parent
@@ -137,17 +137,8 @@ def validate(data, root, label):
     """
     if "version" not in data:
         return [f"{label} missing 'version' field"]
-    raw = data.get("cases", [])
-    if not isinstance(raw, list):
-        return [f"{label} cases is not a list"]
-    problems = [f"{label} cases entry #{n} is not an object"
-                for n, c in enumerate(raw) if not isinstance(c, dict)]
-    cases = [c for c in raw if isinstance(c, dict)]
-
-    ids = [c.get("id") for c in cases]
-    problems += [f"{label} has duplicate case id {i!r}"
-                 for i in sorted({i for i in ids if ids.count(i) > 1},
-                                 key=lambda i: (i is None, str(i)))]
+    cases, problems = eval_schema.entries(data, "cases", label)
+    problems += eval_schema.duplicate_id_problems(cases, label)
     for case in cases:
         problems += _case_problems(case, root, label)
     return problems
@@ -156,17 +147,12 @@ def validate(data, root, label):
 def load_cases(path, root, label):
     """Read and validate the golden case set; return (cases, problems).
 
-    Any problem means the set is unusable: cases is [] so a caller cannot
-    half-run a broken suite and read the result as a charter verdict.
+    A thin caller of eval_schema.load_case_set: any problem means the
+    set is unusable, so a caller cannot half-run a broken suite and
+    read the result as a charter verdict.
     """
-    if not path.is_file():
-        return [], [f"missing {label}"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
-        return [], [f"{label} is not valid JSON: {err}"]
-    problems = validate(data, root, label)
-    return ([], problems) if problems else (data.get("cases", []), [])
+    return eval_schema.load_case_set(
+        path, label, lambda data: validate(data, root, label))
 
 
 # ------------------------------------------------------------- transcripts
@@ -341,9 +327,7 @@ def claude_runner(root, model, timeout):
                 encoding="utf-8"))
         cmd = ["claude", "-p", prompt, "--output-format", "stream-json",
                "--verbose", "--model", model, "--setting-sources", "project"]
-        # CLAUDECODE is stripped so a replay can nest inside a session; the
-        # guard exists for interactive terminal conflicts.
-        env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        env = cli.child_env()
         try:
             proc = subprocess.run(cmd, cwd=scratch, env=env, timeout=timeout,
                                   capture_output=True, text=True)
@@ -366,15 +350,6 @@ def recorded_runner(transcripts):
                                {"tool_calls": [], "text": "",
                                 "error": "no recorded transcript"})
     return run
-
-
-def cli_version():
-    try:
-        proc = subprocess.run(["claude", "--version"], capture_output=True,
-                              text=True, timeout=15)
-        return proc.stdout.strip() or None
-    except (OSError, subprocess.TimeoutExpired):
-        return None
 
 
 def record(output, results_dir):
@@ -452,7 +427,8 @@ def main(argv=None):
         "date": datetime.date.today().isoformat(),
         "source": source,
         "model": model,
-        "cli_version": cli_version() if source == "live-model" else None,
+        "cli_version": cli.version("claude") if source == "live-model"
+        else None,
         "charters": charter_digests(ROOT, [c["role"] for c in cases]),
         **run_suite(cases, runner),
     }

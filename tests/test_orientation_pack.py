@@ -9,12 +9,18 @@ takes root + wo + row, never an issue body, so there is no channel for
 attacker-controlled text to reach the pack.
 """
 import inspect
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import assembler
 import orientation_pack
+
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling fixture_tree import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fixture_tree import FixtureTree as BaseFixtureTree  # noqa: E402
 
 CONTEXT = "# Context\n\nSome vocabulary lives here.\n"
 
@@ -56,16 +62,7 @@ BULLET_0091 = (
     " (PRD-0001 §Solution) (tracker: #991)")
 
 
-class FixtureTree:
-    def __init__(self, root):
-        self.root = Path(root)
-
-    def write(self, rel, text):
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
-
+class FixtureTree(BaseFixtureTree):
     def orientation(self):
         """A tree carrying CONTEXT.md and two real-shaped ADRs, so bundling
         can be checked against known content."""
@@ -164,6 +161,32 @@ class TestCodegraphSummary(unittest.TestCase):
             summary = orientation_pack.codegraph_summary(
                 tmp, "assembler.yml + guards")
             self.assertIn(".github/workflows/assembler.yml", summary)
+
+    def test_the_canonical_copy_beats_mirrors_and_worktrees(self):
+        """A self-hosting repo carries decoy copies of a named file: agent
+        worktrees under .claude/ (which sort before letters) and the
+        template payload. Orientation must summarize the canonical root
+        copy — a dispatched agent's first read is the real module."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".claude/worktrees/agent-1/gates.py",
+                       '"""Stale worktree copy."""\n')
+            tree.write("factory/templates/tools/factory/gates.py",
+                       '"""Payload mirror."""\n')
+            tree.write("gates.py", '"""The canonical detectors."""\n')
+            summary = orientation_pack.codegraph_summary(tmp, "gates.py")
+            self.assertIn("The canonical detectors", summary)
+            self.assertNotIn("Stale worktree copy", summary)
+            self.assertNotIn("Payload mirror", summary)
+
+    def test_github_workflows_stay_resolvable(self):
+        # .github is the one dot-directory that IS a legitimate home
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/workflows/cost-report.yml", "name: c\n")
+            summary = orientation_pack.codegraph_summary(
+                tmp, "cost-report.yml")
+            self.assertIn(".github/workflows/cost-report.yml", summary)
 
     def test_an_unparseable_python_file_degrades_and_does_not_crash(self):
         """A row naming a .py file with a syntax error must not crash the

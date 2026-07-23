@@ -15,7 +15,8 @@ from pathlib import Path
 
 import eval_schema
 import protocol
-from protocol import ALL_SKILLS, STAGES, TEMPLATED_STAGES, read_frontmatter
+from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
+                      TEMPLATED_STAGES, read_frontmatter)
 
 
 def check_manifest(root):
@@ -109,8 +110,11 @@ def check_router(root):
     if not router.is_file():
         return []  # absence already reported by check_skills
     text = router.read_text(encoding="utf-8")
+    # the full routed taxonomy: the spine plus maintenance entry points
+    # (ADR-0025) — utility skills are excluded because the router never
+    # routes to them (ADR-0023)
     return [f"router never mentions stage skill {slug!r}"
-            for slug in STAGES if slug not in text]
+            for slug in STAGES + MAINTENANCE_STAGES if slug not in text]
 
 
 def check_protocol(root):
@@ -138,12 +142,9 @@ def check_output_evals(root):
             ([f"{label} stem is not a skill slug"]
              if slug not in ALL_SKILLS else [])
             + eval_schema.validate_output(data, slug, label)
-            + [f"{label} eval {e.get('id')!r} run_fixture "
-               f"{e.get('run_fixture')!r} does not exist"
-               for e in (data.get("evals")
-                         if isinstance(data.get("evals"), list) else [])
-               if isinstance(e, dict) and e.get("run_fixture")
-               and not (root / e["run_fixture"]).is_dir()]
+            + [f"{label} eval {eid!r} run_fixture {ref!r} does not exist"
+               for eid, ref in eval_schema.fixture_refs(data)
+               if not (root / ref).is_dir()]
         )
     output_dir = root / "evals" / "output"
     if not output_dir.is_dir():

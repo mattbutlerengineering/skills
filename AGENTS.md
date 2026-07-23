@@ -1,51 +1,73 @@
-# Agent Instructions
+# skills — agent notes
 
-This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
+Idea-to-prod pipeline skills, vended as a Claude plugin. Artifacts are the
+state: each stage skill reads/writes run artifacts (product runs at the
+target repo's `docs/` root, feature runs under `docs/features/<slug>/`),
+and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
-> **Architecture in one line:** Issues live in a local Dolt database
-> (`.beads/dolt/`); cross-machine sync uses `bd dolt push/pull` (a
-> git-compatible protocol), stored under `refs/dolt/data` on your git
-> remote — separate from `refs/heads/*` where your code lives.
-> `.beads/issues.jsonl` is a passive export, not the wire protocol.
->
-> See [SYNC_CONCEPTS.md](https://github.com/gastownhall/beads/blob/main/docs/SYNC_CONCEPTS.md)
-> for the one-screen overview and anti-patterns (don't treat JSONL as the
-> source of truth; don't `bd import` during normal operation; don't
-> reach for third-party Dolt hosting before trying the default).
+## Verify (CI runs both on every push/PR)
 
-## Quick Reference
+- `python3 -m unittest discover tests`
+- `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
+- `python3 gates.py && python3 gates.py --selftest` — factory drift
+  detectors (A–I; B skips locally without a PR event payload, but the
+  selftest exercises it), output matching `gates: 0 problem(s)`
 
-```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
-bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
-```
+On demand only (real model runs, costs money, never CI; both need the
+`claude` CLI):
 
-## Non-Interactive Shell Commands
+- `python3 trigger_eval.py` — routing eval
+- `python3 charter_replay.py` — charter regression suite: golden fixture
+  work orders replayed against the role charters. Its scoring seam is pure
+  and injected, so CI covers degradation detection offline with recorded
+  transcripts; only the live replay costs money.
 
-**ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
+## Hard conventions
 
-Shell commands like `cp`, `mv`, and `rm` may be aliased to include `-i` (interactive) mode on some systems, causing the agent to hang indefinitely waiting for y/n input.
+- **Stdlib only.** Every script is standalone Python 3 standard library.
+  No third-party dependencies.
+- **Seam modules, everything else thin callers**: `protocol.py`
+  (ADR-0021 — taxonomy, artifact table, frontmatter, next-stage),
+  `eval_schema.py` (ADR-0022, ADR-0024 — all eval knowledge: routing
+  eval-set shape/kinds/validation, output-eval record shape, results
+  naming grammar), and the four factory seams (ADR-0037, ADR-0039,
+  ADR-0040 — `knowledge_plane.py` typed-ID grammar + run walk, `cli.py`
+  external-CLI + harness-IO conventions, `factory_config.py` factory.json
+  reader/resolvers, `cost_ledger.py` cost-ledger shape). A new shared module needs multiple
+  real callers AND observed divergence between their copies — anticipated
+  reuse doesn't qualify.
+- **Three skill kinds**: stage skills (own a run artifact, routed to by
+  `next`), the `next` router, and utility skills (ADR-0023 —
+  directly-invoked, own no artifact, never routed to; `protocol.py`
+  `UTILITY_SKILLS`).
+- **Problem-string contracts**: checkers/validators return lists of
+  label-prefixed problem strings; callers print and exit nonzero. Tests
+  assert the exact strings through public interfaces (see
+  `tests/test_lint_checkers.py`).
+- **Factory templates are checksum-pinned**: after any edit under
+  `factory/templates/**` or to any root file in `factory_init.MIRRORS`
+  (the authority on what is mirrored into the payload — root tools AND
+  workflows), run `python3 factory_init.py update-manifest` and commit
+  the manifest with the change. Detector E gates manifest↔payload;
+  `tests/test_factory_init.py` pins payload↔root.
+- **Dispatch mirrors one-way** (ADR-0032): never create a `WO-####` issue
+  before its `breakdown.md` row exists.
+- **Typed IDs live in run-artifact frontmatter** (`id: PRD-0001`), never a
+  parallel `docs/prd/` tree (ADR-0004).
 
-**Use these forms instead:**
-```bash
-# Force overwrite without prompting
-cp -f source dest           # NOT: cp source dest
-mv -f source dest           # NOT: mv source dest
-rm -f file                  # NOT: rm file
+## Eval honesty (non-negotiable)
 
-# For recursive operations
-rm -rf directory            # NOT: rm -r directory
-cp -rf source dest          # NOT: cp -r source dest
-```
+- `evals/results/` is append-only: dated snapshots, never rewritten.
+- Never edit an eval definition to make a failing case pass.
+- LEDGER maturity graduates only via a real run — never fabricate run or
+  eval evidence. (ADR-0012, ADR-0019; details in `evals/README.md`.)
 
-**Other commands that may prompt:**
-- `scp` - use `-o BatchMode=yes` for non-interactive
-- `ssh` - use `-o BatchMode=yes` to fail instead of prompting
-- `apt-get` - use `-y` flag
-- `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
+## Where things are decided
+
+- `CONTEXT.md` — canonical vocabulary (use these terms in code and docs)
+- `docs/adr/` — decisions; supersede with a new ADR, don't rewrite
+- `LEDGER.md` — per-skill maturity, linked to eval evidence
+
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
 ## Beads Issue Tracker

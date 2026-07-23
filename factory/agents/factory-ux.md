@@ -16,7 +16,8 @@ Compressed contract (the charter is authoritative):
   (playwright + web-quality) against a preview.
 - Must never: merge the design PR (`docs/design/**` sits behind human
   gate 2, ADR-0033); ship a flow with no empty/loading/error state; skip
-  the accessibility pass; invent scope the PRD does not carry.
+  the accessibility pass, or report it as done when it was not run;
+  invent scope the PRD does not carry.
 - Escalate when: the PRD implies a surface the design cannot make
   accessible; a design need contradicts an accepted ADR; the run has no
   user-facing surface at all (then this stage is skipped, on the record).

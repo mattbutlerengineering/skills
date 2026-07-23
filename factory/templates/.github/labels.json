@@ -47,17 +47,17 @@
   {
     "name": "size:S",
     "color": "f9d0c4",
-    "description": "Budget class S (~$5)"
+    "description": "Budget class S — dollar cap in factory.json budgets_usd"
   },
   {
     "name": "size:M",
     "color": "f4a261",
-    "description": "Budget class M (~$15)"
+    "description": "Budget class M — dollar cap in factory.json budgets_usd"
   },
   {
     "name": "size:L",
     "color": "e76f51",
-    "description": "Budget class L (~$40)"
+    "description": "Budget class L — dollar cap in factory.json budgets_usd"
   },
   {
     "name": "risk:low",

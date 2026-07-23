@@ -47,11 +47,13 @@ _Avoid_: platform, runtime, agent (bare)
 
 **Utility skill**:
 A directly-invoked skill that owns no stage artifact, has no template, and
-is never routed to by /next. It acts on the work around a run: address-pr-review
-works reviewer feedback on an authored PR; autorun orchestrates a full run,
-dispatching a stage subagent per stage without owning an artifact itself;
-mermaid turns processes and systems into digestible, contrast-safe diagrams.
-A full skill for install, lint, ledger, and trigger-eval purposes (ADR-0023).
+is never routed to by /next. It acts on the work surrounding the pipeline —
+a run in flight or the repo the pipeline serves. Examples: address-pr-review
+works reviewer feedback on an authored PR; autorun orchestrates a full run
+without owning an artifact itself; factory-init stamps a product repo with
+the factory scaffold; mermaid turns processes and systems into digestible,
+contrast-safe diagrams. The living roster is `protocol.py`'s
+`UTILITY_SKILLS` (ADR-0023).
 _Avoid_: helper skill, tool skill
 
 **Work item**:

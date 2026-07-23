@@ -31,22 +31,21 @@ Two invariants here are security properties, not conveniences (ADR-0032):
 """
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
 import factory_config
 import orientation_pack
-from knowledge_plane import WO_TOKEN, repo_root, run_dirs
+from cli import write_outputs
+from knowledge_plane import (breakdown_files, repo_root,
+                             row_tracker_issue, row_work_order)
+from protocol import read_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
 
-# A breakdown row is a checkbox line; its work order is its FIRST WO token
-# (later tokens are blocking edges). Notes are prose, never rows. Same grammar
-# validator.py reads — a one-line regex per file is cheaper than a shared
-# module with one caller each (CLAUDE.md: reuse needs callers AND divergence).
-ROW = re.compile(r"^\s*[-*]\s*\[[ xX]\]\s")
-TRACKER = re.compile(r"\(tracker:\s*#(\d+)\)")
+# The row and tracker-mirror grammars are knowledge_plane's — one rule
+# for the whole dispatch plane (validator and orientation_pack read the
+# same ones; ADR-0039).
 
 # Which charter owns a ready work order, keyed on its type: label. A work
 # order reaching wo:ready-for-agent is implementation work; the SWE owns
@@ -102,22 +101,16 @@ def resolve_row(root, issue_number):
     plane, not the issue, decides which work order an issue carries. A
     ready-for-agent issue with no row is a real misconfiguration (the mirror
     ran ahead of the breakdown, which ADR-0032 forbids) — say so."""
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if not breakdown.is_file():
-            continue
-        for line in breakdown.read_text(encoding="utf-8").splitlines():
-            if not ROW.match(line):
+    for _, lines in breakdown_files(root):
+        for line in lines:
+            if row_tracker_issue(line) != issue_number:
                 continue
-            match = TRACKER.search(line)
-            if not match or int(match.group(1)) != issue_number:
-                continue
-            tokens = WO_TOKEN.findall(line)
-            if not tokens:
+            wo = row_work_order(line)
+            if not wo:
                 return None, None, [
                     f"asm: issue #{issue_number}'s breakdown row names no"
                     " work order"]
-            return tokens[0], line.strip(), []
+            return wo, line.strip(), []
     return None, None, [
         f"asm: no breakdown row mirrors issue #{issue_number} — a"
         " wo:ready-for-agent issue without a work-order row is not"
@@ -135,33 +128,19 @@ def select_charter(labels):
 
 def charter_band(agents_dir, role):
     """(the charter's route: band, problems), read from its agent stub
-    frontmatter. A charter names a band, never a model id (ADR-0034); the
-    band is the charter's only routing claim, so this is where routing
-    begins. A missing stub or a stub without a band fails closed."""
+    frontmatter via protocol.read_frontmatter — the one parser (ADR-0021),
+    so any form the charter tests accept is a form dispatch accepts. A
+    charter names a band, never a model id (ADR-0034); the band is the
+    charter's only routing claim, so this is where routing begins. A
+    missing stub or a stub without a band fails closed."""
     stub = Path(agents_dir) / f"factory-{role}.md"
     if not stub.is_file():
         return None, [f"asm: charter stub {stub} is missing"]
-    text = stub.read_text(encoding="utf-8")
-    front = _frontmatter(text)
-    for line in front:
-        if line.strip().startswith("route:"):
-            band = line.split(":", 1)[1].strip()
-            if band:
-                return band, []
+    fields = read_frontmatter(stub) or {}
+    band = (fields.get("route") or "").strip()
+    if band:
+        return band, []
     return None, [f"asm: charter factory-{role} declares no route: band"]
-
-
-def _frontmatter(text):
-    """The lines inside the leading --- fenced frontmatter block, or []."""
-    lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return []
-    body = []
-    for line in lines[1:]:
-        if line.strip() == "---":
-            return body
-        body.append(line)
-    return []
 
 
 def assemble_prompt(role, wo, row, root):
@@ -225,25 +204,6 @@ def run_resolve(root, env, agents_dir=None):
     return ({"dispatch": "true", "wo": wo, "charter": role, "band": band,
              "model": model,
              "prompt": assemble_prompt(role, wo, row, root)}, [])
-
-
-def write_outputs(env, outputs):
-    """Append outputs to $GITHUB_OUTPUT for the workflow's downstream steps.
-    Multiline values (the prompt) use GitHub's heredoc form. No GITHUB_OUTPUT
-    (a hand or local run) is a silent no-op."""
-    path = env.get("GITHUB_OUTPUT")
-    if not path:
-        return
-    chunks = []
-    for key, value in outputs.items():
-        text = str(value)
-        if "\n" in text:
-            delim = f"__ASM_{key.upper()}_EOF__"
-            chunks.append(f"{key}<<{delim}\n{text}\n{delim}")
-        else:
-            chunks.append(f"{key}={text}")
-    with open(path, "a", encoding="utf-8") as handle:
-        handle.write("\n".join(chunks) + "\n")
 
 
 def main(argv, env=None):

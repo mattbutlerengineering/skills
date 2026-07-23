@@ -5,15 +5,20 @@ exercised through its public interface, tests assert the EXACT problem
 strings callers will print, and the gh runner is injected so no test ever
 touches the network.
 """
-import contextlib
-import io
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import label_sync
+
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling fixture_tree import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fixture_tree import FixtureTree  # noqa: E402
+import cli_contract  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = REPO_ROOT / "factory" / "templates" / ".github" / "labels.json"
@@ -38,17 +43,6 @@ MISSING_PROBLEM = ("L: missing labels.json (.github/labels.json or"
 
 def taxonomy():
     return json.loads(TEMPLATE.read_text(encoding="utf-8"))
-
-
-class FixtureTree:
-    def __init__(self, root):
-        self.root = Path(root)
-
-    def write(self, rel, text):
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
 
 
 class RecordingRunner:
@@ -327,32 +321,30 @@ class TestSync(unittest.TestCase):
                 " HTTP 403: rate limit exceeded"])
 
 
-class TestCli(unittest.TestCase):
-    def run_main(self, argv, runner):
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            code = label_sync.main(argv, run=runner)
-        return code, buf.getvalue()
+class TestCli(cli_contract.CliContract, unittest.TestCase):
+    usage_fragment = "label-sync"
+    bad_argv = ("--bogus",)  # the tool has flags, not subcommands
+
+    def run_cli(self, argv, runner=None):
+        return cli_contract.capture(
+            label_sync.main, argv,
+            run=runner if runner is not None else RecordingRunner([]))
 
     def test_clean_run_prints_zero_and_exits_zero(self):
         desired, problems = label_sync.load_labels(REPO_ROOT)
         self.assertEqual(problems, [])
-        code, out = self.run_main([], RecordingRunner(desired))
+        code, out = self.run_cli([], RecordingRunner(desired))
         self.assertEqual(code, 0)
         self.assertEqual(out, "label-sync: 0 problem(s)\n")
 
     def test_drift_prints_problems_and_exits_one(self):
-        code, out = self.run_main([], RecordingRunner([]))
+        code, out = self.run_cli([], RecordingRunner([]))
         self.assertEqual(code, 1)
         lines = out.splitlines()
         self.assertEqual(len(lines), 28)
         self.assertEqual(lines[0], "L: missing label wo:draft")
         self.assertEqual(lines[-1], "label-sync: 27 problem(s)")
 
-    def test_unknown_argument_prints_usage(self):
-        code, out = self.run_main(["--bogus"], RecordingRunner([]))
-        self.assertEqual(code, 2)
-        self.assertIn("label-sync", out)
 
 
 if __name__ == "__main__":

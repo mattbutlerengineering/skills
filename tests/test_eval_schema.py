@@ -74,6 +74,22 @@ class TestValidate(unittest.TestCase):
         self.assertIn("evals/routing.json case 'next-0' has no query",
                       problems)
 
+    def test_missing_id(self):
+        # The runner subscripts case["id"] everywhere it reports; an
+        # id-less case must be refused here with lint's diagnostics, not
+        # surface as a KeyError mid-run (ADR-0022's whole point)
+        data = valid_data()
+        del data["cases"][0]["id"]
+        problems = eval_schema.validate(data, SKILLS, LABEL)
+        self.assertIn("evals/routing.json case None has no id", problems)
+
+    def test_falsy_present_id_is_a_value_not_a_gap(self):
+        # id 0 mirrors validate_output's is-None handling
+        data = valid_data()
+        data["cases"][0]["id"] = 0
+        self.assertNotIn("evals/routing.json case 0 has no id",
+                         eval_schema.validate(data, SKILLS, LABEL))
+
     def test_thin_skill_coverage(self):
         data = valid_data()
         data["cases"] = [c for c in data["cases"] if c["id"] != "idea-0"]
@@ -235,6 +251,39 @@ class TestValidateOutput(unittest.TestCase):
             problems)
 
 
+class TestFixtureRefs(unittest.TestCase):
+    """The output-eval record shape belongs to eval_schema (ADR-0024);
+    fixture_refs is the accessor that keeps callers (the lint's
+    fixture-existence check) from reaching into records by string key."""
+
+    def test_yields_id_and_fixture_per_record(self):
+        data = {"evals": [valid_output_record(),
+                          valid_output_record(id=2, run_fixture="evals/g")]}
+        self.assertEqual(eval_schema.fixture_refs(data),
+                         [(1, "evals/fixtures/f"), (2, "evals/g")])
+
+    def test_records_without_a_fixture_are_skipped(self):
+        # absent and empty both mean "no fixture to check" — matching
+        # _output_field_missing, where validate_output owns the complaint
+        data = {"evals": [valid_output_record(run_fixture=None),
+                          valid_output_record(id=2, run_fixture="")]}
+        self.assertEqual(eval_schema.fixture_refs(data), [])
+
+    def test_missing_id_is_carried_as_none(self):
+        record = valid_output_record()
+        del record["id"]
+        self.assertEqual(eval_schema.fixture_refs({"evals": [record]}),
+                         [(None, "evals/fixtures/f")])
+
+    def test_malformed_shapes_yield_nothing(self):
+        # shape complaints belong to validate_output; the accessor just
+        # never crashes on what validate_output will already flag
+        for data in ({}, {"evals": None}, {"evals": "oops"},
+                     {"evals": ["oops"]}):
+            with self.subTest(data=data):
+                self.assertEqual(eval_schema.fixture_refs(data), [])
+
+
 class TestResultsPath(unittest.TestCase):
     """One owner for the append-only results naming grammar: trigger runs
     as trigger-<date>[-N].json, output gradings as output/<slug>-<date>[-N]/,
@@ -322,6 +371,34 @@ class TestResultsPath(unittest.TestCase):
         with self.assertRaises(ValueError):
             eval_schema.results_path(self.results, "trigger", "2026-07-02",
                                      harness="opencode")
+
+
+class TestResultsGrammarRoundTrip(unittest.TestCase):
+    """The '-N starts at 2' collision rule is encoded twice inside this
+    module — the _SUFFIX regex (validator side) and the results_path
+    counter (generator side). This round-trip pins them together: every
+    path the generator mints must be a link the validator accepts."""
+
+    def setUp(self):
+        self.results = Path(tempfile.mkdtemp(prefix="results-roundtrip-"))
+        self.addCleanup(shutil.rmtree, self.results)
+
+    def link(self, path):
+        return f"evals/results/{path.relative_to(self.results).as_posix()}"
+
+    def test_generated_trigger_paths_validate_through_collisions(self):
+        for _ in range(3):  # unsuffixed, -2, -3
+            path = eval_schema.results_path(self.results, "trigger",
+                                            "2026-07-21")
+            path.write_text("{}", encoding="utf-8")
+            self.assertTrue(eval_schema.valid_results_link(self.link(path)),
+                            self.link(path))
+
+    def test_a_generated_output_grading_validates(self):
+        path = eval_schema.results_path(self.results, "output",
+                                        "2026-07-21", slug="idea")
+        link = self.link(path) + "/grading.json"
+        self.assertTrue(eval_schema.valid_results_link(link), link)
 
 
 class TestValidResultsLink(unittest.TestCase):

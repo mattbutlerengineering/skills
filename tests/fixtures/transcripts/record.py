@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Record a real claude -p stream-json transcript for detection pinning.
 
-Mirrors the trigger-eval runner's invocation — the same flags, env
-strip, and isolated project layout as run_single_query (keep them in
-sync when the runner's invocation changes; nothing pins the two) —
-while teeing every raw stdout line to <name>.jsonl in this directory.
-Like the runner, it stops as soon as detect_fired decides, then writes
+The project layout, flags, and detector come from the runner's own
+harness adapter (trigger_eval.HARNESSES["claude"], ADR-0038), so the
+recording and run_single_query cannot drift — this script adds only the
+tee of every raw stdout line to <name>.jsonl in this directory.
+Like the runner, it stops as soon as the detector decides, then writes
 the outcome, query, date, CLI version, and invocation facts into
 provenance.json. See README.md here for when to re-record; transcripts
 are never edited by hand.
@@ -16,7 +16,6 @@ Usage (from the repo root, with an authenticated claude CLI):
 """
 import datetime
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -26,8 +25,10 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(ROOT))
 
-from trigger_eval import (build_project_dir, cli_version,  # noqa: E402
-                          detect_fired, load_descriptions)
+import cli  # noqa: E402
+from trigger_eval import HARNESSES, load_descriptions  # noqa: E402
+
+ADAPTER = HARNESSES["claude"]
 
 # Fixed so the committed transcripts' tool names are reproducible; the
 # replay test rebuilds name_to_slug from provenance.json's copy of this.
@@ -37,13 +38,11 @@ RUN_ID = "pinned01"
 def record(name, query):
     descriptions = load_descriptions(ROOT / "skills")
     name_to_slug = {f"{slug}-skill-{RUN_ID}": slug for slug in descriptions}
-    project_dir = build_project_dir(descriptions, RUN_ID)
-    cmd = ["claude", "-p", query,
-           "--output-format", "stream-json",
-           "--verbose",
-           "--include-partial-messages",
-           "--setting-sources", "project"]
-    env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+    # model=None, isolate=True: the same invocation the eval runner uses
+    # (and provenance.json records below)
+    project_dir, cmd = ADAPTER.invocation(query, descriptions, RUN_ID,
+                                          None, True)
+    env = cli.child_env()
     lines = []
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL, cwd=project_dir,
@@ -61,7 +60,7 @@ def record(name, query):
                 continue
 
     try:
-        fired = detect_fired(teed_events(), name_to_slug)
+        fired = ADAPTER.detect(teed_events(), name_to_slug)
     finally:
         if process.poll() is None:
             process.kill()
@@ -79,7 +78,7 @@ def record(name, query):
         "query": query,
         "fired": fired,
         "recorded": datetime.date.today().isoformat(),
-        "cli_version": cli_version(),
+        "cli_version": cli.version("claude"),
         # invocation facts, mirroring what trigger-eval results record
         "model": None,
         "isolated_settings": True,

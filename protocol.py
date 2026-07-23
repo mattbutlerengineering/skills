@@ -22,7 +22,7 @@ TEMPLATED_STAGES = [s for s in STAGES + MAINTENANCE_STAGES
                     if s != "implement"]
 # Utility skills act on work surrounding the pipeline (ADR-0023); they
 # have no stage artifact and the router never routes to them, but they are
-# full skills for install, lint, and trigger-eval purposes.
+# full skills for install, lint, ledger, and trigger-eval purposes.
 UTILITY_SKILLS = ["address-pr-review", "autorun", "factory-init", "mermaid"]
 ALL_SKILLS = ["next"] + STAGES + MAINTENANCE_STAGES + UTILITY_SKILLS
 
@@ -59,7 +59,11 @@ MAINTENANCE_STAGE_ARTIFACTS = [
 ]
 
 _FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
-_CHECKBOX = re.compile(r"^\s*[-*+] \[([ xX])\]", re.MULTILINE)
+# Bullet-and-whitespace shape aligned with knowledge_plane.ROW (the
+# dispatch-plane row grammar) so completion counting and dispatch agree
+# about the same line; separate owner by design — this seam stays
+# factory-agnostic and captures the checked state.
+_CHECKBOX = re.compile(r"^\s*[-*+]\s+\[([ xX])\]", re.MULTILINE)
 
 
 def read_frontmatter(path):

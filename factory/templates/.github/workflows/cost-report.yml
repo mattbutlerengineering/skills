@@ -11,9 +11,10 @@
 # FACTORY_PAUSED is a GitHub Actions repository VARIABLE (vars.*), the same
 # convention sweeps.yml's Sentry job (vars.SENTRY_ORG) and validator.yml
 # (vars.FACTORY_REVIEW_LOGIN) already use: free to read from any workflow's
-# `if:` (e.g. a future assembler.yml guard on `vars.FACTORY_PAUSED != 'true'`),
-# repo-wide by construction (ADR-0034: the circuit breaker "pauses dispatch
-# repo-wide"), and it needs no commit — an instant, repo-scoped flip.
+# `if:` — assembler.yml's dispatch guard checks `vars.FACTORY_PAUSED !=
+# 'true'` — repo-wide by construction (ADR-0034: the circuit breaker
+# "pauses dispatch repo-wide"), and it needs no commit — an instant,
+# repo-scoped flip.
 #
 # Writing a repo variable is NOT something the default GITHUB_TOKEN can do
 # (the Actions variables API needs a PAT with the repo scope, or a GitHub

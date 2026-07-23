@@ -7,7 +7,11 @@ one that supersedes it and update the old one's status line.
 
 Statuses: **accepted** (explicitly confirmed), **provisional** (recommended
 answer adopted while awaiting confirmation — pivot freely),
-**superseded by ADR-NNNN**.
+**superseded by ADR-NNNN** (fully retired — citing it is drift),
+**superseded in part by ADR-NNNN**, and **amended by ADR-NNNN** (both
+partial: the decision stays live and citable). The machine-readable
+authority is `ADR_STATUS` in `gates.py`, which also allows a
+parenthesized annotation after any head.
 
 ADRs 0001–0018 were migrated from the former `DESIGN.md`, which captured the
 initial design interview (2026-07-01). See [CONTEXT.md](../../CONTEXT.md) for
@@ -53,4 +57,7 @@ the canonical vocabulary.
 | [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | accepted |
 | [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | accepted |
 | [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | accepted |
-| [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | accepted |
+| [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | amended by ADR-0039 |
+| [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | accepted |
+| [0039](0039-tracker-grammar-joins-the-knowledge-plane.md) | Tracker-mirror grammar joins the knowledge plane | amended by ADR-0040 |
+| [0040](0040-write-outputs-joins-the-cli-seam.md) | write_outputs joins the cli seam | accepted |

@@ -12,14 +12,20 @@ The two security-critical invariants (ADR-0032) have dedicated tests:
   - the dispatched agent's prompt substrate is the breakdown ROW, never the
     raw issue body (the prompt-injection boundary).
 """
-import contextlib
-import io
 import json
+import re
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import assembler
+
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling factory_fixture import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
+from factory_fixture import FixtureTree as FactoryFixtureTree  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -51,37 +57,20 @@ SWE_STUB = (
     "\nFirst, read the charter.\n"
 )
 
-CONFIG = json.dumps({
-    "budgets_usd": {"S": 5, "M": 15, "L": 40},
-    "routing": {"mechanical": "claude-haiku-4-5",
-                "implementation": "claude-sonnet-5",
-                "architecture_review": "claude-fable-5"},
-    "wip_cap": 3,
-    "monthly_cap_usd": 300,
-})
-
 OWNER = "mattbutlerengineering"
 
 
-class FixtureTree:
-    def __init__(self, root):
-        self.root = Path(root)
-
-    def write(self, rel, text):
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
-
+class FixtureTree(FactoryFixtureTree):
     def factory(self):
         """A tree wired like the real repo: a breakdown, the SWE and support
-        stubs, and a factory.json in the template payload."""
+        stubs, and the canonical factory.json in the template payload
+        (written by the factory_fixture base)."""
+        super().factory()
         self.write("docs/features/demo/breakdown.md", BREAKDOWN)
         self.write("factory/agents/factory-swe.md", SWE_STUB)
         self.write("factory/agents/factory-support.md",
                    SWE_STUB.replace("factory-swe", "factory-support")
                    .replace("route: implementation", "route: mechanical"))
-        self.write("factory/templates/factory.json", CONFIG)
         return self
 
 
@@ -200,6 +189,25 @@ class TestCharterBand(unittest.TestCase):
             self.assertEqual(assembler.charter_band(agents, "swe"), (
                 None, ["asm: charter factory-swe declares no route: band"]))
 
+    def test_any_form_the_one_parser_accepts_resolves(self):
+        # charter_band crosses protocol.read_frontmatter (ADR-0021) — the
+        # same parser the charter tests use on the same stubs — so forms
+        # like a `route: |` block scalar or CRLF line endings cannot pass
+        # the charter tests yet fail dispatch (the drift a private parser
+        # allowed)
+        for label, mutate in (
+                ("block scalar",
+                 lambda s: s.replace("route: implementation\n",
+                                     "route: |\n  implementation\n")),
+                ("crlf", lambda s: s.replace("\n", "\r\n"))):
+            with self.subTest(form=label), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = self.tree(tmp)
+                tree.write("factory/agents/factory-swe.md", mutate(SWE_STUB))
+                agents = tree.root / "factory" / "agents"
+                self.assertEqual(assembler.charter_band(agents, "swe"),
+                                 ("implementation", []))
+
 
 class TestAssemblePrompt(unittest.TestCase):
     def test_the_prompt_is_the_row_and_points_at_the_charter(self):
@@ -290,34 +298,60 @@ class TestRunResolve(unittest.TestCase):
                              ["asm: no GITHUB_EVENT_PATH in the environment"])
 
 
-class TestWriteOutputs(unittest.TestCase):
-    def test_multiline_values_use_a_heredoc_delimiter(self):
+class TestWorkflowOutputLockstep(unittest.TestCase):
+    """The $GITHUB_OUTPUT seam: run_resolve's output keys and assembler.yml's
+    steps.resolve.outputs.<name> references are a split contract — Python
+    writes the keys, the workflow reads them by literal name. This test is
+    the bridge (the same lockstep idiom TestLockstep applies to make
+    targets): a renamed key breaks here, in CI, instead of silently
+    expanding to an empty string in the dispatch step. Root and payload
+    YAML are byte-identical (detector E + TestLockstep), so pinning the
+    root copy pins both."""
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "assembler.yml"
+    REFS = re.compile(r"steps\.resolve\.outputs\.(\w+)")
+
+    def yaml_refs(self):
+        refs = set(self.REFS.findall(
+            self.WORKFLOW.read_text(encoding="utf-8")))
+        self.assertTrue(refs, "assembler.yml references no resolve outputs")
+        return refs
+
+    def emitted_keys(self):
+        """Every key run_resolve can write, taken from the real interface —
+        the dispatch-true path and the no-op path — not from a hand-kept
+        list that could itself drift."""
+        keys = set()
         with tempfile.TemporaryDirectory() as tmp:
-            out = Path(tmp) / "out.txt"
-            assembler.write_outputs(
-                {"GITHUB_OUTPUT": str(out)},
-                {"dispatch": "true", "prompt": "line one\nline two"})
-            text = out.read_text(encoding="utf-8")
-            self.assertIn("dispatch=true", text)
-            self.assertIn("prompt<<", text)
-            self.assertIn("line one\nline two", text)
+            root = FixtureTree(tmp).factory().root
+            outputs, problems = assembler.run_resolve(
+                root, label_event(tmp, number=110))
+            self.assertEqual(problems, [])
+            keys |= set(outputs)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = FixtureTree(tmp).factory().root
+            outputs, problems = assembler.run_resolve(
+                root, label_event(tmp, number=110, label="wo:blocked"))
+            self.assertEqual(problems, [])
+            keys |= set(outputs)
+        return keys
 
-    def test_no_github_output_is_a_silent_no_op(self):
-        # Local/hand runs have no GITHUB_OUTPUT; nothing to write, no error.
-        assembler.write_outputs({}, {"dispatch": "false"})
+    def test_every_yaml_output_ref_is_an_emitted_key(self):
+        self.assertLessEqual(self.yaml_refs(), self.emitted_keys())
+
+    def test_the_workflow_consumes_the_dispatch_critical_keys(self):
+        # The keys whose silent loss would misdispatch: the gate, the
+        # prompt substrate, and the routed model.
+        self.assertLessEqual({"dispatch", "prompt", "model"},
+                             self.yaml_refs())
 
 
-class TestMain(unittest.TestCase):
-    def run_cli(self, argv, env):
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            code = assembler.main(argv, env=env)
-        return code, out.getvalue()
+class TestMain(cli_contract.CliContract, unittest.TestCase):
+    usage_fragment = "python3 assembler.py resolve"
 
-    def test_unknown_subcommand_prints_usage(self):
-        code, out = self.run_cli(["nonsense"], {})
-        self.assertEqual(code, 2)
-        self.assertIn("python3 assembler.py resolve", out)
+    def run_cli(self, argv, env=None):
+        return cli_contract.capture(assembler.main, argv,
+                                    env=env if env is not None else {})
 
     def test_a_no_op_dispatch_exits_zero(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -18,7 +18,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import lint  # noqa: E402
-from protocol import ALL_SKILLS, STAGES, TEMPLATED_STAGES  # noqa: E402
+from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,  # noqa: E402
+                      TEMPLATED_STAGES)
 
 
 def make_clean_tree(root):
@@ -43,7 +44,8 @@ def make_clean_tree(root):
         (root / "skills" / slug / "TEMPLATE.md").write_text(
             "t\n", encoding="utf-8")
     (root / "skills" / "next" / "SKILL.md").write_text(
-        "---\nname: next\ndescription: d\n---\n\n" + " ".join(STAGES) + "\n",
+        "---\nname: next\ndescription: d\n---\n\n"
+        + " ".join(STAGES + MAINTENANCE_STAGES) + "\n",
         encoding="utf-8")
 
     (root / "docs").mkdir()
@@ -225,12 +227,23 @@ class TestTemplates(CheckerTreeTest):
 
 class TestRouter(CheckerTreeTest):
     def test_omitted_stage(self):
-        mentions = " ".join(s for s in STAGES if s != "ship")
+        mentions = " ".join(s for s in STAGES + MAINTENANCE_STAGES
+                            if s != "ship")
         (self.root / "skills" / "next" / "SKILL.md").write_text(
             "---\nname: next\ndescription: d\n---\n\n" + mentions + "\n",
             encoding="utf-8")
         self.assertEqual(lint.check_router(self.root),
                          ["router never mentions stage skill 'ship'"])
+
+    def test_omitted_maintenance_stage(self):
+        # capture sits outside the spine but the router routes to it
+        # (ADR-0025) — a router that forgets it is as broken as one that
+        # forgets ship.
+        (self.root / "skills" / "next" / "SKILL.md").write_text(
+            "---\nname: next\ndescription: d\n---\n\n"
+            + " ".join(STAGES) + "\n", encoding="utf-8")
+        self.assertEqual(lint.check_router(self.root),
+                         ["router never mentions stage skill 'capture'"])
 
 
 class TestProtocol(CheckerTreeTest):

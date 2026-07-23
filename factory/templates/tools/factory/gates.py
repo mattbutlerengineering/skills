@@ -50,9 +50,10 @@ import tempfile
 from pathlib import Path
 
 import cost_ledger
+import factory_config
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             repo_root, run_dirs)
+                             breakdown_files, repo_root, run_dirs)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
@@ -86,8 +87,9 @@ ADR_INDEX_ROW = re.compile(
     r"\s*(?P<status>[^|]*?)\s*\|")
 
 # A merged work order is a checked breakdown row (ADR-0004: the artifact,
-# not the tracker, is the state).
-MERGED_ROW = re.compile(r"^\s*-\s*\[x\]", re.IGNORECASE)
+# not the tracker, is the state). Bullet-and-whitespace shape aligned with
+# knowledge_plane.ROW; separate owner because only the checked form counts.
+MERGED_ROW = re.compile(r"^\s*[-*+]\s+\[x\]", re.IGNORECASE)
 
 # Markdown links to repo paths; URLs, autolinks and bare anchors are not.
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
@@ -266,12 +268,8 @@ def _scannable_files(root):
 def check_wo_citation(root):
     """A: a work-order row that cites no PRD section is untraceable scope."""
     problems = []
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if not breakdown.is_file():
-            continue
-        for lineno, line in enumerate(
-                breakdown.read_text(encoding="utf-8").splitlines(), 1):
+    for breakdown, lines in breakdown_files(root):
+        for lineno, line in enumerate(lines, 1):
             wo = WO_TOKEN.search(line)
             if wo and not PRD_TOKEN.search(line):
                 rel = breakdown.relative_to(root)
@@ -336,11 +334,9 @@ def collect_prd_ids(root):
 def collect_wo_rows(root):
     """Set of WO tokens that appear in any breakdown.md row."""
     rows = set()
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if breakdown.is_file():
-            rows.update(WO_TOKEN.findall(
-                breakdown.read_text(encoding="utf-8")))
+    for _, lines in breakdown_files(root):
+        for line in lines:
+            rows.update(WO_TOKEN.findall(line))
     return rows
 
 
@@ -569,13 +565,9 @@ def merged_wo_rows(root):
     """(breakdown path, lineno, WO token) for every checked breakdown row —
     the artifact-side record that a work order merged (ADR-0004)."""
     rows = []
-    for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        if not breakdown.is_file():
-            continue
+    for breakdown, lines in breakdown_files(root):
         rel = breakdown.relative_to(root)
-        for lineno, line in enumerate(
-                breakdown.read_text(encoding="utf-8").splitlines(), 1):
+        for lineno, line in enumerate(lines, 1):
             wo = WO_TOKEN.search(line)
             if MERGED_ROW.match(line) and wo:
                 rows.append((rel, lineno, wo.group(0)))
@@ -645,6 +637,21 @@ def check_staleness(root):
     return problems
 
 
+def manifest_files(root):
+    """{rel: sha256} for every file in the template payload, keyed
+    relative to factory/ in posix form — the ONE statement of the
+    manifest's walk-hash-key grammar. update_manifest (factory_init.py)
+    writes exactly this map and check_scaffold_sync diffs the manifest
+    against it, so writer and verifier cannot diverge — the same
+    discipline detector G borrows from cost_ledger.parse."""
+    payload = root / "factory" / "templates"
+    if not payload.is_dir():
+        return {}
+    return {p.relative_to(root / "factory").as_posix():
+            hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(payload.rglob("*")) if p.is_file()}
+
+
 def check_scaffold_sync(root):
     """E: the template payload must match its checksum manifest exactly."""
     manifest_path = root / "factory" / "manifest.json"
@@ -658,23 +665,16 @@ def check_scaffold_sync(root):
     if not isinstance(files, dict) or not files:
         return ["E: factory/manifest.json has no files map"]
     problems = []
+    actual = manifest_files(root)
     for rel, expected in sorted(files.items()):
-        path = root / "factory" / rel
-        if not path.is_file():
+        if rel not in actual:
             problems.append(f"E: manifest lists missing file factory/{rel}")
-            continue
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        if digest != expected:
+        elif actual[rel] != expected:
             problems.append(
                 f"E: factory/{rel} does not match its manifest checksum"
                 " (re-run manifest update, never hand-edit)")
-    payload = root / "factory" / "templates"
-    if payload.is_dir():
-        for path in sorted(payload.rglob("*")):
-            if path.is_file():
-                rel = str(path.relative_to(root / "factory"))
-                if rel not in files:
-                    problems.append(f"E: factory/{rel} is not in the manifest")
+    problems += [f"E: factory/{rel} is not in the manifest"
+                 for rel in sorted(actual) if rel not in files]
     return problems
 
 
@@ -692,29 +692,19 @@ def check_config_shape(root):
         except json.JSONDecodeError as err:
             problems.append(f"F: {rel} is not valid JSON: {err}")
             continue
+        # key-set completeness is this gate's whole-shape concern; the
+        # field-VALUE grammar is factory_config.config_problems — one
+        # home shared with the runtime accessors, so the gate can never
+        # again pass a value the dispatch path rejects
         budgets = config.get("budgets_usd")
         if not isinstance(budgets, dict) or sorted(budgets) != ["L", "M", "S"]:
             problems.append(f"F: {rel} budgets_usd must map exactly S, M, L")
-        else:
-            for size, value in budgets.items():
-                if not isinstance(value, (int, float)) or value <= 0:
-                    problems.append(
-                        f"F: {rel} budgets_usd.{size} must be a positive number")
         routing = config.get("routing")
         if not isinstance(routing, dict) or sorted(routing) != sorted(CONFIG_ROUTES):
             expected = ", ".join(CONFIG_ROUTES)
             problems.append(f"F: {rel} routing must map exactly {expected}")
-        else:
-            for route, model in routing.items():
-                if not isinstance(model, str) or not model:
-                    problems.append(
-                        f"F: {rel} routing.{route} must name a model id")
-        wip = config.get("wip_cap")
-        if not isinstance(wip, int) or wip < 1:
-            problems.append(f"F: {rel} wip_cap must be a positive integer")
-        cap = config.get("monthly_cap_usd")
-        if not isinstance(cap, (int, float)) or cap <= 0:
-            problems.append(f"F: {rel} monthly_cap_usd must be a positive number")
+        problems += [f"F: {rel} {problem}"
+                     for problem in factory_config.config_problems(config)]
     return problems
 
 

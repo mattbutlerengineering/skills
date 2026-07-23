@@ -8,26 +8,18 @@ web-quality target is identical in both Makefiles. The design-system seed the
 pipeline ships is checked for presence and for where factory-init stamps it.
 """
 import json
+import sys
 import unittest
 from pathlib import Path
 
 import factory_init
 
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling make_parse import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from make_parse import make_recipe  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[1]
-
-
-def make_recipe(text, target):
-    """The command lines of one make target (tab-indented recipe lines)."""
-    lines, capturing = [], False
-    for line in text.splitlines():
-        if line.startswith(f"{target}:"):
-            capturing = True
-        elif capturing:
-            if line.startswith("\t"):
-                lines.append(line.strip())
-            elif line.strip():
-                break
-    return lines
 
 
 def on_block(text):

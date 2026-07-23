@@ -10,7 +10,8 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 - `python3 -m unittest discover tests`
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
 - `python3 gates.py && python3 gates.py --selftest` — factory drift
-  detectors (A/C/D/E/F/G/H/I), output matching `gates: 0 problem(s)`
+  detectors (A–I; B skips locally without a PR event payload, but the
+  selftest exercises it), output matching `gates: 0 problem(s)`
 
 On demand only (real model runs, costs money, never CI; both need the
 `claude` CLI):
@@ -29,10 +30,10 @@ On demand only (real model runs, costs money, never CI; both need the
   (ADR-0021 — taxonomy, artifact table, frontmatter, next-stage),
   `eval_schema.py` (ADR-0022, ADR-0024 — all eval knowledge: routing
   eval-set shape/kinds/validation, output-eval record shape, results
-  naming grammar), and the four factory seams (ADR-0037 —
-  `knowledge_plane.py` typed-ID grammar + run walk, `cli.py` subprocess
-  adapter, `factory_config.py` factory.json reader/resolvers,
-  `cost_ledger.py` cost-ledger shape). A new shared module needs multiple
+  naming grammar), and the four factory seams (ADR-0037, ADR-0039,
+  ADR-0040 — `knowledge_plane.py` typed-ID grammar + run walk, `cli.py`
+  external-CLI + harness-IO conventions, `factory_config.py` factory.json
+  reader/resolvers, `cost_ledger.py` cost-ledger shape). A new shared module needs multiple
   real callers AND observed divergence between their copies — anticipated
   reuse doesn't qualify.
 - **Three skill kinds**: stage skills (own a run artifact, routed to by
@@ -44,9 +45,11 @@ On demand only (real model runs, costs money, never CI; both need the
   assert the exact strings through public interfaces (see
   `tests/test_lint_checkers.py`).
 - **Factory templates are checksum-pinned**: after any edit under
-  `factory/templates/**` (or to `gates.py`/`protocol.py`, which are
-  mirrored into the payload), run `python3 factory_init.py update-manifest`
-  and commit the manifest with the change (detector E gates).
+  `factory/templates/**` or to any root file in `factory_init.MIRRORS`
+  (the authority on what is mirrored into the payload — root tools AND
+  workflows), run `python3 factory_init.py update-manifest` and commit
+  the manifest with the change. Detector E gates manifest↔payload;
+  `tests/test_factory_init.py` pins payload↔root.
 - **Dispatch mirrors one-way** (ADR-0032): never create a `WO-####` issue
   before its `breakdown.md` row exists.
 - **Typed IDs live in run-artifact frontmatter** (`id: PRD-0001`), never a

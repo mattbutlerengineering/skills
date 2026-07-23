@@ -9,40 +9,30 @@ TestResolveBudget (test_budget_guard), TestResolveCap (test_cost_report) —
 one schema, one home, one test file.
 """
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import factory_config
 
-CONFIG = {
-    "budgets_usd": {"S": 5, "M": 15, "L": 40},
-    "routing": {"mechanical": "claude-haiku-4-5",
-                "implementation": "claude-sonnet-5",
-                "architecture_review": "claude-fable-5"},
-    "wip_cap": 3,
-    "monthly_cap_usd": 300,
-}
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling factory_fixture import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from factory_fixture import CONFIG, FixtureTree  # noqa: E402
 
 
 class TestLoad(unittest.TestCase):
-    def write(self, root, rel, text):
-        path = Path(root) / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-
     def test_loads_the_template_payload_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
-            self.write(tmp, "factory/templates/factory.json",
-                       json.dumps(CONFIG))
+            FixtureTree(tmp).factory()
             self.assertEqual(factory_config.load(tmp), (CONFIG, []))
 
     def test_an_installed_config_wins_over_the_template(self):
         with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
             installed = dict(CONFIG, monthly_cap_usd=50)
-            self.write(tmp, ".github/factory.json", json.dumps(installed))
-            self.write(tmp, "factory/templates/factory.json",
-                       json.dumps(CONFIG))
+            tree.write(".github/factory.json", json.dumps(installed))
             config, problems = factory_config.load(tmp)
             self.assertEqual(problems, [])
             self.assertEqual(config["monthly_cap_usd"], 50)
@@ -55,12 +45,47 @@ class TestLoad(unittest.TestCase):
 
     def test_invalid_json_is_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
-            self.write(tmp, ".github/factory.json", "not json")
+            FixtureTree(tmp).write(".github/factory.json", "not json")
             config, problems = factory_config.load(tmp)
             self.assertIsNone(config)
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
                 "config: .github/factory.json is not valid JSON:"), problems)
+
+
+class TestConfigProblems(unittest.TestCase):
+    """The whole-config field grammar, owned here (twin of
+    cost_ledger.line_problems): detector F prefixes these and layers its
+    key-set cross-checks on top, so gate and runtime accessors can never
+    diverge on what a valid field is."""
+
+    def test_the_shipped_config_is_clean(self):
+        self.assertEqual(factory_config.config_problems(CONFIG), [])
+
+    def test_a_bool_budget_is_flagged(self):
+        # True is an int in Python; the accessors reject it, so the
+        # grammar must too — this was detector F's hole.
+        config = dict(CONFIG, budgets_usd={"S": True, "M": 15, "L": 40})
+        self.assertEqual(factory_config.config_problems(config),
+                         ["budgets_usd.S must be a positive number"])
+
+    def test_a_bool_cap_and_bool_wip_cap_are_flagged(self):
+        config = dict(CONFIG, wip_cap=True, monthly_cap_usd=True)
+        self.assertEqual(factory_config.config_problems(config),
+                         ["wip_cap must be a positive integer",
+                          "monthly_cap_usd must be a positive number"])
+
+    def test_an_empty_routing_model_is_flagged(self):
+        routing = dict(CONFIG["routing"], mechanical="")
+        config = dict(CONFIG, routing=routing)
+        self.assertEqual(factory_config.config_problems(config),
+                         ["routing.mechanical must name a model id"])
+
+    def test_key_set_completeness_stays_with_detector_f(self):
+        # a missing size/band is the gate's whole-shape concern, not
+        # field grammar — the accessors fail closed per lookup instead
+        config = dict(CONFIG, budgets_usd={"S": 5})
+        self.assertEqual(factory_config.config_problems(config), [])
 
 
 class TestResolveModel(unittest.TestCase):

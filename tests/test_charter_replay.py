@@ -18,10 +18,12 @@ the fixtures' README for the boundary.
 """
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -298,6 +300,82 @@ class TestPrompt(unittest.TestCase):
     def test_charter_text_reads_the_role_charter(self):
         self.assertIn("Factory SWE charter",
                       charter_replay.charter_text(ROOT, "swe"))
+
+
+class TestClaudeRunnerFailureBranches(unittest.TestCase):
+    """claude_runner's error handling, with subprocess.run stubbed out —
+    the one seam the live path adds on top of the pure transcript code.
+    A timeout must surface as a partial transcript that FAILS its
+    required expectations (the honest verdict), never as a crash or a
+    fabricated pass."""
+
+    EVENT = json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Bash",
+         "input": {"command": "git diff"}}]}})
+
+    def runner_case(self, root):
+        (root / "factory/skills/swe").mkdir(parents=True)
+        (root / "factory/skills/swe/SKILL.md").write_text(
+            "# Charter\n", encoding="utf-8")
+        (root / "fixtures/wo-1").mkdir(parents=True)
+        (root / "fixtures/wo-1/work-order.md").write_text(
+            "# WO\n", encoding="utf-8")
+        return {"id": "c1", "role": "swe", "fixture": "fixtures/wo-1",
+                "expectations": [{"id": "runs-tests", "mode": "require",
+                                  "scope": "commands",
+                                  "pattern": r"unittest"}]}
+
+    def scratch_recorder(self):
+        """mkdtemp wrapper recording every scratch dir the runner makes."""
+        created = []
+        real = tempfile.mkdtemp
+
+        def record(*args, **kwargs):
+            path = real(*args, **kwargs)
+            created.append(Path(path))
+            return path
+        return created, record
+
+    def test_a_timeout_scores_as_an_honest_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            case = self.runner_case(root)
+            created, record = self.scratch_recorder()
+
+            def fake_run(cmd, **kwargs):
+                raise subprocess.TimeoutExpired(cmd, 30,
+                                                output=self.EVENT + "\n")
+            with mock.patch.object(tempfile, "mkdtemp", record), \
+                    mock.patch.object(subprocess, "run", fake_run):
+                transcript = charter_replay.claude_runner(root, "haiku",
+                                                          30)(case)
+            self.assertEqual(transcript["error"], "timed out after 30s")
+            # the partial transcript survives: what ran before the clock
+            self.assertEqual(transcript["tool_calls"],
+                             [{"name": "Bash",
+                               "input": {"command": "git diff"}}])
+            result = charter_replay.score_case(case, transcript)
+            self.assertFalse(result["pass"])
+            self.assertEqual(result["failed"], ["runs-tests"])
+            self.assertEqual([p for p in created if p.exists()], [])
+
+    def test_a_missing_cli_reports_the_error_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            case = self.runner_case(root)
+            created, record = self.scratch_recorder()
+
+            def fake_run(cmd, **kwargs):
+                raise OSError("no claude binary")
+            with mock.patch.object(tempfile, "mkdtemp", record), \
+                    mock.patch.object(subprocess, "run", fake_run):
+                transcript = charter_replay.claude_runner(root, "haiku",
+                                                          30)(case)
+            self.assertEqual(transcript,
+                             {"tool_calls": [], "text": "",
+                              "error": "claude CLI failed: no claude"
+                                       " binary"})
+            self.assertEqual([p for p in created if p.exists()], [])
 
 
 class TestRecord(unittest.TestCase):

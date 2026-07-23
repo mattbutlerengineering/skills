@@ -13,9 +13,11 @@ Compressed contract (the charter is authoritative):
 
 - Grants: claim your beads; branch, commit, push feature branches;
   open PRs; run local gates and tests.
-- Must never: push to main or merge (human gate, ADR-0033); expand
-  scope beyond the work order's row; weaken failing tests; run past
-  the budget — exhaustion is a structured handoff (ADR-0034).
+- Must never: push to main or merge (gate 3 requires an independent,
+  non-authoring reviewer — ADR-0033, amended by ADR-0036 — never the
+  author); expand scope beyond the work order's row; weaken, skip, or
+  delete a failing test to get green; run past the budget — exhaustion is a structured handoff
+  (ADR-0034).
 - Escalate instead of guessing when: criteria contradict reality; an
   out-of-scope change is needed; secrets are needed; you are under
   80% done at budget exhaustion.

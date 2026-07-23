@@ -7,16 +7,21 @@ touches the network. The two invariants of ADR-0032 get their own class:
 a sweep files intake, never a work order, and it treats external text as
 data, never as instructions.
 """
-import contextlib
-import io
 import json
 import re
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import sweeps
+
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling fixture_tree import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fixture_tree import FixtureTree  # noqa: E402
+import cli_contract  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TAXONOMY = json.loads(
@@ -41,17 +46,6 @@ SENTRY_ENTRY = {
     "permalink": "https://sentry.io/organizations/acme/issues/1/",
     "ignored-key": "never copied into the body",
 }
-
-
-class FixtureTree:
-    def __init__(self, root):
-        self.root = Path(root)
-
-    def write(self, rel, text):
-        path = self.root / rel
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-        return path
 
 
 class RecordingRunner:
@@ -670,22 +664,24 @@ class TestLoadPayload(unittest.TestCase):
             self.assertEqual(len(intakes), sweeps.MAX_INTAKE + 2)
 
 
-class TestCli(unittest.TestCase):
+class TestCli(cli_contract.CliContract, unittest.TestCase):
     """The CLI runs against the real repo root (its own taxonomy), with the
     gh runner injected — no network, no issues filed anywhere."""
 
-    def run_main(self, argv, runner):
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            code = sweeps.main(argv, run=runner)
-        return code, buf.getvalue()
+    usage_fragment = "sweeps"
+    bad_argv = ("nope",)
+
+    def run_cli(self, argv, runner=None):
+        return cli_contract.capture(
+            sweeps.main, argv,
+            run=runner if runner is not None else RecordingRunner())
 
     def test_sentry_sweep_files_and_reports(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = FixtureTree(tmp).write("sentry.json",
                                           json.dumps([SENTRY_ENTRY]))
             runner = RecordingRunner()
-            code, out = self.run_main(["sentry", "--payload", str(path)],
+            code, out = self.run_cli(["sentry", "--payload", str(path)],
                                       runner)
             self.assertEqual(code, 0)
             self.assertEqual(out.splitlines(), [
@@ -695,14 +691,14 @@ class TestCli(unittest.TestCase):
 
     def test_label_drift_sweep_on_a_clean_repo_files_nothing(self):
         runner = RecordingRunner()
-        code, out = self.run_main(["label-drift"], runner)
+        code, out = self.run_cli(["label-drift"], runner)
         self.assertEqual(code, 0)
         self.assertEqual(out, "sweeps: 0 issue(s) filed, 0 problem(s)\n")
         self.assertEqual(runner.created(), [])
 
     def test_label_drift_sweep_files_one_issue_on_drift(self):
         runner = RecordingRunner(labels=[])
-        code, out = self.run_main(["label-drift"], runner)
+        code, out = self.run_cli(["label-drift"], runner)
         self.assertEqual(code, 0)
         self.assertIn("sweeps: filed intake issue for sweep:label-drift", out)
         [create] = runner.created()
@@ -723,7 +719,7 @@ class TestCli(unittest.TestCase):
                        dict(SENTRY_ENTRY, shortId="PROJ-3")]
             path = FixtureTree(tmp).write("sentry.json", json.dumps(payload))
             runner = RecordingRunner()
-            code, out = self.run_main(["sentry", "--payload", str(path)],
+            code, out = self.run_cli(["sentry", "--payload", str(path)],
                                       runner)
             filed_titles = [create[create.index("--title") + 1]
                             for create in runner.created()]
@@ -744,21 +740,17 @@ class TestCli(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = FixtureTree(tmp).write("sentry.json", "nope")
             runner = RecordingRunner()
-            code, out = self.run_main(["sentry", "--payload", str(path)],
+            code, out = self.run_cli(["sentry", "--payload", str(path)],
                                       runner)
             self.assertEqual(code, 1)
             self.assertIn("sweeps: payload is not valid JSON:", out)
             self.assertIn("0 issue(s) filed, 1 problem(s)", out)
             self.assertEqual(runner.calls, [])
 
-    def test_unknown_sweep_prints_usage(self):
-        code, out = self.run_main(["nope"], RecordingRunner())
-        self.assertEqual(code, 2)
-        self.assertIn("sweeps", out)
 
     def test_ensure_labels_creates_the_missing_triage_labels(self):
         runner = RecordingRunner(labels=[])
-        code, out = self.run_main(["ensure-labels"], runner)
+        code, out = self.run_cli(["ensure-labels"], runner)
         self.assertEqual(code, 0)
         self.assertEqual(out, "sweeps: 0 problem(s)\n")
         self.assertEqual(sorted(runner.created_labels()),
@@ -770,7 +762,7 @@ class TestCli(unittest.TestCase):
             subprocess.CalledProcessError(
                 1, ["gh", "label", "create"], stderr="HTTP 403\n"),
             failing=("label", "create"), labels=[])
-        code, out = self.run_main(["ensure-labels"], runner)
+        code, out = self.run_cli(["ensure-labels"], runner)
         self.assertEqual(code, 1)
         self.assertIn("sweeps: gh label create source:sentry failed: HTTP 403",
                       out)
@@ -787,8 +779,8 @@ class TestCli(unittest.TestCase):
             path = FixtureTree(tmp).write("sentry.json",
                                           json.dumps([hostile]))
             runner = RecordingRunner(labels=[])
-            self.run_main(["sentry", "--payload", str(path)], runner)
-            self.run_main(["label-drift"], runner)
+            self.run_cli(["sentry", "--payload", str(path)], runner)
+            self.run_cli(["label-drift"], runner)
             self.assertEqual(len(runner.created()), 2)
             for create in runner.created():
                 for arg in create:
