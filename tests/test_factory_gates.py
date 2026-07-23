@@ -1458,6 +1458,8 @@ def product_form(command):
             .replace("python3 assembler.py", "python3 tools/factory/assembler.py")
             .replace("python3 cost_report.py",
                      "python3 tools/factory/cost_report.py")
+            .replace("python3 gate_digest.py",
+                     "python3 tools/factory/gate_digest.py")
             .replace("unittest discover tests", "unittest discover -q tests"))
 
 
@@ -1487,6 +1489,12 @@ class TestLockstep(unittest.TestCase):
                                     / ".github" / "workflows"
                                     / "cost-report.yml")
     COST_REPORT_TARGET = ["python3 cost_report.py report"]
+    GATE_DIGEST_WORKFLOW = (REPO / ".github" / "workflows"
+                            / "gate-digest.yml")
+    PAYLOAD_GATE_DIGEST_WORKFLOW = (REPO / "factory" / "templates"
+                                    / ".github" / "workflows"
+                                    / "gate-digest.yml")
+    GATE_DIGEST_TARGET = ["python3 gate_digest.py daily"]
 
     # The one canonical check set. `lint.py` is the plugin's structural lint
     # and has no product-repo counterpart, so only the root Makefile runs it.
@@ -1581,6 +1589,26 @@ class TestLockstep(unittest.TestCase):
     def test_the_payload_cost_report_workflow_is_the_mirror_of_this_repo_s(self):
         self.assertEqual(self.PAYLOAD_COST_REPORT_WORKFLOW.read_bytes(),
                          self.COST_REPORT_WORKFLOW.read_bytes())
+
+    def test_both_makefiles_expose_the_gate_digest_target(self):
+        self.assertEqual(self.recipes(self.MAKEFILE, "gate-digest"),
+                         self.GATE_DIGEST_TARGET)
+        self.assertEqual(
+            self.recipes(self.TEMPLATE_MAKEFILE, "gate-digest"),
+            [product_form(c) for c in self.GATE_DIGEST_TARGET])
+
+    def test_the_gate_digest_workflow_names_no_command_of_its_own(self):
+        text = self.GATE_DIGEST_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("make gate-digest", text)
+        for tool in ("gate_digest.py", "gates.py", "unittest"):
+            self.assertNotIn(
+                f"python3 {tool}", text,
+                f"{tool} is invoked directly in CI; it belongs in a make"
+                " target, or the two repos' CI will diverge")
+
+    def test_the_payload_gate_digest_workflow_is_the_mirror_of_this_repo_s(self):
+        self.assertEqual(self.PAYLOAD_GATE_DIGEST_WORKFLOW.read_bytes(),
+                         self.GATE_DIGEST_WORKFLOW.read_bytes())
 
     def test_the_assembler_gate_is_the_owner_and_the_ready_label(self):
         """ADR-0032's two security invariants, pinned physically in the

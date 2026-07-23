@@ -69,6 +69,11 @@ a live run: no factory dispatch has executed end-to-end, the cost ledger
 (`docs/factory/costs.jsonl`) has never been written, and the PRD success criteria
 are still unproven in production.
 
+**Update (2026-07-22).** The gate-queue digest and gate-latency capture
+(WO-0017, ADR-0041) are built: `gate-digest.yml` runs `make gate-digest`
+daily, posts the pinned queue digest to the tracker (ADR-0035), and appends
+deduped `gate_wait` rows to the cost ledger. Only WO-0018 remains unbuilt.
+
 ## Approach
 
 The factory is a **layer on top of the existing pipeline, not a replacement for

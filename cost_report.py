@@ -44,21 +44,27 @@ CONTINUE = "CONTINUE"
 def aggregate(entries):
     """PURE: recompute the weekly report's numbers from already-parsed
     ledger entries — total spend, total tokens, run count, and spend by
-    work order. Trusts the full ledger shape cost_ledger.read already
-    established (coding-style.md: no defensive re-validation of an
-    invariant enforced one call up)."""
+    work order. Gate-latency observations (ADR-0041) are skipped: they are
+    $0 wait records, not runs, and counting them would inflate run_count
+    and pad by_wo with $0.00 lines. Trusts the full ledger shape
+    cost_ledger.read already established (coding-style.md: no defensive
+    re-validation of an invariant enforced one call up)."""
     total_cost = 0.0
     total_tokens = 0
+    run_count = 0
     by_wo = {}
     for entry in entries:
+        if cost_ledger.gate_wait(entry) is not None:
+            continue
         cost = entry["cost"]
         total_cost += cost
         total_tokens += entry["tokens"]
+        run_count += 1
         by_wo[entry["wo"]] = by_wo.get(entry["wo"], 0.0) + cost
     return {
         "total_cost": round(total_cost, 2),
         "total_tokens": total_tokens,
-        "run_count": len(entries),
+        "run_count": run_count,
         "by_wo": {wo: round(cost, 2) for wo, cost in by_wo.items()},
     }
 

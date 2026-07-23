@@ -106,6 +106,37 @@ class TestLineProblems(unittest.TestCase):
         ])
 
 
+class TestGateEntry(unittest.TestCase):
+    def test_a_gate_row_is_a_well_formed_zero_cost_ledger_record(self):
+        record = cost_ledger.gate_entry(
+            "WO-0017", "merge", 7260, "2026-07-22T05:17:00Z")
+        self.assertEqual(cost_ledger.line_problems(record), [])
+        self.assertEqual(record["wo"], "WO-0017")
+        self.assertEqual(record["run_id"], "gate-merge-2026-07-22T05:17:00Z")
+        self.assertEqual(record["tokens"], 0)
+        self.assertEqual(record["cost"], 0.0)
+        self.assertEqual(record["outcome"], "gate_wait:merge:7260s")
+
+    def test_the_round_trip_through_gate_wait(self):
+        record = cost_ledger.gate_entry(
+            "WO-0003", "prd", 86400, "2026-07-01T09:00:00Z")
+        self.assertEqual(cost_ledger.gate_wait(record), ("prd", 86400))
+
+
+class TestGateWait(unittest.TestCase):
+    def test_a_dispatched_run_row_is_not_a_gate_row(self):
+        record = entry("WO-0006", "r-1", "claude-sonnet-5", 9000, 16.25,
+                       "merged")
+        self.assertIsNone(cost_ledger.gate_wait(record))
+
+    def test_malformed_or_absent_outcomes_are_none(self):
+        for record in ({"outcome": "gate_wait:prd:"},
+                       {"outcome": "gate_wait:prd:12"},
+                       {"outcome": "gate_wait:12s"},
+                       {"outcome": 7}, {}, None):
+            self.assertIsNone(cost_ledger.gate_wait(record), record)
+
+
 class TestParse(unittest.TestCase):
     def test_blank_lines_are_skipped_and_linenos_kept(self):
         record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged")

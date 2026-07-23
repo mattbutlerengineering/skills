@@ -51,7 +51,7 @@ per ADR-0032 after each row exists here first.
   - Accept: a verification artifact with neither literal command output nor an explicit NOT-RUN disclaimer fails the build; selftest covers both branches.
 - [x] **WO-0012** design pipeline: docs/design template + playwright/web-quality job — size:M, blocked by: WO-0004 (PRD-0001 §Solution) (tracker: #117)
   - Accept: a PR touching design docs triggers the playwright + web-quality job; the design-system seed ships in the template payload.
-- [ ] **WO-0017** gate-queue daily digest + gate-latency capture — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #122)
+- [x] **WO-0017** gate-queue daily digest + gate-latency capture — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #122)
   - Accept: a pinned digest lists items waiting at each gate; gate-latency rows land in costs.jsonl.
 
 ## Milestone D: Charter maturity (full role set, regression CI, feedback mining)

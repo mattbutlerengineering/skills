@@ -119,8 +119,9 @@ _Avoid_: backlog (reserved for the seed inbox), tracker state
 
 **Cost ledger**:
 The append-only spend record (docs/factory/costs.jsonl): one line per
-dispatched run, the factory's measurement substrate (ADR-0034). Shape
-owned by cost_ledger.py; gated by detector G; never rewritten.
+dispatched run or gate passage, the factory's measurement substrate
+(ADR-0034, ADR-0041). Shape owned by cost_ledger.py; gated by detector
+G; never rewritten.
 _Avoid_: billing log, spend history
 
 **Gate**:

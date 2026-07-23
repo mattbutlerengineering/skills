@@ -1,0 +1,59 @@
+# The daily gate-queue digest + gate-latency capture (PRD-0001 user
+# story 4; WO-0017; ADR-0041).
+#
+# Mirrored VERBATIM into the template payload by `factory_init.py
+# update-manifest`, so a stamped product repo runs this same file — which
+# is why it names no commands of its own. Everything gh-shaped (reading
+# the wo: queues and label timelines, creating-or-updating the pinned
+# digest issue) goes through `make gate-digest` (gate_digest.py,
+# unit-tested offline against an injected gh); the one git mutation —
+# committing the gate-latency rows gate_digest.py appended to
+# docs/factory/costs.jsonl — stays here, gated on the `changed` step
+# output. A push by GITHUB_TOKEN does not trigger other workflows, so the
+# daily ledger commit cannot recurse into CI.
+#
+# Editing this file means re-running update-manifest; detector E fails
+# the build otherwise.
+name: gate-digest
+
+on:
+  schedule:
+    # Daily, 05:17 UTC (off the hour — GitHub's cron peaks are lossy; an
+    # hour before sweeps.yml's 06:17 slot so the scheduled jobs never
+    # contend for the same runner minute).
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: gate-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Read the gate queues and label timelines, append new gate-latency
+      # rows to the cost ledger, and create-or-update the pinned digest
+      # issue. Emits changed ('true' when the ledger gained rows) to
+      # $GITHUB_OUTPUT.
+      - name: Post the digest and capture gate latency
+        id: digest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make gate-digest
+      - name: Commit the new gate-latency rows
+        if: steps.digest.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/factory/costs.jsonl
+          git commit -m "chore(factory): gate-latency rows (gate-digest)"
+          git push

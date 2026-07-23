@@ -7,7 +7,7 @@
 # this file's product-repo twin (tools under tools/factory/, no plugin
 # lint); tests/test_factory_gates.py::TestLockstep pins the pair.
 
-.PHONY: check review wo-merged assembler cost-report web-quality
+.PHONY: check review wo-merged assembler cost-report gate-digest web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
@@ -31,6 +31,9 @@ assembler:
 
 cost-report:
 	python3 cost_report.py report
+
+gate-digest:
+	python3 gate_digest.py daily
 
 # The design pipeline's job body (.github/workflows/design.yml; ADR-0033
 # gate 2), run when a PR touches docs/design/**. Playwright drives the UI
