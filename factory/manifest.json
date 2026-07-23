@@ -25,7 +25,7 @@
     "templates/tools/factory/knowledge_plane.py": "1d3f7d809325e58c523dc9fd9e886dd2b3e17249ae8945a385d3c2fc20087739",
     "templates/tools/factory/label_sync.py": "556a37c73981496ad44adc437a2f7867a47d9d71ea39291c65ae34c169c7a242",
     "templates/tools/factory/orientation_pack.py": "5c6b70f047641f92f9ddaf4ea0df9e9fac4fb435c0f501211395ee22000527ec",
-    "templates/tools/factory/protocol.py": "d74d1b2c28e3d118a80ed88607b710b65b7caf5187f2827024c7d79d87579460",
+    "templates/tools/factory/protocol.py": "c0980b82681b127fe4678d0cf09de5ad432a39777a8968576b34bcbe2e4a2ba2",
     "templates/tools/factory/validator.py": "9ff9441b559f646b83396df385120e794f3d1cbed825e81acf6cd066bfd9ee56"
   }
 }

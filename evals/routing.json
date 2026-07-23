@@ -139,6 +139,16 @@
      "query": "Write up the deployment process in the operations guide",
      "notes": "prose documentation must not fire mermaid — nobody asked for a diagram"},
 
+    {"id": "iad-1", "kind": "direct", "expected": "interactive-architecture-diagram",
+     "query": "Create an interactive architecture diagram I can step through while presenting how our system works"},
+    {"id": "iad-2", "kind": "situational", "expected": "interactive-architecture-diagram",
+     "query": "I'm demoing the pipeline at Friday's all-hands — I want an animated diagram where each stage lights up as I talk through it"},
+    {"id": "iad-3", "kind": "situational", "expected": "interactive-architecture-diagram",
+     "query": "Make a self-contained HTML page showing requests flowing through our services, with clickable boxes that explain each component"},
+    {"id": "iad-vs-mermaid-1", "kind": "near-miss", "expected": "mermaid",
+     "query": "Draw an architecture diagram for the design doc — something I can paste into markdown",
+     "notes": "adjacency: interactive-architecture-diagram vs mermaid — a static markdown-embeddable diagram is mermaid; the interactive skill is for presentable step-through HTML demos"},
+
     {"id": "capture-1", "kind": "direct", "expected": "capture",
      "query": "Checkout has been throwing 500s since yesterday's deploy — write up the defect brief so we can run the fix as a maintenance run"},
     {"id": "capture-2", "kind": "situational", "expected": "capture",
