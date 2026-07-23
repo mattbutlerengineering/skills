@@ -28,6 +28,7 @@ EXPECTED_RELS = {
     "templates/.github/workflows/assembler.yml",
     "templates/.github/workflows/design.yml",
     "templates/.github/workflows/cost-report.yml",
+    "templates/.github/workflows/gate-digest.yml",
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
@@ -43,6 +44,7 @@ EXPECTED_RELS = {
     "templates/tools/factory/handoff.py",
     "templates/tools/factory/orientation_pack.py",
     "templates/tools/factory/cost_report.py",
+    "templates/tools/factory/gate_digest.py",
 }
 
 # install_path(rel) for every manifested rel, in target-relative form.

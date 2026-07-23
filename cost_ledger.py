@@ -17,6 +17,7 @@ prefix their own label and location (detector G keeps its G: strings
 byte-for-byte).
 """
 import json
+import re
 from pathlib import Path
 
 from knowledge_plane import WO_TOKEN
@@ -27,12 +28,38 @@ COST_LEDGER = "docs/factory/costs.jsonl"
 LEDGER_FIELDS = ("wo", "run_id", "model", "tokens", "cost", "outcome")
 LEDGER_TEXT_FIELDS = ("run_id", "model", "outcome")
 
+# Gate-latency observations (ADR-0041): a $0, zero-token row recording how
+# long a work order waited at one of the three human gates, written by the
+# daily gate digest inside ADR-0034's open outcome vocabulary.
+GATE_OUTCOME = re.compile(r"gate_wait:([a-z]+):(\d+)s")
+
 
 def entry(wo, run_id, model, tokens, cost, outcome):
     """A well-formed ledger record, built from LEDGER_FIELDS so the field
     set cannot drift from what detector G checks — the single place a
     caller assembles one."""
     return dict(zip(LEDGER_FIELDS, (wo, run_id, model, tokens, cost, outcome)))
+
+
+def gate_entry(wo, gate, waited_seconds, passed_at):
+    """A gate-latency observation as a well-formed ledger record
+    (ADR-0041): the work order waited `waited_seconds` at `gate` and
+    passed it at `passed_at` (ISO timestamp, which keys the run_id so a
+    re-observed passage dedups instead of double-recording)."""
+    return entry(wo, f"gate-{gate}-{passed_at}", "none", 0, 0.0,
+                 f"gate_wait:{gate}:{int(waited_seconds)}s")
+
+
+def gate_wait(entry):
+    """The record's (gate, waited_seconds) when it is a gate-latency row,
+    else None — the one predicate for callers that treat gate rows apart
+    from dispatched runs (the digest dedups on them; the weekly report
+    keeps them out of its run counts)."""
+    value = entry.get("outcome") if isinstance(entry, dict) else None
+    match = GATE_OUTCOME.fullmatch(value) if isinstance(value, str) else None
+    if match is None:
+        return None
+    return match.group(1), int(match.group(2))
 
 
 def append(root, entry):

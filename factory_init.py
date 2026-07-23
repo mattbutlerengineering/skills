@@ -58,10 +58,12 @@ MIRRORS = {
     "handoff.py": "tools/factory/handoff.py",
     "orientation_pack.py": "tools/factory/orientation_pack.py",
     "cost_report.py": "tools/factory/cost_report.py",
+    "gate_digest.py": "tools/factory/gate_digest.py",
     ".github/workflows/validator.yml": ".github/workflows/validator.yml",
     ".github/workflows/assembler.yml": ".github/workflows/assembler.yml",
     ".github/workflows/design.yml": ".github/workflows/design.yml",
     ".github/workflows/cost-report.yml": ".github/workflows/cost-report.yml",
+    ".github/workflows/gate-digest.yml": ".github/workflows/gate-digest.yml",
 }
 
 # Manifest rel -> install destination; anything unmapped strips "templates/".

@@ -70,6 +70,23 @@ class TestAggregate(unittest.TestCase):
             "total_cost": 0.0, "total_tokens": 0, "run_count": 0,
             "by_wo": {}})
 
+    def test_gate_latency_rows_are_not_runs(self):
+        # A gate-wait observation (ADR-0041) is $0 either way; what it must
+        # not do is inflate the run count or pad by_wo with $0.00 lines.
+        entries = [
+            entry("WO-0001", "r-1", "m", 1000, 12.50, "merged"),
+            cost_ledger.gate_entry("WO-0001", "merge", 7260,
+                                   "2026-07-22T05:17:00Z"),
+            cost_ledger.gate_entry("WO-0002", "prd", 86400,
+                                   "2026-07-21T09:00:00Z"),
+        ]
+        self.assertEqual(cost_report.aggregate(entries), {
+            "total_cost": 12.50,
+            "total_tokens": 1000,
+            "run_count": 1,
+            "by_wo": {"WO-0001": 12.50},
+        })
+
 
 class TestDecide(unittest.TestCase):
     def test_spend_under_cap_continues(self):
