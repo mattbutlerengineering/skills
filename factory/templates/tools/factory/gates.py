@@ -265,7 +265,7 @@ def _scannable_files(root):
     return files
 
 
-def check_wo_citation(root):
+def check_wo_citation(root, env=None):
     """A: a work-order row that cites no PRD section is untraceable scope."""
     problems = []
     for breakdown, lines in breakdown_files(root):
@@ -301,9 +301,7 @@ def check_pr_traceability(root, env=None):
     SKIPs silently outside a PR run. A PR that implements no work order may
     say so explicitly (`No work order: <reason>`) to waive the WO-id
     requirement; the Closes-#N link is required regardless."""
-    if env is None:
-        env = os.environ
-    pr, error = pr_event(env)
+    pr, error = pr_event(env or {})
     if error:
         return [f"B: {error}"]
     if pr is None:
@@ -340,7 +338,7 @@ def collect_wo_rows(root):
     return rows
 
 
-def check_link_integrity(root):
+def check_link_integrity(root, env=None):
     """C: typed cross-link tokens must resolve; duplicate PRD ids fail."""
     problems = []
     prd_ids = collect_prd_ids(root)
@@ -482,7 +480,7 @@ def _architecture_drift(root):
     return problems
 
 
-def check_blueprint_drift(root):
+def check_blueprint_drift(root, env=None):
     """D: docs/adr is the approved blueprint (ADR-0033's second gate). It
     must describe itself consistently — every ADR carries a known status
     and is indexed with that status — and no artifact outside docs/adr may
@@ -574,7 +572,7 @@ def merged_wo_rows(root):
     return rows
 
 
-def check_cost_ledger(root):
+def check_cost_ledger(root, env=None):
     """G: every run appends {wo, run_id, model, tokens, cost, outcome} to
     the append-only docs/factory/costs.jsonl, and a merged work order with
     no ledger line is a gating finding (ADR-0034). An absent ledger is
@@ -613,7 +611,7 @@ def check_cost_ledger(root):
     return problems
 
 
-def check_staleness(root):
+def check_staleness(root, env=None):
     """I: a doc that links to a path which no longer exists on disk is
     stale — the knowledge plane moved and the doc did not. Deliberately
     filesystem-shaped, not time-shaped: a detector must be deterministic
@@ -652,7 +650,7 @@ def manifest_files(root):
             for p in sorted(payload.rglob("*")) if p.is_file()}
 
 
-def check_scaffold_sync(root):
+def check_scaffold_sync(root, env=None):
     """E: the template payload must match its checksum manifest exactly."""
     manifest_path = root / "factory" / "manifest.json"
     if not manifest_path.is_file():
@@ -678,7 +676,7 @@ def check_scaffold_sync(root):
     return problems
 
 
-def check_config_shape(root):
+def check_config_shape(root, env=None):
     """F: factory config must parse and every field be a valid token."""
     candidates = [root / "factory" / "templates" / "factory.json",
                   root / ".github" / "factory.json"]
@@ -817,7 +815,7 @@ def _verification_sections(text):
     return sections, (fence[2] if fence else None)
 
 
-def check_evidence_honesty(root):
+def check_evidence_honesty(root, env=None):
     """H: a criterion that asserts a verdict must show literal output or
     disclose that the check was NOT RUN. Prose confidence is not evidence
     (PRD-0001: a change whose verification is asserted but not evidenced
@@ -879,17 +877,16 @@ CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
 
 
 def run_all(root, env=None):
-    """Run every detector. `env` (default os.environ) is threaded to the
-    checkers that read the process environment, so callers can stay
-    hermetic without mutating global state."""
+    """Run every detector uniformly. `env` (default os.environ) is threaded
+    to every detector through one signature — most ignore it; the
+    PR-traceability detector reads the CI event path from it — so callers
+    stay hermetic without mutating global state and the registry needs no
+    per-detector special-casing."""
     if env is None:
         env = os.environ
     problems = []
     for checker in CHECKERS:
-        if checker is check_pr_traceability:
-            problems.extend(checker(root, env))
-        else:
-            problems.extend(checker(root))
+        problems.extend(checker(root, env))
     return problems
 
 

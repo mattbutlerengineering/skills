@@ -1433,6 +1433,16 @@ class TestEvidenceHonesty(unittest.TestCase):
 
 
 class TestRunAll(unittest.TestCase):
+    def test_every_detector_accepts_root_and_env(self):
+        """The detector interface is uniform: every checker is callable as
+        check(root, env) and returns a problem list, so run_all dispatches
+        every member identically with no per-detector special-casing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for checker in gates.CHECKERS:
+                with self.subTest(checker=checker.__name__):
+                    self.assertIsInstance(checker(root, {}), list)
+
     def test_run_all_threads_env_to_the_pr_detector(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
