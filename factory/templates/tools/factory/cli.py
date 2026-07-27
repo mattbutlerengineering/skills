@@ -5,10 +5,12 @@ Two tools shell out to a binary and turn its failures into problem
 strings — label_sync.py (gh) and budget_guard.py (git) — and before this
 seam each carried a byte-identical copy of the failure tuple and the
 one-line detail formatter. Two adapters make the seam real: the failure
-vocabulary and its formatting live here once; each caller keeps its own
-port (gh_runner returns stdout, git_runner the CompletedProcess) and its
-own problem-string label. Tests inject a fake runner so they never touch
-a real CLI.
+vocabulary and its formatting live here once, and the shared gh port —
+gh_runner, which unwraps a gh call to its stdout — lives here too, since
+four tools default to it (label_sync, sweeps, gate_digest, validator).
+git_runner keeps its single caller (budget_guard) the CompletedProcess it
+wants. Each caller adds its own problem-string label; tests inject a fake
+runner so they never touch a real CLI.
 
 The harness-IO conventions live here for the same reason: child_env
 (nesting a harness under Claude Code), version (provenance probes), and
@@ -82,3 +84,15 @@ def runner(binary):
         return subprocess.run([binary, *args], check=True,
                               capture_output=True, text=True)
     return run
+
+
+_gh = runner("gh")
+
+
+def gh_runner(args):
+    """The shared gh port: shell out to gh and return its stdout (the JSON
+    body its callers json.loads). A missing (OSError), unauthenticated, or
+    rate-limited (CalledProcessError) gh raises CLI_FAILURES — each caller
+    turns that into its own problem string, never a traceback. Tests inject
+    a fake so they never touch the network."""
+    return _gh(args).stdout

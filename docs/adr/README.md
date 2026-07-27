@@ -60,5 +60,6 @@ the canonical vocabulary.
 | [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | amended by ADR-0039 |
 | [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | accepted |
 | [0039](0039-tracker-grammar-joins-the-knowledge-plane.md) | Tracker-mirror grammar joins the knowledge plane | amended by ADR-0040 |
-| [0040](0040-write-outputs-joins-the-cli-seam.md) | write_outputs joins the cli seam | accepted |
+| [0040](0040-write-outputs-joins-the-cli-seam.md) | write_outputs joins the cli seam | amended by ADR-0042 |
 | [0041](0041-gate-latency-rows-join-the-cost-ledger.md) | Gate-latency observations are cost-ledger rows | accepted |
+| [0042](0042-gh-port-joins-the-cli-seam.md) | The gh port (gh_runner) joins the cli seam | accepted |

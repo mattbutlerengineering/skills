@@ -39,10 +39,10 @@ from datetime import datetime, timezone
 import cost_ledger
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
+from cli import gh_runner
 from cli import write_outputs
 from knowledge_plane import (breakdown_files, repo_root, row_tracker_issue,
                              row_work_order)
-from label_sync import gh_runner
 
 # The three gates in pipeline order: ledger gate name, the wo: label an
 # issue carries while waiting, the label whose application confirms the

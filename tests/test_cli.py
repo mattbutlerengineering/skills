@@ -9,6 +9,7 @@ without each re-proving what the seam does.
 import os
 import subprocess
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -101,6 +102,26 @@ class TestRunner(unittest.TestCase):
     def test_a_real_run_returns_the_completed_process(self):
         run = cli.runner("true")
         self.assertEqual(run([]).returncode, 0)
+
+
+class TestGhRunner(unittest.TestCase):
+    def test_the_gh_port_returns_stdout_not_the_completed_process(self):
+        # gh_runner is the shared gh port — label_sync, sweeps, gate_digest,
+        # and validator all default to it. Unlike runner (a CompletedProcess),
+        # it unwraps the call to the stdout string its callers json.loads.
+        fake = types.SimpleNamespace(stdout='[{"name":"bug"}]')
+        with mock.patch.object(cli, "_gh", lambda args: fake):
+            self.assertEqual(cli.gh_runner(["label", "list"]),
+                             '[{"name":"bug"}]')
+
+    def test_a_failing_gh_raises_into_the_vocabulary(self):
+        # A missing, unauthenticated, or rate-limited gh raises CLI_FAILURES
+        # so each caller renders its own problem string, never a traceback.
+        def boom(args):
+            raise FileNotFoundError(2, "No such file or directory: 'gh'")
+        with mock.patch.object(cli, "_gh", boom):
+            with self.assertRaises(cli.CLI_FAILURES):
+                cli.gh_runner(["label", "list"])
 
 
 if __name__ == "__main__":
