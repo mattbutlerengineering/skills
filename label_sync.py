@@ -20,7 +20,7 @@ from pathlib import Path
 
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import runner
+from cli import gh_runner
 from knowledge_plane import repo_root
 
 LABEL_FIELDS = ("name", "color", "description")
@@ -84,18 +84,6 @@ def plan(current, desired):
                 f"L: label {want['name']} description"
                 f" {got.get('description')!r}, want {want['description']!r}")
     return problems
-
-
-_gh = runner("gh")
-
-
-def gh_runner(args):
-    """Default runner: shell out to gh (cli.runner), return stdout. A
-    missing (OSError), unauthenticated, or rate-limited
-    (CalledProcessError) gh raises GH_FAILURES — sync turns that into an
-    L: problem string, never a traceback. Tests inject a fake so they
-    never touch the network."""
-    return _gh(args).stdout
 
 
 LIST_ARGS = ("label", "list", "--json", "name,color,description",

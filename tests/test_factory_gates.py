@@ -697,6 +697,18 @@ class TestPrTraceability(unittest.TestCase):
             self.assertTrue(problems[0].startswith(
                 f"B: cannot read GITHUB_EVENT_PATH {path}:"), problems)
 
+    def test_non_object_event_payload_is_a_problem_not_a_skip(self):
+        """A JSON array where the event object should be is a broken event
+        file, not a non-PR run — cli.read_event reports it (ADR-0042).
+        Before the seam this skipped silently."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_text("[1, 2]", encoding="utf-8")
+            self.assertEqual(
+                gates.check_pr_traceability(
+                    Path(tmp), env={"GITHUB_EVENT_PATH": str(path)}),
+                [f"B: GITHUB_EVENT_PATH {path} is not a JSON object"])
+
 class TestEvidenceHonesty(unittest.TestCase):
     """H (origin: WO-0011): a criterion that asserts a LABELLED verdict must
     show literal output or disclose that the check was NOT RUN.

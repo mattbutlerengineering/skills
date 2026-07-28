@@ -35,6 +35,7 @@ import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
+from cli import gh_runner
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              repo_root, row_tracker_issue, row_work_order)
 
@@ -252,7 +253,7 @@ def post_review(number, body, run):
     return []
 
 
-def run_review(root, findings, status, env, run=label_sync.gh_runner):
+def run_review(root, findings, status, env, run=gh_runner):
     """The review job: post the check findings as a non-authoring actor."""
     pr, problems = _pull_request(env)
     if problems:
@@ -280,7 +281,7 @@ def run_review(root, findings, status, env, run=label_sync.gh_runner):
     return post_review(pr.get("number"), body, run)
 
 
-def run_lifecycle(root, label, env, run=label_sync.gh_runner):
+def run_lifecycle(root, label, env, run=gh_runner):
     """The merged-label job: flip the cited work order's lifecycle label."""
     lifecycle, problems = lifecycle_labels(root)
     if problems:
@@ -340,7 +341,7 @@ def parse(argv):
     return None, None
 
 
-def main(argv, env=None, run=label_sync.gh_runner):
+def main(argv, env=None, run=gh_runner):
     env = os.environ if env is None else env
     root = repo_root()
     command, options = parse(argv)

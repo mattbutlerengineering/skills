@@ -29,14 +29,13 @@ Two invariants here are security properties, not conveniences (ADR-0032):
         charter with no band, a band the routing table does not cover — is a
         problem (exit nonzero) so the owner sees it.
 """
-import json
 import os
 import sys
 from pathlib import Path
 
 import factory_config
 import orientation_pack
-from cli import write_outputs
+from cli import read_event, write_outputs
 from knowledge_plane import (breakdown_files, repo_root,
                              row_tracker_issue, row_work_order)
 from protocol import read_frontmatter
@@ -79,16 +78,14 @@ def actor_is_owner(sender, owner):
 
 
 def issue_event(env):
-    """(the issues event payload, problems) from GITHUB_EVENT_PATH."""
-    path = env.get("GITHUB_EVENT_PATH")
-    if not path:
+    """(the issues event payload, problems) from GITHUB_EVENT_PATH
+    (cli.read_event, ADR-0042). A missing path is this tool's problem —
+    the assembler only ever runs inside the labeled-event workflow."""
+    event, error = read_event(env)
+    if error:
+        return None, [f"asm: {error}"]
+    if event is None:
         return None, ["asm: no GITHUB_EVENT_PATH in the environment"]
-    try:
-        event = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as err:
-        return None, [f"asm: cannot read GITHUB_EVENT_PATH {path}: {err}"]
-    if not isinstance(event, dict):
-        return None, [f"asm: GITHUB_EVENT_PATH {path} is not a JSON object"]
     return event, []
 
 

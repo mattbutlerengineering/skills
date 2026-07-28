@@ -103,5 +103,57 @@ class TestRunner(unittest.TestCase):
         self.assertEqual(run([]).returncode, 0)
 
 
+class TestGhRunner(unittest.TestCase):
+    def test_the_gh_port_returns_stdout_and_forwards_args(self):
+        # The port over runner("gh"): callers get stdout, failures raise
+        # CLI_FAILURES for them to label. Patched because a real gh call
+        # is network + auth; the caller suites inject fakes end to end.
+        fake = mock.Mock(return_value=subprocess.CompletedProcess(
+            ["gh"], 0, stdout="[]", stderr=""))
+        with mock.patch.object(cli, "_gh", fake):
+            self.assertEqual(cli.gh_runner(["label", "list"]), "[]")
+        fake.assert_called_once_with(["label", "list"])
+
+
+class TestReadEvent(unittest.TestCase):
+    def test_no_event_path_is_a_silent_none(self):
+        # Absence is a fact, not an error: a hand/local run has no event.
+        # Each caller judges it (detector B skips; the assembler objects).
+        self.assertEqual(cli.read_event({}), (None, None))
+
+    def test_a_payload_object_comes_back_verbatim(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_text('{"action": "labeled"}', encoding="utf-8")
+            self.assertEqual(
+                cli.read_event({"GITHUB_EVENT_PATH": str(path)}),
+                ({"action": "labeled"}, None))
+
+    def test_an_unreadable_path_is_an_unlabeled_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = str(Path(tmp) / "nope" / "event.json")
+            event, error = cli.read_event({"GITHUB_EVENT_PATH": missing})
+            self.assertIsNone(event)
+            self.assertTrue(error.startswith(
+                f"cannot read GITHUB_EVENT_PATH {missing}:"), error)
+
+    def test_malformed_json_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_text("{not json", encoding="utf-8")
+            event, error = cli.read_event({"GITHUB_EVENT_PATH": str(path)})
+            self.assertIsNone(event)
+            self.assertTrue(error.startswith(
+                f"cannot read GITHUB_EVENT_PATH {path}:"), error)
+
+    def test_a_non_object_payload_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_text("[1, 2]", encoding="utf-8")
+            self.assertEqual(
+                cli.read_event({"GITHUB_EVENT_PATH": str(path)}),
+                (None, f"GITHUB_EVENT_PATH {path} is not a JSON object"))
+
+
 if __name__ == "__main__":
     unittest.main()

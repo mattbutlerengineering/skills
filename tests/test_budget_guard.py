@@ -5,7 +5,7 @@ Same discipline as test_assembler: every function is exercised through its
 public interface, tests assert the EXACT strings callers will print or
 write, and nothing here touches the network or a real git repository —
 push_wip takes an injected command runner, same shape as
-label_sync.gh_runner.
+cli.gh_runner.
 
 TestAcceptanceScenario is the WO-0006 acceptance criterion end to end: a
 deliberately over-budget run hard-stops, pushes WIP, posts a handoff naming

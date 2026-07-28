@@ -11,12 +11,20 @@ own problem-string label. Tests inject a fake runner so they never touch
 a real CLI.
 
 The harness-IO conventions live here for the same reason: child_env
-(nesting a harness under Claude Code), version (provenance probes), and
+(nesting a harness under Claude Code), version (provenance probes),
 write_outputs (the $GITHUB_OUTPUT heredoc form assembler.py and
-cost_report.py both emit).
+cost_report.py both emit), and read_event (the $GITHUB_EVENT_PATH read
+gates.py and assembler.py both make — ADR-0042).
+
+gh_runner, the stdout port over runner("gh"), lives beside runner for the
+same reason write_outputs moved here (ADR-0040): it had grown four real
+callers (label_sync, validator, gate_digest, sweeps), three of them
+importing it tool-to-tool from label_sync.
 """
+import json
 import os
 import subprocess
+from pathlib import Path
 
 # A failed or missing binary raises one of these; callers turn that into
 # a label-prefixed problem string instead of a traceback.
@@ -74,6 +82,24 @@ def write_outputs(env, outputs):
         handle.write("\n".join(chunks) + "\n")
 
 
+def read_event(env):
+    """(the CI event payload, error) from $GITHUB_EVENT_PATH. (None, None)
+    when the environment carries no event path — absence is a fact, not an
+    error, and each caller judges it (detector B skips silently outside a
+    PR run; the assembler calls it a problem). An unreadable, unparsable,
+    or non-object payload is an error string the caller labels."""
+    path = env.get("GITHUB_EVENT_PATH")
+    if not path:
+        return None, None
+    try:
+        event = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        return None, f"cannot read GITHUB_EVENT_PATH {path}: {err}"
+    if not isinstance(event, dict):
+        return None, f"GITHUB_EVENT_PATH {path} is not a JSON object"
+    return event, None
+
+
 def runner(binary):
     """A run(args) callable shelling out to `binary`, returning the
     CompletedProcess. A failed or missing binary raises CLI_FAILURES —
@@ -82,3 +108,15 @@ def runner(binary):
         return subprocess.run([binary, *args], check=True,
                               capture_output=True, text=True)
     return run
+
+
+_gh = runner("gh")
+
+
+def gh_runner(args):
+    """The gh port: shell out to gh (runner), return stdout. A missing
+    (OSError), unauthenticated, or rate-limited (CalledProcessError) gh
+    raises CLI_FAILURES — each caller turns that into its own
+    label-prefixed problem string, never a traceback. Tests inject a fake
+    runner so they never touch the network."""
+    return _gh(args).stdout

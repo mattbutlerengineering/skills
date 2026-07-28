@@ -45,7 +45,7 @@ import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from knowledge_plane import WO_TOKEN, repo_root
-from label_sync import gh_runner
+from cli import gh_runner
 
 # Sweep kind -> the two taxonomy labels its intake carries. Closed by
 # construction: the triage a sweep can express is source + type, never a

@@ -96,7 +96,7 @@ def push_wip(wo, run=git_runner):
     """Commit and push whatever is on disk under `wo`'s name, returning a
     list of bg: problems (empty on success) — ADR-0034: a run that hits its
     budget preserves its work-in-progress, it never discards it. `run` is an
-    injected command runner (same shape as label_sync.gh_runner) so tests
+    injected command runner (same shape as cli.gh_runner) so tests
     never touch a real repository. --allow-empty: a run that hard-stops
     before changing a file still needs a commit to push.
 

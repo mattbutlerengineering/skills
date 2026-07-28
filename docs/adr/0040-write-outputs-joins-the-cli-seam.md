@@ -1,6 +1,6 @@
 # write_outputs joins the cli seam
 
-- Status: accepted
+- Status: amended by ADR-0042
 - Date: 2026-07-21
 
 Amends ADR-0039. Its closing reconciliation read: "The rest of ADR-0037

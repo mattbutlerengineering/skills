@@ -51,6 +51,7 @@ from pathlib import Path
 
 import cost_ledger
 import factory_config
+from cli import read_event
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
                              breakdown_files, repo_root, run_dirs)
@@ -281,17 +282,14 @@ def check_wo_citation(root):
 
 def pr_event(env):
     """(the pull_request payload, error): the PR this CI run is about, read
-    from the event file. (None, None) outside a PR run — every caller SKIPs
-    silently there. Callers label the error string themselves, so this stays
-    detector-agnostic (validator.py is the second caller)."""
-    event_path = env.get("GITHUB_EVENT_PATH")
-    if not event_path:
-        return None, None
-    try:
-        event = json.loads(Path(event_path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as err:
-        return None, f"cannot read GITHUB_EVENT_PATH {event_path}: {err}"
-    pr = event.get("pull_request") if isinstance(event, dict) else None
+    from the event file (cli.read_event, ADR-0042). (None, None) outside a
+    PR run — every caller SKIPs silently there. Callers label the error
+    string themselves, so this stays detector-agnostic (validator.py is the
+    second caller)."""
+    event, error = read_event(env)
+    if event is None:
+        return None, error
+    pr = event.get("pull_request")
     return (pr if isinstance(pr, dict) else None), None
 
 
@@ -587,7 +585,7 @@ def check_cost_ledger(root):
     stays here is G's own work: the cross-checks between ledger and
     breakdown (a recorded wo must have a row; a merged row must be
     recorded)."""
-    ledger = root / "docs" / "factory" / "costs.jsonl"
+    ledger = root / COST_LEDGER
     if not ledger.is_file():
         return []
     try:
