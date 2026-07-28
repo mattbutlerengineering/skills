@@ -579,8 +579,11 @@ def check_cost_ledger(root):
     the append-only docs/factory/costs.jsonl, and a merged work order with
     no ledger line is a gating finding (ADR-0034). An absent ledger is
     silent, not a finding: the ledger is created by the first run that
-    records into it, so a freshly stamped repo has no runs to account for
-    — the rule bites once the ledger exists.
+    records into it, so a freshly stamped repo has no runs to account for.
+    The merged-order rule bites once the ledger records a dispatched RUN,
+    not on the ledger's mere non-emptiness (ADR-0041): a ledger holding
+    only gate-latency rows has begun no run-accounting epoch, so orders
+    merged before the first run are not yet owed a line.
 
     The line grammar itself is cost_ledger.parse — the same rule the
     weekly report reads with (ADR-0037), so the two cannot diverge. What
@@ -597,19 +600,26 @@ def check_cost_ledger(root):
     problems = []
     wo_rows = collect_wo_rows(root)
     recorded = set()
+    has_run = False
     for lineno, entry, suffixes in cost_ledger.parse(text):
         problems.extend(f"G: {COST_LEDGER}:{lineno} {suffix}"
                         for suffix in suffixes)
+        if entry is not None and cost_ledger.gate_wait(entry) is None:
+            has_run = True
         wo = cost_ledger.wo_token(entry) if entry is not None else None
         if wo:
             recorded.add(wo)
             if wo not in wo_rows:
                 problems.append(f"G: {COST_LEDGER}:{lineno} wo {wo}"
                                 " has no breakdown row")
-    for rel, lineno, wo in merged_wo_rows(root):
-        if wo not in recorded:
-            problems.append(f"G: {rel}:{lineno} merged work order {wo} has"
-                            f" no line in {COST_LEDGER}")
+    # The merged-order cross-check waits for the run-accounting epoch: a
+    # ledger of only gate-latency rows (ADR-0041) owes no run lines yet, so
+    # orders merged before the first dispatched run are not findings.
+    if has_run:
+        for rel, lineno, wo in merged_wo_rows(root):
+            if wo not in recorded:
+                problems.append(f"G: {rel}:{lineno} merged work order {wo}"
+                                f" has no line in {COST_LEDGER}")
     return problems
 
 

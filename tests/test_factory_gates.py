@@ -218,6 +218,11 @@ class TestCostLedger(unittest.TestCase):
 
     LINE = {"wo": "WO-0001", "run_id": "r-1", "model": "m",
             "tokens": 1200, "cost": 0.42, "outcome": "merged"}
+    # A gate-latency row (ADR-0041): $0, model "none", the wait in the
+    # outcome. Present in the ledger, but not a dispatched run.
+    GATE_LINE = {"wo": "WO-0001", "run_id": "gate-merge-2026-07-12T03:12:55Z",
+                 "model": "none", "tokens": 0, "cost": 0.0,
+                 "outcome": "gate_wait:merge:2379s"}
 
     def build(self, tmp, *lines, row="- [x] WO-0001 slice (PRD-0001)\n"):
         tree = FixtureTree(tmp)
@@ -244,6 +249,32 @@ class TestCostLedger(unittest.TestCase):
                 row="- [x] WO-0001 one (PRD-0001)\n"
                     "- [x] WO-0002 two (PRD-0001)\n"
                     "- [ ] WO-0003 unmerged (PRD-0001)\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/features/demo/breakdown.md:2 merged work order"
+                " WO-0002 has no line in docs/factory/costs.jsonl"])
+
+    def test_gate_only_ledger_does_not_demand_run_lines(self):
+        # ADR-0041: a ledger holding only gate-latency rows has begun no
+        # run-accounting epoch, so an order merged before the first run is
+        # not owed a line. This is the exact state a fresh gate-digest
+        # commit leaves before any dispatched run records itself — where
+        # the merged-order rule must NOT fire on the ledger's non-emptiness.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.GATE_LINE,
+                row="- [x] WO-0001 one (PRD-0001)\n"
+                    "- [x] WO-0002 two (PRD-0001)\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+    def test_a_dispatched_run_opens_the_epoch(self):
+        # Once any dispatched run records itself (a non-gate row), the
+        # merged-order cross-check activates: an order merged with no line
+        # is flagged again, gate rows in the same ledger notwithstanding.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.GATE_LINE, self.LINE,
+                row="- [x] WO-0001 one (PRD-0001)\n"
+                    "- [x] WO-0002 two (PRD-0001)\n")
             self.assertEqual(gates.check_cost_ledger(tree.root), [
                 "G: docs/features/demo/breakdown.md:2 merged work order"
                 " WO-0002 has no line in docs/factory/costs.jsonl"])

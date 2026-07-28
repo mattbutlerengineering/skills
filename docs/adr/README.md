@@ -61,4 +61,5 @@ the canonical vocabulary.
 | [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | accepted |
 | [0039](0039-tracker-grammar-joins-the-knowledge-plane.md) | Tracker-mirror grammar joins the knowledge plane | amended by ADR-0040 |
 | [0040](0040-write-outputs-joins-the-cli-seam.md) | write_outputs joins the cli seam | accepted |
-| [0041](0041-gate-latency-rows-join-the-cost-ledger.md) | Gate-latency observations are cost-ledger rows | accepted |
+| [0041](0041-gate-latency-rows-join-the-cost-ledger.md) | Gate-latency observations are cost-ledger rows | amended by ADR-0043 |
+| [0043](0043-merged-order-rule-anchors-to-the-run-epoch.md) | Detector G's merged-order rule anchors to the run epoch | accepted |
