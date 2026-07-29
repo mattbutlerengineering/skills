@@ -19,46 +19,46 @@ per ADR-0032 after each row exists here first.
 
 - [x] **WO-0001** factory-init skill + template payload + manifest regeneration — size:M, blocked by: — (PRD-0001 §Solution) (tracker: #106)
   - Accept: factory-init stamps the full template payload into a scratch repo; a manifest regen command exists and detector E passes on the stamped tree.
-- [x] **WO-0002** labels.json + label-sync (detector L) + CODEOWNERS template — size:S, blocked by: WO-0001 (PRD-0001 §Solution) (tracker: #107)
+- [x] **WO-0002** labels.json + label-sync (detector L) + CODEOWNERS template — size:S, blocked by: WO-0001 (PRD-0001 §Solution) (tracker: #107) (pre-ledger)
   - Accept: label-sync recreates the 27-label taxonomy on a bare repo and reports drift; CODEOWNERS ships in the template payload.
-- [x] **WO-0003** Detector B (PR-traceability) + Makefile↔validator lockstep test — size:S, blocked by: WO-0001 (PRD-0001 §Success criteria) (tracker: #108)
+- [x] **WO-0003** Detector B (PR-traceability) + Makefile↔validator lockstep test — size:S, blocked by: WO-0001 (PRD-0001 §Success criteria) (tracker: #108) (pre-ledger)
   - Accept: a PR body missing the work-order citation fails B in event context and SKIPs locally; a unit test pins Makefile and CI steps in lockstep.
-- [x] **WO-0004** validator.yml (check + tests + merged-label step + review job) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #109)
+- [x] **WO-0004** validator.yml (check + tests + merged-label step + review job) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #109) (pre-ledger)
   - Accept: every PR runs detectors and tests; closing a merged PR flips the lifecycle label; the review job posts findings from a non-authoring actor.
-- [x] **WO-0013** minimal charters first: SWE, Reviewer, Planner (agents + SKILL.md) — size:M, blocked by: WO-0001 (PRD-0001 §Actors) (tracker: #118)
+- [x] **WO-0013** minimal charters first: SWE, Reviewer, Planner (agents + SKILL.md) — size:M, blocked by: WO-0001 (PRD-0001 §Actors) (tracker: #118) (pre-ledger)
   - Accept: three agent files with `name:` frontmatter plus their SKILL.md charters load cleanly; structural lint passes.
 
 ## Milestone B: AFK dispatch (first fully unattended work order lands as a PR)
 
-- [x] **WO-0005** assembler.yml + claude-code-action + guards — size:L, blocked by: WO-0002, WO-0004 (PRD-0001 §Solution) (tracker: #110)
+- [x] **WO-0005** assembler.yml + claude-code-action + guards — size:L, blocked by: WO-0002, WO-0004 (PRD-0001 §Solution) (tracker: #110) (pre-ledger)
   - Accept: an owner-applied ready label triggers a run that opens a PR carrying the work-order citation; a non-owner label does not fire; FACTORY_PAUSED and WIP-cap guards hold.
-- [x] **WO-0006** budget_guard.py + handoff.py + cost ledger — size:M, blocked by: WO-0005 (PRD-0001 §Success criteria) (tracker: #111)
+- [x] **WO-0006** budget_guard.py + handoff.py + cost ledger — size:M, blocked by: WO-0005 (PRD-0001 §Success criteria) (tracker: #111) (pre-ledger)
   - Accept: a deliberately over-budget run hard-stops, pushes WIP, posts a handoff naming remaining work, and appends a costs.jsonl line.
-- [x] **WO-0007** model routing table + resolution — size:S, blocked by: WO-0006 (PRD-0001 §Solution) (tracker: #112)
+- [x] **WO-0007** model routing table + resolution — size:S, blocked by: WO-0006 (PRD-0001 §Solution) (tracker: #112) (pre-ledger)
   - Accept: each type label resolves to a model id from factory config; a unit test covers all three routes.
-- [x] **WO-0015** orientation pack in assembler prompt — size:S, blocked by: WO-0005 (PRD-0001 §User stories) (tracker: #120)
+- [x] **WO-0015** orientation pack in assembler prompt — size:S, blocked by: WO-0005 (PRD-0001 §User stories) (tracker: #120) (pre-ledger)
   - Accept: the assembler prompt bundles CONTEXT.md, cited ADRs, and a codegraph summary for the dispatched work order via orientation_pack.py.
 
 ## Milestone C: Self-observation (weekly report, sweeps, honesty gates)
 
-- [x] **WO-0008** Detectors D (blueprint-drift) + G (cost-ledger) + I (staleness) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #113)
+- [x] **WO-0008** Detectors D (blueprint-drift) + G (cost-ledger) + I (staleness) — size:M, blocked by: WO-0003 (PRD-0001 §Solution) (tracker: #113) (pre-ledger)
   - Accept: planted drift, ledger-gap, and stale-doc fixtures are each caught by selftest; the clean tree stays silent.
-- [x] **WO-0009** cost-report.yml + monthly circuit breaker — size:S, blocked by: WO-0006 (PRD-0001 §User stories) (tracker: #114)
+- [x] **WO-0009** cost-report.yml + monthly circuit breaker — size:S, blocked by: WO-0006 (PRD-0001 §User stories) (tracker: #114) (pre-ledger)
   - Accept: the weekly report issue posts numbers recomputed from costs.jsonl; a simulated cap breach sets FACTORY_PAUSED.
-- [x] **WO-0010** sweeps.yml + sentry-intake stamping — size:M, blocked by: WO-0002 (PRD-0001 §Success criteria) (tracker: #115)
+- [x] **WO-0010** sweeps.yml + sentry-intake stamping — size:M, blocked by: WO-0002 (PRD-0001 §Success criteria) (tracker: #115) (pre-ledger)
   - Accept: a sweep files a triaged draft issue with source and type labels applied, no human transcription.
-- [x] **WO-0011** Detector H (evidence honesty) — size:S, blocked by: WO-0003 (PRD-0001 §Success criteria) (tracker: #116)
+- [x] **WO-0011** Detector H (evidence honesty) — size:S, blocked by: WO-0003 (PRD-0001 §Success criteria) (tracker: #116) (pre-ledger)
   - Accept: a verification artifact with neither literal command output nor an explicit NOT-RUN disclaimer fails the build; selftest covers both branches.
-- [x] **WO-0012** design pipeline: docs/design template + playwright/web-quality job — size:M, blocked by: WO-0004 (PRD-0001 §Solution) (tracker: #117)
+- [x] **WO-0012** design pipeline: docs/design template + playwright/web-quality job — size:M, blocked by: WO-0004 (PRD-0001 §Solution) (tracker: #117) (pre-ledger)
   - Accept: a PR touching design docs triggers the playwright + web-quality job; the design-system seed ships in the template payload.
-- [x] **WO-0017** gate-queue daily digest + gate-latency capture — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #122)
+- [x] **WO-0017** gate-queue daily digest + gate-latency capture — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #122) (pre-ledger)
   - Accept: a pinned digest lists items waiting at each gate; gate-latency rows land in costs.jsonl.
 
 ## Milestone D: Charter maturity (full role set, regression CI, feedback mining)
 
-- [x] **WO-0014** full 9-role charter set + CHARTERS.md + gate checklists — size:L, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #119)
+- [x] **WO-0014** full 9-role charter set + CHARTERS.md + gate checklists — size:L, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #119) (pre-ledger)
   - Accept: all nine agent+skill charter pairs exist; CHARTERS.md indexes them with the three gate checklists; structural lint passes.
-- [x] **WO-0016** charter regression suite (golden fixture replays) — size:M, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #121)
+- [x] **WO-0016** charter regression suite (golden fixture replays) — size:M, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #121) (pre-ledger)
   - Accept: golden fixture work orders replay on plugin PRs via a cheap model; a deliberately degraded charter fails the suite.
 - [ ] **WO-0018** rejection mining into the toolsmith queue — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #123)
   - Accept: a weekly job harvests gate rejections and PR change-requests into the toolsmith/claude-reflect queue.

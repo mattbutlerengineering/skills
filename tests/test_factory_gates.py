@@ -248,6 +248,31 @@ class TestCostLedger(unittest.TestCase):
                 "G: docs/features/demo/breakdown.md:2 merged work order"
                 " WO-0002 has no line in docs/factory/costs.jsonl"])
 
+    def test_pre_ledger_annotated_row_is_exempt_from_recording(self):
+        """ADR-0043: a work order merged before the ledger was born carries
+        (pre-ledger) on its breakdown row, and G's merged-row-must-be-
+        recorded check skips it. The exemption lives in the knowledge
+        plane, on the row it describes — never as a repo-specific list in
+        this mirrored module, which would leak one repo's WO ids into
+        every stamped repo."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                row="- [x] WO-0001 one (PRD-0001)\n"
+                    "- [x] WO-0002 two (PRD-0001) (pre-ledger)\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+    def test_pre_ledger_annotation_does_not_waive_the_reverse_check(self):
+        """The annotation waives only must-be-recorded. A recorded wo must
+        still have a breakdown row, annotated or not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, dict(self.LINE, wo="WO-0009"),
+                row="- [x] WO-0001 one (PRD-0001) (pre-ledger)\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/factory/costs.jsonl:1 wo WO-0009 has no"
+                " breakdown row"])
+
     def test_malformed_line_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(tmp, self.LINE)

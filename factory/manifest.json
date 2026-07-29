@@ -20,7 +20,7 @@
     "templates/tools/factory/cost_report.py": "4da72011bef667b70861355b145432e866f46d45d61aa5287871d512a9b686a6",
     "templates/tools/factory/factory_config.py": "2abe251d5bee968b6355ef7e09c3d160b63ec80a19e9ee04e785c49bfbfcad0d",
     "templates/tools/factory/gate_digest.py": "89361f3b7f8fb4190a5465550f4835bf1cf7276f7c9b8888cd226fecf5c11742",
-    "templates/tools/factory/gates.py": "7f197527b7c3767cb5f73a45e7e3e27332b68e48210980bb14d1acca71af145f",
+    "templates/tools/factory/gates.py": "89fec66f0007ceac38dd70aad7b835f06c3325676f8d9d34f358b14431f961e2",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/knowledge_plane.py": "1d3f7d809325e58c523dc9fd9e886dd2b3e17249ae8945a385d3c2fc20087739",
     "templates/tools/factory/label_sync.py": "5d486fc97733792d635d5f7cf923ce4272948c2cb9caffb6805ab89dc17e6318",
