@@ -67,6 +67,8 @@ On demand only (real model runs, costs money, never CI; both need the
 - `CONTEXT.md` — canonical vocabulary (use these terms in code and docs)
 - `docs/adr/` — decisions; supersede with a new ADR, don't rewrite
 - `LEDGER.md` — per-skill maturity, linked to eval evidence
+- `docs/factory/improvement-routine.md` — the daily cloud routine's
+  protocol (ADR-0044); tuned by PR, never edited by the routine itself
 
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
