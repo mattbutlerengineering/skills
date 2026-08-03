@@ -23,11 +23,13 @@ Two invariants here are security properties, not conveniences (ADR-0032):
   python3 assembler.py resolve
         Resolve the labeled issue into dispatch outputs (dispatch, wo,
         charter, band, model, prompt) written to $GITHUB_OUTPUT for the
-        workflow's claude-code-action step. A non-owner or non-ready label is
-        a no-op (dispatch=false, exit 0). A genuine misconfiguration — an
-        owner-applied ready label on an issue with no work-order row, a
-        charter with no band, a band the routing table does not cover — is a
-        problem (exit nonzero) so the owner sees it.
+        workflow's claude-code-action step. A non-owner or non-ready label,
+        or an issue still flagged budget-exhausted (ADR-0034: the owner must
+        clear it to re-dispatch), is a no-op (dispatch=false, exit 0). A
+        genuine misconfiguration — an owner-applied ready label on an
+        unflagged issue with no work-order row, a charter with no band, a
+        band the routing table does not cover — is a problem (exit nonzero)
+        so the owner sees it.
 """
 import os
 import sys
@@ -41,6 +43,10 @@ from knowledge_plane import (breakdown_files, repo_root,
 from protocol import read_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
+
+# ADR-0034: a hard-stopped order is re-dispatched only after the owner
+# clears this flag — the dispatcher itself enforces the no-self-retry rule.
+EXHAUSTED_LABEL = "budget-exhausted"
 
 # The row and tracker-mirror grammars are knowledge_plane's — one rule
 # for the whole dispatch plane (validator and orientation_pack read the
@@ -162,8 +168,9 @@ def assemble_prompt(role, wo, row, root):
 def run_resolve(root, env, agents_dir=None):
     """(outputs, problems) for the resolve command. outputs always carries
     `dispatch`; on a real dispatch it also carries wo, charter, band, model,
-    and prompt. A non-owner or non-ready label resolves to dispatch=false with
-    no problems (a no-op); a genuine misconfiguration is a problem."""
+    and prompt. A non-owner or non-ready label — or a budget-exhausted flag
+    still on the issue (ADR-0034) — resolves to dispatch=false with no
+    problems (a no-op); a genuine misconfiguration is a problem."""
     agents_dir = agents_dir or (Path(root) / "factory" / "agents")
     event, problems = issue_event(env)
     if problems:
@@ -184,10 +191,15 @@ def run_resolve(root, env, agents_dir=None):
     if not isinstance(number, int):
         return ({"dispatch": "false"},
                 ["asm: the issues event carries no issue number"])
+    labels = [(entry.get("name") or "") for entry in issue.get("labels") or []]
+    if EXHAUSTED_LABEL in labels:
+        return {"dispatch": "false",
+                "reason": f"asm: issue #{number} carries {EXHAUSTED_LABEL} —"
+                " a hard-stopped order is not re-dispatchable until the owner"
+                " clears the flag (ADR-0034)"}, []
     wo, row, problems = resolve_row(root, number)
     if problems:
         return {"dispatch": "false"}, problems
-    labels = [(entry.get("name") or "") for entry in issue.get("labels") or []]
     role = select_charter(labels)
     band, problems = charter_band(agents_dir, role)
     if problems:
