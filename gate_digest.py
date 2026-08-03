@@ -31,7 +31,6 @@ strings; the CLI prints them and exits nonzero.
         `changed` ('true'/'false': did the ledger gain rows?) to
         $GITHUB_OUTPUT for the workflow's commit step.
 """
-import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -39,7 +38,7 @@ from datetime import datetime, timezone
 import cost_ledger
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import write_outputs
+from cli import full_window, gh_json, write_outputs
 from knowledge_plane import (breakdown_files, repo_root, row_tracker_issue,
                              row_work_order)
 from cli import gh_runner
@@ -165,8 +164,11 @@ def compose_digest(queues, as_of):
     return "\n".join(lines) + "\n"
 
 
+# gh truncates a windowed listing silently; the window size is declared
+# once so the full-window report and the --limit can never drift apart.
+LIST_WINDOW = 1000
 LIST_ARGS = ("issue", "list", "--state", "all", "--json",
-             "number,title,state,labels,body", "--limit", "1000")
+             "number,title,state,labels,body", "--limit", str(LIST_WINDOW))
 
 
 def mirror_map(root):
@@ -197,10 +199,14 @@ def _timelines(mirrored, run, problems):
     for number in mirrored:
         path = f"repos/{{owner}}/{{repo}}/issues/{number}/timeline"
         try:
-            pages = json.loads(run(["api", path, "--paginate", "--slurp"]))
+            pages, suffix = gh_json(["api", path, "--paginate", "--slurp"],
+                                    run, expect=list)
         except GH_FAILURES as err:
             problems.append(f"gd: gh api timeline for #{number} failed:"
                             f" {gh_detail(err)}")
+            continue
+        if suffix:
+            problems.append(f"gd: gh api timeline for #{number} {suffix}")
             continue
         events[number] = label_events(
             [event for page in pages for event in page])
@@ -289,11 +295,16 @@ def run_daily(root, run=gh_runner, clock=None):
     now = clock()
     mirror = mirror_map(root)
     try:
-        listing = json.loads(run(list(LIST_ARGS)))
+        listing, suffix = gh_json(list(LIST_ARGS), run, expect=list)
     except GH_FAILURES as err:
         return ({"changed": "false"},
                 [f"gd: gh issue list failed: {gh_detail(err)}"])
+    if suffix:
+        return {"changed": "false"}, [f"gd: gh issue list {suffix}"]
     problems = []
+    window = full_window(listing, LIST_WINDOW)
+    if window:
+        problems.append(f"gd: gh issue list {window}")
     mirrored = sorted(entry["number"] for entry in listing
                       if entry.get("number") in mirror)
     events_by_issue = _timelines(mirrored, run, problems)

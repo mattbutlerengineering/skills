@@ -645,6 +645,40 @@ class TestRunLifecycle(unittest.TestCase):
                     tree.root, "wo:merged", env=self.env(tmp), run=run),
                 ["V: gh issue view 109 failed: gh: not found"])
 
+    class BannerViewRunner(RecordingRunner):
+        """Records like RecordingRunner but answers `issue view` with raw
+        non-JSON (or wrong-shape) stdout — gh ran, exited 0, said nonsense."""
+
+        def __init__(self, stdout):
+            super().__init__()
+            self.stdout = stdout
+
+        def __call__(self, args):
+            out = super().__call__(args)
+            return self.stdout if list(args[:2]) == ["issue", "view"] else out
+
+    def test_an_unparseable_issue_view_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = self.BannerViewRunner("gh: banner text")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp), run=run)
+            self.assertEqual(problems, [
+                "V: gh issue view 109 returned unparseable JSON:"
+                " Expecting value: line 1 column 1 (char 0)"])
+            self.assertEqual(run.called("issue", "edit"), [])
+
+    def test_a_non_object_issue_view_is_a_problem_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = self.BannerViewRunner("[]")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp), run=run)
+            self.assertEqual(problems, [
+                "V: gh issue view 109 returned list where dict"
+                " was expected"])
+            self.assertEqual(run.called("issue", "edit"), [])
+
 
 class TestMain(cli_contract.CliContract, unittest.TestCase):
     usage_fragment = "python3 validator.py review"

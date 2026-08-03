@@ -60,12 +60,50 @@ class TestDetail(unittest.TestCase):
 
 class TestFailureVocabulary(unittest.TestCase):
     def test_covers_ran_and_failed_and_never_ran(self):
-        # The two ways a shell-out goes wrong; callers catch CLI_FAILURES
-        # and never a bare Exception.
+        # The three ways a shell-out goes wrong: ran-and-failed and
+        # never-ran raise CLI_FAILURES; ran-but-said-nonsense is gh_json's
+        # (None, suffix). Callers catch CLI_FAILURES, never a bare
+        # Exception — JSONDecodeError (a ValueError) stays excluded so the
+        # third mode can't hide inside the first two.
         self.assertTrue(issubclass(subprocess.CalledProcessError,
                                    cli.CLI_FAILURES))
         self.assertTrue(issubclass(FileNotFoundError, cli.CLI_FAILURES))
         self.assertFalse(issubclass(ValueError, cli.CLI_FAILURES))
+
+
+class TestGhJson(unittest.TestCase):
+    def test_covers_ran_succeeded_and_said_nonsense(self):
+        value, suffix = cli.gh_json([], run=lambda args: "gh: banner text")
+        self.assertIsNone(value)
+        self.assertEqual(suffix, "returned unparseable JSON: Expecting"
+                         " value: line 1 column 1 (char 0)")
+
+    def test_a_wrong_top_level_shape_is_a_suffix_not_a_crash(self):
+        value, suffix = cli.gh_json([], run=lambda args: "{}", expect=list)
+        self.assertEqual((value, suffix),
+                         (None, "returned dict where list was expected"))
+
+    def test_parsed_json_of_the_expected_shape_passes_through(self):
+        value, suffix = cli.gh_json([], run=lambda args: '[{"a": 1}]',
+                                    expect=list)
+        self.assertEqual((value, suffix), ([{"a": 1}], None))
+
+    def test_a_failed_gh_still_raises_for_the_callers_catch(self):
+        def failing(args):
+            raise subprocess.CalledProcessError(1, ["gh", *args])
+        with self.assertRaises(subprocess.CalledProcessError):
+            cli.gh_json(["issue", "list"], run=failing)
+
+
+class TestFullWindow(unittest.TestCase):
+    def test_a_full_window_is_a_problem_suffix(self):
+        self.assertEqual(
+            cli.full_window([{}] * 1000, 1000),
+            "returned a full 1000-entry window — older entries"
+            " are invisible; raise the window or narrow the query")
+
+    def test_a_partial_window_is_fine(self):
+        self.assertIsNone(cli.full_window([{}], 1000))
 
 
 class TestChildEnv(unittest.TestCase):

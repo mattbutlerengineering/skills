@@ -20,7 +20,7 @@ from pathlib import Path
 
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import gh_runner
+from cli import full_window, gh_json, gh_runner
 from knowledge_plane import repo_root
 
 LABEL_FIELDS = ("name", "color", "description")
@@ -86,15 +86,28 @@ def plan(current, desired):
     return problems
 
 
+# gh truncates a windowed listing silently; the window size is declared
+# once so the full-window report and the --limit can never drift apart.
+LIST_WINDOW = 1000
 LIST_ARGS = ("label", "list", "--json", "name,color,description",
-             "--limit", "1000")
+             "--limit", str(LIST_WINDOW))
 
 
 def live_labels(run=gh_runner):
-    """The live label set through gh. Raises GH_FAILURES when gh is missing,
-    unauthenticated, or rate-limited — each caller (sync here, the label-drift
-    sweep in sweeps.py) turns that into its own problem string."""
-    return json.loads(run(list(LIST_ARGS)))
+    """(live label set, problem-suffixes) through gh. Raises GH_FAILURES
+    when gh is missing, unauthenticated, or rate-limited — each caller
+    (sync here; the label-drift and ensure-labels sweeps in sweeps.py)
+    owns that catch and its own label prefix — the suffixes here carry
+    the operation but no label (the cost_ledger.line_problems
+    convention). (None, suffixes) when the listing is unusable —
+    comparing the taxonomy against nonsense would report the whole
+    taxonomy as drift. A full window is a suffix too, but the labels
+    stay usable."""
+    labels, suffix = gh_json(list(LIST_ARGS), run, expect=list)
+    if suffix:
+        return None, [f"gh label list {suffix}"]
+    window = full_window(labels, LIST_WINDOW)
+    return labels, ([f"gh label list {window}"] if window else [])
 
 
 def sync(root, apply=False, run=gh_runner):
@@ -107,10 +120,12 @@ def sync(root, apply=False, run=gh_runner):
     if problems:
         return problems
     try:
-        current = live_labels(run)
+        current, suffixes = live_labels(run)
     except GH_FAILURES as err:
         return [f"L: gh label list failed: {gh_detail(err)}"]
-    problems = []
+    problems = [f"L: {suffix}" for suffix in suffixes]
+    if current is None:
+        return problems
     for want in desired:
         drift = plan(current, [want])
         problems.extend(drift)

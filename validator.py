@@ -25,7 +25,6 @@ problem strings; the CLI prints them and exits nonzero.
         comes from the breakdown row, never from the issue itself — the
         knowledge plane is authoritative and the mirror is one-way.
 """
-import json
 import os
 import sys
 import tempfile
@@ -35,7 +34,7 @@ import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import gh_runner
+from cli import gh_json, gh_runner
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              repo_root, row_tracker_issue, row_work_order)
 
@@ -298,11 +297,14 @@ def run_lifecycle(root, label, env, run=gh_runner):
     if problems:
         return problems
     try:
-        current = json.loads(
-            run(["issue", "view", str(number), "--json", "labels"]))
+        current, suffix = gh_json(
+            ["issue", "view", str(number), "--json", "labels"], run,
+            expect=dict)
     except GH_FAILURES as err:
         return [f"V: gh issue view {number} failed:"
                 f" {gh_detail(err)}"]
+    if suffix:
+        return [f"V: gh issue view {number} {suffix}"]
     names = [entry.get("name") for entry in current.get("labels", [])]
     add, remove = transition(names, lifecycle, label)
     if not add and not remove:
