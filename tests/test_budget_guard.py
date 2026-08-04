@@ -13,6 +13,7 @@ the remaining work, and appends a costs.jsonl line that satisfies detector
 G's own shape check (gates.check_cost_ledger) — not a re-implementation of
 G's rules, a cross-check against the real one.
 """
+import json
 import os
 import subprocess
 import sys
@@ -213,7 +214,7 @@ class TestHardStop(unittest.TestCase):
                 " budget", done=["decide"],
                 remaining=["cost ledger append"], resume="rerun after review",
                 run_id="r-1", model="claude-sonnet-5", tokens=9500, cost=16.40,
-                run=failing_push, post=posted.append)
+                at="2026-08-02", run=failing_push, post=posted.append)
 
             # The push failure is surfaced...
             self.assertEqual(problems, [
@@ -224,8 +225,10 @@ class TestHardStop(unittest.TestCase):
             # ...and the ledger line was still appended (and is well-formed
             # per detector G's real check).
             ledger = tree.root / "docs" / "factory" / "costs.jsonl"
-            self.assertEqual(len(ledger.read_text(
-                encoding="utf-8").splitlines()), 1)
+            (line,) = ledger.read_text(encoding="utf-8").splitlines()
+            # ...stamped with the caller's date (the monthly circuit
+            # breaker windows on it)...
+            self.assertEqual(json.loads(line)["at"], "2026-08-02")
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
     def test_the_real_runner_end_to_end_no_uncaught_raise(self):
@@ -246,7 +249,7 @@ class TestHardStop(unittest.TestCase):
                     repo, "WO-0006", "over budget", done=[],
                     remaining=["finish"], resume="rerun",
                     run_id="r-1", model="m", tokens=1, cost=16.40,
-                    post=posted.append)
+                    at="2026-08-02", post=posted.append)
             finally:
                 os.chdir(cwd)
             self.assertEqual(len(problems), 1, problems)
@@ -296,7 +299,7 @@ class TestAcceptanceScenario(unittest.TestCase):
             cost_ledger.append(
                 tree.root, cost_ledger.entry(
                     "WO-0006", "r-over-budget", "claude-sonnet-5",
-                    9500, 16.40, "budget-exhausted"))
+                    9500, 16.40, "budget-exhausted", "2026-08-02"))
             ledger = tree.root / "docs" / "factory" / "costs.jsonl"
             self.assertEqual(len(ledger.read_text(
                 encoding="utf-8").splitlines()), 1)

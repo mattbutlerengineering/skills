@@ -116,7 +116,7 @@ def push_wip(wo, run=git_runner):
 
 
 def hard_stop(root, wo, reason, done, remaining, resume, *, run_id, model,
-              tokens, cost, outcome="budget-exhausted", run=git_runner,
+              tokens, cost, at, outcome="budget-exhausted", run=git_runner,
               post=print):
     """The ADR-0034 hard-stop sequence, made RESILIENT: push WIP, post the
     handoff, append the ledger line — in that order, but a push failure
@@ -129,11 +129,13 @@ def hard_stop(root, wo, reason, done, remaining, resume, *, run_id, model,
     git nor the network.
 
     done/remaining are short acceptance-criterion strings the run tracked,
-    never a raw issue body — handoff.compose draws that ADR-0032 boundary."""
+    never a raw issue body — handoff.compose draws that ADR-0032 boundary.
+    `at` is the UTC date the caller stamps on the ledger row (injected,
+    not computed here, to keep the function's IO injected)."""
     problems = push_wip(wo, run=run)
     post(handoff.compose(wo, reason, done, remaining, resume))
     cost_ledger.append(root, cost_ledger.entry(
-        wo, run_id, model, tokens, cost, outcome))
+        wo, run_id, model, tokens, cost, outcome, at))
     return problems
 
 

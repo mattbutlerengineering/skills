@@ -12,6 +12,11 @@ breach decides PAUSE — the signal the workflow's `gh variable set
 FACTORY_PAUSED` step reads from $GITHUB_OUTPUT (this module only computes;
 the workflow is the one that mutates, per the compute/mutate boundary in
 its own header comment).
+
+TestMonthlyWindow pins what makes the breaker MONTHLY (ADR-0034): the
+verdict decides on the report month's spend, so a past month's blowout
+un-latches when a new month opens under the cap, and legacy (pre-`at`)
+rows count in the lifetime figure but never in a month window.
 """
 import json
 import re
@@ -54,9 +59,10 @@ class FixtureTree(FactoryTree):
 class TestAggregate(unittest.TestCase):
     def test_recomputes_totals_from_a_fixture(self):
         entries = [
-            entry("WO-0001", "r-1", "m", 1000, 12.50, "merged"),
-            entry("WO-0002", "r-2", "m", 2000, 5.00, "merged"),
-            entry("WO-0001", "r-3", "m", 500, 2.50, "budget-exhausted"),
+            entry("WO-0001", "r-1", "m", 1000, 12.50, "merged", "2026-07-06"),
+            entry("WO-0002", "r-2", "m", 2000, 5.00, "merged", "2026-07-08"),
+            entry("WO-0001", "r-3", "m", 500, 2.50, "budget-exhausted",
+                  "2026-07-10"),
         ]
         self.assertEqual(cost_report.aggregate(entries), {
             "total_cost": 20.00,
@@ -74,7 +80,7 @@ class TestAggregate(unittest.TestCase):
         # A gate-wait observation (ADR-0041) is $0 either way; what it must
         # not do is inflate the run count or pad by_wo with $0.00 lines.
         entries = [
-            entry("WO-0001", "r-1", "m", 1000, 12.50, "merged"),
+            entry("WO-0001", "r-1", "m", 1000, 12.50, "merged", "2026-07-06"),
             cost_ledger.gate_entry("WO-0001", "merge", 7260,
                                    "2026-07-22T05:17:00Z"),
             cost_ledger.gate_entry("WO-0002", "prd", 86400,
@@ -86,6 +92,29 @@ class TestAggregate(unittest.TestCase):
             "run_count": 1,
             "by_wo": {"WO-0001": 12.50},
         })
+
+    def test_a_month_window_counts_only_that_months_rows(self):
+        entries = [
+            entry("WO-0001", "r-1", "m", 1000, 12.50, "merged", "2026-07-06"),
+            entry("WO-0002", "r-2", "m", 2000, 5.00, "merged", "2026-06-28"),
+        ]
+        self.assertEqual(cost_report.aggregate(entries, month="2026-07"), {
+            "total_cost": 12.50,
+            "total_tokens": 1000,
+            "run_count": 1,
+            "by_wo": {"WO-0001": 12.50},
+        })
+
+    def test_legacy_rows_without_at_are_excluded_from_a_window(self):
+        # Pre-timestamp rows belong to closed months by construction: they
+        # count in the lifetime total (month=None) but never in a window.
+        legacy = {"wo": "WO-0001", "run_id": "r-1", "model": "m",
+                  "tokens": 1000, "cost": 12.50, "outcome": "merged"}
+        self.assertEqual(
+            cost_report.aggregate([legacy], month="2026-07")["total_cost"],
+            0.0)
+        self.assertEqual(
+            cost_report.aggregate([legacy])["total_cost"], 12.50)
 
 
 class TestDecide(unittest.TestCase):
@@ -113,9 +142,10 @@ class TestGuard(unittest.TestCase):
     def test_under_cap_continues_using_repo_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).factory()
-            tree.ledger([entry("WO-0001", "r-1", "m", 1000, 50.0, "merged")])
-            verdict, reason, totals, cap, problems = cost_report.guard(
-                tree.root)
+            tree.ledger([entry("WO-0001", "r-1", "m", 1000, 50.0, "merged",
+                               "2026-07-06")])
+            verdict, reason, totals, month_totals, cap, problems = \
+                cost_report.guard(tree.root)
             self.assertEqual(problems, [])
             self.assertEqual(verdict, cost_report.CONTINUE)
             self.assertEqual(cap, 300)
@@ -125,35 +155,68 @@ class TestGuard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).factory()
             tree.ledger([
-                entry("WO-0001", "r-1", "m", 100000, 250.0, "merged"),
-                entry("WO-0002", "r-2", "m", 50000, 75.0, "merged"),
+                entry("WO-0001", "r-1", "m", 100000, 250.0, "merged",
+                      "2026-07-06"),
+                entry("WO-0002", "r-2", "m", 50000, 75.0, "merged",
+                      "2026-07-08"),
             ])
-            verdict, reason, totals, cap, problems = cost_report.guard(
-                tree.root)
+            verdict, reason, totals, month_totals, cap, problems = \
+                cost_report.guard(tree.root)
             self.assertEqual(problems, [])
             self.assertEqual(verdict, cost_report.PAUSE)
             self.assertIn("FACTORY_PAUSED", reason)
             self.assertEqual(totals["total_cost"], 325.0)
 
+    def test_no_month_decides_on_the_lifetime_total(self):
+        # guard(month=None) keeps the pre-window behavior: month_totals is
+        # the lifetime aggregate, so the verdict covers every row.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.ledger([entry("WO-0001", "r-1", "m", 1000, 50.0, "merged",
+                               "2026-07-06")])
+            verdict, reason, totals, month_totals, cap, problems = \
+                cost_report.guard(tree.root)
+            self.assertEqual(problems, [])
+            self.assertEqual(month_totals, totals)
+
+    def test_a_month_windows_the_verdict(self):
+        # An over-cap June plus a quiet July: windowed on July, the guard
+        # CONTINUEs, while the lifetime figure still shows everything.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.ledger([
+                entry("WO-0001", "r-1", "m", 900000, 305.0, "merged",
+                      "2026-06-20"),
+                entry("WO-0002", "r-2", "m", 1000, 5.0, "merged",
+                      "2026-07-06"),
+            ])
+            verdict, reason, totals, month_totals, cap, problems = \
+                cost_report.guard(tree.root, month="2026-07")
+            self.assertEqual(problems, [])
+            self.assertEqual(verdict, cost_report.CONTINUE)
+            self.assertEqual(month_totals["total_cost"], 5.0)
+            self.assertEqual(totals["total_cost"], 310.0)
+
     def test_no_runs_yet_is_well_under_cap(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).factory()
-            verdict, reason, totals, cap, problems = cost_report.guard(
-                tree.root)
+            verdict, reason, totals, month_totals, cap, problems = \
+                cost_report.guard(tree.root)
             self.assertEqual(problems, [])
             self.assertEqual(verdict, cost_report.CONTINUE)
             self.assertEqual(totals["total_cost"], 0.0)
 
     def test_an_injected_config_skips_the_repo_lookup(self):
-        verdict, reason, totals, cap, problems = cost_report.guard(
-            "/does/not/exist", config=CONFIG)
+        verdict, reason, totals, month_totals, cap, problems = \
+            cost_report.guard("/does/not/exist", config=CONFIG)
         self.assertEqual(problems, [])
         self.assertEqual(verdict, cost_report.CONTINUE)
         self.assertEqual(cap, 300)
 
     def test_a_missing_factory_json_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
-            verdict, reason, totals, cap, problems = cost_report.guard(tmp)
+            verdict, reason, totals, month_totals, cap, problems = \
+                cost_report.guard(tmp)
             self.assertEqual(verdict, cost_report.PAUSE)
             self.assertEqual(
                 reason,
@@ -168,8 +231,8 @@ class TestGuard(unittest.TestCase):
             tree = FixtureTree(tmp)
             tree.write("factory/templates/factory.json",
                        json.dumps({"budgets_usd": {"S": 5}}))
-            verdict, reason, totals, cap, problems = cost_report.guard(
-                tree.root)
+            verdict, reason, totals, month_totals, cap, problems = \
+                cost_report.guard(tree.root)
             self.assertEqual(verdict, cost_report.PAUSE)
             self.assertEqual(problems, [
                 "config: factory.json names no positive monthly_cap_usd"])
@@ -178,8 +241,8 @@ class TestGuard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).factory()
             tree.write("docs/factory/costs.jsonl", "not json\n")
-            verdict, reason, totals, cap, problems = cost_report.guard(
-                tree.root)
+            verdict, reason, totals, month_totals, cap, problems = \
+                cost_report.guard(tree.root)
             self.assertEqual(verdict, cost_report.PAUSE)
             self.assertEqual(
                 reason, "cr: unreadable ledger — failing closed")
@@ -194,13 +257,27 @@ class TestComposeReport(unittest.TestCase):
         body = cost_report.compose_report(
             totals, cost_report.CONTINUE,
             "cr: spend $20.00 is within the $300.00 monthly cap", 300,
-            "2026-07-13")
+            "2026-07-13", "2026-07", totals)
         self.assertIn("## Factory cost report — 2026-07-13", body)
-        self.assertIn("$20.00 of $300.00 monthly cap", body)
+        self.assertIn("**Spend this month (2026-07):** $20.00 of $300.00"
+                      " monthly cap (lifetime: $20.00)", body)
         self.assertIn("- WO-0001: $15.00", body)
         self.assertIn("- WO-0002: $5.00", body)
         self.assertIn("cr: spend $20.00 is within the $300.00 monthly cap",
                       body)
+
+    def test_month_and_lifetime_figures_are_distinct(self):
+        totals = {"total_cost": 310.0, "total_tokens": 901000,
+                  "run_count": 2,
+                  "by_wo": {"WO-0001": 305.0, "WO-0002": 5.0}}
+        month_totals = {"total_cost": 5.0, "total_tokens": 1000,
+                        "run_count": 1, "by_wo": {"WO-0002": 5.0}}
+        body = cost_report.compose_report(
+            totals, cost_report.CONTINUE,
+            "cr: spend $5.00 is within the $300.00 monthly cap", 300,
+            "2026-07-13", "2026-07", month_totals)
+        self.assertIn("**Spend this month (2026-07):** $5.00 of $300.00"
+                      " monthly cap (lifetime: $310.00)", body)
 
     def test_no_runs_recorded_says_so(self):
         totals = {"total_cost": 0.0, "total_tokens": 0, "run_count": 0,
@@ -208,7 +285,7 @@ class TestComposeReport(unittest.TestCase):
         body = cost_report.compose_report(
             totals, cost_report.CONTINUE,
             "cr: spend $0.00 is within the $300.00 monthly cap", 300,
-            "2026-07-13")
+            "2026-07-13", "2026-07", totals)
         self.assertIn("(no runs recorded)", body)
 
     def test_an_unknown_cap_is_shown_honestly(self):
@@ -216,7 +293,8 @@ class TestComposeReport(unittest.TestCase):
                   "by_wo": {}}
         body = cost_report.compose_report(
             totals, cost_report.PAUSE,
-            "cr: unreadable ledger — failing closed", None, "2026-07-13")
+            "cr: unreadable ledger — failing closed", None, "2026-07-13",
+            "2026-07", totals)
         self.assertIn("of unknown monthly cap", body)
 
 
@@ -230,7 +308,8 @@ class TestRunReport(unittest.TestCase):
     def test_under_cap_outputs_continue_and_pause_false(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).factory()
-            tree.ledger([entry("WO-0001", "r-1", "m", 1000, 50.0, "merged")])
+            tree.ledger([entry("WO-0001", "r-1", "m", 1000, 50.0, "merged",
+                               "2026-07-06")])
             outputs, problems = cost_report.run_report(
                 tree.root, clock=fixed_clock("2026-07-13"))
             self.assertEqual(problems, [])
@@ -245,8 +324,10 @@ class TestRunReport(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).factory()
             tree.ledger([
-                entry("WO-0001", "r-1", "m", 100000, 250.0, "merged"),
-                entry("WO-0002", "r-2", "m", 50000, 75.0, "merged"),
+                entry("WO-0001", "r-1", "m", 100000, 250.0, "merged",
+                      "2026-07-06"),
+                entry("WO-0002", "r-2", "m", 50000, 75.0, "merged",
+                      "2026-07-08"),
             ])
             outputs, problems = cost_report.run_report(
                 tree.root, clock=fixed_clock("2026-07-13"))
@@ -264,6 +345,64 @@ class TestRunReport(unittest.TestCase):
             self.assertIn(today, outputs["title"])
 
 
+class TestMonthlyWindow(unittest.TestCase):
+    """The two load-bearing monthly behaviors, end to end through
+    run_report: rollover un-latches a past breach, and a month at its
+    ceiling still pauses."""
+
+    def test_rollover_unlatches_a_past_breach(self):
+        # July blew past the cap; August has spent $5.00. The August report
+        # must CONTINUE (pause=false) — the workflow's resume leg reads
+        # exactly this output to clear FACTORY_PAUSED.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.ledger([
+                entry("WO-0001", "r-1", "m", 900000, 305.0, "merged",
+                      "2026-07-28"),
+                entry("WO-0002", "r-2", "m", 1000, 5.0, "merged",
+                      "2026-08-02"),
+            ])
+            outputs, problems = cost_report.run_report(
+                tree.root, clock=fixed_clock("2026-08-03"))
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs["pause"], "false")
+            self.assertIn("cr: spend $5.00 is within the $300.00 monthly"
+                          " cap", outputs["reason"])
+
+    def test_the_current_month_at_the_cap_pauses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.ledger([
+                entry("WO-0001", "r-1", "m", 500000, 200.0, "merged",
+                      "2026-08-01"),
+                entry("WO-0002", "r-2", "m", 250000, 100.0, "merged",
+                      "2026-08-02"),
+            ])
+            outputs, problems = cost_report.run_report(
+                tree.root, clock=fixed_clock("2026-08-03"))
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs["pause"], "true")
+            self.assertIn("FACTORY_PAUSED", outputs["reason"])
+
+    def test_legacy_rows_count_lifetime_not_monthly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            legacy = {"wo": "WO-0001", "run_id": "r-0", "model": "m",
+                      "tokens": 100000, "cost": 250.0, "outcome": "merged"}
+            tree.ledger([
+                legacy,
+                entry("WO-0002", "r-1", "m", 1000, 5.0, "merged",
+                      "2026-08-02"),
+            ])
+            outputs, problems = cost_report.run_report(
+                tree.root, clock=fixed_clock("2026-08-03"))
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs["pause"], "false")
+            self.assertIn("**Spend this month (2026-08):** $5.00 of $300.00"
+                          " monthly cap (lifetime: $255.00)",
+                          outputs["body"])
+
+
 class TestMain(cli_contract.CliContract, unittest.TestCase):
     usage_fragment = "python3 cost_report.py report"
 
@@ -273,9 +412,10 @@ class TestMain(cli_contract.CliContract, unittest.TestCase):
             env=env if env is not None else {})
 
     def test_check_against_the_real_repo_config_exits_zero(self):
-        # No docs/factory/costs.jsonl in this repo yet: $0 spend, well under
-        # the real factory.json's monthly cap (same precedent as
-        # test_budget_guard.TestMain's real-repo-config check).
+        # The real docs/factory/costs.jsonl holds only legacy (pre-at) and
+        # gate rows: $0 this month, well under the real factory.json's
+        # monthly cap (same precedent as test_budget_guard.TestMain's
+        # real-repo-config check).
         code, out = self.run_cli(["report"])
         self.assertEqual(code, 0)
         self.assertIn("cost_report: 0 problem(s)", out)
@@ -342,9 +482,9 @@ class TestAcceptanceScenario(unittest.TestCase):
             tree = FixtureTree(tmp).factory()
             tree.ledger([
                 entry("WO-0001", "r-1", "claude-sonnet-5", 9000, 12.34,
-                      "merged"),
+                      "merged", "2026-07-06"),
                 entry("WO-0002", "r-2", "claude-haiku-4-5", 4000, 1.11,
-                      "merged"),
+                      "merged", "2026-07-08"),
             ])
             outputs, problems = cost_report.run_report(
                 tree.root, clock=fixed_clock("2026-07-13"))
@@ -359,7 +499,7 @@ class TestAcceptanceScenario(unittest.TestCase):
             tree = FixtureTree(tmp).factory()
             tree.ledger([
                 entry("WO-0001", "r-1", "claude-sonnet-5", 900000, 305.0,
-                      "merged"),
+                      "merged", "2026-07-06"),
             ])
             outputs, problems = cost_report.run_report(
                 tree.root, clock=fixed_clock("2026-07-13"))

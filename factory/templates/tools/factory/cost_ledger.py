@@ -18,6 +18,7 @@ byte-for-byte).
 """
 import json
 import re
+from datetime import date
 from pathlib import Path
 
 from knowledge_plane import WO_TOKEN
@@ -28,26 +29,57 @@ COST_LEDGER = "docs/factory/costs.jsonl"
 LEDGER_FIELDS = ("wo", "run_id", "model", "tokens", "cost", "outcome")
 LEDGER_TEXT_FIELDS = ("run_id", "model", "outcome")
 
+# Optional-on-read, written by every new row: the UTC date the row was
+# appended, "YYYY-MM-DD" — the monthly circuit breaker (ADR-0034) windows
+# on it. Absent on pre-2026-08 legacy rows, which stay valid — the ledger
+# is append-only and never backfilled.
+LEDGER_OPTIONAL_FIELDS = ("at",)
+
+# The at field's shape: the dashed calendar form ONLY. date.fromisoformat
+# alone is looser (basic "20260802", week dates) — a row in those shapes
+# would pass the shape check yet fall out of every month window, the
+# fail-open direction the breaker must not have.
+AT_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
 # Gate-latency observations (ADR-0041): a $0, zero-token row recording how
 # long a work order waited at one of the three human gates, written by the
 # daily gate digest inside ADR-0034's open outcome vocabulary.
 GATE_OUTCOME = re.compile(r"gate_wait:([a-z]+):(\d+)s")
 
 
-def entry(wo, run_id, model, tokens, cost, outcome):
-    """A well-formed ledger record, built from LEDGER_FIELDS so the field
-    set cannot drift from what detector G checks — the single place a
-    caller assembles one."""
-    return dict(zip(LEDGER_FIELDS, (wo, run_id, model, tokens, cost, outcome)))
+def entry(wo, run_id, model, tokens, cost, outcome, at):
+    """A well-formed ledger record, built from LEDGER_FIELDS +
+    LEDGER_OPTIONAL_FIELDS so the field set cannot drift from what
+    detector G checks — the single place a caller assembles one. `at` is
+    the UTC date the row is written ("YYYY-MM-DD"): every NEW row carries
+    it (the monthly circuit breaker windows on it), while legacy rows
+    without it stay readable — required on the writer, optional on the
+    reader."""
+    record = dict(zip(LEDGER_FIELDS, (wo, run_id, model, tokens, cost,
+                                      outcome)))
+    record.update(zip(LEDGER_OPTIONAL_FIELDS, (at,)))
+    return record
 
 
 def gate_entry(wo, gate, waited_seconds, passed_at):
     """A gate-latency observation as a well-formed ledger record
     (ADR-0041): the work order waited `waited_seconds` at `gate` and
     passed it at `passed_at` (ISO timestamp, which keys the run_id so a
-    re-observed passage dedups instead of double-recording)."""
+    re-observed passage dedups instead of double-recording, and whose date
+    part is the row's `at` — gate rows need no clock)."""
     return entry(wo, f"gate-{gate}-{passed_at}", "none", 0, 0.0,
-                 f"gate_wait:{gate}:{int(waited_seconds)}s")
+                 f"gate_wait:{gate}:{int(waited_seconds)}s",
+                 at=passed_at[:10])
+
+
+def in_month(entry, month):
+    """True when the record's `at` date falls in `month` ("YYYY-MM") — the
+    monthly circuit breaker's window predicate (ADR-0034). Legacy rows
+    without `at` predate the field and belong to closed months by
+    construction: in no window. Same tolerant shape as wo_token/gate_wait
+    (a non-dict record or malformed field is simply not in the month)."""
+    value = entry.get("at") if isinstance(entry, dict) else None
+    return isinstance(value, str) and value.startswith(month + "-")
 
 
 def gate_wait(entry):
@@ -85,15 +117,17 @@ def wo_token(entry):
 
 def line_problems(entry):
     """Unlocated shape problems for one parsed ledger record (ADR-0034):
-    missing/unknown fields, then per-field rules in LEDGER_FIELDS order.
-    Callers prefix their own label and location — this is the single rule
-    detector G and read() both apply."""
+    missing/unknown fields, per-field rules in LEDGER_FIELDS order, then
+    the optional `at` rule (present means a valid ISO date; absent means a
+    legacy row and is never a problem). Callers prefix their own label and
+    location — this is the single rule detector G and read() both apply."""
     problems = []
     missing = sorted(set(LEDGER_FIELDS) - set(entry))
     if missing:
         problems.append(
             f"ledger line is missing field(s): {', '.join(missing)}")
-    unknown = sorted(set(entry) - set(LEDGER_FIELDS))
+    unknown = sorted(
+        set(entry) - set(LEDGER_FIELDS) - set(LEDGER_OPTIONAL_FIELDS))
     if unknown:
         problems.append(
             f"ledger line has unknown field(s): {', '.join(unknown)}")
@@ -115,6 +149,20 @@ def line_problems(entry):
             if isinstance(value, bool) or not isinstance(value, (int, float)) \
                     or value < 0:
                 problems.append("cost must be a non-negative number")
+    for field in LEDGER_OPTIONAL_FIELDS:
+        if field not in entry:
+            continue
+        value = entry[field]
+        if field == "at":
+            valid = isinstance(value, str) and AT_DATE.fullmatch(value)
+            if valid:
+                try:
+                    date.fromisoformat(value)
+                except ValueError:
+                    valid = False
+            if not valid:
+                problems.append(
+                    f"at {value!r} is not an ISO date (YYYY-MM-DD)")
     return problems
 
 

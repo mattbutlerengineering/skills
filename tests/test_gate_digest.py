@@ -268,6 +268,9 @@ class TestRunDaily(unittest.TestCase):
             self.assertEqual(ledger_problems, [])
             self.assertEqual(entries, [cost_ledger.gate_entry(
                 "WO-0010", "merge", 3600, "2026-07-01T10:00:00Z")])
+            # the captured row is stamped with the passage date — the
+            # monthly circuit breaker windows on it
+            self.assertEqual(entries[0]["at"], "2026-07-01")
             # the daily re-scan sees the same passage and records nothing
             rerun = DigestRunner(issues=issues, timelines=timelines)
             outputs, problems = gate_digest.run_daily(
