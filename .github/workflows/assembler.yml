@@ -74,7 +74,11 @@ jobs:
       # nothing is dispatched and nothing is faked.
       - name: Run the chartered agent
         if: steps.resolve.outputs.dispatch == 'true' && env.ANTHROPIC_API_KEY != ''
-        uses: anthropics/claude-code-action@v1
+        # Pinned by SHA: this job holds write scopes + the API key, so its
+        # third-party code must change only by reviewed commit, never by a
+        # re-pointed tag. Bump deliberately: re-resolve the tag, update the
+        # SHA and the comment.
+        uses: anthropics/claude-code-action@86180fa9e4d311eed10c9cc49854c53dab5d517a  # v1 as of 2026-08-04
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

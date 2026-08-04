@@ -14,6 +14,11 @@
 FINDINGS ?= findings.txt
 STATUS ?= 0
 
+# Plain `=`, not `?=`: the pin must not be overridable from the environment,
+# or a repo's CI could change behavior when a new playwright ships. Bump
+# deliberately alongside the design workflow's Node LTS.
+PLAYWRIGHT_VERSION = 1.62.1
+
 check:
 	python3 lint.py
 	python3 gates.py
@@ -44,8 +49,8 @@ gate-digest:
 # Makefiles carry it verbatim.
 web-quality:
 	@if ls playwright.config.* >/dev/null 2>&1; then \
-		npx --yes playwright install --with-deps; \
-		npx --yes playwright test; \
+		npx --yes playwright@$(PLAYWRIGHT_VERSION) install --with-deps; \
+		npx --yes playwright@$(PLAYWRIGHT_VERSION) test; \
 	else \
 		echo "web-quality: no playwright.config.* — skipping (no web app to test)"; \
 	fi

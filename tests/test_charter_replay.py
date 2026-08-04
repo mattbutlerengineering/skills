@@ -428,9 +428,26 @@ class TestReplayIsNeverAutomatic(unittest.TestCase):
         self.assertNotIn("schedule", triggers)
 
     def test_ci_checks_never_invoke_the_replay(self):
-        checks = (ROOT / ".github" / "workflows" / "validator.yml").read_text(
-            encoding="utf-8")
-        self.assertNotIn("charter_replay.py", checks)
+        # Every workflow, not just validator.yml: any of them could grow a
+        # replay call, and each is a paid model run the moment it does.
+        # (.yaml counts too — GitHub accepts both suffixes.)
+        workflows = ROOT / ".github" / "workflows"
+        others = [path for path in
+                  sorted(list(workflows.glob("*.yml"))
+                         + list(workflows.glob("*.yaml")))
+                  if path.name != "charter-replay.yml"]
+        self.assertTrue(others, "no workflows found to scan")
+        for path in others:
+            self.assertNotIn("charter_replay.py",
+                             path.read_text(encoding="utf-8"),
+                             f"{path.name} invokes the replay")
+
+    def test_the_token_grant_is_read_only(self):
+        # Workflow-level least privilege: checkout + artifact upload is all
+        # the job does with the token, and a replay case is a real agent run
+        # — it must never hold ambient write authority.
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("permissions:\n  contents: read", text)
 
 
 if __name__ == "__main__":

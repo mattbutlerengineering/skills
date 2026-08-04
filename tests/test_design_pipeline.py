@@ -15,9 +15,10 @@ from pathlib import Path
 import factory_init
 
 # discover puts tests/ on sys.path; selective package-style runs need it
-# added for the sibling make_parse import
+# added for the sibling make_parse / workflow_parse imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from make_parse import make_recipe  # noqa: E402
+from workflow_parse import run_steps  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -70,9 +71,7 @@ class TestDesignWorkflow(unittest.TestCase):
         # stamped product repo. A tool invoked directly in a run step would
         # drift the two. (The header comment may describe playwright; only the
         # commands the workflow actually runs are constrained.)
-        runs = [line.split("run:", 1)[1].strip()
-                for line in self.text.splitlines()
-                if line.strip().startswith("run:")]
+        runs = run_steps(self.text)
         self.assertTrue(runs, "the workflow runs nothing")
         for command in runs:
             self.assertTrue(
@@ -132,6 +131,30 @@ class TestWebQualityTarget(unittest.TestCase):
     def test_the_target_drives_playwright(self):
         recipe = " ".join(self.recipe(self.ROOT_MAKEFILE))
         self.assertIn("playwright", recipe)
+
+    def test_the_target_installs_the_pinned_playwright(self):
+        # Latest-at-runtime was the supply-chain hole: an unpinned
+        # `npx --yes playwright` changes behavior the day a new playwright
+        # ships, in every stamped repo at once.
+        for path in (self.ROOT_MAKEFILE, self.TEMPLATE_MAKEFILE):
+            recipe = " ".join(self.recipe(path))
+            self.assertIn("playwright@$(PLAYWRIGHT_VERSION)", recipe)
+            self.assertNotIn("--yes playwright install", recipe)
+            self.assertNotIn("--yes playwright test", recipe)
+
+    def test_the_playwright_pin_is_identical_in_both_makefiles(self):
+        # The pin sits above the recipe, outside make_recipe's capture, so
+        # recipe identity alone would let the two repos install different
+        # playwrights with a green suite. Plain `=` (not `?=`) is asserted
+        # too: an environment-overridable pin is advisory, not a pin.
+        def pin(path):
+            return [line for line in
+                    path.read_text(encoding="utf-8").splitlines()
+                    if line.startswith("PLAYWRIGHT_VERSION")]
+        root = pin(self.ROOT_MAKEFILE)
+        self.assertEqual(len(root), 1, "expected exactly one pin line")
+        self.assertRegex(root[0], r"^PLAYWRIGHT_VERSION = \d+\.\d+\.\d+$")
+        self.assertEqual(root, pin(self.TEMPLATE_MAKEFILE))
 
     def test_the_target_skips_when_there_is_no_web_app(self):
         # The guard: absent a playwright.config.*, the target prints why it is
