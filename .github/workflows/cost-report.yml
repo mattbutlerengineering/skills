@@ -77,3 +77,22 @@ jobs:
             exit 1
           fi
           gh variable set FACTORY_PAUSED --body true
+      # An under-cap verdict clears the breaker, so a new month opening
+      # under the cap resumes dispatch without a human remembering the
+      # variable exists. The variable tracks the verdict in BOTH
+      # directions — this workflow owns FACTORY_PAUSED, and a hand-set
+      # pause does not survive an under-cap run; pause deliberately by
+      # lowering monthly_cap_usd or disabling this workflow instead.
+      # Skipped (not failed) without the token — an unclearable pause is
+      # safe, an unenforceable one is not (mirror of the breach step
+      # above).
+      - name: Resume dispatch when under the cap
+        if: steps.report.outputs.pause == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_PAUSE_TOKEN }}
+        run: |
+          if [ -n "${GH_TOKEN}" ]; then
+            gh variable set FACTORY_PAUSED --body false
+          else
+            echo "cost-report: no FACTORY_PAUSE_TOKEN — FACTORY_PAUSED left as-is"
+          fi

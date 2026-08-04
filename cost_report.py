@@ -3,7 +3,8 @@
 Recomputes spend numbers from docs/factory/costs.jsonl — read through
 cost_ledger.read, the same line grammar detector G gates in CI (ADR-0037),
 so the report's reader cannot diverge from the CI rule — and decides
-whether total spend has crossed factory.json's monthly_cap_usd.
+whether the report month's spend (rows whose `at` date falls in it;
+ADR-0034's monthly window) has crossed factory.json's monthly_cap_usd.
 Conventions match budget_guard.py: functions return cr:-prefixed problem
 strings (ledger problems keep cost_ledger's ledger: prefix, the same way
 validator.py surfaces label_sync's L: strings); the CLI prints them and
@@ -41,20 +42,26 @@ PAUSE = "PAUSE"
 CONTINUE = "CONTINUE"
 
 
-def aggregate(entries):
+def aggregate(entries, month=None):
     """PURE: recompute the weekly report's numbers from already-parsed
     ledger entries — total spend, total tokens, run count, and spend by
     work order. Gate-latency observations (ADR-0041) are skipped: they are
     $0 wait records, not runs, and counting them would inflate run_count
-    and pad by_wo with $0.00 lines. Trusts the full ledger shape
-    cost_ledger.read already established (coding-style.md: no defensive
-    re-validation of an invariant enforced one call up)."""
+    and pad by_wo with $0.00 lines. When `month` ("YYYY-MM") is given,
+    only rows cost_ledger.in_month places in that month are counted — the
+    seam owns the window predicate, and rows without `at` are legacy
+    (pre-timestamp), belonging to closed months by construction. Trusts
+    the full ledger shape cost_ledger.read already established
+    (coding-style.md: no defensive re-validation of an invariant enforced
+    one call up)."""
     total_cost = 0.0
     total_tokens = 0
     run_count = 0
     by_wo = {}
     for entry in entries:
         if cost_ledger.gate_wait(entry) is not None:
+            continue
+        if month is not None and not cost_ledger.in_month(entry, month):
             continue
         cost = entry["cost"]
         total_cost += cost
@@ -81,30 +88,35 @@ def decide(total_cost, cap):
                       f" ${cap:.2f} monthly cap")
 
 
-def guard(root, config=None, ledger_path=None):
-    """(verdict, reason, totals, cap, problems): recompute spend from the
-    ledger and decide against factory.json's monthly cap. FAILS CLOSED: any
-    read or resolution problem decides PAUSE rather than letting
-    unaccountable spend continue — a report that cannot prove it is under
-    the cap is treated as over it (same discipline as budget_guard.guard).
-    totals is always the best-effort aggregate of what WAS readable, even
-    on a failing path, so a human reading the report still sees something."""
+def guard(root, config=None, ledger_path=None, month=None):
+    """(verdict, reason, totals, month_totals, cap, problems): recompute
+    spend from the ledger and decide against factory.json's monthly cap.
+    The verdict decides on `month_totals` — the aggregate windowed to
+    `month` ("YYYY-MM", the report month), which IS the lifetime aggregate
+    when no month is given — while `totals` stays lifetime for the report
+    body. FAILS CLOSED: any read or resolution problem decides PAUSE
+    rather than letting unaccountable spend continue — a report that
+    cannot prove it is under the cap is treated as over it (same
+    discipline as budget_guard.guard). Both aggregates are always the
+    best-effort rollup of what WAS readable, even on a failing path, so a
+    human reading the report still sees something."""
     entries, problems = cost_ledger.read(root, ledger_path=ledger_path)
     totals = aggregate(entries)
+    month_totals = aggregate(entries, month)
     if problems:
         return PAUSE, "cr: unreadable ledger — failing closed", totals, \
-            None, problems
+            month_totals, None, problems
     if config is None:
         config, problems = factory_config.load(root)
         if problems:
             return (PAUSE, "cr: no monthly cap could be resolved — failing"
-                    " closed", totals, None, problems)
+                    " closed", totals, month_totals, None, problems)
     cap, problems = factory_config.resolve_cap(config)
     if problems:
         return (PAUSE, "cr: no monthly cap could be resolved — failing"
-                " closed", totals, None, problems)
-    verdict, reason = decide(totals["total_cost"], cap)
-    return verdict, reason, totals, cap, []
+                " closed", totals, month_totals, None, problems)
+    verdict, reason = decide(month_totals["total_cost"], cap)
+    return verdict, reason, totals, month_totals, cap, []
 
 
 def report_title(as_of):
@@ -113,19 +125,24 @@ def report_title(as_of):
     return f"Factory cost report — {as_of}"
 
 
-def compose_report(totals, verdict, reason, cap, as_of):
-    """The weekly report issue body: total spend against the monthly cap, a
-    by-work-order breakdown, and the pause verdict. Deterministic text,
-    easy to assert on and easy to skim (same discipline as
-    handoff.compose). cap is None only on a failing-closed guard() path
-    (no cap could be resolved); shown honestly rather than faked."""
+def compose_report(totals, verdict, reason, cap, as_of, month,
+                   month_totals):
+    """The weekly report issue body: the report month's spend against the
+    monthly cap (with the lifetime figure alongside — the spend line is
+    the number the verdict decided on, ADR-0034's monthly window), a
+    by-work-order breakdown over the LIFETIME totals, and the pause
+    verdict. Deterministic text, easy to assert on and easy to skim (same
+    discipline as handoff.compose). cap is None only on a failing-closed
+    guard() path (no cap could be resolved); shown honestly rather than
+    faked."""
     cap_text = f"${cap:.2f}" if cap is not None else "unknown"
     lines = [f"## {report_title(as_of)}", "",
-             f"**Total spend:** ${totals['total_cost']:.2f} of {cap_text}"
-             " monthly cap",
+             f"**Spend this month ({month}):**"
+             f" ${month_totals['total_cost']:.2f} of {cap_text} monthly cap"
+             f" (lifetime: ${totals['total_cost']:.2f})",
              f"**Runs recorded:** {totals['run_count']}",
              f"**Total tokens:** {totals['total_tokens']}", "",
-             "### By work order"]
+             "### By work order (lifetime)"]
     if totals["by_wo"]:
         for wo in sorted(totals["by_wo"]):
             lines.append(f"- {wo}: ${totals['by_wo'][wo]:.2f}")
@@ -147,12 +164,14 @@ def run_report(root, clock=None, ledger_path=None):
     `gh variable set FACTORY_PAUSED` (the compute/mutate boundary)."""
     clock = clock or _utcnow
     as_of = clock().date().isoformat()
-    verdict, reason, totals, cap, problems = guard(
-        root, ledger_path=ledger_path)
+    month = as_of[:7]
+    verdict, reason, totals, month_totals, cap, problems = guard(
+        root, ledger_path=ledger_path, month=month)
     outputs = {
         "pause": "true" if verdict == PAUSE else "false",
         "title": report_title(as_of),
-        "body": compose_report(totals, verdict, reason, cap, as_of),
+        "body": compose_report(totals, verdict, reason, cap, as_of, month,
+                               month_totals),
         "reason": reason,
     }
     return outputs, problems

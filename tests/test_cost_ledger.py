@@ -22,17 +22,21 @@ entry = cost_ledger.entry
 
 
 class TestEntry(unittest.TestCase):
-    def test_builds_exactly_the_ledger_fields(self):
+    def test_builds_the_ledger_fields_plus_at(self):
         record = cost_ledger.entry(
             "WO-0006", "r-1", "claude-sonnet-5", 9000, 16.25,
-            "budget-exhausted")
-        self.assertEqual(tuple(record), cost_ledger.LEDGER_FIELDS)
+            "budget-exhausted", "2026-08-02")
+        self.assertEqual(
+            tuple(record),
+            cost_ledger.LEDGER_FIELDS + cost_ledger.LEDGER_OPTIONAL_FIELDS)
         self.assertEqual(record["wo"], "WO-0006")
         self.assertEqual(record["cost"], 16.25)
         self.assertEqual(record["outcome"], "budget-exhausted")
+        self.assertEqual(record["at"], "2026-08-02")
 
     def test_a_built_entry_has_no_shape_problems(self):
-        record = cost_ledger.entry("WO-0001", "r-1", "m", 100, 1.0, "merged")
+        record = cost_ledger.entry("WO-0001", "r-1", "m", 100, 1.0, "merged",
+                                   "2026-08-02")
         self.assertEqual(cost_ledger.line_problems(record), [])
 
 
@@ -40,7 +44,7 @@ class TestAppend(unittest.TestCase):
     def test_appends_one_line_creating_the_ledger(self):
         with tempfile.TemporaryDirectory() as tmp:
             record = cost_ledger.entry(
-                "WO-0006", "r-1", "m", 100, 1.0, "merged")
+                "WO-0006", "r-1", "m", 100, 1.0, "merged", "2026-08-02")
             cost_ledger.append(tmp, record)
             ledger = Path(tmp) / cost_ledger.COST_LEDGER
             self.assertEqual(
@@ -50,9 +54,10 @@ class TestAppend(unittest.TestCase):
     def test_appends_without_touching_existing_lines(self):
         with tempfile.TemporaryDirectory() as tmp:
             first = cost_ledger.entry(
-                "WO-0001", "r-1", "m", 100, 1.0, "merged")
+                "WO-0001", "r-1", "m", 100, 1.0, "merged", "2026-08-01")
             second = cost_ledger.entry(
-                "WO-0002", "r-2", "m", 200, 2.0, "budget-exhausted")
+                "WO-0002", "r-2", "m", 200, 2.0, "budget-exhausted",
+                "2026-08-02")
             cost_ledger.append(tmp, first)
             cost_ledger.append(tmp, second)
             ledger = Path(tmp) / cost_ledger.COST_LEDGER
@@ -62,7 +67,7 @@ class TestAppend(unittest.TestCase):
 
 class TestWoToken(unittest.TestCase):
     def test_a_valid_token_is_returned(self):
-        record = entry("WO-0009", "r-1", "m", 1, 0.1, "merged")
+        record = entry("WO-0009", "r-1", "m", 1, 0.1, "merged", "2026-08-02")
         self.assertEqual(cost_ledger.wo_token(record), "WO-0009")
 
     def test_an_invalid_or_absent_token_is_none(self):
@@ -72,7 +77,15 @@ class TestWoToken(unittest.TestCase):
 
 class TestLineProblems(unittest.TestCase):
     def test_a_well_formed_record_has_no_problems(self):
-        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged")
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-02")
+        self.assertEqual(cost_ledger.line_problems(record), [])
+
+    def test_a_legacy_row_without_at_is_valid(self):
+        # Pre-2026-08 rows predate the at field; the ledger is append-only
+        # and never backfilled, so they must keep parsing cleanly.
+        record = {"wo": "WO-0001", "run_id": "r-1", "model": "m",
+                  "tokens": 100, "cost": 1.5, "outcome": "merged"}
         self.assertEqual(cost_ledger.line_problems(record), [])
 
     def test_missing_fields_are_named_sorted(self):
@@ -82,13 +95,14 @@ class TestLineProblems(unittest.TestCase):
             ["ledger line is missing field(s): cost, tokens"])
 
     def test_unknown_fields_are_named(self):
-        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged")
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-02")
         record["surprise"] = True
         self.assertEqual(cost_ledger.line_problems(record),
                          ["ledger line has unknown field(s): surprise"])
 
     def test_bad_field_values_in_ledger_field_order(self):
-        record = entry("nonsense", "", "m", -5, -1.0, "merged")
+        record = entry("nonsense", "", "m", -5, -1.0, "merged", "2026-08-02")
         self.assertEqual(cost_ledger.line_problems(record), [
             "wo 'nonsense' is not a WO-#### token",
             "run_id must be a non-empty string",
@@ -99,11 +113,38 @@ class TestLineProblems(unittest.TestCase):
     def test_bool_tokens_and_cost_are_problems(self):
         # bool is an int subclass in Python; True must not pass as a count
         # or a dollar amount.
-        record = entry("WO-0001", "r-1", "m", True, True, "merged")
+        record = entry("WO-0001", "r-1", "m", True, True, "merged",
+                       "2026-08-02")
         self.assertEqual(cost_ledger.line_problems(record), [
             "tokens must be a non-negative integer",
             "cost must be a non-negative number",
         ])
+
+    def test_a_non_iso_at_is_a_problem(self):
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "yesterday")
+        self.assertEqual(cost_ledger.line_problems(record),
+                         ["at 'yesterday' is not an ISO date (YYYY-MM-DD)"])
+
+    def test_a_non_string_at_is_a_problem(self):
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged", 20260802)
+        self.assertEqual(cost_ledger.line_problems(record),
+                         ["at 20260802 is not an ISO date (YYYY-MM-DD)"])
+
+    def test_a_basic_format_iso_date_at_is_a_problem(self):
+        # date.fromisoformat alone accepts the basic "20260802" (and week
+        # dates); such a row would pass the shape check yet fall out of
+        # every month window — the fail-open direction the breaker must
+        # not have. Only the dashed calendar form is a valid at.
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged", "20260802")
+        self.assertEqual(cost_ledger.line_problems(record),
+                         ["at '20260802' is not an ISO date (YYYY-MM-DD)"])
+
+    def test_an_impossible_calendar_date_at_is_a_problem(self):
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-13-40")
+        self.assertEqual(cost_ledger.line_problems(record),
+                         ["at '2026-13-40' is not an ISO date (YYYY-MM-DD)"])
 
 
 class TestGateEntry(unittest.TestCase):
@@ -117,16 +158,46 @@ class TestGateEntry(unittest.TestCase):
         self.assertEqual(record["cost"], 0.0)
         self.assertEqual(record["outcome"], "gate_wait:merge:7260s")
 
+    def test_a_gate_row_derives_at_from_the_passage_timestamp(self):
+        # Gate rows need no clock: the passage timestamp already carries
+        # the date the monthly window keys on.
+        record = cost_ledger.gate_entry(
+            "WO-0017", "merge", 7260, "2026-07-22T05:17:00Z")
+        self.assertEqual(record["at"], "2026-07-22")
+
     def test_the_round_trip_through_gate_wait(self):
         record = cost_ledger.gate_entry(
             "WO-0003", "prd", 86400, "2026-07-01T09:00:00Z")
         self.assertEqual(cost_ledger.gate_wait(record), ("prd", 86400))
 
 
+class TestInMonth(unittest.TestCase):
+    def test_a_row_in_the_month_matches(self):
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-02")
+        self.assertTrue(cost_ledger.in_month(record, "2026-08"))
+
+    def test_a_row_in_another_month_does_not(self):
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-07-28")
+        self.assertFalse(cost_ledger.in_month(record, "2026-08"))
+
+    def test_a_legacy_row_is_in_no_month(self):
+        # Pre-at rows belong to closed months by construction.
+        legacy = {"wo": "WO-0001", "run_id": "r-1", "model": "m",
+                  "tokens": 100, "cost": 1.5, "outcome": "merged"}
+        self.assertFalse(cost_ledger.in_month(legacy, "2026-08"))
+
+    def test_malformed_records_are_in_no_month(self):
+        for record in ({"at": 7}, {}, None):
+            self.assertFalse(cost_ledger.in_month(record, "2026-08"),
+                             record)
+
+
 class TestGateWait(unittest.TestCase):
     def test_a_dispatched_run_row_is_not_a_gate_row(self):
         record = entry("WO-0006", "r-1", "claude-sonnet-5", 9000, 16.25,
-                       "merged")
+                       "merged", "2026-08-02")
         self.assertIsNone(cost_ledger.gate_wait(record))
 
     def test_malformed_or_absent_outcomes_are_none(self):
@@ -139,7 +210,8 @@ class TestGateWait(unittest.TestCase):
 
 class TestParse(unittest.TestCase):
     def test_blank_lines_are_skipped_and_linenos_kept(self):
-        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged")
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-02")
         text = "\n" + json.dumps(record) + "\n\n"
         self.assertEqual(cost_ledger.parse(text), [(2, record, [])])
 
@@ -168,10 +240,21 @@ class TestRead(unittest.TestCase):
 
     def test_reads_well_formed_lines(self):
         with tempfile.TemporaryDirectory() as tmp:
-            e1 = entry("WO-0001", "r-1", "m", 100, 1.5, "merged")
-            e2 = entry("WO-0002", "r-2", "m", 200, 2.5, "merged")
+            e1 = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-01")
+            e2 = entry("WO-0002", "r-2", "m", 200, 2.5, "merged",
+                       "2026-08-02")
             self.ledger(tmp, json.dumps(e1) + "\n" + json.dumps(e2) + "\n")
             self.assertEqual(cost_ledger.read(tmp), ([e1, e2], []))
+
+    def test_a_legacy_line_without_at_still_reads(self):
+        # The real docs/factory/costs.jsonl has pre-at rows; read() must
+        # keep returning them (append-only: they are never rewritten).
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy = {"wo": "WO-0001", "run_id": "r-1", "model": "m",
+                      "tokens": 100, "cost": 1.5, "outcome": "merged"}
+            self.ledger(tmp, json.dumps(legacy) + "\n")
+            self.assertEqual(cost_ledger.read(tmp), ([legacy], []))
 
     def test_invalid_json_is_a_problem_and_excluded(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -202,7 +285,8 @@ class TestRead(unittest.TestCase):
         # Fail closed: a negative cost would silently pull the total spend
         # DOWN, exactly the direction that could mask a real cap breach.
         with tempfile.TemporaryDirectory() as tmp:
-            bad = entry("WO-0001", "r-1", "m", 100, -5.0, "merged")
+            bad = entry("WO-0001", "r-1", "m", 100, -5.0, "merged",
+                        "2026-08-02")
             self.ledger(tmp, json.dumps(bad) + "\n")
             self.assertEqual(cost_ledger.read(tmp), ([], [
                 "ledger: docs/factory/costs.jsonl:1 cost must be a"
@@ -211,7 +295,8 @@ class TestRead(unittest.TestCase):
     def test_an_injected_ledger_path_overrides_the_repo_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             custom = Path(tmp) / "custom.jsonl"
-            e1 = entry("WO-0001", "r-1", "m", 100, 1.5, "merged")
+            e1 = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-01")
             custom.write_text(json.dumps(e1) + "\n", encoding="utf-8")
             self.assertEqual(
                 cost_ledger.read("/does/not/exist", ledger_path=custom),

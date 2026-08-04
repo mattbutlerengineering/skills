@@ -1666,6 +1666,14 @@ class TestLockstep(unittest.TestCase):
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("vars.FACTORY_PAUSED != 'true'", text)
 
+    def test_the_cost_report_workflow_clears_the_breaker_under_the_cap(self):
+        """ADR-0034's breaker is MONTHLY: a new month opening under the
+        cap must clear FACTORY_PAUSED (the resume leg) — without it the
+        variable latches true forever and the first breach pauses
+        dispatch permanently."""
+        text = self.COST_REPORT_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("gh variable set FACTORY_PAUSED --body false", text)
+
 
 class TestSelftest(unittest.TestCase):
     def test_selftest_passes(self):
