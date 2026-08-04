@@ -15,17 +15,17 @@
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
     "templates/tools/factory/assembler.py": "9adb94fa6d271a52ffceb5eacd4f3c1bb2a9e6be76961559fe762fac2b2cb24c",
     "templates/tools/factory/budget_guard.py": "112c18db49ba227292d945c437998a6b41677209599a56da6c541c6360041423",
-    "templates/tools/factory/cli.py": "8bb81c2c4f3649b536020192adfa09e7da6a2600cb0222f9417caa6e07d818fe",
+    "templates/tools/factory/cli.py": "32f50fcf99cc2e015652f45b4d2517b48f7d571e76b90436348e3d32c073096b",
     "templates/tools/factory/cost_ledger.py": "af67e4b0c9ded57f08314786458547982916141b315932190a893553a2d6bc2b",
     "templates/tools/factory/cost_report.py": "4da72011bef667b70861355b145432e866f46d45d61aa5287871d512a9b686a6",
     "templates/tools/factory/factory_config.py": "2abe251d5bee968b6355ef7e09c3d160b63ec80a19e9ee04e785c49bfbfcad0d",
-    "templates/tools/factory/gate_digest.py": "89361f3b7f8fb4190a5465550f4835bf1cf7276f7c9b8888cd226fecf5c11742",
+    "templates/tools/factory/gate_digest.py": "9318a828a6cef1127b93382540c99dc3f18af50a71084d7112d6787fdff75912",
     "templates/tools/factory/gates.py": "89fec66f0007ceac38dd70aad7b835f06c3325676f8d9d34f358b14431f961e2",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/knowledge_plane.py": "1d3f7d809325e58c523dc9fd9e886dd2b3e17249ae8945a385d3c2fc20087739",
-    "templates/tools/factory/label_sync.py": "5d486fc97733792d635d5f7cf923ce4272948c2cb9caffb6805ab89dc17e6318",
+    "templates/tools/factory/label_sync.py": "736052c5495a5a6dc78b4be2496715b2058e88ca9a222afe924f513a0904ae46",
     "templates/tools/factory/orientation_pack.py": "5c6b70f047641f92f9ddaf4ea0df9e9fac4fb435c0f501211395ee22000527ec",
     "templates/tools/factory/protocol.py": "c0980b82681b127fe4678d0cf09de5ad432a39777a8968576b34bcbe2e4a2ba2",
-    "templates/tools/factory/validator.py": "743bec59b698a54e8095635e863b46bc1e8ab74339eeaef98093a47dfaff9abe"
+    "templates/tools/factory/validator.py": "af93ca702ae41e7cf36ad3329d604dd09bb64a9ddae97eb42b09c947e08e6290"
   }
 }

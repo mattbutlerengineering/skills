@@ -44,6 +44,7 @@ from pathlib import Path
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
+from cli import gh_json
 from knowledge_plane import WO_TOKEN, repo_root
 from cli import gh_runner
 
@@ -229,10 +230,13 @@ def ensure_labels(root, run=gh_runner):
         return problems
     want = {label["name"]: label for label in desired}
     try:
-        live = {label.get("name") for label in label_sync.live_labels(run)}
+        listing, suffixes = label_sync.live_labels(run)
     except GH_FAILURES as err:
         return [f"sweeps: gh label list failed: {gh_detail(err)}"]
-    problems = []
+    problems = [f"sweeps: {suffix}" for suffix in suffixes]
+    if listing is None:
+        return problems
+    live = {label.get("name") for label in listing}
     for name in TRIAGE_LABELS:
         if name in live:
             continue
@@ -288,12 +292,14 @@ def known_keys(run=gh_runner):
     reported: past it, old keys are invisible and their intake is re-filed as a
     duplicate — which would otherwise look just like a clean sweep."""
     try:
-        issues = json.loads(run(["issue", "list", "--state", "all",
-                                 "--json", "number,body",
-                                 "--limit", str(LIST_WINDOW)]))
+        issues, suffix = gh_json(["issue", "list", "--state", "all",
+                                  "--json", "number,body",
+                                  "--limit", str(LIST_WINDOW)], run,
+                                 expect=list)
     except GH_FAILURES as err:
         return None, [f"sweeps: gh issue list failed: {gh_detail(err)}"]
-    issues = issues if isinstance(issues, list) else []
+    if suffix:
+        return None, [f"sweeps: gh issue list {suffix}"]
     problems = []
     if len(issues) >= LIST_WINDOW:
         problems.append(f"sweeps: gh issue list returned a full {LIST_WINDOW}"
@@ -355,11 +361,14 @@ def label_drift(root, run=gh_runner):
     if problems:
         return [], problems
     try:
-        current = label_sync.live_labels(run)
+        current, suffixes = label_sync.live_labels(run)
     except GH_FAILURES as err:
         return [], [f"sweeps: gh label list failed: {gh_detail(err)}"]
+    problems = [f"sweeps: {suffix}" for suffix in suffixes]
+    if current is None:
+        return [], problems
     intake = drift_intake(label_sync.plan(current, desired))
-    return ([intake] if intake else []), []
+    return ([intake] if intake else []), problems
 
 
 def load_payload(path):

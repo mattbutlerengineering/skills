@@ -305,6 +305,55 @@ class TestSync(unittest.TestCase):
             self.assertEqual(problems, [
                 f"L: gh label list failed: {error}"])
 
+    class BannerRunner(RecordingRunner):
+        """Records like RecordingRunner but answers the list call with raw
+        non-JSON (or wrong-shape) stdout — gh ran, exited 0, said nonsense."""
+
+        def __init__(self, stdout):
+            super().__init__([])
+            self.stdout = stdout
+
+        def __call__(self, args):
+            super().__call__(args)
+            return self.stdout
+
+    def test_unparseable_gh_list_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree_with_template(tmp)
+            runner = self.BannerRunner("gh: banner text")
+            problems = label_sync.sync(tree.root, apply=True, run=runner)
+            self.assertEqual(problems, [
+                "L: gh label list returned unparseable JSON: Expecting"
+                " value: line 1 column 1 (char 0)"])
+            self.assertEqual(runner.calls, [self.LIST_CALL])
+
+    def test_a_non_list_gh_listing_is_a_problem_not_fake_drift(self):
+        # A dict here must short-circuit: comparing the taxonomy against
+        # nonsense would report every label as missing drift (and, with
+        # apply, force-create the whole taxonomy off nonsense).
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree_with_template(tmp)
+            runner = self.BannerRunner("{}")
+            problems = label_sync.sync(tree.root, apply=True, run=runner)
+            self.assertEqual(problems, [
+                "L: gh label list returned dict where list was expected"])
+            self.assertEqual(runner.calls, [self.LIST_CALL])
+
+    def test_a_full_label_window_is_reported_alongside_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree_with_template(tmp)
+            runner = RecordingRunner(
+                [self.DESIRED[1]]
+                + [{"name": f"noise:{n}", "color": "ededed",
+                    "description": "noise"}
+                   for n in range(label_sync.LIST_WINDOW - 1)])
+            problems = label_sync.sync(tree.root, run=runner)
+            self.assertEqual(problems, [
+                "L: gh label list returned a full"
+                f" {label_sync.LIST_WINDOW}-entry window — older entries"
+                " are invisible; raise the window or narrow the query",
+                "L: missing label wo:draft"])
+
     def test_failing_gh_create_reports_per_label_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree_with_template(tmp)

@@ -352,6 +352,70 @@ class TestRunDaily(unittest.TestCase):
             self.assertEqual(outputs["changed"], "false")
             self.assertEqual(run.called("issue", "create"), [])
 
+    def test_an_unparseable_issue_list_reports_and_posts_nothing(self):
+        class BannerList(DigestRunner):
+            def __call__(self, args):
+                out = super().__call__(args)
+                return ("gh: banner text" if args[:2] == ["issue", "list"]
+                        else out)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = BannerList()
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [
+                "gd: gh issue list returned unparseable JSON: Expecting"
+                " value: line 1 column 1 (char 0)"])
+            self.assertEqual(outputs["changed"], "false")
+            self.assertEqual(run.called("issue", "create"), [])
+
+    def test_a_non_list_issue_listing_reports_and_posts_nothing(self):
+        class DictList(DigestRunner):
+            def __call__(self, args):
+                out = super().__call__(args)
+                return "{}" if args[:2] == ["issue", "list"] else out
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = DictList()
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [
+                "gd: gh issue list returned dict where list was expected"])
+            self.assertEqual(outputs["changed"], "false")
+            self.assertEqual(run.called("issue", "create"), [])
+
+    def test_a_full_issue_window_is_reported_and_the_digest_still_posts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = DigestRunner(issues=[
+                issue(10_000 + n, f"noise {n}", state="CLOSED")
+                for n in range(gate_digest.LIST_WINDOW)])
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [
+                "gd: gh issue list returned a full"
+                f" {gate_digest.LIST_WINDOW}-entry window — older entries"
+                " are invisible; raise the window or narrow the query"])
+            self.assertEqual(len(run.called("issue", "create")), 1)
+
+    def test_an_unparseable_timeline_still_posts_the_digest(self):
+        class BannerTimelines(DigestRunner):
+            def __call__(self, args):
+                out = super().__call__(args)
+                return "not json" if args[0] == "api" else out
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run = BannerTimelines(
+                issues=[issue(123, "WO-0018 rejection mining",
+                              labels=["wo:draft"])])
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [
+                "gd: gh api timeline for #123 returned unparseable"
+                " JSON: Expecting value: line 1 column 1 (char 0)"])
+            (create,) = run.called("issue", "create")
+            body = create[create.index("--body") + 1]
+            self.assertIn("- #123 WO-0018 rejection mining\n", body)
+
     def test_a_failing_timeline_still_posts_the_digest(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = FailingRunner(

@@ -120,3 +120,37 @@ def gh_runner(args):
     label-prefixed problem string, never a traceback. Tests inject a fake
     runner so they never touch the network."""
     return _gh(args).stdout
+
+
+def gh_json(args, run=gh_runner, expect=None):
+    """(parsed value, problem-suffix): run gh and parse its stdout as
+    JSON. The third failure vocabulary entry — ran, exited 0, said
+    something unreadable — becomes a suffix here instead of a traceback
+    in a scheduled job; `expect` (list or dict) adds the wrong-shape
+    case. The suffix is a verb phrase with no label and no operation:
+    the caller prefixes both ("gd: gh issue list " + suffix), exactly
+    the cost_ledger.line_problems convention, so identical failures at
+    different call sites stay tellable apart. (None, suffix) on any
+    failure; a failed/missing gh still raises CLI_FAILURES — that
+    vocabulary entry stays the caller's catch."""
+    out = run(args)
+    try:
+        value = json.loads(out)
+    except json.JSONDecodeError as err:
+        return None, f"returned unparseable JSON: {err}"
+    if expect is not None and not isinstance(value, expect):
+        return None, (f"returned {type(value).__name__} where"
+                      f" {expect.__name__} was expected")
+    return value, None
+
+
+def full_window(entries, limit):
+    """Problem-suffix when a windowed gh listing came back full — gh
+    truncates silently, so a full window means entries past it are
+    invisible and must be reported, never trusted (the sweeps
+    known_keys rule, made shared). A verb phrase like gh_json's: the
+    caller names the operation and its own label."""
+    if len(entries) >= limit:
+        return (f"returned a full {limit}-entry window — older entries"
+                " are invisible; raise the window or narrow the query")
+    return None

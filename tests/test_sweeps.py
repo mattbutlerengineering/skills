@@ -402,6 +402,22 @@ class TestEnsureLabels(unittest.TestCase):
                 " of label entries"])
             self.assertEqual(runner.calls, [])
 
+    def test_an_unparseable_label_listing_creates_nothing(self):
+        class BannerLabels(RecordingRunner):
+            def __call__(self, args):
+                out = super().__call__(args)
+                return ("gh: banner text" if args[:2] == ["label", "list"]
+                        else out)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            runner = BannerLabels()
+            problems = sweeps.ensure_labels(tree.root, run=runner)
+            self.assertEqual(problems, [
+                "sweeps: gh label list returned unparseable JSON:"
+                " Expecting value: line 1 column 1 (char 0)"])
+            self.assertEqual(runner.created_labels(), [])
+
     def test_every_label_a_sweep_can_stamp_is_ensured(self):
         # TRIAGE_LABELS is derived from TRIAGE, so a new sweep kind cannot
         # ship a label the bootstrap forgets to create.
@@ -485,6 +501,24 @@ class TestFileIssues(unittest.TestCase):
             # Loud, but not fatal: the new signal is still filed. A signal
             # nobody files is an outage nobody notices.
             self.assertEqual(filed, ["sentry:PROJ-7K"])
+
+    def test_an_unparseable_dedupe_listing_means_do_not_file(self):
+        # Filing blind would duplicate everything — nonsense stdout joins
+        # the failed-listing path, never an empty key set.
+        keys, problems = sweeps.known_keys(run=lambda args: "gh: banner")
+        self.assertIsNone(keys)
+        self.assertEqual(problems, [
+            "sweeps: gh issue list returned unparseable JSON: Expecting"
+            " value: line 1 column 1 (char 0)"])
+
+    def test_a_non_list_dedupe_listing_means_do_not_file(self):
+        # The old shape guard silently emptied the key set — which made a
+        # wrong shape file every intake as new, the exact churn dedupe
+        # exists to remove.
+        keys, problems = sweeps.known_keys(run=lambda args: "{}")
+        self.assertIsNone(keys)
+        self.assertEqual(problems, [
+            "sweeps: gh issue list returned dict where list was expected"])
 
     def test_the_cap_applies_to_what_is_new_not_to_the_payload(self):
         # Week 1 of the 15-unresolved-error scenario: 15 plans, none on the
@@ -611,6 +645,16 @@ class TestLabelDriftSweep(unittest.TestCase):
             self.assertEqual(intakes, [])
             self.assertEqual(problems,
                              ["sweeps: gh label list failed: HTTP 401"])
+
+    def test_an_unparseable_label_listing_is_a_problem_not_a_signal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = taxonomy_tree(tmp)
+            intakes, problems = sweeps.label_drift(
+                tree.root, run=lambda args: "gh: banner text")
+            self.assertEqual(intakes, [])
+            self.assertEqual(problems, [
+                "sweeps: gh label list returned unparseable JSON:"
+                " Expecting value: line 1 column 1 (char 0)"])
 
     def test_a_broken_taxonomy_file_is_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
