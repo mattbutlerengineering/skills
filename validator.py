@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""validator: the brain behind .github/workflows/validator.yml (PRD-0001;
-ADR-0032 lifecycle labels, ADR-0033 gate 3).
+"""validator: the brain behind .github/workflows/validator.yml and the
+assembler workflow's claim step (PRD-0001; ADR-0032 lifecycle labels,
+ADR-0033 gate 3).
 
-The workflow names no commands of its own — it runs `make` targets, and the
-two that need judgment land here. Both read the pull_request event payload
-(GITHUB_EVENT_PATH) and mutate GitHub through the gh CLI, which is injected
-so tests never touch the network (same shape as label_sync.py).
+The workflows name no commands of their own — they run `make` targets, and
+the ones that need judgment land here. The PR-shaped legs read the
+pull_request event payload (GITHUB_EVENT_PATH); the claim leg is handed its
+issue number outright. All mutate GitHub through the gh CLI, which is
+injected so tests never touch the network (same shape as label_sync.py).
 Conventions match gates.py/label_sync.py: functions return V:-prefixed
 problem strings; the CLI prints them and exits nonzero.
 
@@ -24,6 +26,20 @@ problem strings; the CLI prints them and exits nonzero.
         mirrored issue (ADR-0032: exactly one at a time). The issue number
         comes from the breakdown row, never from the issue itself — the
         knowledge plane is authoritative and the mirror is one-way.
+        Strict: a PR citing no work order is a problem, because this leg
+        mutates an issue and only a resolved citation says which one.
+
+  python3 validator.py lifecycle --label wo:needs-review --uncited skip
+        The PR-open leg: same PR-shaped resolution, but a PR citing no
+        work order is a silent no-op — human housekeeping PRs are normal
+        traffic, not errors.
+
+  python3 validator.py lifecycle --label wo:in-progress --issue <N>
+        The dispatch claim: flip a KNOWN issue (no PR to resolve) and
+        write transitioned=true/false to $GITHUB_OUTPUT — true only when
+        the flip took the order out of wo:ready-for-agent, which is the
+        assembler's idempotency verdict (a repeat label event gets false
+        and the paid agent step is skipped).
 """
 import os
 import sys
@@ -34,11 +50,15 @@ import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import gh_json, gh_runner
+from cli import gh_json, gh_runner, write_outputs
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              repo_root, row_tracker_issue, row_work_order)
 
 LIFECYCLE_PREFIX = "wo:"
+# The dispatch-queue state (ADR-0032). The claim's idempotency verdict is
+# "did THIS event take the order out of ready" — so the label is named
+# here, not inferred from the taxonomy's ordering.
+READY_LABEL = "wo:ready-for-agent"
 # The row and tracker-mirror grammars are knowledge_plane's — the same
 # rules the assembler dispatches with, so the two cannot diverge
 # (ADR-0039).
@@ -280,35 +300,22 @@ def run_review(root, findings, status, env, run=gh_runner):
     return post_review(pr.get("number"), body, run)
 
 
-def run_lifecycle(root, label, env, run=gh_runner):
-    """The merged-label job: flip the cited work order's lifecycle label."""
-    lifecycle, problems = lifecycle_labels(root)
-    if problems:
-        return problems
-    if label not in lifecycle:
-        return [f"V: {label} is not a lifecycle label in the taxonomy"]
-    pr, problems = _pull_request(env)
-    if problems:
-        return problems
-    wo, problems = cited_work_order(root, pr.get("body") or "")
-    if problems:
-        return problems
-    number, problems = tracker_issue(root, wo)
-    if problems:
-        return problems
+def _flip(number, label, lifecycle, run):
+    """(labels removed, problems): make `label` the only lifecycle label
+    on issue `number`. An already-correct issue is a no-op ([], [])."""
     try:
         current, suffix = gh_json(
             ["issue", "view", str(number), "--json", "labels"], run,
             expect=dict)
     except GH_FAILURES as err:
-        return [f"V: gh issue view {number} failed:"
-                f" {gh_detail(err)}"]
+        return [], [f"V: gh issue view {number} failed:"
+                    f" {gh_detail(err)}"]
     if suffix:
-        return [f"V: gh issue view {number} {suffix}"]
+        return [], [f"V: gh issue view {number} {suffix}"]
     names = [entry.get("name") for entry in current.get("labels", [])]
     add, remove = transition(names, lifecycle, label)
     if not add and not remove:
-        return []
+        return [], []
     args = ["issue", "edit", str(number)]
     for name in add:
         args += ["--add-label", name]
@@ -317,8 +324,71 @@ def run_lifecycle(root, label, env, run=gh_runner):
     try:
         run(args)
     except GH_FAILURES as err:
-        return [f"V: gh issue edit {number} failed:"
-                f" {gh_detail(err)}"]
+        return [], [f"V: gh issue edit {number} failed:"
+                    f" {gh_detail(err)}"]
+    return remove, []
+
+
+def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
+    """The merged-label job: flip the cited work order's lifecycle label.
+
+    uncited="skip" (the PR-open leg) makes a PR that cites no work order
+    at all a silent no-op instead of a problem: human housekeeping PRs
+    are normal traffic. ONLY that case is relaxed — a body that names a
+    work order but resolves to none (no Closes line, ambiguous,
+    unmirrored) is a malformed WO PR and stays loud in both legs, as
+    does everything after resolution. The merged leg keeps the strict
+    default everywhere: it MUTATES an issue, and only a resolved
+    citation says which one."""
+    lifecycle, problems = lifecycle_labels(root)
+    if problems:
+        return problems
+    if label not in lifecycle:
+        return [f"V: {label} is not a lifecycle label in the taxonomy"]
+    pr, problems = _pull_request(env)
+    if problems:
+        return problems
+    body = pr.get("body") or ""
+    wo, problems = cited_work_order(root, body)
+    if problems:
+        # The skip is exactly the no-citation case. A malformed WO PR
+        # must not be silently unlabelled — the lost label is the very
+        # queue-entry event this leg exists to record, and the job only
+        # fires on opened/reopened, so nothing would ever retry it.
+        if uncited == "skip" and not WO_TOKEN.findall(body):
+            return []
+        return problems
+    number, problems = tracker_issue(root, wo)
+    if problems:
+        return problems
+    _, problems = _flip(number, label, lifecycle, run)
+    return problems
+
+
+def run_claim(root, label, issue, env, run=gh_runner):
+    """The dispatch claim: flip a KNOWN issue (no PR, no citation to
+    resolve) and write the assembler's idempotency verdict to
+    $GITHUB_OUTPUT. `transitioned` is true only when the flip removed
+    wo:ready-for-agent — the order was in ready state and THIS event
+    claimed it; a repeat/stale event finds it already advanced and gets
+    false, which is what skips the paid agent step. A flip that cannot
+    verify the order's state is a problem (red step), never a verdict."""
+    lifecycle, problems = lifecycle_labels(root)
+    if problems:
+        return problems
+    if label not in lifecycle:
+        return [f"V: {label} is not a lifecycle label in the taxonomy"]
+    if READY_LABEL not in lifecycle:
+        # The verdict is "did the flip take the order out of ready" — a
+        # taxonomy that lost the ready label would make every verdict
+        # false and silently stop all dispatch. Fail loudly instead.
+        return [f"V: {READY_LABEL} is not a lifecycle label in the"
+                " taxonomy"]
+    removed, problems = _flip(issue, label, lifecycle, run)
+    if problems:
+        return problems
+    claimed = READY_LABEL in removed
+    write_outputs(env, {"transitioned": "true" if claimed else "false"})
     return []
 
 
@@ -338,8 +408,15 @@ def parse(argv):
             return None, None
         return command, {"findings": options.get("findings", "findings.txt"),
                          "status": int(status)}
-    if command == "lifecycle" and set(options) == {"label"}:
-        return command, options
+    if command == "lifecycle":
+        if set(options) == {"label"}:
+            return command, options
+        if (set(options) == {"label", "issue"}
+                and options["issue"].isdigit()):
+            return command, options
+        if (set(options) == {"label", "uncited"}
+                and options["uncited"] == "skip"):
+            return command, options
     return None, None
 
 
@@ -350,8 +427,12 @@ def main(argv, env=None, run=gh_runner):
     if command == "review":
         problems = run_review(root, options["findings"], options["status"],
                               env=env, run=run)
+    elif command == "lifecycle" and "issue" in options:
+        problems = run_claim(root, options["label"], options["issue"],
+                             env=env, run=run)
     elif command == "lifecycle":
-        problems = run_lifecycle(root, options["label"], env=env, run=run)
+        problems = run_lifecycle(root, options["label"], env=env, run=run,
+                                 uncited=options.get("uncited", "problem"))
     else:
         print(__doc__.strip())
         return 2
