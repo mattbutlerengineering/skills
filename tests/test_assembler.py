@@ -75,10 +75,15 @@ class FixtureTree(FactoryFixtureTree):
 
 
 def label_event(tmp, *, action="labeled", label="wo:ready-for-agent",
-                sender=OWNER, number=110, body="", types=("type:feature",)):
-    """A GITHUB_EVENT_PATH env pointing at an `issues` labeled payload."""
+                sender=OWNER, number=110, body="", types=("type:feature",),
+                flags=()):
+    """A GITHUB_EVENT_PATH env pointing at an `issues` labeled payload.
+    `types` is the type:* charter-selection axis; `flags` are bare flag
+    labels (budget-exhausted, needs-human, ...) — separate axes in the
+    ADR-0032 taxonomy."""
     issue = {"number": number, "body": body,
-             "labels": [{"name": name} for name in ("size:L", *types)]}
+             "labels": [{"name": name}
+                        for name in ("size:L", *types, *flags)]}
     event = {"action": action, "label": {"name": label},
              "sender": {"login": sender}, "issue": issue}
     path = Path(tmp) / "event.json"
@@ -249,6 +254,32 @@ class TestRunResolve(unittest.TestCase):
             self.assertEqual(outputs["band"], "implementation")
             self.assertEqual(outputs["model"], "claude-sonnet-5")
             self.assertIn("WO-0005", outputs["prompt"])
+
+    def test_a_budget_exhausted_order_is_refused(self):
+        """ADR-0034: the dispatcher refuses a budget-exhausted order until
+        the owner clears the flag — no self-retry at full budget. The
+        refusal wins over charter selection (the issue still carries a
+        type: label)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = label_event(tmp, number=110,
+                              flags=("budget-exhausted",))
+            outputs, problems = assembler.run_resolve(self.tree(tmp).root, env)
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs["dispatch"], "false")
+            self.assertEqual(
+                outputs["reason"],
+                "asm: issue #110 carries budget-exhausted — a hard-stopped"
+                " order is not re-dispatchable until the owner clears the"
+                " flag (ADR-0034)")
+
+    def test_clearing_the_flag_makes_the_order_dispatchable_again(self):
+        """Positive control: the same order without the flag dispatches —
+        the guard keys on the flag alone."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = label_event(tmp, number=110)
+            outputs, problems = assembler.run_resolve(self.tree(tmp).root, env)
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs["dispatch"], "true")
 
     def test_the_prompt_substrate_is_the_row_never_the_issue_body(self):
         """The single most important security property (ADR-0032): a poisoned
