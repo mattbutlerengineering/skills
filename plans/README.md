@@ -35,8 +35,8 @@ flag this run).
 | 012  | Assembler refuses `budget-exhausted` orders (ADR-0034 refusal leg) | P1 | S | — | DONE — PR [#183](https://github.com/mattbutlerengineering/skills/pull/183) |
 | 013  | `cli.gh_json` + `cli.full_window` — malformed-JSON and window-truncation seams | P1 | S | — | DONE — PR [#186](https://github.com/mattbutlerengineering/skills/pull/186) |
 | 014  | Dispatch lifecycle labels actually flip (claim step + needs-review job) | P1 | M | 013 | TODO |
-| 015  | Workflow supply-chain hardening (pin action SHA, permissions block, CLI/node/Playwright pins, run-step invariant test) | P1 | M | — | IN PROGRESS — PR #190 |
-| 016  | `install_path` refuses instead of mangling — stamp destinations constrained to the target tree | P2 | S | — | TODO |
+| 015  | Workflow supply-chain hardening (pin action SHA, permissions block, CLI/node/Playwright pins, run-step invariant test) | P1 | M | — | DONE — PR [#190](https://github.com/mattbutlerengineering/skills/pull/190) |
+| 016  | `install_path` refuses instead of mangling — stamp destinations constrained to the target tree | P2 | S | — | IN PROGRESS — PR #192 |
 | 017  | First real maintenance run — CODEOWNERS owner substitution through capture→operate (dogfood spike) | P2 | M–L | 016 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE (with one-line evidence) | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
