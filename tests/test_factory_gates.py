@@ -1,4 +1,6 @@
-"""Factory gate detectors (gates.py) — fixture-tree tests.
+"""Factory gate detectors (gates.py) — fixture-tree tests, plus the
+live-tree CI guards over .github/workflows/ and the two Makefiles
+(TestLockstep and the run-step invariant).
 
 Same discipline as test_lint_checkers: every checker is exercised through
 its public interface against a temp fixture tree, and tests assert the
@@ -19,6 +21,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from factory_fixture import CONFIG  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 from make_parse import make_recipe  # noqa: E402
+import workflow_parse  # noqa: E402
+
+
+def offending_run_steps(text, allowed=()):
+    """Run steps in a workflow text that neither go through make nor open
+    with an allowlisted line — the run-step invariant's helper, factored
+    out so the guard itself is testable against synthetic drift. A step's
+    identity is its first non-comment line."""
+    bad = []
+    for step in workflow_parse.run_steps(text):
+        first = next((line.strip() for line in step.splitlines()
+                      if line.strip() and not line.strip().startswith("#")),
+                     "")
+        if first.startswith("make ") or first in allowed:
+            continue
+        bad.append(step)
+    return bad
 
 
 class TestWoCitation(unittest.TestCase):
@@ -1673,6 +1692,161 @@ class TestLockstep(unittest.TestCase):
         dispatch permanently."""
         text = self.COST_REPORT_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("gh variable set FACTORY_PAUSED --body false", text)
+
+    def test_the_agent_action_is_pinned_by_sha(self):
+        """The dispatch job holds write scopes and the API key, so its
+        third-party action must change only by reviewed commit — a mutable
+        tag re-point is a same-day, unreviewed change to the factory's most
+        privileged surface. (The byte-mirror test above extends the pin to
+        the payload copy.)"""
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertRegex(
+            text, r"uses: anthropics/claude-code-action@[0-9a-f]{40}")
+
+
+class TestRunSteps(unittest.TestCase):
+    """workflow_parse.run_steps — the stdlib extractor the run-step
+    invariant is built on (sibling of make_parse.make_recipe)."""
+
+    def test_inline_and_block_forms_are_both_extracted(self):
+        text = ("jobs:\n  a:\n    steps:\n"
+                "      - run: make check\n"
+                "      - name: glue\n"
+                "        run: |\n"
+                "          set +e\n"
+                "          make check > findings.txt 2>&1\n"
+                "      - run: make review\n")
+        self.assertEqual(workflow_parse.run_steps(text), [
+            "make check",
+            "set +e\nmake check > findings.txt 2>&1",
+            "make review"])
+
+    def test_a_block_keeps_comments_and_drops_blank_lines(self):
+        text = ("      - run: |\n"
+                "          # why this step exists\n"
+                "\n"
+                "          gh variable set X --body true\n"
+                "      - run: make check\n")
+        self.assertEqual(workflow_parse.run_steps(text), [
+            "# why this step exists\ngh variable set X --body true",
+            "make check"])
+
+    def test_a_dedent_ends_the_block(self):
+        text = ("        run: |\n"
+                "          git push\n"
+                "      - name: next step\n"
+                "        run: make check\n")
+        self.assertEqual(workflow_parse.run_steps(text),
+                         ["git push", "make check"])
+
+    def test_a_sibling_key_ends_a_dash_form_block(self):
+        # For a `- run: |` sequence item the block's boundary is the KEY
+        # column, not the dash column — otherwise a trailing sibling key
+        # (env:, if:) is swallowed into the step body.
+        text = ("      - run: |\n"
+                "          git push\n"
+                "        env:\n"
+                "          TOKEN: x\n")
+        self.assertEqual(workflow_parse.run_steps(text), ["git push"])
+
+    def test_a_chomping_indicator_still_opens_a_block(self):
+        # `|-`/`|+`/`>` variants must not degrade into a phantom inline
+        # step whose body lines are never inspected.
+        text = ("        run: |-\n"
+                "          make check\n")
+        self.assertEqual(workflow_parse.run_steps(text), ["make check"])
+
+
+class TestWorkflowRunStepInvariant(unittest.TestCase):
+    """Every run step in every workflow OPENS with `make` or a named,
+    reasoned allowlist entry — enumeration was the old guard's hole: a
+    tool absent from a denylist could drift CI from `make check`. Step
+    identity is the first non-comment line, so an allowlisted opener
+    admits the rest of its block; the denylist tests above stay as the
+    depth guard inside those blocks (they scan whole workflow texts for
+    named tools). Together they are the structural closure over all of
+    .github/workflows/."""
+
+    WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+    EXPECTED = {"assembler.yml", "charter-replay.yml", "cost-report.yml",
+                "design.yml", "gate-digest.yml", "sweeps.yml",
+                "validator.yml"}
+
+    # Each entry is a step's first non-comment line, exact. Each is a
+    # deliberate hole in the make-only invariant and carries the reason it
+    # stays true. An entry admits the whole step it opens, so re-review the
+    # full block whenever an allowlisted step changes.
+    ALLOWED = {
+        "charter-replay.yml": (
+            # this-repo-only, never mirrored: the replay deliberately
+            # lives outside the Makefile (paid model runs, manual only);
+            # the CLI version rides in env from the pinned dispatch input
+            'npm install -g "@anthropic-ai/claude-code@${CLI_VERSION}"',
+            # the replay invocation: builds argv from the dispatch inputs
+            'args=(--model "$MODEL" --record)',
+        ),
+        "sweeps.yml": (
+            # this-repo-only sweep tools — same reason charter-replay is
+            # exempt: never mirrored into a stamped repo's CI
+            "python3 sweeps.py ensure-labels",
+            "python3 sweeps.py label-drift",
+            "python3 sweeps.py sentry --payload sentry.json",
+            # shell glue: names the missing-secret cause, then fetches the
+            # Sentry payload with the token passed on stdin, never argv
+            'if [ -z "${SENTRY_TOKEN}" ]; then',
+        ),
+        "cost-report.yml": (
+            # the compute/mutate boundary (workflow header comment): gh
+            # mutations stay in YAML, never in a make target
+            'gh issue create --title "$REPORT_TITLE" --body "$REPORT_BODY"',
+            # the breach leg: names the missing-token cause, then flips
+            # FACTORY_PAUSED on
+            'if [ -z "${GH_TOKEN}" ]; then',
+            # the resume leg: the same gh-mutation boundary, opposite
+            # direction — clears FACTORY_PAUSED once a new month's spend
+            # is back under the cap
+            'if [ -n "${GH_TOKEN}" ]; then',
+        ),
+        "gate-digest.yml": (
+            # git mutation glue: commits the ledger rows `make gate-digest`
+            # just wrote (the make target computes, the YAML mutates)
+            'git config user.name "github-actions[bot]"',
+        ),
+        "validator.yml": (
+            # shell glue capturing `make check`'s findings and exit code
+            # for the review step; the command underneath is still make
+            "set +e",
+        ),
+    }
+
+    def test_every_run_step_is_make_or_allowlisted(self):
+        # .yaml counts too — GitHub accepts both suffixes, and a workflow
+        # invisible to this scan is a hole in the invariant.
+        paths = sorted(list(self.WORKFLOWS.glob("*.yml"))
+                       + list(self.WORKFLOWS.glob("*.yaml")))
+        names = {path.name for path in paths}
+        self.assertLessEqual(self.EXPECTED, names,
+                             "a known workflow file is missing")
+        for path in paths:
+            text = path.read_text(encoding="utf-8")
+            for step in offending_run_steps(
+                    text, self.ALLOWED.get(path.name, ())):
+                self.fail(f"{path.name}: run step neither goes through"
+                          f" make nor is allowlisted:\n{step}")
+
+    def test_the_helper_flags_a_drifting_step(self):
+        # The guard itself, not just the current tree: a tool invoked
+        # directly must surface even when no denylist names it.
+        text = "jobs:\n  x:\n    steps:\n      - run: python3 gates.py\n"
+        self.assertEqual(offending_run_steps(text), ["python3 gates.py"])
+
+    def test_an_allowlisted_first_line_admits_only_that_step(self):
+        text = ("      - run: |\n"
+                "          set +e\n"
+                "          make check\n"
+                "      - run: python3 gates.py\n")
+        self.assertEqual(offending_run_steps(text, ("set +e",)),
+                         ["python3 gates.py"])
 
 
 class TestSelftest(unittest.TestCase):

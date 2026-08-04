@@ -20,6 +20,15 @@ on:
         description: Replay only this case id or role (blank = all)
         required: false
         default: ""
+      cli_version:
+        description: claude CLI version to install (pinned default)
+        required: false
+        default: "2.1.221"
+
+# Checkout + artifact upload is all this job does with the token; a replay
+# case — a real agent run — must never hold ambient write authority.
+permissions:
+  contents: read
 
 jobs:
   replay:
@@ -29,8 +38,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      # The version rides in env, not spliced into the shell — the same
+      # input hygiene as the replay step below ("$MODEL"/"$ONLY").
       - name: Install the claude CLI
-        run: npm install -g @anthropic-ai/claude-code
+        env:
+          CLI_VERSION: ${{ inputs.cli_version }}
+        run: npm install -g "@anthropic-ai/claude-code@${CLI_VERSION}"
       - name: Replay golden fixture work orders against the charters
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
