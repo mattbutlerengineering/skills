@@ -200,11 +200,11 @@ class TestDesignSeed(unittest.TestCase):
     def test_the_seed_stamps_into_docs_design(self):
         self.assertEqual(
             factory_init.install_path("templates/docs/design/TEMPLATE.md"),
-            "docs/design/TEMPLATE.md")
+            ("docs/design/TEMPLATE.md", None))
         self.assertEqual(
             factory_init.install_path(
                 "templates/docs/design/design-system.md"),
-            "docs/design/design-system.md")
+            ("docs/design/design-system.md", None))
 
 
 if __name__ == "__main__":

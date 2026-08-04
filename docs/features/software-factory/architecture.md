@@ -359,8 +359,10 @@ reconciles it against `breakdown.md` (see *Open questions*).
 
 - Input: repo root (implicit) / a target repo path.
 - Output: problem strings; `factory-init: N problem(s)`.
-- Failure modes: `stamp` refuses a source payload that fails detector E, and
-  refuses any pre-existing destination file — no partial stamps, no overwrites.
+- Failure modes: `stamp` refuses a source payload that fails detector E, a
+  malformed manifest key, a destination resolving outside the target, and any
+  pre-existing destination file — no partial stamps, no overwrites, no writes
+  outside the target tree.
   `update-manifest` refuses a repo missing `.claude-plugin/plugin.json` or any
   tool mirror.
 - Contract with humans: **never hand-edit `factory/templates/**` or the
