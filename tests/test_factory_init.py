@@ -2,7 +2,11 @@
 
 Same discipline as test_factory_gates: every function is exercised through
 its public interface against a temp fixture tree, and tests assert the
-exact problem strings callers will print.
+exact problem strings callers will print. One deliberate exception: stamp's
+defense-in-depth refusals are unreachable through an honest tree (the
+manifest walk cannot emit a malformed key), so those tests patch the
+checksum gate or INSTALL_MAP to reach the branch — stamp itself is still
+driven through its public interface.
 """
 import hashlib
 import json
@@ -11,6 +15,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import factory_init
 import gates
@@ -47,7 +52,8 @@ EXPECTED_RELS = {
     "templates/tools/factory/gate_digest.py",
 }
 
-# install_path(rel) for every manifested rel, in target-relative form.
+# Hand-maintained map: the expected install destination for every
+# manifested rel, in target-relative form.
 EXPECTED_INSTALLS = {
     "templates/.github/workflows/validator.yml":
         ".github/workflows/validator.yml",
@@ -77,6 +83,7 @@ EXPECTED_INSTALLS = {
     "templates/tools/factory/orientation_pack.py":
         "tools/factory/orientation_pack.py",
     "templates/tools/factory/cost_report.py": "tools/factory/cost_report.py",
+    "templates/tools/factory/gate_digest.py": "tools/factory/gate_digest.py",
 }
 
 TAMPER_PROBLEM = (
@@ -194,16 +201,36 @@ class TestRealTreeMirrors(unittest.TestCase):
 class TestInstallPath(unittest.TestCase):
     def test_factory_json_installs_under_dot_github(self):
         self.assertEqual(factory_init.install_path("templates/factory.json"),
-                         ".github/factory.json")
+                         (".github/factory.json", None))
 
     def test_makefile_installs_at_root(self):
         self.assertEqual(factory_init.install_path("templates/Makefile"),
-                         "Makefile")
+                         ("Makefile", None))
 
     def test_nested_tool_strips_templates_prefix(self):
         self.assertEqual(
             factory_init.install_path("templates/tools/factory/gates.py"),
-            "tools/factory/gates.py")
+            ("tools/factory/gates.py", None))
+
+    def test_a_key_outside_templates_is_refused(self):
+        # The old blind slice turned '../../evil.sh' into 'vil.sh' and
+        # '/tmp/evil' into 'evil' — mangled, never refused.
+        for rel in ("../../evil.sh", "/tmp/evil"):
+            with self.subTest(rel=rel):
+                self.assertEqual(
+                    factory_init.install_path(rel),
+                    (None, f"factory-init: manifest key {rel!r} is not"
+                           " under templates/"))
+
+    def test_a_key_that_escapes_or_degenerates_is_refused(self):
+        for rel in ("templates/../../etc/evil", "templates//x",
+                    "templates/", "templates/a/../b", "templates/.",
+                    "templates/./x", "templates/x\x00y"):
+            with self.subTest(rel=rel):
+                self.assertEqual(
+                    factory_init.install_path(rel),
+                    (None, f"factory-init: manifest key {rel!r} does not"
+                           " resolve to a plain relative path"))
 
 
 class TestStamp(unittest.TestCase):
@@ -244,6 +271,57 @@ class TestStamp(unittest.TestCase):
             self.assertEqual(factory_init.stamp(source, target),
                              [TAMPER_PROBLEM])
             self.assertEqual(all_files(target), [])
+
+    def test_refuses_a_malformed_manifest_key_and_writes_nothing(self):
+        # Destinations are constrained by construction, not by upstream
+        # luck: even with the checksum gate out of the way, a malformed
+        # key is refused before any copy.
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            manifest_path = source / "factory/manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["files"]["templates/../../etc/evil"] = "0" * 64
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            target = Path(tmp) / "target"
+            target.mkdir()
+            with mock.patch.object(gates, "check_scaffold_sync",
+                                   return_value=[]):
+                problems = factory_init.stamp(source, target)
+            self.assertEqual(problems, [
+                "factory-init: manifest key 'templates/../../etc/evil'"
+                " does not resolve to a plain relative path"])
+            # iterdir, not just all_files: no directories either.
+            self.assertEqual(list(target.iterdir()), [])
+
+    def test_refuses_an_escaping_install_map_destination(self):
+        # The source tree here is honest — only the map is poisoned — so
+        # the checksum gate passes and the containment layer is what
+        # refuses (install_path returns INSTALL_MAP values unvalidated).
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            target = Path(tmp) / "target"
+            target.mkdir()
+            with mock.patch.dict(factory_init.INSTALL_MAP,
+                                 {"templates/factory.json": "../escape"}):
+                problems = factory_init.stamp(source, target)
+            self.assertEqual(problems, [
+                "factory-init: destination ../escape escapes the stamp"
+                " target"])
+            self.assertEqual(list(target.iterdir()), [])
+            # The harm this prevents is a write OUTSIDE the target.
+            self.assertFalse((Path(tmp) / "escape").exists())
+
+    def test_stamps_through_a_symlinked_target(self):
+        # The containment pass resolves both sides, so a target reached
+        # through a symlink compares real paths and still stamps.
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            real = Path(tmp) / "real"
+            real.mkdir()
+            link = Path(tmp) / "link"
+            link.symlink_to(real, target_is_directory=True)
+            self.assertEqual(factory_init.stamp(source, link), [])
+            self.assertTrue((real / "Makefile").is_file())
 
     def test_refuses_existing_destination_without_partial_stamp(self):
         with tempfile.TemporaryDirectory() as tmp:

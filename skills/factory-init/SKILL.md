@@ -16,9 +16,10 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
 
        python3 factory_init.py stamp <path-to-product-repo>
 
-2. The stamp is all-or-nothing. It refuses a drifted source payload and
-   refuses to overwrite any existing file in the target, printing one
-   problem line per clash; resolve and re-run.
+2. The stamp is all-or-nothing. It refuses a drifted source payload, a
+   malformed manifest key, a destination resolving outside the target,
+   and any existing file in the target, printing one problem line per
+   refusal; resolve and re-run.
 3. What lands in the target:
    - `factory/` — the pristine mirror (manifest + templates) that the
      stamped detector suite checks itself against.

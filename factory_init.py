@@ -15,8 +15,10 @@ problem strings; the CLI prints them and exits nonzero.
                     under factory/ (manifest + templates, what detector E
                     checks there) plus installed copies (Makefile at the
                     root, .github/factory.json, tools/factory/*). Refuses
-                    a drifted source payload and any existing destination
-                    file — no partial stamps, no overwrites.
+                    a drifted source payload, a malformed manifest key, a
+                    destination resolving outside the target, and any
+                    existing destination file — no partial stamps, no
+                    overwrites, no writes outside the target tree.
 """
 import json
 import shutil
@@ -71,8 +73,27 @@ INSTALL_MAP = {"templates/factory.json": ".github/factory.json"}
 
 
 def install_path(rel):
-    """Destination of a manifest entry in a product repo."""
-    return INSTALL_MAP.get(rel, rel[len("templates/"):])
+    """(destination in a product repo, problem). A manifest key must be
+    a plain relative path under templates/ — anything else is refused,
+    never sliced into something that happens to join cleanly. The
+    checksum gate upstream makes a malformed key unlikely; this makes
+    the write path safe by construction, not by upstream luck. The one
+    exception: an INSTALL_MAP hit returns its repo-controlled value
+    verbatim, unvalidated — stamp's containment pass is what bounds
+    those destinations."""
+    if rel in INSTALL_MAP:
+        return INSTALL_MAP[rel], None
+    if not rel.startswith("templates/"):
+        return None, (f"factory-init: manifest key {rel!r} is not under"
+                      " templates/")
+    dest = rel[len("templates/"):]
+    parts = dest.split("/")
+    # "" in parts covers the empty, leading-slash, and doubled-slash
+    # shapes in one clause.
+    if "\x00" in dest or ".." in parts or "." in parts or "" in parts:
+        return None, (f"factory-init: manifest key {rel!r} does not"
+                      " resolve to a plain relative path")
+    return dest, None
 
 
 def update_manifest(root):
@@ -110,9 +131,24 @@ def stamp(source, target):
     manifest_src = source / "factory" / "manifest.json"
     files = json.loads(manifest_src.read_text(encoding="utf-8"))["files"]
     copies = [(manifest_src, Path("factory/manifest.json"))]
+    problems = []
     for rel in sorted(files):
         copies.append((source / "factory" / rel, Path("factory") / rel))
-        copies.append((source / "factory" / rel, Path(install_path(rel))))
+        dest, problem = install_path(rel)
+        if problem:
+            problems.append(problem)
+            continue
+        copies.append((source / "factory" / rel, Path(dest)))
+    if problems:
+        return problems
+    # Every resolved destination — INSTALL_MAP's entries included — must
+    # stay inside the resolved target tree, checked before any write.
+    target_root = target.resolve()
+    escapes = [f"factory-init: destination {dest.as_posix()} escapes"
+               " the stamp target" for _, dest in copies
+               if not (target / dest).resolve().is_relative_to(target_root)]
+    if escapes:
+        return escapes
     clashes = [f"factory-init: target already has {dest.as_posix()}"
                for _, dest in copies if (target / dest).exists()]
     if clashes:
