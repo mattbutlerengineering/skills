@@ -57,9 +57,12 @@ class RunEvalContract:
     def test_counts_every_run_and_scores_per_case(self):
         cases = [case("a", "idea", "fire:idea"),
                  case("b", None, "fire:none", kind="distractor")]
-        output, _ = self.run_quiet(
+        output, err = self.run_quiet(
             cases, {"idea": "d", "prd": "d"}, workers=2, runs_per_query=2,
             timeout=10, threshold=0.5, model=None, isolate=False)
+        # A crashed worker buckets its run as 'none' and warns — without
+        # this check it would masquerade as a routing miss below.
+        self.assertNotIn("warning:", err)
         by_id = {r["id"]: r for r in output["results"]}
         self.assertEqual(by_id["a"]["fired"], {"idea": 2})
         self.assertEqual(by_id["a"]["runs"], 2)
