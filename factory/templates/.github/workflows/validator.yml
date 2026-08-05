@@ -75,6 +75,34 @@ jobs:
           FACTORY_REVIEW_LOGIN: ${{ vars.FACTORY_REVIEW_LOGIN }}
         run: make review FINDINGS=findings.txt STATUS="$FINDINGS_RC"
 
+  # PR open flips the cited work order to wo:needs-review — the merge
+  # gate's queue-entry event (ADR-0033 gate 3; ADR-0041's latency rows
+  # measure its passage, and without this flip the digest's review-queue
+  # math never sees an entry). --uncited skip: a PR that cites no work
+  # order (human housekeeping) is normal traffic, not an error. A push to
+  # an open PR (synchronize) must not re-flip an order a human already
+  # moved along; a REOPENED PR re-enters the queue deliberately — it is
+  # again awaiting review. Fork PRs are skipped for the same reason as the
+  # review job: their token cannot write labels.
+  needs-review-label:
+    if: >-
+      github.event_name == 'pull_request'
+      && (github.event.action == 'opened' || github.event.action == 'reopened')
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Flip the work order to wo:needs-review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make wo-needs-review
+
   # Merging the PR is gate 3 itself (ADR-0033), and it is the work order's
   # terminal state: flip the mirrored issue to wo:merged (ADR-0032 — exactly
   # one lifecycle label at a time). The issue number comes from the breakdown

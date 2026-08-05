@@ -6,12 +6,17 @@
 # (its tools sit at the root, these under tools/factory/, and the plugin's
 # structural lint has no product-repo counterpart).
 
-.PHONY: check review wo-merged assembler cost-report gate-digest web-quality
+.PHONY: check review wo-merged wo-in-progress wo-needs-review
+.PHONY: assembler cost-report gate-digest web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
 FINDINGS ?= findings.txt
 STATUS ?= 0
+
+# Set by the assembler workflow's claim step (the issue the label event
+# fired on); an empty ISSUE makes validator.py print usage and exit 2.
+ISSUE ?=
 
 # Plain `=`, not `?=`: the pin must not be overridable from the environment,
 # or a repo's CI could change behavior when a new playwright ships. Bump
@@ -28,6 +33,12 @@ review:
 
 wo-merged:
 	python3 tools/factory/validator.py lifecycle --label wo:merged
+
+wo-in-progress:
+	python3 tools/factory/validator.py lifecycle --label wo:in-progress --issue $(ISSUE)
+
+wo-needs-review:
+	python3 tools/factory/validator.py lifecycle --label wo:needs-review --uncited skip
 
 assembler:
 	python3 tools/factory/assembler.py resolve

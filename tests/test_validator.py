@@ -7,6 +7,7 @@ strings callers will print, and the gh runner is injected so no test ever
 touches the network.
 """
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -645,6 +646,64 @@ class TestRunLifecycle(unittest.TestCase):
                     tree.root, "wo:merged", env=self.env(tmp), run=run),
                 ["V: gh issue view 109 failed: gh: not found"])
 
+    def test_uncited_skip_silences_a_pr_with_no_work_order(self):
+        # The PR-open leg (wo:needs-review) labels every WO PR, but a
+        # human housekeeping PR cites no work order — that is normal
+        # traffic, not an error. Nothing is resolved, nothing is called.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = RecordingRunner()
+            problems = validator.run_lifecycle(
+                tree.root, "wo:needs-review",
+                env=self.env(tmp, body="chore: housekeeping"), run=run,
+                uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_uncited_skip_keeps_a_malformed_citation_loud(self):
+        # The skip is exactly the no-citation case. A body that NAMES a
+        # work order but resolves to none is a malformed WO PR — silently
+        # not labelling it would lose the queue-entry event with nothing
+        # ever retrying it (the job fires on opened/reopened only).
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = RecordingRunner()
+            problems = validator.run_lifecycle(
+                tree.root, "wo:needs-review",
+                env=self.env(tmp, body="Implements WO-0004."), run=run,
+                uncited="skip")
+            self.assertEqual(problems, [
+                "V: PR body has no Closes #N link, so the work order it"
+                " implements cannot be told from the ones it only"
+                " mentions"])
+            self.assertEqual(run.calls, [])
+
+    def test_uncited_skip_still_flips_a_cited_work_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = RecordingRunner(labels=["wo:in-progress"])
+            problems = validator.run_lifecycle(
+                tree.root, "wo:needs-review", env=self.env(tmp), run=run,
+                uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:needs-review",
+                "--remove-label", "wo:in-progress"]])
+
+    def test_the_merged_leg_stays_strict_by_default(self):
+        # Only an explicit uncited="skip" relaxes the citation; the
+        # merged leg keeps failing loudly on an uncited PR (mutating the
+        # wrong issue silently would be worse than a red job).
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = RecordingRunner()
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged",
+                env=self.env(tmp, body="chore: housekeeping"), run=run)
+            self.assertEqual(
+                problems, ["V: PR body cites no work-order id"])
+
     class BannerViewRunner(RecordingRunner):
         """Records like RecordingRunner but answers `issue view` with raw
         non-JSON (or wrong-shape) stdout — gh ran, exited 0, said nonsense."""
@@ -680,6 +739,212 @@ class TestRunLifecycle(unittest.TestCase):
             self.assertEqual(run.called("issue", "edit"), [])
 
 
+class TestRunClaim(unittest.TestCase):
+    """The dispatch claim (ADR-0032): flip a known issue to
+    wo:in-progress and tell the workflow whether the order was actually
+    in ready state — `transitioned` on $GITHUB_OUTPUT is the assembler's
+    idempotency verdict; false means a repeat/stale event and the paid
+    agent step must not run."""
+
+    def tree(self, tmp):
+        tree = FixtureTree(tmp)
+        tree.write(".github/labels.json", json.dumps(
+            [{"name": name, "color": "ededed", "description": "lifecycle"}
+             for name in LIFECYCLE]
+            + [{"name": "size:M", "color": "f4a261", "description": "size"}]))
+        return tree
+
+    def env(self, tmp):
+        return {"GITHUB_OUTPUT": str(Path(tmp) / "outputs.txt")}
+
+    def outputs(self, env):
+        path = Path(env["GITHUB_OUTPUT"])
+        return path.read_text(encoding="utf-8") if path.exists() else ""
+
+    def test_a_ready_order_is_claimed_and_reports_transitioned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp)
+            run = RecordingRunner(labels=["wo:ready-for-agent", "size:M"])
+            problems = validator.run_claim(
+                tree.root, "wo:in-progress", "109", env=env, run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:in-progress",
+                "--remove-label", "wo:ready-for-agent"]])
+            self.assertEqual(self.outputs(env), "transitioned=true\n")
+
+    def test_a_repeat_claim_is_a_no_op_not_an_error(self):
+        # The concurrency group queues a repeat label event behind the
+        # running dispatch; by the time it runs, the order is already
+        # wo:in-progress. That is a skip (exit 0, transitioned=false),
+        # never a red workflow.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp)
+            run = RecordingRunner(labels=["wo:in-progress"])
+            problems = validator.run_claim(
+                tree.root, "wo:in-progress", "109", env=env, run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [])
+            self.assertEqual(self.outputs(env), "transitioned=false\n")
+
+    def test_an_order_no_longer_ready_does_not_count_as_a_claim(self):
+        # The flip happens (exactly-one-label invariant) but the order
+        # was not in ready state, so this event did not claim it —
+        # transitioned=false keeps the agent step skipped.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp)
+            run = RecordingRunner(labels=["wo:blocked"])
+            problems = validator.run_claim(
+                tree.root, "wo:in-progress", "109", env=env, run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:in-progress",
+                "--remove-label", "wo:blocked"]])
+            self.assertEqual(self.outputs(env), "transitioned=false\n")
+
+    def test_an_order_with_no_lifecycle_label_is_labelled_not_claimed(self):
+        # The dispatch job's own if: saw the ready label at event time, so
+        # an empty label set means it vanished in between — a raced or
+        # hand-tended order. The invariant flip still happens, but this
+        # event did not take the order out of ready, so no paid dispatch.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp)
+            run = RecordingRunner(labels=["size:M"])
+            problems = validator.run_claim(
+                tree.root, "wo:in-progress", "109", env=env, run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:in-progress"]])
+            self.assertEqual(self.outputs(env), "transitioned=false\n")
+
+    def test_a_label_outside_the_state_machine_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp)
+            run = RecordingRunner()
+            self.assertEqual(
+                validator.run_claim(
+                    tree.root, "wo:done", "109", env=env, run=run),
+                ["V: wo:done is not a lifecycle label in the taxonomy"])
+            self.assertEqual(run.calls, [])
+            self.assertEqual(self.outputs(env), "")
+
+    def test_a_taxonomy_without_the_ready_label_is_refused(self):
+        # transitioned is "did the flip take the order out of ready" — a
+        # taxonomy that lost the ready label would make every verdict
+        # false and silently stop all dispatch. Loud beats silent.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", json.dumps(
+                [{"name": name, "color": "ededed",
+                  "description": "lifecycle"}
+                 for name in LIFECYCLE if name != "wo:ready-for-agent"]))
+            env = self.env(tmp)
+            run = RecordingRunner(labels=["wo:in-progress"])
+            self.assertEqual(
+                validator.run_claim(
+                    tree.root, "wo:in-progress", "109", env=env, run=run),
+                ["V: wo:ready-for-agent is not a lifecycle label in the"
+                 " taxonomy"])
+            self.assertEqual(run.calls, [])
+            self.assertEqual(self.outputs(env), "")
+
+    def test_a_failing_gh_call_is_a_problem_and_writes_no_verdict(self):
+        # A claim that cannot verify the order's state must fail the
+        # step (problems -> nonzero) rather than declare a verdict.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            env = self.env(tmp)
+            run = FailingRunner(error=OSError("gh: not found"),
+                                failing=["issue", "view"])
+            self.assertEqual(
+                validator.run_claim(
+                    tree.root, "wo:in-progress", "109", env=env, run=run),
+                ["V: gh issue view 109 failed: gh: not found"])
+            self.assertEqual(self.outputs(env), "")
+
+
+class TestClaimOutputLockstep(unittest.TestCase):
+    """The $GITHUB_OUTPUT seam: run_claim's output keys and assembler.yml's
+    steps.claim.outputs.<name> references are a split contract — Python
+    writes the keys, the workflow reads them by literal name (the same
+    lockstep idiom test_assembler's TestWorkflowOutputLockstep applies to
+    resolve). A renamed key breaks here, in CI, instead of silently
+    expanding to an empty string that skips every paid dispatch. Root and
+    payload YAML are byte-identical (detector E), so pinning the root
+    copy pins both."""
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "assembler.yml"
+    REFS = re.compile(r"steps\.claim\.outputs\.(\w+)")
+
+    def test_every_yaml_claim_ref_is_an_emitted_key(self):
+        refs = set(self.REFS.findall(
+            self.WORKFLOW.read_text(encoding="utf-8")))
+        self.assertTrue(refs, "assembler.yml references no claim outputs")
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", json.dumps(
+                [{"name": name, "color": "ededed",
+                  "description": "lifecycle"} for name in LIFECYCLE]))
+            env = {"GITHUB_OUTPUT": str(Path(tmp) / "outputs.txt")}
+            problems = validator.run_claim(
+                tree.root, "wo:in-progress", "7", env=env,
+                run=RecordingRunner(labels=["wo:ready-for-agent"]))
+            self.assertEqual(problems, [])
+            written = Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8")
+        keys = {line.split("=", 1)[0]
+                for line in written.splitlines() if "=" in line}
+        self.assertLessEqual(refs, keys)
+
+
+class TestParseLifecycle(unittest.TestCase):
+    """The three lifecycle invocations (ADR-0032): the merged leg
+    (--label alone), the dispatch claim (--label --issue N), and the
+    PR-open leg (--label --uncited skip). Anything else is usage."""
+
+    def test_the_bare_label_form_still_parses(self):
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:merged"]),
+            ("lifecycle", {"label": "wo:merged"}))
+
+    def test_the_claim_form_takes_a_numeric_issue(self):
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:in-progress",
+                             "--issue", "42"]),
+            ("lifecycle", {"label": "wo:in-progress", "issue": "42"}))
+
+    def test_a_non_numeric_issue_is_a_usage_error(self):
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:in-progress",
+                             "--issue", "abc"]),
+            (None, None))
+
+    def test_the_uncited_form_takes_only_skip(self):
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:needs-review",
+                             "--uncited", "skip"]),
+            ("lifecycle", {"label": "wo:needs-review", "uncited": "skip"}))
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:needs-review",
+                             "--uncited", "yes"]),
+            (None, None))
+
+    def test_the_claim_and_uncited_forms_do_not_combine(self):
+        # A claim names its issue outright; "uncited" only means anything
+        # for a PR-shaped resolution. Both at once is a confused caller.
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:in-progress",
+                             "--issue", "42", "--uncited", "skip"]),
+            (None, None))
+
+
 class TestMain(cli_contract.CliContract, unittest.TestCase):
     usage_fragment = "python3 validator.py review"
 
@@ -696,6 +961,34 @@ class TestMain(cli_contract.CliContract, unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("V: no pull_request in the CI event payload", out)
         self.assertIn("validator: 1 problem(s)", out)
+
+    def test_a_non_numeric_claim_issue_is_a_usage_error(self):
+        self.assertEqual(
+            self.run_cli(["lifecycle", "--label", "wo:in-progress",
+                          "--issue", "abc"])[0], 2)
+
+    def test_a_claim_invocation_routes_past_the_pr_event(self):
+        # No event payload in env, yet the claim succeeds: --issue N
+        # names the issue outright, so main must route to run_claim, not
+        # the PR-shaped leg (which would fail here on the missing event).
+        run = RecordingRunner(labels=["wo:ready-for-agent"])
+        code, out = cli_contract.capture(
+            validator.main,
+            ["lifecycle", "--label", "wo:in-progress", "--issue", "7"],
+            env={}, run=run)
+        self.assertEqual(code, 0)
+        self.assertEqual(run.called("issue", "edit"), [[
+            "issue", "edit", "7",
+            "--add-label", "wo:in-progress",
+            "--remove-label", "wo:ready-for-agent"]])
+
+    def test_an_uncited_skip_invocation_is_still_pr_shaped(self):
+        # --uncited skip relaxes the citation, not the event: outside a
+        # pull_request payload it is still a config error.
+        code, out = self.run_cli(["lifecycle", "--label", "wo:needs-review",
+                                  "--uncited", "skip"])
+        self.assertEqual(code, 1)
+        self.assertIn("V: no pull_request in the CI event payload", out)
 
 
 if __name__ == "__main__":

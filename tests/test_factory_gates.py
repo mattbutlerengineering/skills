@@ -1562,6 +1562,10 @@ class TestLockstep(unittest.TestCase):
         "review": ["python3 validator.py review --findings $(FINDINGS)"
                    " --status $(STATUS)"],
         "wo-merged": ["python3 validator.py lifecycle --label wo:merged"],
+        "wo-in-progress": ["python3 validator.py lifecycle --label"
+                           " wo:in-progress --issue $(ISSUE)"],
+        "wo-needs-review": ["python3 validator.py lifecycle --label"
+                            " wo:needs-review --uncited skip"],
     }
 
     def recipes(self, path, target):
@@ -1588,7 +1592,8 @@ class TestLockstep(unittest.TestCase):
         """Every check runs through `make`, so CI cannot drift from the local
         gate by adding a step — there is nowhere to add one."""
         text = self.WORKFLOW.read_text(encoding="utf-8")
-        for command in ("make check", "make review", "make wo-merged"):
+        for command in ("make check", "make review", "make wo-merged",
+                        "make wo-needs-review"):
             self.assertIn(command, text)
         for tool in ("lint.py", "gates.py", "validator.py", "unittest"):
             self.assertNotIn(
@@ -1606,6 +1611,26 @@ class TestLockstep(unittest.TestCase):
         text = self.WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("github.event.action == 'closed'", text)
         self.assertIn("github.event.pull_request.merged == true", text)
+
+    def test_the_needs_review_job_fires_only_on_an_opened_same_repo_pr(self):
+        # ADR-0033 gate 3's queue entry (ADR-0041's latency rows measure
+        # the passage). synchronize is deliberately absent — pushes to an
+        # open PR must not re-flip an order a human already moved along.
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("needs-review-label:", text)
+        self.assertIn("(github.event.action == 'opened'"
+                      " || github.event.action == 'reopened')", text)
+        self.assertIn("github.event.pull_request.head.repo.full_name"
+                      " == github.repository", text)
+
+    def test_the_claim_step_gates_the_agent_step(self):
+        # ADR-0032: the claim step flips ready -> in-progress and its
+        # transitioned output is the dispatch idempotency verdict — the
+        # paid agent step runs only on a true claim (the concurrency
+        # group only queues repeat label events, it cannot dedupe them).
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("make wo-in-progress", text)
+        self.assertIn("steps.claim.outputs.transitioned == 'true'", text)
 
     def test_both_makefiles_expose_the_assembler_target(self):
         self.assertEqual(self.recipes(self.MAKEFILE, "assembler"),
