@@ -21,7 +21,10 @@ on:
   issues:
     types: [labeled]
 
-# Don't dispatch the same work order twice if the label event repeats.
+# A repeat label event QUEUES behind the running dispatch — this group
+# serializes, it does not dedupe. The claim step below is what makes the
+# repeat a no-op: by the time it runs, the order is no longer in ready
+# state, transitioned=false, and the agent step is skipped.
 concurrency:
   group: assembler-${{ github.event.issue.number }}
   cancel-in-progress: false
@@ -69,11 +72,29 @@ jobs:
         env:
           FACTORY_REPO_OWNER: ${{ github.repository_owner }}
         run: make assembler
+      # Claim the order: ready -> in-progress (ADR-0032's state machine,
+      # advanced by machinery, not memory). transitioned=false means a
+      # repeat/stale event — the agent step is skipped, no second paid run.
+      # A benign no-op exits 0; only a flip that cannot verify the order's
+      # state fails the step. Gated on the API key exactly like the agent
+      # step: a repo that can never dispatch must not mark orders
+      # in-progress, or the graceful skip would fake a working agent.
+      - name: Claim the work order
+        id: claim
+        if: >-
+          steps.resolve.outputs.dispatch == 'true'
+          && env.ANTHROPIC_API_KEY != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make wo-in-progress ISSUE=${{ github.event.issue.number }}
       # The chartered agent, on the model its charter's band routes to. Skips
       # gracefully when no API key is configured (the graceful-skip pattern):
-      # nothing is dispatched and nothing is faked.
+      # nothing is dispatched, nothing is labelled, nothing is faked.
       - name: Run the chartered agent
-        if: steps.resolve.outputs.dispatch == 'true' && env.ANTHROPIC_API_KEY != ''
+        if: >-
+          steps.resolve.outputs.dispatch == 'true'
+          && steps.claim.outputs.transitioned == 'true'
+          && env.ANTHROPIC_API_KEY != ''
         # Pinned by SHA: this job holds write scopes + the API key, so its
         # third-party code must change only by reviewed commit, never by a
         # re-pointed tag. Bump deliberately: re-resolve the tag, update the
