@@ -105,3 +105,17 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.resolve.outputs.prompt }}
           claude_args: --model ${{ steps.resolve.outputs.model }}
+      # The order's exit when the run dies (ADR-0032's terminal state,
+      # ADR-0045's writer): without this the dispatched agent's failure
+      # leaves the order on wo:in-progress forever, where the gate digest
+      # and the improvement routine both read it as work still in flight.
+      # Gated on the claim's own verdict, not just failure(): only an order
+      # THIS run took out of ready may be flipped — a run that died before
+      # or during the claim leaves the order's state exactly as it found it.
+      - name: Mark the work order failed
+        if: >-
+          failure()
+          && steps.claim.outputs.transitioned == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make wo-failed ISSUE=${{ github.event.issue.number }}
