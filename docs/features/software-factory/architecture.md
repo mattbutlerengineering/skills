@@ -131,7 +131,7 @@ in the breakdown, no code).
 - Collaborators: detectors A, B, C; `factory/skills/*/SKILL.md` (charters cite
   the row, not the issue).
 
-### Gate detectors — `gates.py` (BUILT: A, B, C, E, F; UNBUILT: D, G, H, I)
+### Gate detectors — `gates.py` (BUILT: A–J)
 
 - Responsibility: fail the build when the spine rots. One module, one convention
   (a checker takes the repo root and returns label-prefixed problem strings; the
@@ -140,10 +140,18 @@ in the breakdown, no code).
   **B** PR-TRACEABILITY (a PR body carries a `WO-####` and a closing keyword;
   reads the CI event payload, SKIPs locally), **C** LINK-INTEGRITY (every typed
   token in `docs/**` and `CONTEXT.md` resolves; duplicate PRD ids fail),
-  **E** SCAFFOLD-SYNC (the template payload matches its checksum manifest),
-  **F** CONFIG-SHAPE (`factory.json` parses; every field is a valid token).
-- Unbuilt: **D** blueprint-drift, **G** cost-ledger, **I** staleness (WO-0008);
-  **H** evidence-honesty (WO-0011).
+  **D** BLUEPRINT-DRIFT (every ADR declares a known status and is indexed with
+  it; nothing outside `docs/adr` builds on a superseded decision),
+  **E** SCAFFOLD-SYNC (the template payload matches its checksum manifest, and
+  a stamped repo's executable payload matches what it was stamped from),
+  **F** CONFIG-SHAPE (`factory.json` parses; every field is a valid token),
+  **G** COST-LEDGER (ADR-0034 fields per line; every merged row is recorded),
+  **H** EVIDENCE-HONESTY (a labelled verdict shows output or discloses NOT
+  RUN, in its own section scope), **I** STALENESS (no knowledge-plane doc
+  links to a path that is gone), **J** LABEL-WIRING (every label the tools and
+  the Makefile's lifecycle targets name exists in the taxonomy).
+- The roster in `gates.py`'s module docstring is the authority; this list
+  tracks it.
 - Collaborators: `protocol.py` (frontmatter read), the root `Makefile` and its
   stamped twin (both reached through `make check`), `validator.yml`,
   `factory_init.py` (which calls `check_scaffold_sync` before stamping).

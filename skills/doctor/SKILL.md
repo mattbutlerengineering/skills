@@ -74,7 +74,11 @@ plugin-only, which is a legitimate install.
    does: the budgets, the code-owner handle, and the doc seeds are the
    repo's to edit, so a difference there is never drift. Say so when asked
    rather than leaving the user to wonder why a changed CODEOWNERS is
-   silent.
+   silent. Detector J is the one place a repo-owned file *is* checked, and
+   for a narrow reason worth passing on: `.github/labels.json` is theirs to
+   curate, but the tools and the Makefile's lifecycle targets name labels
+   in it, so a deletion would otherwise fail only when CI flips the label.
+   Adding labels stays free — J looks in one direction only.
 
 5. **`tests/` exists.** The stamped `check` target runs
    `python3 -m unittest discover -q tests` and errors outright without a
