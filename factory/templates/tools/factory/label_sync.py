@@ -21,6 +21,7 @@ from pathlib import Path
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import full_window, gh_json, gh_runner
+from factory_config import artifact_paths
 from knowledge_plane import repo_root
 
 LABEL_FIELDS = ("name", "color", "description")
@@ -28,15 +29,17 @@ LABEL_FIELDS = ("name", "color", "description")
 
 def load_labels(root):
     """Desired taxonomy for a repo: the installed .github/labels.json when
-    stamped, else the template payload copy. Returns (labels, problems);
-    malformed entries are excluded from labels and reported."""
+    stamped, else the template payload copy — the first existing candidate
+    in factory_config.artifact_paths' installed-first order (ADR-0048).
+    Returns (labels, problems); malformed entries are excluded from labels
+    and reported."""
     root = Path(root)
-    candidates = (root / ".github" / "labels.json",
-                  root / "factory" / "templates" / ".github" / "labels.json")
-    path = next((p for p in candidates if p.is_file()), None)
+    candidates = artifact_paths(root, "labels.json")
+    path = next((p for p, _ in candidates if p.is_file()), None)
     if path is None:
-        return [], ["L: missing labels.json (.github/labels.json or"
-                    " factory/templates/.github/labels.json)"]
+        homes = " or ".join(
+            p.relative_to(root).as_posix() for p, _ in candidates)
+        return [], [f"L: missing labels.json ({homes})"]
     rel = path.relative_to(root).as_posix()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))

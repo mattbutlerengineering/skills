@@ -33,7 +33,10 @@ import factory_config
 REPO_ROOT = Path(__file__).resolve().parent.parent
 AGENTS_DIR = REPO_ROOT / "factory" / "agents"
 
-ROUTES = ("mechanical", "implementation", "architecture_review")
+# The band vocabulary itself lives at the seam (factory_config.BANDS,
+# ADR-0048); this module keeps only its own name for the acceptance
+# evidence's "three routes".
+ROUTES = factory_config.BANDS
 
 
 def real_config():

@@ -25,6 +25,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import factory_config
 import gates
 
 # Root files mirrored verbatim into the payload (repo-root path -> path
@@ -69,7 +70,14 @@ MIRRORS = {
 }
 
 # Manifest rel -> install destination; anything unmapped strips "templates/".
-INSTALL_MAP = {"templates/factory.json": ".github/factory.json"}
+# Derived from the seam's installed-vs-payload grammar (ADR-0048), never a
+# second spelling of it: an artifact whose payload home already mirrors its
+# installed home (labels.json under templates/.github/) needs no entry —
+# the strip rule below installs it — so only factory.json, at the payload
+# root, maps.
+INSTALL_MAP = {payload: installed for installed, payload
+               in factory_config.ARTIFACT_HOMES.values()
+               if payload != f"templates/{installed}"}
 
 
 def install_path(rel):

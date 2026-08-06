@@ -74,8 +74,6 @@ from protocol import read_frontmatter
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
 
-CONFIG_ROUTES = ("mechanical", "implementation", "architecture_review")
-
 # ADR status vocabulary (docs/adr/README.md), as a status head plus an
 # optional free-text annotation: "accepted (shipped by ...)" is accepted.
 # Only full supersession retires a decision — "superseded in part by" and
@@ -691,9 +689,18 @@ def check_scaffold_sync(root):
 
 
 def check_config_shape(root):
-    """F: factory config must parse and every field be a valid token."""
-    candidates = [root / "factory" / "templates" / "factory.json",
-                  root / ".github" / "factory.json"]
+    """F: factory config must parse and every field be a valid token.
+
+    Every candidate home, not the first hit: the payload copy and the
+    installed copy drift independently, so F validates each one that
+    exists, where the runtime's factory_config.load reads the first. The
+    candidates are the seam's (ADR-0048); only the REPORT order stays
+    payload-first — the order F has always printed, pinned by its tests —
+    which is the inverse of the seam's installed-first read order. The
+    retained divergence is the order of report lines, never which files
+    are checked."""
+    candidates = [path for path, _ in reversed(
+        factory_config.artifact_paths(root, "factory.json"))]
     problems = []
     for path in candidates:
         if not path.is_file():
@@ -712,8 +719,9 @@ def check_config_shape(root):
         if not isinstance(budgets, dict) or sorted(budgets) != ["L", "M", "S"]:
             problems.append(f"F: {rel} budgets_usd must map exactly S, M, L")
         routing = config.get("routing")
-        if not isinstance(routing, dict) or sorted(routing) != sorted(CONFIG_ROUTES):
-            expected = ", ".join(CONFIG_ROUTES)
+        if not isinstance(routing, dict) \
+                or sorted(routing) != sorted(factory_config.BANDS):
+            expected = ", ".join(factory_config.BANDS)
             problems.append(f"F: {rel} routing must map exactly {expected}")
         problems += [f"F: {rel} {problem}"
                      for problem in factory_config.config_problems(config)]

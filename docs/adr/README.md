@@ -67,3 +67,4 @@ the canonical vocabulary.
 | [0044](0044-daily-improvement-routine.md) | A daily routine drives the factory's improvement loop | accepted |
 | [0045](0045-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
 | [0046](0046-tools-factory-symmetry-deferred.md) | tools/factory root symmetry deferred — flat root is load-bearing | accepted |
+| [0048](0048-artifact-path-grammar-joins-factory-config.md) | The installed-vs-payload path grammar joins factory_config | accepted |
