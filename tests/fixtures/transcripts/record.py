@@ -37,7 +37,7 @@ RUN_ID = "pinned01"
 
 
 def record(name, query):
-    descriptions = load_descriptions(ROOT / "skills")
+    descriptions = load_descriptions(ROOT)
     name_to_slug = {f"{slug}-skill-{RUN_ID}": slug for slug in descriptions}
     # model=None, isolate=True: the same invocation the eval runner uses
     # (and provenance.json records below)

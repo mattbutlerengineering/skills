@@ -36,23 +36,25 @@ from pathlib import Path
 
 import cli
 import eval_schema
+import protocol
 from protocol import ALL_SKILLS, read_frontmatter
 
 ROOT = Path(__file__).resolve().parent
 
 
-def load_descriptions(skills_dir):
-    """Parse every skill's frontmatter description. Fails loudly on gaps."""
-    descriptions = {}
-    for slug in ALL_SKILLS:
-        path = skills_dir / slug / "SKILL.md"
-        fields = read_frontmatter(path)
-        if fields is None:
-            raise ValueError(f"{path} has no frontmatter block")
-        if not fields.get("description"):
-            raise ValueError(f"{path} frontmatter has no description")
-        descriptions[slug] = fields["description"]
-    return descriptions
+def load_descriptions(root):
+    """Parse every skill's frontmatter description under a plugin root.
+
+    Fails loudly on gaps with lint's exact strings —
+    protocol.skill_frontmatter_problems is the one frontmatter contract
+    (ADR-0052), so a description over Pi's 1024-char limit refuses to
+    eval just as it refuses to lint."""
+    problems = [p for slug in ALL_SKILLS
+                for p in protocol.skill_frontmatter_problems(root, slug)]
+    if problems:
+        raise ValueError("; ".join(problems))
+    return {slug: read_frontmatter(protocol.skill_path(root, slug))
+            ["description"] for slug in ALL_SKILLS}
 
 
 def build_project_dir(descriptions, run_id):
@@ -411,7 +413,9 @@ def main():
                         default="claude",
                         help="which CLI drives the queries (ADR-0031)")
     parser.add_argument("--eval-set", default=str(ROOT / "evals" / "routing.json"))
-    parser.add_argument("--skills-dir", default=str(ROOT / "skills"))
+    parser.add_argument("--skills-root", default=str(ROOT),
+                        help="plugin root; skill descriptions are read "
+                             "from <skills-root>/skills")
     parser.add_argument("--num-workers", type=int, default=10)
     parser.add_argument("--timeout", type=int, default=30,
                         help="seconds per claude -p run")
@@ -444,7 +448,7 @@ def main():
                   file=sys.stderr)
             return 1
 
-    descriptions = load_descriptions(Path(args.skills_dir))
+    descriptions = load_descriptions(Path(args.skills_root))
     isolate = not args.no_isolate_settings
 
     output = {

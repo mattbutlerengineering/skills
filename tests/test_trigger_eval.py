@@ -10,12 +10,14 @@ the cli seam (tests/test_cli.py) and the record()/collision pin at
 tests/test_trigger_scoring.py.
 """
 import contextlib
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import cli
+import protocol
 import trigger_eval
 
 
@@ -78,6 +80,39 @@ class TestRunSingleQueryCleanup(unittest.TestCase):
         self.assertEqual(seen["cwd"], created[0])
         self.assertIn("q", seen["cmd"])
         self.assertEqual([p for p in created if p.exists()], [])
+
+
+class TestLoadDescriptions(unittest.TestCase):
+    """load_descriptions shares lint's frontmatter contract
+    (protocol.skill_frontmatter_problems, ADR-0052). The pinned
+    divergence: an overlong description used to pass eval but fail
+    lint — now both refuse it with the same string."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="eval-skills-"))
+        self.addCleanup(shutil.rmtree, self.root)
+        for slug in protocol.ALL_SKILLS:
+            self.seed(slug, f"---\nname: {slug}\ndescription: d({slug})\n"
+                            "---\n\nbody\n")
+
+    def seed(self, slug, text):
+        skill_dir = self.root / "skills" / slug
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text(text, encoding="utf-8")
+
+    def test_conformant_tree_yields_every_description(self):
+        descriptions = trigger_eval.load_descriptions(self.root)
+        self.assertEqual(sorted(descriptions), sorted(protocol.ALL_SKILLS))
+        self.assertEqual(descriptions["idea"], "d(idea)")
+
+    def test_overlong_description_fails_loudly_with_lints_string(self):
+        overlong = "x" * (protocol.SKILL_DESCRIPTION_LIMIT + 1)
+        self.seed("idea",
+                  f"---\nname: idea\ndescription: {overlong}\n---\n\nbody\n")
+        with self.assertRaises(ValueError) as ctx:
+            trigger_eval.load_descriptions(self.root)
+        self.assertIn("skills/idea/SKILL.md description exceeds Pi's "
+                      "1024-char limit", str(ctx.exception))
 
 
 if __name__ == "__main__":

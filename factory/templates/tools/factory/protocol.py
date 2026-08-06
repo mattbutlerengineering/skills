@@ -3,7 +3,8 @@
 docs/pipeline-protocol.md is the spec; this module is its one
 implementation. It owns the stage/skill taxonomy, the artifact tables
 (product/feature and maintenance, ADR-0025), artifact-frontmatter
-reading, the UX conditional, the re-entry conditional, the checkbox
+reading, the skill-file contract (path shape and frontmatter rules,
+ADR-0052), the UX conditional, the re-entry conditional, the checkbox
 rule, the retro short-circuit, and next-stage derivation (ADR-0021).
 Tools — the orientation CLI, the structural lint, the trigger-eval
 runner — are thin callers.
@@ -101,6 +102,43 @@ def read_frontmatter(path):
     if key is not None and block_lines is not None:
         fields[key] = "\n".join(block_lines).rstrip("\n")
     return fields
+
+
+# Pi (oh-my-pi) caps a skill description at 1024 chars; a longer one
+# loads on Claude but silently drops the skill on omp (ADR-0027).
+SKILL_DESCRIPTION_LIMIT = 1024
+
+
+def skill_path(root, slug):
+    """skills/<slug>/SKILL.md under a plugin root — the one place the
+    skill-file path shape lives (ADR-0052)."""
+    return Path(root) / "skills" / slug / "SKILL.md"
+
+
+def skill_frontmatter_problems(root, slug):
+    """Problem strings for one skill's SKILL.md frontmatter — the single
+    error contract behind lint's skill checker and the trigger-eval
+    loader (ADR-0052): the file exists, has a frontmatter block, its
+    name matches the slug, and its description is present and within
+    Pi's limit. [] when conformant."""
+    path = skill_path(root, slug)
+    label = f"skills/{slug}/SKILL.md"
+    if not path.is_file():
+        return [f"missing {label}"]
+    fields = read_frontmatter(path)
+    if fields is None:
+        return [f"{label} has no frontmatter block"]
+    return (
+        ([f"{label} frontmatter name is {fields.get('name')!r}, "
+          f"expected {slug!r}"]
+         if fields.get("name") != slug else [])
+        + ([f"{label} frontmatter has no description"]
+           if not fields.get("description") else [])
+        + ([f"{label} description exceeds Pi's "
+            f"{SKILL_DESCRIPTION_LIMIT}-char limit"]
+           if fields.get("description")
+           and len(fields["description"]) > SKILL_DESCRIPTION_LIMIT else [])
+    )
 
 
 def _ux_skipped(run_dir):

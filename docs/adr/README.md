@@ -41,7 +41,7 @@ the canonical vocabulary.
 | [0018](0018-git-bootstrap.md) | Git bootstrap | accepted |
 | [0019](0019-trigger-and-output-evals.md) | Evals: routing discrimination + on-demand output grading | accepted |
 | [0020](0020-hybrid-recall-policy.md) | Hybrid recall policy for skill descriptions | accepted |
-| [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | accepted |
+| [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | amended by ADR-0052 |
 | [0022](0022-eval-schema-module.md) | One eval-schema module beside the protocol module | accepted |
 | [0023](0023-utility-skills.md) | Utility skills alongside stage skills and the router | provisional |
 | [0024](0024-eval-schema-charter.md) | eval_schema's charter covers all eval knowledge, not one file's schema | provisional |
@@ -71,3 +71,4 @@ the canonical vocabulary.
 | [0048](0048-artifact-path-grammar-joins-factory-config.md) | The installed-vs-payload path grammar joins factory_config | accepted |
 | [0049](0049-row-identity-joins-the-cost-ledger.md) | The row identity joins the cost ledger | accepted |
 | [0050](0050-mirrors-carry-a-transform.md) | MIRRORS carries a transform: one authority per payload file | accepted |
+| [0052](0052-skill-file-contract-joins-the-protocol-seam.md) | The skill-file contract joins the protocol seam; lint pins the recitals | accepted |

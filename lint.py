@@ -16,7 +16,7 @@ from pathlib import Path
 import eval_schema
 import protocol
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
-                      TEMPLATED_STAGES, read_frontmatter)
+                      TEMPLATED_STAGES)
 
 
 def check_manifest(root):
@@ -71,24 +71,11 @@ def extra_skills(root):
 
 
 def check_skills(root):
+    """Frontmatter contract per skill: protocol.skill_frontmatter_problems
+    owns the rules and the strings (ADR-0052); this checker keeps the
+    taxonomy walk."""
     def problems_for(slug):
-        skill = root / "skills" / slug / "SKILL.md"
-        if not skill.is_file():
-            return [f"missing skills/{slug}/SKILL.md"]
-        fm = read_frontmatter(skill)
-        if fm is None:
-            return [f"skills/{slug}/SKILL.md has no frontmatter block"]
-        return (
-            ([f"skills/{slug}/SKILL.md frontmatter name is "
-              f"{fm.get('name')!r}, expected {slug!r}"]
-             if fm.get("name") != slug else [])
-            + ([f"skills/{slug}/SKILL.md frontmatter has no description"]
-               if not fm.get("description") else [])
-            + ([f"skills/{slug}/SKILL.md description exceeds Pi's "
-                "1024-char limit"]
-               if fm.get("description")
-               and len(fm["description"]) > 1024 else [])
-        )
+        return protocol.skill_frontmatter_problems(root, slug)
     # An unregistered dir is itself a problem: taxonomy membership is what
     # subjects a skill to the routing-coverage policy (ADR-0023). Its
     # frontmatter is still checked so both defects surface in one run.
@@ -99,6 +86,137 @@ def check_skills(root):
     ]
 
 
+# The recital vocabulary check_skill_recitals is strict about (ADR-0052):
+# a numbered process step, a backticked artifact filename inside one, and
+# a "next stage is <stage>" claim (stage names read hyphens as spaces,
+# and phrases may wrap across lines).
+STEP_LINE = re.compile(r"^\d+\.\s")
+GATE_ARTIFACT = re.compile(r"`([a-z0-9._-]+\.md)`")
+
+
+def _numbered_steps(text):
+    """The `N. ` process steps of a skill body; a step runs to the next
+    numbered step or heading."""
+    steps, current = [], None
+    for line in text.splitlines():
+        if STEP_LINE.match(line):
+            if current is not None:
+                steps.append("\n".join(current))
+            current = [line]
+        elif line.startswith("#"):
+            if current is not None:
+                steps.append("\n".join(current))
+            current = None
+        elif current is not None:
+            current.append(line)
+    if current is not None:
+        steps.append("\n".join(current))
+    return steps
+
+
+def _next_stage_claims(text):
+    """Every stage a 'next stage is <stage>' phrase in the body names."""
+    normalized = re.sub(r"[-\s]+", " ", text.lower())
+    return [slug for slug in STAGES + MAINTENANCE_STAGES
+            if re.search(rf"next stage is {slug.replace('-', ' ')}\b",
+                         normalized)]
+
+
+def _gate_problems(label, text, expected, upstream, spine_artifacts):
+    """The soft-gate step names every expected predecessor artifact and
+    no stage artifact from further down the pipeline."""
+    steps = [s for s in _numbered_steps(text) if "soft gate" in s.lower()]
+    if not steps:
+        return [f"{label} has no soft-gate step"]
+    named = {a for step in steps for a in GATE_ARTIFACT.findall(step)}
+    return ([f"{label} soft gate never names predecessor artifact {a!r}"
+             for a in sorted(expected - named)]
+            + [f"{label} soft gate names downstream artifact {a!r}"
+               for a in sorted(named & (spine_artifacts - upstream))])
+
+
+def _hand_off_problems(label, slug, text, successor, skip_target):
+    """Every 'next stage is <stage>' claim names the table successor; the
+    stage before the conditional UX stage also names the skip target."""
+    claims = _next_stage_claims(text)
+    if successor is None:
+        return [f"{label} states next stage {claim!r}, "
+                f"but {slug!r} completes the run" for claim in claims]
+    problems = ([f"{label} never states next stage {successor!r}"]
+                if successor not in claims else [])
+    problems += [f"{label} states next stage {claim!r}, "
+                 f"expected {successor!r}"
+                 for claim in claims if claim != successor]
+    if skip_target and not re.search(
+            rf"\b{skip_target}\b", re.sub(r"[-\s]+", " ", text.lower())):
+        problems.append(f"{label} never names the ux-skip target "
+                        f"{skip_target!r}")
+    return problems
+
+
+def _capture_problems(label, text):
+    """Capture's hand-off is the re-entry conditional: both recorded
+    frontmatter options must be recited, and any 'next stage is' claim
+    must be one of the re-entry stages."""
+    lowered = text.lower()
+    problems = [f"{label} never records re-entry option {option!r}"
+                for option in ("re-entry: implement", "re-entry: architect")
+                if option not in lowered]
+    return problems + [
+        f"{label} states next stage {claim!r}, expected re-entry to "
+        "'implement' or 'architect'"
+        for claim in _next_stage_claims(text)
+        if claim not in ("implement", "architect")]
+
+
+def check_skill_recitals(root):
+    """Stage-skill prose recites the protocol — soft-gate predecessor,
+    own artifact, hand-off successor. Vended skills can't import
+    protocol.py (ADR-0008), so the copies are forced; this checker pins
+    them to STAGE_ARTIFACTS / MAINTENANCE_STAGE_ARTIFACTS so drift is
+    loud (ADR-0052). Robust to phrasing, strict on the facts: artifact
+    filenames and stage names."""
+    spine = [stage for stage, _ in protocol.STAGE_ARTIFACTS]
+    artifact = dict(protocol.STAGE_ARTIFACTS
+                    + protocol.MAINTENANCE_STAGE_ARTIFACTS)
+    spine_artifacts = {a for _, a in protocol.STAGE_ARTIFACTS}
+    problems = []
+    for i, slug in enumerate(spine):
+        path = protocol.skill_path(root, slug)
+        if not path.is_file():
+            continue  # absence already reported by check_skills
+        text = path.read_text(encoding="utf-8")
+        label = f"skills/{slug}/SKILL.md"
+        if i > 0:
+            # the conditional UX stage gates on its own artifact OR the
+            # one before it (ADR-0017), so its successor's gate must
+            # recite both
+            expected = {artifact[spine[i - 1]]}
+            if spine[i - 1] == "ux-design":
+                expected.add(artifact[spine[i - 2]])
+            upstream = {artifact[s] for s in spine[:i]}
+            problems += _gate_problems(label, text, expected, upstream,
+                                       spine_artifacts)
+        if f"`{artifact[slug]}`" not in text:
+            problems.append(f"{label} never names its artifact "
+                            f"{artifact[slug]!r}")
+        successor = spine[i + 1] if i + 1 < len(spine) else None
+        skip_target = spine[i + 2] if successor == "ux-design" else None
+        problems += _hand_off_problems(label, slug, text, successor,
+                                       skip_target)
+    for slug in MAINTENANCE_STAGES:  # entry stages: no soft gate to pin
+        path = protocol.skill_path(root, slug)
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        label = f"skills/{slug}/SKILL.md"
+        if f"`{artifact[slug]}`" not in text:
+            problems.append(f"{label} never names its artifact "
+                            f"{artifact[slug]!r}")
+        problems += _capture_problems(label, text)
+    return problems
+
+
 def check_templates(root):
     return [f"missing skills/{slug}/TEMPLATE.md"
             for slug in TEMPLATED_STAGES
@@ -106,7 +224,7 @@ def check_templates(root):
 
 
 def check_router(root):
-    router = root / "skills" / "next" / "SKILL.md"
+    router = protocol.skill_path(root, "next")
     if not router.is_file():
         return []  # absence already reported by check_skills
     text = router.read_text(encoding="utf-8")
@@ -199,8 +317,9 @@ def check_ledger_links(root):
     )
 
 
-CHECKERS = (check_manifest, check_pi_package, check_skills, check_templates,
-            check_router, check_protocol, check_backlog, check_evals,
+CHECKERS = (check_manifest, check_pi_package, check_skills,
+            check_skill_recitals, check_templates, check_router,
+            check_protocol, check_backlog, check_evals,
             check_output_evals, check_ledger, check_ledger_links)
 
 

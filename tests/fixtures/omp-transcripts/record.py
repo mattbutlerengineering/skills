@@ -41,7 +41,7 @@ MODEL = "claude-sonnet-5"
 
 
 def record(name, query):
-    descriptions = load_descriptions(ROOT / "skills")
+    descriptions = load_descriptions(ROOT)
     name_to_slug = {f"{slug}-skill-{RUN_ID}": slug for slug in descriptions}
     # isolate is claude-only (omp isolation is always on); MODEL pins the
     # model the same way the invocation's --model flag does for the runner

@@ -1,6 +1,6 @@
 # One shared protocol module alongside standalone scripts
 
-- Status: accepted
+- Status: amended by ADR-0052
 - Date: 2026-07-01
 
 The repo's tools have been standalone stdlib-Python scripts, each carrying
