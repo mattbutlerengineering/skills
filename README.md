@@ -55,6 +55,11 @@ Fallbacks: omp inherits `.claude` skills on first run, or copy `skills/*` into
 Every skill works on a bare install of either harness — no third-party tools,
 MCP servers, or other plugins required.
 
+That is the whole setup for the skills. To also stamp the factory into a repo
+— offline gates, dispatch workflows, cost ledger — and confirm the install
+works end to end, follow [`docs/setup.md`](docs/setup.md). `/doctor` checks it
+mechanically, at whichever tier the repo has reached.
+
 ## Usage
 
 Two ways in:
