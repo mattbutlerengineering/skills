@@ -52,6 +52,8 @@ EXPECTED_RELS = {
     "templates/tools/factory/gate_digest.py",
 }
 
+SEEDED_ADRS = REPO_ROOT / "factory" / "templates" / "docs" / "adr"
+
 # Hand-maintained map: the expected install destination for every
 # manifested rel, in target-relative form.
 EXPECTED_INSTALLS = {
@@ -335,6 +337,52 @@ class TestStamp(unittest.TestCase):
             self.assertEqual((target / "Makefile").read_text(
                 encoding="utf-8"), "pre-existing\n")
             self.assertEqual(all_files(target), ["Makefile"])
+
+
+class TestSeededADRs(unittest.TestCase):
+    """The ADR seed a stamped repo inherits (issue #199). The acceptance
+    test below proves the whole payload passes the stamped detectors; these
+    name the specific rules, so a broken seed fails by its own reason rather
+    than as an opaque "gates failed in stamped repo"."""
+
+    def numbered(self):
+        return sorted(SEEDED_ADRS.glob("[0-9][0-9][0-9][0-9]-*.md"))
+
+    def test_the_seed_ships(self):
+        # Deleting the seed would leave the acceptance test green — an empty
+        # docs/adr passes every detector.
+        self.assertTrue((SEEDED_ADRS / "README.md").is_file())
+        self.assertTrue((SEEDED_ADRS / "TEMPLATE.md").is_file())
+        self.assertTrue(self.numbered(), "no seeded ADRs")
+
+    def test_every_seeded_adr_has_a_valid_status(self):
+        for path in self.numbered():
+            _, text = gates._adr_status(path)
+            self.assertIsNotNone(text, f"{path.name} has no Status line")
+            self.assertRegex(text, gates.ADR_STATUS,
+                             f"{path.name} status {text!r}")
+
+    def test_every_seeded_adr_is_indexed(self):
+        index = (SEEDED_ADRS / "README.md").read_text(encoding="utf-8")
+        rows = {match.group("num") for match in
+                (gates.ADR_INDEX_ROW.match(line)
+                 for line in index.splitlines()) if match}
+        self.assertEqual({path.name[:4] for path in self.numbered()}, rows)
+
+    def test_no_seeded_token_points_outside_the_seed(self):
+        # The trap this seed is most likely to fall into: citing an upstream
+        # idea-to-prod ADR by bare token. In a stamped repo that file does
+        # not exist, so detector C reads it as a dangling local citation and
+        # the repo's first `make check` fails on documentation it was handed.
+        local = {path.name[:4] for path in self.numbered()}
+        for path in [*self.numbered(), SEEDED_ADRS / "README.md",
+                     SEEDED_ADRS / "TEMPLATE.md"]:
+            for number in gates.ADR_TOKEN.findall(
+                    path.read_text(encoding="utf-8")):
+                self.assertIn(number, local,
+                              f"{path.name} cites ADR-{number}, which is not"
+                              " in the seed — cite upstream decisions by name"
+                              " or link, never by bare token")
 
 
 class TestAcceptanceStampRealRepo(unittest.TestCase):
