@@ -761,108 +761,111 @@ class TestEvidenceHonesty(unittest.TestCase):
     `Status:`) creates the obligation. Unlabelled prose and heading text
     assert nothing the detector recognises — a summary may narrate, an
     author may write "Done." — so there is no roll-up excuse to purchase.
+
+    The grammar is pure text — gates.evidence_problems over
+    gates.verification_sections — so its rules are asserted here on TEXT:
+    (lineno, suffix) pairs, no fixture tree, line numbers countable in the
+    test's own literal. A handful of filesystem tests pin the detector
+    wrapper's own job: artifact discovery, the "H: {rel}:{lineno}" prefix,
+    frontmatter skipped in situ, and an unreadable artifact reported
+    rather than raised.
     """
 
     HEAD = "---\nstage: verify\nrun: feature:demo\n---\n\n# Verification\n\n"
     REL = "docs/features/demo/verification.md"
+    BACKSTOP = ("verification artifact shows neither literal evidence nor a"
+                " NOT-RUN disclaimer (evidence must be a fenced code block)")
 
     def verification(self, tmp, body):
         tree = FixtureTree(tmp)
         tree.write("docs/features/demo/verification.md", self.HEAD + body)
         return tree
 
-    def bare(self, title, verdict):
-        return (f'H: {self.REL}:%d criterion "{title}" asserts {verdict}'
-                " with neither literal evidence nor a NOT-RUN disclaimer"
-                " (evidence must be a fenced code block in this section)")
+    def claim(self, title, verdict):
+        """The suffix evidence_problems emits for an unevidenced claim."""
+        return (f'criterion "{title}" asserts {verdict} with neither literal'
+                " evidence nor a NOT-RUN disclaimer (evidence must be a"
+                " fenced code block in this section)")
 
     # ---- the rule, in both directions ---------------------------------
 
     def test_criterion_with_literal_output_is_silent(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Criteria & evidence\n\n"
-                "### Suite is green\n\n"
-                "- Check: `python3 -m unittest discover tests`\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  Ran 212 tests in 4.0s\n\n"
-                "  OK\n"
-                "  ```\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "## Criteria & evidence\n\n"
+            "### Suite is green\n\n"
+            "- Check: `python3 -m unittest discover tests`\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  Ran 212 tests in 4.0s\n\n"
+            "  OK\n"
+            "  ```\n"
+            "- Result: PASS\n"), [])
 
     def test_criterion_with_not_run_disclaimer_is_silent(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Non-owner dispatch does not fire\n\n"
-                "- Check: NOT RUN — needs a second GitHub account.\n"
-                "- Result: NOT VERIFIED\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "### Non-owner dispatch does not fire\n\n"
+            "- Check: NOT RUN — needs a second GitHub account.\n"
+            "- Result: NOT VERIFIED\n"), [])
 
     def test_asserted_but_unevidenced_criterion_is_flagged(self):
+        """Filesystem: pins the detector wrapper's output — the H: label and
+        the rel:lineno prefix around the grammar's suffix (HEAD is 7 lines,
+        so the body's line 4 lands on line 11)."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.verification(tmp, (
                 "### Suite is green\n\n"
                 "- Check: ran the tests, everything looks correct.\n"
                 "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Suite is green", "PASS") % 11])
+            self.assertEqual(gates.check_evidence_honesty(tree.root), [
+                f"H: {self.REL}:11 " + self.claim("Suite is green", "PASS")])
 
     def test_relabelled_verdict_lines_still_engage_the_rule(self):
         """`Verdict:` / `Outcome:` / `Status:` assert exactly what `Result:`
         asserts; renaming the label must not buy the criterion out."""
         for label in ("Verdict", "Outcome", "Status", "result"):
-            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
-                tree = self.verification(tmp, (
+            with self.subTest(label=label):
+                self.assertEqual(gates.evidence_problems(
                     "### Dispatch fires\n\n"
                     "- Check: eyeballed the run.\n"
-                    f"- {label}: PASS\n"))
-                self.assertEqual(gates.check_evidence_honesty(tree.root),
-                                 [self.bare("Dispatch fires", "PASS") % 11])
+                    f"- {label}: PASS\n"),
+                    [(4, self.claim("Dispatch fires", "PASS"))])
 
     def test_evidence_does_not_leak_across_criteria(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Evidenced\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  OK\n"
-                "  ```\n"
-                "- Result: PASS\n\n"
-                "### Bare\n\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Bare", "PASS") % 18])
+        self.assertEqual(gates.evidence_problems(
+            "### Evidenced\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  OK\n"
+            "  ```\n"
+            "- Result: PASS\n\n"
+            "### Bare\n\n"
+            "- Result: PASS\n"),
+            [(11, self.claim("Bare", "PASS"))])
 
     def test_appendix_fence_does_not_vouch_for_other_criteria(self):
         """Evidence is section-scoped: a throwaway fence in an appendix
         vouches for nothing three headings away."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Dispatch fires\n\n"
-                "- Result: PASS\n\n"
-                "### Budget guard holds\n\n"
-                "- Verdict: PASS\n\n"
-                "## Appendix: branch log\n\n"
-                "```\n"
-                "git log --oneline -3\n"
-                "```\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                self.bare("Dispatch fires", "PASS") % 10,
-                self.bare("Budget guard holds", "PASS") % 14])
+        self.assertEqual(gates.evidence_problems(
+            "### Dispatch fires\n\n"
+            "- Result: PASS\n\n"
+            "### Budget guard holds\n\n"
+            "- Verdict: PASS\n\n"
+            "## Appendix: branch log\n\n"
+            "```\n"
+            "git log --oneline -3\n"
+            "```\n"),
+            [(3, self.claim("Dispatch fires", "PASS")),
+             (7, self.claim("Budget guard holds", "PASS"))])
 
     def test_scoped_hedge_is_not_a_not_run_disclaimer(self):
         """"not tested on Windows" concedes the check DID run. A scoped
         hedge is partial coverage, not a disclosure."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Suite is green\n\n"
-                "- Check: ran the suite.\n"
-                "- Result: PASS\n"
-                "- Caveat: not tested on Windows.\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Suite is green", "PASS") % 11])
+        self.assertEqual(gates.evidence_problems(
+            "### Suite is green\n\n"
+            "- Check: ran the suite.\n"
+            "- Result: PASS\n"
+            "- Caveat: not tested on Windows.\n"),
+            [(4, self.claim("Suite is green", "PASS"))])
 
     def test_body_not_run_note_does_not_excuse_an_asserted_claim(self):
         """A section that CLAIMS PASS and mentions in passing that something
@@ -871,55 +874,47 @@ class TestEvidenceHonesty(unittest.TestCase):
         path was not run)" was a two-word licence to fabricate any verdict —
         a bypass that survived attempts 1 and 2. The disclosure has to BE the
         verdict, not sit next to it."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Suite is green\n\n"
-                "- Check: ran it.\n"
-                "- Result: PASS\n"
-                "- Note: the browser matrix was not run.\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Suite is green", "PASS") % 11])
+        self.assertEqual(gates.evidence_problems(
+            "### Suite is green\n\n"
+            "- Check: ran it.\n"
+            "- Result: PASS\n"
+            "- Note: the browser matrix was not run.\n"),
+            [(4, self.claim("Suite is green", "PASS"))])
 
     def test_a_verdict_that_makes_no_claim_needs_no_evidence(self):
         """The other side of that line: a verdict which claims nothing —
         NOT VERIFIED, SKIPPED, N/A — IS the disclosure, and owes no output."""
         for verdict in ("NOT VERIFIED", "NOT RUN", "SKIPPED", "N/A"):
-            with self.subTest(verdict=verdict), \
-                    tempfile.TemporaryDirectory() as tmp:
-                tree = self.verification(tmp, (
+            with self.subTest(verdict=verdict):
+                self.assertEqual(gates.evidence_problems(
                     "### Cap breach pauses the factory\n\n"
                     "- Check: needs a month of real cost data.\n"
-                    f"- Result: {verdict}\n"))
-                self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+                    f"- Result: {verdict}\n"), [])
 
     def test_a_claim_beside_a_disclosure_still_owes_evidence(self):
         """Declaring one criterion NOT RUN does not buy the section's other,
         affirmative verdict out of showing its output."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Cap breach\n\n"
-                "- Result: NOT VERIFIED\n"
-                "- Verdict: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Cap breach", "PASS") % 11])
+        self.assertEqual(gates.evidence_problems(
+            "### Cap breach\n\n"
+            "- Result: NOT VERIFIED\n"
+            "- Verdict: PASS\n"),
+            [(4, self.claim("Cap breach", "PASS"))])
 
     def test_empty_and_placeholder_fences_are_not_evidence(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Empty fence\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  ```\n"
-                "- Result: PASS\n\n"
-                "### Unfilled template\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  <actual output — quoted, not summarized>\n"
-                "  ```\n"
-                "- Result: PASS | FAIL\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                self.bare("Empty fence", "PASS") % 13,
-                self.bare("Unfilled template", "PASS | FAIL") % 21])
+        self.assertEqual(gates.evidence_problems(
+            "### Empty fence\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  ```\n"
+            "- Result: PASS\n\n"
+            "### Unfilled template\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  <actual output — quoted, not summarized>\n"
+            "  ```\n"
+            "- Result: PASS | FAIL\n"),
+            [(6, self.claim("Empty fence", "PASS")),
+             (14, self.claim("Unfilled template", "PASS | FAIL"))])
 
     # ---- bypasses that attempts 1 and 2 left open ----------------------
 
@@ -929,23 +924,19 @@ class TestEvidenceHonesty(unittest.TestCase):
         manufactured an artifact-wide excuse, so a 100%-fabricated,
         template-shaped artifact with ZERO command output passed silently.
         A disclosure is what the author WRITES, never the slot label."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Summary\n\n"
-                "6/6 criteria pass. Verdict: ship it.\n\n"
-                "## Criteria & evidence\n\n"
-                "### Test suite\n\n"
-                "- Check: ran the full suite; everything passed comfortably.\n\n"
-                "### Dispatch\n\n"
-                "- Check: watched the workflow run to completion.\n\n"
-                "## Failures\n\n"
-                "None.\n\n"
-                "## Not verified\n\n"
-                "Nothing; everything was checked.\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                f"H: {self.REL}:1 verification artifact shows neither literal"
-                " evidence nor a NOT-RUN disclaimer (evidence must be a"
-                " fenced code block)"])
+        self.assertEqual(gates.evidence_problems(
+            "## Summary\n\n"
+            "6/6 criteria pass. Verdict: ship it.\n\n"
+            "## Criteria & evidence\n\n"
+            "### Test suite\n\n"
+            "- Check: ran the full suite; everything passed comfortably.\n\n"
+            "### Dispatch\n\n"
+            "- Check: watched the workflow run to completion.\n\n"
+            "## Failures\n\n"
+            "None.\n\n"
+            "## Not verified\n\n"
+            "Nothing; everything was checked.\n"),
+            [(1, self.BACKSTOP)])
 
     def test_renaming_the_lying_section_does_not_excuse_it(self):
         """BYPASS 2. The roll-up excuse was keyed on heading NAME, so calling
@@ -954,51 +945,45 @@ class TestEvidenceHonesty(unittest.TestCase):
         evidence wherever it is written."""
         for name in ("Summary", "Results", "Conclusion", "Overview",
                      "Verdict"):
-            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
-                tree = self.verification(tmp, (
+            with self.subTest(name=name):
+                self.assertEqual(gates.evidence_problems(
                     f"## {name}\n\n"
                     "- Result: 6/6 criteria PASS\n"
                     "- Verdict: ship it\n\n"
                     "## Not verified\n\n"
-                    "Nothing; everything was checked.\n"))
-                self.assertEqual(
-                    gates.check_evidence_honesty(tree.root),
-                    [self.bare(name, "6/6 criteria PASS") % 10])
+                    "Nothing; everything was checked.\n"),
+                    [(3, self.claim(name, "6/6 criteria PASS"))])
 
     def test_one_honest_leaf_does_not_launder_a_lying_rollup(self):
         """BYPASS 3. The excuse asked only whether the artifact's leaves were
         evidenced — never whether the roll-up narrated THOSE criteria — so a
         single throwaway leaf (a fence holding one dot) laundered a roll-up
         making every real claim."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Grammar parses\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  .\n"
-                "  ```\n"
-                "- Result: PASS\n\n"
-                "## Results\n\n"
-                "- Result: all 6 PRD criteria PASS\n"
-                "- Verdict: ship it\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Results", "all 6 PRD criteria PASS")
-                              % 18])
+        self.assertEqual(gates.evidence_problems(
+            "### Grammar parses\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  .\n"
+            "  ```\n"
+            "- Result: PASS\n\n"
+            "## Results\n\n"
+            "- Result: all 6 PRD criteria PASS\n"
+            "- Verdict: ship it\n"),
+            [(11, self.claim("Results", "all 6 PRD criteria PASS"))])
 
     def test_a_hedge_appended_to_a_claim_does_not_disarm_it(self):
         """BYPASS 5. Reading the NOT-RUN token as a SUBSTRING of the verdict
         let a claim buy itself out by appending a hedge: "PASS ... (soak test
         not run)" asserted PASS and showed nothing, in silence. A verdict is
         a disclosure only when the WHOLE value is one."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Criterion 1 - payment capture\n\n"
-                "- Result: PASS - every acceptance criterion met, full suite"
-                " green (soak test not run).\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                self.bare("Criterion 1 - payment capture",
-                          "PASS - every acceptance criterion met, full suite"
-                          " green (soak test not run).") % 10])
+        self.assertEqual(gates.evidence_problems(
+            "## Criterion 1 - payment capture\n\n"
+            "- Result: PASS - every acceptance criterion met, full suite"
+            " green (soak test not run).\n"),
+            [(3, self.claim(
+                "Criterion 1 - payment capture",
+                "PASS - every acceptance criterion met, full suite green"
+                " (soak test not run)."))])
 
     def test_a_disclosure_may_give_its_reason(self):
         """The other side of anchoring it: an honest disclosure names why the
@@ -1008,12 +993,10 @@ class TestEvidenceHonesty(unittest.TestCase):
                         "N/A — no payment provider in this environment",
                         "SKIPPED: covered by the nightly soak",
                         "**NOT RUN**"):
-            with self.subTest(verdict=verdict), \
-                    tempfile.TemporaryDirectory() as tmp:
-                tree = self.verification(tmp, (
+            with self.subTest(verdict=verdict):
+                self.assertEqual(gates.evidence_problems(
                     "### Soak test\n\n"
-                    f"- Result: {verdict}\n"))
-                self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+                    f"- Result: {verdict}\n"), [])
 
     def test_verdict_labels_beyond_the_original_four_engage_the_rule(self):
         """BYPASS 6. The label whitelist (Result/Verdict/Outcome/Status) was
@@ -1022,35 +1005,32 @@ class TestEvidenceHonesty(unittest.TestCase):
         for label in ("Conclusion", "Assessment", "Finding", "Determination",
                       "Evaluation", "Judgement", "Judgment", "Disposition",
                       "Decision", "Ruling", "Appraisal"):
-            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
-                tree = self.verification(tmp, (
+            with self.subTest(label=label):
+                self.assertEqual(gates.evidence_problems(
                     "### Payments capture\n\n"
                     "- Check: eyeballed the dashboard.\n"
-                    f"- {label}: PASS\n"))
-                self.assertEqual(gates.check_evidence_honesty(tree.root),
-                                 [self.bare("Payments capture", "PASS") % 11])
+                    f"- {label}: PASS\n"),
+                    [(4, self.claim("Payments capture", "PASS"))])
 
     def test_one_honest_fence_does_not_launder_relabelled_lies(self):
         """BYPASS 6, as reported: one real fence (lint) satisfied the
         artifact-wide backstop, and the two fabricated criteria beside it used
         labels outside the whitelist, so the whole artifact passed silently.
         Each lying section now owes evidence in its own right."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Criterion 0 - lint\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  lint: 0 problem(s)\n"
-                "  ```\n\n"
-                "## Criterion 1 - payments\n\n"
-                "- Conclusion: PASS. All 12 criteria met, full suite green.\n\n"
-                "## Criterion 2 - retries\n\n"
-                "- Assessment: works correctly under load. Ship it.\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                self.bare("Criterion 1 - payments",
-                          "PASS. All 12 criteria met, full suite green.") % 17,
-                self.bare("Criterion 2 - retries",
-                          "works correctly under load. Ship it.") % 21])
+        self.assertEqual(gates.evidence_problems(
+            "## Criterion 0 - lint\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  lint: 0 problem(s)\n"
+            "  ```\n\n"
+            "## Criterion 1 - payments\n\n"
+            "- Conclusion: PASS. All 12 criteria met, full suite green.\n\n"
+            "## Criterion 2 - retries\n\n"
+            "- Assessment: works correctly under load. Ship it.\n"),
+            [(10, self.claim("Criterion 1 - payments",
+                             "PASS. All 12 criteria met, full suite green.")),
+             (14, self.claim("Criterion 2 - retries",
+                             "works correctly under load. Ship it."))])
 
     def test_frontmatter_fields_are_not_verdicts(self):
         """BYPASS 6, sibling finding. YAML frontmatter is metadata, not the
@@ -1076,17 +1056,12 @@ class TestEvidenceHonesty(unittest.TestCase):
         frontmatter carries `status:` had a `results` entry, so the
         artifact-wide backstop never ran and the artifact passed with zero
         evidence."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write("docs/features/demo/verification.md", (
-                "---\nstage: verify\nstatus: done\nrun: feature:demo\n---\n\n"
-                "# Verification\n\n"
-                "## Summary\n\n"
-                "Everything works; all criteria are comfortably met.\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                f"H: {self.REL}:1 verification artifact shows neither literal"
-                " evidence nor a NOT-RUN disclaimer (evidence must be a"
-                " fenced code block)"])
+        self.assertEqual(gates.evidence_problems(
+            "---\nstage: verify\nstatus: done\nrun: feature:demo\n---\n\n"
+            "# Verification\n\n"
+            "## Summary\n\n"
+            "Everything works; all criteria are comfortably met.\n"),
+            [(1, self.BACKSTOP)])
 
     # ---- the fence scanner (CommonMark, not a parity toggle) -----------
 
@@ -1094,83 +1069,79 @@ class TestEvidenceHonesty(unittest.TestCase):
         """BYPASS 4a. A ```` fence quoting a ``` fence: the shorter marker is
         content, not a delimiter. The parity toggle flipped on it and lost
         the evidence, false-positiving on an author who DID paste output."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Skill doc renders\n\n"
-                "- Evidence:\n"
-                "  ````\n"
-                "  ```bash\n"
-                "  make check\n"
-                "  ```\n"
-                "  ````\n"
-                "- Result: PASS\n\n"
-                "### Router picks the model\n\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Router picks the model", "PASS") % 20])
+        self.assertEqual(gates.evidence_problems(
+            "### Skill doc renders\n\n"
+            "- Evidence:\n"
+            "  ````\n"
+            "  ```bash\n"
+            "  make check\n"
+            "  ```\n"
+            "  ````\n"
+            "- Result: PASS\n\n"
+            "### Router picks the model\n\n"
+            "- Result: PASS\n"),
+            [(13, self.claim("Router picks the model", "PASS"))])
 
     def test_backtick_fence_inside_a_tilde_block_does_not_close_it(self):
         """BYPASS 4b. A ``` line inside a ~~~ block is content — a closing
         fence must use the SAME marker. The parity toggle desynced on it and
         silently swallowed every later criterion."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Evidence quotes a snippet\n\n"
-                "- Evidence:\n"
-                "  ~~~\n"
-                "  The README starts with:\n"
-                "  ```bash\n"
-                "  make check\n"
-                "  ~~~\n"
-                "- Result: PASS\n\n"
-                "### Bare claim\n\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Bare claim", "PASS") % 20])
+        self.assertEqual(gates.evidence_problems(
+            "### Evidence quotes a snippet\n\n"
+            "- Evidence:\n"
+            "  ~~~\n"
+            "  The README starts with:\n"
+            "  ```bash\n"
+            "  make check\n"
+            "  ~~~\n"
+            "- Result: PASS\n\n"
+            "### Bare claim\n\n"
+            "- Result: PASS\n"),
+            [(13, self.claim("Bare claim", "PASS"))])
 
     def test_info_string_line_does_not_close_a_fence(self):
         """A closing fence carries NO info string, so ```bash inside a ```
         block is content (CommonMark)."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Docs quote a shell block\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  ```bash\n"
-                "  make check\n"
-                "  ```\n"
-                "- Result: PASS\n\n"
-                "### Bare claim\n\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Bare claim", "PASS") % 19])
+        self.assertEqual(gates.evidence_problems(
+            "### Docs quote a shell block\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  ```bash\n"
+            "  make check\n"
+            "  ```\n"
+            "- Result: PASS\n\n"
+            "### Bare claim\n\n"
+            "- Result: PASS\n"),
+            [(12, self.claim("Bare claim", "PASS"))])
 
     def test_unclosed_fence_is_flagged(self):
         """BYPASS 4c. An unclosed fence absorbed the tail of the artifact in
         silence. It must be a problem, not a swallow."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Suite is green\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  Ran 212 tests\n\n"
-                "  OK\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                f"H: {self.REL}:11 unclosed code fence — every criterion after"
-                " it is unread"])
+        self.assertEqual(gates.evidence_problems(
+            "### Suite is green\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  Ran 212 tests\n\n"
+            "  OK\n"
+            "- Result: PASS\n"),
+            [(4, "unclosed code fence — every criterion after it is"
+                 " unread")])
 
     def test_headings_inside_a_fence_do_not_split_the_criterion(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Report renders\n\n"
+        text = ("### Report renders\n\n"
                 "- Evidence:\n"
                 "  ```\n"
                 "  ### Weekly report\n"
                 "  3 work orders merged\n"
                 "  ```\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+                "- Result: PASS\n")
+        sections, unclosed = gates.verification_sections(text)
+        self.assertIsNone(unclosed)
+        self.assertEqual([s["title"] for s in sections],
+                         ["(untitled)", "Report renders"])
+        self.assertTrue(sections[1]["evidence"])
+        self.assertEqual(sections[1]["results"], [(8, "PASS")])
+        self.assertEqual(gates.evidence_problems(text), [])
 
     # The bypass in #147: the splitter was ATX-only, so a Setext-headed
     # artifact collapsed into one section and a single honest fence
@@ -1197,14 +1168,10 @@ class TestEvidenceHonesty(unittest.TestCase):
         and 2 because the Setext-headed artifact never split into sections.
         The two syntaxes render identically on GitHub, so they must gate
         identically — same criteria named, same verdicts caught."""
-        with tempfile.TemporaryDirectory() as tmp:
-            setext = self.verification(tmp, self.SETEXT_BODY)
-            problems = gates.check_evidence_honesty(setext.root)
-        with tempfile.TemporaryDirectory() as tmp:
-            atx = self.verification(tmp, self.ATX_BODY)
-            control = gates.check_evidence_honesty(atx.root)
+        problems = gates.evidence_problems(self.SETEXT_BODY)
+        control = gates.evidence_problems(self.ATX_BODY)
 
-        named = lambda ps: sorted(p.split("criterion ")[1] for p in ps)
+        named = lambda ps: sorted(s.split("criterion ")[1] for _, s in ps)
         self.assertEqual(len(problems), 2)  # criterion 0 is honestly evidenced
         self.assertEqual(named(problems), named(control))
         self.assertEqual(named(problems), sorted([
@@ -1218,13 +1185,12 @@ class TestEvidenceHonesty(unittest.TestCase):
     def test_setext_underline_is_not_confused_with_frontmatter_or_rule(self):
         """`---` opens the frontmatter fence and also writes a thematic break.
         Neither is a heading; only an underline under a non-blank line is."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Criterion\n\n"
-                "---\n\n"
-                "- Evidence:\n  ```\n  ok\n  ```\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "---\nstage: verify\n---\n\n"
+            "## Criterion\n\n"
+            "---\n\n"
+            "- Evidence:\n  ```\n  ok\n  ```\n"
+            "- Result: PASS\n"), [])
 
     # Independent-review finding on this branch: RESULT_LINE tolerated only a
     # leading unordered bullet, so a verdict written under any other leading
@@ -1238,33 +1204,25 @@ class TestEvidenceHonesty(unittest.TestCase):
         "- Result: PASS\n\n")
 
     def test_blockquoted_verdict_still_asserts(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, self.EVIDENCED_NEIGHBOUR + (
+        self.assertEqual(
+            gates.evidence_problems(self.EVIDENCED_NEIGHBOUR + (
                 "## Criterion B - payments\n"
-                "> Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                "H: docs/features/demo/verification.md:16 criterion"
-                ' "Criterion B - payments" asserts PASS with neither literal'
-                " evidence nor a NOT-RUN disclaimer (evidence must be a fenced"
-                " code block in this section)"])
+                "> Result: PASS\n")),
+            [(9, self.claim("Criterion B - payments", "PASS"))])
 
     def test_ordered_list_verdict_still_asserts(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, self.EVIDENCED_NEIGHBOUR + (
+        self.assertEqual(
+            gates.evidence_problems(self.EVIDENCED_NEIGHBOUR + (
                 "## Criterion B - payments\n"
-                "1. Result: PASS\n"))
-            problems = gates.check_evidence_honesty(tree.root)
-            self.assertEqual(len(problems), 1)
-            self.assertIn('"Criterion B - payments" asserts PASS', problems[0])
+                "1. Result: PASS\n")),
+            [(9, self.claim("Criterion B - payments", "PASS"))])
 
     def test_blockquoted_not_run_still_discloses(self):
         """The fix widens the marker class, not the claim test: a blockquoted
         NOT-RUN disclaimer is still a disclosure, owing no output."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Criterion B - payments\n"
-                "> Result: NOT RUN — no staging card\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "## Criterion B - payments\n"
+            "> Result: NOT RUN — no staging card\n"), [])
 
     # #151: two further wrappers GitHub renders as a visible verdict slipped
     # the splitter after the blockquote/ordered-list fix — a single-row table
@@ -1273,26 +1231,18 @@ class TestEvidenceHonesty(unittest.TestCase):
     # clickable verdict). Beside one honestly evidenced criterion (so the
     # artifact-wide backstop stays quiet), the smuggled fake PASS was silent.
     def test_table_cell_verdict_still_asserts(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, self.EVIDENCED_NEIGHBOUR + (
+        self.assertEqual(
+            gates.evidence_problems(self.EVIDENCED_NEIGHBOUR + (
                 "## Criterion B - payments\n"
-                "| Result: PASS |\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                "H: docs/features/demo/verification.md:16 criterion"
-                ' "Criterion B - payments" asserts PASS with neither literal'
-                " evidence nor a NOT-RUN disclaimer (evidence must be a fenced"
-                " code block in this section)"])
+                "| Result: PASS |\n")),
+            [(9, self.claim("Criterion B - payments", "PASS"))])
 
     def test_summary_tag_verdict_still_asserts(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, self.EVIDENCED_NEIGHBOUR + (
+        self.assertEqual(
+            gates.evidence_problems(self.EVIDENCED_NEIGHBOUR + (
                 "## Criterion B - payments\n"
-                "<summary>Result: PASS</summary>\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                "H: docs/features/demo/verification.md:16 criterion"
-                ' "Criterion B - payments" asserts PASS with neither literal'
-                " evidence nor a NOT-RUN disclaimer (evidence must be a fenced"
-                " code block in this section)"])
+                "<summary>Result: PASS</summary>\n")),
+            [(9, self.claim("Criterion B - payments", "PASS"))])
 
     def test_table_and_summary_not_run_still_disclose(self):
         """The fix widens the wrapper class, not the claim test: a NOT-RUN
@@ -1301,171 +1251,145 @@ class TestEvidenceHonesty(unittest.TestCase):
         `</summary>` so `_is_disclosure` reads the verdict's true head."""
         for verdict_line in ("| Result: NOT RUN — no staging card |",
                              "<summary>Result: NOT VERIFIED</summary>"):
-            with self.subTest(line=verdict_line), \
-                    tempfile.TemporaryDirectory() as tmp:
-                tree = self.verification(tmp, (
-                    "## Criterion B - payments\n" + verdict_line + "\n"))
-                self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+            with self.subTest(line=verdict_line):
+                self.assertEqual(gates.evidence_problems(
+                    "## Criterion B - payments\n" + verdict_line + "\n"), [])
 
     def test_verdict_line_inside_a_fence_is_not_a_criterion(self):
         """Quoted output that happens to contain `Result: PASS` is evidence,
         not an assertion of the author's own."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### CI log renders\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  Result: PASS\n"
-                "  ```\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "### CI log renders\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  Result: PASS\n"
+            "  ```\n"
+            "- Result: PASS\n"), [])
 
     # ---- false positives: a gate that blocks honest work gets disabled --
 
     def test_angle_bracket_output_is_evidence_not_a_placeholder(self):
         """Shape-matching `<...>` discarded real DOM dumps and Python reprs
         as "placeholders". Only the template's own filler text is filler."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### DOM renders the report\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  <html>\n"
-                "  <body><h1>Weekly report</h1></body>\n"
-                "  </html>\n"
-                "  ```\n"
-                "- Result: PASS\n\n"
-                "### Model repr is stable\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  <class 'app.models.User'>\n"
-                "  ```\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "### DOM renders the report\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  <html>\n"
+            "  <body><h1>Weekly report</h1></body>\n"
+            "  </html>\n"
+            "  ```\n"
+            "- Result: PASS\n\n"
+            "### Model repr is stable\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  <class 'app.models.User'>\n"
+            "  ```\n"
+            "- Result: PASS\n"), [])
 
     def test_table_of_evidenced_results_stays_silent(self):
         """#151 guard: a table cell verdict is just another wrapper, but a
         section that shows its literal output owes nothing. A table that
         tabulates real evidenced results (a fenced block in the same section)
         must not fire."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Suite is green\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  Ran 212 tests in 4.0s\n\n"
-                "  OK\n"
-                "  ```\n"
-                "| Result: PASS |\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "### Suite is green\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  Ran 212 tests in 4.0s\n\n"
+            "  OK\n"
+            "  ```\n"
+            "| Result: PASS |\n"), [])
 
     def test_details_folding_real_output_stays_silent(self):
         """#151 guard: `<details><summary>…</summary>` folding a real fenced
         block is honest evidence — the summary verdict is backed by the output
         it hides, so the section stays silent."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "### Suite is green\n\n"
-                "<details>\n"
-                "<summary>Result: PASS</summary>\n\n"
-                "```\n"
-                "Ran 212 tests in 4.0s\n\n"
-                "OK\n"
-                "```\n\n"
-                "</details>\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "### Suite is green\n\n"
+            "<details>\n"
+            "<summary>Result: PASS</summary>\n\n"
+            "```\n"
+            "Ran 212 tests in 4.0s\n\n"
+            "OK\n"
+            "```\n\n"
+            "</details>\n"), [])
 
     def test_honest_prose_and_headings_are_not_criteria(self):
         """Unlabelled prose asserts nothing the detector reads: an author may
         open a note with "Done." and title a section "all checks pass"."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Criteria & evidence\n\n"
-                "### Suite is green and lint is passing\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  Ran 212 tests in 4.0s\n\n"
-                "  OK\n"
-                "  ```\n"
-                "- Result: PASS\n\n"
-                "## Known-good baseline (all checks pass)\n\n"
-                "The previous release's numbers, for comparison only.\n\n"
-                "## Notes\n\n"
-                "Done. The remaining gap is tracked as a backlog seed.\n"
-                "Ok, that is everything.\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "## Criteria & evidence\n\n"
+            "### Suite is green and lint is passing\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  Ran 212 tests in 4.0s\n\n"
+            "  OK\n"
+            "  ```\n"
+            "- Result: PASS\n\n"
+            "## Known-good baseline (all checks pass)\n\n"
+            "The previous release's numbers, for comparison only.\n\n"
+            "## Notes\n\n"
+            "Done. The remaining gap is tracked as a backlog seed.\n"
+            "Ok, that is everything.\n"), [])
 
     def test_prose_rollup_over_evidenced_criteria_owes_nothing(self):
         """The template's `## Summary` holds "the one-sentence verdict" as
         PROSE. Prose is not a labelled verdict, so it owes no evidence — the
         excuse that used to protect it (and that gaming sections bought) is
         gone, and nothing is lost."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Summary\n\n"
-                "4/4 criteria pass; suite and lint green on the branch.\n"
-                "The feature demonstrably works.\n\n"
-                "## Criteria & evidence\n\n"
-                "### Suite is green\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  Ran 222 tests in 4.1s\n\n"
-                "  OK\n"
-                "  ```\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "## Summary\n\n"
+            "4/4 criteria pass; suite and lint green on the branch.\n"
+            "The feature demonstrably works.\n\n"
+            "## Criteria & evidence\n\n"
+            "### Suite is green\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  Ran 222 tests in 4.1s\n\n"
+            "  OK\n"
+            "  ```\n"
+            "- Result: PASS\n"), [])
 
     def test_labelled_verdict_in_a_summary_still_owes_evidence(self):
         """The deliberate cost of killing the roll-up excuse: if you write a
         LABELLED verdict, you back it — in that section — wherever you write
         it. Narrate in prose, or show the output."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Summary\n\n"
-                "- Verdict: all criteria pass.\n\n"
-                "## Criteria & evidence\n\n"
-                "### Suite is green\n\n"
-                "- Evidence:\n"
-                "  ```\n"
-                "  OK\n"
-                "  ```\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root),
-                             [self.bare("Summary", "all criteria pass.") % 10])
+        self.assertEqual(gates.evidence_problems(
+            "## Summary\n\n"
+            "- Verdict: all criteria pass.\n\n"
+            "## Criteria & evidence\n\n"
+            "### Suite is green\n\n"
+            "- Evidence:\n"
+            "  ```\n"
+            "  OK\n"
+            "  ```\n"
+            "- Result: PASS\n"),
+            [(3, self.claim("Summary", "all criteria pass."))])
 
     # ---- the artifact-wide backstop ------------------------------------
 
     def test_prose_only_artifact_is_flagged(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Summary\n\n"
-                "Everything works; all criteria are comfortably met.\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                f"H: {self.REL}:1 verification artifact shows neither literal"
-                " evidence nor a NOT-RUN disclaimer (evidence must be a"
-                " fenced code block)"])
+        self.assertEqual(gates.evidence_problems(
+            "## Summary\n\n"
+            "Everything works; all criteria are comfortably met.\n"),
+            [(1, self.BACKSTOP)])
 
     def test_scoped_hedge_does_not_disarm_the_whole_artifact_backstop(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Summary\n\n"
-                "Everything is fine; the criteria are comfortably met.\n"
-                "(Not tested on Windows, but that is out of scope.)\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                f"H: {self.REL}:1 verification artifact shows neither literal"
-                " evidence nor a NOT-RUN disclaimer (evidence must be a"
-                " fenced code block)"])
+        self.assertEqual(gates.evidence_problems(
+            "## Summary\n\n"
+            "Everything is fine; the criteria are comfortably met.\n"
+            "(Not tested on Windows, but that is out of scope.)\n"),
+            [(1, self.BACKSTOP)])
 
     def test_written_not_run_disclosure_satisfies_the_backstop(self):
         """The disclaimer branch of the acceptance criterion: an artifact that
         ran nothing and SAYS so is honest, and stays silent."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
-                "## Summary\n\n"
-                "Nothing could be checked this run.\n\n"
-                "## Not verified\n\n"
-                "The whole suite was not run — the CI runner was offline.\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        self.assertEqual(gates.evidence_problems(
+            "## Summary\n\n"
+            "Nothing could be checked this run.\n\n"
+            "## Not verified\n\n"
+            "The whole suite was not run — the CI runner was offline.\n"), [])
 
     def test_unreadable_artifact_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:

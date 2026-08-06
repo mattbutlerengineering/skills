@@ -33,6 +33,11 @@ ai-tooling suite where the rule is the same idea):
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
 
+The letter namespace does not end at I. Detector L (LABEL-SYNC) is
+network-side and lives in label_sync.py, driven by scheduled sweeps —
+network calls stay out of this offline gate — and J/K are unclaimed.
+DETECTORS (beside CHECKERS below) is the full roster.
+
 `--selftest` runs the checkers against fixture trees and exits nonzero
 on a failing assertion. Both run in CI (validator.yml, via `make check`)
 on every push/PR.
@@ -757,21 +762,26 @@ def _fence_closes(line, char, length):
     return marker[0] == char and len(marker) >= length
 
 
-def _verification_sections(text):
-    """Split a verification artifact into heading-delimited sections, each
-    recording — IN ITS OWN SCOPE — whether it shows literal output, discloses
-    a check as NOT RUN, and what verdicts it asserts. Scope is the point:
-    evidence parked in an appendix does not vouch for a criterion three
-    headings away. Fenced content is inert: a heading, a `Result:` line, or a
-    "not run" quoted inside evidence is output, not the author's assertion.
+def verification_sections(text):
+    """Split a verification artifact's TEXT into heading-delimited sections,
+    each recording — IN ITS OWN SCOPE — whether it shows literal output,
+    discloses a check as NOT RUN, and what verdicts it asserts. Scope is the
+    point: evidence parked in an appendix does not vouch for a criterion
+    three headings away. Fenced content is inert: a heading, a `Result:`
+    line, or a "not run" quoted inside evidence is output, not the author's
+    assertion.
 
     A section asserts a verdict exactly one way: `results` holds its LABELLED
-    verdict lines (the verdict-noun vocabulary — see RESULT_LINE). Prose and
-    heading text assert nothing. YAML frontmatter is metadata and is skipped
-    outright, so a `status:` field is never mistaken for an author's verdict.
+    verdict lines as (lineno, verdict) pairs (the verdict-noun vocabulary —
+    see RESULT_LINE). Prose and heading text assert nothing. YAML frontmatter
+    is metadata and is skipped outright, so a `status:` field is never
+    mistaken for an author's verdict.
 
-    Returns (sections, unclosed), where `unclosed` is the line number of a
-    fence that is never closed, or None."""
+    Public with evidence_problems: pure text in, structure out, so the H
+    grammar is exercisable without a fixture tree. Returns (sections,
+    unclosed), where each section is {"title", "lineno", "evidence",
+    "not_run", "results"} and `unclosed` is the line number of a fence that
+    is never closed, or None."""
     sections = []
 
     def blank(title, lineno):
@@ -824,11 +834,14 @@ def _verification_sections(text):
     return sections, (fence[2] if fence else None)
 
 
-def check_evidence_honesty(root):
-    """H: a criterion that asserts a verdict must show literal output or
-    disclose that the check was NOT RUN. Prose confidence is not evidence
-    (PRD-0001: a change whose verification is asserted but not evidenced
-    fails the build).
+def evidence_problems(text):
+    """The H grammar over one verification artifact's TEXT: [(lineno,
+    suffix)] for every violation, in artifact order — an unclosed fence
+    first (it would otherwise swallow every criterion after it), then each
+    section's unevidenced claim, then the artifact-wide backstop. Suffixes
+    carry no label and no path; check_evidence_honesty prefixes
+    "H: {rel}:{lineno}" (the cost_ledger.parse convention: the grammar is
+    pure over text, so its rules are exercisable without a fixture tree).
 
     The rule is per-criterion, uniform, and UNEXCUSED: every section holding
     a labelled verdict line carries its own evidence or its own disclaimer.
@@ -840,6 +853,47 @@ def check_evidence_honesty(root):
     the acceptance criterion demands: literal command output, or an explicit
     NOT-RUN disclaimer. Neither one present means the build fails."""
     problems = []
+    sections, unclosed = verification_sections(text)
+    if unclosed is not None:
+        problems.append((unclosed, "unclosed code fence — every criterion"
+                                   " after it is unread"))
+    for section in sections:
+        if section["evidence"]:
+            continue
+        claims = [(lineno, verdict)
+                  for lineno, verdict in section["results"]
+                  if not _is_disclosure(verdict)]
+        if not claims:
+            continue
+        lineno, verdict = claims[0]
+        problems.append(
+            (lineno,
+             f'criterion "{section["title"]}" asserts {verdict} with'
+             " neither literal evidence nor a NOT-RUN disclaimer (evidence"
+             " must be a fenced code block in this section)"))
+    # An artifact that asserts no verdict at all escapes the per-criterion
+    # rule; it still owes the reader output or a disclosure.
+    if not any(s["results"] for s in sections) and not any(
+            s["evidence"] or s["not_run"] for s in sections):
+        problems.append(
+            (1, "verification artifact shows neither literal evidence nor"
+                " a NOT-RUN disclaimer (evidence must be a fenced code"
+                " block)"))
+    return problems
+
+
+def check_evidence_honesty(root):
+    """H: a criterion that asserts a verdict must show literal output or
+    disclose that the check was NOT RUN. Prose confidence is not evidence
+    (PRD-0001: a change whose verification is asserted but not evidenced
+    fails the build).
+
+    The grammar — what asserts, what evidences, what discloses — is
+    evidence_problems, pure over the artifact's text. What stays here is
+    the detector's own job: find each run's verification.md, read it (an
+    unreadable artifact is a problem, never a traceback), and prefix each
+    (lineno, suffix) the grammar returns."""
+    problems = []
     for run in run_dirs(root):
         artifact = run / "verification.md"
         if not artifact.is_file():
@@ -850,35 +904,37 @@ def check_evidence_honesty(root):
         except (OSError, UnicodeDecodeError) as err:
             problems.append(f"H: {rel} cannot be read: {err}")
             continue
-        sections, unclosed = _verification_sections(text)
-        if unclosed is not None:
-            problems.append(
-                f"H: {rel}:{unclosed} unclosed code fence — every criterion"
-                " after it is unread")
-        for section in sections:
-            if section["evidence"]:
-                continue
-            claims = [(lineno, verdict)
-                      for lineno, verdict in section["results"]
-                      if not _is_disclosure(verdict)]
-            if not claims:
-                continue
-            lineno, verdict = claims[0]
-            problems.append(
-                f'H: {rel}:{lineno} criterion "{section["title"]}"'
-                f" asserts {verdict} with neither literal evidence nor a"
-                " NOT-RUN disclaimer (evidence must be a fenced code block"
-                " in this section)")
-        # An artifact that asserts no verdict at all escapes the per-criterion
-        # rule; it still owes the reader output or a disclosure.
-        if not any(s["results"] for s in sections) and not any(
-                s["evidence"] or s["not_run"] for s in sections):
-            problems.append(
-                f"H: {rel}:1 verification artifact shows neither literal"
-                " evidence nor a NOT-RUN disclaimer (evidence must be a"
-                " fenced code block)")
+        problems.extend(f"H: {rel}:{lineno} {suffix}"
+                        for lineno, suffix in evidence_problems(text))
     return problems
 
+
+# The detector letter namespace, indexed in ONE place: letter -> (name,
+# home module, plane). A letter's plane decides where its code goes.
+# Offline detectors live in this module and gate every push/PR through
+# CHECKERS — hermetic and deterministic, no network (B reads a local event
+# file, so it is offline too; it just SKIPs outside a PR run). Network
+# detectors read live services, so they live beside the scheduled sweeps
+# that drive them and are NEVER wired into CHECKERS: L reads the repo's
+# live label set through gh, which is why it lives in label_sync.py and
+# not here (the same posture that keeps every ADR-0037 seam offline).
+# J and K are unclaimed — the shared ai-tooling letter namespace assigns
+# nothing to them, so a new detector takes the next free letter and adds
+# its row here.
+DETECTORS = {
+    "A": ("WO-CITATION", "gates.py", "offline"),
+    "B": ("PR-TRACEABILITY", "gates.py", "offline"),
+    "C": ("LINK-INTEGRITY", "gates.py", "offline"),
+    "D": ("BLUEPRINT-DRIFT", "gates.py", "offline"),
+    "E": ("SCAFFOLD-SYNC", "gates.py", "offline"),
+    "F": ("CONFIG-SHAPE", "gates.py", "offline"),
+    "G": ("COST-LEDGER", "gates.py", "offline"),
+    "H": ("EVIDENCE-HONESTY", "gates.py", "offline"),
+    "I": ("STALENESS", "gates.py", "offline"),
+    "J": (None, None, "unused"),
+    "K": (None, None, "unused"),
+    "L": ("LABEL-SYNC", "label_sync.py", "network"),
+}
 
 CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
             check_blueprint_drift, check_scaffold_sync, check_config_shape,
