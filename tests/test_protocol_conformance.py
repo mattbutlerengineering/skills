@@ -84,5 +84,22 @@ class TestOrientationTablesMatchProtocol(unittest.TestCase):
             SPEC.read_text(encoding="utf-8"))
 
 
+class TestRouterRoutesOnlyStageSkills(unittest.TestCase):
+    """lint.check_router pins the floor — every stage skill is named — but
+    nothing pinned the ceiling, and the ceiling is the ADR-0023 rule: the
+    router never routes to a utility skill. A utility skill added to the
+    hand-off list would route silently and nothing would object, so the
+    absence is asserted here rather than assumed.
+    """
+
+    def test_the_router_names_no_utility_skill(self):
+        text = (REPO_ROOT / "skills" / "next" / "SKILL.md").read_text(
+            encoding="utf-8")
+        named = [slug for slug in protocol.UTILITY_SKILLS if slug in text]
+        self.assertEqual(named, [],
+                         "the router never routes to utility skills"
+                         " (ADR-0023)")
+
+
 if __name__ == "__main__":
     unittest.main()
