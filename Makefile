@@ -3,9 +3,11 @@
 # `make check` is the local gate and *exactly* what CI runs:
 # .github/workflows/validator.yml names no commands of its own, it calls
 # these targets — so local and CI cannot drift apart. The same workflow is
-# mirrored into the template payload, where factory/templates/Makefile is
-# this file's product-repo twin (tools under tools/factory/, no plugin
-# lint); tests/test_factory_gates.py::TestLockstep pins the pair.
+# mirrored into the template payload, and factory/templates/Makefile is
+# GENERATED from this file by factory_init.py's product_makefile transform
+# (tools under tools/factory/, no plugin lint) — edit here, then run
+# `python3 factory_init.py update-manifest`, never edit the twin;
+# tests/test_factory_gates.py::TestLockstep pins the command sets.
 
 .PHONY: check review wo-merged wo-in-progress wo-needs-review
 .PHONY: assembler cost-report gate-digest web-quality

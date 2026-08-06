@@ -15,6 +15,7 @@ from pathlib import Path
 
 import cost_ledger
 import gates
+from factory_init import product_form
 
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling helper import
@@ -1448,19 +1449,6 @@ class TestRunAll(unittest.TestCase):
                  if p.startswith("B:")], [])
 
 
-def product_form(command):
-    """A root command as its product-repo twin spells it: the factory tools
-    live under tools/factory/ there, and the stamped test run is quiet."""
-    return (command.replace("python3 gates.py", "python3 tools/factory/gates.py")
-            .replace("python3 validator.py", "python3 tools/factory/validator.py")
-            .replace("python3 assembler.py", "python3 tools/factory/assembler.py")
-            .replace("python3 cost_report.py",
-                     "python3 tools/factory/cost_report.py")
-            .replace("python3 gate_digest.py",
-                     "python3 tools/factory/gate_digest.py")
-            .replace("unittest discover tests", "unittest discover -q tests"))
-
-
 class TestLockstep(unittest.TestCase):
     """Makefile <-> CI lockstep (origin: WO-0003, tightened by WO-0004).
 
@@ -1469,7 +1457,10 @@ class TestLockstep(unittest.TestCase):
     not to the Makefile passed. These assert exact, ordered equality of the
     command sets, and that the workflow names no command of its own (it goes
     through `make`), which is what lets one workflow file serve both this
-    repo and every stamped product repo."""
+    repo and every stamped product repo. The root->product respelling the
+    assertions lean on is factory_init.product_form — the production
+    transform that generates the payload Makefile (ADR-0050) — never a
+    test-private copy of the translation rule."""
 
     REPO = Path(__file__).resolve().parents[1]
     WORKFLOW = REPO / ".github" / "workflows" / "validator.yml"

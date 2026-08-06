@@ -70,3 +70,4 @@ the canonical vocabulary.
 | [0047](0047-factory-roles-seam.md) | Factory roles seam: factory_roles.py owns the role vocabulary | accepted |
 | [0048](0048-artifact-path-grammar-joins-factory-config.md) | The installed-vs-payload path grammar joins factory_config | accepted |
 | [0049](0049-row-identity-joins-the-cost-ledger.md) | The row identity joins the cost ledger | accepted |
+| [0050](0050-mirrors-carry-a-transform.md) | MIRRORS carries a transform: one authority per payload file | accepted |

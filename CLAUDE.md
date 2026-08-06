@@ -46,10 +46,11 @@ On demand only (real model runs, costs money, never CI; both need the
   `tests/test_lint_checkers.py`).
 - **Factory templates are checksum-pinned**: after any edit under
   `factory/templates/**` or to any root file in `factory_init.MIRRORS`
-  (the authority on what is mirrored into the payload — root tools AND
-  workflows), run `python3 factory_init.py update-manifest` and commit
-  the manifest with the change. Detector E gates manifest↔payload;
-  `tests/test_factory_init.py` pins payload↔root.
+  (the authority on what is mirrored into the payload — root tools,
+  workflows, CODEOWNERS, and the Makefile, each through its entry's
+  transform per ADR-0050), run `python3 factory_init.py update-manifest`
+  and commit the manifest with the change. Detector E gates
+  manifest↔payload; `tests/test_factory_init.py` pins payload↔root.
 - **Dispatch mirrors one-way** (ADR-0032): never create a `WO-####` issue
   before its `breakdown.md` row exists.
 - **Typed IDs live in run-artifact frontmatter** (`id: PRD-0001`), never a

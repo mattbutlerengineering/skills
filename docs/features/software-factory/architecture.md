@@ -400,9 +400,11 @@ already depend on it)
 - Since WO-0004 there is one entry point in both places. `validator.yml` names no
   commands of its own — it calls `make check`, and the Makefile knows where that
   repo keeps its tools (root here, `tools/factory/` there). The root `Makefile`
-  and `factory/templates/Makefile` are pinned in lockstep by a unit test:
-  `gates.py`, `gates.py --selftest`, `unittest discover tests` (plus `lint.py`
-  here). A local green must mean a CI green.
+  is the single authority: factory-init's `product_makefile` transform generates
+  `factory/templates/Makefile` from it (ADR-0050), and a unit test pins the
+  command sets in lockstep: `gates.py`, `gates.py --selftest`,
+  `unittest discover tests` (plus `lint.py` here). A local green must mean a CI
+  green.
 
 ## Stack & dependencies
 

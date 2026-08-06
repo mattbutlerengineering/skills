@@ -94,9 +94,10 @@ class TestWorkflowMirror(unittest.TestCase):
                / "design.yml")
 
     def test_design_yml_is_a_registered_mirror(self):
-        self.assertEqual(
-            factory_init.MIRRORS.get(".github/workflows/design.yml"),
-            ".github/workflows/design.yml")
+        self.assertIn(
+            (".github/workflows/design.yml", ".github/workflows/design.yml",
+             factory_init.identity),
+            factory_init.MIRRORS)
 
     def test_the_payload_workflow_is_the_byte_mirror_of_the_root_one(self):
         self.assertTrue(self.PAYLOAD.is_file(),
