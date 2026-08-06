@@ -50,7 +50,6 @@ printf '%s%s%s\n' "$prefix" "$name" "$suffix"
 
 
 class FakeClaudeTest(RunEvalContract, unittest.TestCase):
-    BINARY = "claude"
     FAKE = FAKE_CLAUDE
     HARNESS = "claude"
 

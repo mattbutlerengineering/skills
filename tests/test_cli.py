@@ -1,14 +1,24 @@
-"""cli seam tests (ADR-0037, ADR-0040): the failure vocabulary, the
-one-line detail formatter, and the harness-IO trio — child_env, version,
-write_outputs — asserted at the seam's own interface. The caller suites
-(label_sync, validator, budget_guard, trigger_eval, charter_replay,
-assembler, cost_report) keep testing their composition — problem-string
-labels around a failing runner, step outputs a workflow consumes —
-without each re-proving what the seam does.
+"""cli seam tests (ADR-0037, ADR-0040, ADR-0045): the failure
+vocabulary, the one-line detail formatter, and the harness-IO
+conventions — child_env, version, write_outputs, decode_events, and the
+harness_run process-lifecycle contract — asserted at the seam's own
+interface. The caller suites (label_sync, validator, budget_guard,
+trigger_eval, charter_replay, assembler, cost_report) keep testing their
+composition — problem-string labels around a failing runner, step
+outputs a workflow consumes — without each re-proving what the seam
+does.
+
+harness_run's fakes are real shell scripts run as real subprocesses (the
+tests/test_process_reaping.py technique), so the group-kill contract is
+proven against live process groups, not mocks; the one mock-driven test
+is the kill fallback, where a real stray SIGKILL must never leave the
+test.
 """
 import os
+import stat
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -151,6 +161,185 @@ class TestGhRunner(unittest.TestCase):
         with mock.patch.object(cli, "_gh", fake):
             self.assertEqual(cli.gh_runner(["label", "list"]), "[]")
         fake.assert_called_once_with(["label", "list"])
+
+
+class TestDecodeEvents(unittest.TestCase):
+    """The one JSON-lines decode for every harness stream: undecodable
+    and blank lines are skipped, decoded events come back in order."""
+
+    def test_json_lines_decode_and_junk_is_skipped(self):
+        lines = ["not json", "", '  {"type": "result"}  ', '{"n": 1}']
+        self.assertEqual(list(cli.decode_events(lines)),
+                         [{"type": "result"}, {"n": 1}])
+
+    def test_an_empty_iterable_decodes_to_nothing(self):
+        self.assertEqual(list(cli.decode_events([])), [])
+
+
+FAKE_EMITTER = """#!/bin/sh
+echo 'not json'
+echo '{"type": "result", "result": "ok"}'
+"""
+
+FAKE_SLEEPER = """#!/bin/sh
+# Spawn a grandchild that outlives us unless the caller kills our group.
+sleep 300 &
+echo $! > "$PID_FILE"
+echo '{"n": 1}'
+sleep 300
+"""
+
+FAKE_EXITING = """#!/bin/sh
+# Leader exits immediately; the grandchild inherits the stdout pipe and
+# keeps the process group alive after the leader is gone.
+sleep 300 &
+echo $! > "$PID_FILE"
+exit 0
+"""
+
+FAKE_VANISHING = """#!/bin/sh
+exit 0
+"""
+
+FAKE_ENV_PROBE = """#!/bin/sh
+echo "{\\"guard\\": \\"${CLAUDECODE:-absent}\\"}"
+"""
+
+
+def pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+class FakeProcess:
+    """A Popen stand-in still running when the finally block reaches it."""
+
+    pid = 424242
+
+    def __init__(self):
+        self.stdout = mock.Mock()
+        self.killed = False
+        self.waited = False
+
+    def poll(self):
+        return None if not self.killed else -9
+
+    def kill(self):
+        self.killed = True
+
+    def wait(self):
+        self.waited = True
+
+
+class TestHarnessRun(unittest.TestCase):
+    """The streaming-spawn contract (ADR-0045): own process group,
+    decoded events while the child runs, and an unconditional group
+    SIGKILL on the way out — whether the leader is still running,
+    already exited with survivors, or fully gone. Signalled, not
+    reaped — killed grandchildren are collected by init, hence the
+    grace loops."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="harness-run-"))
+        self.pid_file = self.dir / "grandchild.pid"
+        self.addCleanup(self._cleanup)
+
+    def _cleanup(self):
+        if self.pid_file.is_file():
+            pid = int(self.pid_file.read_text())
+            if pid_alive(pid):
+                os.kill(pid, 9)
+        import shutil
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def script(self, body):
+        path = self.dir / "fake-harness"
+        path.write_text(body, encoding="utf-8")
+        path.chmod(path.stat().st_mode | stat.S_IEXEC)
+        return str(path)
+
+    def env(self):
+        return {**cli.child_env(), "PID_FILE": str(self.pid_file)}
+
+    def assert_grandchild_reaped(self):
+        deadline = time.time() + 2
+        while time.time() < deadline and not self.pid_file.is_file():
+            time.sleep(0.05)
+        self.assertTrue(self.pid_file.is_file(),
+                        "fake harness never started")
+        pid = int(self.pid_file.read_text())
+        deadline = time.time() + 2
+        while time.time() < deadline and pid_alive(pid):
+            time.sleep(0.05)
+        self.assertFalse(pid_alive(pid), "grandchild survived harness_run")
+
+    def test_events_stream_decoded_with_junk_lines_skipped(self):
+        cmd = [self.script(FAKE_EMITTER)]
+        with cli.harness_run(cmd, cwd=self.dir, timeout=10,
+                             env=self.env()) as events:
+            self.assertEqual(list(events),
+                             [{"type": "result", "result": "ok"}])
+        self.assertFalse(events.timed_out)
+
+    def test_a_timeout_flips_timed_out_and_reaps_the_group(self):
+        cmd = [self.script(FAKE_SLEEPER)]
+        with cli.harness_run(cmd, cwd=self.dir, timeout=2,
+                             env=self.env()) as events:
+            self.assertEqual(list(events), [{"n": 1}])
+        self.assertTrue(events.timed_out)
+        self.assert_grandchild_reaped()
+
+    def test_a_dead_leaders_grandchild_is_still_reaped(self):
+        # Deterministic by control flow: the fake writes nothing and its
+        # grandchild holds the stdout write end open, so the reader can
+        # only leave its loop by observing the exit — the cleanup always
+        # runs against a dead leader.
+        cmd = [self.script(FAKE_EXITING)]
+        with cli.harness_run(cmd, cwd=self.dir, timeout=2,
+                             env=self.env()) as events:
+            self.assertEqual(list(events), [])
+        self.assertFalse(events.timed_out)
+        self.assert_grandchild_reaped()
+
+    def test_a_fully_exited_group_is_tolerated(self):
+        # No grandchild: the reader's poll reaps the leader, leaving the
+        # group empty, so the exit group-kill has nothing to signal and
+        # must swallow the lookup failure rather than crash the run.
+        cmd = [self.script(FAKE_VANISHING)]
+        with cli.harness_run(cmd, cwd=self.dir, timeout=2,
+                             env=self.env()) as events:
+            self.assertEqual(list(events), [])
+
+    def test_the_default_env_strips_the_nesting_guard(self):
+        cmd = [self.script(FAKE_ENV_PROBE)]
+        with mock.patch.dict(os.environ, {"CLAUDECODE": "1"}):
+            with cli.harness_run(cmd, cwd=self.dir, timeout=10) as events:
+                self.assertEqual(list(events), [{"guard": "absent"}])
+
+    def test_a_spawn_that_never_starts_raises_into_the_callers_catch(self):
+        def no_spawn(*args, **kwargs):
+            raise OSError("no harness binary")
+        with self.assertRaises(OSError):
+            with cli.harness_run(["nope"], cwd=self.dir, timeout=2,
+                                 spawn=no_spawn):
+                self.fail("the body must never run when spawn fails")
+
+    def test_kill_falls_back_to_the_leader_when_the_group_is_gone(self):
+        process = FakeProcess()
+
+        def refuse_killpg(pgid, sig):
+            # force the fallback so no real signal leaves the test
+            raise ProcessLookupError
+        with mock.patch.object(cli.os, "killpg", refuse_killpg):
+            with cli.harness_run(["fake"], cwd=self.dir, timeout=2,
+                                 spawn=lambda *a, **k: process):
+                pass  # never read the mock pipe; the exit path is the test
+        self.assertTrue(process.killed)
+        self.assertTrue(process.waited)
+        process.stdout.close.assert_called_once_with()
 
 
 class TestReadEvent(unittest.TestCase):

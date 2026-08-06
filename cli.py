@@ -14,16 +14,26 @@ The harness-IO conventions live here for the same reason: child_env
 (nesting a harness under Claude Code), version (provenance probes),
 write_outputs (the $GITHUB_OUTPUT heredoc form assembler.py and
 cost_report.py both emit), and read_event (the $GITHUB_EVENT_PATH read
-gates.py and assembler.py both make — ADR-0042).
+gates.py and assembler.py both make — ADR-0042). decode_events and
+harness_run (ADR-0045) are the streaming half: the one JSON-lines
+decode every harness stream shares, and the spawn-watch-reap lifecycle
+of a `-p` harness child (own process group, drain-after-exit reader,
+unconditional group kill) that trigger_eval.py and charter_replay.py
+both run. harness_run is POSIX-only (select on pipes, os.killpg), the
+stance trigger_eval.py has always documented.
 
 gh_runner, the stdout port over runner("gh"), lives beside runner for the
 same reason write_outputs moved here (ADR-0040): it had grown four real
 callers (label_sync, validator, gate_digest, sweeps), three of them
 importing it tool-to-tool from label_sync.
 """
+import contextlib
 import json
 import os
+import select
+import signal
 import subprocess
+import time
 from pathlib import Path
 
 # A failed or missing binary raises one of these; callers turn that into
@@ -61,6 +71,111 @@ def version(binary):
         return proc.stdout.strip() or None
     except (OSError, subprocess.TimeoutExpired):
         return None
+
+
+def decode_events(lines):
+    """Decode an iterable of JSON-lines into event dicts. Blank and
+    undecodable lines are skipped — harness streams interleave noise
+    with events, and a half-written trailing line must not abort the
+    run. The one decode every harness stream shares (ADR-0045); the
+    per-harness registry (trigger_eval.HARNESSES) names it so recorders
+    and runners cannot fork their own copies."""
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            yield json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+
+class EventStream:
+    """Decoded JSON-lines events from a live harness pipe, until the
+    process exits AND its buffered output is drained, the stream closes,
+    or timeout elapses. `timed_out` flips True when the reader abandoned
+    the run on the clock — how a consumer that read the stream to its
+    end tells a completed run from a truncated one.
+
+    The drain-after-exit order is load-bearing: a harness that writes its
+    whole stream and exits within milliseconds is often dead before the
+    reader's first poll, and breaking on exit alone silently drops
+    whatever is still in the pipe — a fired run scores 'none' (observed
+    as a CI-only flake in the fake-harness suite). After exit the reader
+    stops the first time the pipe reads empty, so an orphaned child
+    holding the write end open but idle costs nothing; one that keeps
+    writing is bounded by the overall timeout. A trailing line with no
+    newline is dropped — harness streams are newline-terminated."""
+
+    def __init__(self, process, timeout):
+        self.timed_out = False
+        self._iter = decode_events(self._lines(process, timeout))
+
+    def __iter__(self):
+        return self._iter
+
+    def _lines(self, process, timeout):
+        start_time = time.time()
+        buffer = ""
+        while True:
+            if time.time() - start_time >= timeout:
+                self.timed_out = True
+                return
+            exited = process.poll() is not None
+            ready, _, _ = select.select([process.stdout], [], [],
+                                        0 if exited else 1.0)
+            if not ready:
+                if exited:
+                    return
+                continue
+
+            chunk = os.read(process.stdout.fileno(), 8192)
+            if not chunk:
+                return
+            buffer += chunk.decode("utf-8", errors="replace")
+
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                yield line
+
+
+@contextlib.contextmanager
+def harness_run(cmd, cwd, timeout, env=None, spawn=None):
+    """Run a harness command in its own process group and yield its
+    EventStream; on the way out, SIGKILL the whole group unconditionally
+    — early detection returns before the CLI exits, and a dead leader's
+    grandchildren keep the group alive and would otherwise outlive the
+    run (burning API budget). start_new_session makes the leader's pid
+    the pgid, and the kernel keeps that pgid alive while any grandchild
+    survives, so the group is signalled whether the leader is running,
+    exited with survivors, or setpgid itself away (the leader-only kill
+    covers the last; an empty group's lookup failure is swallowed). The
+    pipe is closed after the wait, so no fd leaks per run.
+
+    env defaults to child_env(); spawn is the injectable substitute
+    (tests pass a fake instead of monkeypatching subprocess). A spawn
+    that never starts raises straight into the caller's catch — there
+    is nothing to clean up."""
+    process = (spawn or subprocess.Popen)(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        cwd=cwd,
+        env=child_env() if env is None else env,
+        start_new_session=True,
+    )
+    try:
+        yield EventStream(process, timeout)
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            # Group empty (then Popen.kill is a no-op — poll already
+            # recorded the exit) or a leader that setpgid itself out
+            # of the group; the leader-only kill covers the latter.
+            process.kill()
+        process.wait()
+        process.stdout.close()
 
 
 def write_outputs(env, outputs):

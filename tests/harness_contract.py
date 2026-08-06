@@ -4,8 +4,11 @@ Every harness adapter in trigger_eval.HARNESSES must meet the same
 fan-out contract: count every run, score per case, feed wrong slugs
 into the confusion matrix, preserve case order. This mixin holds that
 contract once — a twin (test_run_eval.py, test_run_eval_omp.py) sets
-BINARY, FAKE, and HARNESS, and supplies only what genuinely differs:
-the fake executable's event shapes and any harness-specific seam tests.
+FAKE and HARNESS, and supplies only what genuinely differs: the fake
+executable's event shapes and any harness-specific seam tests. The
+executable name the fake shadows comes from the registry's own binary
+field (ADR-0045), so the contract exercises the same name the runner
+invokes.
 """
 import os
 import shutil
@@ -19,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trigger_eval import run_eval  # noqa: E402
+from trigger_eval import HARNESSES, run_eval  # noqa: E402
 
 
 def case(case_id, expected, query, kind="direct"):
@@ -31,13 +34,13 @@ class RunEvalContract:
     binary at the front of PATH, then asserts the shared contract
     through run_eval's public interface (no real CLI, no API calls)."""
 
-    BINARY = None   # executable name the runner invokes ("claude", "omp")
     FAKE = None     # shell script body emitting harness-shaped events
-    HARNESS = None  # run_eval harness key
+    HARNESS = None  # run_eval harness key; the binary comes from the registry
 
     def setUp(self):
-        self.dir = Path(tempfile.mkdtemp(prefix=f"run-eval-{self.BINARY}-"))
-        fake = self.dir / self.BINARY
+        binary = HARNESSES[self.HARNESS].binary
+        self.dir = Path(tempfile.mkdtemp(prefix=f"run-eval-{binary}-"))
+        fake = self.dir / binary
         fake.write_text(self.FAKE, encoding="utf-8")
         fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
         self.old_path = os.environ["PATH"]

@@ -1,6 +1,6 @@
 # ADR-0038: One registration per harness in the trigger-eval runner
 
-- Status: accepted (2026-07-20)
+- Status: amended by ADR-0045 (accepted 2026-07-20)
 
 ## Decision
 
