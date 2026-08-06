@@ -43,7 +43,32 @@ queue must never read the same.
 
 `wq:` problems are refusals, not warnings. Stop on them.
 
-### 3. Run the batch in parallel
+One caveat to state plainly rather than let the output imply: the monthly
+cap is priced against recorded spend, and today **nothing writes a ledger
+row when a run succeeds** (#222) — only budget exhaustion does. So the
+month-to-date figure the planner prints is a floor, not the truth, and its
+over-cap refusal cannot currently fire. The `wip_cap` bound is real; treat
+the dollar bound as advisory until #222 lands.
+
+### 3. Claim the batch before spending anything
+
+For every work order the planner returned:
+
+    make wo-in-progress ISSUE=<n>
+
+`wo:ready-for-agent -> wo:in-progress`, through the lifecycle machine, one
+issue at a time. This is not bookkeeping. Until the claim lands the
+dispatch plane still reads the order as available, and three things act on
+that: a second `work-queue` session picks the same orders, the gate digest
+counts them as waiting rather than in flight, and the ready label stays
+armed for `assembler.yml`. The claim is what makes "one session at a time"
+a fact instead of a request.
+
+A claim that will not flip is a refusal for that work order — drop it from
+the batch and report it. Never dispatch an agent against an order the
+dispatch plane did not agree to hand over.
+
+### 4. Run the batch in parallel
 
 One agent per work order, **all dispatched in a single message** so they
 run concurrently, each with `isolation: "worktree"` — they will write to
@@ -65,7 +90,7 @@ Each agent's prompt must carry:
 Model per work order follows `factory.json`'s routing bands — mechanical
 work does not need the implementation model.
 
-### 4. Report — and stop at the gate
+### 5. Report — and stop at the gate
 
 Report per work order: the PR, whether `make check` passed inside the
 worktree, and the budget it actually used. Then stop.
@@ -76,18 +101,42 @@ merging its own work erases the only gate the factory has. The same rule
 covers approving the PR, applying `wo:merged` by hand, and re-running a
 failed check until it passes.
 
-A work order whose agent produced nothing usable is reported as failed,
-with the reason. Do not silently retry it into the next batch.
+A work order whose agent produced nothing usable is **released**, not
+just reported:
 
-### 5. Cloud fallback
+    make wo-failed ISSUE=<n>
+
+An order left on `wo:in-progress` after its agent died is the exact bug
+ADR-0045's writer exists to prevent — the digest counts it as work in
+flight forever and no sweep will ever free it. The claim in step 3 is what
+makes this leg mandatory: having taken the order out of the queue, this
+skill owes it a terminal state.
+
+Do not retry inside the round. A second attempt at the same work order is
+a human's call, because the first failure is evidence about the order —
+an under-specified row, a stale blocker, a missing `Accept:` — at least as
+often as it is evidence about the agent.
+
+**Circuit breaker: three consecutive agent failures ends the round.**
+Release each claimed order, report, and stop. Past three, the common cause
+is the tree or the queue rather than any one work order, and the next
+agent buys nothing but another failure at full price.
+
+### 6. Cloud fallback
 
 When the local harness cannot run agents — no worktree support, or the
 work must happen unattended — the same batch can be dispatched by the
-shipped assembler instead: apply `wo:ready-for-agent` to the planned
-issues and let `assembler.yml` claim each one. That path is serial per
-label event and depends on GitHub Actions, so prefer local; say which
-path you used, because the cost ledger records them the same way and the
-run evidence should not be ambiguous.
+shipped assembler instead. Choose this **before** step 3, because the
+assembler does its own claim: leave `wo:ready-for-agent` in place and
+re-apply it to each planned issue, and `assembler.yml` resolves, claims,
+and dispatches one order per label event. Steps 3 through 5 are then the
+workflow's job, not yours.
+
+That path is serial per label event and depends on GitHub Actions, so
+prefer local. Say which path a run used either way — the two are not
+distinguishable after the fact from the artifacts alone, and while #222
+stands neither writes a spend row on success, so the ledger will not
+answer it for you.
 
 ## Rules
 
@@ -100,5 +149,14 @@ run evidence should not be ambiguous.
 - Never create a `WO-####` issue, and never write a breakdown row, to make
   something eligible. The mirror is one-way (ADR-0032); if the queue is
   empty, that is an answer.
+- Every order this skill claims gets a terminal state before the round
+  ends — a PR, or `wo:failed`. Claiming is a debt.
+- One session at a time, and the claim in step 3 is what enforces it. Two
+  concurrent sessions racing the same queue is the failure this ordering
+  exists to prevent.
+- Two orders in one batch may still touch the same files. There is no
+  merge train here to tax — nothing merges — so the cost lands as a
+  conflict the human resolves at merge time, not as re-run CI. Say which
+  PRs overlap in the report rather than pretending the batch was disjoint.
 - Report the deferrals. "Nothing to do" without them is indistinguishable
   from a broken queue.
