@@ -592,24 +592,21 @@ def check_cost_ledger(root):
     records into it, so a freshly stamped repo has no runs to account for
     — the rule bites once the ledger exists.
 
-    The line grammar itself is cost_ledger.parse — the same rule the
-    weekly report reads with (ADR-0037), so the two cannot diverge. What
-    stays here is G's own work: the cross-checks between ledger and
-    breakdown (a recorded wo must have a row; a merged row must be
-    recorded)."""
-    ledger = root / COST_LEDGER
-    if not ledger.is_file():
-        return []
-    try:
-        text = ledger.read_text(encoding="utf-8")
-    except OSError as err:
-        return [f"G: cannot read {COST_LEDGER}: {err}"]
-    problems = []
+    The file read and line grammar are cost_ledger.load — the same
+    labelled read the weekly report is built on (ADR-0037, ADR-0049), so
+    the two cannot diverge, down to the cannot-read string. What stays
+    here is G's own work: the cross-checks between ledger and breakdown
+    (a recorded wo must have a row; a merged row must be recorded)."""
+    rows, problems = cost_ledger.load(root, "G")
+    if rows is None:
+        # Absent (silent, no runs yet) or unreadable (the labelled
+        # cannot-read problem) — either way the line walk and the
+        # merged-row cross-check have no ledger to bite on.
+        return problems
     wo_rows = collect_wo_rows(root)
     recorded = set()
-    for lineno, entry, suffixes in cost_ledger.parse(text):
-        problems.extend(f"G: {COST_LEDGER}:{lineno} {suffix}"
-                        for suffix in suffixes)
+    for lineno, entry, located in rows:
+        problems.extend(located)
         wo = cost_ledger.wo_token(entry) if entry is not None else None
         if wo:
             recorded.add(wo)

@@ -105,6 +105,17 @@ def append(root, entry):
         handle.write(json.dumps(entry) + "\n")
 
 
+def row_key(entry):
+    """The row's (wo, run_id) identity — ADR-0041's dedup rule in the
+    module that composes both fields: gate_entry keys run_id on the
+    passage timestamp so a daily re-scan builds a row with the SAME key,
+    and the gate digest drops any row whose key is already recorded.
+    Takes a well-formed row (read() entries, entry/gate_entry outputs);
+    both fields are required on every row, so this subscripts — the read
+    contract."""
+    return entry["wo"], entry["run_id"]
+
+
 def wo_token(entry):
     """The record's valid WO-#### token, or None. The shape complaint for
     an invalid one is line_problems' job; this is for callers (detector G)
@@ -187,24 +198,49 @@ def parse(text):
     return parsed
 
 
+def load(root, label, ledger_path=None):
+    """(rows, problems): the labelled ledger read every reader is built
+    on — one existence check, one OSError-to-problem translation, one
+    located problem grammar. rows is parse()'s [(lineno, entry, problems)]
+    with each problem located and prefixed for the caller
+    ("<label>: <path>:<lineno> <suffix>"), or None when the ledger does
+    not exist — None, not [], so a caller whose rules bite only once the
+    ledger exists (detector G's merged-row cross-check) can tell an
+    absent ledger from an empty one. problems carries only the file-level
+    failure ("<label>: cannot read …"), so read() and detector G report
+    an unreadable ledger with the same body under their own prefix."""
+    path = Path(ledger_path) if ledger_path else Path(root) / COST_LEDGER
+    if not path.is_file():
+        return None, []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as err:
+        return None, [f"{label}: cannot read {COST_LEDGER}: {err}"]
+    rows = [(lineno, record,
+             [f"{label}: {COST_LEDGER}:{lineno} {suffix}"
+              for suffix in suffixes])
+            for lineno, record, suffixes in parse(text)]
+    return rows, []
+
+
 def read(root, ledger_path=None):
     """(entries, problems): every ledger line that satisfies the full
     ADR-0034 shape; anything else is excluded from entries and reported as
     a ledger:-prefixed problem, never silently dropped — an unaccountable
     line must not silently undercount spend (fail closed). An absent
     ledger is silent (no runs yet): the ledger is created by the first run
-    that records into it, matching detector G's own convention."""
-    path = Path(ledger_path) if ledger_path else Path(root) / COST_LEDGER
-    if not path.is_file():
-        return [], []
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as err:
-        return [], [f"ledger: cannot read {COST_LEDGER}: {err}"]
-    entries, problems = [], []
-    for lineno, record, suffixes in parse(text):
-        problems.extend(f"ledger: {COST_LEDGER}:{lineno} {suffix}"
-                        for suffix in suffixes)
-        if record is not None and not suffixes:
+    that records into it, matching detector G's own convention.
+
+    THE READ CONTRACT: entries are validated dicts — the full shape is
+    established right here, so callers subscript LEDGER_FIELDS freely
+    (cost_report.aggregate does; per-field accessors would be pure
+    pass-throughs, below the seam bar). What the seam owns are the
+    semantic rules over a row: row_key (identity), in_month (window),
+    gate_wait (gate rows), wo_token (typed token)."""
+    rows, problems = load(root, "ledger", ledger_path=ledger_path)
+    entries = []
+    for _, record, located in rows or ():
+        problems.extend(located)
+        if record is not None and not located:
             entries.append(record)
     return entries, problems

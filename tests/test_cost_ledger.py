@@ -171,6 +171,32 @@ class TestGateEntry(unittest.TestCase):
         self.assertEqual(cost_ledger.gate_wait(record), ("prd", 86400))
 
 
+class TestRowKey(unittest.TestCase):
+    def test_the_identity_is_wo_plus_run_id(self):
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-02")
+        self.assertEqual(cost_ledger.row_key(record), ("WO-0001", "r-1"))
+
+    def test_a_reobserved_gate_passage_has_the_same_key(self):
+        # ADR-0041: the passage timestamp keys run_id, so a daily re-scan
+        # of the same label history composes a row with the SAME identity
+        # — the dedup the gate digest hangs on this function.
+        first = cost_ledger.gate_entry("WO-0017", "merge", 7260,
+                                       "2026-07-22T05:17:00Z")
+        again = cost_ledger.gate_entry("WO-0017", "merge", 7260,
+                                       "2026-07-22T05:17:00Z")
+        self.assertEqual(cost_ledger.row_key(first),
+                         cost_ledger.row_key(again))
+
+    def test_distinct_passages_have_distinct_keys(self):
+        earlier = cost_ledger.gate_entry("WO-0017", "merge", 7260,
+                                         "2026-07-22T05:17:00Z")
+        later = cost_ledger.gate_entry("WO-0017", "merge", 60,
+                                       "2026-07-23T09:00:00Z")
+        self.assertNotEqual(cost_ledger.row_key(earlier),
+                            cost_ledger.row_key(later))
+
+
 class TestInMonth(unittest.TestCase):
     def test_a_row_in_the_month_matches(self):
         record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
@@ -226,6 +252,70 @@ class TestParse(unittest.TestCase):
     def test_a_non_object_line_is_an_unlocated_suffix(self):
         self.assertEqual(cost_ledger.parse("[1, 2, 3]\n"),
                          [(1, None, ["is not a JSON object"])])
+
+
+class TestLoad(unittest.TestCase):
+    """The labelled file read both read() and detector G are built on:
+    one existence check, one OSError-to-problem translation, one located
+    problem grammar — prefixed with whatever label the caller reports
+    under."""
+
+    def ledger(self, tmp, text):
+        path = Path(tmp) / cost_ledger.COST_LEDGER
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_an_absent_ledger_is_none_not_empty(self):
+        # None, not []: detector G's merged-row rule bites only once the
+        # ledger exists, so absent and empty must stay distinguishable.
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(cost_ledger.load(tmp, "G"), (None, []))
+
+    def test_an_empty_ledger_is_distinct_from_an_absent_one(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "")
+            self.assertEqual(cost_ledger.load(tmp, "G"), ([], []))
+
+    def test_a_well_formed_row_carries_no_problems(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            e1 = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-01")
+            self.ledger(tmp, json.dumps(e1) + "\n")
+            self.assertEqual(cost_ledger.load(tmp, "ledger"),
+                             ([(1, e1, [])], []))
+
+    def test_rows_carry_located_problems_under_the_callers_label(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "[1, 2]\n")
+            self.assertEqual(cost_ledger.load(tmp, "G"), ([
+                (1, None,
+                 ["G: docs/factory/costs.jsonl:1 is not a JSON object"]),
+            ], []))
+
+    def test_an_unreadable_ledger_is_the_callers_problem_string(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.ledger(tmp, "")
+            path.chmod(0)
+            try:
+                rows, problems = cost_ledger.load(tmp, "G")
+            finally:
+                path.chmod(0o644)
+            self.assertIsNone(rows)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "G: cannot read docs/factory/costs.jsonl:"), problems)
+
+    def test_an_injected_ledger_path_overrides_the_repo_default(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            custom = Path(tmp) / "custom.jsonl"
+            e1 = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-01")
+            custom.write_text(json.dumps(e1) + "\n", encoding="utf-8")
+            self.assertEqual(
+                cost_ledger.load("/does/not/exist", "ledger",
+                                 ledger_path=custom),
+                ([(1, e1, [])], []))
 
 
 class TestRead(unittest.TestCase):

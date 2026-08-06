@@ -215,17 +215,18 @@ def _timelines(mirrored, run, problems):
 
 def _capture_latency(root, mirror, events_by_issue, problems):
     """Append every not-yet-recorded gate passage to the cost ledger and
-    return the new rows. run_id keys the passage timestamp, so a daily
-    re-scan of the same history appends nothing."""
+    return the new rows. The dedup identity is cost_ledger.row_key
+    (ADR-0041): gate_entry keys run_id on the passage timestamp, so a
+    daily re-scan of the same history appends nothing."""
     existing, ledger_problems = cost_ledger.read(root)
     problems.extend(ledger_problems)
-    recorded = {(entry["wo"], entry["run_id"]) for entry in existing}
+    recorded = {cost_ledger.row_key(entry) for entry in existing}
     new_rows = []
     for number, events in sorted(events_by_issue.items()):
         for gate, waited, passed_at in gate_passages(events):
             row = cost_ledger.gate_entry(mirror[number], gate, waited,
                                          passed_at)
-            if (row["wo"], row["run_id"]) not in recorded:
+            if cost_ledger.row_key(row) not in recorded:
                 new_rows.append(row)
     for row in new_rows:
         cost_ledger.append(root, row)

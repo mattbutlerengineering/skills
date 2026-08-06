@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cost_ledger
 import gates
 
 # discover puts tests/ on sys.path; selective package-style runs need it
@@ -235,14 +236,18 @@ class TestCostLedger(unittest.TestCase):
     factory's measurement substrate; a merged order missing from it is a
     gating finding, and an absent ledger means no runs are recorded yet."""
 
-    LINE = {"wo": "WO-0001", "run_id": "r-1", "model": "m",
-            "tokens": 1200, "cost": 0.42, "outcome": "merged"}
+    # Fixture rows come from the writer seam itself (cost_ledger.entry),
+    # so this suite cannot pin G against a shape no current writer
+    # produces. The one deliberate exception is the labelled legacy
+    # fixture below.
+    LINE = cost_ledger.entry("WO-0001", "r-1", "m", 1200, 0.42, "merged",
+                             "2026-08-01")
 
     def build(self, tmp, *lines, row="- [x] WO-0001 slice (PRD-0001)\n"):
         tree = FixtureTree(tmp)
         tree.write("docs/features/demo/breakdown.md", row)
         if lines:
-            tree.write("docs/factory/costs.jsonl",
+            tree.write(cost_ledger.COST_LEDGER,
                        "".join(json.dumps(line) + "\n" for line in lines))
         return tree
 
@@ -254,6 +259,19 @@ class TestCostLedger(unittest.TestCase):
     def test_well_formed_ledger_covering_merged_orders_is_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(tmp, self.LINE)
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+    def test_a_legacy_row_without_at_is_tolerated(self):
+        """The ONE deliberately legacy-shaped fixture in this suite: the
+        real costs.jsonl still holds pre-`at` rows (the ledger is
+        append-only, never backfilled) and G gates the real repo in CI,
+        so it must keep accepting them even though no current writer
+        produces the shape. Every other fixture builds through
+        cost_ledger.entry."""
+        legacy = {"wo": "WO-0001", "run_id": "r-1", "model": "m",
+                  "tokens": 1200, "cost": 0.42, "outcome": "merged"}
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp, legacy)
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
     def test_merged_order_with_no_ledger_line_is_flagged(self):
@@ -295,7 +313,7 @@ class TestCostLedger(unittest.TestCase):
     def test_malformed_line_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(tmp, self.LINE)
-            tree.write("docs/factory/costs.jsonl",
+            tree.write(cost_ledger.COST_LEDGER,
                        json.dumps(self.LINE) + "\n{not json\n[1, 2]\n")
             problems = gates.check_cost_ledger(tree.root)
             self.assertEqual(len(problems), 2, problems)
@@ -308,9 +326,9 @@ class TestCostLedger(unittest.TestCase):
     def test_wrong_fields_are_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(
-                tmp, {"wo": "WO-0001", "run_id": "r-1", "model": "m",
-                      "tokens": 1, "cost": 0.1, "outcome": "merged",
-                      "note": "extra"},
+                tmp, dict(self.LINE, note="extra"),
+                # missing-fields row: deliberately unbuildable through
+                # cost_ledger.entry — absent fields ARE the fixture
                 {"wo": "WO-0001", "model": "m", "outcome": "merged"})
             self.assertEqual(gates.check_cost_ledger(tree.root), [
                 "G: docs/factory/costs.jsonl:1 ledger line has unknown"
@@ -321,8 +339,8 @@ class TestCostLedger(unittest.TestCase):
     def test_bad_field_values_are_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(
-                tmp, {"wo": "WO-0009", "run_id": "", "model": "m",
-                      "tokens": -1, "cost": "free", "outcome": "merged"})
+                tmp, cost_ledger.entry("WO-0009", "", "m", -1, "free",
+                                       "merged", "2026-08-01"))
             self.assertEqual(gates.check_cost_ledger(tree.root), [
                 "G: docs/factory/costs.jsonl:1 run_id must be a non-empty"
                 " string",
@@ -338,8 +356,8 @@ class TestCostLedger(unittest.TestCase):
     def test_untyped_wo_field_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(
-                tmp, {"wo": "nope", "run_id": "r", "model": "m",
-                      "tokens": 0, "cost": 0, "outcome": "failed"})
+                tmp, cost_ledger.entry("nope", "r", "m", 0, 0, "failed",
+                                       "2026-08-01"))
             problems = gates.check_cost_ledger(tree.root)
             self.assertIn(
                 "G: docs/factory/costs.jsonl:1 wo 'nope' is not a WO-####"
@@ -348,7 +366,7 @@ class TestCostLedger(unittest.TestCase):
     def test_blank_lines_are_tolerated(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(tmp, self.LINE)
-            tree.write("docs/factory/costs.jsonl",
+            tree.write(cost_ledger.COST_LEDGER,
                        json.dumps(self.LINE) + "\n\n")
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
