@@ -329,12 +329,17 @@ def run_single_query(query, descriptions, timeout, model, isolate,
                              detect=adapter.detect)
     finally:
         if process is not None:
-            if process.poll() is None:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except (ProcessLookupError, PermissionError):
-                    process.kill()
-                process.wait()
+            # Signal the group even when the leader has already exited:
+            # start_new_session makes the leader's pid the pgid, and the
+            # kernel keeps that pgid alive while any grandchild survives.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
+                # Group empty (then Popen.kill is a no-op — poll already
+                # recorded the exit) or a leader that setpgid itself out
+                # of the group; the leader-only kill covers the latter.
+                process.kill()
+            process.wait()
             process.stdout.close()
         shutil.rmtree(project_dir, ignore_errors=True)
 
