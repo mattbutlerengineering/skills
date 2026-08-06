@@ -59,7 +59,8 @@ import factory_config
 from cli import read_event, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             breakdown_files, repo_root, run_dirs)
+                             breakdown_files, repo_root, row_pre_ledger,
+                             run_dirs)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
@@ -94,12 +95,6 @@ ADR_INDEX_ROW = re.compile(
 # not the tracker, is the state). Bullet-and-whitespace shape aligned with
 # knowledge_plane.ROW; separate owner because only the checked form counts.
 MERGED_ROW = re.compile(r"^\s*[-*+]\s+\[x\]", re.IGNORECASE)
-
-# A row merged before the cost ledger was born carries this annotation
-# (ADR-0043); G's merged-row-must-be-recorded check skips it. The
-# exemption lives on the row it describes — a repo-specific list in this
-# mirrored module would leak one repo's WO ids into every stamped repo.
-PRE_LEDGER_MARK = "(pre-ledger)"
 
 # Markdown links to repo paths; URLs, autolinks and bare anchors are not.
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
@@ -571,7 +566,8 @@ def check_blueprint_drift(root):
 def merged_wo_rows(root):
     """(breakdown path, lineno, WO token) for every checked breakdown row —
     the artifact-side record that a work order merged (ADR-0004). Rows
-    annotated (pre-ledger) are excluded: they merged before the ledger
+    carrying the trailing (pre-ledger) annotation — knowledge_plane's
+    row_pre_ledger grammar — are excluded: they merged before the ledger
     existed and G owes them no ledger line (ADR-0043)."""
     rows = []
     for breakdown, lines in breakdown_files(root):
@@ -579,7 +575,7 @@ def merged_wo_rows(root):
         for lineno, line in enumerate(lines, 1):
             wo = WO_TOKEN.search(line)
             if (MERGED_ROW.match(line) and wo
-                    and PRE_LEDGER_MARK not in line):
+                    and not row_pre_ledger(line)):
                 rows.append((rel, lineno, wo.group(0)))
     return rows
 

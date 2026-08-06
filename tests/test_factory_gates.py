@@ -301,6 +301,20 @@ class TestCostLedger(unittest.TestCase):
                     "- [x] WO-0002 two (PRD-0001) (pre-ledger)\n")
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
+    def test_pre_ledger_as_mid_row_prose_does_not_exempt(self):
+        """The annotation is a TRAILING mark (knowledge_plane.row_pre_ledger,
+        ADR-0043) — a merged row that merely mentions (pre-ledger) mid-row
+        still owes its ledger line."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                row="- [x] WO-0001 one (PRD-0001)\n"
+                    "- [x] WO-0002 explain the (pre-ledger) mark"
+                    " (PRD-0001)\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/features/demo/breakdown.md:2 merged work order"
+                " WO-0002 has no line in docs/factory/costs.jsonl"])
+
     def test_pre_ledger_annotation_does_not_waive_the_reverse_check(self):
         """The annotation waives only must-be-recorded. A recorded wo must
         still have a breakdown row, annotated or not."""

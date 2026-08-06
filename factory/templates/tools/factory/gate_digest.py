@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 import cost_ledger
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json, report, write_outputs
+from cli import full_window, gh_json, label_names, report, write_outputs
 from knowledge_plane import (breakdown_files, repo_root, row_tracker_issue,
                              row_work_order)
 from cli import gh_runner
@@ -186,10 +186,6 @@ def mirror_map(root):
     return mapping
 
 
-def _issue_labels(entry):
-    return [(label.get("name") or "") for label in entry.get("labels") or []]
-
-
 def _timelines(mirrored, run, problems):
     """{issue number: label events} for every mirrored issue gh can
     answer for; a failed fetch is a problem, never a lost queue item
@@ -244,7 +240,7 @@ def _queues(mirror, open_issues, events_by_issue, now):
         for entry in sorted(open_issues, key=lambda e: e["number"]):
             number = entry["number"]
             if number not in mirror or \
-                    queue_label not in _issue_labels(entry):
+                    queue_label not in label_names(entry):
                 continue
             since = waiting_since(events_by_issue.get(number, []),
                                   queue_label)

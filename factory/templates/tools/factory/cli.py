@@ -290,3 +290,25 @@ def full_window(entries, limit):
         return (f"returned a full {limit}-entry window — older entries"
                 " are invisible; raise the window or narrow the query")
     return None
+
+
+def label_names(payload):
+    """The label names on a gh label-carrying payload, in payload order.
+    Accepts both shapes gh answers with: an object carrying a `labels`
+    array (issue view, an issue-list entry) or the label array itself
+    (label list; label_sync.load_labels emits the same shape).
+
+    One deliberate strictness for every caller — the strictest all of
+    them tolerate: an entry that is not an object, or whose name is not
+    a non-empty string, contributes NO name. A nameless label cannot be
+    compared, added, or removed by name, and coercing it (to None or "")
+    smuggles a non-name into the caller's next comparison — the
+    validator's lifecycle transition carried exactly that hazard. A
+    missing or malformed `labels` key is an empty list for the same
+    reason."""
+    labels = payload.get("labels") if isinstance(payload, dict) else payload
+    if not isinstance(labels, list):
+        return []
+    return [entry["name"] for entry in labels
+            if isinstance(entry, dict)
+            and isinstance(entry.get("name"), str) and entry["name"]]

@@ -603,6 +603,27 @@ class TestRunLifecycle(unittest.TestCase):
                 "--add-label", "wo:merged",
                 "--remove-label", "wo:in-progress"]])
 
+    def test_a_nameless_label_entry_is_dropped_not_compared(self):
+        # gh can answer `issue view` with a label entry carrying no usable
+        # name. The seam (cli.label_names) drops it, so the lifecycle
+        # transition never compares a non-name against the state machine
+        # and the flip proceeds on the labels that ARE named.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = FakeGh(answers={
+                ("issue", "view"): json.dumps({"labels": [
+                    "junk", {"id": 4321},
+                    {"name": "wo:needs-review"}, {"name": "size:M"}]}),
+                ("api", "user"): "github-actions[bot]\n",
+            })
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp), run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit", "109"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:merged",
+                "--remove-label", "wo:needs-review"]])
+
     def test_a_failing_gh_call_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)

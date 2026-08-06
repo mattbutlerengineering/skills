@@ -6,8 +6,8 @@ implementation. It owns the stage/skill taxonomy, the artifact tables
 reading, the skill-file contract (path shape and frontmatter rules,
 ADR-0052), the UX conditional, the re-entry conditional, the checkbox
 rule, the retro short-circuit, and next-stage derivation (ADR-0021).
-Tools — the orientation CLI, the structural lint, the trigger-eval
-runner — are thin callers.
+Tools — the structural lint, the trigger-eval runner — are thin
+callers.
 """
 import re
 from pathlib import Path

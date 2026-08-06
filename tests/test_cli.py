@@ -162,6 +162,30 @@ class TestFullWindow(unittest.TestCase):
         self.assertIsNone(cli.full_window([{}], 1000))
 
 
+class TestLabelNames(unittest.TestCase):
+    def test_names_come_off_an_issue_payload_in_order(self):
+        payload = {"labels": [{"name": "wo:merged"}, {"name": "size:M"}]}
+        self.assertEqual(cli.label_names(payload), ["wo:merged", "size:M"])
+
+    def test_a_bare_label_listing_works_the_same_way(self):
+        # gh label list answers with the array itself, unwrapped.
+        self.assertEqual(cli.label_names([{"name": "bug"}]), ["bug"])
+
+    def test_a_nameless_entry_is_dropped_never_coerced(self):
+        # One deliberate strictness for every caller: an entry with no
+        # usable name yields NO name — not None (the validator's old
+        # lifecycle-comparison hazard) and not "" (gate_digest's old
+        # coercion). A non-object entry is dropped too, not a traceback.
+        payload = {"labels": [{"id": 4321}, {"name": None}, {"name": ""},
+                              "junk", {"name": "wo:ready-for-agent"}]}
+        self.assertEqual(cli.label_names(payload), ["wo:ready-for-agent"])
+
+    def test_a_missing_or_malformed_labels_key_is_empty(self):
+        for payload in ({}, {"labels": None}, {"labels": "wo:merged"}, None):
+            with self.subTest(payload=payload):
+                self.assertEqual(cli.label_names(payload), [])
+
+
 class TestChildEnv(unittest.TestCase):
     def test_strips_the_nesting_guard_and_keeps_the_rest(self):
         with mock.patch.dict(os.environ, {"CLAUDECODE": "1",
