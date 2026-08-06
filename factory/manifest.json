@@ -13,19 +13,19 @@
     "templates/docs/design/TEMPLATE.md": "e1f91e3f34bb0f742ca40e2390e5dfbeaaca585eddb69437b9a71b56708500a0",
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/assembler.py": "2d683c811cfd087872f5a281efdd7508d5d725bca475ee9af875d8bfc9911acc",
-    "templates/tools/factory/budget_guard.py": "9263a03cbc816880290f5e0811635c59f8fe692f4dce9a174b64393edbc01226",
-    "templates/tools/factory/cli.py": "fa3d951dfa4fc4c5622bcad8b9dbb13f14930d85fb14cfa53e09a277c26c5034",
+    "templates/tools/factory/assembler.py": "f480346bc52be9621cff1224a0569b04c4c60d14ea1ab551cf019f1bd7f01610",
+    "templates/tools/factory/budget_guard.py": "2347a13435bebdf3cfe961af84326e1ece996680be5f7bff0779b0c04bf17c4b",
+    "templates/tools/factory/cli.py": "287c0fe538bb20a99a6041ae38e3772991cae28aa1059ee51d9db6ef6859c127",
     "templates/tools/factory/cost_ledger.py": "10b5a2767c837b8cbdff36697ab4b64d67c91ad381c64ad4fcadbc010be5e21d",
-    "templates/tools/factory/cost_report.py": "b5a30946999a5c46f4cd018c5ace3dbcc6fdc9146c6b2d9ecb6544f637661cad",
+    "templates/tools/factory/cost_report.py": "d00ed970ef4a3f7d9c02c853c16b8e5f3e33dec4d1a3da0c4a11dec75a835d7a",
     "templates/tools/factory/factory_config.py": "a040880859269d993076a250e4ad61ea52a7595e696f8e2d9ad98e90842a260d",
-    "templates/tools/factory/gate_digest.py": "035fee1594a47aea7343f50e4da6a218225339ec4a97b5a6938b15cb85dde803",
-    "templates/tools/factory/gates.py": "dfbc46036e4b089846434662706faa7eaeb451e608672f9837e3fa7f3cb8feb8",
+    "templates/tools/factory/gate_digest.py": "296a6ed806adc7d544beae2d2de97411dd341fcdabe3d541a9e27e4a115c20d8",
+    "templates/tools/factory/gates.py": "94660c73106d12010058db9980c2e3fbbd2c48e4dfcae2200ae26e5daa34eb3d",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/knowledge_plane.py": "1d3f7d809325e58c523dc9fd9e886dd2b3e17249ae8945a385d3c2fc20087739",
-    "templates/tools/factory/label_sync.py": "bfe3ada8ba3dc79b891f7f2fec43a3be88105d34fe6c6219a9e0f79f77019b5c",
+    "templates/tools/factory/label_sync.py": "2dd74d12942271d71d64cb60bc54923f0589f14cedf7bf41bb56413a4e55c3d9",
     "templates/tools/factory/orientation_pack.py": "5c6b70f047641f92f9ddaf4ea0df9e9fac4fb435c0f501211395ee22000527ec",
     "templates/tools/factory/protocol.py": "98410fee52aae696af09b8cce07bd5b5aca36a15c16d899f6ed924b1cb2bd6fd",
-    "templates/tools/factory/validator.py": "2bc3ee1665a403c689e9247828beaab5a0ef103bd68d6e308eb3037901f58acd"
+    "templates/tools/factory/validator.py": "77f9ce9c1b06c31e109a04dad545a39ae29931ee2f55496e54b274243e418462"
   }
 }

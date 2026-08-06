@@ -52,6 +52,9 @@ def recital_body(slug):
         lines.append(f"3. **Hand off.** {hand}")
     return "## Process\n\n" + "\n".join(lines) + "\n"
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
+
 
 def make_clean_tree(root):
     """Seed the smallest tree on which every checker reports zero problems."""
@@ -543,6 +546,19 @@ class TestLedgerLinks(CheckerTreeTest):
             "(evals/results/output/idea-2026-01-01-2/grading.json) |\n",
             encoding="utf-8")
         self.assertEqual(lint.check_ledger_links(self.root), [])
+
+
+class TestMainSummary(cli_contract.ReportContract, unittest.TestCase):
+    """lint.main against the real repo — the one summary with a coda
+    (`across N skills`) after the count clause. CI greps this line."""
+
+    @property
+    def summary_line(self):
+        checked = len(lint.ALL_SKILLS) + len(lint.extra_skills(ROOT))
+        return f"lint: 0 problem(s) across {checked} skills"
+
+    def clean_cli(self):
+        return cli_contract.capture(lint.main)
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ from pathlib import Path
 
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json, gh_runner
+from cli import full_window, gh_json, gh_runner, report
 from factory_config import artifact_paths
 from knowledge_plane import repo_root
 
@@ -148,11 +148,7 @@ def main(argv, run=gh_runner):
     if [arg for arg in argv if arg != "--apply"]:
         print(__doc__.strip())
         return 2
-    problems = sync(repo_root(), apply=apply, run=run)
-    for problem in problems:
-        print(problem)
-    print(f"label-sync: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("label-sync", sync(repo_root(), apply=apply, run=run))
 
 
 if __name__ == "__main__":

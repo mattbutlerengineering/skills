@@ -1,6 +1,6 @@
 # gh_runner and the event read join the cli seam
 
-- Status: accepted
+- Status: amended by ADR-0051
 - Date: 2026-07-28
 
 Amends ADR-0040. Its consequences read the ADR-0037 carve-out list as:

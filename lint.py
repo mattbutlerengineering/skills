@@ -15,6 +15,7 @@ from pathlib import Path
 
 import eval_schema
 import protocol
+from cli import report
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
                       TEMPLATED_STAGES)
 
@@ -326,11 +327,11 @@ CHECKERS = (check_manifest, check_pi_package, check_skills,
 def main():
     root = Path(__file__).resolve().parent
     problems = [p for checker in CHECKERS for p in checker(root)]
-    for problem in problems:
-        print(f"LINT: {problem}")
     checked = len(ALL_SKILLS) + len(extra_skills(root))
-    print(f"lint: {len(problems)} problem(s) across {checked} skills")
-    return 1 if problems else 0
+    # Checker strings carry no label (their suite pins them bare); the
+    # LINT: prefix is print-time dress, applied before the shared epilogue.
+    return report("lint", [f"LINT: {p}" for p in problems],
+                  suffix=f" across {checked} skills")
 
 
 if __name__ == "__main__":

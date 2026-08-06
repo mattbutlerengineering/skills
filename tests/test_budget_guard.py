@@ -310,11 +310,16 @@ class TestAcceptanceScenario(unittest.TestCase):
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
 
-class TestMain(cli_contract.CliContract, unittest.TestCase):
+class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
+               unittest.TestCase):
     usage_fragment = "python3 budget_guard.py check"
+    summary_line = "budget_guard: 0 problem(s)"
 
     def run_cli(self, argv):
         return cli_contract.capture(budget_guard.main, argv)
+
+    def clean_cli(self):
+        return self.run_cli(["check", "S", "0.01"])
 
     def test_a_non_numeric_spend_is_a_problem(self):
         code, out = self.run_cli(["check", "S", "lots"])

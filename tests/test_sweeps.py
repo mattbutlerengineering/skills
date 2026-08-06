@@ -681,17 +681,23 @@ class TestLoadPayload(unittest.TestCase):
             self.assertEqual(len(intakes), sweeps.MAX_INTAKE + 2)
 
 
-class TestCli(cli_contract.CliContract, unittest.TestCase):
+class TestCli(cli_contract.CliContract, cli_contract.ReportContract,
+              unittest.TestCase):
     """The CLI runs against the real repo root (its own taxonomy), with the
     gh runner injected — no network, no issues filed anywhere."""
 
     usage_fragment = "sweeps"
     bad_argv = ("nope",)
+    summary_line = "sweeps: 0 problem(s)"
 
     def run_cli(self, argv, runner=None):
         return cli_contract.capture(
             sweeps.main, argv,
             run=runner if runner is not None else gh())
+
+    def clean_cli(self):
+        # The ensure-labels epilogue — the plain summary shape.
+        return self.run_cli(["ensure-labels"], gh(labels=[]))
 
     def test_sentry_sweep_files_and_reports(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -804,6 +810,17 @@ class TestCli(cli_contract.CliContract, unittest.TestCase):
                 for arg in create:
                     self.assertNotRegex(arg, r"\bWO-\d{4}\b")
                     self.assertFalse(arg.startswith("wo:"), arg)
+
+
+class TestFiledSummary(cli_contract.ReportContract, unittest.TestCase):
+    """The tool's second epilogue (the filing paths): its summary carries
+    the filed clause between the label and the problem count."""
+
+    summary_line = "sweeps: 0 issue(s) filed, 0 problem(s)"
+
+    def clean_cli(self):
+        return cli_contract.capture(sweeps.main, ["label-drift"],
+                                    run=gh())
 
 
 class TestSweepsWorkflow(unittest.TestCase):

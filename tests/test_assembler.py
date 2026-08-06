@@ -377,12 +377,19 @@ class TestWorkflowOutputLockstep(unittest.TestCase):
                              self.yaml_refs())
 
 
-class TestMain(cli_contract.CliContract, unittest.TestCase):
+class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
+               unittest.TestCase):
     usage_fragment = "python3 assembler.py resolve"
+    summary_line = "assembler: 0 problem(s)"
 
     def run_cli(self, argv, env=None):
         return cli_contract.capture(assembler.main, argv,
                                     env=env if env is not None else {})
+
+    def clean_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            return self.run_cli(["resolve"],
+                                label_event(tmp, sender="drive-by"))
 
     def test_a_no_op_dispatch_exits_zero(self):
         with tempfile.TemporaryDirectory() as tmp:

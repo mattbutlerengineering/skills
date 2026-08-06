@@ -37,7 +37,7 @@ from pathlib import Path
 
 import factory_config
 import orientation_pack
-from cli import read_event, write_outputs
+from cli import read_event, report, write_outputs
 from knowledge_plane import (breakdown_files, repo_root,
                              row_tracker_issue, row_work_order)
 from protocol import read_frontmatter
@@ -231,10 +231,7 @@ def main(argv, env=None):
     else:
         print(__doc__.strip())
         return 2
-    for problem in problems:
-        print(problem)
-    print(f"assembler: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("assembler", problems)
 
 
 if __name__ == "__main__":

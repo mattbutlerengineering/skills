@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 
 import cost_ledger
 import factory_config
-from cli import write_outputs
+from cli import report, write_outputs
 from knowledge_plane import repo_root
 
 PAUSE = "PAUSE"
@@ -207,10 +207,7 @@ def main(argv, env=None, clock=None):
     else:
         print(__doc__.strip())
         return 2
-    for problem in problems:
-        print(problem)
-    print(f"cost_report: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("cost_report", problems)
 
 
 if __name__ == "__main__":

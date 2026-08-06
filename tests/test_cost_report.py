@@ -416,13 +416,18 @@ class TestMonthlyWindow(unittest.TestCase):
                           outputs["body"])
 
 
-class TestMain(cli_contract.CliContract, unittest.TestCase):
+class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
+               unittest.TestCase):
     usage_fragment = "python3 cost_report.py report"
+    summary_line = "cost_report: 0 problem(s)"
 
     def run_cli(self, argv, env=None):
         return cli_contract.capture(
             cost_report.main, argv,
             env=env if env is not None else {})
+
+    def clean_cli(self):
+        return self.run_cli(["report"])
 
     def test_check_against_the_real_repo_config_exits_zero(self):
         # The real docs/factory/costs.jsonl holds only legacy (pre-at) and

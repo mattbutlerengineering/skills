@@ -50,7 +50,7 @@ import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import gh_json, gh_runner, write_outputs
+from cli import gh_json, gh_runner, report, write_outputs
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              repo_root, row_tracker_issue, row_work_order)
 
@@ -436,10 +436,7 @@ def main(argv, env=None, run=gh_runner):
     else:
         print(__doc__.strip())
         return 2
-    for problem in problems:
-        print(problem)
-    print(f"validator: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("validator", problems)
 
 
 if __name__ == "__main__":

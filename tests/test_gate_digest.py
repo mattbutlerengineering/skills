@@ -20,6 +20,7 @@ import gate_digest
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling fixture_tree import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
@@ -400,7 +401,15 @@ class TestRunDaily(unittest.TestCase):
             self.assertIn("- #123 WO-0018 rejection mining\n", body)
 
 
-class TestMain(unittest.TestCase):
+class TestMain(cli_contract.ReportContract, unittest.TestCase):
+    summary_line = "gate_digest: 0 problem(s)"
+
+    def clean_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            return cli_contract.capture(
+                gate_digest.main, ["daily"], env={},
+                root=tree(tmp).root, run=gh(), clock=clock)
+
     def test_daily_writes_changed_to_github_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "out.txt"

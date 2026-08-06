@@ -902,12 +902,21 @@ class TestParseLifecycle(unittest.TestCase):
             (None, None))
 
 
-class TestMain(cli_contract.CliContract, unittest.TestCase):
+class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
+               unittest.TestCase):
     usage_fragment = "python3 validator.py review"
+    summary_line = "validator: 0 problem(s)"
 
     def run_cli(self, argv):
         return cli_contract.capture(validator.main, argv, env={},
                                     run=gh())
+
+    def clean_cli(self):
+        # The claim leg needs no PR event; a ready issue flips cleanly.
+        return cli_contract.capture(
+            validator.main,
+            ["lifecycle", "--label", "wo:in-progress", "--issue", "7"],
+            env={}, run=gh(labels=["wo:ready-for-agent"]))
 
     def test_a_non_numeric_status_is_a_usage_error(self):
         self.assertEqual(

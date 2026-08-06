@@ -44,7 +44,7 @@ from pathlib import Path
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import gh_json
+from cli import gh_json, report
 from knowledge_plane import WO_TOKEN, repo_root
 from cli import gh_runner
 
@@ -407,11 +407,7 @@ def main(argv, run=gh_runner):
         return 2
     root = repo_root()
     if kind == "ensure-labels":
-        problems = ensure_labels(root, run=run)
-        for problem in problems:
-            print(problem)
-        print(f"sweeps: {len(problems)} problem(s)")
-        return 1 if problems else 0
+        return report("sweeps", ensure_labels(root, run=run))
     if kind == "sentry":
         intakes, problems = sentry(path)
     else:
@@ -421,14 +417,10 @@ def main(argv, run=gh_runner):
     # the valid intake — a signal nobody files is an outage nobody notices.
     # With no plans (bad JSON, non-array, failed gh) file_issues is a no-op.
     filed, file_problems = file_issues(root, intakes, run=run)
-    problems = problems + file_problems
-    for problem in problems:
-        print(problem)
     for key in filed:
         print(f"sweeps: filed intake issue for {key}")
-    print(f"sweeps: {len(filed)} issue(s) filed,"
-          f" {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("sweeps", problems + file_problems,
+                  prefix=f"{len(filed)} issue(s) filed, ")
 
 
 if __name__ == "__main__":

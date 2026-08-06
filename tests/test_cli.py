@@ -1,7 +1,8 @@
-"""cli seam tests (ADR-0037, ADR-0040, ADR-0045): the failure
-vocabulary, the one-line detail formatter, and the harness-IO
+"""cli seam tests (ADR-0037, ADR-0040, ADR-0045, ADR-0051): the failure
+vocabulary, the one-line detail formatter, the harness-IO
 conventions — child_env, version, write_outputs, decode_events, and the
-harness_run process-lifecycle contract — asserted at the seam's own
+harness_run process-lifecycle contract — and the report epilogue,
+asserted at the seam's own
 interface. The caller suites (label_sync, validator, budget_guard,
 trigger_eval, charter_replay, assembler, cost_report) keep testing their
 composition — problem-string labels around a failing runner, step
@@ -17,6 +18,7 @@ test.
 import os
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -24,6 +26,50 @@ from pathlib import Path
 from unittest import mock
 
 import cli
+
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling capture-helper import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
+
+
+class TestReport(unittest.TestCase):
+    def test_prints_each_problem_then_the_computed_summary(self):
+        code, out = cli_contract.capture(
+            cli.report, "tool", ["t: first", "t: second"])
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(),
+                         ["t: first", "t: second", "tool: 2 problem(s)"])
+
+    def test_no_problems_is_the_zero_summary_and_exit_zero(self):
+        code, out = cli_contract.capture(cli.report, "tool", [])
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "tool: 0 problem(s)\n")
+
+    def test_the_count_is_computed_never_a_literal(self):
+        # The budget_guard fork this seam closes: its error path hand-typed
+        # "1 problem(s)". Any list length must print through the same
+        # computation.
+        for problems in (["bg: x"], ["bg: x", "bg: y", "bg: z"]):
+            code, out = cli_contract.capture(cli.report, "bg", problems)
+            self.assertEqual(code, 1)
+            self.assertEqual(out.splitlines()[-1],
+                             f"bg: {len(problems)} problem(s)")
+
+    def test_prefix_decorates_before_the_count_clause(self):
+        # sweeps' filed clause sits between the label and the count.
+        code, out = cli_contract.capture(
+            cli.report, "sweeps", [], prefix="3 issue(s) filed, ")
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "sweeps: 3 issue(s) filed, 0 problem(s)\n")
+
+    def test_suffix_decorates_after_the_count_clause(self):
+        # lint's `across N skills` coda.
+        code, out = cli_contract.capture(
+            cli.report, "lint", ["LINT: bad"], suffix=" across 12 skills")
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(),
+                         ["LINT: bad", "lint: 1 problem(s) across 12 skills"])
 
 
 class TestWriteOutputs(unittest.TestCase):

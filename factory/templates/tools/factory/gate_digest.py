@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 import cost_ledger
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json, write_outputs
+from cli import full_window, gh_json, report, write_outputs
 from knowledge_plane import (breakdown_files, repo_root, row_tracker_issue,
                              row_work_order)
 from cli import gh_runner
@@ -339,10 +339,7 @@ def main(argv, env=None, root=None, run=gh_runner, clock=None):
     else:
         print(__doc__.strip())
         return 2
-    for problem in problems:
-        print(problem)
-    print(f"gate_digest: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("gate_digest", problems)
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ import gates
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling fixture_tree import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -421,6 +422,21 @@ class TestStamp(unittest.TestCase):
             self.assertEqual((target / "Makefile").read_text(
                 encoding="utf-8"), "pre-existing\n")
             self.assertEqual(all_files(target), ["Makefile"])
+
+
+class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
+               unittest.TestCase):
+    usage_fragment = "update-manifest"
+    summary_line = "factory-init: 0 problem(s)"
+
+    def run_cli(self, argv):
+        return cli_contract.capture(factory_init.main, argv)
+
+    def clean_cli(self):
+        # Stamping the real payload into an empty target is the
+        # problem-free run (live-tree, like the acceptance test below).
+        with tempfile.TemporaryDirectory() as tmp:
+            return self.run_cli(["stamp", str(Path(tmp) / "product")])
 
 
 class TestAcceptanceStampRealRepo(unittest.TestCase):

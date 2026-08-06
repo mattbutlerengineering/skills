@@ -20,6 +20,7 @@ from factory_init import product_form
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling helper import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
 from factory_fixture import CONFIG  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 from make_parse import make_recipe  # noqa: E402
@@ -1805,6 +1806,18 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
                 "      - run: python3 gates.py\n")
         self.assertEqual(offending_run_steps(text, ("set +e",)),
                          ["python3 gates.py"])
+
+
+class TestMainSummary(cli_contract.ReportContract, unittest.TestCase):
+    """gates.main against the real repo — the most load-bearing summary in
+    the repo (CI greps `gates: 0 problem(s)`), pinned through the shared
+    epilogue. Live-tree run, same precedent as test_factory_init's
+    TestAcceptanceStampRealRepo."""
+
+    summary_line = "gates: 0 problem(s)"
+
+    def clean_cli(self):
+        return cli_contract.capture(gates.main, [])
 
 
 class TestSelftest(unittest.TestCase):

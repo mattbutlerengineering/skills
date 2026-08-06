@@ -62,7 +62,7 @@ the canonical vocabulary.
 | [0039](0039-tracker-grammar-joins-the-knowledge-plane.md) | Tracker-mirror grammar joins the knowledge plane | amended by ADR-0040 |
 | [0040](0040-write-outputs-joins-the-cli-seam.md) | write_outputs joins the cli seam | amended by ADR-0042 |
 | [0041](0041-gate-latency-rows-join-the-cost-ledger.md) | Gate-latency observations are cost-ledger rows | amended by ADR-0049 |
-| [0042](0042-gh-runner-and-event-read-join-the-cli-seam.md) | gh_runner and the event read join the cli seam | accepted |
+| [0042](0042-gh-runner-and-event-read-join-the-cli-seam.md) | gh_runner and the event read join the cli seam | amended by ADR-0051 |
 | [0043](0043-pre-ledger-rows-are-annotated-in-the-knowledge-plane.md) | Pre-ledger rows are annotated in the knowledge plane | accepted |
 | [0044](0044-daily-improvement-routine.md) | A daily routine drives the factory's improvement loop | accepted |
 | [0045](0045-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
@@ -71,4 +71,5 @@ the canonical vocabulary.
 | [0048](0048-artifact-path-grammar-joins-factory-config.md) | The installed-vs-payload path grammar joins factory_config | accepted |
 | [0049](0049-row-identity-joins-the-cost-ledger.md) | The row identity joins the cost ledger | accepted |
 | [0050](0050-mirrors-carry-a-transform.md) | MIRRORS carries a transform: one authority per payload file | accepted |
+| [0051](0051-report-joins-the-cli-seam.md) | The report epilogue joins the cli seam | accepted |
 | [0052](0052-skill-file-contract-joins-the-protocol-seam.md) | The skill-file contract joins the protocol seam; lint pins the recitals | accepted |

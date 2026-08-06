@@ -333,14 +333,20 @@ class TestSync(unittest.TestCase):
                 " HTTP 403: rate limit exceeded"])
 
 
-class TestCli(cli_contract.CliContract, unittest.TestCase):
+class TestCli(cli_contract.CliContract, cli_contract.ReportContract,
+              unittest.TestCase):
     usage_fragment = "label-sync"
     bad_argv = ("--bogus",)  # the tool has flags, not subcommands
+    summary_line = "label-sync: 0 problem(s)"
 
     def run_cli(self, argv, runner=None):
         return cli_contract.capture(
             label_sync.main, argv,
             run=runner if runner is not None else gh([]))
+
+    def clean_cli(self):
+        desired, _ = label_sync.load_labels(REPO_ROOT)
+        return self.run_cli([], gh(desired))
 
     def test_clean_run_prints_zero_and_exits_zero(self):
         desired, problems = label_sync.load_labels(REPO_ROOT)

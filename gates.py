@@ -56,7 +56,7 @@ from pathlib import Path
 
 import cost_ledger
 import factory_config
-from cli import read_event
+from cli import read_event, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
                              breakdown_files, repo_root, run_dirs)
@@ -1181,12 +1181,7 @@ def selftest():
 def main(argv):
     if "--selftest" in argv:
         return selftest()
-    root = repo_root()
-    problems = run_all(root)
-    for problem in problems:
-        print(problem)
-    print(f"gates: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("gates", run_all(repo_root()))
 
 
 if __name__ == "__main__":

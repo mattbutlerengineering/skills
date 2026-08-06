@@ -20,7 +20,10 @@ decode every harness stream shares, and the spawn-watch-reap lifecycle
 of a `-p` harness child (own process group, drain-after-exit reader,
 unconditional group kill) that trigger_eval.py and charter_replay.py
 both run. harness_run is POSIX-only (select on pipes, os.killpg), the
-stance trigger_eval.py has always documented.
+stance trigger_eval.py has always documented. report is the caller
+half of the problem-string contract — print the problems, print the
+`<label>: N problem(s)` summary with a computed count, return the exit
+code — retyped in ten mains before it moved here (ADR-0051).
 
 gh_runner, the stdout port over runner("gh"), lives beside runner for the
 same reason write_outputs moved here (ADR-0040): it had grown four real
@@ -56,6 +59,24 @@ def detail(err):
     not installed)."""
     stderr = (getattr(err, "stderr", None) or "").strip()
     return stderr.splitlines()[-1] if stderr else str(err)
+
+
+def report(label, problems, prefix="", suffix=""):
+    """The caller half of the problem-string contract (the checker half
+    is CLAUDE.md's: checkers return label-prefixed problem strings).
+    Print each problem, then the summary every tool's main ends with —
+    `<label>: <prefix><N> problem(s)<suffix>`, the count always computed
+    from the list, never a hand-typed literal — and return the exit code
+    (1 with problems, else 0). Printing and code computation only, never
+    sys.exit: mains return this to their __main__ sys.exit, the way
+    every tool is already structured. The two decorations are the two
+    observed in shipped summaries, one on each side of the count —
+    prefix carries sweeps' `N issue(s) filed, ` clause, suffix lint's
+    ` across N skills` coda."""
+    for problem in problems:
+        print(problem)
+    print(f"{label}: {prefix}{len(problems)} problem(s){suffix}")
+    return 1 if problems else 0
 
 
 def version(binary):

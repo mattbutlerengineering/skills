@@ -30,6 +30,7 @@ from pathlib import Path
 
 import factory_config
 import gates
+from cli import report
 
 
 def identity(text):
@@ -250,10 +251,7 @@ def main(argv):
     else:
         print(__doc__.strip())
         return 2
-    for problem in problems:
-        print(problem)
-    print(f"factory-init: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("factory-init", problems)
 
 
 if __name__ == "__main__":
