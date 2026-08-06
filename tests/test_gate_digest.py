@@ -8,7 +8,6 @@ pure parts — timeline parsing, passage detection, digest composition —
 are exercised directly; run_daily composes them against the fakes.
 """
 import json
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -21,6 +20,7 @@ import gate_digest
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling fixture_tree import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fake_gh import FakeGh  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
 BREAKDOWN = (
@@ -43,45 +43,24 @@ def issue(number, title, state="OPEN", labels=(), body=""):
             "labels": [{"name": name} for name in labels], "body": body}
 
 
-class DigestRunner:
-    """Injected gh runner: answers `issue list` with a canned issue set,
-    `api .../timeline` with per-issue canned timelines (in --slurp's
-    array-of-pages shape), `issue create` with a new issue's URL, and
-    records every call."""
+def gh(issues=(), timelines=None,
+       create_url="https://github.com/o/r/issues/50", **kwargs):
+    """A fake gh for the digest's traffic: `issue list` answers with a
+    canned issue set, `api .../timeline` with per-issue canned timelines
+    (in --slurp's array-of-pages shape), `issue create` with the new
+    issue's URL. Failure is declared via FakeGh's failing= (the shared
+    default error carries stderr "boom\\n")."""
+    canned = timelines or {}
 
-    def __init__(self, issues=(), timelines=None,
-                 create_url="https://github.com/o/r/issues/50"):
-        self.issues = list(issues)
-        self.timelines = timelines or {}
-        self.create_url = create_url
-        self.calls = []
+    def timeline(args):
+        number = int(args[1].split("/")[-2])
+        return json.dumps([canned.get(number, [])])
 
-    def __call__(self, args):
-        call = list(args)
-        self.calls.append(call)
-        if call[:2] == ["issue", "list"]:
-            return json.dumps(self.issues)
-        if call[0] == "api":
-            number = int(call[1].split("/")[-2])
-            return json.dumps([self.timelines.get(number, [])])
-        if call[:2] == ["issue", "create"]:
-            return self.create_url + "\n"
-        return ""
-
-    def called(self, *prefix):
-        return [c for c in self.calls if c[:len(prefix)] == list(prefix)]
-
-
-class FailingRunner(DigestRunner):
-    def __init__(self, failing, **kwargs):
-        super().__init__(**kwargs)
-        self.failing = list(failing)
-
-    def __call__(self, args):
-        result = super().__call__(args)
-        if list(args[:len(self.failing)]) == self.failing:
-            raise subprocess.CalledProcessError(1, "gh", stderr="boom\n")
-        return result
+    return FakeGh(answers={
+        ("issue", "list"): json.dumps(list(issues)),
+        ("api",): timeline,
+        ("issue", "create"): create_url + "\n",
+    }, **kwargs)
 
 
 def tree(tmp):
@@ -214,7 +193,7 @@ class TestMirrorMap(unittest.TestCase):
 class TestRunDaily(unittest.TestCase):
     def test_first_run_creates_and_pins_the_digest(self):
         with tempfile.TemporaryDirectory() as tmp:
-            run = DigestRunner(
+            run = gh(
                 issues=[issue(123, "WO-0018 rejection mining",
                               labels=["wo:draft", "size:S"])],
                 timelines={123: [labeled("2026-07-20T09:00:00Z",
@@ -235,7 +214,7 @@ class TestRunDaily(unittest.TestCase):
 
     def test_a_later_run_edits_the_marker_issue_in_place(self):
         with tempfile.TemporaryDirectory() as tmp:
-            run = DigestRunner(issues=[
+            run = gh(issues=[
                 issue(50, "Factory gate queue",
                       body=gate_digest.DIGEST_MARKER + "\nold"),
             ])
@@ -259,7 +238,7 @@ class TestRunDaily(unittest.TestCase):
             ]}
             issues = [issue(131, "WO-0010 sweeps", state="CLOSED",
                             labels=["wo:merged"])]
-            run = DigestRunner(issues=issues, timelines=timelines)
+            run = gh(issues=issues, timelines=timelines)
             outputs, problems = gate_digest.run_daily(
                 fixture.root, run=run, clock=clock)
             self.assertEqual(problems, [])
@@ -272,7 +251,7 @@ class TestRunDaily(unittest.TestCase):
             # monthly circuit breaker windows on it
             self.assertEqual(entries[0]["at"], "2026-07-01")
             # the daily re-scan sees the same passage and records nothing
-            rerun = DigestRunner(issues=issues, timelines=timelines)
+            rerun = gh(issues=issues, timelines=timelines)
             outputs, problems = gate_digest.run_daily(
                 fixture.root, run=rerun, clock=clock)
             self.assertEqual(problems, [])
@@ -282,7 +261,7 @@ class TestRunDaily(unittest.TestCase):
 
     def test_a_closed_issue_is_never_a_queue_item(self):
         with tempfile.TemporaryDirectory() as tmp:
-            run = DigestRunner(issues=[
+            run = gh(issues=[
                 issue(123, "WO-0018 rejection mining", state="CLOSED",
                       labels=["wo:draft"])])
             outputs, problems = gate_digest.run_daily(
@@ -297,7 +276,7 @@ class TestRunDaily(unittest.TestCase):
         # this is the path a missing import would hide on.
         with tempfile.TemporaryDirectory() as tmp:
             outputs, problems = gate_digest.run_daily(
-                tree(tmp).root, run=DigestRunner())
+                tree(tmp).root, run=gh())
             self.assertEqual(problems, [])
 
     def test_the_edit_path_re_pins_and_tolerates_the_usual_refusal(self):
@@ -305,7 +284,7 @@ class TestRunDaily(unittest.TestCase):
         # not a problem. What the retry buys: a human unpin heals on the
         # next daily run instead of rotting unpinned forever.
         with tempfile.TemporaryDirectory() as tmp:
-            run = FailingRunner(["issue", "pin"], issues=[
+            run = gh(failing=["issue", "pin"], issues=[
                 issue(50, "Factory gate queue",
                       body=gate_digest.DIGEST_MARKER + "\nold")])
             outputs, problems = gate_digest.run_daily(
@@ -325,13 +304,13 @@ class TestRunDaily(unittest.TestCase):
         for failing, issues, problem in cases:
             with self.subTest(failing=failing):
                 with tempfile.TemporaryDirectory() as tmp:
-                    run = FailingRunner(failing, issues=issues)
+                    run = gh(failing=failing, issues=issues)
                     outputs, problems = gate_digest.run_daily(
                         tree(tmp).root, run=run, clock=clock)
                     self.assertEqual(problems, [problem])
         # a create-path pin failure IS reported: nothing retries it later
         with tempfile.TemporaryDirectory() as tmp:
-            run = FailingRunner(["issue", "pin"])
+            run = gh(failing=["issue", "pin"])
             outputs, problems = gate_digest.run_daily(
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, ["gd: gh issue pin failed: boom"])
@@ -341,14 +320,14 @@ class TestRunDaily(unittest.TestCase):
             fixture = tree(tmp)
             fixture.write("docs/factory/costs.jsonl", '{"wo": "WO-0010"}\n')
             outputs, problems = gate_digest.run_daily(
-                fixture.root, run=DigestRunner(), clock=clock)
+                fixture.root, run=gh(), clock=clock)
             self.assertEqual(problems, [
                 "ledger: docs/factory/costs.jsonl:1 ledger line is missing"
                 " field(s): cost, model, outcome, run_id, tokens"])
 
     def test_a_failing_issue_list_reports_and_posts_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
-            run = FailingRunner(["issue", "list"])
+            run = gh(failing=["issue", "list"])
             outputs, problems = gate_digest.run_daily(
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, ["gd: gh issue list failed: boom"])
@@ -356,14 +335,9 @@ class TestRunDaily(unittest.TestCase):
             self.assertEqual(run.called("issue", "create"), [])
 
     def test_an_unparseable_issue_list_reports_and_posts_nothing(self):
-        class BannerList(DigestRunner):
-            def __call__(self, args):
-                out = super().__call__(args)
-                return ("gh: banner text" if args[:2] == ["issue", "list"]
-                        else out)
-
+        # gh ran, exited 0, answered `issue list` with raw non-JSON.
         with tempfile.TemporaryDirectory() as tmp:
-            run = BannerList()
+            run = FakeGh(answers={("issue", "list"): "gh: banner text"})
             outputs, problems = gate_digest.run_daily(
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, [
@@ -373,13 +347,8 @@ class TestRunDaily(unittest.TestCase):
             self.assertEqual(run.called("issue", "create"), [])
 
     def test_a_non_list_issue_listing_reports_and_posts_nothing(self):
-        class DictList(DigestRunner):
-            def __call__(self, args):
-                out = super().__call__(args)
-                return "{}" if args[:2] == ["issue", "list"] else out
-
         with tempfile.TemporaryDirectory() as tmp:
-            run = DictList()
+            run = FakeGh(answers={("issue", "list"): "{}"})
             outputs, problems = gate_digest.run_daily(
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, [
@@ -389,7 +358,7 @@ class TestRunDaily(unittest.TestCase):
 
     def test_a_full_issue_window_is_reported_and_the_digest_still_posts(self):
         with tempfile.TemporaryDirectory() as tmp:
-            run = DigestRunner(issues=[
+            run = gh(issues=[
                 issue(10_000 + n, f"noise {n}", state="CLOSED")
                 for n in range(gate_digest.LIST_WINDOW)])
             outputs, problems = gate_digest.run_daily(
@@ -401,15 +370,12 @@ class TestRunDaily(unittest.TestCase):
             self.assertEqual(len(run.called("issue", "create")), 1)
 
     def test_an_unparseable_timeline_still_posts_the_digest(self):
-        class BannerTimelines(DigestRunner):
-            def __call__(self, args):
-                out = super().__call__(args)
-                return "not json" if args[0] == "api" else out
-
+        # The same traffic gh() cans, but the timeline endpoint answers
+        # raw non-JSON.
         with tempfile.TemporaryDirectory() as tmp:
-            run = BannerTimelines(
-                issues=[issue(123, "WO-0018 rejection mining",
-                              labels=["wo:draft"])])
+            run = gh(issues=[issue(123, "WO-0018 rejection mining",
+                                   labels=["wo:draft"])])
+            run.answers[("api",)] = "not json"
             outputs, problems = gate_digest.run_daily(
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, [
@@ -421,8 +387,8 @@ class TestRunDaily(unittest.TestCase):
 
     def test_a_failing_timeline_still_posts_the_digest(self):
         with tempfile.TemporaryDirectory() as tmp:
-            run = FailingRunner(
-                ["api"],
+            run = gh(
+                failing=["api"],
                 issues=[issue(123, "WO-0018 rejection mining",
                               labels=["wo:draft"])])
             outputs, problems = gate_digest.run_daily(
@@ -438,7 +404,7 @@ class TestMain(unittest.TestCase):
     def test_daily_writes_changed_to_github_output(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "out.txt"
-            run = DigestRunner()
+            run = gh()
             code = gate_digest.main(
                 ["daily"], env={"GITHUB_OUTPUT": str(out)},
                 root=tree(tmp).root, run=run, clock=clock)
