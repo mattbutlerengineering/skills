@@ -30,10 +30,11 @@
     "templates/tools/factory/gate_digest.py": "9318a828a6cef1127b93382540c99dc3f18af50a71084d7112d6787fdff75912",
     "templates/tools/factory/gates.py": "e35b6aee54b04b8c139e6bd088b2225114e8a1cd2a6eaaf55253ad0dc8fd1f90",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
-    "templates/tools/factory/knowledge_plane.py": "1d3f7d809325e58c523dc9fd9e886dd2b3e17249ae8945a385d3c2fc20087739",
+    "templates/tools/factory/knowledge_plane.py": "8f5afc3aa19964e5b4c47f0997b927bcef01a71f72a9fe927d7a9fb71f83e1b1",
     "templates/tools/factory/label_sync.py": "736052c5495a5a6dc78b4be2496715b2058e88ca9a222afe924f513a0904ae46",
     "templates/tools/factory/orientation_pack.py": "5c6b70f047641f92f9ddaf4ea0df9e9fac4fb435c0f501211395ee22000527ec",
-    "templates/tools/factory/protocol.py": "d380a893a0785f47d4a883b01434d84754b6cf4fdc788669e47a61055682a015",
-    "templates/tools/factory/validator.py": "a2f208986ee321750f81b2022700192c3335de73f2cd79ba0640398ce7c9c53d"
+    "templates/tools/factory/protocol.py": "384dc1c5b15003035dbc26b8f0dab13cf7d50bae34b98b25544afbada18dbafb",
+    "templates/tools/factory/validator.py": "a2f208986ee321750f81b2022700192c3335de73f2cd79ba0640398ce7c9c53d",
+    "templates/tools/factory/work_queue.py": "85ec852c31a96509a34f602fc54c4dff62bbfb2f650b66ad7319ff672ce30299"
   }
 }

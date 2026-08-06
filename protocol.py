@@ -24,7 +24,8 @@ TEMPLATED_STAGES = [s for s in STAGES + MAINTENANCE_STAGES
 # have no stage artifact and the router never routes to them, but they are
 # full skills for install, lint, ledger, and trigger-eval purposes.
 UTILITY_SKILLS = ["address-pr-review", "autorun", "doctor", "factory-init",
-                  "interactive-architecture-diagram", "mermaid"]
+                  "interactive-architecture-diagram", "mermaid",
+                  "work-queue"]
 ALL_SKILLS = ["next"] + STAGES + MAINTENANCE_STAGES + UTILITY_SKILLS
 
 # (stage, artifact) rows in pipeline order; implement and the UX
