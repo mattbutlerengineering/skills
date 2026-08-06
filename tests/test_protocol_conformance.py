@@ -59,6 +59,49 @@ def as_protocol_rows(rows):
     return out
 
 
+class TestBacklogConsumersMatchProtocol(unittest.TestCase):
+    """The seed-backlog section names its consumers: "`idea` (or `capture`),
+    when starting a run from a seed, claims it in place". Same split
+    contract as the tables above — the prose is the runtime interface in a
+    target repo, so a consumer the spec names must actually carry the step.
+
+    Capture parks deferred defects in that backlog. Until this was pinned,
+    only `idea` carried the claim step and the router offered every seed as
+    an idea, so a parked defect re-entered as a feature run — losing the
+    defect brief, the re-entry depth, and the mandatory-Verify rule that is
+    the whole point of the maintenance scale (issue #202).
+    """
+
+    def unwrapped(self, path):
+        """Prose with its hard line wrapping collapsed to single spaces.
+
+        Every file here is hand-wrapped at ~72 columns, so a sentence-long
+        assertion would otherwise be pinned to today's wrap points and fail
+        on a reflow that changed nothing.
+        """
+        return " ".join(path.read_text(encoding="utf-8").split())
+
+    def skill(self, slug):
+        return self.unwrapped(REPO_ROOT / "skills" / slug / "SKILL.md")
+
+    def test_the_spec_still_names_both_consumers(self):
+        self.assertIn("`idea` (or `capture`), when starting a run from a"
+                      " seed, claims it in place", self.unwrapped(SPEC))
+
+    def test_both_named_consumers_carry_the_claim_step(self):
+        for slug in ("idea", "capture"):
+            text = self.skill(slug)
+            self.assertIn("docs/backlog.md", text, slug)
+            self.assertIn("(claimed:", text,
+                          f"{slug} is named as a backlog consumer but has no"
+                          " claim step")
+
+    def test_the_router_routes_a_seed_by_what_it_describes(self):
+        text = self.skill("next")
+        self.assertIn("starts a maintenance run through `capture`", text)
+        self.assertIn("backlog", text)
+
+
 class TestOrientationTablesMatchProtocol(unittest.TestCase):
     def setUp(self):
         self.tables = spec_tables()

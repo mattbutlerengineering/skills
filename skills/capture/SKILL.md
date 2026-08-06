@@ -21,6 +21,13 @@ interviews — it does not draft.
    **condition brief** (something is degraded — refactor, dependency
    upgrade). The filename is `defect.md` either way.
 
+   When starting from a backlog seed, claim it in place — append
+   `(claimed: maintenance:<slug>)` to the seed's line in
+   `docs/backlog.md` per the protocol's seed-backlog section — and record
+   the seed as the origin in `defect.md`. A parked defect re-enters here,
+   not through `idea`: it is still a defect, and a maintenance run is
+   what keeps Verify mandatory.
+
 3. **Interview.** One question at a time, each with your recommended
    answer when you have one. For a defect brief, cover at least:
    - What exactly is broken — observed behavior vs expected?
