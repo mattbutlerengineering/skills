@@ -212,16 +212,27 @@ def detect_omp_fired(events, name_to_slug):
 
 def _stream_events(process, timeout):
     """Yield decoded JSON-lines events from a live harness pipe until the
-    process exits, the stream closes, or timeout elapses. Lines that are
-    not valid JSON are skipped."""
+    process exits AND its buffered output is drained, the stream closes,
+    or timeout elapses. Lines that are not valid JSON are skipped.
+
+    The drain-after-exit order is load-bearing: a harness that writes its
+    whole stream and exits within milliseconds is often dead before the
+    reader's first poll, and breaking on exit alone silently drops
+    whatever is still in the pipe — a fired run scores 'none' (observed
+    as a CI-only flake in the fake-harness suite). After exit the reader
+    stops the first time the pipe reads empty, so an orphaned child
+    holding the write end open but idle costs nothing; one that keeps
+    writing is bounded by the overall timeout. A trailing line with no
+    newline is dropped — harness streams are newline-terminated."""
     start_time = time.time()
     buffer = ""
     while time.time() - start_time < timeout:
-        if process.poll() is not None:
-            break
-
-        ready, _, _ = select.select([process.stdout], [], [], 1.0)
+        exited = process.poll() is not None
+        ready, _, _ = select.select([process.stdout], [], [],
+                                    0 if exited else 1.0)
         if not ready:
+            if exited:
+                break
             continue
 
         chunk = os.read(process.stdout.fileno(), 8192)

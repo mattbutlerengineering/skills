@@ -6,14 +6,18 @@ dicts drive every branch the state machine distinguishes: early detection
 via input_json_delta, the content_block_stop/message_stop fallbacks, the
 legacy full assistant message shape, a different tool firing first, and
 the result event. The live-pipe adapter (_watch_stream/_stream_events)
-gets one real-subprocess test proving the feed. Recorded real-CLI
-transcripts are the seam's second adapter (issue #24): replaying them
-pins the CLI's actual output shape, so drift breaks CI instead of
+gets one real-subprocess test proving the feed, plus the exit-order seam:
+buffered output must survive a process that exits before the reader's
+first poll, without an orphan-held pipe stalling the run. Recorded
+real-CLI transcripts are the seam's second adapter (issue #24): replaying
+them pins the CLI's actual output shape, so drift breaks CI instead of
 silently corrupting eval results.
 """
 import json
+import os
 import subprocess
 import sys
+import time
 import unittest
 from pathlib import Path
 
@@ -21,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from protocol import ALL_SKILLS  # noqa: E402
-from trigger_eval import _watch_stream, detect_fired  # noqa: E402
+from trigger_eval import _stream_events, _watch_stream, detect_fired  # noqa: E402
 
 NAMES = {"prd-skill-abc123": "prd", "idea-skill-abc123": "idea"}
 
@@ -173,6 +177,62 @@ class TestLivePipeAdapter(unittest.TestCase):
             process.kill()
             process.wait()
             process.stdout.close()
+
+
+class TestStreamEventsDrainsAfterExit(unittest.TestCase):
+    """The reader must not lose buffered output when the process beats it
+    to the exit: a fake harness writes its whole stream and exits within
+    milliseconds, so on a loaded runner it is often dead before the
+    reader's first poll — and a reader that breaks on exit before
+    draining scores a fired run as 'none'. That race is CI-only (100
+    local iterations of the fan-out contract never lose it), so these
+    tests construct the post-exit states deterministically instead."""
+
+    def test_buffered_events_survive_an_early_exit(self):
+        # ~1000 lines ≈ 11 KB: spans multiple 8192-byte reads, yet stays
+        # under the smallest default pipe capacity (16 KiB on macOS) so
+        # the writer exits without blocking — wait() would deadlock on a
+        # payload that fills the pipe, hence its own timeout.
+        script = ("for n in range(1000):\n"
+                  "    print('{\"n\": %d}' % n)\n")
+        process = subprocess.Popen([sys.executable, "-c", script],
+                                   stdout=subprocess.PIPE)
+        self.addCleanup(process.stdout.close)
+        process.wait(timeout=10)  # dead before the reader's first poll
+        self.assertEqual(list(_stream_events(process, timeout=10)),
+                         [{"n": n} for n in range(1000)])
+
+    class DeadLeaderOpenPipe:
+        """The exited-leader shape run_single_query can meet: the leader
+        is gone (poll() says so) but an orphan still holds the write end,
+        so EOF never comes. os.read needs a real fd, hence a real pipe;
+        the payload is far under pipe capacity, so os.write never
+        blocks."""
+
+        def __init__(self, payload):
+            read_fd, self.write_fd = os.pipe()
+            os.write(self.write_fd, payload)
+            self.stdout = os.fdopen(read_fd, "rb")
+
+        def poll(self):
+            return 0
+
+        def close(self):
+            self.stdout.close()
+            os.close(self.write_fd)
+
+    def test_a_dead_process_with_a_held_open_pipe_does_not_hang(self):
+        # Why the reader still watches poll(): an idle orphan holding the
+        # write end must not stall the run until timeout. The bound is a
+        # fraction of the timeout so the test can only pass by breaking
+        # early, never by riding the timeout out.
+        timeout = 3
+        process = self.DeadLeaderOpenPipe(b'{"n": 1}\n')
+        self.addCleanup(process.close)
+        start = time.time()
+        events = list(_stream_events(process, timeout=timeout))
+        self.assertEqual(events, [{"n": 1}])
+        self.assertLess(time.time() - start, timeout / 3)
 
 
 class TestRecordedTranscripts(unittest.TestCase):
