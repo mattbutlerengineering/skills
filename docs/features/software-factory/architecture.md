@@ -128,7 +128,7 @@ in the breakdown, no code).
   in run-artifact frontmatter, never a parallel `docs/prd/` tree). `ADR-####`
   is the ADR's filename prefix. `WO-####` is a `breakdown.md` row token, and the
   same token names its mirrored issue and is cited by the PR that implements it.
-- Collaborators: detectors A, B, C; `factory/skills/*/SKILL.md` (charters cite
+- Collaborators: detectors A, B, C; `factory/charters/*/CHARTER.md` (charters cite
   the row, not the issue).
 
 ### Gate detectors — `gates.py` (BUILT: A, B, C, E, F; UNBUILT: D, G, H, I)
@@ -206,7 +206,7 @@ in the breakdown, no code).
   is the repo-controlled `breakdown.md` row, **never** the issue body. This is
   currently enforced only by the charters' prose, because nothing dispatches.
 
-### Charters — `factory/agents/*.md` + `factory/skills/<role>/SKILL.md` (PARTIAL)
+### Charters — `factory/agents/*.md` + `factory/charters/<role>/CHARTER.md` (PARTIAL)
 
 - Responsibility: define an agent role — mission, owned stages, entry/exit
   criteria, tool grants, escalation, handoff artifact, and a routing band. Three
@@ -373,7 +373,7 @@ reconciles it against `breakdown.md` (see *Open questions*).
 - An agent stub (`factory/agents/<role>.md`) carries `name:` (required for
   dispatch), `description:`, `tools:`, and `route:` — a routing **band**, never a
   model id. Its body points at the charter.
-- A charter (`factory/skills/<role>/SKILL.md`) states mission, stages with
+- A charter (`factory/charters/<role>/CHARTER.md`) states mission, stages with
   entry/exit criteria, actions, loadout, grants, "must never", handoff artifact,
   and escalation triggers.
 - Failure mode today: **nothing loads either file.** The contract is written and

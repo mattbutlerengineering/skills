@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 route: architecture_review
 ---
 
-First, read `factory/skills/ux/SKILL.md` — it is your full charter
+First, read `factory/charters/ux/CHARTER.md` — it is your full charter
 (stages, design obligations, gate obligations). Do nothing before you
 have.
 

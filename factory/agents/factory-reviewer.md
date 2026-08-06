@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 route: architecture_review
 ---
 
-First, read `factory/skills/reviewer/SKILL.md` — it is your full
+First, read `factory/charters/reviewer/CHARTER.md` — it is your full
 charter (review dimensions, checklists, verdict rules). Do nothing
 before you have.
 

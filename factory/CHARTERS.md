@@ -10,7 +10,7 @@ Each role is two files:
   dispatch plane reads (`name:`, `description:`, `tools:`, `route:`) and a
   compressed contract. The subagent registry keys on frontmatter `name:`,
   not the filename: a stub without it is silently undispatchable.
-- **a charter**, `factory/skills/<role>/SKILL.md` — the authoritative
+- **a charter**, `factory/charters/<role>/CHARTER.md` — the authoritative
   role definition: mission, stages with entry/exit criteria, actions per
   cycle, loadout, grants, `Must never`, handoff artifact, escalation.
 
@@ -20,15 +20,15 @@ The stub is a pointer; the charter wins wherever they disagree.
 
 | Role | Owns | Agent stub | Charter | Band |
 |------|------|-----------|---------|------|
-| PM | Idea → PRD; scope | `factory/agents/factory-pm.md` | `factory/skills/pm/SKILL.md` | `architecture_review` |
-| Architect | architecture.md + ADRs | `factory/agents/factory-architect.md` | `factory/skills/architect/SKILL.md` | `architecture_review` |
-| UX designer | flows, states, design system | `factory/agents/factory-ux.md` | `factory/skills/ux/SKILL.md` | `architecture_review` |
-| Planner | Decompose; work-order rows + beads graph | `factory/agents/factory-planner.md` | `factory/skills/planner/SKILL.md` | `implementation` |
-| Engineer (SWE) | one work order → merge-ready PR | `factory/agents/factory-swe.md` | `factory/skills/swe/SKILL.md` | `implementation` |
-| QA | independent Verify; the evidence record | `factory/agents/factory-qa.md` | `factory/skills/qa/SKILL.md` | `implementation` |
-| Reviewer | Review; pre-chews the merge gate | `factory/agents/factory-reviewer.md` | `factory/skills/reviewer/SKILL.md` | `architecture_review` |
-| Support | signal intake, triage, Operate | `factory/agents/factory-support.md` | `factory/skills/support/SKILL.md` | `mechanical` |
-| Toolsmith | the factory's own machinery | `factory/agents/factory-toolsmith.md` | `factory/skills/toolsmith/SKILL.md` | `implementation` |
+| PM | Idea → PRD; scope | `factory/agents/factory-pm.md` | `factory/charters/pm/CHARTER.md` | `architecture_review` |
+| Architect | architecture.md + ADRs | `factory/agents/factory-architect.md` | `factory/charters/architect/CHARTER.md` | `architecture_review` |
+| UX designer | flows, states, design system | `factory/agents/factory-ux.md` | `factory/charters/ux/CHARTER.md` | `architecture_review` |
+| Planner | Decompose; work-order rows + beads graph | `factory/agents/factory-planner.md` | `factory/charters/planner/CHARTER.md` | `implementation` |
+| Engineer (SWE) | one work order → merge-ready PR | `factory/agents/factory-swe.md` | `factory/charters/swe/CHARTER.md` | `implementation` |
+| QA | independent Verify; the evidence record | `factory/agents/factory-qa.md` | `factory/charters/qa/CHARTER.md` | `implementation` |
+| Reviewer | Review; pre-chews the merge gate | `factory/agents/factory-reviewer.md` | `factory/charters/reviewer/CHARTER.md` | `architecture_review` |
+| Support | signal intake, triage, Operate | `factory/agents/factory-support.md` | `factory/charters/support/CHARTER.md` | `mechanical` |
+| Toolsmith | the factory's own machinery | `factory/agents/factory-toolsmith.md` | `factory/charters/toolsmith/CHARTER.md` | `implementation` |
 
 Read the table left to right and the pipeline reads off it: PM → Architect
 → UX → Planner → SWE → QA → Reviewer, with Support feeding the front of

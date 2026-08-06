@@ -75,9 +75,13 @@ class TestGoldenCaseSet(unittest.TestCase):
         _, problems = charter_replay.load_cases(CASES, ROOT, LABEL)
         self.assertEqual(problems, [])
 
-    def test_every_chartered_role_has_a_fixture_work_order(self):
+    def test_replay_coverage_matches_the_declared_subset(self):
+        """The shipped golden set covers exactly the roles
+        SUPPORTED_REPLAY_ROLES declares (WO-0013's three) — extend the
+        tuple as fixtures for the other chartered roles land."""
         covered = {c["role"] for c in golden_cases()}
-        self.assertEqual(covered, set(charter_replay.ROLES))
+        self.assertEqual(covered,
+                         set(charter_replay.SUPPORTED_REPLAY_ROLES))
 
     def test_every_case_names_the_trap_it_plants(self):
         for c in golden_cases():
@@ -124,9 +128,17 @@ class TestValidation(unittest.TestCase):
 
     def test_unknown_role(self):
         _, problems = self.load({"version": 1,
-                                 "cases": [case(role="toolsmith")]})
-        self.assertIn(f"{LABEL} case 'c1' has invalid role 'toolsmith'",
+                                 "cases": [case(role="wizard")]})
+        self.assertIn(f"{LABEL} case 'c1' has invalid role 'wizard'",
                       problems)
+
+    def test_any_chartered_role_is_valid(self):
+        """Validation is against the full vocabulary (factory_roles.ROLES,
+        ADR-0047) — the retired three-role literal rejected six real
+        charters; a fixture may target any of the nine."""
+        _, problems = self.load({"version": 1,
+                                 "cases": [case(role="toolsmith")]})
+        self.assertEqual(problems, [])
 
     def test_missing_fixture_work_order(self):
         broken = {**case(), "fixture": "factory/evals/fixtures/nope"}
@@ -438,8 +450,8 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         self.install_fake(FAKE_POISON)
         self.root = Path(tempfile.mkdtemp(prefix="charter-root-"))
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
-        (self.root / "factory/skills/swe").mkdir(parents=True)
-        (self.root / "factory/skills/swe/SKILL.md").write_text(
+        (self.root / "factory/charters/swe").mkdir(parents=True)
+        (self.root / "factory/charters/swe/CHARTER.md").write_text(
             "# Charter body\n", encoding="utf-8")
         (self.root / "fixtures/wo-1").mkdir(parents=True)
         (self.root / "fixtures/wo-1/work-order.md").write_text(

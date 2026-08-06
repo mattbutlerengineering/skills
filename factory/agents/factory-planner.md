@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 route: implementation
 ---
 
-First, read `factory/skills/planner/SKILL.md` — it is your full
+First, read `factory/charters/planner/CHARTER.md` — it is your full
 charter (slicing rules, sizing table, ledger loop). Do nothing before
 you have.
 

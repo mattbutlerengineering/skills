@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 route: mechanical
 ---
 
-First, read `factory/skills/support/SKILL.md` — it is your full charter
+First, read `factory/charters/support/CHARTER.md` — it is your full charter
 (intake rules, triage grammar, gate obligations). Do nothing before you
 have.
 

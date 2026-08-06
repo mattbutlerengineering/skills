@@ -3,7 +3,7 @@
 The complete daily protocol for the `factory-daily-improvement`
 scheduled cloud routine (ADR-0044) — the factory improving itself on a
 cadence. The routine is the
-[toolsmith charter](../../factory/skills/toolsmith/SKILL.md) operating
+[toolsmith charter](../../factory/charters/toolsmith/CHARTER.md) operating
 on a schedule: same mission (mine the correction stream, build rules and
 tooling), same grants, same `Must never` list. Where this file and the
 charter disagree, the charter wins. This protocol instantiates the
@@ -96,7 +96,7 @@ never work:
    first. Only if it fits the size bound.
 3. **A graduated reflect candidate** (§6): a candidate rule with two or
    more distinct correction events across the journal history. The edit
-   lands in `factory/skills/<role>/SKILL.md` or
+   lands in `factory/charters/<role>/CHARTER.md` or
    `skills/<slug>/SKILL.md` — never a gate-change path. Prefer a
    detector to a paragraph (charter, actions 2): when the rule is
    machine-checkable and the detector still fits the size bound, ship

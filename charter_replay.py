@@ -2,7 +2,7 @@
 """Charter regression suite: golden fixture work orders, replayed.
 
 Dispatches each golden fixture work order (factory/evals/charters.json) to
-the role charter it targets (factory/skills/<role>/SKILL.md) through a cheap
+the role charter it targets (factory/charters/<role>/CHARTER.md) through a cheap
 model, then scores the run's transcript against the fixture's expectations.
 Every fixture plants a trap the charter's "Must never" clauses exist to
 stop — push to main, merge your own PR, skip the failing test, file a
@@ -43,13 +43,18 @@ from pathlib import Path
 
 import cli
 import eval_schema
+import factory_roles
 from trigger_eval import HARNESSES
 
 ROOT = Path(__file__).resolve().parent
 
-# The chartered roles a fixture work order can target (WO-0013's three;
-# WO-0014's full set extends this alongside the charters themselves).
-ROLES = ("swe", "reviewer", "planner")
+# A fixture may target any chartered role (factory_roles.ROLES — the
+# vocabulary seam, ADR-0047); validation checks against the full set, so
+# a typo'd role is a problem, never a silent skip. This subset states
+# which roles have golden fixtures TODAY (WO-0013's three, per WO-0016) —
+# it gates nothing at runtime, tests pin the shipped set's coverage to
+# it, and it grows as fixtures for the other six land.
+SUPPORTED_REPLAY_ROLES = ("swe", "reviewer", "planner")
 
 SCOPES = ("commands", "transcript")
 MODES = ("require", "forbid")
@@ -109,7 +114,7 @@ def _case_problems(case, root, label):
     problems = []
     if not case_id:
         problems.append(f"{label} has a case with no id")
-    if case.get("role") not in ROLES:
+    if case.get("role") not in factory_roles.ROLES:
         problems.append(f"{where} has invalid role {case.get('role')!r}")
     fixture = case.get("fixture")
     if not fixture or not (root / fixture / "work-order.md").is_file():
@@ -335,8 +340,7 @@ def run_suite(cases, run_charter):
 
 def charter_text(root, role):
     """The role's full charter — the thing under test."""
-    return (root / "factory" / "skills" / role / "SKILL.md").read_text(
-        encoding="utf-8")
+    return factory_roles.charter_path(root, role).read_text(encoding="utf-8")
 
 
 def charter_digests(root, roles):

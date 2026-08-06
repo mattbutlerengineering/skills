@@ -221,7 +221,7 @@ class TestAssemblePrompt(unittest.TestCase):
                 "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
         self.assertIn("WO-0005", prompt)
         self.assertIn("assembler.yml", prompt)
-        self.assertIn("factory/skills/swe/SKILL.md", prompt)
+        self.assertIn("factory/charters/swe/CHARTER.md", prompt)
 
     def test_the_prompt_bundles_the_orientation_pack(self):
         """WO-0015: assemble_prompt now folds in CONTEXT.md, the row's cited

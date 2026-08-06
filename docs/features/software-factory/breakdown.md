@@ -98,7 +98,7 @@ ADR-0033, and ADR-0034 (all accepted).
   so the desired and live shapes match.
 - 2026-07-12: open gap — the charters (WO-0013, PRD-0001 §Actors) have
   **no load path**. They live at `factory/agents/*.md` +
-  `factory/skills/<role>/SKILL.md`, but Claude Code discovers subagents
+  `factory/charters/<role>/CHARTER.md`, but Claude Code discovers subagents
   only under `.claude/agents/` or `<plugin-root>/agents/`; nothing
   discovers or stamps this path today, so the charters are inert and no
   row owns wiring them up. They stay out of `factory/templates/**`

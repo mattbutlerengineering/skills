@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 route: implementation
 ---
 
-First, read `factory/skills/swe/SKILL.md` — it is your full charter
+First, read `factory/charters/swe/CHARTER.md` — it is your full charter
 (stages, entry/exit criteria, loadout, handoff). Do nothing before you
 have.
 
