@@ -98,6 +98,16 @@ be published as tracker issues, mapping recorded in the breakdown), close
 at Implement item boundaries (completing a work item closes its mirrored
 issue).
 
+The mirror is one-way **out**: nothing in the tracker starts a run. An
+issue filed there — including one a sweep filed unattended, carrying
+`source:sentry` / `type:defect` — is intake, and intake is never a work
+order: a work order exists only once its breakdown row does, and the
+dispatch plane never runs ahead of the knowledge plane (ADR-0032). A bug
+therefore reaches a work order only after a person starts a run for it,
+today through `capture`. ADR-0030's inbound leg would add an intake
+convention; it is provisional and unimplemented, so this bound currently
+holds without exception.
+
 A work item mirroring a tracker issue records the reference at the end of
 its checkbox line, in exactly this form:
 
