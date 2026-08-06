@@ -1,7 +1,7 @@
 """validator.py (the validator workflow's brain) — pure-function + fixture
 tests.
 
-Same discipline as test_label_sync/test_factory_gates: every function is
+Same discipline as test_label_sync/test_gates: every function is
 exercised through its public interface, tests assert the EXACT problem
 strings callers will print, and the gh runner is injected so no test ever
 touches the network.

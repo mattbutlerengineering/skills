@@ -1,7 +1,7 @@
 """assembler.py (the assembler workflow's brain) — pure-function + fixture
 tests.
 
-Same discipline as test_validator/test_factory_gates: every function is
+Same discipline as test_validator/test_gates: every function is
 exercised through its public interface, tests assert the EXACT problem
 strings callers will print, and no test touches the network — resolving a
 work order is pure I/O over the repo-controlled breakdown row.

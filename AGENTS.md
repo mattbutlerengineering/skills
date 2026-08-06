@@ -43,7 +43,7 @@ On demand only (real model runs, costs money, never CI; both need the
 - **Problem-string contracts**: checkers/validators return lists of
   label-prefixed problem strings; callers print and exit nonzero. Tests
   assert the exact strings through public interfaces (see
-  `tests/test_lint_checkers.py`).
+  `tests/test_lint.py`).
 - **Factory templates are checksum-pinned**: after any edit under
   `factory/templates/**` or to any root file in `factory_init.MIRRORS`
   (the authority on what is mirrored into the payload — root tools,

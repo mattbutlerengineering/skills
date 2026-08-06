@@ -1,7 +1,7 @@
 """Design pipeline (origin: WO-0012): design.yml + the web-quality make
 target + the docs/design seed shipped in the template payload.
 
-Same discipline as test_factory_gates::TestLockstep and test_sweeps'
+Same discipline as test_gates::TestLockstep and test_sweeps'
 workflow tests: the workflow names no command of its own (every step goes
 through `make`), the payload copy is a byte mirror of the root one, and the
 web-quality target is identical in both Makefiles. The design-system seed the

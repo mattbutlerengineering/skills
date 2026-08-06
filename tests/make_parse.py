@@ -1,6 +1,6 @@
 """Stdlib-only Makefile text extraction shared by the lockstep tests.
 
-test_factory_gates and test_design_pipeline both assert Makefile <-> CI
+test_gates and test_design_pipeline both assert Makefile <-> CI
 lockstep and had byte-identical copies of this extractor; helpers a
 single suite uses (product_form, on_block) stay in their suites.
 """

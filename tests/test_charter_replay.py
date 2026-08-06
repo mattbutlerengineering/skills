@@ -430,7 +430,7 @@ def pid_alive(pid):
 
 class TestClaudeRunnerLiveSeam(unittest.TestCase):
     """claude_runner against real fake-claude subprocesses on PATH (the
-    tests/test_process_reaping.py technique; no API calls). The command
+    tests/test_cli_process_reaping.py technique; no API calls). The command
     comes from the harness registry — --include-partial-messages and
     all — a timeout is an honest partial-transcript failure, and the
     whole process group dies with the run, grandchildren included,

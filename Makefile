@@ -7,7 +7,7 @@
 # GENERATED from this file by factory_init.py's product_makefile transform
 # (tools under tools/factory/, no plugin lint) — edit here, then run
 # `python3 factory_init.py update-manifest`, never edit the twin;
-# tests/test_factory_gates.py::TestLockstep pins the command sets.
+# tests/test_gates.py::TestLockstep pins the command sets.
 
 .PHONY: check review wo-merged wo-in-progress wo-needs-review
 .PHONY: assembler cost-report gate-digest web-quality

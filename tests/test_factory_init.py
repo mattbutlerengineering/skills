@@ -1,6 +1,6 @@
 """factory_init.py (manifest stamping) — fixture-tree tests.
 
-Same discipline as test_factory_gates: every function is exercised through
+Same discipline as test_gates: every function is exercised through
 its public interface against a temp fixture tree, and tests assert the
 exact problem strings callers will print. One deliberate exception: stamp's
 defense-in-depth refusals are unreachable through an honest tree (the
@@ -234,7 +234,7 @@ class TestRealTreeMirrors(unittest.TestCase):
 class TestProductForm(unittest.TestCase):
     """The per-command root->product respelling. Public on purpose:
     product_makefile generates the payload Makefile through it, and
-    TestLockstep (tests/test_factory_gates.py) asserts both Makefiles'
+    TestLockstep (tests/test_gates.py) asserts both Makefiles'
     command sets against it — never a test-private copy."""
 
     def test_each_factory_tool_moves_under_tools_factory(self):

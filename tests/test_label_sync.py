@@ -1,6 +1,6 @@
 """label_sync.py (detector L, LABEL-SYNC) — pure-function + fixture tests.
 
-Same discipline as test_factory_gates/test_factory_init: every function is
+Same discipline as test_gates/test_factory_init: every function is
 exercised through its public interface, tests assert the EXACT problem
 strings callers will print, and the gh runner is injected so no test ever
 touches the network.

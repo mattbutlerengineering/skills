@@ -5,7 +5,7 @@ dispatched work order's prompt (WO-0015; ADR-0032 dispatch plane).
 Named orientation_pack.py, not orientation.py: "orientation" already
 names an unrelated concept in this repo — the idea-to-prod pipeline's
 "which stage is next" decision table (ADR-0021, protocol.py's
-next_stage, pinned by tests/test_orientation.py against
+next_stage, pinned by tests/test_protocol_orientation.py against
 tests/fixtures/orientation/; the root orientation.py CLI adapter over
 it has since been deleted as a zero-caller pass-through). The factory
 shares this repo's root namespace with that pipeline, so the two

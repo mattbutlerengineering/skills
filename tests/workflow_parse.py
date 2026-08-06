@@ -1,6 +1,6 @@
 """Stdlib-only workflow text extraction shared by the run-step tests.
 
-Sibling of make_parse: test_factory_gates' run-step invariant needs every
+Sibling of make_parse: test_gates' run-step invariant needs every
 `run:` command in a workflow file without a YAML parser (stdlib only,
 like every script here). Handles the two forms this repo's workflows
 use — inline (`run: make check`) and block scalar (`run: |` followed by

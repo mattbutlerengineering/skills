@@ -3,8 +3,9 @@
 Every harness adapter in trigger_eval.HARNESSES must meet the same
 fan-out contract: count every run, score per case, feed wrong slugs
 into the confusion matrix, preserve case order. This mixin holds that
-contract once — a twin (test_run_eval.py, test_run_eval_omp.py) sets
-FAKE and HARNESS, and supplies only what genuinely differs: the fake
+contract once — a twin (test_trigger_eval_run_eval.py,
+test_trigger_eval_run_eval_omp.py) sets FAKE and HARNESS, and supplies
+only what genuinely differs: the fake
 executable's event shapes and any harness-specific seam tests. The
 executable name the fake shadows comes from the registry's own binary
 field (ADR-0045), so the contract exercises the same name the runner

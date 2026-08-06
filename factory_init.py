@@ -50,7 +50,7 @@ def product_form(command):
     """A root command as its product-repo twin spells it. The one
     production statement of the root<->payload command respelling:
     product_makefile generates the payload Makefile through it, and
-    TestLockstep (tests/test_factory_gates.py) asserts both Makefiles'
+    TestLockstep (tests/test_gates.py) asserts both Makefiles'
     command sets against it — never a test-private copy."""
     for tool in _PRODUCT_TOOLS:
         command = command.replace(f"python3 {tool}",

@@ -2,7 +2,7 @@
 live-tree CI guards over .github/workflows/ and the two Makefiles
 (TestLockstep and the run-step invariant).
 
-Same discipline as test_lint_checkers: every checker is exercised through
+Same discipline as test_lint: every checker is exercised through
 its public interface against a temp fixture tree, and tests assert the
 exact problem strings callers will print.
 """

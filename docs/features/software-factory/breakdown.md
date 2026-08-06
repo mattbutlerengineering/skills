@@ -185,7 +185,7 @@ ADR-0033, and ADR-0034 (all accepted).
   the `orientation.py` this row's accept line originally named. The repo root
   already carries an unrelated `orientation.py` — ADR-0021's CLI adapter
   over `protocol.py`'s `next_stage`, the idea-to-prod pipeline's "which
-  stage is next" tool, with its own `tests/test_orientation.py` and
+  stage is next" tool, with its own `tests/test_protocol_orientation.py` and
   `tests/fixtures/orientation/` — because the factory's tools and the
   idea-to-prod skills share this repo's root namespace. Renaming avoided
   overwriting a shipped, tested, unrelated feature; the row's accept line

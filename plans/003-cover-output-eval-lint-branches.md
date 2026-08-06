@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 8399f85..HEAD -- lint.py tests/test_lint_checkers.py`
+> **Drift check (run first)**: `git diff --stat 8399f85..HEAD -- lint.py tests/test_lint.py`
 > If `check_output_evals` in `lint.py` changed since this plan was written
 > (issue #25 rewrites it through `eval_schema.py`), compare the "Current
 > state" excerpt against the live code; on a mismatch, treat it as a STOP
@@ -69,13 +69,13 @@ def check_output_evals(root):
             for p in problems_for(path)]
 ```
 
-- `tests/test_lint_checkers.py` — the existing test module. Its pattern:
+- `tests/test_lint.py` — the existing test module. Its pattern:
   `make_clean_tree(root)` seeds a minimal zero-problem tree (including
   `evals/output/idea.json` with one valid eval and the fixture dir
   `evals/fixtures/seeded-run`); each defect test subclasses
   `CheckerTreeTest` (tempdir + clean tree in `setUp`), breaks ONE aspect,
   and asserts the checker's **exact problem strings**. The existing
-  output-eval test to model after (`tests/test_lint_checkers.py:158-170`):
+  output-eval test to model after (`tests/test_lint.py:158-170`):
 
 ```python
 class TestOutputEvals(CheckerTreeTest):
@@ -101,14 +101,14 @@ class TestOutputEvals(CheckerTreeTest):
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
-| One test class | `python3 -m unittest tests.test_lint_checkers.TestOutputEvals -v` | all pass |
+| One test class | `python3 -m unittest tests.test_lint.TestOutputEvals -v` | all pass |
 | Tests   | `python3 -m unittest discover tests` | `OK`, exit 0 |
 | Lint    | `python3 lint.py` | `lint: 0 problem(s) across 11 skills`, exit 0 |
 
 ## Scope
 
 **In scope**:
-- `tests/test_lint_checkers.py` — add tests to the existing
+- `tests/test_lint.py` — add tests to the existing
   `TestOutputEvals` class only.
 
 **Out of scope** (do NOT touch):
@@ -128,7 +128,7 @@ class TestOutputEvals(CheckerTreeTest):
 
 ### Step 1: Add the four missing branch tests
 
-Append to `class TestOutputEvals` in `tests/test_lint_checkers.py`
+Append to `class TestOutputEvals` in `tests/test_lint.py`
 (after `test_skill_name_mismatch_and_missing_fixture`):
 
 ```python
@@ -181,7 +181,7 @@ the live code if anything fails):
   branch (skill_name mismatch would otherwise also fire — it compares
   against the stem, so keeping them equal yields exactly one problem).
 
-**Verify**: `python3 -m unittest tests.test_lint_checkers.TestOutputEvals -v`
+**Verify**: `python3 -m unittest tests.test_lint.TestOutputEvals -v`
 → 5 tests, all pass. If an exact-string assertion fails, read the live
 `check_output_evals` and fix the *test's expected string* to match the
 code — never the other way around (characterization tests document current
@@ -195,7 +195,7 @@ behavior).
 ### Step 3: Commit
 
 ```bash
-git add tests/test_lint_checkers.py
+git add tests/test_lint.py
 git commit -m "test: cover check_output_evals defect branches"
 ```
 
@@ -208,10 +208,10 @@ interface. Pattern: the existing `TestOutputEvals` test in the same class.
 
 ## Done criteria
 
-- [ ] `python3 -m unittest tests.test_lint_checkers.TestOutputEvals -v` → 5 tests pass
+- [ ] `python3 -m unittest tests.test_lint.TestOutputEvals -v` → 5 tests pass
 - [ ] `python3 -m unittest discover tests` exits 0
 - [ ] `python3 lint.py` exits 0
-- [ ] `git status --short` shows only `tests/test_lint_checkers.py` modified
+- [ ] `git status --short` shows only `tests/test_lint.py` modified
 - [ ] `plans/README.md` status row updated
 
 ## STOP conditions

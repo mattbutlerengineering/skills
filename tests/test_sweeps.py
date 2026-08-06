@@ -1,6 +1,6 @@
 """sweeps.py — pure-function + fixture tests (origin: WO-0010).
 
-Same discipline as test_label_sync/test_factory_gates: every function is
+Same discipline as test_label_sync/test_gates: every function is
 exercised through its public interface, tests assert the EXACT problem
 strings callers will print, and the gh runner is injected so NO test ever
 touches the network. The two invariants of ADR-0032 get their own class:

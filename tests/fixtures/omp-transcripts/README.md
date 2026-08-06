@@ -3,7 +3,7 @@
 Real `omp -p --mode json` transcripts, pinned as test fixtures so the
 omp trigger-eval detection seam has a second adapter beside the live
 pipe (issue #88, ADR-0031) — `tests/fixtures/transcripts/` is the
-claude-harness counterpart. `tests/test_omp_trigger_detection.py`
+claude-harness counterpart. `tests/test_trigger_eval_detection_omp.py`
 replays each transcript through `detect_omp_fired` and asserts the
 outcome recorded here — an omp output-shape change breaks CI instead of
 silently corrupting eval results.

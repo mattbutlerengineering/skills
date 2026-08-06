@@ -2,12 +2,12 @@
 out at the cli seam (ADR-0045) — no stdlib monkeypatching. The process
 lifecycle (group kill, wait, pipe close) is cli.harness_run's contract,
 pinned at tests/test_cli.py; the real-subprocess composition is pinned
-at tests/test_process_reaping.py. What remains run_single_query's own
+at tests/test_cli_process_reaping.py. What remains run_single_query's own
 duty — and what this module pins — is the per-run project dir: created
 once, removed whatever the stream does. A leaked dir per query times
 hundreds of runs is the failure this guards. The version probe lives at
 the cli seam (tests/test_cli.py) and the record()/collision pin at
-tests/test_trigger_scoring.py.
+tests/test_trigger_eval_scoring.py.
 """
 import contextlib
 import shutil

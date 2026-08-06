@@ -24,7 +24,7 @@
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/knowledge_plane.py": "691522f28f92782d91916c25a22aa56e7ef578bf6b92b1ea8d1c6dc66d6e921a",
     "templates/tools/factory/label_sync.py": "2dd74d12942271d71d64cb60bc54923f0589f14cedf7bf41bb56413a4e55c3d9",
-    "templates/tools/factory/orientation_pack.py": "d54821e9b836152a8a6f57c4d3c5b5a979481de0ec88efc8f8ab2ce28cbcd02d",
+    "templates/tools/factory/orientation_pack.py": "b67c338ba8f4ae762d891b1c329976c6daa8c46d95f377e4c1f3bfd22a85168c",
     "templates/tools/factory/protocol.py": "e0751ed557534d457eadddb30060234aea4cad7778009af028c6094a6093ba41",
     "templates/tools/factory/validator.py": "a988f07dc2f8f87da0d80ef058c6e7a0e9240dabe15d8605723f1f24f6457754"
   }

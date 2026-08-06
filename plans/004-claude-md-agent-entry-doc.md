@@ -139,7 +139,7 @@ On demand only (real model runs, costs money, never CI):
 - **Problem-string contracts**: checkers/validators return lists of
   label-prefixed problem strings; callers print and exit nonzero. Tests
   assert the exact strings through public interfaces (see
-  `tests/test_lint_checkers.py`).
+  `tests/test_lint.py`).
 
 ## Eval honesty (non-negotiable)
 

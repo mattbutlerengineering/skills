@@ -10,7 +10,7 @@ outputs a workflow consumes — without each re-proving what the seam
 does.
 
 harness_run's fakes are real shell scripts run as real subprocesses (the
-tests/test_process_reaping.py technique), so the group-kill contract is
+tests/test_cli_process_reaping.py technique), so the group-kill contract is
 proven against live process groups, not mocks; the one mock-driven test
 is the kill fallback, where a real stray SIGKILL must never leave the
 test.

@@ -31,7 +31,7 @@ acceptance criteria are met. No tracker mirror (opted out).
 - [x] **Lint checker** — register `check_backlog` in `lint.py` `CHECKERS`
   - Accept: `docs/backlog.md` validated when present; absent file yields no
     problems; unreadable file yields one problem string; exact-string tests
-    in `tests/test_lint_checkers.py`; `python3 lint.py` exits 0 on the repo.
+    in `tests/test_lint.py`; `python3 lint.py` exits 0 on the repo.
   - Blocked by: Backlog grammar in protocol.py
 
 ## Milestone 2: Skills carry the loop

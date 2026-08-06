@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 79b08fc..HEAD -- trigger_eval.py tests/test_process_reaping.py`
+> **Drift check (run first)**: `git diff --stat 79b08fc..HEAD -- trigger_eval.py tests/test_cli_process_reaping.py`
 > If `trigger_eval.py` changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -84,7 +84,7 @@ def run_single_query(query, descriptions, timeout, model, isolate):
   `tests/`, run with `python3 -m unittest discover tests`, and test through
   public interfaces. Subprocess-style integration tests already exist —
   see `tests/test_eval_schema.py` (class `TestRunnerRefusesMalformedSet`)
-  and `tests/test_trigger_detection.py` (class `TestLivePipeAdapter`, which
+  and `tests/test_trigger_eval_detection.py` (class `TestLivePipeAdapter`, which
   uses `subprocess.Popen` + `finally: process.kill(); process.wait();
   process.stdout.close()`). Match their style: module docstring explaining
   the seam, plain `unittest`, `tempfile` + `addCleanup`.
@@ -94,14 +94,14 @@ def run_single_query(query, descriptions, timeout, model, isolate):
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
 | Tests   | `python3 -m unittest discover tests` | `OK`, exit 0 (86 tests before this plan; more after) |
-| One test module | `python3 -m unittest tests.test_process_reaping -v` | all pass |
+| One test module | `python3 -m unittest tests.test_cli_process_reaping -v` | all pass |
 | Lint    | `python3 lint.py` | `lint: 0 problem(s) across 13 skills`, exit 0 |
 
 ## Scope
 
 **In scope** (the only files you should modify):
 - `trigger_eval.py` (the `run_single_query` function and the import block only)
-- `tests/test_process_reaping.py` (create)
+- `tests/test_cli_process_reaping.py` (create)
 
 **Out of scope** (do NOT touch, even though they look related):
 - `_stream_events` / `detect_fired` / `_watch_stream` — the detection seam
@@ -119,7 +119,7 @@ def run_single_query(query, descriptions, timeout, model, isolate):
 
 ### Step 1: Write the failing test (RED)
 
-Create `tests/test_process_reaping.py`. The test installs a **fake `claude`
+Create `tests/test_cli_process_reaping.py`. The test installs a **fake `claude`
 executable** on `PATH` (so no real CLI or API is needed): a shell script
 that spawns a grandchild `sleep`, writes the grandchild's PID to a file,
 and then sleeps itself. `run_single_query` with a short timeout returns
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-**Verify**: `python3 -m unittest tests.test_process_reaping -v` →
+**Verify**: `python3 -m unittest tests.test_cli_process_reaping -v` →
 `test_grandchild_is_dead_after_timeout_return` **FAILS** with
 "grandchild survived run_single_query". (If it errors because the fake
 `claude` was not found, fix the PATH setup before proceeding — the RED
@@ -242,7 +242,7 @@ id. `ProcessLookupError` covers the group already being gone;
 whether or not the process was already dead — that is the fd-leak half of
 this fix.
 
-**Verify**: `python3 -m unittest tests.test_process_reaping -v` → PASS.
+**Verify**: `python3 -m unittest tests.test_cli_process_reaping -v` → PASS.
 
 ### Step 3: Full gates
 
@@ -253,15 +253,15 @@ skills`.
 ### Step 4: Commit
 
 ```bash
-git add trigger_eval.py tests/test_process_reaping.py
+git add trigger_eval.py tests/test_cli_process_reaping.py
 git commit -m "fix: reap claude process tree and close stdout pipe in run_single_query"
 ```
 
 ## Test plan
 
-- New: `tests/test_process_reaping.py::test_grandchild_is_dead_after_timeout_return`
+- New: `tests/test_cli_process_reaping.py::test_grandchild_is_dead_after_timeout_return`
   (the regression this plan fixes). Model structure after
-  `tests/test_trigger_detection.py`'s `TestLivePipeAdapter`.
+  `tests/test_trigger_eval_detection.py`'s `TestLivePipeAdapter`.
 - Existing detection tests must stay green — the fix must not change what
   `run_single_query` returns, only how it cleans up.
 - Verification: `python3 -m unittest discover tests` → all pass.
