@@ -80,6 +80,20 @@ fails the build if you do. Change the template at the source and re-stamp.
 
 `/doctor` covers this whole section.
 
+### Taking a later factory change
+
+A stamp is a snapshot. When the factory gains a fix, refresh the repo:
+
+```
+python3 factory_init.py update <path-to-target-repo>
+```
+
+It overwrites the executable half and the mirror, lands any payload file the
+repo lacks, and leaves everything you were meant to edit alone — reporting
+each kept file that differs so you can reconcile it deliberately. Read its
+make-target line: the workflows are refreshed and call only `make` targets, so
+a factory change that adds one leaves a Makefile that has never heard of it.
+
 ## 5. Sync the label taxonomy
 
 The 27-label taxonomy backs the work-order lifecycle machine, the gate digest,
