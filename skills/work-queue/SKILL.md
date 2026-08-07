@@ -43,12 +43,13 @@ queue must never read the same.
 
 `wq:` problems are refusals, not warnings. Stop on them.
 
-One caveat to state plainly rather than let the output imply: the monthly
-cap is priced against recorded spend, and today **nothing writes a ledger
-row when a run succeeds** (#222) — only budget exhaustion does. So the
-month-to-date figure the planner prints is a floor, not the truth, and its
-over-cap refusal cannot currently fire. The `wip_cap` bound is real; treat
-the dollar bound as advisory until #222 lands.
+One caveat to state plainly rather than let the output imply: the
+month-to-date figure is only as good as what has been recorded, and until
+recently **nothing wrote a ledger row when a run succeeded** (#222) — only
+budget exhaustion did. Step 5 is what fixes that for this path, and it is
+not optional bookkeeping: skip it and the next batch prices against a
+total it knows is wrong. Runs dispatched through the cloud fallback still
+record nothing, so a month that mixed both paths reads low.
 
 ### 3. Claim the batch before spending anything
 
@@ -93,7 +94,22 @@ work does not need the implementation model.
 ### 5. Report — and stop at the gate
 
 Report per work order: the PR, whether `make check` passed inside the
-worktree, and the budget it actually used. Then stop.
+worktree, and the budget it actually used.
+
+Then record that spend, once per work order:
+
+    python3 budget_guard.py record <WO-####> <run-id> <model> <tokens> <cost>
+
+The numbers come from the harness's own report of that subagent's usage.
+Never estimate them, never round them to something plausible, and never
+record a run that did not happen — this is an append-only ledger under the
+same honesty rule as `evals/results/`, and a line written to make a total
+look right is worse than the missing line it replaces. `record` refuses a
+malformed row and a `(wo, run_id)` it has already seen, both *before* the
+append, so a retry cannot double-count; a refusal is a stop, not a prompt
+to try different numbers.
+
+Then stop.
 
 **Never merge.** The merged PR is the human approval record (ADR-0033
 gate 3) and required code-owner review is what makes it one. An agent
@@ -134,9 +150,9 @@ workflow's job, not yours.
 
 That path is serial per label event and depends on GitHub Actions, so
 prefer local. Say which path a run used either way — the two are not
-distinguishable after the fact from the artifacts alone, and while #222
-stands neither writes a spend row on success, so the ledger will not
-answer it for you.
+distinguishable after the fact from the artifacts alone, and the cloud leg
+still records no spend on success (#222), so the ledger will not answer it
+for you.
 
 ## Rules
 
