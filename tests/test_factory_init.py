@@ -8,8 +8,10 @@ manifest walk cannot emit a malformed key), so those tests patch the
 checksum gate or INSTALL_MAP to reach the branch — stamp itself is still
 driven through its public interface.
 """
+import collections
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -589,6 +591,81 @@ class TestSeededADRs(unittest.TestCase):
                               f"{path.name} cites ADR-{number}, which is not"
                               " in the seed — cite upstream decisions by name"
                               " or link, never by bare token")
+
+
+class TestSetupDocCounts(unittest.TestCase):
+    """docs/setup.md tells a reader exactly how many files a stamp lands
+    and how they group. Nothing kept those numbers true: adding
+    work_queue.py to the payload meant hand-editing three of them, and a
+    missed one is invisible — the doc still reads authoritative and the
+    stamp still works, so the reader is the only thing that breaks.
+
+    Every number is derivable from the manifest through the real
+    install_path resolver, so this derives them and compares. Same
+    direction as detector J: a documented fact about the payload with
+    nothing pinning it to the payload is a fact with a shelf life.
+    """
+
+    SETUP = REPO_ROOT / "docs" / "setup.md"
+    TABLE_ROW = re.compile(r"^\|\s*`([^`]+)`\s*\|\s*(\d+)\s*\|")
+    TOTALS = re.compile(r"(\d+) files land: the (\d+)-file payload")
+
+    def derived(self):
+        """(group -> count, payload total, stamp total) from the manifest."""
+        files = json.loads(
+            (REPO_ROOT / "factory" / "manifest.json").read_text(
+                encoding="utf-8"))["files"]
+        groups = collections.Counter()
+        for rel in files:
+            dest, problem = factory_init.install_path(rel)
+            self.assertIsNone(problem, f"{rel}: {problem}")
+            parts = dest.split("/")
+            if len(parts) == 1:
+                groups[dest] += 1
+            else:
+                groups["/".join(parts[:-1]) + "/"] += 1
+        payload = sum(groups.values())
+        # factory/ holds the pristine mirror plus manifest.json itself.
+        groups["factory/"] = len(files) + 1
+        return groups, payload, payload + len(files) + 1
+
+    def test_the_group_table_matches_the_manifest(self):
+        groups, _, _ = self.derived()
+        text = self.SETUP.read_text(encoding="utf-8")
+        stated = {}
+        for line in text.splitlines():
+            match = self.TABLE_ROW.match(line)
+            if match:
+                stated[match.group(1)] = int(match.group(2))
+        self.assertTrue(stated, "no count table found in docs/setup.md")
+        self.assertEqual(
+            stated, dict(groups),
+            "docs/setup.md's group table has drifted from"
+            " factory/manifest.json — update the table, or the reader is"
+            " told a stamp lands files it does not")
+
+    def test_the_totals_sentence_matches_the_manifest(self):
+        _, payload, stamp = self.derived()
+        text = self.SETUP.read_text(encoding="utf-8")
+        match = self.TOTALS.search(text)
+        self.assertIsNotNone(
+            match, "docs/setup.md no longer states 'N files land: the M-file"
+            " payload' — this test pins that sentence")
+        self.assertEqual(
+            (int(match.group(1)), int(match.group(2))), (stamp, payload),
+            "docs/setup.md's totals sentence has drifted from"
+            " factory/manifest.json")
+
+    def test_the_table_sums_to_the_stated_stamp_total(self):
+        """Internal consistency, independent of the manifest: a table that
+        matches the manifest but does not sum to the headline number still
+        misleads."""
+        text = self.SETUP.read_text(encoding="utf-8")
+        rows = [int(match.group(2)) for match
+                in (self.TABLE_ROW.match(line)
+                    for line in text.splitlines()) if match]
+        match = self.TOTALS.search(text)
+        self.assertEqual(sum(rows), int(match.group(1)))
 
 
 class TestAcceptanceStampRealRepo(unittest.TestCase):
