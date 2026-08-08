@@ -723,6 +723,37 @@ class TestReconcileDrift(unittest.TestCase):
              " #109, which is labelled wo:merged — the issue is ahead of"
              " the row"])
 
+    def test_an_unchecked_row_whose_issue_was_closed(self):
+        """The symmetric case to the checked-row pair above. For a checked
+        row the sweep judged BOTH the label and the state; for an unchecked
+        row it judged only the label, so an issue closed under any
+        non-merged label — the state WO-0018/#123 is actually in — read as
+        agreement. The knowledge plane stays authoritative: the row says
+        the work is outstanding, so closing the issue is the drift."""
+        self.assertEqual(
+            self.drift(rows(self.ROW), [issue(109, "CLOSED", ["wo:draft"])]),
+            ["docs/features/demo/breakdown.md: an unchecked row mirrors"
+             " #109, which is closed carrying wo:draft — the row says the"
+             " work is outstanding"])
+
+    def test_an_unchecked_row_whose_issue_was_closed_unlabelled(self):
+        self.assertEqual(
+            self.drift(rows(self.ROW), [issue(109, "CLOSED", [])]),
+            ["docs/features/demo/breakdown.md: an unchecked row mirrors"
+             " #109, which is closed carrying no wo: label — the row says"
+             " the work is outstanding"])
+
+    def test_an_unchecked_row_whose_issue_is_merely_open_is_agreement(self):
+        """The guard is CLOSED, not "any non-merged label": an open issue
+        mid-flight is exactly what an unchecked row should mirror, and
+        flagging it would make the sweep noise on every live work order."""
+        for labels in ([], ["wo:draft"], ["wo:in-progress"],
+                       ["wo:ready-for-agent"], ["wo:needs-review"]):
+            with self.subTest(labels=labels):
+                self.assertEqual(
+                    self.drift(rows(self.ROW), [issue(109, "OPEN", labels)]),
+                    [])
+
     def test_a_row_mirroring_an_issue_that_is_not_there(self):
         self.assertEqual(
             self.drift(rows(self.ROW), [issue(7)]),

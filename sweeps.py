@@ -270,6 +270,10 @@ def reconcile_drift(rows, issues):
                 drift.append(f"{path}: an unchecked row mirrors #{number},"
                              " which is labelled wo:merged — the issue is"
                              " ahead of the row")
+            elif state == "closed":
+                drift.append(f"{path}: an unchecked row mirrors #{number},"
+                             f" which is closed carrying {_describe(labels)}"
+                             " — the row says the work is outstanding")
     for number, paths in sorted(mirrored.items()):
         if len(paths) > 1:
             drift.append(f"#{number} is mirrored by {len(paths)} rows"
