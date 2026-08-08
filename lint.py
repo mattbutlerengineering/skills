@@ -99,41 +99,70 @@ def check_skills(root):
     ]
 
 
-# A skill's own bundled files, as its SKILL.md names them. Agents resolve
-# these at runtime, relative to the skill directory.
-SKILL_ASSET = re.compile(r"(?:references|assets)/[A-Za-z0-9._-]+")
+# Bundled-file paths a SKILL.md names without linking them: "read
+# `references/playbook.md`". Reference files use markdown links instead.
+# The lookbehind keeps it from matching inside a longer path: without
+# it, "../audit/references/playbook.md" also yields a bare
+# "references/playbook.md" resolved against the wrong directory.
+SKILL_ASSET = re.compile(
+    r"(?<![A-Za-z0-9._/-])(?:references|assets)/[A-Za-z0-9._-]+")
+# A markdown link to a local file. In-page anchors are not files.
+LOCAL_LINK = re.compile(r"\]\(([^)#][^)]*)\)")
+
+
+def named_files(path, skill_dir):
+    """(reference-as-written, directory it resolves against) for every
+    local file `path` names. Links resolve against the LINKING file's
+    own directory, because that is how a reader resolves them — a
+    reference file's `language.md` is its sibling, not the skill root's."""
+    text = path.read_text(encoding="utf-8")
+    named = [(ref, path.parent) for ref in LOCAL_LINK.findall(text)
+             if "://" not in ref]
+    if path.name == "SKILL.md":
+        named += [(ref, skill_dir) for ref in SKILL_ASSET.findall(text)]
+    return sorted(set(named))
 
 
 def check_skill_assets(root):
-    """Every references/ or assets/ path a SKILL.md names actually ships
-    beside it. Skills are self-contained (ADR-0008) and nothing enforced
-    that half of the claim: a reference file renamed, or never committed,
-    fails only at runtime in the agent's hands — as a read that quietly
-    returns nothing — and no gate sees it. Missing SKILL.md files are
-    check_skills' finding, not this one's."""
-    def ships(skill_dir, ref):
+    """Every local file a skill's own markdown names actually ships
+    beside it, and none of them reaches outside the skill directory.
+    Skills are self-contained (ADR-0008) and nothing enforced either
+    half: a reference renamed, or never committed, fails only at runtime
+    in the agent's hands — as a read that quietly returns nothing — and
+    no gate sees it. Every .md in the skill is walked, not just
+    SKILL.md, because reference files link to each other too. Missing
+    SKILL.md files are check_skills' finding, not this one's."""
+    def ships(directory, name):
         """Case-exact existence. Path.exists() answers with the local
         filesystem's case folding, so on macOS a SKILL.md naming
         'references/Playbook.md' passes beside a file called
         playbook.md — and then fails on the case-sensitive filesystem
         the plugin installs onto. Reading the directory is what makes
         this check unsatisfiable by the wrong file."""
-        parent, _, name = ref.rpartition("/")
         try:
-            return name in {entry.name
-                            for entry in (skill_dir / parent).iterdir()}
+            return name in {entry.name for entry in directory.iterdir()}
         except OSError:
             return False
 
     def problems_for(slug):
-        skill = root / "skills" / slug / "SKILL.md"
-        if not skill.is_file():
+        skill_dir = root / "skills" / slug
+        if not (skill_dir / "SKILL.md").is_file():
             return []
-        named = sorted(set(SKILL_ASSET.findall(
-            skill.read_text(encoding="utf-8"))))
-        return [f"skills/{slug}/SKILL.md names {ref!r}, which does not "
-                f"exist in skills/{slug}/"
-                for ref in named if not ships(skill.parent, ref)]
+        problems = []
+        for path in sorted(skill_dir.rglob("*.md")):
+            source = path.relative_to(skill_dir).as_posix()
+            for ref, base in named_files(path, skill_dir):
+                target = (base / ref).resolve()
+                if not target.is_relative_to(skill_dir.resolve()):
+                    problems.append(
+                        f"skills/{slug}/{source} names {ref!r}, which is "
+                        "outside the skill directory (ADR-0008: skills "
+                        "are self-contained)")
+                elif not ships(target.parent, target.name):
+                    problems.append(f"skills/{slug}/{source} names {ref!r}, "
+                                    "which does not exist")
+        return problems
+
     return [p for slug in ALL_SKILLS + extra_skills(root)
             for p in problems_for(slug)]
 
