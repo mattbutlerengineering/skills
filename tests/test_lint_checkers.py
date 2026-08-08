@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import lint  # noqa: E402
+import protocol  # noqa: E402
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,  # noqa: E402
                       TEMPLATED_STAGES)
 
@@ -43,9 +44,13 @@ def make_clean_tree(root):
     for slug in TEMPLATED_STAGES:
         (root / "skills" / slug / "TEMPLATE.md").write_text(
             "t\n", encoding="utf-8")
+    # The router needs its hand-off list, not just the slugs: check_router
+    # pins that list's membership and pipeline order, so a bare mention
+    # dump is no longer a clean router.
     (root / "skills" / "next" / "SKILL.md").write_text(
         "---\nname: next\ndescription: d\n---\n\n"
-        + " ".join(STAGES + MAINTENANCE_STAGES) + "\n",
+        + "\n".join(f"   - {stage} → the `{stage}` skill"
+                    for stage in lint.routed_order()) + "\n",
         encoding="utf-8")
 
     (root / "docs").mkdir()
@@ -226,24 +231,98 @@ class TestTemplates(CheckerTreeTest):
 
 
 class TestRouter(CheckerTreeTest):
-    def test_omitted_stage(self):
-        mentions = " ".join(s for s in STAGES + MAINTENANCE_STAGES
-                            if s != "ship")
+    """The router skill is prose an agent reads at RUNTIME, so drift there
+    is drift in shipped behaviour. The mention check alone passed on the
+    word "idea" appearing anywhere; these pin the hand-off list, whose
+    membership and order are derivable from protocol's walk tables.
+
+    What stays UNPINNED, deliberately and worth stating: the router's
+    conditionals — the `ux:` field, the `re-entry:` field, the Implement
+    checkbox rule. Those are English, and no mechanical check here reads
+    them. A green lint means the list is right, not that the routing prose
+    is.
+    """
+
+    def write(self, body):
         (self.root / "skills" / "next" / "SKILL.md").write_text(
-            "---\nname: next\ndescription: d\n---\n\n" + mentions + "\n",
+            "---\nname: next\ndescription: d\n---\n\n" + body + "\n",
             encoding="utf-8")
-        self.assertEqual(lint.check_router(self.root),
-                         ["router never mentions stage skill 'ship'"])
+
+    def handoffs(self, stages):
+        return "\n".join(f"   - {s} → the `{s}` skill" for s in stages)
+
+    def test_a_complete_in_order_list_is_clean(self):
+        self.write(self.handoffs(lint.routed_order()))
+        self.assertEqual(lint.check_router(self.root), [])
+
+    def test_omitted_stage(self):
+        stages = [s for s in lint.routed_order() if s != "ship"]
+        self.write(" ".join(stages) + "\n\n" + self.handoffs(stages))
+        self.assertEqual(lint.check_router(self.root), [
+            "router never mentions stage skill 'ship'",
+            "router's hand-off list omits stage skill 'ship'"])
 
     def test_omitted_maintenance_stage(self):
         # capture sits outside the spine but the router routes to it
         # (ADR-0025) — a router that forgets it is as broken as one that
         # forgets ship.
-        (self.root / "skills" / "next" / "SKILL.md").write_text(
-            "---\nname: next\ndescription: d\n---\n\n"
-            + " ".join(STAGES) + "\n", encoding="utf-8")
-        self.assertEqual(lint.check_router(self.root),
-                         ["router never mentions stage skill 'capture'"])
+        stages = [s for s in lint.routed_order() if s != "capture"]
+        self.write(" ".join(stages) + "\n\n" + self.handoffs(stages))
+        self.assertEqual(lint.check_router(self.root), [
+            "router never mentions stage skill 'capture'",
+            "router's hand-off list omits stage skill 'capture'"])
+
+    def test_a_router_with_no_handoff_list_at_all(self):
+        """The case the mention check could never see: every slug present
+        as prose, nothing routing anywhere."""
+        self.write(" ".join(lint.routed_order()))
+        self.assertEqual(lint.check_router(self.root), [
+            "router has no hand-off list — step 5's '<stage> → the"
+            " `<stage>` skill' lines are what route a run, and nothing"
+            " else names the order"])
+
+    def test_a_list_out_of_pipeline_order(self):
+        order = lint.routed_order()
+        swapped = order[:]
+        i, j = swapped.index("verify"), swapped.index("review")
+        swapped[i], swapped[j] = swapped[j], swapped[i]
+        self.write(self.handoffs(swapped))
+        problems = lint.check_router(self.root)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            "router's hand-off list is out of pipeline order:"), problems)
+        self.assertIn("verify → review", problems[0])
+
+    def test_a_list_naming_a_stage_the_tables_do_not_route_to(self):
+        self.write(self.handoffs(lint.routed_order() + ["retire"]))
+        self.assertEqual(lint.check_router(self.root), [
+            "router hands off to 'retire', which protocol's walk tables do"
+            " not route to"])
+
+    def test_a_stage_pointed_at_the_wrong_skill(self):
+        order = lint.routed_order()
+        body = self.handoffs(order).replace(
+            "- verify → the `verify` skill", "- verify → the `review` skill")
+        self.write(body)
+        problems = lint.check_router(self.root)
+        self.assertIn("router hands 'verify' off to the 'review' skill; a"
+                      " stage routes to the skill of the same name",
+                      problems)
+
+    def test_the_shipped_router_satisfies_all_of_it(self):
+        """Against the real file, not a fixture — the point is the shipped
+        prose, and a checker only ever run on fixtures pins nothing."""
+        self.assertEqual(lint.check_router(ROOT), [])
+
+    def test_the_order_is_derived_not_restated(self):
+        """routed_order() must come from protocol's tables, so adding a
+        stage there is a single edit. Pinning the literal list here would
+        recreate the duplication this closes."""
+        self.assertEqual(
+            lint.routed_order(),
+            [s for s, _ in protocol.MAINTENANCE_STAGE_ARTIFACTS
+             if s not in [p for p, _ in protocol.STAGE_ARTIFACTS]]
+            + [s for s, _ in protocol.STAGE_ARTIFACTS])
 
 
 class TestProtocol(CheckerTreeTest):
