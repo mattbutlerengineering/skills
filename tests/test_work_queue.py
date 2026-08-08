@@ -73,8 +73,23 @@ class TestEligible(unittest.TestCase):
             "WO-0001: blocked by WO-0009",
             "WO-0002: its row carries no (tracker: #N) mirror, so no issue"
             " can carry the ready label",
-            "WO-0003: issue #8 does not carry wo:ready-for-agent — the owner"
-            " applies it, and that is the opt-in"])
+            "WO-0003: no open issue #8 carries wo:ready-for-agent — the"
+            " owner applies that label, and it does nothing on a closed"
+            " issue; the reconcile sweep reports a row whose issue was"
+            " closed"])
+
+    def test_the_unready_line_never_claims_the_issue_is_open(self):
+        """The listing covers OPEN issues, so a miss is equally "open but
+        unlabelled" and "closed". WO-0018/#123 in this repo is the second,
+        and the old wording sent the reader to apply a label to a closed
+        issue — advice that cannot work. The line now says only what the
+        listing proves, and names the sweep that owns the drift."""
+        _, deferred = work_queue.eligible(
+            found(row("WO-0003", issue=123)), set())
+        self.assertEqual(len(deferred), 1)
+        self.assertNotIn("that is the opt-in", deferred[0])
+        self.assertIn("no open issue #123", deferred[0])
+        self.assertIn("reconcile sweep", deferred[0])
 
     def test_a_blocker_that_is_checked_off_no_longer_blocks(self):
         candidates, deferred = work_queue.eligible(
