@@ -629,6 +629,27 @@ class TestSetupDocCounts(unittest.TestCase):
         groups["factory/"] = len(files) + 1
         return groups, payload, payload + len(files) + 1
 
+    LABEL_COUNT = re.compile(r"(\d+)-label taxonomy")
+
+    def test_the_label_count_matches_the_shipped_taxonomy(self):
+        """setup.md states the taxonomy's size twice, and it is the same
+        kind of hand-maintained number as the payload counts: adding a
+        label means remembering the doc, and forgetting leaves a doc that
+        still reads authoritative. The taxonomy is what the lifecycle
+        machine, the digest and the sweeps key on, so the number is one a
+        reader acts on."""
+        shipped = json.loads(
+            (REPO_ROOT / "factory" / "templates" / ".github"
+             / "labels.json").read_text(encoding="utf-8"))
+        text = self.SETUP.read_text(encoding="utf-8")
+        stated = self.LABEL_COUNT.findall(text)
+        self.assertTrue(stated, "docs/setup.md states no label count")
+        self.assertEqual(
+            sorted(set(stated)), [str(len(shipped))],
+            f"docs/setup.md says {sorted(set(stated))}-label taxonomy; "
+            f"factory/templates/.github/labels.json ships {len(shipped)}"
+            " — run the numbers or fix the doc")
+
     def test_the_group_table_matches_the_manifest(self):
         groups, _, _ = self.derived()
         text = self.SETUP.read_text(encoding="utf-8")
