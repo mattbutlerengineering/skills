@@ -59,41 +59,37 @@ plugin-only, which is a legitimate install.
        python3 tools/factory/gates.py
        python3 tools/factory/gates.py --selftest
 
-   Detector E is the one to explain rather than repeat: it fails any file
-   under `factory/templates/` that disagrees with `factory/manifest.json`,
-   and the remedy is never to patch the mirror — it is to re-stamp from the
-   factory repo. Detector F covers `.github/factory.json`'s shape; report
+   Detector E is the one to explain rather than repeat. It covers both
+   halves of the scaffold: the mirror under `factory/templates/` against
+   `factory/manifest.json`, and — in a stamped repo — the executable payload
+   actually in use (`tools/factory/`, `.github/workflows/`) against that
+   same manifest. Its two findings mean different things, so pass the
+   difference on: a *diverged* file is a hand edit, and the remedy is never
+   to keep it — restore from the mirror or re-stamp; a *missing* one is a
+   partial stamp. Detector F covers `.github/factory.json`'s shape; report
    what F says about budgets, routing bands, and caps rather than parsing
    the file yourself.
 
-5. **The files in use match the pristine mirror.** Detector E stops at
-   `factory/templates/**` — it never compares the copies the repo actually
-   runs. So a hand-edited `tools/factory/gates.py` (the tool that runs the
-   gates), `Makefile`, or workflow passes every offline gate silently. No
-   shipped detector closes this, so doctor does it directly: for each file
-   under `factory/templates/`, its stamped destination is the same path
-   with `templates/` stripped — except `templates/factory.json`, which
-   installs to `.github/factory.json` — and the two must be byte-identical.
-   Report any divergence as a hand-edited stamped file, and give the only
-   correct remedy: restore from the mirror or re-stamp, never keep the
-   edit. A destination that is missing entirely is a different finding — a
-   partial stamp, not an edit. Retire this step once a detector takes it
-   over.
+   What E deliberately does not compare is as worth reporting as what it
+   does: the budgets, the code-owner handle, and the doc seeds are the
+   repo's to edit, so a difference there is never drift. Say so when asked
+   rather than leaving the user to wonder why a changed CODEOWNERS is
+   silent.
 
-6. **`tests/` exists.** The stamped `check` target runs
+5. **`tests/` exists.** The stamped `check` target runs
    `python3 -m unittest discover -q tests` and errors outright without a
    `tests/` directory — a fresh stamp into a test-less repo fails its first
    gate for a reason that reads like a broken tool. Fix: create `tests/`
    with at least one test module.
 
-7. **The Makefile carries its full target set.** `check`, `review`, the four
+6. **The Makefile carries its full target set.** `check`, `review`, the four
    lifecycle targets (`wo-merged`, `wo-in-progress`, `wo-needs-review`,
    `wo-failed`), `assembler`, `cost-report`, `gate-digest`, `web-quality`. A
    missing lifecycle target is a hole in the work-order state machine that
    nothing else reports: without `wo-failed`, for instance, a dispatched run
    that dies leaves its order on `wo:in-progress` forever.
 
-8. **The five workflows are present and call the factory through `make`.**
+7. **The five workflows are present and call the factory through `make`.**
    `validator.yml`, `assembler.yml`, `design.yml`, `cost-report.yml`,
    `gate-digest.yml`. The drift to look for is narrow and specific: a `run:`
    step invoking `python3 tools/factory/...` directly instead of a make
@@ -102,7 +98,7 @@ plugin-only, which is a legitimate install.
    or the reverse. Steps that legitimately do other work — `gh issue
    create`, checkout, Python setup — are not drift; do not report them.
 
-9. **CODEOWNERS is substituted.** The template ships a placeholder owner on
+8. **CODEOWNERS is substituted.** The template ships a placeholder owner on
    every path. If it still names the template's owner and that handle is not
    a collaborator here, GitHub silently ignores the entry and the code-owner
    gate — the human approval record — goes inert. Fix: replace the handle
@@ -110,7 +106,7 @@ plugin-only, which is a legitimate install.
 
 ### Tier 2 — networked (opt-in, never unasked)
 
-10. Only when the user explicitly asks for it, check the label taxonomy that
+9. Only when the user explicitly asks for it, check the label taxonomy that
     backs the lifecycle machine, the gate digest, and the sweeps' triage:
 
         python3 tools/factory/label_sync.py
@@ -122,7 +118,7 @@ plugin-only, which is a legitimate install.
 
 ### Report
 
-11. One label-prefixed line per problem, each naming the fix, then a tiered
+10. One label-prefixed line per problem, each naming the fix, then a tiered
     summary — the same shape the repo's own checkers use:
 
         DOCTOR [tier 1]: no tests/ directory — `make check` runs

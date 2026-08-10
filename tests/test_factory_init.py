@@ -392,6 +392,158 @@ class TestStamp(unittest.TestCase):
             self.assertEqual(all_files(target), ["Makefile"])
 
 
+class TestUpdate(unittest.TestCase):
+    """update refreshes an already-stamped repo (issue #212).
+
+    stamp refuses every existing destination, which left a stamped repo
+    unable to take any factory change — including a fix to the integrity
+    gate itself. update splits the payload where detector E does: the
+    executable half is the factory's and gets overwritten, the rest is the
+    repo's and is never written over.
+    """
+
+    def stamped(self, tmp):
+        """(source, target) with target already stamped from source."""
+        source = Path(tmp) / "source"
+        tree = make_factory_repo(source)
+        assert factory_init.update_manifest(tree.root) == []
+        target = Path(tmp) / "target"
+        target.mkdir()
+        assert factory_init.stamp(tree.root, target) == []
+        return tree.root, target
+
+    def test_the_executable_payload_is_overwritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            (target / "tools/factory/gates.py").write_text(
+                "# hand-edited\n", encoding="utf-8")
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual(problems, [])
+            self.assertEqual(kept, [])
+            self.assertIn("tools/factory/gates.py", written)
+            self.assertEqual(
+                (target / "tools/factory/gates.py").read_bytes(),
+                (source / "factory/templates/tools/factory/gates.py"
+                 ).read_bytes())
+
+    def test_an_edited_config_file_is_kept_and_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            mine = json.dumps({"wip_cap": 7})
+            (target / ".github/factory.json").write_text(
+                mine, encoding="utf-8")
+            written, kept, _ = factory_init.update(source, target)
+            self.assertEqual(kept, [".github/factory.json"])
+            self.assertNotIn(".github/factory.json", written)
+            self.assertEqual(
+                (target / ".github/factory.json").read_text(encoding="utf-8"),
+                mine)
+
+    def test_an_unchanged_config_file_is_neither_written_nor_reported(self):
+        # cry-wolf guard: the normal case is a repo whose config still
+        # matches, and it must not show up in either list
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            written, kept, _ = factory_init.update(source, target)
+            self.assertEqual(kept, [])
+            self.assertNotIn(".github/factory.json", written)
+
+    def test_a_payload_file_the_target_lacks_is_created(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            (source / "factory/templates/docs/adr").mkdir(parents=True)
+            (source / "factory/templates/docs/adr/0001-seed.md").write_text(
+                "seed\n", encoding="utf-8")
+            self.assertEqual(factory_init.update_manifest(source), [])
+            written, kept, _ = factory_init.update(source, target)
+            self.assertIn("docs/adr/0001-seed.md", written)
+            self.assertEqual(kept, [])
+            self.assertTrue((target / "docs/adr/0001-seed.md").is_file())
+
+    def test_a_never_stamped_tree_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, _ = self.stamped(tmp)
+            fresh = Path(tmp) / "fresh"
+            fresh.mkdir()
+            written, kept, problems = factory_init.update(source, fresh)
+            self.assertEqual(
+                problems, ["factory-init: target has no factory/manifest.json"
+                           " — it was never stamped; run stamp, not update"])
+            self.assertEqual((written, kept), ([], []))
+            self.assertEqual(all_files(fresh), [])
+
+    def test_a_drifted_source_is_refused_and_nothing_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            before = {rel: (target / rel).read_bytes()
+                      for rel in all_files(target)}
+            (source / "factory/templates/Makefile").write_text(
+                "check: tampered\n", encoding="utf-8")
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual(problems, [TAMPER_PROBLEM])
+            self.assertEqual((written, kept), ([], []))
+            self.assertEqual({rel: (target / rel).read_bytes()
+                              for rel in all_files(target)}, before)
+
+    def test_running_it_twice_changes_nothing_the_second_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            factory_init.update(source, target)
+            after_first = {rel: (target / rel).read_bytes()
+                           for rel in all_files(target)}
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual((kept, problems), ([], []))
+            self.assertEqual({rel: (target / rel).read_bytes()
+                              for rel in all_files(target)}, after_first)
+
+    def test_a_make_target_the_refreshed_workflows_call_must_exist(self):
+        # the coupling update creates: workflows are overwritten and name no
+        # commands of their own, so a factory change that adds a target
+        # leaves a repo calling one its Makefile never heard of
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            # the root file, not the mirror: update_manifest re-copies
+            # root -> factory/templates, so editing the mirror is undone
+            (source / ".github/workflows/assembler.yml").write_text(
+                "jobs:\n  x:\n    steps:\n      - run: make wo-failed\n",
+                encoding="utf-8")
+            self.assertEqual(factory_init.update_manifest(source), [])
+            _, _, problems = factory_init.update(source, target)
+            self.assertEqual(
+                problems,
+                ["factory-init: workflows call `make wo-failed` but the"
+                 " Makefile has no wo-failed target (add it, or re-stamp"
+                 " the Makefile)"])
+
+    def test_a_make_target_named_only_in_a_comment_is_not_a_call(self):
+        # validator.yml's header explains the convention ("every step goes
+        # through a `make` target"); reading that as a call would report a
+        # phantom target on every update
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            (source / ".github/workflows/design.yml").write_text(
+                "# every step goes through a make target\njobs: {}\n",
+                encoding="utf-8")
+            self.assertEqual(factory_init.update_manifest(source), [])
+            self.assertEqual(factory_init.update(source, target)[2], [])
+
+    def test_factory_owned_agrees_with_detector_e_s_pristine_set(self):
+        # the same split stated twice — in destination terms here, in
+        # manifest-key terms in gates — so they must not drift apart
+        for rel in gates.PRISTINE_PREFIXES:
+            with self.subTest(rel=rel):
+                dest = factory_init.install_path(rel + "x.py")[0]
+                self.assertTrue(factory_init.is_factory_owned(Path(dest)),
+                                dest)
+        for rel in ("templates/Makefile", "templates/factory.json",
+                    "templates/.github/CODEOWNERS",
+                    "templates/docs/adr/0001-x.md"):
+            with self.subTest(rel=rel):
+                dest = Path(factory_init.install_path(rel)[0])
+                self.assertFalse(factory_init.is_factory_owned(dest), dest)
+                self.assertFalse(rel.startswith(gates.PRISTINE_PREFIXES), rel)
+
+
 class TestSeededADRs(unittest.TestCase):
     """The ADR seed a stamped repo inherits (issue #199). The acceptance
     test below proves the whole payload passes the stamped detectors; these
