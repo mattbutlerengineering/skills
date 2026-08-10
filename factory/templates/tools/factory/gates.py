@@ -602,7 +602,12 @@ def check_cost_ledger(root):
     weekly report reads with (ADR-0037), so the two cannot diverge. What
     stays here is G's own work: the cross-checks between ledger and
     breakdown (a recorded wo must have a row; a merged row must be
-    recorded)."""
+    recorded).
+
+    A gate-latency row (ADR-0041) never satisfies the merged-order
+    check: it records queue time at $0 with no tokens, and the monthly
+    breaker's sum excludes it — counting it as spend coverage kept G
+    green on a ledger that accounted for nothing (issue #222)."""
     ledger = root / COST_LEDGER
     if not ledger.is_file():
         return []
@@ -618,7 +623,8 @@ def check_cost_ledger(root):
                         for suffix in suffixes)
         wo = cost_ledger.wo_token(entry) if entry is not None else None
         if wo:
-            recorded.add(wo)
+            if cost_ledger.gate_wait(entry) is None:
+                recorded.add(wo)
             if wo not in wo_rows:
                 problems.append(f"G: {COST_LEDGER}:{lineno} wo {wo}"
                                 " has no breakdown row")

@@ -6,6 +6,7 @@ assembler, cost_report) keep testing their composition — problem-string
 labels around a failing runner, step outputs a workflow consumes —
 without each re-proving what the seam does.
 """
+import json
 import os
 import subprocess
 import tempfile
@@ -191,6 +192,75 @@ class TestReadEvent(unittest.TestCase):
             self.assertEqual(
                 cli.read_event({"GITHUB_EVENT_PATH": str(path)}),
                 (None, f"GITHUB_EVENT_PATH {path} is not a JSON object"))
+
+
+class TestReadExecution(unittest.TestCase):
+    """read_execution — the claude-code-action execution file's (tokens,
+    cost), issue #222's harness-side spend record. Every shape it cannot
+    account for is (None, error): the caller refuses to write rather than
+    inventing a ledger row."""
+
+    RESULT = {"type": "result", "subtype": "success",
+              "total_cost_usd": 1.25,
+              "usage": {"input_tokens": 1000, "output_tokens": 200,
+                        "cache_creation_input_tokens": 300,
+                        "cache_read_input_tokens": 500}}
+
+    def write(self, tmp, payload):
+        path = Path(tmp) / "execution.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return str(path)
+
+    def test_the_last_result_entry_yields_tokens_and_cost(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, [{"type": "assistant"}, self.RESULT])
+            self.assertEqual(cli.read_execution(path), ((2000, 1.25), None))
+
+    def test_absent_usage_fields_count_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, [dict(
+                self.RESULT, usage={"input_tokens": 7})])
+            self.assertEqual(cli.read_execution(path), ((7, 1.25), None))
+
+    def test_an_unreadable_path_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = str(Path(tmp) / "nope" / "execution.json")
+            spend, error = cli.read_execution(missing)
+            self.assertIsNone(spend)
+            self.assertTrue(error.startswith(
+                f"cannot read execution file {missing}:"), error)
+
+    def test_malformed_json_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "execution.json"
+            path.write_text("{not json", encoding="utf-8")
+            spend, error = cli.read_execution(str(path))
+            self.assertIsNone(spend)
+            self.assertTrue(error.startswith(
+                f"execution file {path} is not valid JSON:"), error)
+
+    def test_a_log_with_no_result_entry_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, [{"type": "assistant"}])
+            self.assertEqual(
+                cli.read_execution(path),
+                (None, f"execution file {path} has no result entry"))
+
+    def test_a_bad_cost_is_an_error_not_a_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, [dict(self.RESULT,
+                                         total_cost_usd="free")])
+            self.assertEqual(cli.read_execution(path), (
+                None, f"execution file {path} result entry's"
+                " total_cost_usd 'free' is not a non-negative number"))
+
+    def test_a_bad_usage_count_is_an_error_not_a_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, [dict(
+                self.RESULT, usage={"input_tokens": -1})])
+            self.assertEqual(cli.read_execution(path), (
+                None, f"execution file {path} usage input_tokens -1 is"
+                " not a non-negative integer"))
 
 
 if __name__ == "__main__":

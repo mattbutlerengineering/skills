@@ -8,7 +8,7 @@
 # lint); tests/test_factory_gates.py::TestLockstep pins the pair.
 
 .PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
-.PHONY: assembler cost-report gate-digest web-quality
+.PHONY: wo-record assembler cost-report gate-digest web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
@@ -44,6 +44,11 @@ wo-needs-review:
 
 wo-failed:
 	python3 validator.py lifecycle --label wo:failed --issue $(ISSUE) --verdict skip
+
+# Set by the assembler workflow's record step: the dispatched run's spend,
+# machine-written to the append-only cost ledger (issue #222; ADR-0034).
+wo-record:
+	python3 budget_guard.py record-run $(WO) $(RUN_ID) $(MODEL) $(FILE) $(OUTCOME)
 
 assembler:
 	python3 assembler.py resolve

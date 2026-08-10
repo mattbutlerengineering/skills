@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cost_ledger
 import gates
 
 # discover puts tests/ on sys.path; selective package-style runs need it
@@ -351,6 +352,41 @@ class TestCostLedger(unittest.TestCase):
             tree.write("docs/factory/costs.jsonl",
                        json.dumps(self.LINE) + "\n\n")
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+    def test_a_gate_latency_row_does_not_satisfy_merged_coverage(self):
+        """Issue #222: a gate_wait row records queue time — model none,
+        0 tokens, $0.00 — and the monthly breaker's sum excludes it
+        (cost_report skips gate rows). Counting it as the merged order's
+        ledger line kept G green forever while recorded spend stayed
+        $0.00; spend coverage now requires a dispatched-run row."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, cost_ledger.gate_entry("WO-0001", "merge", 2379,
+                                            "2026-07-12T03:12:55Z"))
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/features/demo/breakdown.md:1 merged work order"
+                " WO-0001 has no line in docs/factory/costs.jsonl"])
+
+    def test_a_gate_row_beside_a_spend_row_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                cost_ledger.gate_entry("WO-0001", "merge", 2379,
+                                       "2026-07-12T03:12:55Z"))
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+    def test_a_gate_row_still_needs_a_breakdown_row(self):
+        """Narrowing what satisfies coverage must not waive the reverse
+        check: a gate row naming an unknown order is still
+        ledger-to-breakdown drift."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                cost_ledger.gate_entry("WO-0002", "merge", 10,
+                                       "2026-07-12T03:12:55Z"))
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/factory/costs.jsonl:2 wo WO-0002 has no breakdown"
+                " row"])
 
 
 class TestStaleness(unittest.TestCase):
@@ -1640,6 +1676,8 @@ def product_form(command):
                      "python3 tools/factory/cost_report.py")
             .replace("python3 gate_digest.py",
                      "python3 tools/factory/gate_digest.py")
+            .replace("python3 budget_guard.py",
+                     "python3 tools/factory/budget_guard.py")
             .replace("unittest discover tests", "unittest discover -q tests"))
 
 
@@ -1675,6 +1713,8 @@ class TestLockstep(unittest.TestCase):
                                     / ".github" / "workflows"
                                     / "gate-digest.yml")
     GATE_DIGEST_TARGET = ["python3 gate_digest.py daily"]
+    RECORD_TARGET = ["python3 budget_guard.py record-run $(WO) $(RUN_ID)"
+                     " $(MODEL) $(FILE) $(OUTCOME)"]
 
     # The one canonical check set. `lint.py` is the plugin's structural lint
     # and has no product-repo counterpart, so only the root Makefile runs it.
@@ -1795,6 +1835,28 @@ class TestLockstep(unittest.TestCase):
         self.assertIn("failure()", failed)
         self.assertIn("steps.claim.outputs.transitioned == 'true'", failed)
 
+    def test_both_makefiles_expose_the_wo_record_target(self):
+        self.assertEqual(self.recipes(self.MAKEFILE, "wo-record"),
+                         self.RECORD_TARGET)
+        self.assertEqual(self.recipes(self.TEMPLATE_MAKEFILE, "wo-record"),
+                         [product_form(c) for c in self.RECORD_TARGET])
+
+    def test_a_finished_dispatch_records_its_spend(self):
+        # Issue #222: the ledger's success-path caller. always() — a
+        # failed agent still spent money; gated on the claim's verdict
+        # and on the execution file existing (the harness's own spend
+        # record, never a hand-typed figure). continue-on-error — a
+        # ledger refusal must not flip a finished order to wo:failed;
+        # the miss shows red here and detector G reds the merge if the
+        # line never lands.
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("make wo-record", text)
+        record = text.split("make wo-record")[0].rsplit("- name:", 1)[1]
+        self.assertIn("always()", record)
+        self.assertIn("steps.claim.outputs.transitioned == 'true'", record)
+        self.assertIn("steps.agent.outputs.execution_file != ''", record)
+        self.assertIn("continue-on-error: true", record)
+
     def test_both_makefiles_expose_the_assembler_target(self):
         self.assertEqual(self.recipes(self.MAKEFILE, "assembler"),
                          self.ASSEMBLER_TARGET)
@@ -1804,7 +1866,8 @@ class TestLockstep(unittest.TestCase):
     def test_the_assembler_workflow_names_no_command_of_its_own(self):
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("make assembler", text)
-        for tool in ("gates.py", "validator.py", "assembler.py", "unittest"):
+        for tool in ("gates.py", "validator.py", "assembler.py",
+                     "budget_guard.py", "unittest"):
             self.assertNotIn(
                 f"python3 {tool}", text,
                 f"{tool} is invoked directly in CI; it belongs in a make"
