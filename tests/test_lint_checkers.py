@@ -215,61 +215,63 @@ class TestSkills(CheckerTreeTest):
 
 
 class TestSkillAssets(CheckerTreeTest):
-    """A SKILL.md's references/ and assets/ paths are read by an agent at
-    runtime, so a rename or a never-committed file fails in the agent's
-    hands and no other gate sees it (ADR-0008 self-containment)."""
+    """A skill's own markdown is read by an agent at runtime, so a rename
+    or a never-committed file fails in the agent's hands and no other gate
+    sees it. Every .md in the skill is walked, not just SKILL.md, because
+    reference files link to each other (ADR-0008 self-containment)."""
 
-    def name_asset(self, slug, ref):
+    def write_skill(self, slug, body):
         skill = self.root / "skills" / slug / "SKILL.md"
-        skill.write_text(
-            f"---\nname: {slug}\ndescription: d\n---\n\n"
-            f"Read [`{ref}`]({ref}) before starting.\n", encoding="utf-8")
+        skill.write_text(f"---\nname: {slug}\ndescription: d\n---\n\n{body}",
+                         encoding="utf-8")
         return skill.parent
 
+    def write_ref(self, skill_dir, name, body):
+        (skill_dir / "references").mkdir(exist_ok=True)
+        (skill_dir / "references" / name).write_text(body, encoding="utf-8")
+
     def test_named_asset_that_does_not_exist(self):
-        self.name_asset("idea", "references/playbook.md")
+        self.write_skill("idea", "Read [`references/playbook.md`]"
+                                 "(references/playbook.md) first.\n")
         self.assertEqual(
             lint.check_skill_assets(self.root),
             ["skills/idea/SKILL.md names 'references/playbook.md', "
-             "which does not exist in skills/idea/"])
+             "which does not exist"])
 
     def test_named_asset_that_ships_is_clean(self):
-        skill_dir = self.name_asset("idea", "references/playbook.md")
-        (skill_dir / "references").mkdir()
-        (skill_dir / "references" / "playbook.md").write_text(
-            "p\n", encoding="utf-8")
+        skill_dir = self.write_skill(
+            "idea", "Read `references/playbook.md` first.\n")
+        self.write_ref(skill_dir, "playbook.md", "p\n")
         self.assertEqual(lint.check_skill_assets(self.root), [])
 
     def test_case_differing_file_does_not_satisfy_the_name(self):
         # Path.exists() folds case on macOS, so this would pass locally and
         # break on the case-sensitive filesystem the plugin installs onto.
-        skill_dir = self.name_asset("idea", "references/playbook.md")
-        (skill_dir / "references").mkdir()
-        (skill_dir / "references" / "Playbook.md").write_text(
-            "p\n", encoding="utf-8")
+        skill_dir = self.write_skill(
+            "idea", "Read `references/playbook.md` first.\n")
+        self.write_ref(skill_dir, "Playbook.md", "p\n")
         self.assertEqual(
             lint.check_skill_assets(self.root),
             ["skills/idea/SKILL.md names 'references/playbook.md', "
-             "which does not exist in skills/idea/"])
+             "which does not exist"])
 
     def test_absent_directory_is_a_problem_not_a_traceback(self):
-        self.name_asset("idea", "assets/boilerplate.html")
+        self.write_skill("idea", "Copy `assets/boilerplate.html`.\n")
         self.assertEqual(
             lint.check_skill_assets(self.root),
             ["skills/idea/SKILL.md names 'assets/boilerplate.html', "
-             "which does not exist in skills/idea/"])
+             "which does not exist"])
 
     def test_each_missing_asset_reported_once_however_often_named(self):
-        (self.root / "skills" / "idea" / "SKILL.md").write_text(
-            "---\nname: idea\ndescription: d\n---\n\n"
-            "See `references/one.md`, then `references/one.md` again,\n"
-            "and `assets/two.svg`.\n", encoding="utf-8")
+        self.write_skill("idea",
+                         "See `references/one.md`, then `references/one.md` "
+                         "again,\nand `assets/two.svg`.\n")
         self.assertEqual(
             lint.check_skill_assets(self.root),
             ["skills/idea/SKILL.md names 'assets/two.svg', "
-             "which does not exist in skills/idea/",
+             "which does not exist",
              "skills/idea/SKILL.md names 'references/one.md', "
-             "which does not exist in skills/idea/"])
+             "which does not exist"])
 
     def test_dir_outside_the_taxonomy_is_checked_too(self):
         rogue = self.root / "skills" / "rogue"
@@ -280,11 +282,71 @@ class TestSkillAssets(CheckerTreeTest):
         self.assertEqual(
             lint.check_skill_assets(self.root),
             ["skills/rogue/SKILL.md names 'references/gone.md', "
-             "which does not exist in skills/rogue/"])
+             "which does not exist"])
 
     def test_missing_skill_md_belongs_to_check_skills(self):
         (self.root / "skills" / "idea" / "SKILL.md").unlink()
         self.assertEqual(lint.check_skill_assets(self.root), [])
+
+    def test_broken_link_between_two_reference_files(self):
+        # The gap the SKILL.md-only walk missed: reference files link to
+        # each other, and renaming one breaks every sibling silently.
+        skill_dir = self.write_skill(
+            "idea", "Read [the playbook](references/playbook.md).\n")
+        self.write_ref(skill_dir, "playbook.md",
+                       "Vocabulary is in [language](language.md).\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/references/playbook.md names 'language.md', "
+             "which does not exist"])
+
+    def test_resolving_sibling_link_is_clean(self):
+        skill_dir = self.write_skill(
+            "idea", "Read [the playbook](references/playbook.md).\n")
+        self.write_ref(skill_dir, "playbook.md",
+                       "Vocabulary is in [language](language.md).\n")
+        self.write_ref(skill_dir, "language.md", "terms\n")
+        self.assertEqual(lint.check_skill_assets(self.root), [])
+
+    def test_link_out_of_the_skill_directory_from_skill_md(self):
+        self.write_skill("idea", "See [prd's template](../prd/TEMPLATE.md).\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names '../prd/TEMPLATE.md', which is "
+             "outside the skill directory (ADR-0008: skills are "
+             "self-contained)"])
+
+    def test_link_out_of_the_skill_directory_from_a_reference_file(self):
+        # One ../ from references/ lands back inside the skill; escaping
+        # takes two, and the checker must count depth rather than dots.
+        skill_dir = self.write_skill(
+            "idea", "Read [the playbook](references/playbook.md).\n")
+        self.write_ref(skill_dir, "playbook.md",
+                       "See [prd](../../prd/TEMPLATE.md).\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/references/playbook.md names '../../prd/"
+             "TEMPLATE.md', which is outside the skill directory "
+             "(ADR-0008: skills are self-contained)"])
+
+    def test_anchors_and_urls_are_not_files(self):
+        skill_dir = self.write_skill(
+            "idea", "Read [the playbook](references/playbook.md).\n")
+        self.write_ref(skill_dir, "playbook.md",
+                       "Jump to [terms](#terms) or read\n"
+                       "[the source](https://example.com/a.md).\n")
+        self.assertEqual(lint.check_skill_assets(self.root), [])
+
+    def test_bare_path_is_not_matched_inside_a_longer_path(self):
+        # Without the lookbehind, '../prd/references/x.md' would ALSO yield
+        # a bare 'references/x.md' resolved against the skill root — one
+        # broken link reported as two, the second at a path nobody wrote.
+        self.write_skill("idea", "See [prd](../prd/references/x.md).\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names '../prd/references/x.md', which is "
+             "outside the skill directory (ADR-0008: skills are "
+             "self-contained)"])
 
 
 class TestTemplates(CheckerTreeTest):
