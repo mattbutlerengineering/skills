@@ -35,6 +35,6 @@
     "templates/tools/factory/orientation_pack.py": "5c6b70f047641f92f9ddaf4ea0df9e9fac4fb435c0f501211395ee22000527ec",
     "templates/tools/factory/protocol.py": "384dc1c5b15003035dbc26b8f0dab13cf7d50bae34b98b25544afbada18dbafb",
     "templates/tools/factory/validator.py": "a2f208986ee321750f81b2022700192c3335de73f2cd79ba0640398ce7c9c53d",
-    "templates/tools/factory/work_queue.py": "85ec852c31a96509a34f602fc54c4dff62bbfb2f650b66ad7319ff672ce30299"
+    "templates/tools/factory/work_queue.py": "b19a3626501b6f78dc02b2aa31caedfe6df936d08fa7dcc262159a713025b07e"
   }
 }

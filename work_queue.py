@@ -92,9 +92,17 @@ def eligible(found, ready_issues):
             deferred.append(f"{wo}: its row carries no (tracker: #N) mirror,"
                             " so no issue can carry the ready label")
         elif row["issue"] not in ready_issues:
-            deferred.append(f"{wo}: issue #{row['issue']} does not carry"
-                            f" {READY_LABEL} — the owner applies it, and"
-                            " that is the opt-in")
+            # Says only what the listing proves. It covers OPEN issues, so
+            # a miss means "no open issue #N carries the label" — which is
+            # ALSO how a closed issue looks, and telling someone to label a
+            # closed issue is advice that cannot work. The reconcile sweep
+            # owns diagnosing that drift; this line points at it instead of
+            # fetching the whole tracker to duplicate it.
+            deferred.append(f"{wo}: no open issue #{row['issue']} carries"
+                            f" {READY_LABEL} — the owner applies that label,"
+                            " and it does nothing on a closed issue; the"
+                            " reconcile sweep reports a row whose issue was"
+                            " closed")
         else:
             candidates.append(row)
     return candidates, deferred
