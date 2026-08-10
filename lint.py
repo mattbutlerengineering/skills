@@ -242,6 +242,21 @@ def check_router(root):
     return problems
 
 
+def check_readme_skills(root):
+    """Every skill in the taxonomy is named in README.md. The README is
+    where a reader learns what the plugin ships, and it is prose — so a
+    skill can be added, registered, tested, and released without the
+    README ever hearing about it. That is not hypothetical: it is how
+    interactive-architecture-diagram shipped undocumented. Same bar and
+    same shape as check_ledger, for the same reason."""
+    path = root / "README.md"
+    if not path.is_file():
+        return ["missing README.md"]
+    text = path.read_text(encoding="utf-8")
+    return [f"README.md never names skill {slug!r}"
+            for slug in ALL_SKILLS + extra_skills(root) if slug not in text]
+
+
 def check_protocol(root):
     path = root / "docs" / "pipeline-protocol.md"
     return [] if path.is_file() else ["missing docs/pipeline-protocol.md"]
@@ -411,7 +426,8 @@ def check_ledger_links(root):
 
 CHECKERS = (check_manifest, check_pi_package, check_skills,
             check_skill_assets, check_templates, check_router,
-            check_protocol, check_protocol_tables, check_backlog,
+            check_readme_skills, check_protocol,
+            check_protocol_tables, check_backlog,
             check_evals,
             check_output_evals, check_ledger, check_ledger_links)
 

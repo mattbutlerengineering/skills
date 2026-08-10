@@ -104,7 +104,11 @@ from a one-time brief — one fresh subagent per stage, every brief gap logged
 as an assumption, and, unless the brief explicitly authorizes the release,
 it prepares the release and stops rather than executing it. `mermaid` turns a process or system
 into a digestible mermaid diagram with explicit, contrast-safe colors that
-read in both light and dark renderers. `factory-init` stamps a product repo
+read in both light and dark renderers, and
+`interactive-architecture-diagram` goes further for the cases that want
+showing rather than telling — one self-contained dark-mode HTML file with an
+inline-SVG system diagram, a narrated step-through presenter mode, and
+PNG/SVG export, with no build step and no external requests. `factory-init` stamps a product repo
 with the factory scaffold — offline gates, dispatch workflows, and the cost
 ledger — so promoted work orders can run there unattended. `doctor` is the
 read-only counterpart to that stamp: run in the repo that *uses* these

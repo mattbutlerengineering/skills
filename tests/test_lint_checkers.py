@@ -62,6 +62,12 @@ def make_clean_tree(root):
                     for stage in lint.routed_order()) + "\n",
         encoding="utf-8")
 
+    # check_readme_skills holds the README to naming every skill, so the
+    # smallest clean tree carries one.
+    (root / "README.md").write_text(
+        "# t\n\n" + "".join(f"- `{slug}`\n" for slug in ALL_SKILLS),
+        encoding="utf-8")
+
     (root / "docs").mkdir()
     # Both orientation tables, not a stub: check_protocol_tables pins the
     # doc's stage order and artifacts to protocol.py's walk tables, so the
@@ -363,6 +369,34 @@ class TestSkillAssets(CheckerTreeTest):
             ["skills/idea/SKILL.md names '../prd/references/x.md', which is "
              "outside the skill directory (ADR-0008: skills are "
              "self-contained)"])
+
+
+class TestReadmeSkills(CheckerTreeTest):
+    """A skill can be added, registered, tested and released without the
+    README hearing about it — which is how interactive-architecture-diagram
+    shipped undocumented."""
+
+    def test_unnamed_skill_is_reported(self):
+        path = self.root / "README.md"
+        path.write_text(path.read_text(encoding="utf-8")
+                        .replace("`ship`", "`the release stage`"),
+                        encoding="utf-8")
+        self.assertEqual(lint.check_readme_skills(self.root),
+                         ["README.md never names skill 'ship'"])
+
+    def test_discovered_dir_outside_the_taxonomy_is_held_to_it_too(self):
+        rogue = self.root / "skills" / "rogue"
+        rogue.mkdir()
+        (rogue / "SKILL.md").write_text(
+            "---\nname: rogue\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_readme_skills(self.root),
+                         ["README.md never names skill 'rogue'"])
+
+    def test_missing_readme_is_one_problem_not_one_per_skill(self):
+        (self.root / "README.md").unlink()
+        self.assertEqual(lint.check_readme_skills(self.root),
+                         ["missing README.md"])
 
 
 class TestProtocolTables(CheckerTreeTest):
