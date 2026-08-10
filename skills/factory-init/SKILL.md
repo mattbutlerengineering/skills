@@ -20,16 +20,30 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
    malformed manifest key, a destination resolving outside the target,
    and any existing file in the target, printing one problem line per
    refusal; resolve and re-run.
-3. What lands in the target:
+3. What lands in the target — `factory/manifest.json` is the authority;
+   the groups are:
    - `factory/` — the pristine mirror (manifest + templates) that the
      stamped detector suite checks itself against.
    - `Makefile` — `make check` runs the detectors, their selftest, and
      the test suite; it is exactly what CI must run.
    - `.github/factory.json` — budgets, routing, WIP cap, monthly cap.
-   - `tools/factory/gates.py` + `tools/factory/protocol.py` — the
-     detector suite and the frontmatter seam it imports.
+   - `.github/workflows/` — the validator, assembler, design,
+     cost-report, and gate-digest workflows.
+   - `.github/labels.json` + `.github/CODEOWNERS` — the label taxonomy
+     and the code-owner gate.
+   - `tools/factory/` — the detector suite and the tools the workflows
+     call through `make`.
+   - `docs/adr/` — the seeded ADR set recording what stamping decided for
+     the repo, plus the ADR convention and template.
+   - `docs/design/` — the design-system seed and its template.
 4. Commit the stamped files in the product repo, then run `make check`
-   there and confirm it exits clean.
+   there and confirm it exits clean. Two things to fix first, or the
+   first run is confusing:
+   - the target needs a `tests/` directory — `make check` runs
+     `unittest discover -q tests` and errors without one;
+   - `.github/CODEOWNERS` ships a placeholder owner handle. If it is not
+     a collaborator on the target, GitHub ignores the entry and the
+     code-owner gate goes inert.
 
 ## Regenerate the manifest (factory repo)
 
