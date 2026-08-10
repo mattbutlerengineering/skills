@@ -99,6 +99,45 @@ def check_skills(root):
     ]
 
 
+# A skill's own bundled files, as its SKILL.md names them. Agents resolve
+# these at runtime, relative to the skill directory.
+SKILL_ASSET = re.compile(r"(?:references|assets)/[A-Za-z0-9._-]+")
+
+
+def check_skill_assets(root):
+    """Every references/ or assets/ path a SKILL.md names actually ships
+    beside it. Skills are self-contained (ADR-0008) and nothing enforced
+    that half of the claim: a reference file renamed, or never committed,
+    fails only at runtime in the agent's hands — as a read that quietly
+    returns nothing — and no gate sees it. Missing SKILL.md files are
+    check_skills' finding, not this one's."""
+    def ships(skill_dir, ref):
+        """Case-exact existence. Path.exists() answers with the local
+        filesystem's case folding, so on macOS a SKILL.md naming
+        'references/Playbook.md' passes beside a file called
+        playbook.md — and then fails on the case-sensitive filesystem
+        the plugin installs onto. Reading the directory is what makes
+        this check unsatisfiable by the wrong file."""
+        parent, _, name = ref.rpartition("/")
+        try:
+            return name in {entry.name
+                            for entry in (skill_dir / parent).iterdir()}
+        except OSError:
+            return False
+
+    def problems_for(slug):
+        skill = root / "skills" / slug / "SKILL.md"
+        if not skill.is_file():
+            return []
+        named = sorted(set(SKILL_ASSET.findall(
+            skill.read_text(encoding="utf-8"))))
+        return [f"skills/{slug}/SKILL.md names {ref!r}, which does not "
+                f"exist in skills/{slug}/"
+                for ref in named if not ships(skill.parent, ref)]
+    return [p for slug in ALL_SKILLS + extra_skills(root)
+            for p in problems_for(slug)]
+
+
 def check_templates(root):
     return [f"missing skills/{slug}/TEMPLATE.md"
             for slug in TEMPLATED_STAGES
@@ -256,8 +295,9 @@ def check_ledger_links(root):
     )
 
 
-CHECKERS = (check_manifest, check_pi_package, check_skills, check_templates,
-            check_router, check_protocol, check_backlog, check_evals,
+CHECKERS = (check_manifest, check_pi_package, check_skills,
+            check_skill_assets, check_templates, check_router,
+            check_protocol, check_backlog, check_evals,
             check_output_evals, check_ledger, check_ledger_links)
 
 

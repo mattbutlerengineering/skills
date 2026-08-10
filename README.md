@@ -111,7 +111,15 @@ read-only counterpart to that stamp: run in the repo that *uses* these
 skills, it answers whether the install is actually wired up, tier by tier —
 the plugin side in any repo, the stamped detectors and targets when the
 factory is present, label drift only when asked — and reports each problem
-with the fix rather than applying it.
+with the fix rather than applying it. `work-queue` runs several
+already-approved work orders at once — one worktree-isolated agent per
+order, bounded by the factory's WIP cap and priced against the monthly cap
+before anything is spent — and stops at merge-ready PRs, because the merge
+is a human gate. `audit` is the way in when there is no run yet and no
+defect named: it surveys the codebase read-only, reproduces every finding
+before reporting it, and routes each one to a carrier that already exists —
+a backlog seed, a maintenance run via `capture`, a feature run via `idea` —
+rather than opening a parallel plan tree of its own.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
