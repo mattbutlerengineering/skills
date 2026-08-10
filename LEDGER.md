@@ -27,6 +27,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | autorun | draft | — | 0/4 — [2026-07-05](evals/results/trigger-2026-07-05-4.json), autorun-vs-next-1 held [2026-07-05-5](evals/results/trigger-2026-07-05-5.json) (was 1/3 — [2026-07-03](evals/results/trigger-2026-07-03-2.json)) |
 | mermaid | draft | — | 1/3 — [2026-07-05](evals/results/trigger-2026-07-05-6.json), mermaid-vs-docs-1 held [2026-07-05-8](evals/results/trigger-2026-07-05-8.json), mermaid-vs-ux-1 silent [2026-07-05-7](evals/results/trigger-2026-07-05-7.json) |
 | factory-init | draft | — | — |
+| doctor | draft | — | — |
 | interactive-architecture-diagram | draft | — | — |
 
 Reading of the 2026-07-01 run: all failures are under-triggering (no skill

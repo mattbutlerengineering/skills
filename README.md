@@ -101,7 +101,12 @@ it prepares the release and stops rather than executing it. `mermaid` turns a pr
 into a digestible mermaid diagram with explicit, contrast-safe colors that
 read in both light and dark renderers. `factory-init` stamps a product repo
 with the factory scaffold — offline gates, dispatch workflows, and the cost
-ledger — so promoted work orders can run there unattended.
+ledger — so promoted work orders can run there unattended. `doctor` is the
+read-only counterpart to that stamp: run in the repo that *uses* these
+skills, it answers whether the install is actually wired up, tier by tier —
+the plugin side in any repo, the stamped detectors and targets when the
+factory is present, label drift only when asked — and reports each problem
+with the fix rather than applying it.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
