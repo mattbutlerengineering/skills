@@ -70,6 +70,7 @@ MIRRORS = {
     "orientation_pack.py": "tools/factory/orientation_pack.py",
     "cost_report.py": "tools/factory/cost_report.py",
     "gate_digest.py": "tools/factory/gate_digest.py",
+    "work_queue.py": "tools/factory/work_queue.py",
     ".github/workflows/validator.yml": ".github/workflows/validator.yml",
     ".github/workflows/assembler.yml": ".github/workflows/assembler.yml",
     ".github/workflows/design.yml": ".github/workflows/design.yml",
