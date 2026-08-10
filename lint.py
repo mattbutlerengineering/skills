@@ -105,7 +105,36 @@ def check_templates(root):
             if not (root / "skills" / slug / "TEMPLATE.md").is_file()]
 
 
+# The router's hand-off list: "  - <slug> -> the `<slug>` skill".
+HANDOFF_LINE = re.compile(r"^\s*-\s+([a-z][a-z-]*)\s+→\s+the\s+"
+                          r"`([a-z][a-z-]*)`\s+skill")
+
+
+def routed_order():
+    """The order the router must hand off in, DERIVED from protocol's two
+    walk tables rather than restated: the product/feature walk, preceded by
+    any stage only a maintenance run enters (ADR-0025). The maintenance
+    tail is a suffix of the product walk, so this is a total order, not a
+    merge that has to pick sides."""
+    product = [stage for stage, _ in protocol.STAGE_ARTIFACTS]
+    entry = [stage for stage, _ in protocol.MAINTENANCE_STAGE_ARTIFACTS
+             if stage not in product]
+    return entry + product
+
+
 def check_router(root):
+    """The router skill is prose an agent reads at RUNTIME, so drift in it
+    is drift in the shipped behaviour — and nothing was pinning it. The
+    mention check below passes on the word "idea" appearing anywhere, so a
+    hand-off list that omitted a stage, named a retired one, or listed them
+    out of pipeline order stayed green.
+
+    What is checkable is the list itself: its membership and its order are
+    derivable from protocol's walk tables. The CONDITIONALS the router also
+    carries — the UX field, the re-entry field, the Implement checkbox rule
+    — are English and stay unpinned; see the note in tests/test_lint_checkers
+    so that limit is recorded rather than assumed covered.
+    """
     router = root / "skills" / "next" / "SKILL.md"
     if not router.is_file():
         return []  # absence already reported by check_skills
@@ -113,8 +142,36 @@ def check_router(root):
     # the full routed taxonomy: the spine plus maintenance entry points
     # (ADR-0025) — utility skills are excluded because the router never
     # routes to them (ADR-0023)
-    return [f"router never mentions stage skill {slug!r}"
-            for slug in STAGES + MAINTENANCE_STAGES if slug not in text]
+    problems = [f"router never mentions stage skill {slug!r}"
+                for slug in STAGES + MAINTENANCE_STAGES if slug not in text]
+    listed = []
+    for line in text.splitlines():
+        match = HANDOFF_LINE.match(line)
+        if not match:
+            continue
+        stage, skill = match.groups()
+        if stage != skill:
+            problems.append(f"router hands {stage!r} off to the {skill!r}"
+                            " skill; a stage routes to the skill of the"
+                            " same name")
+        listed.append(stage)
+    if not listed:
+        problems.append("router has no hand-off list — step 5's"
+                        " '<stage> → the `<stage>` skill' lines are what"
+                        " route a run, and nothing else names the order")
+        return problems
+    expected = routed_order()
+    unknown = [stage for stage in listed if stage not in expected]
+    problems.extend(f"router hands off to {stage!r}, which protocol's walk"
+                    " tables do not route to" for stage in unknown)
+    missing = [stage for stage in expected if stage not in listed]
+    problems.extend(f"router's hand-off list omits stage skill {stage!r}"
+                    for stage in missing)
+    if not unknown and not missing and listed != expected:
+        problems.append("router's hand-off list is out of pipeline order:"
+                        f" expected {' → '.join(expected)}, got"
+                        f" {' → '.join(listed)}")
+    return problems
 
 
 def check_protocol(root):
