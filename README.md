@@ -119,7 +119,12 @@ is a human gate. `audit` is the way in when there is no run yet and no
 defect named: it surveys the codebase read-only, reproduces every finding
 before reporting it, and routes each one to a carrier that already exists —
 a backlog seed, a maintenance run via `capture`, a feature run via `idea` —
-rather than opening a parallel plan tree of its own.
+rather than opening a parallel plan tree of its own. `deepen` asks the
+narrower architectural question instead: where is the codebase **shallow**,
+its interfaces nearly as costly to learn as the implementations behind them?
+It confirms each candidate against real call sites rather than a feeling of
+friction, presents the deepenings as a self-contained before/after report
+outside the repo, and designs the chosen interface with you.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
