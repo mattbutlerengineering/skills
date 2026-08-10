@@ -8,7 +8,7 @@
     "templates/.github/workflows/cost-report.yml": "c8501cfc10c122a9644852c60ef958d6e5e12c10308fff5c7dbe43ed854ccf5e",
     "templates/.github/workflows/design.yml": "1d717103b2e18cc5a2c291ad5cc8cc91e8c091c2e19657e194c2645eeef107ce",
     "templates/.github/workflows/gate-digest.yml": "5abc8a86c8bcebc0ab41e217f13b32843dcb91eb0d90390ca3a5f6b892539552",
-    "templates/.github/workflows/validator.yml": "d2ade7cd95e5d1a4243cd5b6bd9f6b8333ce817c309fb7f28e27986d2b2ae1bd",
+    "templates/.github/workflows/validator.yml": "db2976a9fe649f4ed2db90a7a7c34a95d92efad0875308acb712c1d77f4dda18",
     "templates/Makefile": "5efd2e3ea9163392bbee237c8da5a5f4fa2e55e15aaf579b556d25591640d7ae",
     "templates/docs/adr/0001-decisions-are-recorded-here.md": "2dda45634398a0a29d04f073fadaf51ecbdf7c1ccbb3795583355396382c02e5",
     "templates/docs/adr/0002-artifacts-are-the-state.md": "78b63944832b8421bbc1d635b53bfcab739748b65d74bfb2d0ac822981d41bf9",

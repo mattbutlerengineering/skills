@@ -1749,6 +1749,30 @@ class TestLockstep(unittest.TestCase):
         self.assertIn("github.event.pull_request.head.repo.full_name"
                       " == github.repository", text)
 
+    def test_a_body_edit_retriggers_the_check(self):
+        # Detector B reads the PR body, so the body is an input to the
+        # check and correcting it has to re-run it. Without `edited` the
+        # only route is close/reopen, and that dispatches a closed-event
+        # run against the pre-edit payload whose failure then sits in the
+        # PR's status rollup for good (issue #216).
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("types: [opened, reopened, synchronize, edited,"
+                      " closed]", text)
+
+    def test_the_review_job_names_the_actions_it_runs_on(self):
+        # An allow-list, not `!= 'closed'`: the reviewer posts a comment
+        # per run, so a deny-list would enrol it in every title and body
+        # edit the moment `edited` was added — and in any trigger type
+        # added later.
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("(github.event.action == 'opened'\n"
+                      "          || github.event.action == 'reopened'\n"
+                      "          || github.event.action == 'synchronize')",
+                      text)
+        self.assertNotIn("&& github.event.action != 'closed'\n"
+                         "      && github.event.pull_request.head.repo",
+                         text)
+
     def test_the_claim_step_gates_the_agent_step(self):
         # ADR-0032: the claim step flips ready -> in-progress and its
         # transitioned output is the dispatch idempotency verdict — the
