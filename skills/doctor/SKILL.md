@@ -88,10 +88,12 @@ plugin-only, which is a legitimate install.
 
 6. **The Makefile carries its full target set.** `check`, `review`, the four
    lifecycle targets (`wo-merged`, `wo-in-progress`, `wo-needs-review`,
-   `wo-failed`), `assembler`, `cost-report`, `gate-digest`, `web-quality`. A
-   missing lifecycle target is a hole in the work-order state machine that
-   nothing else reports: without `wo-failed`, for instance, a dispatched run
-   that dies leaves its order on `wo:in-progress` forever.
+   `wo-failed`), `wo-record`, `assembler`, `cost-report`, `gate-digest`,
+   `web-quality`. A missing lifecycle target is a hole in the work-order
+   state machine that nothing else reports: without `wo-failed`, for
+   instance, a dispatched run that dies leaves its order on
+   `wo:in-progress` forever; without `wo-record`, every finished run is
+   free as far as the monthly circuit breaker can tell (issue #222).
 
 7. **The five workflows are present and call the factory through `make`.**
    `validator.yml`, `assembler.yml`, `design.yml`, `cost-report.yml`,

@@ -31,6 +31,14 @@ docs/adr/0034-work-order-budgets-and-routing.md.
         monthly circuit breaker summed a total that could only ever be
         $0.00 (issue #222). Refuses BEFORE writing on a malformed row or a
         (wo, run_id) already recorded.
+
+  python3 budget_guard.py record-run <wo> <run_id> <model>
+                                     <execution_file> [outcome]
+        record, with tokens and cost read from the claude-code-action
+        execution file the dispatched run left behind (cli.read_execution)
+        — the assembler workflow's caller (issue #222), so the figures are
+        the harness's own record, never hand-typed. Refuses BEFORE writing
+        on any file it cannot account for.
 """
 import math
 import sys
@@ -41,7 +49,7 @@ import factory_config
 import handoff
 from cli import CLI_FAILURES as GIT_FAILURES
 from cli import detail as _git_detail
-from cli import runner
+from cli import read_execution, runner
 from knowledge_plane import repo_root
 
 CONTINUE = "CONTINUE"
@@ -190,6 +198,20 @@ def record(root, wo, run_id, model, tokens, cost, outcome, at):
     return []
 
 
+def record_run(root, wo, run_id, model, execution_path, outcome, at):
+    """record(), with tokens and cost read from the harness's own
+    execution file (cli.read_execution) rather than typed by a caller —
+    the assembler workflow's success-path writer (issue #222). A file
+    that cannot be accounted for is a refusal BEFORE the write, never a
+    zeroed or invented row; every record() refusal (shape, double-count)
+    then applies unchanged."""
+    spend, error = read_execution(execution_path)
+    if error:
+        return [f"bg: refusing to record {wo}: {error}"]
+    tokens, cost = spend
+    return record(root, wo, run_id, model, tokens, cost, outcome, at)
+
+
 def _record_args(argv):
     """(kwargs, problems) for the record CLI leg. tokens and cost are the
     only parsed values, and a bad one is a problem rather than a
@@ -223,6 +245,17 @@ def main(argv, clock=None, root=None):
             at = (clock or (lambda: datetime.now(timezone.utc)))()
             problems = record(root or repo_root(),
                               at=at.date().isoformat(), **fields)
+        for problem in problems:
+            print(problem)
+        print(f"budget_guard: {len(problems)} problem(s)")
+        return 1 if problems else 0
+    if len(argv) in (5, 6) and argv[0] == "record-run":
+        wo, run_id, model, execution_path = argv[1:5]
+        outcome = argv[5] if len(argv) == 6 else "completed"
+        at = (clock or (lambda: datetime.now(timezone.utc)))()
+        problems = record_run(root or repo_root(), wo, run_id, model,
+                              execution_path, outcome,
+                              at.date().isoformat())
         for problem in problems:
             print(problem)
         print(f"budget_guard: {len(problems)} problem(s)")

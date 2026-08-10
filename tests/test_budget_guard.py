@@ -387,6 +387,122 @@ class TestRecord(unittest.TestCase):
                              ["budget-exhausted", "completed"])
 
 
+class TestRecordRun(unittest.TestCase):
+    """budget_guard.record_run — record(), with tokens and cost read from
+    the harness's own execution file (issue #222's assembler caller)
+    rather than typed by a caller. Any file read_execution cannot account
+    for is a refusal BEFORE the write: never an invented row."""
+
+    RESULT = {"type": "result", "total_cost_usd": 0.75,
+              "usage": {"input_tokens": 900, "output_tokens": 100}}
+
+    def execution(self, tmp, payload):
+        path = Path(tmp) / "execution.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return str(path)
+
+    def ledger(self, tmp):
+        path = Path(tmp) / "docs" / "factory" / "costs.jsonl"
+        if not path.is_file():
+            return []
+        return [json.loads(line) for line
+                in path.read_text(encoding="utf-8").splitlines() if line]
+
+    def test_a_run_s_spend_lands_from_its_execution_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            problems = budget_guard.record_run(
+                tree.root, "WO-0007", "run-9", "claude-sonnet-5",
+                self.execution(tmp, [self.RESULT]), "completed",
+                "2026-08-10")
+            self.assertEqual(problems, [])
+            self.assertEqual(self.ledger(tmp), [{
+                "wo": "WO-0007", "run_id": "run-9",
+                "model": "claude-sonnet-5", "tokens": 1000, "cost": 0.75,
+                "outcome": "completed", "at": "2026-08-10"}])
+
+    def test_an_unaccountable_file_is_refused_before_the_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = self.execution(tmp, [{"type": "assistant"}])
+            problems = budget_guard.record_run(
+                tree.root, "WO-0007", "run-9", "claude-sonnet-5", path,
+                "completed", "2026-08-10")
+            self.assertEqual(problems, [
+                f"bg: refusing to record WO-0007: execution file {path}"
+                " has no result entry"])
+            self.assertEqual(self.ledger(tmp), [])
+
+    def test_a_re_recorded_run_is_still_refused(self):
+        """record_run inherits record's (wo, run_id) dedup — the same
+        double-count guard, not a second copy of it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = self.execution(tmp, [self.RESULT])
+            self.assertEqual(budget_guard.record_run(
+                tree.root, "WO-0007", "run-9", "claude-sonnet-5", path,
+                "completed", "2026-08-10"), [])
+            problems = budget_guard.record_run(
+                tree.root, "WO-0007", "run-9", "claude-sonnet-5", path,
+                "agent-failed", "2026-08-10")
+            self.assertEqual(problems, [
+                "bg: refusing to record WO-0007: run_id 'run-9' is already"
+                " in the ledger — recording it twice would double-count the"
+                " run against the monthly cap"])
+            self.assertEqual(len(self.ledger(tmp)), 1)
+
+
+class TestRecordRunCLI(unittest.TestCase):
+    def run_cli(self, argv, root, at="2026-08-10"):
+        clock = lambda: datetime(*(int(part) for part in at.split("-")),
+                                 tzinfo=timezone.utc)
+        return budget_guard.main(argv, clock=clock, root=Path(root))
+
+    def test_outcome_defaults_to_completed_and_the_clock_stamps_at(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = Path(tmp) / "execution.json"
+            path.write_text(json.dumps([TestRecordRun.RESULT]),
+                            encoding="utf-8")
+            code = self.run_cli(
+                ["record-run", "WO-0007", "run-9", "claude-sonnet-5",
+                 str(path)], tmp)
+            self.assertEqual(code, 0)
+            row = json.loads((tree.root / "docs" / "factory"
+                              / "costs.jsonl").read_text(
+                                  encoding="utf-8").splitlines()[0])
+            self.assertEqual(row["outcome"], "completed")
+            self.assertEqual(row["at"], "2026-08-10")
+
+    def test_an_explicit_outcome_is_recorded_verbatim(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = Path(tmp) / "execution.json"
+            path.write_text(json.dumps([TestRecordRun.RESULT]),
+                            encoding="utf-8")
+            self.assertEqual(self.run_cli(
+                ["record-run", "WO-0007", "run-9", "claude-sonnet-5",
+                 str(path), "agent-failed"], tmp), 0)
+            row = json.loads((tree.root / "docs" / "factory"
+                              / "costs.jsonl").read_text(
+                                  encoding="utf-8").splitlines()[0])
+            self.assertEqual(row["outcome"], "agent-failed")
+
+    def test_a_missing_file_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code = self.run_cli(
+                ["record-run", "WO-0007", "run-9", "claude-sonnet-5",
+                 str(Path(tmp) / "nope.json")], tmp)
+            self.assertEqual(code, 1)
+            self.assertEqual(
+                (Path(tmp) / "docs" / "factory" / "costs.jsonl").is_file(),
+                False)
+
+    def test_wrong_arity_prints_usage_rather_than_recording(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self.run_cli(["record-run", "WO-0007"], tmp), 2)
+
+
 class TestRecordCLI(unittest.TestCase):
     def run_cli(self, argv, root, at="2026-08-07"):
         """The root is INJECTED. repo_root() resolves from __file__, so a
