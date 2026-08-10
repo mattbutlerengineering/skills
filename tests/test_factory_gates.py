@@ -1566,6 +1566,8 @@ class TestLockstep(unittest.TestCase):
                            " wo:in-progress --issue $(ISSUE)"],
         "wo-needs-review": ["python3 validator.py lifecycle --label"
                             " wo:needs-review --uncited skip"],
+        "wo-failed": ["python3 validator.py lifecycle --label wo:failed"
+                      " --issue $(ISSUE) --verdict skip"],
     }
 
     def recipes(self, path, target):
@@ -1631,6 +1633,19 @@ class TestLockstep(unittest.TestCase):
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("make wo-in-progress", text)
         self.assertIn("steps.claim.outputs.transitioned == 'true'", text)
+
+    def test_a_failed_dispatch_flips_the_order_it_claimed(self):
+        # ADR-0045: without this step a dying agent run leaves its order on
+        # wo:in-progress forever. Gated on the claim's verdict, not on
+        # failure() alone — a run that died before claiming the order must
+        # leave its state alone (the order is still someone else's to
+        # dispatch).
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("make wo-failed", text)
+        self.assertIn("failure()", text)
+        failed = text.split("make wo-failed")[0].rsplit("- name:", 1)[1]
+        self.assertIn("failure()", failed)
+        self.assertIn("steps.claim.outputs.transitioned == 'true'", failed)
 
     def test_both_makefiles_expose_the_assembler_target(self):
         self.assertEqual(self.recipes(self.MAKEFILE, "assembler"),
@@ -1815,6 +1830,7 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # exempt: never mirrored into a stamped repo's CI
             "python3 sweeps.py ensure-labels",
             "python3 sweeps.py label-drift",
+            "python3 sweeps.py reconcile",
             "python3 sweeps.py sentry --payload sentry.json",
             # shell glue: names the missing-secret cause, then fetches the
             # Sentry payload with the token passed on stdin, never argv

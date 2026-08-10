@@ -6,7 +6,7 @@
 # (its tools sit at the root, these under tools/factory/, and the plugin's
 # structural lint has no product-repo counterpart).
 
-.PHONY: check review wo-merged wo-in-progress wo-needs-review
+.PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
 .PHONY: assembler cost-report gate-digest web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
@@ -39,6 +39,9 @@ wo-in-progress:
 
 wo-needs-review:
 	python3 tools/factory/validator.py lifecycle --label wo:needs-review --uncited skip
+
+wo-failed:
+	python3 tools/factory/validator.py lifecycle --label wo:failed --issue $(ISSUE) --verdict skip
 
 assembler:
 	python3 tools/factory/assembler.py resolve

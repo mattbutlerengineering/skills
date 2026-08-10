@@ -7,7 +7,7 @@
 # this file's product-repo twin (tools under tools/factory/, no plugin
 # lint); tests/test_factory_gates.py::TestLockstep pins the pair.
 
-.PHONY: check review wo-merged wo-in-progress wo-needs-review
+.PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
 .PHONY: assembler cost-report gate-digest web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
@@ -41,6 +41,9 @@ wo-in-progress:
 
 wo-needs-review:
 	python3 validator.py lifecycle --label wo:needs-review --uncited skip
+
+wo-failed:
+	python3 validator.py lifecycle --label wo:failed --issue $(ISSUE) --verdict skip
 
 assembler:
 	python3 assembler.py resolve

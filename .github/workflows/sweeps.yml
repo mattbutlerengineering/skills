@@ -20,6 +20,7 @@ on:
         options:
           - all
           - label-drift
+          - reconcile
           - sentry
 
 permissions:
@@ -57,6 +58,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 sweeps.py label-drift
+
+  # ADR-0032's cross-plane reconciliation: the breakdown rows against the
+  # live wo:* labels. A sweep and never a merge gate — the check is a
+  # network read, and the planes disagree for ordinary reasons that must not
+  # turn into a red build. Disagreement is always resolved in the knowledge
+  # plane's favor, by a human reading the report.
+  reconcile:
+    if: github.event.inputs.sweep == null || github.event.inputs.sweep == 'all' || github.event.inputs.sweep == 'reconcile'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Ensure the triage labels exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 sweeps.py ensure-labels
+      - name: Reconcile sweep
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 sweeps.py reconcile
 
   # Skips entirely until the repo is configured for Sentry (the vars context,
   # unlike secrets, is readable in a job-level if). Every unresolved error
