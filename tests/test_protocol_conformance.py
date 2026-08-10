@@ -127,6 +127,33 @@ class TestOrientationTablesMatchProtocol(unittest.TestCase):
             SPEC.read_text(encoding="utf-8"))
 
 
+class TestIntakeBoundIsStated(unittest.TestCase):
+    """Issue #218. The bound follows from ADR-0026 and ADR-0032, but it
+    was written nowhere a reader would find it, so it got re-derived from
+    the ADRs every time someone asked how a bug becomes a run. Pinning
+    the sentence keeps a future edit from quietly dropping it."""
+
+    def unwrapped(self, path):
+        """Prose with its hard line wrapping collapsed to single spaces —
+        the spec is hand-wrapped, so a sentence-long assertion would
+        otherwise break on a reflow that changed nothing."""
+        return " ".join(path.read_text(encoding="utf-8").split())
+
+    def test_the_spec_says_the_tracker_starts_nothing(self):
+        text = self.unwrapped(SPEC)
+        self.assertIn("The mirror is one-way **out**: nothing in the"
+                      " tracker starts a run.", text)
+        self.assertIn("intake is never a work order", text)
+
+    def test_the_spec_names_the_bound_as_currently_unconditional(self):
+        # ADR-0030's inbound leg is provisional; the spec must say the
+        # bound holds *today* without implying the door is shut for good,
+        # or accepting that ADR later reads as contradicting the spec.
+        text = self.unwrapped(SPEC)
+        self.assertIn("provisional and unimplemented", text)
+        self.assertIn("holds without exception", text)
+
+
 class TestRouterRoutesOnlyStageSkills(unittest.TestCase):
     """lint.check_router pins the floor — every stage skill is named — but
     nothing pinned the ceiling, and the ceiling is the ADR-0023 rule: the
