@@ -588,6 +588,130 @@ class TestManifestFiles(unittest.TestCase):
             self.assertEqual(gates.manifest_files(Path(tmp)), {})
 
 
+class TestLabelWiring(unittest.TestCase):
+    """Detector J. The tools and the Makefile name 15 labels between them
+    and `.github/labels.json` is explicitly the stamped repo's to curate
+    (docs/setup.md), so pruning one is a sanctioned edit that used to pass
+    every offline gate and fail only when CI flipped the label."""
+
+    REPO = Path(__file__).resolve().parents[1]
+    MAKEFILE = ("wo-merged:\n\tpython3 validator.py lifecycle"
+                " --label wo:merged\n")
+
+    def taxonomy(self, names):
+        return json.dumps([{"name": name, "color": "ededed",
+                            "description": name} for name in names])
+
+    def wired_tree(self, tmp, makefile=None):
+        """(tree, every label it names) — the correctly curated state."""
+        tree = FixtureTree(tmp)
+        tree.write("Makefile", self.MAKEFILE if makefile is None else makefile)
+        named = sorted(gates.declared_labels(tree.root))
+        tree.write(".github/labels.json", self.taxonomy(named))
+        return tree, named
+
+    def test_a_taxonomy_carrying_every_named_label_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, _ = self.wired_tree(tmp)
+            self.assertEqual(gates.check_label_wiring(tree.root), [])
+
+    def test_a_pruned_label_is_reported_against_every_site_that_names_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            tree.write(".github/labels.json", self.taxonomy(
+                [name for name in named if name != "wo:merged"]))
+            # wo:merged is named twice over — the Makefile target that
+            # flips it and the gate_digest entry that counts it — and both
+            # sites are reported, because both break
+            self.assertEqual(gates.check_label_wiring(tree.root), [
+                "J: Makefile:2 names wo:merged but the taxonomy has no such"
+                " label (add it to .github/labels.json, or the flip fails"
+                " when CI runs it)",
+                "J: gate_digest.py names wo:merged but the taxonomy has no"
+                " such label (add it to .github/labels.json, or the flip"
+                " fails when CI runs it)"])
+
+    def test_a_pruned_tool_label_is_reported_without_any_makefile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp, makefile="check:\n\ttrue\n")
+            tree.write(".github/labels.json", self.taxonomy(
+                [name for name in named if name != "wo:ready-for-agent"]))
+            self.assertEqual(gates.check_label_wiring(tree.root), [
+                "J: assembler.py names wo:ready-for-agent but the taxonomy"
+                " has no such label (add it to .github/labels.json, or the"
+                " flip fails when CI runs it)"])
+
+    def test_an_unnamed_taxonomy_label_is_not_a_finding(self):
+        # one direction only: wo:blocked is human-applied by design
+        # (ADR-0045) and the approval labels are the gates' to set, so
+        # "no writer" is never drift
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            tree.write(".github/labels.json",
+                       self.taxonomy(named + ["area:nobody-writes-this"]))
+            self.assertEqual(gates.check_label_wiring(tree.root), [])
+
+    def test_a_tree_with_no_taxonomy_is_silent(self):
+        # an unstamped repo has nothing to be wrong about
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("Makefile", self.MAKEFILE)
+            self.assertEqual(gates.check_label_wiring(tree.root), [])
+
+    def test_an_unusable_taxonomy_is_silent_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("Makefile", self.MAKEFILE)
+            for text in ("[]", "{not json", '[{"name": "wo:merged"}]'):
+                tree.write(".github/labels.json", text)
+                self.assertEqual(gates.check_label_wiring(tree.root), [],
+                                 f"unusable taxonomy {text!r}")
+
+    def test_one_malformed_entry_does_not_switch_the_detector_off(self):
+        # bailing on any load problem would let a single bad entry silence
+        # J entirely — the very failure mode it exists to close
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            entries = json.loads(self.taxonomy(
+                [name for name in named if name != "wo:merged"]))
+            tree.write(".github/labels.json",
+                       json.dumps(entries + [{"name": "wo:half-declared"}]))
+            self.assertIn("J: Makefile:2 names wo:merged but the taxonomy has"
+                          " no such label (add it to .github/labels.json, or"
+                          " the flip fails when CI runs it)",
+                          gates.check_label_wiring(tree.root))
+
+    def test_the_extraction_actually_finds_the_shipped_labels(self):
+        """A detector whose extraction silently stops matching is
+        vacuously clean forever — worse than no detector. This pins that
+        every declarer still yields what it is there for."""
+        named = gates.declared_labels(self.REPO)
+
+        def declared_by(site):
+            return sorted(label for label, sites in named.items()
+                          if site in sites)
+
+        self.assertEqual(declared_by("assembler.py"),
+                         ["budget-exhausted", "type:chore", "type:defect",
+                          "type:feature", "type:support",
+                          "wo:ready-for-agent"])
+        # five distinct, not six: wo:prd-approved is the PRD gate's
+        # confirming label and the blueprint gate's waiting one
+        self.assertEqual(declared_by("gate_digest.py"),
+                         ["wo:blueprint-approved", "wo:draft", "wo:merged",
+                          "wo:needs-review", "wo:prd-approved"])
+        # every lifecycle target's --label argument, read off the Makefile
+        for label in ("wo:merged", "wo:in-progress", "wo:needs-review",
+                      "wo:failed"):
+            self.assertTrue(
+                any(site.startswith("Makefile") for site in
+                    named.get(label, [])), f"{label} not read off Makefile")
+
+    def test_the_shipped_taxonomy_wires_the_shipped_tools(self):
+        """The live pin, and the one that would have caught the gap."""
+        self.assertEqual(gates.check_label_wiring(self.REPO), [])
+
+
 class TestConfigShape(unittest.TestCase):
     def test_the_shipped_config_is_silent(self):
         # the config we actually ship, not a synthetic twin — the valid

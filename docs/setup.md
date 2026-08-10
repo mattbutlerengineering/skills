@@ -106,6 +106,14 @@ python3 tools/factory/label_sync.py --apply    # create/update drifted labels
 
 Never deletes: labels the taxonomy doesn't name are left alone.
 
+`.github/labels.json` is yours to curate, and the one edit to make carefully is
+a **deletion**. The tools name 15 of these labels between them — `assembler`
+reads `wo:ready-for-agent` and `budget-exhausted`, the digest counts the six
+gate labels, each Makefile lifecycle target flips one — and a pruned label
+fails when CI goes to flip it, at dispatch or merge time. Detector J catches
+that offline instead, in `make check`. Adding labels is always safe; a label
+nothing names is never a finding.
+
 - [ ] Labels present on the remote
 - [ ] Detector L reports no drift
 
