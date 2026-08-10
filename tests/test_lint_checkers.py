@@ -23,6 +23,15 @@ from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,  # noqa: E402
                       TEMPLATED_STAGES)
 
 
+def protocol_table(rows):
+    """The protocol doc's orientation table for a walk table — the shape
+    check_protocol_tables parses back out."""
+    return ("| Stage | Artifact | Complete when |\n"
+            "|-------|----------|---------------|\n"
+            + "".join(f"| {stage} | `{artifact}` | file exists |\n"
+                      for stage, artifact in rows))
+
+
 def make_clean_tree(root):
     """Seed the smallest tree on which every checker reports zero problems."""
     plugin_dir = root / ".claude-plugin"
@@ -54,8 +63,15 @@ def make_clean_tree(root):
         encoding="utf-8")
 
     (root / "docs").mkdir()
-    (root / "docs" / "pipeline-protocol.md").write_text("spec\n",
-                                                        encoding="utf-8")
+    # Both orientation tables, not a stub: check_protocol_tables pins the
+    # doc's stage order and artifacts to protocol.py's walk tables, so the
+    # smallest tree every checker passes on genuinely has to carry them.
+    (root / "docs" / "pipeline-protocol.md").write_text(
+        "spec\n\n## Artifacts are the state\n\n"
+        + protocol_table(protocol.STAGE_ARTIFACTS)
+        + "\n### Maintenance-run orientation\n\n"
+        + protocol_table(protocol.MAINTENANCE_STAGE_ARTIFACTS),
+        encoding="utf-8")
 
     cases = [{"id": f"{slug}-{n}", "kind": "direct",
               "expected": slug, "query": "q"}
@@ -347,6 +363,84 @@ class TestSkillAssets(CheckerTreeTest):
             ["skills/idea/SKILL.md names '../prd/references/x.md', which is "
              "outside the skill directory (ADR-0008: skills are "
              "self-contained)"])
+
+
+class TestProtocolTables(CheckerTreeTest):
+    """The protocol doc and protocol.py are both authorities on the walk
+    and neither derives from the other: offline tools read the module,
+    and an agent in a consuming repo reads the doc. Drift routes two
+    ways in one pipeline."""
+
+    PRODUCT = "## Artifacts are the state"
+    MAINTENANCE = "### Maintenance-run orientation"
+
+    def doc(self):
+        return self.root / "docs" / "pipeline-protocol.md"
+
+    def rewrite(self, old, new):
+        path = self.doc()
+        text = path.read_text(encoding="utf-8")
+        self.assertIn(old, text)          # the fixture really said it
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def test_clean_tree_is_clean(self):
+        self.assertEqual(lint.check_protocol_tables(self.root), [])
+
+    def test_reordered_stage_in_the_doc(self):
+        self.rewrite("| review | `review.md` | file exists |\n"
+                     "| ship | `release.md` | file exists |\n",
+                     "| ship | `release.md` | file exists |\n"
+                     "| review | `review.md` | file exists |\n")
+        problems = lint.check_protocol_tables(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("out of step with protocol.py", problems[0])
+        self.assertIn("verify → ship → review → operate", problems[0])
+
+    def test_renamed_artifact_in_the_doc(self):
+        self.rewrite("| verify | `verification.md` |", "| verify | `verify.md` |")
+        self.assertEqual(
+            lint.check_protocol_tables(self.root),
+            ["protocol doc gives stage 'verify' artifact 'verify.md'; "
+             "protocol.py reads 'verification.md'"])
+
+    def test_stage_missing_from_the_doc(self):
+        self.rewrite("| ship | `release.md` | file exists |\n", "")
+        problems = lint.check_protocol_tables(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("out of step with protocol.py", problems[0])
+
+    def test_each_table_is_judged_independently(self):
+        self.rewrite("| verify | `verification.md` |", "| verify | `verify.md` |")
+        self.rewrite("| verify | `verification.md` |", "| verify | `nope.md` |")
+        self.assertEqual(len(lint.check_protocol_tables(self.root)), 2)
+
+    def test_missing_table_names_the_heading(self):
+        path = self.doc()
+        path.write_text("spec only\n", encoding="utf-8")
+        problems = lint.check_protocol_tables(self.root)
+        self.assertEqual(len(problems), 2)
+        self.assertIn(self.PRODUCT, problems[0])
+        self.assertIn(self.MAINTENANCE, problems[1])
+
+    def test_prose_stage_names_normalize_to_slugs(self):
+        # The real doc writes "UX Design"; protocol.py says "ux-design".
+        # Both forms have to parse, or one is dropped silently and the
+        # failure reads as a reordering.
+        self.rewrite("| ux-design | `ux.md` |", "| UX Design | `ux.md` |")
+        self.assertEqual(lint.check_protocol_tables(self.root), [])
+
+    def test_absent_doc_belongs_to_check_protocol(self):
+        self.doc().unlink()
+        self.assertEqual(lint.check_protocol_tables(self.root), [])
+        self.assertEqual(lint.check_protocol(self.root),
+                         ["missing docs/pipeline-protocol.md"])
+
+    def test_non_file_artifact_cell_is_not_compared(self):
+        # Implement's cell in the real doc reads "code" — the stage's
+        # product, not the file orientation reads. The stage still has to
+        # be in the right place; only the artifact comparison is skipped.
+        self.rewrite("| implement | `breakdown.md` |", "| implement | code |")
+        self.assertEqual(lint.check_protocol_tables(self.root), [])
 
 
 class TestTemplates(CheckerTreeTest):

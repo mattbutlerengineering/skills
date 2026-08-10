@@ -247,6 +247,91 @@ def check_protocol(root):
     return [] if path.is_file() else ["missing docs/pipeline-protocol.md"]
 
 
+# A row of either orientation table in the protocol doc:
+# "| UX Design | `ux.md` | file exists ... |".
+# The hyphen matters: the doc writes stages in prose ("UX Design"),
+# but a slug ("ux-design") is just as reasonable, and a row this
+# fails to match is dropped silently — surfacing as an order
+# mismatch rather than as the formatting difference it is.
+TABLE_ROW = re.compile(r"^\|\s*([A-Za-z][A-Za-z -]*?)\s*\|\s*(.+?)\s*\|")
+# The artifact cell when it names a file rather than what the stage
+# produces. Implement's cell reads "code" and is deliberately not a file.
+ARTIFACT_CELL = re.compile(r"^`([a-z]+\.md)`$")
+
+
+def doc_table(text, heading):
+    """The (stage-slug, artifact-or-None) rows of the markdown table that
+    follows `heading` in the protocol doc, in document order. Stage names
+    are title-case prose there and slugs in protocol.py, so "UX Design"
+    normalizes to "ux-design"; the artifact is None when the cell names a
+    product rather than a file. Returns [] when the heading or its table
+    is absent, which check_protocol_tables reports as its own problem."""
+    after = text.split(heading, 1)
+    if len(after) < 2:
+        return []
+    rows = []
+    for line in after[1].splitlines():
+        if not line.startswith("|"):
+            if rows:
+                break       # the table ended
+            continue        # prose between the heading and the table
+        match = TABLE_ROW.match(line)
+        if not match:
+            continue
+        stage, artifact = match.groups()
+        if stage.lower() in ("stage", "---"):
+            continue
+        cell = ARTIFACT_CELL.match(artifact)
+        rows.append((stage.lower().replace(" ", "-"),
+                     cell.group(1) if cell else None))
+    return rows
+
+
+def check_protocol_tables(root):
+    """The protocol doc's two orientation tables agree with protocol.py's
+    walk tables. Both are authorities and neither derives from the other:
+    in a stamped repo the offline tools read protocol.py, while in a
+    consuming repo the doc is what an agent reads at runtime — doctor
+    calls it the runtime interface precisely because there is no
+    protocol.py to fall back on there. A stage added to one and not the
+    other routes two different ways in the same pipeline, and nothing
+    was red.
+
+    Deliberately NOT covered, so a green run is not misread: the
+    "Complete when" column, which carries the Implement checkbox rule and
+    the ux:/re-entry: conditionals in English. Those still restate
+    protocol._stage_complete with nothing pinning them."""
+    path = root / "docs" / "pipeline-protocol.md"
+    if not path.is_file():
+        return []  # absence already reported by check_protocol
+    text = path.read_text(encoding="utf-8")
+    problems = []
+    for heading, table in (("## Artifacts are the state",
+                            protocol.STAGE_ARTIFACTS),
+                           ("### Maintenance-run orientation",
+                            protocol.MAINTENANCE_STAGE_ARTIFACTS)):
+        rows = doc_table(text, heading)
+        if not rows:
+            problems.append(f"protocol doc has no orientation table under "
+                            f"{heading!r} — it is what an agent reads to "
+                            "orient a run, and nothing else states the order")
+            continue
+        documented = [stage for stage, _ in rows]
+        expected = [stage for stage, _ in table]
+        if documented != expected:
+            problems.append(
+                f"protocol doc's {heading!r} table is out of step with "
+                f"protocol.py: expected {' → '.join(expected)}, "
+                f"got {' → '.join(documented)}")
+            continue
+        problems.extend(
+            f"protocol doc gives stage {stage!r} artifact {named!r}; "
+            f"protocol.py reads {artifact!r}"
+            for (stage, named), (_, artifact) in zip(rows, table)
+            if named is not None and named != artifact)
+    return problems
+
+
 def check_evals(root):
     _, problems = eval_schema.load(root / "evals" / "routing.json",
                                    ALL_SKILLS, label="evals/routing.json")
@@ -326,7 +411,8 @@ def check_ledger_links(root):
 
 CHECKERS = (check_manifest, check_pi_package, check_skills,
             check_skill_assets, check_templates, check_router,
-            check_protocol, check_backlog, check_evals,
+            check_protocol, check_protocol_tables, check_backlog,
+            check_evals,
             check_output_evals, check_ledger, check_ledger_links)
 
 
