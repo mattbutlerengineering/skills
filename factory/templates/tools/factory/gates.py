@@ -17,7 +17,10 @@ ai-tooling suite where the rule is the same idea):
                      that status in docs/adr/README.md, and no artifact
                      outside docs/adr builds on a superseded decision
   E SCAFFOLD-SYNC  — factory/manifest.json checksums match the template
-                     payload (no hand-edited mirrors)
+                     payload (no hand-edited mirrors), and in a stamped
+                     repo the executable payload in use — tools/factory/
+                     and .github/workflows/ — matches what it was stamped
+                     from (no hand-edited stamped files)
   F CONFIG-SHAPE   — factory config parses and every field is a valid
                      token (budgets, routing, caps)
   G COST-LEDGER    — docs/factory/costs.jsonl lines carry the ADR-0034
@@ -659,8 +662,74 @@ def manifest_files(root):
             for p in sorted(payload.rglob("*")) if p.is_file()}
 
 
+# The half of the payload a product repo must never edit: the tools and the
+# workflows — exactly the files factory_init.MIRRORS machine-copies from the
+# factory repo root. Everything else the stamp lands is meant to be edited
+# there: docs/adr/ and docs/design/ are seeds, .github/factory.json carries
+# budgets to tune, .github/CODEOWNERS ships a placeholder owner that SHOULD
+# be substituted, and the Makefile's contract is its target set (checked by
+# name, not by byte). Comparing those would fight the documented setup.
+PRISTINE_PREFIXES = ("templates/tools/factory/",
+                     "templates/.github/workflows/")
+
+
+def install_destination(rel):
+    """Where a manifest key installs in a stamped repo, or None if it is not
+    a plain path under templates/.
+
+    Mirrors factory_init.install_path's rule, pinned to it in lockstep by
+    tests/test_factory_init.py: factory_init.py is NOT in the payload, so a
+    stamped repo's gates.py cannot import the mapping it has to agree with.
+    """
+    if not rel.startswith("templates/"):
+        return None
+    dest = rel[len("templates/"):]
+    parts = dest.split("/")
+    if "\x00" in dest or ".." in parts or "." in parts or "" in parts:
+        return None
+    return dest
+
+
+def stamped_destination_problems(root, expected):
+    """E's second half: in a STAMPED repo, the executable payload actually in
+    use must match the manifest it was stamped from.
+
+    The mirror-vs-manifest pass proves factory/templates/ is intact. It says
+    nothing about tools/factory/gates.py, or the workflows — the copies the
+    repo actually runs. A hand edit there passed every offline gate silently,
+    including an edit to gates.py itself (issue #207).
+
+    Scoped to stamped trees, discovered by where the tools live: the factory
+    repo keeps its own at the root, and its Makefile, docs/adr/, and .github/
+    are its own files rather than copies of the payload. Compares against the
+    manifest, not the on-disk mirror, so a drifted mirror and a drifted
+    destination stay one problem each instead of cross-reporting.
+    """
+    if not (root / "tools" / "factory" / "gates.py").is_file():
+        return []
+    problems = []
+    for rel in sorted(expected):
+        if not rel.startswith(PRISTINE_PREFIXES):
+            continue
+        dest = install_destination(rel)
+        if dest is None:
+            continue  # malformed key: already reported by the manifest pass
+        path = root / dest
+        if not path.is_file():
+            problems.append(f"E: {dest} is in the payload but missing here"
+                            " (partial stamp — re-stamp the target)")
+        elif hashlib.sha256(path.read_bytes()).hexdigest() != expected[rel]:
+            problems.append(
+                f"E: {dest} does not match factory/{rel} (hand-edited"
+                " stamped file — restore it from the mirror or re-stamp,"
+                " never keep the edit)")
+    return problems
+
+
 def check_scaffold_sync(root):
-    """E: the template payload must match its checksum manifest exactly."""
+    """E: the template payload must match its checksum manifest exactly, and
+    a stamped repo's executable payload must match what it was stamped
+    from."""
     manifest_path = root / "factory" / "manifest.json"
     if not manifest_path.is_file():
         return ["E: missing factory/manifest.json"]
@@ -682,7 +751,7 @@ def check_scaffold_sync(root):
                 " (re-run manifest update, never hand-edit)")
     problems += [f"E: factory/{rel} is not in the manifest"
                  for rel in sorted(actual) if rel not in files]
-    return problems
+    return problems + stamped_destination_problems(root, files)
 
 
 def check_config_shape(root):
@@ -971,6 +1040,38 @@ def selftest():
         expect_clean("E clean", check_scaffold_sync(root))
         (factory / "Makefile").write_text("check: tampered\n", encoding="utf-8")
         expect("E", check_scaffold_sync(root), "manifest checksum")
+
+        # E's stamped half (issue #207): an unstamped tree is silent about
+        # destinations, a stamped one compares its executable payload — and
+        # only that. The Makefile above stays diverged throughout and is
+        # never reported as a destination: it is the repo's to adjust.
+        tool = factory / "tools" / "factory" / "gates.py"
+        tool.parent.mkdir(parents=True)
+        tool.write_text("# payload\n", encoding="utf-8")
+        (factory / "Makefile").write_text("check:\n", encoding="utf-8")
+        (root / "factory" / "manifest.json").write_text(json.dumps(
+            {"files": manifest_files(root)}), encoding="utf-8")
+        expect_clean("E unstamped", check_scaffold_sync(root))
+        stamped = root / "tools" / "factory"
+        stamped.mkdir(parents=True)
+        (stamped / "gates.py").write_text("# payload\n", encoding="utf-8")
+        expect_clean("E stamped clean", check_scaffold_sync(root))
+        (stamped / "gates.py").write_text("# hand-edited\n", encoding="utf-8")
+        expect("E stamped", check_scaffold_sync(root),
+               "tools/factory/gates.py does not match", "hand-edited")
+        (stamped / "gates.py").unlink()
+        # the discriminator is gates.py itself, so removing it un-stamps the
+        # tree — a second tool proves the missing-destination leg instead
+        (factory / "tools" / "factory" / "cli.py").write_text(
+            "# payload\n", encoding="utf-8")
+        (stamped / "gates.py").write_text("# payload\n", encoding="utf-8")
+        (root / "factory" / "manifest.json").write_text(json.dumps(
+            {"files": manifest_files(root)}), encoding="utf-8")
+        expect("E partial", check_scaffold_sync(root),
+               "tools/factory/cli.py is in the payload but missing here",
+               "partial stamp")
+        (factory / "tools" / "factory" / "cli.py").unlink()
+        (factory / "Makefile").write_text("check: tampered\n", encoding="utf-8")
 
         (factory / "factory.json").write_text(json.dumps(
             {"budgets_usd": {"S": 5, "M": 15},

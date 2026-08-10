@@ -235,6 +235,59 @@ class TestInstallPath(unittest.TestCase):
                            " resolve to a plain relative path"))
 
 
+class TestInstallDestinationLockstep(unittest.TestCase):
+    """gates.install_destination must agree with factory_init.install_path.
+
+    Detector E's stamped half compares each pristine payload file to where
+    it installs — and it runs inside stamped repos, which have no
+    factory_init.py to import (it is not in MIRRORS, so the stamp never
+    lands it). The mapping is therefore stated twice, and only a test can
+    keep the two statements from drifting.
+
+    Scoped to the keys E actually compares (gates.PRISTINE_PREFIXES): a
+    future INSTALL_MAP entry redirecting a tool or a workflow still fails
+    here, while gates stays free of a mapping it has no use for.
+    """
+
+    def pristine_keys(self):
+        manifest = json.loads(
+            (REPO_ROOT / "factory" / "manifest.json").read_text(
+                encoding="utf-8"))
+        keys = [rel for rel in sorted(manifest["files"])
+                if rel.startswith(gates.PRISTINE_PREFIXES)]
+        assert keys, "no pristine payload keys — the scoping is wrong"
+        return keys
+
+    def test_both_agree_on_every_pristine_payload_key(self):
+        for rel in self.pristine_keys():
+            with self.subTest(rel=rel):
+                self.assertEqual(gates.install_destination(rel),
+                                 factory_init.install_path(rel)[0])
+
+    def test_the_pristine_set_is_the_tools_and_the_workflows(self):
+        # the scoping decision itself: seeds and config are the repo's to
+        # edit, so E must not compare them (docs/adr, docs/design,
+        # factory.json, CODEOWNERS, labels.json, Makefile)
+        installed = {gates.install_destination(rel)
+                     for rel in self.pristine_keys()}
+        self.assertTrue(
+            all(d.startswith(("tools/factory/", ".github/workflows/"))
+                for d in installed), sorted(installed))
+        self.assertEqual(
+            [rel for rel in ("templates/Makefile", "templates/factory.json",
+                             "templates/.github/CODEOWNERS",
+                             "templates/.github/labels.json")
+             if rel.startswith(gates.PRISTINE_PREFIXES)], [])
+
+    def test_both_refuse_the_same_malformed_keys(self):
+        for rel in ("../../evil.sh", "/tmp/evil", "templates/../../etc/evil",
+                    "templates//x", "templates/", "templates/a/../b",
+                    "templates/.", "templates/./x", "templates/x\x00y"):
+            with self.subTest(rel=rel):
+                self.assertIsNone(gates.install_destination(rel))
+                self.assertIsNone(factory_init.install_path(rel)[0])
+
+
 class TestStamp(unittest.TestCase):
     def manifested_source(self, tmp):
         source = Path(tmp) / "source"
