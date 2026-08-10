@@ -668,6 +668,100 @@ class TestSetupDocCounts(unittest.TestCase):
         self.assertEqual(sum(rows), int(match.group(1)))
 
 
+class TestDoctorChecklistMatchesThePayload(unittest.TestCase):
+    """skills/doctor/SKILL.md recites the Makefile target set and the
+    workflow list a stamp lands, and a reader takes those as the complete
+    checklist. Nothing pinned them — there is not one reference to doctor
+    anywhere in tests/.
+
+    That matters more than ordinary doc drift because doctor is the
+    DIAGNOSTIC. A stale checklist does not read as stale; it reads as a
+    clean bill of health with a hole in it. #204 adding `wo-failed` to the
+    Makefile is precisely the edit that would have done it — without the
+    target in its list, doctor would report a complete target set on a repo
+    whose work-order state machine has no terminal state.
+
+    Both directions are checked. A target the payload gained and doctor
+    never learned is the silent case; a target doctor still names after the
+    payload dropped it sends a reader chasing a hole that is not there.
+    """
+
+    DOCTOR = REPO_ROOT / "skills" / "doctor" / "SKILL.md"
+    TEMPLATES = REPO_ROOT / "factory" / "templates"
+    ITEM = re.compile(r"^(\d+)\. ", re.MULTILINE)
+    BACKTICKED = re.compile(r"`([^`]+)`")
+
+    def numbered_item(self, needle):
+        """The text of doctor's numbered step containing `needle`, bounded
+        by the next numbered step so a later paragraph cannot leak tokens
+        into the comparison."""
+        text = self.DOCTOR.read_text(encoding="utf-8")
+        bounds = [match.start() for match in self.ITEM.finditer(text)]
+        bounds.append(len(text))
+        for start, stop in zip(bounds, bounds[1:]):
+            item = text[start:stop]
+            if needle in item:
+                return item
+        self.fail(f"skills/doctor/SKILL.md has no numbered step mentioning"
+                  f" {needle!r} — this test pins that step")
+
+    def payload_targets(self):
+        makefile = (self.TEMPLATES / "Makefile").read_text(encoding="utf-8")
+        return {line.split(":", 1)[0]
+                for line in makefile.splitlines()
+                if re.match(r"^[a-z][a-z-]*:", line)}
+
+    def test_it_names_every_make_target_the_payload_ships(self):
+        item = self.numbered_item("full target set")
+        named = set(self.BACKTICKED.findall(item))
+        missing = sorted(self.payload_targets() - named)
+        self.assertEqual(
+            missing, [],
+            "skills/doctor/SKILL.md does not name make target(s) the"
+            " stamped Makefile ships — doctor would report a complete"
+            " target set on a repo missing one")
+
+    def test_it_names_no_make_target_the_payload_lacks(self):
+        item = self.numbered_item("full target set")
+        targets = self.payload_targets()
+        # Only tokens shaped like a target are candidates; the step's prose
+        # backticks other things (`make`, a command) that are not claims.
+        claimed = {token for token in self.BACKTICKED.findall(item)
+                   if re.fullmatch(r"[a-z][a-z-]*", token)
+                   and token != "make"}
+        self.assertEqual(
+            sorted(claimed - targets), [],
+            "skills/doctor/SKILL.md names make target(s) the stamped"
+            " Makefile does not ship — a reader chases a hole that is not"
+            " there")
+
+    def test_it_names_exactly_the_workflows_the_payload_ships(self):
+        item = self.numbered_item("workflows are present")
+        named = {token for token in self.BACKTICKED.findall(item)
+                 if token.endswith(".yml")}
+        shipped = {path.name for path
+                   in (self.TEMPLATES / ".github" / "workflows").iterdir()
+                   if path.suffix == ".yml"}
+        self.assertEqual(
+            named, shipped,
+            "skills/doctor/SKILL.md's workflow list has drifted from the"
+            " stamped payload")
+
+    def test_the_stated_workflow_count_matches(self):
+        """The step leads with a number ("The five workflows"), which goes
+        stale independently of the list beside it."""
+        item = self.numbered_item("workflows are present")
+        shipped = len([path for path
+                       in (self.TEMPLATES / ".github" / "workflows").iterdir()
+                       if path.suffix == ".yml"])
+        words = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                 6: "six", 7: "seven", 8: "eight"}
+        self.assertIn(
+            f"{words[shipped]} workflows", item.lower(),
+            f"doctor says something other than {words[shipped]!r} workflows"
+            f" while the payload ships {shipped}")
+
+
 class TestAcceptanceStampRealRepo(unittest.TestCase):
     def test_stamped_repo_passes_its_own_gates(self):
         with tempfile.TemporaryDirectory() as tmp:
