@@ -55,6 +55,11 @@ Fallbacks: omp inherits `.claude` skills on first run, or copy `skills/*` into
 Every skill works on a bare install of either harness — no third-party tools,
 MCP servers, or other plugins required.
 
+That is the whole setup for the skills. To also stamp the factory into a repo
+— offline gates, dispatch workflows, cost ledger — and confirm the install
+works end to end, follow [`docs/setup.md`](docs/setup.md). `/doctor` checks it
+mechanically, at whichever tier the repo has reached.
+
 ## Usage
 
 Two ways in:
@@ -99,9 +104,31 @@ from a one-time brief — one fresh subagent per stage, every brief gap logged
 as an assumption, and, unless the brief explicitly authorizes the release,
 it prepares the release and stops rather than executing it. `mermaid` turns a process or system
 into a digestible mermaid diagram with explicit, contrast-safe colors that
-read in both light and dark renderers. `factory-init` stamps a product repo
+read in both light and dark renderers, and
+`interactive-architecture-diagram` goes further for the cases that want
+showing rather than telling — one self-contained dark-mode HTML file with an
+inline-SVG system diagram, a narrated step-through presenter mode, and
+PNG/SVG export, with no build step and no external requests. `factory-init` stamps a product repo
 with the factory scaffold — offline gates, dispatch workflows, and the cost
-ledger — so promoted work orders can run there unattended.
+ledger — so promoted work orders can run there unattended. `doctor` is the
+read-only counterpart to that stamp: run in the repo that *uses* these
+skills, it answers whether the install is actually wired up, tier by tier —
+the plugin side in any repo, the stamped detectors and targets when the
+factory is present, label drift only when asked — and reports each problem
+with the fix rather than applying it. `work-queue` runs several
+already-approved work orders at once — one worktree-isolated agent per
+order, bounded by the factory's WIP cap and priced against the monthly cap
+before anything is spent — and stops at merge-ready PRs, because the merge
+is a human gate. `audit` is the way in when there is no run yet and no
+defect named: it surveys the codebase read-only, reproduces every finding
+before reporting it, and routes each one to a carrier that already exists —
+a backlog seed, a maintenance run via `capture`, a feature run via `idea` —
+rather than opening a parallel plan tree of its own. `deepen` asks the
+narrower architectural question instead: where is the codebase **shallow**,
+its interfaces nearly as costly to learn as the implementations behind them?
+It confirms each candidate against real call sites rather than a feeling of
+friction, presents the deepenings as a self-contained before/after report
+outside the repo, and designs the chosen interface with you.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).

@@ -86,6 +86,55 @@ def row_pre_ledger(line):
     return bool(ROW.match(line)) and bool(_PRE_LEDGER.search(line))
 
 
+# A row's own declared metadata. `size:` is the cost band (factory_config
+# resolves it to a dollar budget) and `blocked by:` is the dependency edge
+# the ROW comment above refers to as "later tokens". Both are clause-scoped
+# so the trailing `(PRD-...)` and `(tracker: #N)` markers can never be read
+# as part of them.
+DONE_ROW = re.compile(r"^\s*[-*+]\s+\[x\]", re.IGNORECASE)
+SIZE = re.compile(r"\bsize:\s*([SML])\b")
+BLOCKED_BY = re.compile(r"\bblocked by:\s*([^(]*)")
+
+
+def row_size(line):
+    """The row's declared size band ("S"/"M"/"L"), or None.
+
+    factory_config.resolve_budget turns it into the dollar budget, so a
+    caller planning a batch can price the batch before running it rather
+    than discovering the cost afterwards (ADR-0034).
+    """
+    if not ROW.match(line):
+        return None
+    match = SIZE.search(line)
+    return match.group(1) if match else None
+
+
+def row_blockers(line):
+    """The work orders this row declares it is blocked by.
+
+    Read from the `blocked by:` clause only — NOT "every WO token after
+    the first", which would swallow a work order merely mentioned in the
+    row's prose and park the row forever. An em-dash (the written form of
+    "nothing") yields an empty list, same as an absent clause.
+    """
+    if not ROW.match(line):
+        return []
+    match = BLOCKED_BY.search(line)
+    return WO_TOKEN.findall(match.group(1)) if match else []
+
+
+def row_done(line):
+    """Whether a breakdown row is checked off.
+
+    gates.MERGED_ROW is a separate, older owner of the same bullet shape
+    and stays that way: it additionally excludes ADR-0043 pre-ledger rows,
+    which is detector G's rule and not the row grammar's. Same alignment
+    caveat as protocol._CHECKBOX — change the bullet shape in one and the
+    others must move with it.
+    """
+    return bool(DONE_ROW.match(line))
+
+
 def run_dirs(root):
     """Candidate run directories per the pipeline protocol."""
     dirs = [root / "docs"]

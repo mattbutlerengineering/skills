@@ -213,7 +213,7 @@ def transcript_from_events(events):
     CLI emits both for one message, so the shapes are collected apart
     and the frames win when present — never summed — while a stream
     carrying only one shape still yields its full transcript. Depending
-    on a single shape is the fail-open ADR-0045 kills: a shape the CLI
+    on a single shape is the fail-open ADR-0053 kills: a shape the CLI
     stops emitting would score every forbid against an empty transcript
     and pass the suite while testing nothing."""
     frame_calls, frame_texts = [], []
@@ -367,7 +367,7 @@ def claude_runner(root, model, timeout):
     """The live runner: one `claude -p` per case in an isolated scratch dir.
 
     The command comes from the harness registry (trigger_eval.HARNESSES,
-    ADR-0038/ADR-0045) — --include-partial-messages included — and the
+    ADR-0038/ADR-0053) — --include-partial-messages included — and the
     child runs under cli.harness_run, which owns the process group and
     kills it whole on the way out, so a timed-out replay cannot orphan
     the CLI's grandchildren. Default permissions on purpose — a

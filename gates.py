@@ -17,9 +17,17 @@ ai-tooling suite where the rule is the same idea):
                      that status in docs/adr/README.md, and no artifact
                      outside docs/adr builds on a superseded decision
   E SCAFFOLD-SYNC  — factory/manifest.json checksums match the template
-                     payload (no hand-edited mirrors)
+                     payload (no hand-edited mirrors), and in a stamped
+                     repo the executable payload in use — tools/factory/
+                     and .github/workflows/ — matches what it was stamped
+                     from (no hand-edited stamped files)
   F CONFIG-SHAPE   — factory config parses and every field is a valid
                      token (budgets, routing, caps)
+  J LABEL-WIRING   — every label the tools and the Makefile's lifecycle
+                     targets name exists in the label taxonomy; the
+                     taxonomy is the repo's to curate, and pruning a
+                     label the machinery reads would otherwise fail only
+                     when CI flips it, at dispatch or merge time
   G COST-LEDGER    — docs/factory/costs.jsonl lines carry the ADR-0034
                      fields and every merged (checked) work-order row has
                      one; an absent ledger is silent (no runs recorded yet)
@@ -47,6 +55,7 @@ repo_root) lives in knowledge_plane.py, and the cost ledger's shape in
 cost_ledger.py (ADR-0037) — this module keeps only the detectors.
 """
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -592,7 +601,12 @@ def check_cost_ledger(root):
     labelled read the weekly report is built on (ADR-0037, ADR-0049), so
     the two cannot diverge, down to the cannot-read string. What stays
     here is G's own work: the cross-checks between ledger and breakdown
-    (a recorded wo must have a row; a merged row must be recorded)."""
+    (a recorded wo must have a row; a merged row must be recorded).
+
+    A gate-latency row (ADR-0041) never satisfies the merged-order
+    check: it records queue time at $0 with no tokens, and the monthly
+    breaker's sum excludes it — counting it as spend coverage kept G
+    green on a ledger that accounted for nothing (issue #222)."""
     rows, problems = cost_ledger.load(root, "G")
     if rows is None:
         # Absent (silent, no runs yet) or unreadable (the labelled
@@ -605,7 +619,8 @@ def check_cost_ledger(root):
         problems.extend(located)
         wo = cost_ledger.wo_token(entry) if entry is not None else None
         if wo:
-            recorded.add(wo)
+            if cost_ledger.gate_wait(entry) is None:
+                recorded.add(wo)
             if wo not in wo_rows:
                 problems.append(f"G: {COST_LEDGER}:{lineno} wo {wo}"
                                 " has no breakdown row")
@@ -655,8 +670,74 @@ def manifest_files(root):
             for p in sorted(payload.rglob("*")) if p.is_file()}
 
 
+# The half of the payload a product repo must never edit: the tools and the
+# workflows — exactly the files factory_init.MIRRORS machine-copies from the
+# factory repo root. Everything else the stamp lands is meant to be edited
+# there: docs/adr/ and docs/design/ are seeds, .github/factory.json carries
+# budgets to tune, .github/CODEOWNERS ships a placeholder owner that SHOULD
+# be substituted, and the Makefile's contract is its target set (checked by
+# name, not by byte). Comparing those would fight the documented setup.
+PRISTINE_PREFIXES = ("templates/tools/factory/",
+                     "templates/.github/workflows/")
+
+
+def install_destination(rel):
+    """Where a manifest key installs in a stamped repo, or None if it is not
+    a plain path under templates/.
+
+    Mirrors factory_init.install_path's rule, pinned to it in lockstep by
+    tests/test_factory_init.py: factory_init.py is NOT in the payload, so a
+    stamped repo's gates.py cannot import the mapping it has to agree with.
+    """
+    if not rel.startswith("templates/"):
+        return None
+    dest = rel[len("templates/"):]
+    parts = dest.split("/")
+    if "\x00" in dest or ".." in parts or "." in parts or "" in parts:
+        return None
+    return dest
+
+
+def stamped_destination_problems(root, expected):
+    """E's second half: in a STAMPED repo, the executable payload actually in
+    use must match the manifest it was stamped from.
+
+    The mirror-vs-manifest pass proves factory/templates/ is intact. It says
+    nothing about tools/factory/gates.py, or the workflows — the copies the
+    repo actually runs. A hand edit there passed every offline gate silently,
+    including an edit to gates.py itself (issue #207).
+
+    Scoped to stamped trees, discovered by where the tools live: the factory
+    repo keeps its own at the root, and its Makefile, docs/adr/, and .github/
+    are its own files rather than copies of the payload. Compares against the
+    manifest, not the on-disk mirror, so a drifted mirror and a drifted
+    destination stay one problem each instead of cross-reporting.
+    """
+    if not (root / "tools" / "factory" / "gates.py").is_file():
+        return []
+    problems = []
+    for rel in sorted(expected):
+        if not rel.startswith(PRISTINE_PREFIXES):
+            continue
+        dest = install_destination(rel)
+        if dest is None:
+            continue  # malformed key: already reported by the manifest pass
+        path = root / dest
+        if not path.is_file():
+            problems.append(f"E: {dest} is in the payload but missing here"
+                            " (partial stamp — re-stamp the target)")
+        elif hashlib.sha256(path.read_bytes()).hexdigest() != expected[rel]:
+            problems.append(
+                f"E: {dest} does not match factory/{rel} (hand-edited"
+                " stamped file — restore it from the mirror or re-stamp,"
+                " never keep the edit)")
+    return problems
+
+
 def check_scaffold_sync(root):
-    """E: the template payload must match its checksum manifest exactly."""
+    """E: the template payload must match its checksum manifest exactly, and
+    a stamped repo's executable payload must match what it was stamped
+    from."""
     manifest_path = root / "factory" / "manifest.json"
     if not manifest_path.is_file():
         return ["E: missing factory/manifest.json"]
@@ -678,7 +759,107 @@ def check_scaffold_sync(root):
                 " (re-run manifest update, never hand-edit)")
     problems += [f"E: factory/{rel} is not in the manifest"
                  for rel in sorted(actual) if rel not in files]
-    return problems
+    return problems + stamped_destination_problems(root, files)
+
+
+# Where the factory's label literals are declared: module name -> a
+# callable pulling the labels that module names out of its own constants.
+# Read the declaration, never the source text — a regex over source stops
+# matching the moment a literal is reformatted, and stops SILENTLY, which
+# is the exact failure a detector exists to prevent.
+#
+# sweeps.py is absent on purpose: it is factory-repo-only (never stamped)
+# and its TRIAGE labels are bootstrap-created by ensure_labels before any
+# sweep runs, so they are wired by construction rather than by taxonomy.
+LABEL_DECLARERS = {
+    "assembler": lambda mod: ({mod.READY_LABEL, mod.EXHAUSTED_LABEL}
+                              | set(mod.CHARTER_BY_TYPE)),
+    "gate_digest": lambda mod: {name for gate in mod.GATES
+                                for name in gate[1:3]},
+}
+
+# The Makefile's lifecycle targets hand validator.py the label to flip, so
+# the target line IS the declaration — there is no constant to read.
+MAKEFILE_LABEL = re.compile(r"--label\s+([a-z][a-z0-9:._-]*)")
+
+
+def declared_labels(root):
+    """{label: sorted [where it is named]} across the factory's tools.
+
+    The modules are imported lazily and their absence is silent. A tool
+    missing from a stamped repo is a partial stamp, which detector E
+    already reports by name; re-reporting it here would just double the
+    noise on the one finding that already has an owner. Import failure is
+    silent for the same reason it is in E's neighbourhood: a broken
+    sibling import already stops gates.py outright, and this detector is
+    not the place to discover that.
+    """
+    named = {}
+    for name, pull in sorted(LABEL_DECLARERS.items()):
+        try:
+            module = importlib.import_module(name)
+        except ImportError:
+            continue
+        for label in pull(module):
+            named.setdefault(label, set()).add(f"{name}.py")
+    makefile = root / "Makefile"
+    if makefile.is_file():
+        for lineno, line in enumerate(
+                makefile.read_text(encoding="utf-8").splitlines(), 1):
+            for label in MAKEFILE_LABEL.findall(line):
+                named.setdefault(label, set()).add(f"Makefile:{lineno}")
+    return {label: sorted(sites) for label, sites in named.items()}
+
+
+def check_label_wiring(root):
+    """J: every label the factory's tools and Makefile name must exist in
+    the label taxonomy.
+
+    The couplings are all runtime-only otherwise. assembler reads
+    wo:ready-for-agent and budget-exhausted, gate_digest counts the six
+    gate labels, and each Makefile lifecycle target hands validator.py one
+    to flip — and validator refuses a label the taxonomy does not carry
+    (`V: <label> is not a lifecycle label in the taxonomy`). So a taxonomy
+    that loses a label passes every offline gate and fails in the dispatch
+    plane, at merge or dispatch time, which is the worst moment to find
+    out.
+
+    That is not a hypothetical edit. `.github/labels.json` is one of the
+    files docs/setup.md and factory_init.update both hand to the stamped
+    repo as its own to curate, so pruning it is sanctioned — this is what
+    makes the pruning safe.
+
+    One direction only. A taxonomy label with no writer is normal and
+    expected: wo:blocked is human-applied by design (ADR-0045) and the
+    approval labels are the gates' to set, so "unused" is never a finding.
+
+    Silent when there is no taxonomy to check — an unstamped repo has
+    nothing to be wrong about.
+    """
+    # Lazily, for the same reason the declarers are: label_sync.py is a
+    # stamped sibling, and importing it at module scope would make a
+    # partial stamp crash gates.py before any detector ran.
+    try:
+        label_sync = importlib.import_module("label_sync")
+    except ImportError:
+        return []
+    # Per-entry shape problems are label_sync's to report, and J checks
+    # against whatever parsed rather than bailing on them: bailing would
+    # let one malformed entry switch this detector off silently, which is
+    # the failure mode it exists to close. Nothing parsed at all means
+    # either no taxonomy (unstamped) or a wholly unusable one — neither is
+    # a wiring finding. Resolution of WHERE the taxonomy lives stays
+    # label_sync's, so the gate and the sync tool cannot read different
+    # files.
+    taxonomy, _ = label_sync.load_labels(root)
+    if not taxonomy:
+        return []
+    known = {label["name"] for label in taxonomy}
+    return [f"J: {site} names {label} but the taxonomy has no such label"
+            " (add it to .github/labels.json, or the flip fails when CI"
+            " runs it)"
+            for label, sites in sorted(declared_labels(root).items())
+            if label not in known for site in sites]
 
 
 def check_config_shape(root):
@@ -938,8 +1119,9 @@ DETECTORS = {
 }
 
 CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
-            check_blueprint_drift, check_scaffold_sync, check_config_shape,
-            check_cost_ledger, check_evidence_honesty, check_staleness)
+            check_blueprint_drift, check_scaffold_sync, check_label_wiring,
+            check_config_shape, check_cost_ledger, check_evidence_honesty,
+            check_staleness)
 
 
 def run_all(root, env=None):
@@ -1028,6 +1210,66 @@ def selftest():
         expect_clean("E clean", check_scaffold_sync(root))
         (factory / "Makefile").write_text("check: tampered\n", encoding="utf-8")
         expect("E", check_scaffold_sync(root), "manifest checksum")
+
+        # E's stamped half (issue #207): an unstamped tree is silent about
+        # destinations, a stamped one compares its executable payload — and
+        # only that. The Makefile above stays diverged throughout and is
+        # never reported as a destination: it is the repo's to adjust.
+        tool = factory / "tools" / "factory" / "gates.py"
+        tool.parent.mkdir(parents=True)
+        tool.write_text("# payload\n", encoding="utf-8")
+        (factory / "Makefile").write_text("check:\n", encoding="utf-8")
+        (root / "factory" / "manifest.json").write_text(json.dumps(
+            {"files": manifest_files(root)}), encoding="utf-8")
+        expect_clean("E unstamped", check_scaffold_sync(root))
+        stamped = root / "tools" / "factory"
+        stamped.mkdir(parents=True)
+        (stamped / "gates.py").write_text("# payload\n", encoding="utf-8")
+        expect_clean("E stamped clean", check_scaffold_sync(root))
+        (stamped / "gates.py").write_text("# hand-edited\n", encoding="utf-8")
+        expect("E stamped", check_scaffold_sync(root),
+               "tools/factory/gates.py does not match", "hand-edited")
+        (stamped / "gates.py").unlink()
+        # the discriminator is gates.py itself, so removing it un-stamps the
+        # tree — a second tool proves the missing-destination leg instead
+        (factory / "tools" / "factory" / "cli.py").write_text(
+            "# payload\n", encoding="utf-8")
+        (stamped / "gates.py").write_text("# payload\n", encoding="utf-8")
+        (root / "factory" / "manifest.json").write_text(json.dumps(
+            {"files": manifest_files(root)}), encoding="utf-8")
+        expect("E partial", check_scaffold_sync(root),
+               "tools/factory/cli.py is in the payload but missing here",
+               "partial stamp")
+        (factory / "tools" / "factory" / "cli.py").unlink()
+        (factory / "Makefile").write_text("check: tampered\n", encoding="utf-8")
+
+        # J: the taxonomy is the repo's to curate, so a pruned label must
+        # be caught here — the alternative is finding out when CI flips it.
+        # Silent with no taxonomy at all: nothing stamped to be wrong.
+        expect_clean("J unstamped", check_label_wiring(root))
+        labels = root / ".github" / "labels.json"
+        labels.parent.mkdir(parents=True, exist_ok=True)
+        (root / "Makefile").write_text(
+            "wo-merged:\n\tpython3 validator.py lifecycle --label wo:merged\n",
+            encoding="utf-8")
+
+        def taxonomy(names):
+            return json.dumps([{"name": name, "color": "ededed",
+                                "description": name} for name in names])
+
+        # The correctly curated state: every label the shipped tools and
+        # this Makefile name. Derived, so the fixture cannot drift out of
+        # step with the tools — what it proves is the PRUNE below, and the
+        # real repo run is what proves the shipped taxonomy is complete.
+        wired = sorted(declared_labels(root))
+        labels.write_text(taxonomy(wired), encoding="utf-8")
+        expect_clean("J clean", check_label_wiring(root))
+        labels.write_text(
+            taxonomy([name for name in wired if name != "wo:merged"]),
+            encoding="utf-8")
+        expect("J", check_label_wiring(root), "Makefile:2 names wo:merged",
+               "gate_digest.py names wo:merged", "no such label")
+        labels.write_text(taxonomy(wired), encoding="utf-8")
 
         (factory / "factory.json").write_text(json.dumps(
             {"budgets_usd": {"S": 5, "M": 15},

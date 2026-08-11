@@ -13,17 +13,19 @@ a real CLI.
 The harness-IO conventions live here for the same reason: child_env
 (nesting a harness under Claude Code), version (provenance probes),
 write_outputs (the $GITHUB_OUTPUT heredoc form assembler.py and
-cost_report.py both emit), and read_event (the $GITHUB_EVENT_PATH read
-gates.py and assembler.py both make — ADR-0042). decode_events and
-harness_run (ADR-0045) are the streaming half: the one JSON-lines
-decode every harness stream shares, and the spawn-watch-reap lifecycle
-of a `-p` harness child (own process group, drain-after-exit reader,
-unconditional group kill) that trigger_eval.py and charter_replay.py
-both run. harness_run is POSIX-only (select on pipes, os.killpg), the
-stance trigger_eval.py has always documented. report is the caller
-half of the problem-string contract — print the problems, print the
-`<label>: N problem(s)` summary with a computed count, return the exit
-code — retyped in ten mains before it moved here (ADR-0051).
+cost_report.py both emit), read_event (the $GITHUB_EVENT_PATH read
+gates.py and assembler.py both make — ADR-0042), and read_execution (the
+claude-code-action execution file's spend record — issue #222).
+decode_events and harness_run (ADR-0053) are the streaming half: the
+one JSON-lines decode every harness stream shares, and the
+spawn-watch-reap lifecycle of a `-p` harness child (own process group,
+drain-after-exit reader, unconditional group kill) that trigger_eval.py
+and charter_replay.py both run. harness_run is POSIX-only (select on
+pipes, os.killpg), the stance trigger_eval.py has always documented.
+report is the caller half of the problem-string contract — print the
+problems, print the `<label>: N problem(s)` summary with a computed
+count, return the exit code — retyped in ten mains before it moved here
+(ADR-0051).
 
 gh_runner, the stdout port over runner("gh"), lives beside runner for the
 same reason write_outputs moved here (ADR-0040): it had grown four real
@@ -32,6 +34,7 @@ importing it tool-to-tool from label_sync.
 """
 import contextlib
 import json
+import math
 import os
 import select
 import signal
@@ -98,7 +101,7 @@ def decode_events(lines):
     """Decode an iterable of JSON-lines into event dicts. Blank and
     undecodable lines are skipped — harness streams interleave noise
     with events, and a half-written trailing line must not abort the
-    run. The one decode every harness stream shares (ADR-0045); the
+    run. The one decode every harness stream shares (ADR-0053); the
     per-harness registry (trigger_eval.HARNESSES) names it so recorders
     and runners cannot fork their own copies."""
     for line in lines:
@@ -234,6 +237,57 @@ def read_event(env):
     if not isinstance(event, dict):
         return None, f"GITHUB_EVENT_PATH {path} is not a JSON object"
     return event, None
+
+
+# The usage counts a result entry may carry; absent fields count zero
+# (the CLI omits cache fields on cache-less runs), present fields must be
+# non-negative integers.
+USAGE_TOKEN_FIELDS = ("input_tokens", "output_tokens",
+                      "cache_creation_input_tokens",
+                      "cache_read_input_tokens")
+
+
+def read_execution(path):
+    """((tokens, cost), error) from a claude-code-action execution file —
+    the harness's own record of what a dispatched run spent (issue #222).
+    The file is the action's execution log: a JSON array of turn records
+    whose final "result" entry carries total_cost_usd and the usage token
+    counts; tokens is their sum. Any shape this cannot account for is
+    (None, error) — the caller (budget_guard record-run) refuses to write
+    rather than inventing a ledger row, the same fail-closed direction as
+    the ledger itself."""
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except OSError as err:
+        return None, f"cannot read execution file {path}: {err}"
+    try:
+        log = json.loads(text)
+    except json.JSONDecodeError as err:
+        return None, f"execution file {path} is not valid JSON: {err}"
+    entries = log if isinstance(log, list) else [log]
+    results = [entry for entry in entries
+               if isinstance(entry, dict) and entry.get("type") == "result"]
+    if not results:
+        return None, f"execution file {path} has no result entry"
+    result = results[-1]
+    cost = result.get("total_cost_usd")
+    if isinstance(cost, bool) or not isinstance(cost, (int, float)) \
+            or not math.isfinite(cost) or cost < 0:
+        return None, (f"execution file {path} result entry's"
+                      f" total_cost_usd {cost!r} is not a non-negative"
+                      " number")
+    usage = result.get("usage", {})
+    if not isinstance(usage, dict):
+        return None, (f"execution file {path} result entry's usage is not"
+                      " an object")
+    tokens = 0
+    for field in USAGE_TOKEN_FIELDS:
+        value = usage.get(field, 0)
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return None, (f"execution file {path} usage {field} {value!r}"
+                          " is not a non-negative integer")
+        tokens += value
+    return (tokens, float(cost)), None
 
 
 def runner(binary):

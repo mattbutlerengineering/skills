@@ -8,8 +8,10 @@ manifest walk cannot emit a malformed key), so those tests patch the
 checksum gate or INSTALL_MAP to reach the branch — stamp itself is still
 driven through its public interface.
 """
+import collections
 import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -39,6 +41,7 @@ EXPECTED_RELS = {
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
+    "templates/tools/factory/work_queue.py",
     "templates/tools/factory/knowledge_plane.py",
     "templates/tools/factory/cli.py",
     "templates/tools/factory/factory_config.py",
@@ -53,6 +56,8 @@ EXPECTED_RELS = {
     "templates/tools/factory/cost_report.py",
     "templates/tools/factory/gate_digest.py",
 }
+
+SEEDED_ADRS = REPO_ROOT / "factory" / "templates" / "docs" / "adr"
 
 # Hand-maintained map: the expected install destination for every
 # manifested rel, in target-relative form.
@@ -320,6 +325,59 @@ class TestInstallPath(unittest.TestCase):
                            " resolve to a plain relative path"))
 
 
+class TestInstallDestinationLockstep(unittest.TestCase):
+    """gates.install_destination must agree with factory_init.install_path.
+
+    Detector E's stamped half compares each pristine payload file to where
+    it installs — and it runs inside stamped repos, which have no
+    factory_init.py to import (it is not in MIRRORS, so the stamp never
+    lands it). The mapping is therefore stated twice, and only a test can
+    keep the two statements from drifting.
+
+    Scoped to the keys E actually compares (gates.PRISTINE_PREFIXES): a
+    future INSTALL_MAP entry redirecting a tool or a workflow still fails
+    here, while gates stays free of a mapping it has no use for.
+    """
+
+    def pristine_keys(self):
+        manifest = json.loads(
+            (REPO_ROOT / "factory" / "manifest.json").read_text(
+                encoding="utf-8"))
+        keys = [rel for rel in sorted(manifest["files"])
+                if rel.startswith(gates.PRISTINE_PREFIXES)]
+        assert keys, "no pristine payload keys — the scoping is wrong"
+        return keys
+
+    def test_both_agree_on_every_pristine_payload_key(self):
+        for rel in self.pristine_keys():
+            with self.subTest(rel=rel):
+                self.assertEqual(gates.install_destination(rel),
+                                 factory_init.install_path(rel)[0])
+
+    def test_the_pristine_set_is_the_tools_and_the_workflows(self):
+        # the scoping decision itself: seeds and config are the repo's to
+        # edit, so E must not compare them (docs/adr, docs/design,
+        # factory.json, CODEOWNERS, labels.json, Makefile)
+        installed = {gates.install_destination(rel)
+                     for rel in self.pristine_keys()}
+        self.assertTrue(
+            all(d.startswith(("tools/factory/", ".github/workflows/"))
+                for d in installed), sorted(installed))
+        self.assertEqual(
+            [rel for rel in ("templates/Makefile", "templates/factory.json",
+                             "templates/.github/CODEOWNERS",
+                             "templates/.github/labels.json")
+             if rel.startswith(gates.PRISTINE_PREFIXES)], [])
+
+    def test_both_refuse_the_same_malformed_keys(self):
+        for rel in ("../../evil.sh", "/tmp/evil", "templates/../../etc/evil",
+                    "templates//x", "templates/", "templates/a/../b",
+                    "templates/.", "templates/./x", "templates/x\x00y"):
+            with self.subTest(rel=rel):
+                self.assertIsNone(gates.install_destination(rel))
+                self.assertIsNone(factory_init.install_path(rel)[0])
+
+
 class TestStamp(unittest.TestCase):
     def manifested_source(self, tmp):
         source = Path(tmp) / "source"
@@ -437,6 +495,394 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         # problem-free run (live-tree, like the acceptance test below).
         with tempfile.TemporaryDirectory() as tmp:
             return self.run_cli(["stamp", str(Path(tmp) / "product")])
+
+
+class TestUpdate(unittest.TestCase):
+    """update refreshes an already-stamped repo (issue #212).
+
+    stamp refuses every existing destination, which left a stamped repo
+    unable to take any factory change — including a fix to the integrity
+    gate itself. update splits the payload where detector E does: the
+    executable half is the factory's and gets overwritten, the rest is the
+    repo's and is never written over.
+    """
+
+    def stamped(self, tmp):
+        """(source, target) with target already stamped from source."""
+        source = Path(tmp) / "source"
+        tree = make_factory_repo(source)
+        assert factory_init.update_manifest(tree.root) == []
+        target = Path(tmp) / "target"
+        target.mkdir()
+        assert factory_init.stamp(tree.root, target) == []
+        return tree.root, target
+
+    def test_the_executable_payload_is_overwritten(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            (target / "tools/factory/gates.py").write_text(
+                "# hand-edited\n", encoding="utf-8")
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual(problems, [])
+            self.assertEqual(kept, [])
+            self.assertIn("tools/factory/gates.py", written)
+            self.assertEqual(
+                (target / "tools/factory/gates.py").read_bytes(),
+                (source / "factory/templates/tools/factory/gates.py"
+                 ).read_bytes())
+
+    def test_an_edited_config_file_is_kept_and_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            mine = json.dumps({"wip_cap": 7})
+            (target / ".github/factory.json").write_text(
+                mine, encoding="utf-8")
+            written, kept, _ = factory_init.update(source, target)
+            self.assertEqual(kept, [".github/factory.json"])
+            self.assertNotIn(".github/factory.json", written)
+            self.assertEqual(
+                (target / ".github/factory.json").read_text(encoding="utf-8"),
+                mine)
+
+    def test_an_unchanged_config_file_is_neither_written_nor_reported(self):
+        # cry-wolf guard: the normal case is a repo whose config still
+        # matches, and it must not show up in either list
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            written, kept, _ = factory_init.update(source, target)
+            self.assertEqual(kept, [])
+            self.assertNotIn(".github/factory.json", written)
+
+    def test_a_payload_file_the_target_lacks_is_created(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            (source / "factory/templates/docs/adr").mkdir(parents=True)
+            (source / "factory/templates/docs/adr/0001-seed.md").write_text(
+                "seed\n", encoding="utf-8")
+            self.assertEqual(factory_init.update_manifest(source), [])
+            written, kept, _ = factory_init.update(source, target)
+            self.assertIn("docs/adr/0001-seed.md", written)
+            self.assertEqual(kept, [])
+            self.assertTrue((target / "docs/adr/0001-seed.md").is_file())
+
+    def test_a_never_stamped_tree_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, _ = self.stamped(tmp)
+            fresh = Path(tmp) / "fresh"
+            fresh.mkdir()
+            written, kept, problems = factory_init.update(source, fresh)
+            self.assertEqual(
+                problems, ["factory-init: target has no factory/manifest.json"
+                           " — it was never stamped; run stamp, not update"])
+            self.assertEqual((written, kept), ([], []))
+            self.assertEqual(all_files(fresh), [])
+
+    def test_a_drifted_source_is_refused_and_nothing_is_written(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            before = {rel: (target / rel).read_bytes()
+                      for rel in all_files(target)}
+            (source / "factory/templates/Makefile").write_text(
+                "check: tampered\n", encoding="utf-8")
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual(problems, [TAMPER_PROBLEM])
+            self.assertEqual((written, kept), ([], []))
+            self.assertEqual({rel: (target / rel).read_bytes()
+                              for rel in all_files(target)}, before)
+
+    def test_running_it_twice_changes_nothing_the_second_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            factory_init.update(source, target)
+            after_first = {rel: (target / rel).read_bytes()
+                           for rel in all_files(target)}
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual((kept, problems), ([], []))
+            self.assertEqual({rel: (target / rel).read_bytes()
+                              for rel in all_files(target)}, after_first)
+
+    def test_a_make_target_the_refreshed_workflows_call_must_exist(self):
+        # the coupling update creates: workflows are overwritten and name no
+        # commands of their own, so a factory change that adds a target
+        # leaves a repo calling one its Makefile never heard of
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            # the root file, not the mirror: update_manifest re-copies
+            # root -> factory/templates, so editing the mirror is undone
+            (source / ".github/workflows/assembler.yml").write_text(
+                "jobs:\n  x:\n    steps:\n      - run: make wo-failed\n",
+                encoding="utf-8")
+            self.assertEqual(factory_init.update_manifest(source), [])
+            _, _, problems = factory_init.update(source, target)
+            self.assertEqual(
+                problems,
+                ["factory-init: workflows call `make wo-failed` but the"
+                 " Makefile has no wo-failed target (add it, or re-stamp"
+                 " the Makefile)"])
+
+    def test_a_make_target_named_only_in_a_comment_is_not_a_call(self):
+        # validator.yml's header explains the convention ("every step goes
+        # through a `make` target"); reading that as a call would report a
+        # phantom target on every update
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            (source / ".github/workflows/design.yml").write_text(
+                "# every step goes through a make target\njobs: {}\n",
+                encoding="utf-8")
+            self.assertEqual(factory_init.update_manifest(source), [])
+            self.assertEqual(factory_init.update(source, target)[2], [])
+
+    def test_factory_owned_agrees_with_detector_e_s_pristine_set(self):
+        # the same split stated twice — in destination terms here, in
+        # manifest-key terms in gates — so they must not drift apart
+        for rel in gates.PRISTINE_PREFIXES:
+            with self.subTest(rel=rel):
+                dest = factory_init.install_path(rel + "x.py")[0]
+                self.assertTrue(factory_init.is_factory_owned(Path(dest)),
+                                dest)
+        for rel in ("templates/Makefile", "templates/factory.json",
+                    "templates/.github/CODEOWNERS",
+                    "templates/docs/adr/0001-x.md"):
+            with self.subTest(rel=rel):
+                dest = Path(factory_init.install_path(rel)[0])
+                self.assertFalse(factory_init.is_factory_owned(dest), dest)
+                self.assertFalse(rel.startswith(gates.PRISTINE_PREFIXES), rel)
+
+
+class TestSeededADRs(unittest.TestCase):
+    """The ADR seed a stamped repo inherits (issue #199). The acceptance
+    test below proves the whole payload passes the stamped detectors; these
+    name the specific rules, so a broken seed fails by its own reason rather
+    than as an opaque "gates failed in stamped repo"."""
+
+    def numbered(self):
+        return sorted(SEEDED_ADRS.glob("[0-9][0-9][0-9][0-9]-*.md"))
+
+    def test_the_seed_ships(self):
+        # Deleting the seed would leave the acceptance test green — an empty
+        # docs/adr passes every detector.
+        self.assertTrue((SEEDED_ADRS / "README.md").is_file())
+        self.assertTrue((SEEDED_ADRS / "TEMPLATE.md").is_file())
+        self.assertTrue(self.numbered(), "no seeded ADRs")
+
+    def test_every_seeded_adr_has_a_valid_status(self):
+        for path in self.numbered():
+            _, text = gates._adr_status(path)
+            self.assertIsNotNone(text, f"{path.name} has no Status line")
+            self.assertRegex(text, gates.ADR_STATUS,
+                             f"{path.name} status {text!r}")
+
+    def test_every_seeded_adr_is_indexed(self):
+        index = (SEEDED_ADRS / "README.md").read_text(encoding="utf-8")
+        rows = {match.group("num") for match in
+                (gates.ADR_INDEX_ROW.match(line)
+                 for line in index.splitlines()) if match}
+        self.assertEqual({path.name[:4] for path in self.numbered()}, rows)
+
+    def test_no_seeded_token_points_outside_the_seed(self):
+        # The trap this seed is most likely to fall into: citing an upstream
+        # idea-to-prod ADR by bare token. In a stamped repo that file does
+        # not exist, so detector C reads it as a dangling local citation and
+        # the repo's first `make check` fails on documentation it was handed.
+        local = {path.name[:4] for path in self.numbered()}
+        for path in [*self.numbered(), SEEDED_ADRS / "README.md",
+                     SEEDED_ADRS / "TEMPLATE.md"]:
+            for number in gates.ADR_TOKEN.findall(
+                    path.read_text(encoding="utf-8")):
+                self.assertIn(number, local,
+                              f"{path.name} cites ADR-{number}, which is not"
+                              " in the seed — cite upstream decisions by name"
+                              " or link, never by bare token")
+
+
+class TestSetupDocCounts(unittest.TestCase):
+    """docs/setup.md tells a reader exactly how many files a stamp lands
+    and how they group. Nothing kept those numbers true: adding
+    work_queue.py to the payload meant hand-editing three of them, and a
+    missed one is invisible — the doc still reads authoritative and the
+    stamp still works, so the reader is the only thing that breaks.
+
+    Every number is derivable from the manifest through the real
+    install_path resolver, so this derives them and compares. Same
+    direction as detector J: a documented fact about the payload with
+    nothing pinning it to the payload is a fact with a shelf life.
+    """
+
+    SETUP = REPO_ROOT / "docs" / "setup.md"
+    TABLE_ROW = re.compile(r"^\|\s*`([^`]+)`\s*\|\s*(\d+)\s*\|")
+    TOTALS = re.compile(r"(\d+) files land: the (\d+)-file payload")
+
+    def derived(self):
+        """(group -> count, payload total, stamp total) from the manifest."""
+        files = json.loads(
+            (REPO_ROOT / "factory" / "manifest.json").read_text(
+                encoding="utf-8"))["files"]
+        groups = collections.Counter()
+        for rel in files:
+            dest, problem = factory_init.install_path(rel)
+            self.assertIsNone(problem, f"{rel}: {problem}")
+            parts = dest.split("/")
+            if len(parts) == 1:
+                groups[dest] += 1
+            else:
+                groups["/".join(parts[:-1]) + "/"] += 1
+        payload = sum(groups.values())
+        # factory/ holds the pristine mirror plus manifest.json itself.
+        groups["factory/"] = len(files) + 1
+        return groups, payload, payload + len(files) + 1
+
+    LABEL_COUNT = re.compile(r"(\d+)-label taxonomy")
+
+    def test_the_label_count_matches_the_shipped_taxonomy(self):
+        """setup.md states the taxonomy's size twice, and it is the same
+        kind of hand-maintained number as the payload counts: adding a
+        label means remembering the doc, and forgetting leaves a doc that
+        still reads authoritative. The taxonomy is what the lifecycle
+        machine, the digest and the sweeps key on, so the number is one a
+        reader acts on."""
+        shipped = json.loads(
+            (REPO_ROOT / "factory" / "templates" / ".github"
+             / "labels.json").read_text(encoding="utf-8"))
+        text = self.SETUP.read_text(encoding="utf-8")
+        stated = self.LABEL_COUNT.findall(text)
+        self.assertTrue(stated, "docs/setup.md states no label count")
+        self.assertEqual(
+            sorted(set(stated)), [str(len(shipped))],
+            f"docs/setup.md says {sorted(set(stated))}-label taxonomy; "
+            f"factory/templates/.github/labels.json ships {len(shipped)}"
+            " — run the numbers or fix the doc")
+
+    def test_the_group_table_matches_the_manifest(self):
+        groups, _, _ = self.derived()
+        text = self.SETUP.read_text(encoding="utf-8")
+        stated = {}
+        for line in text.splitlines():
+            match = self.TABLE_ROW.match(line)
+            if match:
+                stated[match.group(1)] = int(match.group(2))
+        self.assertTrue(stated, "no count table found in docs/setup.md")
+        self.assertEqual(
+            stated, dict(groups),
+            "docs/setup.md's group table has drifted from"
+            " factory/manifest.json — update the table, or the reader is"
+            " told a stamp lands files it does not")
+
+    def test_the_totals_sentence_matches_the_manifest(self):
+        _, payload, stamp = self.derived()
+        text = self.SETUP.read_text(encoding="utf-8")
+        match = self.TOTALS.search(text)
+        self.assertIsNotNone(
+            match, "docs/setup.md no longer states 'N files land: the M-file"
+            " payload' — this test pins that sentence")
+        self.assertEqual(
+            (int(match.group(1)), int(match.group(2))), (stamp, payload),
+            "docs/setup.md's totals sentence has drifted from"
+            " factory/manifest.json")
+
+    def test_the_table_sums_to_the_stated_stamp_total(self):
+        """Internal consistency, independent of the manifest: a table that
+        matches the manifest but does not sum to the headline number still
+        misleads."""
+        text = self.SETUP.read_text(encoding="utf-8")
+        rows = [int(match.group(2)) for match
+                in (self.TABLE_ROW.match(line)
+                    for line in text.splitlines()) if match]
+        match = self.TOTALS.search(text)
+        self.assertEqual(sum(rows), int(match.group(1)))
+
+
+class TestDoctorChecklistMatchesThePayload(unittest.TestCase):
+    """skills/doctor/SKILL.md recites the Makefile target set and the
+    workflow list a stamp lands, and a reader takes those as the complete
+    checklist. Nothing pinned them — there is not one reference to doctor
+    anywhere in tests/.
+
+    That matters more than ordinary doc drift because doctor is the
+    DIAGNOSTIC. A stale checklist does not read as stale; it reads as a
+    clean bill of health with a hole in it. #204 adding `wo-failed` to the
+    Makefile is precisely the edit that would have done it — without the
+    target in its list, doctor would report a complete target set on a repo
+    whose work-order state machine has no terminal state.
+
+    Both directions are checked. A target the payload gained and doctor
+    never learned is the silent case; a target doctor still names after the
+    payload dropped it sends a reader chasing a hole that is not there.
+    """
+
+    DOCTOR = REPO_ROOT / "skills" / "doctor" / "SKILL.md"
+    TEMPLATES = REPO_ROOT / "factory" / "templates"
+    ITEM = re.compile(r"^(\d+)\. ", re.MULTILINE)
+    BACKTICKED = re.compile(r"`([^`]+)`")
+
+    def numbered_item(self, needle):
+        """The text of doctor's numbered step containing `needle`, bounded
+        by the next numbered step so a later paragraph cannot leak tokens
+        into the comparison."""
+        text = self.DOCTOR.read_text(encoding="utf-8")
+        bounds = [match.start() for match in self.ITEM.finditer(text)]
+        bounds.append(len(text))
+        for start, stop in zip(bounds, bounds[1:]):
+            item = text[start:stop]
+            if needle in item:
+                return item
+        self.fail(f"skills/doctor/SKILL.md has no numbered step mentioning"
+                  f" {needle!r} — this test pins that step")
+
+    def payload_targets(self):
+        makefile = (self.TEMPLATES / "Makefile").read_text(encoding="utf-8")
+        return {line.split(":", 1)[0]
+                for line in makefile.splitlines()
+                if re.match(r"^[a-z][a-z-]*:", line)}
+
+    def test_it_names_every_make_target_the_payload_ships(self):
+        item = self.numbered_item("full target set")
+        named = set(self.BACKTICKED.findall(item))
+        missing = sorted(self.payload_targets() - named)
+        self.assertEqual(
+            missing, [],
+            "skills/doctor/SKILL.md does not name make target(s) the"
+            " stamped Makefile ships — doctor would report a complete"
+            " target set on a repo missing one")
+
+    def test_it_names_no_make_target_the_payload_lacks(self):
+        item = self.numbered_item("full target set")
+        targets = self.payload_targets()
+        # Only tokens shaped like a target are candidates; the step's prose
+        # backticks other things (`make`, a command) that are not claims.
+        claimed = {token for token in self.BACKTICKED.findall(item)
+                   if re.fullmatch(r"[a-z][a-z-]*", token)
+                   and token != "make"}
+        self.assertEqual(
+            sorted(claimed - targets), [],
+            "skills/doctor/SKILL.md names make target(s) the stamped"
+            " Makefile does not ship — a reader chases a hole that is not"
+            " there")
+
+    def test_it_names_exactly_the_workflows_the_payload_ships(self):
+        item = self.numbered_item("workflows are present")
+        named = {token for token in self.BACKTICKED.findall(item)
+                 if token.endswith(".yml")}
+        shipped = {path.name for path
+                   in (self.TEMPLATES / ".github" / "workflows").iterdir()
+                   if path.suffix == ".yml"}
+        self.assertEqual(
+            named, shipped,
+            "skills/doctor/SKILL.md's workflow list has drifted from the"
+            " stamped payload")
+
+    def test_the_stated_workflow_count_matches(self):
+        """The step leads with a number ("The five workflows"), which goes
+        stale independently of the list beside it."""
+        item = self.numbered_item("workflows are present")
+        shipped = len([path for path
+                       in (self.TEMPLATES / ".github" / "workflows").iterdir()
+                       if path.suffix == ".yml"])
+        words = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                 6: "six", 7: "seven", 8: "eight"}
+        self.assertIn(
+            f"{words[shipped]} workflows", item.lower(),
+            f"doctor says something other than {words[shipped]!r} workflows"
+            f" while the payload ships {shipped}")
 
 
 class TestAcceptanceStampRealRepo(unittest.TestCase):

@@ -40,6 +40,22 @@ problem strings; the CLI prints them and exits nonzero.
         the flip took the order out of wo:ready-for-agent, which is the
         assembler's idempotency verdict (a repeat label event gets false
         and the paid agent step is skipped).
+
+  python3 validator.py lifecycle --label wo:failed --issue <N> --verdict skip
+        The dispatch failure leg: the same KNOWN-issue flip, writing no
+        verdict. The assembler runs it from a failure() step, so an order
+        whose agent run died lands on wo:failed instead of sitting on
+        wo:in-progress forever — the state both the gate digest and the
+        improvement routine read as work still in flight.
+
+Which lifecycle labels machinery writes, and which it deliberately does
+not (ADR-0045). The assembler claims (wo:in-progress) and reports its own
+failures (wo:failed); the PR legs above record the merge queue
+(wo:needs-review) and its exit (wo:merged). The three gate labels are
+applied by the humans who pass the gates. wo:blocked is human- or
+Planner-applied by design: it means an unmet dependency, and that graph
+lives in the issue tracker, not in CI. No workflow flips it — its absence
+from this file is a decision, not a hole.
 """
 import os
 import sys
@@ -368,6 +384,37 @@ def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     return problems
 
 
+def _known_issue_flip(root, label, issue, run, require=()):
+    """(labels removed, problems): the shared half of the two KNOWN-issue
+    legs — the ones handed an issue number outright, with no PR to resolve
+    a citation against. Loads the taxonomy once, refuses any label the
+    state machine does not contain, then flips. `require` names the extra
+    labels the CALLER's own reasoning depends on being in the taxonomy;
+    they are checked before the flip, so a broken taxonomy never mutates
+    an issue halfway."""
+    lifecycle, problems = lifecycle_labels(root)
+    if problems:
+        return [], problems
+    for name in (label, *require):
+        if name not in lifecycle:
+            return [], [f"V: {name} is not a lifecycle label in the"
+                        " taxonomy"]
+    return _flip(issue, label, lifecycle, run)
+
+
+def run_outcome(root, label, issue, run=gh_runner):
+    """The dispatch failure leg: flip a KNOWN issue, write no verdict.
+
+    Its own function rather than a flag on run_claim, because the two
+    differ in what they may assume. The claim reasons about
+    wo:ready-for-agent and reports whether THIS event won the race for
+    the order; this leg runs from a failure() step, where the order's
+    prior state is however far the dying run got. There is no later step
+    to read a verdict, and writing one anyway would let a step that
+    failed cast a dispatch decision."""
+    return _known_issue_flip(root, label, issue, run)[1]
+
+
 def run_claim(root, label, issue, env, run=gh_runner):
     """The dispatch claim: flip a KNOWN issue (no PR, no citation to
     resolve) and write the assembler's idempotency verdict to
@@ -376,18 +423,11 @@ def run_claim(root, label, issue, env, run=gh_runner):
     claimed it; a repeat/stale event finds it already advanced and gets
     false, which is what skips the paid agent step. A flip that cannot
     verify the order's state is a problem (red step), never a verdict."""
-    lifecycle, problems = lifecycle_labels(root)
-    if problems:
-        return problems
-    if label not in lifecycle:
-        return [f"V: {label} is not a lifecycle label in the taxonomy"]
-    if READY_LABEL not in lifecycle:
-        # The verdict is "did the flip take the order out of ready" — a
-        # taxonomy that lost the ready label would make every verdict
-        # false and silently stop all dispatch. Fail loudly instead.
-        return [f"V: {READY_LABEL} is not a lifecycle label in the"
-                " taxonomy"]
-    removed, problems = _flip(issue, label, lifecycle, run)
+    # The verdict is "did the flip take the order out of ready" — a
+    # taxonomy that lost the ready label would make every verdict false
+    # and silently stop all dispatch. Fail loudly instead.
+    removed, problems = _known_issue_flip(root, label, issue, run,
+                                          require=(READY_LABEL,))
     if problems:
         return problems
     claimed = READY_LABEL in removed
@@ -417,6 +457,10 @@ def parse(argv):
         if (set(options) == {"label", "issue"}
                 and options["issue"].isdigit()):
             return command, options
+        if (set(options) == {"label", "issue", "verdict"}
+                and options["issue"].isdigit()
+                and options["verdict"] == "skip"):
+            return command, options
         if (set(options) == {"label", "uncited"}
                 and options["uncited"] == "skip"):
             return command, options
@@ -430,6 +474,9 @@ def main(argv, env=None, run=gh_runner):
     if command == "review":
         problems = run_review(root, options["findings"], options["status"],
                               env=env, run=run)
+    elif command == "lifecycle" and "verdict" in options:
+        problems = run_outcome(root, options["label"], options["issue"],
+                               run=run)
     elif command == "lifecycle" and "issue" in options:
         problems = run_claim(root, options["label"], options["issue"],
                              env=env, run=run)

@@ -212,7 +212,7 @@ def _claude_command(prompt, model, isolate, run_id=None):
     grammar. --include-partial-messages is load-bearing for every
     consumer: it emits the current stream_event frames, so no caller
     depends exclusively on the legacy full assistant message shape
-    (ADR-0045). run_id is unused: claude isolation is flag-based
+    (ADR-0053). run_id is unused: claude isolation is flag-based
     (--setting-sources), not name-based like omp's glob."""
     cmd = [
         "claude", "-p", prompt,
@@ -259,7 +259,7 @@ def _omp_invocation(query, descriptions, run_id, model, isolate):
             _omp_command(query, model, isolate, run_id))
 
 
-# One registration per harness (ADR-0038, ADR-0045): everything
+# One registration per harness (ADR-0038, ADR-0053): everything
 # harness-specific a runner — trigger eval, charter replay, or a
 # transcript recorder — needs, as one adapter. binary is the executable
 # (provenance probes, fake-harness installs); command is the flag
@@ -286,7 +286,7 @@ def run_single_query(query, descriptions, timeout, model, isolate,
     """Run one query in a fresh isolated project; return fired slug or None.
 
     cli.harness_run owns the child's whole lifecycle (own process group,
-    drain-after-exit reader, unconditional group kill — ADR-0045); this
+    drain-after-exit reader, unconditional group kill — ADR-0053); this
     function's residual duty is the per-run project dir."""
     run_id = uuid.uuid4().hex[:8]
     name_to_slug = {f"{slug}-skill-{run_id}": slug for slug in descriptions}

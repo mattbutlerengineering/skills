@@ -9,8 +9,8 @@
 # `python3 factory_init.py update-manifest`, never edit the twin;
 # tests/test_gates.py::TestLockstep pins the command sets.
 
-.PHONY: check review wo-merged wo-in-progress wo-needs-review
-.PHONY: assembler cost-report gate-digest web-quality
+.PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
+.PHONY: wo-record assembler cost-report gate-digest web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
@@ -43,6 +43,14 @@ wo-in-progress:
 
 wo-needs-review:
 	python3 validator.py lifecycle --label wo:needs-review --uncited skip
+
+wo-failed:
+	python3 validator.py lifecycle --label wo:failed --issue $(ISSUE) --verdict skip
+
+# Set by the assembler workflow's record step: the dispatched run's spend,
+# machine-written to the append-only cost ledger (issue #222; ADR-0034).
+wo-record:
+	python3 budget_guard.py record-run $(WO) $(RUN_ID) $(MODEL) $(FILE) $(OUTCOME)
 
 assembler:
 	python3 assembler.py resolve

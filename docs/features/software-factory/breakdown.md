@@ -17,7 +17,7 @@ per ADR-0032 after each row exists here first.
 
 ## Milestone A: Scaffolding + validation line (factory-init stamps a repo; PRs validated; minimal charters exist)
 
-- [x] **WO-0001** factory-init skill + template payload + manifest regeneration — size:M, blocked by: — (PRD-0001 §Solution) (tracker: #106)
+- [x] **WO-0001** factory-init skill + template payload + manifest regeneration — size:M, blocked by: — (PRD-0001 §Solution) (tracker: #106) (pre-ledger)
   - Accept: factory-init stamps the full template payload into a scratch repo; a manifest regen command exists and detector E passes on the stamped tree.
 - [x] **WO-0002** labels.json + label-sync (detector L) + CODEOWNERS template — size:S, blocked by: WO-0001 (PRD-0001 §Solution) (tracker: #107) (pre-ledger)
   - Accept: label-sync recreates the 27-label taxonomy on a bare repo and reports drift; CODEOWNERS ships in the template payload.

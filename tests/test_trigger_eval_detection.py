@@ -5,7 +5,7 @@ detect_fired is pure (no process, pipe, or clock), so synthetic event
 dicts drive every branch the state machine distinguishes: early detection
 via input_json_delta, the content_block_stop/message_stop fallbacks, the
 legacy full assistant message shape, a different tool firing first, and
-the result event. The live-pipe adapter (cli.EventStream, ADR-0045)
+the result event. The live-pipe adapter (cli.EventStream, ADR-0053)
 gets one real-subprocess test proving the feed, plus the exit-order seam:
 buffered output must survive a process that exits before the reader's
 first poll, without an orphan-held pipe stalling the run. Recorded

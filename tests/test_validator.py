@@ -849,6 +849,95 @@ class TestRunClaim(unittest.TestCase):
             self.assertEqual(self.outputs(env), "")
 
 
+class TestRunOutcome(unittest.TestCase):
+    """The dispatch failure leg (ADR-0045): the assembler's failure() step
+    flips the order it claimed to wo:failed. Same KNOWN-issue flip as the
+    claim, deliberately without the idempotency verdict — nothing runs
+    after a failed job that could read one."""
+
+    def tree(self, tmp):
+        tree = FixtureTree(tmp)
+        tree.write(".github/labels.json", json.dumps(
+            [{"name": name, "color": "ededed", "description": "lifecycle"}
+             for name in LIFECYCLE]
+            + [{"name": "size:M", "color": "f4a261", "description": "size"}]))
+        return tree
+
+    def test_a_dispatched_order_lands_on_failed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh(labels=["wo:in-progress", "size:M"])
+            problems = validator.run_outcome(
+                tree.root, "wo:failed", "109", run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:failed",
+                "--remove-label", "wo:in-progress"]])
+
+    def test_it_writes_no_verdict(self):
+        # The claim's transitioned output is a dispatch decision. A step
+        # that runs BECAUSE the job failed has no business casting one,
+        # and no later step survives to read it.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            outputs = Path(tmp) / "outputs.txt"
+            run = gh(labels=["wo:in-progress"])
+            # run_outcome takes no env at all — the signature is the
+            # guarantee. Nothing may appear at $GITHUB_OUTPUT.
+            validator.run_outcome(tree.root, "wo:failed", "109", run=run)
+            self.assertFalse(outputs.exists())
+
+    def test_an_already_failed_order_is_a_no_op(self):
+        # A re-run of a failed job must not churn the label.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh(labels=["wo:failed"])
+            self.assertEqual(
+                validator.run_outcome(tree.root, "wo:failed", "109",
+                                      run=run), [])
+            self.assertEqual(run.called("issue", "edit"), [])
+
+    def test_a_label_outside_the_state_machine_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            self.assertEqual(
+                validator.run_outcome(tree.root, "wo:exploded", "109",
+                                      run=run),
+                ["V: wo:exploded is not a lifecycle label in the taxonomy"])
+            self.assertEqual(run.calls, [])
+
+    def test_a_taxonomy_without_the_ready_label_still_flips(self):
+        # Unlike the claim, this leg never reasons about ready state, so a
+        # taxonomy missing that label is none of its business — the failed
+        # order still gets its terminal state.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", json.dumps(
+                [{"name": name, "color": "ededed",
+                  "description": "lifecycle"}
+                 for name in LIFECYCLE if name != "wo:ready-for-agent"]))
+            run = gh(labels=["wo:in-progress"])
+            self.assertEqual(
+                validator.run_outcome(tree.root, "wo:failed", "109",
+                                      run=run), [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:failed",
+                "--remove-label", "wo:in-progress"]])
+
+    def test_a_failing_gh_call_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh(error=OSError("gh: not found"),
+                     failing=["issue", "view"])
+            self.assertEqual(
+                validator.run_outcome(tree.root, "wo:failed", "109",
+                                      run=run),
+                ["V: gh issue view 109 failed: gh: not found"])
+
+
 class TestClaimOutputLockstep(unittest.TestCase):
     """The $GITHUB_OUTPUT seam: run_claim's output keys and assembler.yml's
     steps.claim.outputs.<name> references are a split contract — Python
@@ -883,9 +972,10 @@ class TestClaimOutputLockstep(unittest.TestCase):
 
 
 class TestParseLifecycle(unittest.TestCase):
-    """The three lifecycle invocations (ADR-0032): the merged leg
-    (--label alone), the dispatch claim (--label --issue N), and the
-    PR-open leg (--label --uncited skip). Anything else is usage."""
+    """The four lifecycle invocations (ADR-0032, ADR-0045): the merged leg
+    (--label alone), the dispatch claim (--label --issue N), the failure
+    leg (--label --issue N --verdict skip), and the PR-open leg (--label
+    --uncited skip). Anything else is usage."""
 
     def test_the_bare_label_form_still_parses(self):
         self.assertEqual(
@@ -912,6 +1002,29 @@ class TestParseLifecycle(unittest.TestCase):
         self.assertEqual(
             validator.parse(["lifecycle", "--label", "wo:needs-review",
                              "--uncited", "yes"]),
+            (None, None))
+
+    def test_the_verdict_form_takes_only_skip_and_a_numeric_issue(self):
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:failed",
+                             "--issue", "42", "--verdict", "skip"]),
+            ("lifecycle", {"label": "wo:failed", "issue": "42",
+                           "verdict": "skip"}))
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:failed",
+                             "--issue", "42", "--verdict", "write"]),
+            (None, None))
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:failed",
+                             "--issue", "abc", "--verdict", "skip"]),
+            (None, None))
+
+    def test_the_verdict_form_needs_its_issue(self):
+        # "no verdict" is only meaningful for the KNOWN-issue legs; on a
+        # PR-shaped invocation it is a confused caller.
+        self.assertEqual(
+            validator.parse(["lifecycle", "--label", "wo:failed",
+                             "--verdict", "skip"]),
             (None, None))
 
     def test_the_claim_and_uncited_forms_do_not_combine(self):
@@ -968,6 +1081,21 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
             "issue", "edit", "7",
             "--add-label", "wo:in-progress",
             "--remove-label", "wo:ready-for-agent"]])
+
+    def test_a_verdict_skip_invocation_routes_past_the_pr_event(self):
+        # Like the claim, the failure leg names its issue outright: no
+        # event payload in env, and it must still reach run_outcome.
+        run = gh(labels=["wo:in-progress"])
+        code, out = cli_contract.capture(
+            validator.main,
+            ["lifecycle", "--label", "wo:failed", "--issue", "7",
+             "--verdict", "skip"],
+            env={}, run=run)
+        self.assertEqual(code, 0)
+        self.assertEqual(run.called("issue", "edit"), [[
+            "issue", "edit", "7",
+            "--add-label", "wo:failed",
+            "--remove-label", "wo:in-progress"]])
 
     def test_an_uncited_skip_invocation_is_still_pr_shaped(self):
         # --uncited skip relaxes the citation, not the event: outside a

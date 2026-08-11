@@ -1,5 +1,5 @@
 """run_single_query's cleanup contract with the harness stream stubbed
-out at the cli seam (ADR-0045) — no stdlib monkeypatching. The process
+out at the cli seam (ADR-0053) — no stdlib monkeypatching. The process
 lifecycle (group kill, wait, pipe close) is cli.harness_run's contract,
 pinned at tests/test_cli.py; the real-subprocess composition is pinned
 at tests/test_cli_process_reaping.py. What remains run_single_query's own

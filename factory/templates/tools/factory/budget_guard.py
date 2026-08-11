@@ -21,16 +21,35 @@ docs/adr/0034-work-order-budgets-and-routing.md.
         misconfiguration (fails CLOSED: an unresolvable budget prints
         HARD-STOP and still exits nonzero, so a broken config can never
         silently wave a run through).
+
+  python3 budget_guard.py record <wo> <run_id> <model> <tokens> <cost>
+                                 [outcome]
+        Append ONE completed run's line to the ledger (outcome defaults to
+        "completed"). The success-path counterpart to hard_stop: until this
+        existed, hard_stop was the only in-repo writer of a dispatched-run
+        row, so the ledger recorded exhausted runs and nothing else and the
+        monthly circuit breaker summed a total that could only ever be
+        $0.00 (issue #222). Refuses BEFORE writing on a malformed row or a
+        (wo, run_id) already recorded.
+
+  python3 budget_guard.py record-run <wo> <run_id> <model>
+                                     <execution_file> [outcome]
+        record, with tokens and cost read from the claude-code-action
+        execution file the dispatched run left behind (cli.read_execution)
+        — the assembler workflow's caller (issue #222), so the figures are
+        the harness's own record, never hand-typed. Refuses BEFORE writing
+        on any file it cannot account for.
 """
 import math
 import sys
+from datetime import datetime, timezone
 
 import cost_ledger
 import factory_config
 import handoff
 from cli import CLI_FAILURES as GIT_FAILURES
 from cli import detail as _git_detail
-from cli import report, runner
+from cli import read_execution, report, runner
 from knowledge_plane import repo_root
 
 CONTINUE = "CONTINUE"
@@ -139,7 +158,108 @@ def hard_stop(root, wo, reason, done, remaining, resume, *, run_id, model,
     return problems
 
 
-def main(argv):
+def record(root, wo, run_id, model, tokens, cost, outcome, at):
+    """Append one COMPLETED run's line to the append-only cost ledger —
+    the success-path counterpart to hard_stop, and the reason the ledger
+    can account for spend at all (issue #222). hard_stop fires only on
+    budget exhaustion, so before this existed a run that finished inside
+    its budget wrote nothing and was free as far as ADR-0034's monthly
+    circuit breaker could tell.
+
+    Both refusals happen BEFORE the write, because the ledger is
+    append-only and a bad line is permanent — there is no edit to undo it
+    with, only a second line explaining the first:
+
+      - a row cost_ledger.line_problems rejects (the same rule detector G
+        and the weekly report read with, never a second copy);
+      - a (wo, run_id) already in the ledger. A re-recorded run would
+        double-count against the monthly cap, and bounding that cap is the
+        entire reason the row is written.
+
+    Fails CLOSED on an unreadable or unparseable ledger: appending spend
+    to a ledger that cannot be summed would undercount silently, which is
+    the failure this whole path exists to end. Returns bg: problems; an
+    empty list means the line landed."""
+    row = cost_ledger.entry(wo, run_id, model, tokens, cost, outcome, at)
+    shape = cost_ledger.line_problems(row)
+    if shape:
+        return [f"bg: refusing to record {wo}: {problem}"
+                for problem in shape]
+    entries, problems = cost_ledger.read(root)
+    if problems:
+        return [f"bg: refusing to record {wo}: {problem}"
+                for problem in problems]
+    if any(existing.get("wo") == wo and existing.get("run_id") == run_id
+           for existing in entries):
+        return [f"bg: refusing to record {wo}: run_id {run_id!r} is already"
+                " in the ledger — recording it twice would double-count the"
+                " run against the monthly cap"]
+    cost_ledger.append(root, row)
+    return []
+
+
+def record_run(root, wo, run_id, model, execution_path, outcome, at):
+    """record(), with tokens and cost read from the harness's own
+    execution file (cli.read_execution) rather than typed by a caller —
+    the assembler workflow's success-path writer (issue #222). A file
+    that cannot be accounted for is a refusal BEFORE the write, never a
+    zeroed or invented row; every record() refusal (shape, double-count)
+    then applies unchanged."""
+    spend, error = read_execution(execution_path)
+    if error:
+        return [f"bg: refusing to record {wo}: {error}"]
+    tokens, cost = spend
+    return record(root, wo, run_id, model, tokens, cost, outcome, at)
+
+
+def _record_args(argv):
+    """(kwargs, problems) for the record CLI leg. tokens and cost are the
+    only parsed values, and a bad one is a problem rather than a
+    traceback — the leg is called from a workflow step and an unhandled
+    ValueError there reads as a broken tool."""
+    wo, run_id, model, tokens_raw, cost_raw = argv[:5]
+    outcome = argv[5] if len(argv) == 6 else "completed"
+    problems = []
+    try:
+        tokens = int(tokens_raw)
+    except ValueError:
+        tokens, _ = 0, problems.append(
+            f"bg: tokens {tokens_raw!r} is not an integer")
+    try:
+        cost = float(cost_raw)
+    except ValueError:
+        cost, _ = 0.0, problems.append(
+            f"bg: cost {cost_raw!r} is not a number")
+    return dict(wo=wo, run_id=run_id, model=model, tokens=tokens,
+                cost=cost, outcome=outcome), problems
+
+
+def main(argv, clock=None, root=None):
+    """`root` is injected, never derived from the cwd: repo_root() resolves
+    from __file__, so a test that only chdir'd into a temp tree would write
+    its fabricated row into the REAL ledger — an append-only file the
+    honesty rules say may never carry invented runs."""
+    if len(argv) in (6, 7) and argv[0] == "record":
+        fields, problems = _record_args(argv[1:])
+        if not problems:
+            at = (clock or (lambda: datetime.now(timezone.utc)))()
+            problems = record(root or repo_root(),
+                              at=at.date().isoformat(), **fields)
+        for problem in problems:
+            print(problem)
+        print(f"budget_guard: {len(problems)} problem(s)")
+        return 1 if problems else 0
+    if len(argv) in (5, 6) and argv[0] == "record-run":
+        wo, run_id, model, execution_path = argv[1:5]
+        outcome = argv[5] if len(argv) == 6 else "completed"
+        at = (clock or (lambda: datetime.now(timezone.utc)))()
+        problems = record_run(root or repo_root(), wo, run_id, model,
+                              execution_path, outcome,
+                              at.date().isoformat())
+        for problem in problems:
+            print(problem)
+        print(f"budget_guard: {len(problems)} problem(s)")
+        return 1 if problems else 0
     if len(argv) == 3 and argv[0] == "check":
         _, size, spend_raw = argv
         try:

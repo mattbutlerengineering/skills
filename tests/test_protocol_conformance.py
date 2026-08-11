@@ -59,6 +59,49 @@ def as_protocol_rows(rows):
     return out
 
 
+class TestBacklogConsumersMatchProtocol(unittest.TestCase):
+    """The seed-backlog section names its consumers: "`idea` (or `capture`),
+    when starting a run from a seed, claims it in place". Same split
+    contract as the tables above — the prose is the runtime interface in a
+    target repo, so a consumer the spec names must actually carry the step.
+
+    Capture parks deferred defects in that backlog. Until this was pinned,
+    only `idea` carried the claim step and the router offered every seed as
+    an idea, so a parked defect re-entered as a feature run — losing the
+    defect brief, the re-entry depth, and the mandatory-Verify rule that is
+    the whole point of the maintenance scale (issue #202).
+    """
+
+    def unwrapped(self, path):
+        """Prose with its hard line wrapping collapsed to single spaces.
+
+        Every file here is hand-wrapped at ~72 columns, so a sentence-long
+        assertion would otherwise be pinned to today's wrap points and fail
+        on a reflow that changed nothing.
+        """
+        return " ".join(path.read_text(encoding="utf-8").split())
+
+    def skill(self, slug):
+        return self.unwrapped(REPO_ROOT / "skills" / slug / "SKILL.md")
+
+    def test_the_spec_still_names_both_consumers(self):
+        self.assertIn("`idea` (or `capture`), when starting a run from a"
+                      " seed, claims it in place", self.unwrapped(SPEC))
+
+    def test_both_named_consumers_carry_the_claim_step(self):
+        for slug in ("idea", "capture"):
+            text = self.skill(slug)
+            self.assertIn("docs/backlog.md", text, slug)
+            self.assertIn("(claimed:", text,
+                          f"{slug} is named as a backlog consumer but has no"
+                          " claim step")
+
+    def test_the_router_routes_a_seed_by_what_it_describes(self):
+        text = self.skill("next")
+        self.assertIn("starts a maintenance run through `capture`", text)
+        self.assertIn("backlog", text)
+
+
 class TestOrientationTablesMatchProtocol(unittest.TestCase):
     def setUp(self):
         self.tables = spec_tables()
@@ -82,6 +125,50 @@ class TestOrientationTablesMatchProtocol(unittest.TestCase):
         self.assertIn(
             "Next stage = the first stage in order that is not complete.",
             SPEC.read_text(encoding="utf-8"))
+
+
+class TestIntakeBoundIsStated(unittest.TestCase):
+    """Issue #218. The bound follows from ADR-0026 and ADR-0032, but it
+    was written nowhere a reader would find it, so it got re-derived from
+    the ADRs every time someone asked how a bug becomes a run. Pinning
+    the sentence keeps a future edit from quietly dropping it."""
+
+    def unwrapped(self, path):
+        """Prose with its hard line wrapping collapsed to single spaces —
+        the spec is hand-wrapped, so a sentence-long assertion would
+        otherwise break on a reflow that changed nothing."""
+        return " ".join(path.read_text(encoding="utf-8").split())
+
+    def test_the_spec_says_the_tracker_starts_nothing(self):
+        text = self.unwrapped(SPEC)
+        self.assertIn("The mirror is one-way **out**: nothing in the"
+                      " tracker starts a run.", text)
+        self.assertIn("intake is never a work order", text)
+
+    def test_the_spec_names_the_bound_as_currently_unconditional(self):
+        # ADR-0030's inbound leg is provisional; the spec must say the
+        # bound holds *today* without implying the door is shut for good,
+        # or accepting that ADR later reads as contradicting the spec.
+        text = self.unwrapped(SPEC)
+        self.assertIn("provisional and unimplemented", text)
+        self.assertIn("holds without exception", text)
+
+
+class TestRouterRoutesOnlyStageSkills(unittest.TestCase):
+    """lint.check_router pins the floor — every stage skill is named — but
+    nothing pinned the ceiling, and the ceiling is the ADR-0023 rule: the
+    router never routes to a utility skill. A utility skill added to the
+    hand-off list would route silently and nothing would object, so the
+    absence is asserted here rather than assumed.
+    """
+
+    def test_the_router_names_no_utility_skill(self):
+        text = (REPO_ROOT / "skills" / "next" / "SKILL.md").read_text(
+            encoding="utf-8")
+        named = [slug for slug in protocol.UTILITY_SKILLS if slug in text]
+        self.assertEqual(named, [],
+                         "the router never routes to utility skills"
+                         " (ADR-0023)")
 
 
 if __name__ == "__main__":

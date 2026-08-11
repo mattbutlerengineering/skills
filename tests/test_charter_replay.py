@@ -205,7 +205,7 @@ class TestTranscriptAssembly(unittest.TestCase):
     Both CLI output shapes must build a transcript: the current
     stream_event partial frames (--include-partial-messages) and the
     legacy full assistant messages. Depending on either alone is the
-    fail-open ADR-0045 kills: a shape the CLI stops emitting would
+    fail-open ADR-0053 kills: a shape the CLI stops emitting would
     replay every forbid expectation against an empty transcript and
     pass the suite while testing nothing."""
 
@@ -283,7 +283,7 @@ class TestTranscriptAssembly(unittest.TestCase):
                          {"tool_calls": [], "text": ""})
 
     def test_non_json_lines_are_skipped(self):
-        # decode is the cli seam's (ADR-0045); this pins the composition
+        # decode is the cli seam's (ADR-0053); this pins the composition
         # the runner relies on: junk lines never reach the assembler.
         events = cli.decode_events(
             'not json\n{"type": "result", "result": "ok"}\n\n'.splitlines())

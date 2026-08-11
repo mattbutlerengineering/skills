@@ -3,8 +3,8 @@
 intake issue with no human transcription (PRD-0001 §Success criteria;
 ADR-0030 tracker intake, ADR-0032 two planes).
 
-Two sweeps ship, both driven by .github/workflows/sweeps.yml, plus the
-bootstrap step that must run before either of them can file anything:
+Three sweeps ship, all driven by .github/workflows/sweeps.yml, plus the
+bootstrap step that must run before any of them can file anything:
 
   python3 sweeps.py ensure-labels             create the triage labels a
                                               sweep stamps, if missing
@@ -12,6 +12,8 @@ bootstrap step that must run before either of them can file anything:
                                               issues JSON the workflow fetched
   python3 sweeps.py label-drift               detector L (network-bound, so
                                               sweeps-only) -> one intake issue
+  python3 sweeps.py reconcile                 the two planes disagree
+                                              (ADR-0032) -> one intake issue
 
 Conventions match label_sync.py/gates.py: functions return problem strings
 (`sweeps:`-prefixed for this module's own; the `L:`-prefixed strings from
@@ -34,6 +36,16 @@ Two invariants, mechanical rather than conventional:
   defanged, collapsed to one line, length-capped, WO ids redacted) and
   rendered *inside* a fenced block, which GitHub neither links nor notifies
   from. It is quoted as evidence, never interpolated into a prompt.
+
+The reconcile sweep is ADR-0032's promised cross-plane check, and a sweep
+rather than a gate on purpose: the planes disagree for ordinary reasons
+(an issue hand-edited, a row merged while the tracker was unreachable),
+and a merge gate on a NETWORK read would make every such moment a red
+build. It reports; a human resolves, always in the knowledge plane's
+favor. It names drift by breakdown path and issue number, never by WO id
+— so the "a sweep may not mint WO ids" screen below stays mechanical,
+with no exception carved out for the one sweep that reads the dispatch
+plane.
 """
 import json
 import re
@@ -41,11 +53,13 @@ import sys
 from collections import namedtuple
 from pathlib import Path
 
+import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import full_window, gh_json, label_names, report
-from knowledge_plane import WO_TOKEN, repo_root
+from knowledge_plane import (WO_TOKEN, breakdown_files, repo_root,
+                             row_tracker_issue)
 from cli import gh_runner
 
 # Sweep kind -> the two taxonomy labels its intake carries. Closed by
@@ -54,6 +68,7 @@ from cli import gh_runner
 TRIAGE = {
     "sentry": ("source:sentry", "type:defect"),
     "label-drift": ("source:sweep", "type:chore"),
+    "reconcile": ("source:sweep", "type:chore"),
 }
 
 # Every label a sweep can stamp — derived from TRIAGE, so a new sweep kind
@@ -189,6 +204,150 @@ def drift_intake(drift):
                     " `python3 label_sync.py --apply`.",
                     fields),
         labels=(source, work_type))
+
+
+def issue_lifecycle(issue):
+    """The `wo:` labels one issue-listing entry carries, sorted. Anything
+    that is not a `{"name": ...}` object is ignored rather than guessed
+    at — the shape is gh's, and a changed shape becomes a drift report's
+    silence, not a traceback in a scheduled run."""
+    labels = issue.get("labels")
+    names = [entry.get("name") for entry in labels
+             if isinstance(entry, dict)] if isinstance(labels, list) else []
+    return sorted(name for name in names
+                  if isinstance(name, str) and name.startswith("wo:"))
+
+
+def _describe(labels):
+    return ", ".join(labels) if labels else "no wo: label"
+
+
+def reconcile_drift(rows, issues):
+    """PURE: (breakdown rows, the live issue listing) -> (drift lines,
+    problems).
+
+    Every line names a breakdown path and an issue NUMBER, never a work
+    order id: the row is identified by where it lives, which is also where
+    a human goes to fix it. The knowledge plane is authoritative in every
+    comparison — a line says what the dispatch plane must be brought to,
+    never the reverse (ADR-0032).
+
+    `rows` is (display path, lines) per breakdown, so the caller owns how
+    paths are spelled and this stays a pure function.
+    """
+    index, problems = {}, []
+    for position, issue in enumerate(issues):
+        if not isinstance(issue, dict) or not isinstance(
+                issue.get("number"), int):
+            problems.append(f"sweeps: issue listing entry {position} has no"
+                            " usable number")
+            continue
+        index[issue["number"]] = issue
+    drift, mirrored = [], {}
+    for path, lines in rows:
+        for line in lines:
+            number = row_tracker_issue(line)
+            if number is None:
+                continue
+            mirrored.setdefault(number, []).append(path)
+            issue = index.get(number)
+            if issue is None:
+                drift.append(f"{path}: a row mirrors #{number}, which is not"
+                             " in the issue listing")
+                continue
+            labels = issue_lifecycle(issue)
+            merged = "wo:merged" in labels
+            state = str(issue.get("state") or "").lower()
+            if gates.MERGED_ROW.match(line):
+                if not merged:
+                    drift.append(f"{path}: a checked row mirrors #{number},"
+                                 f" which carries {_describe(labels)} — the"
+                                 " row says merged")
+                elif state == "open":
+                    drift.append(f"{path}: a checked row mirrors #{number},"
+                                 " which is labelled wo:merged but still open")
+            elif merged:
+                drift.append(f"{path}: an unchecked row mirrors #{number},"
+                             " which is labelled wo:merged — the issue is"
+                             " ahead of the row")
+            elif state == "closed":
+                drift.append(f"{path}: an unchecked row mirrors #{number},"
+                             f" which is closed carrying {_describe(labels)}"
+                             " — the row says the work is outstanding")
+    for number, paths in sorted(mirrored.items()):
+        if len(paths) > 1:
+            drift.append(f"#{number} is mirrored by {len(paths)} rows"
+                         f" ({', '.join(sorted(set(paths)))}) — an issue"
+                         " mirrors one work order")
+    for number, issue in sorted(index.items()):
+        labels = issue_lifecycle(issue)
+        if not labels:
+            continue
+        if len(labels) > 1:
+            drift.append(f"#{number} carries {len(labels)} lifecycle labels"
+                         f" at once ({', '.join(labels)}) — the state"
+                         " machine allows one")
+        if number not in mirrored:
+            drift.append(f"#{number} carries {_describe(labels)} but no"
+                         " breakdown row mirrors it — the dispatch plane is"
+                         " ahead of the knowledge plane")
+    return drift, problems
+
+
+def reconcile_intake(drift):
+    """PURE: reconcile drift lines -> one intake plan (None when the two
+    planes agree)."""
+    if not drift:
+        return None
+    source, work_type = TRIAGE["reconcile"]
+    fields = tuple((f"drift[{index}]", sanitize(line))
+                   for index, line in enumerate(drift))
+    key = "sweep:reconcile"
+    return Intake(
+        key=key,
+        title=f"[sweep] plane drift ({len(drift)} problem(s))",
+        body=render("reconcile", key,
+                    "The breakdown rows and their mirrored issues"
+                    " disagree. The rows are the state (ADR-0032):"
+                    " reconcile the issues to them, never the reverse.",
+                    fields),
+        labels=(source, work_type))
+
+
+def live_issues(run=gh_runner):
+    """(the issue listing, problems), or (None, problems) when it cannot be
+    trusted — the caller must then report nothing.
+
+    A truncated window ABORTS here rather than warning, unlike the dedupe
+    listing in known_keys: past the window an issue is simply absent, and
+    absence is exactly what two of the drift checks read as a finding. A
+    windowed reconcile would file a report full of invented drift."""
+    try:
+        issues, suffix = gh_json(["issue", "list", "--state", "all",
+                                  "--json", "number,state,labels",
+                                  "--limit", str(LIST_WINDOW)], run,
+                                 expect=list)
+    except GH_FAILURES as err:
+        return None, [f"sweeps: gh issue list failed: {gh_detail(err)}"]
+    if suffix:
+        return None, [f"sweeps: gh issue list {suffix}"]
+    window = full_window(issues, LIST_WINDOW)
+    if window:
+        return None, [f"sweeps: gh issue list {window}"]
+    return issues, []
+
+
+def reconcile(root, run=gh_runner):
+    """The reconcile sweep (ADR-0032): the knowledge plane's rows against
+    the dispatch plane's live labels, as one intake plan."""
+    issues, problems = live_issues(run)
+    if issues is None:
+        return [], problems
+    rows = [(str(path.relative_to(root)), lines)
+            for path, lines in breakdown_files(root)]
+    drift, problems = reconcile_drift(rows, issues)
+    intake = reconcile_intake(drift)
+    return ([intake] if intake else []), problems
 
 
 def plan_problems(names, intake):
@@ -414,6 +573,8 @@ def main(argv, run=gh_runner):
         return report("sweeps", ensure_labels(root, run=run))
     if kind == "sentry":
         intakes, problems = sentry(path)
+    elif kind == "reconcile":
+        intakes, problems = reconcile(root, run=run)
     else:
         intakes, problems = label_drift(root, run=run)
     # File the good plans even when some entries were unusable: a malformed or

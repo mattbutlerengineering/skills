@@ -218,13 +218,110 @@ def check_skill_recitals(root):
     return problems
 
 
+# Bundled-file paths a SKILL.md names without linking them: "read
+# `references/playbook.md`". Reference files use markdown links instead.
+# The lookbehind keeps it from matching inside a longer path: without
+# it, "../audit/references/playbook.md" also yields a bare
+# "references/playbook.md" resolved against the wrong directory.
+SKILL_ASSET = re.compile(
+    r"(?<![A-Za-z0-9._/-])(?:references|assets)/[A-Za-z0-9._-]+")
+# A markdown link to a local file. In-page anchors are not files.
+LOCAL_LINK = re.compile(r"\]\(([^)#][^)]*)\)")
+
+
+def named_files(path, skill_dir):
+    """(reference-as-written, directory it resolves against) for every
+    local file `path` names. Links resolve against the LINKING file's
+    own directory, because that is how a reader resolves them — a
+    reference file's `language.md` is its sibling, not the skill root's."""
+    text = path.read_text(encoding="utf-8")
+    named = [(ref, path.parent) for ref in LOCAL_LINK.findall(text)
+             if "://" not in ref]
+    if path.name == "SKILL.md":
+        named += [(ref, skill_dir) for ref in SKILL_ASSET.findall(text)]
+    return sorted(set(named))
+
+
+def check_skill_assets(root):
+    """Every local file a skill's own markdown names actually ships
+    beside it, and none of them reaches outside the skill directory.
+    Skills are self-contained (ADR-0008) and nothing enforced either
+    half: a reference renamed, or never committed, fails only at runtime
+    in the agent's hands — as a read that quietly returns nothing — and
+    no gate sees it. Every .md in the skill is walked, not just
+    SKILL.md, because reference files link to each other too. Missing
+    SKILL.md files are check_skills' finding, not this one's."""
+    def ships(directory, name):
+        """Case-exact existence. Path.exists() answers with the local
+        filesystem's case folding, so on macOS a SKILL.md naming
+        'references/Playbook.md' passes beside a file called
+        playbook.md — and then fails on the case-sensitive filesystem
+        the plugin installs onto. Reading the directory is what makes
+        this check unsatisfiable by the wrong file."""
+        try:
+            return name in {entry.name for entry in directory.iterdir()}
+        except OSError:
+            return False
+
+    def problems_for(slug):
+        skill_dir = root / "skills" / slug
+        if not (skill_dir / "SKILL.md").is_file():
+            return []
+        problems = []
+        for path in sorted(skill_dir.rglob("*.md")):
+            source = path.relative_to(skill_dir).as_posix()
+            for ref, base in named_files(path, skill_dir):
+                target = (base / ref).resolve()
+                if not target.is_relative_to(skill_dir.resolve()):
+                    problems.append(
+                        f"skills/{slug}/{source} names {ref!r}, which is "
+                        "outside the skill directory (ADR-0008: skills "
+                        "are self-contained)")
+                elif not ships(target.parent, target.name):
+                    problems.append(f"skills/{slug}/{source} names {ref!r}, "
+                                    "which does not exist")
+        return problems
+
+    return [p for slug in ALL_SKILLS + extra_skills(root)
+            for p in problems_for(slug)]
+
+
 def check_templates(root):
     return [f"missing skills/{slug}/TEMPLATE.md"
             for slug in TEMPLATED_STAGES
             if not (root / "skills" / slug / "TEMPLATE.md").is_file()]
 
 
+# The router's hand-off list: "  - <slug> -> the `<slug>` skill".
+HANDOFF_LINE = re.compile(r"^\s*-\s+([a-z][a-z-]*)\s+→\s+the\s+"
+                          r"`([a-z][a-z-]*)`\s+skill")
+
+
+def routed_order():
+    """The order the router must hand off in, DERIVED from protocol's two
+    walk tables rather than restated: the product/feature walk, preceded by
+    any stage only a maintenance run enters (ADR-0025). The maintenance
+    tail is a suffix of the product walk, so this is a total order, not a
+    merge that has to pick sides."""
+    product = [stage for stage, _ in protocol.STAGE_ARTIFACTS]
+    entry = [stage for stage, _ in protocol.MAINTENANCE_STAGE_ARTIFACTS
+             if stage not in product]
+    return entry + product
+
+
 def check_router(root):
+    """The router skill is prose an agent reads at RUNTIME, so drift in it
+    is drift in the shipped behaviour — and nothing was pinning it. The
+    mention check below passes on the word "idea" appearing anywhere, so a
+    hand-off list that omitted a stage, named a retired one, or listed them
+    out of pipeline order stayed green.
+
+    What is checkable is the list itself: its membership and its order are
+    derivable from protocol's walk tables. The CONDITIONALS the router also
+    carries — the UX field, the re-entry field, the Implement checkbox rule
+    — are English and stay unpinned; see the note in tests/test_lint
+    so that limit is recorded rather than assumed covered.
+    """
     router = protocol.skill_path(root, "next")
     if not router.is_file():
         return []  # absence already reported by check_skills
@@ -232,13 +329,141 @@ def check_router(root):
     # the full routed taxonomy: the spine plus maintenance entry points
     # (ADR-0025) — utility skills are excluded because the router never
     # routes to them (ADR-0023)
-    return [f"router never mentions stage skill {slug!r}"
-            for slug in STAGES + MAINTENANCE_STAGES if slug not in text]
+    problems = [f"router never mentions stage skill {slug!r}"
+                for slug in STAGES + MAINTENANCE_STAGES if slug not in text]
+    listed = []
+    for line in text.splitlines():
+        match = HANDOFF_LINE.match(line)
+        if not match:
+            continue
+        stage, skill = match.groups()
+        if stage != skill:
+            problems.append(f"router hands {stage!r} off to the {skill!r}"
+                            " skill; a stage routes to the skill of the"
+                            " same name")
+        listed.append(stage)
+    if not listed:
+        problems.append("router has no hand-off list — step 5's"
+                        " '<stage> → the `<stage>` skill' lines are what"
+                        " route a run, and nothing else names the order")
+        return problems
+    expected = routed_order()
+    unknown = [stage for stage in listed if stage not in expected]
+    problems.extend(f"router hands off to {stage!r}, which protocol's walk"
+                    " tables do not route to" for stage in unknown)
+    missing = [stage for stage in expected if stage not in listed]
+    problems.extend(f"router's hand-off list omits stage skill {stage!r}"
+                    for stage in missing)
+    if not unknown and not missing and listed != expected:
+        problems.append("router's hand-off list is out of pipeline order:"
+                        f" expected {' → '.join(expected)}, got"
+                        f" {' → '.join(listed)}")
+    return problems
+
+
+def check_readme_skills(root):
+    """Every skill in the taxonomy is named in README.md. The README is
+    where a reader learns what the plugin ships, and it is prose — so a
+    skill can be added, registered, tested, and released without the
+    README ever hearing about it. That is not hypothetical: it is how
+    interactive-architecture-diagram shipped undocumented. Same bar and
+    same shape as check_ledger, for the same reason."""
+    path = root / "README.md"
+    if not path.is_file():
+        return ["missing README.md"]
+    text = path.read_text(encoding="utf-8")
+    return [f"README.md never names skill {slug!r}"
+            for slug in ALL_SKILLS + extra_skills(root) if slug not in text]
 
 
 def check_protocol(root):
     path = root / "docs" / "pipeline-protocol.md"
     return [] if path.is_file() else ["missing docs/pipeline-protocol.md"]
+
+
+# A row of either orientation table in the protocol doc:
+# "| UX Design | `ux.md` | file exists ... |".
+# The hyphen matters: the doc writes stages in prose ("UX Design"),
+# but a slug ("ux-design") is just as reasonable, and a row this
+# fails to match is dropped silently — surfacing as an order
+# mismatch rather than as the formatting difference it is.
+TABLE_ROW = re.compile(r"^\|\s*([A-Za-z][A-Za-z -]*?)\s*\|\s*(.+?)\s*\|")
+# The artifact cell when it names a file rather than what the stage
+# produces. Implement's cell reads "code" and is deliberately not a file.
+ARTIFACT_CELL = re.compile(r"^`([a-z]+\.md)`$")
+
+
+def doc_table(text, heading):
+    """The (stage-slug, artifact-or-None) rows of the markdown table that
+    follows `heading` in the protocol doc, in document order. Stage names
+    are title-case prose there and slugs in protocol.py, so "UX Design"
+    normalizes to "ux-design"; the artifact is None when the cell names a
+    product rather than a file. Returns [] when the heading or its table
+    is absent, which check_protocol_tables reports as its own problem."""
+    after = text.split(heading, 1)
+    if len(after) < 2:
+        return []
+    rows = []
+    for line in after[1].splitlines():
+        if not line.startswith("|"):
+            if rows:
+                break       # the table ended
+            continue        # prose between the heading and the table
+        match = TABLE_ROW.match(line)
+        if not match:
+            continue
+        stage, artifact = match.groups()
+        if stage.lower() in ("stage", "---"):
+            continue
+        cell = ARTIFACT_CELL.match(artifact)
+        rows.append((stage.lower().replace(" ", "-"),
+                     cell.group(1) if cell else None))
+    return rows
+
+
+def check_protocol_tables(root):
+    """The protocol doc's two orientation tables agree with protocol.py's
+    walk tables. Both are authorities and neither derives from the other:
+    in a stamped repo the offline tools read protocol.py, while in a
+    consuming repo the doc is what an agent reads at runtime — doctor
+    calls it the runtime interface precisely because there is no
+    protocol.py to fall back on there. A stage added to one and not the
+    other routes two different ways in the same pipeline, and nothing
+    was red.
+
+    Deliberately NOT covered, so a green run is not misread: the
+    "Complete when" column, which carries the Implement checkbox rule and
+    the ux:/re-entry: conditionals in English. Those still restate
+    protocol._stage_complete with nothing pinning them."""
+    path = root / "docs" / "pipeline-protocol.md"
+    if not path.is_file():
+        return []  # absence already reported by check_protocol
+    text = path.read_text(encoding="utf-8")
+    problems = []
+    for heading, table in (("## Artifacts are the state",
+                            protocol.STAGE_ARTIFACTS),
+                           ("### Maintenance-run orientation",
+                            protocol.MAINTENANCE_STAGE_ARTIFACTS)):
+        rows = doc_table(text, heading)
+        if not rows:
+            problems.append(f"protocol doc has no orientation table under "
+                            f"{heading!r} — it is what an agent reads to "
+                            "orient a run, and nothing else states the order")
+            continue
+        documented = [stage for stage, _ in rows]
+        expected = [stage for stage, _ in table]
+        if documented != expected:
+            problems.append(
+                f"protocol doc's {heading!r} table is out of step with "
+                f"protocol.py: expected {' → '.join(expected)}, "
+                f"got {' → '.join(documented)}")
+            continue
+        problems.extend(
+            f"protocol doc gives stage {stage!r} artifact {named!r}; "
+            f"protocol.py reads {artifact!r}"
+            for (stage, named), (_, artifact) in zip(rows, table)
+            if named is not None and named != artifact)
+    return problems
 
 
 def check_evals(root):
@@ -319,8 +544,9 @@ def check_ledger_links(root):
 
 
 CHECKERS = (check_manifest, check_pi_package, check_skills,
-            check_skill_recitals, check_templates, check_router,
-            check_protocol, check_backlog, check_evals,
+            check_skill_recitals, check_skill_assets, check_templates,
+            check_router, check_readme_skills, check_protocol,
+            check_protocol_tables, check_backlog, check_evals,
             check_output_evals, check_ledger, check_ledger_links)
 
 

@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import lint  # noqa: E402
+import protocol  # noqa: E402
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES,  # noqa: E402
                       STAGE_ARTIFACTS, STAGES, TEMPLATED_STAGES)
 
@@ -56,6 +57,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 
 
+def protocol_table(rows):
+    """The protocol doc's orientation table for a walk table — the shape
+    check_protocol_tables parses back out."""
+    return ("| Stage | Artifact | Complete when |\n"
+            "|-------|----------|---------------|\n"
+            + "".join(f"| {stage} | `{artifact}` | file exists |\n"
+                      for stage, artifact in rows))
+
+
 def make_clean_tree(root):
     """Seed the smallest tree on which every checker reports zero problems."""
     plugin_dir = root / ".claude-plugin"
@@ -77,14 +87,31 @@ def make_clean_tree(root):
     for slug in TEMPLATED_STAGES:
         (root / "skills" / slug / "TEMPLATE.md").write_text(
             "t\n", encoding="utf-8")
+    # The router needs its hand-off list, not just the slugs: check_router
+    # pins that list's membership and pipeline order, so a bare mention
+    # dump is no longer a clean router.
     (root / "skills" / "next" / "SKILL.md").write_text(
         "---\nname: next\ndescription: d\n---\n\n"
-        + " ".join(STAGES + MAINTENANCE_STAGES) + "\n",
+        + "\n".join(f"   - {stage} → the `{stage}` skill"
+                    for stage in lint.routed_order()) + "\n",
+        encoding="utf-8")
+
+    # check_readme_skills holds the README to naming every skill, so the
+    # smallest clean tree carries one.
+    (root / "README.md").write_text(
+        "# t\n\n" + "".join(f"- `{slug}`\n" for slug in ALL_SKILLS),
         encoding="utf-8")
 
     (root / "docs").mkdir()
-    (root / "docs" / "pipeline-protocol.md").write_text("spec\n",
-                                                        encoding="utf-8")
+    # Both orientation tables, not a stub: check_protocol_tables pins the
+    # doc's stage order and artifacts to protocol.py's walk tables, so the
+    # smallest tree every checker passes on genuinely has to carry them.
+    (root / "docs" / "pipeline-protocol.md").write_text(
+        "spec\n\n## Artifacts are the state\n\n"
+        + protocol_table(protocol.STAGE_ARTIFACTS)
+        + "\n### Maintenance-run orientation\n\n"
+        + protocol_table(protocol.MAINTENANCE_STAGE_ARTIFACTS),
+        encoding="utf-8")
 
     cases = [{"id": f"{slug}-{n}", "kind": "direct",
               "expected": slug, "query": "q"}
@@ -341,6 +368,247 @@ class TestSkillRecitals(CheckerTreeTest):
         self.assertEqual(lint.check_skill_recitals(self.root), [])
 
 
+class TestSkillAssets(CheckerTreeTest):
+    """A skill's own markdown is read by an agent at runtime, so a rename
+    or a never-committed file fails in the agent's hands and no other gate
+    sees it. Every .md in the skill is walked, not just SKILL.md, because
+    reference files link to each other (ADR-0008 self-containment)."""
+
+    def write_skill(self, slug, body):
+        skill = self.root / "skills" / slug / "SKILL.md"
+        skill.write_text(f"---\nname: {slug}\ndescription: d\n---\n\n{body}",
+                         encoding="utf-8")
+        return skill.parent
+
+    def write_ref(self, skill_dir, name, body):
+        (skill_dir / "references").mkdir(exist_ok=True)
+        (skill_dir / "references" / name).write_text(body, encoding="utf-8")
+
+    def test_named_asset_that_does_not_exist(self):
+        self.write_skill("idea", "Read [`references/playbook.md`]"
+                                 "(references/playbook.md) first.\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names 'references/playbook.md', "
+             "which does not exist"])
+
+    def test_named_asset_that_ships_is_clean(self):
+        skill_dir = self.write_skill(
+            "idea", "Read `references/playbook.md` first.\n")
+        self.write_ref(skill_dir, "playbook.md", "p\n")
+        self.assertEqual(lint.check_skill_assets(self.root), [])
+
+    def test_case_differing_file_does_not_satisfy_the_name(self):
+        # Path.exists() folds case on macOS, so this would pass locally and
+        # break on the case-sensitive filesystem the plugin installs onto.
+        skill_dir = self.write_skill(
+            "idea", "Read `references/playbook.md` first.\n")
+        self.write_ref(skill_dir, "Playbook.md", "p\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names 'references/playbook.md', "
+             "which does not exist"])
+
+    def test_absent_directory_is_a_problem_not_a_traceback(self):
+        self.write_skill("idea", "Copy `assets/boilerplate.html`.\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names 'assets/boilerplate.html', "
+             "which does not exist"])
+
+    def test_each_missing_asset_reported_once_however_often_named(self):
+        self.write_skill("idea",
+                         "See `references/one.md`, then `references/one.md` "
+                         "again,\nand `assets/two.svg`.\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names 'assets/two.svg', "
+             "which does not exist",
+             "skills/idea/SKILL.md names 'references/one.md', "
+             "which does not exist"])
+
+    def test_dir_outside_the_taxonomy_is_checked_too(self):
+        rogue = self.root / "skills" / "rogue"
+        rogue.mkdir()
+        (rogue / "SKILL.md").write_text(
+            "---\nname: rogue\ndescription: d\n---\n\n"
+            "Read `references/gone.md`.\n", encoding="utf-8")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/rogue/SKILL.md names 'references/gone.md', "
+             "which does not exist"])
+
+    def test_missing_skill_md_belongs_to_check_skills(self):
+        (self.root / "skills" / "idea" / "SKILL.md").unlink()
+        self.assertEqual(lint.check_skill_assets(self.root), [])
+
+    def test_broken_link_between_two_reference_files(self):
+        # The gap the SKILL.md-only walk missed: reference files link to
+        # each other, and renaming one breaks every sibling silently.
+        skill_dir = self.write_skill(
+            "idea", "Read [the playbook](references/playbook.md).\n")
+        self.write_ref(skill_dir, "playbook.md",
+                       "Vocabulary is in [language](language.md).\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/references/playbook.md names 'language.md', "
+             "which does not exist"])
+
+    def test_resolving_sibling_link_is_clean(self):
+        skill_dir = self.write_skill(
+            "idea", "Read [the playbook](references/playbook.md).\n")
+        self.write_ref(skill_dir, "playbook.md",
+                       "Vocabulary is in [language](language.md).\n")
+        self.write_ref(skill_dir, "language.md", "terms\n")
+        self.assertEqual(lint.check_skill_assets(self.root), [])
+
+    def test_link_out_of_the_skill_directory_from_skill_md(self):
+        self.write_skill("idea", "See [prd's template](../prd/TEMPLATE.md).\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names '../prd/TEMPLATE.md', which is "
+             "outside the skill directory (ADR-0008: skills are "
+             "self-contained)"])
+
+    def test_link_out_of_the_skill_directory_from_a_reference_file(self):
+        # One ../ from references/ lands back inside the skill; escaping
+        # takes two, and the checker must count depth rather than dots.
+        skill_dir = self.write_skill(
+            "idea", "Read [the playbook](references/playbook.md).\n")
+        self.write_ref(skill_dir, "playbook.md",
+                       "See [prd](../../prd/TEMPLATE.md).\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/references/playbook.md names '../../prd/"
+             "TEMPLATE.md', which is outside the skill directory "
+             "(ADR-0008: skills are self-contained)"])
+
+    def test_anchors_and_urls_are_not_files(self):
+        skill_dir = self.write_skill(
+            "idea", "Read [the playbook](references/playbook.md).\n")
+        self.write_ref(skill_dir, "playbook.md",
+                       "Jump to [terms](#terms) or read\n"
+                       "[the source](https://example.com/a.md).\n")
+        self.assertEqual(lint.check_skill_assets(self.root), [])
+
+    def test_bare_path_is_not_matched_inside_a_longer_path(self):
+        # Without the lookbehind, '../prd/references/x.md' would ALSO yield
+        # a bare 'references/x.md' resolved against the skill root — one
+        # broken link reported as two, the second at a path nobody wrote.
+        self.write_skill("idea", "See [prd](../prd/references/x.md).\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names '../prd/references/x.md', which is "
+             "outside the skill directory (ADR-0008: skills are "
+             "self-contained)"])
+
+
+class TestReadmeSkills(CheckerTreeTest):
+    """A skill can be added, registered, tested and released without the
+    README hearing about it — which is how interactive-architecture-diagram
+    shipped undocumented."""
+
+    def test_unnamed_skill_is_reported(self):
+        path = self.root / "README.md"
+        path.write_text(path.read_text(encoding="utf-8")
+                        .replace("`ship`", "`the release stage`"),
+                        encoding="utf-8")
+        self.assertEqual(lint.check_readme_skills(self.root),
+                         ["README.md never names skill 'ship'"])
+
+    def test_discovered_dir_outside_the_taxonomy_is_held_to_it_too(self):
+        rogue = self.root / "skills" / "rogue"
+        rogue.mkdir()
+        (rogue / "SKILL.md").write_text(
+            "---\nname: rogue\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_readme_skills(self.root),
+                         ["README.md never names skill 'rogue'"])
+
+    def test_missing_readme_is_one_problem_not_one_per_skill(self):
+        (self.root / "README.md").unlink()
+        self.assertEqual(lint.check_readme_skills(self.root),
+                         ["missing README.md"])
+
+
+class TestProtocolTables(CheckerTreeTest):
+    """The protocol doc and protocol.py are both authorities on the walk
+    and neither derives from the other: offline tools read the module,
+    and an agent in a consuming repo reads the doc. Drift routes two
+    ways in one pipeline."""
+
+    PRODUCT = "## Artifacts are the state"
+    MAINTENANCE = "### Maintenance-run orientation"
+
+    def doc(self):
+        return self.root / "docs" / "pipeline-protocol.md"
+
+    def rewrite(self, old, new):
+        path = self.doc()
+        text = path.read_text(encoding="utf-8")
+        self.assertIn(old, text)          # the fixture really said it
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+    def test_clean_tree_is_clean(self):
+        self.assertEqual(lint.check_protocol_tables(self.root), [])
+
+    def test_reordered_stage_in_the_doc(self):
+        self.rewrite("| review | `review.md` | file exists |\n"
+                     "| ship | `release.md` | file exists |\n",
+                     "| ship | `release.md` | file exists |\n"
+                     "| review | `review.md` | file exists |\n")
+        problems = lint.check_protocol_tables(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("out of step with protocol.py", problems[0])
+        self.assertIn("verify → ship → review → operate", problems[0])
+
+    def test_renamed_artifact_in_the_doc(self):
+        self.rewrite("| verify | `verification.md` |", "| verify | `verify.md` |")
+        self.assertEqual(
+            lint.check_protocol_tables(self.root),
+            ["protocol doc gives stage 'verify' artifact 'verify.md'; "
+             "protocol.py reads 'verification.md'"])
+
+    def test_stage_missing_from_the_doc(self):
+        self.rewrite("| ship | `release.md` | file exists |\n", "")
+        problems = lint.check_protocol_tables(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("out of step with protocol.py", problems[0])
+
+    def test_each_table_is_judged_independently(self):
+        self.rewrite("| verify | `verification.md` |", "| verify | `verify.md` |")
+        self.rewrite("| verify | `verification.md` |", "| verify | `nope.md` |")
+        self.assertEqual(len(lint.check_protocol_tables(self.root)), 2)
+
+    def test_missing_table_names_the_heading(self):
+        path = self.doc()
+        path.write_text("spec only\n", encoding="utf-8")
+        problems = lint.check_protocol_tables(self.root)
+        self.assertEqual(len(problems), 2)
+        self.assertIn(self.PRODUCT, problems[0])
+        self.assertIn(self.MAINTENANCE, problems[1])
+
+    def test_prose_stage_names_normalize_to_slugs(self):
+        # The real doc writes "UX Design"; protocol.py says "ux-design".
+        # Both forms have to parse, or one is dropped silently and the
+        # failure reads as a reordering.
+        self.rewrite("| ux-design | `ux.md` |", "| UX Design | `ux.md` |")
+        self.assertEqual(lint.check_protocol_tables(self.root), [])
+
+    def test_absent_doc_belongs_to_check_protocol(self):
+        self.doc().unlink()
+        self.assertEqual(lint.check_protocol_tables(self.root), [])
+        self.assertEqual(lint.check_protocol(self.root),
+                         ["missing docs/pipeline-protocol.md"])
+
+    def test_non_file_artifact_cell_is_not_compared(self):
+        # Implement's cell in the real doc reads "code" — the stage's
+        # product, not the file orientation reads. The stage still has to
+        # be in the right place; only the artifact comparison is skipped.
+        self.rewrite("| implement | `breakdown.md` |", "| implement | code |")
+        self.assertEqual(lint.check_protocol_tables(self.root), [])
+
+
 class TestTemplates(CheckerTreeTest):
     def test_missing_template(self):
         (self.root / "skills" / "verify" / "TEMPLATE.md").unlink()
@@ -358,24 +626,98 @@ class TestTemplates(CheckerTreeTest):
 
 
 class TestRouter(CheckerTreeTest):
-    def test_omitted_stage(self):
-        mentions = " ".join(s for s in STAGES + MAINTENANCE_STAGES
-                            if s != "ship")
+    """The router skill is prose an agent reads at RUNTIME, so drift there
+    is drift in shipped behaviour. The mention check alone passed on the
+    word "idea" appearing anywhere; these pin the hand-off list, whose
+    membership and order are derivable from protocol's walk tables.
+
+    What stays UNPINNED, deliberately and worth stating: the router's
+    conditionals — the `ux:` field, the `re-entry:` field, the Implement
+    checkbox rule. Those are English, and no mechanical check here reads
+    them. A green lint means the list is right, not that the routing prose
+    is.
+    """
+
+    def write(self, body):
         (self.root / "skills" / "next" / "SKILL.md").write_text(
-            "---\nname: next\ndescription: d\n---\n\n" + mentions + "\n",
+            "---\nname: next\ndescription: d\n---\n\n" + body + "\n",
             encoding="utf-8")
-        self.assertEqual(lint.check_router(self.root),
-                         ["router never mentions stage skill 'ship'"])
+
+    def handoffs(self, stages):
+        return "\n".join(f"   - {s} → the `{s}` skill" for s in stages)
+
+    def test_a_complete_in_order_list_is_clean(self):
+        self.write(self.handoffs(lint.routed_order()))
+        self.assertEqual(lint.check_router(self.root), [])
+
+    def test_omitted_stage(self):
+        stages = [s for s in lint.routed_order() if s != "ship"]
+        self.write(" ".join(stages) + "\n\n" + self.handoffs(stages))
+        self.assertEqual(lint.check_router(self.root), [
+            "router never mentions stage skill 'ship'",
+            "router's hand-off list omits stage skill 'ship'"])
 
     def test_omitted_maintenance_stage(self):
         # capture sits outside the spine but the router routes to it
         # (ADR-0025) — a router that forgets it is as broken as one that
         # forgets ship.
-        (self.root / "skills" / "next" / "SKILL.md").write_text(
-            "---\nname: next\ndescription: d\n---\n\n"
-            + " ".join(STAGES) + "\n", encoding="utf-8")
-        self.assertEqual(lint.check_router(self.root),
-                         ["router never mentions stage skill 'capture'"])
+        stages = [s for s in lint.routed_order() if s != "capture"]
+        self.write(" ".join(stages) + "\n\n" + self.handoffs(stages))
+        self.assertEqual(lint.check_router(self.root), [
+            "router never mentions stage skill 'capture'",
+            "router's hand-off list omits stage skill 'capture'"])
+
+    def test_a_router_with_no_handoff_list_at_all(self):
+        """The case the mention check could never see: every slug present
+        as prose, nothing routing anywhere."""
+        self.write(" ".join(lint.routed_order()))
+        self.assertEqual(lint.check_router(self.root), [
+            "router has no hand-off list — step 5's '<stage> → the"
+            " `<stage>` skill' lines are what route a run, and nothing"
+            " else names the order"])
+
+    def test_a_list_out_of_pipeline_order(self):
+        order = lint.routed_order()
+        swapped = order[:]
+        i, j = swapped.index("verify"), swapped.index("review")
+        swapped[i], swapped[j] = swapped[j], swapped[i]
+        self.write(self.handoffs(swapped))
+        problems = lint.check_router(self.root)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            "router's hand-off list is out of pipeline order:"), problems)
+        self.assertIn("verify → review", problems[0])
+
+    def test_a_list_naming_a_stage_the_tables_do_not_route_to(self):
+        self.write(self.handoffs(lint.routed_order() + ["retire"]))
+        self.assertEqual(lint.check_router(self.root), [
+            "router hands off to 'retire', which protocol's walk tables do"
+            " not route to"])
+
+    def test_a_stage_pointed_at_the_wrong_skill(self):
+        order = lint.routed_order()
+        body = self.handoffs(order).replace(
+            "- verify → the `verify` skill", "- verify → the `review` skill")
+        self.write(body)
+        problems = lint.check_router(self.root)
+        self.assertIn("router hands 'verify' off to the 'review' skill; a"
+                      " stage routes to the skill of the same name",
+                      problems)
+
+    def test_the_shipped_router_satisfies_all_of_it(self):
+        """Against the real file, not a fixture — the point is the shipped
+        prose, and a checker only ever run on fixtures pins nothing."""
+        self.assertEqual(lint.check_router(ROOT), [])
+
+    def test_the_order_is_derived_not_restated(self):
+        """routed_order() must come from protocol's tables, so adding a
+        stage there is a single edit. Pinning the literal list here would
+        recreate the duplication this closes."""
+        self.assertEqual(
+            lint.routed_order(),
+            [s for s, _ in protocol.MAINTENANCE_STAGE_ARTIFACTS
+             if s not in [p for p, _ in protocol.STAGE_ARTIFACTS]]
+            + [s for s, _ in protocol.STAGE_ARTIFACTS])
 
 
 class TestProtocol(CheckerTreeTest):

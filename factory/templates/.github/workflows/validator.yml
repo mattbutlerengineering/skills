@@ -11,7 +11,12 @@ name: validator
 on:
   push:
   pull_request:
-    types: [opened, reopened, synchronize, closed]
+    # `edited` is here because detector B reads the PR body: the body is
+    # an INPUT to the check, so correcting it has to re-run the check.
+    # Without it the only way to re-check a fixed body is close/reopen,
+    # and a re-run is no help — it replays the payload it was dispatched
+    # with, stale body and all (issue #216).
+    types: [opened, reopened, synchronize, edited, closed]
 
 permissions:
   contents: read
@@ -48,10 +53,16 @@ jobs:
   # Fork PRs are skipped — their GITHUB_TOKEN is read-only, and reaching for
   # pull_request_target to work around that would run untrusted code with a
   # write token.
+  # The action list is an ALLOW-list, not `!= 'closed'`: the reviewer posts
+  # a comment per run, and `edited` (added for detector B) would otherwise
+  # enrol it in every title and body tweak. Naming the three actions keeps
+  # any future trigger type from signing the reviewer up silently.
   review:
     if: >-
       github.event_name == 'pull_request'
-      && github.event.action != 'closed'
+      && (github.event.action == 'opened'
+          || github.event.action == 'reopened'
+          || github.event.action == 'synchronize')
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:

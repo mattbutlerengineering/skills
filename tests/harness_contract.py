@@ -8,7 +8,7 @@ test_trigger_eval_run_eval_omp.py) sets FAKE and HARNESS, and supplies
 only what genuinely differs: the fake
 executable's event shapes and any harness-specific seam tests. The
 executable name the fake shadows comes from the registry's own binary
-field (ADR-0045), so the contract exercises the same name the runner
+field (ADR-0053), so the contract exercises the same name the runner
 invokes.
 """
 import os

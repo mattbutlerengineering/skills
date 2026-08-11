@@ -91,6 +91,7 @@ jobs:
       # gracefully when no API key is configured (the graceful-skip pattern):
       # nothing is dispatched, nothing is labelled, nothing is faked.
       - name: Run the chartered agent
+        id: agent
         if: >-
           steps.resolve.outputs.dispatch == 'true'
           && steps.claim.outputs.transitioned == 'true'
@@ -105,3 +106,36 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.resolve.outputs.prompt }}
           claude_args: --model ${{ steps.resolve.outputs.model }}
+      # The run's own spend, machine-written to the append-only cost ledger
+      # (issue #222; ADR-0034): tokens and cost come from the action's
+      # execution file — the harness's record, never a hand-typed figure.
+      # always(): a failed agent still spent money, and its outcome says so.
+      # continue-on-error: a ledger refusal must not flip a finished order
+      # to wo:failed — the miss shows red on this step, and detector G reds
+      # the merge if the line truly never lands (the gating backstop).
+      - name: Record the run's spend in the cost ledger
+        if: >-
+          always()
+          && steps.claim.outputs.transitioned == 'true'
+          && steps.agent.outputs.execution_file != ''
+        continue-on-error: true
+        run: >-
+          make wo-record WO=${{ steps.resolve.outputs.wo }}
+          RUN_ID=${{ github.run_id }}
+          MODEL=${{ steps.resolve.outputs.model }}
+          FILE=${{ steps.agent.outputs.execution_file }}
+          OUTCOME=${{ steps.agent.outcome == 'success' && 'completed' || 'agent-failed' }}
+      # The order's exit when the run dies (ADR-0032's terminal state,
+      # ADR-0045's writer): without this the dispatched agent's failure
+      # leaves the order on wo:in-progress forever, where the gate digest
+      # and the improvement routine both read it as work still in flight.
+      # Gated on the claim's own verdict, not just failure(): only an order
+      # THIS run took out of ready may be flipped — a run that died before
+      # or during the claim leaves the order's state exactly as it found it.
+      - name: Mark the work order failed
+        if: >-
+          failure()
+          && steps.claim.outputs.transitioned == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make wo-failed ISSUE=${{ github.event.issue.number }}

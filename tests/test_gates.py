@@ -386,6 +386,41 @@ class TestCostLedger(unittest.TestCase):
                        json.dumps(self.LINE) + "\n\n")
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
+    def test_a_gate_latency_row_does_not_satisfy_merged_coverage(self):
+        """Issue #222: a gate_wait row records queue time — model none,
+        0 tokens, $0.00 — and the monthly breaker's sum excludes it
+        (cost_report skips gate rows). Counting it as the merged order's
+        ledger line kept G green forever while recorded spend stayed
+        $0.00; spend coverage now requires a dispatched-run row."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, cost_ledger.gate_entry("WO-0001", "merge", 2379,
+                                            "2026-07-12T03:12:55Z"))
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/features/demo/breakdown.md:1 merged work order"
+                " WO-0001 has no line in docs/factory/costs.jsonl"])
+
+    def test_a_gate_row_beside_a_spend_row_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                cost_ledger.gate_entry("WO-0001", "merge", 2379,
+                                       "2026-07-12T03:12:55Z"))
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+    def test_a_gate_row_still_needs_a_breakdown_row(self):
+        """Narrowing what satisfies coverage must not waive the reverse
+        check: a gate row naming an unknown order is still
+        ledger-to-breakdown drift."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                cost_ledger.gate_entry("WO-0002", "merge", 10,
+                                       "2026-07-12T03:12:55Z"))
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/factory/costs.jsonl:2 wo WO-0002 has no breakdown"
+                " row"])
+
 
 class TestStaleness(unittest.TestCase):
     """I (origin: WO-0008): a doc that points at a path which no longer
@@ -620,6 +655,130 @@ class TestManifestFiles(unittest.TestCase):
     def test_no_payload_dir_is_an_empty_map(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(gates.manifest_files(Path(tmp)), {})
+
+
+class TestLabelWiring(unittest.TestCase):
+    """Detector J. The tools and the Makefile name 15 labels between them
+    and `.github/labels.json` is explicitly the stamped repo's to curate
+    (docs/setup.md), so pruning one is a sanctioned edit that used to pass
+    every offline gate and fail only when CI flipped the label."""
+
+    REPO = Path(__file__).resolve().parents[1]
+    MAKEFILE = ("wo-merged:\n\tpython3 validator.py lifecycle"
+                " --label wo:merged\n")
+
+    def taxonomy(self, names):
+        return json.dumps([{"name": name, "color": "ededed",
+                            "description": name} for name in names])
+
+    def wired_tree(self, tmp, makefile=None):
+        """(tree, every label it names) — the correctly curated state."""
+        tree = FixtureTree(tmp)
+        tree.write("Makefile", self.MAKEFILE if makefile is None else makefile)
+        named = sorted(gates.declared_labels(tree.root))
+        tree.write(".github/labels.json", self.taxonomy(named))
+        return tree, named
+
+    def test_a_taxonomy_carrying_every_named_label_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, _ = self.wired_tree(tmp)
+            self.assertEqual(gates.check_label_wiring(tree.root), [])
+
+    def test_a_pruned_label_is_reported_against_every_site_that_names_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            tree.write(".github/labels.json", self.taxonomy(
+                [name for name in named if name != "wo:merged"]))
+            # wo:merged is named twice over — the Makefile target that
+            # flips it and the gate_digest entry that counts it — and both
+            # sites are reported, because both break
+            self.assertEqual(gates.check_label_wiring(tree.root), [
+                "J: Makefile:2 names wo:merged but the taxonomy has no such"
+                " label (add it to .github/labels.json, or the flip fails"
+                " when CI runs it)",
+                "J: gate_digest.py names wo:merged but the taxonomy has no"
+                " such label (add it to .github/labels.json, or the flip"
+                " fails when CI runs it)"])
+
+    def test_a_pruned_tool_label_is_reported_without_any_makefile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp, makefile="check:\n\ttrue\n")
+            tree.write(".github/labels.json", self.taxonomy(
+                [name for name in named if name != "wo:ready-for-agent"]))
+            self.assertEqual(gates.check_label_wiring(tree.root), [
+                "J: assembler.py names wo:ready-for-agent but the taxonomy"
+                " has no such label (add it to .github/labels.json, or the"
+                " flip fails when CI runs it)"])
+
+    def test_an_unnamed_taxonomy_label_is_not_a_finding(self):
+        # one direction only: wo:blocked is human-applied by design
+        # (ADR-0045) and the approval labels are the gates' to set, so
+        # "no writer" is never drift
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            tree.write(".github/labels.json",
+                       self.taxonomy(named + ["area:nobody-writes-this"]))
+            self.assertEqual(gates.check_label_wiring(tree.root), [])
+
+    def test_a_tree_with_no_taxonomy_is_silent(self):
+        # an unstamped repo has nothing to be wrong about
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("Makefile", self.MAKEFILE)
+            self.assertEqual(gates.check_label_wiring(tree.root), [])
+
+    def test_an_unusable_taxonomy_is_silent_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("Makefile", self.MAKEFILE)
+            for text in ("[]", "{not json", '[{"name": "wo:merged"}]'):
+                tree.write(".github/labels.json", text)
+                self.assertEqual(gates.check_label_wiring(tree.root), [],
+                                 f"unusable taxonomy {text!r}")
+
+    def test_one_malformed_entry_does_not_switch_the_detector_off(self):
+        # bailing on any load problem would let a single bad entry silence
+        # J entirely — the very failure mode it exists to close
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            entries = json.loads(self.taxonomy(
+                [name for name in named if name != "wo:merged"]))
+            tree.write(".github/labels.json",
+                       json.dumps(entries + [{"name": "wo:half-declared"}]))
+            self.assertIn("J: Makefile:2 names wo:merged but the taxonomy has"
+                          " no such label (add it to .github/labels.json, or"
+                          " the flip fails when CI runs it)",
+                          gates.check_label_wiring(tree.root))
+
+    def test_the_extraction_actually_finds_the_shipped_labels(self):
+        """A detector whose extraction silently stops matching is
+        vacuously clean forever — worse than no detector. This pins that
+        every declarer still yields what it is there for."""
+        named = gates.declared_labels(self.REPO)
+
+        def declared_by(site):
+            return sorted(label for label, sites in named.items()
+                          if site in sites)
+
+        self.assertEqual(declared_by("assembler.py"),
+                         ["budget-exhausted", "type:chore", "type:defect",
+                          "type:feature", "type:support",
+                          "wo:ready-for-agent"])
+        # five distinct, not six: wo:prd-approved is the PRD gate's
+        # confirming label and the blueprint gate's waiting one
+        self.assertEqual(declared_by("gate_digest.py"),
+                         ["wo:blueprint-approved", "wo:draft", "wo:merged",
+                          "wo:needs-review", "wo:prd-approved"])
+        # every lifecycle target's --label argument, read off the Makefile
+        for label in ("wo:merged", "wo:in-progress", "wo:needs-review",
+                      "wo:failed"):
+            self.assertTrue(
+                any(site.startswith("Makefile") for site in
+                    named.get(label, [])), f"{label} not read off Makefile")
+
+    def test_the_shipped_taxonomy_wires_the_shipped_tools(self):
+        """The live pin, and the one that would have caught the gap."""
+        self.assertEqual(gates.check_label_wiring(self.REPO), [])
 
 
 class TestConfigShape(unittest.TestCase):
@@ -1464,6 +1623,21 @@ class TestRunAll(unittest.TestCase):
                  if p.startswith("B:")], [])
 
 
+def product_form(command):
+    """A root command as its product-repo twin spells it: the factory tools
+    live under tools/factory/ there, and the stamped test run is quiet."""
+    return (command.replace("python3 gates.py", "python3 tools/factory/gates.py")
+            .replace("python3 validator.py", "python3 tools/factory/validator.py")
+            .replace("python3 assembler.py", "python3 tools/factory/assembler.py")
+            .replace("python3 cost_report.py",
+                     "python3 tools/factory/cost_report.py")
+            .replace("python3 gate_digest.py",
+                     "python3 tools/factory/gate_digest.py")
+            .replace("python3 budget_guard.py",
+                     "python3 tools/factory/budget_guard.py")
+            .replace("unittest discover tests", "unittest discover -q tests"))
+
+
 class TestLockstep(unittest.TestCase):
     """Makefile <-> CI lockstep (origin: WO-0003, tightened by WO-0004).
 
@@ -1499,6 +1673,8 @@ class TestLockstep(unittest.TestCase):
                                     / ".github" / "workflows"
                                     / "gate-digest.yml")
     GATE_DIGEST_TARGET = ["python3 gate_digest.py daily"]
+    RECORD_TARGET = ["python3 budget_guard.py record-run $(WO) $(RUN_ID)"
+                     " $(MODEL) $(FILE) $(OUTCOME)"]
 
     # The one canonical check set. `lint.py` is the plugin's structural lint
     # and has no product-repo counterpart, so only the root Makefile runs it.
@@ -1514,6 +1690,8 @@ class TestLockstep(unittest.TestCase):
                            " wo:in-progress --issue $(ISSUE)"],
         "wo-needs-review": ["python3 validator.py lifecycle --label"
                             " wo:needs-review --uncited skip"],
+        "wo-failed": ["python3 validator.py lifecycle --label wo:failed"
+                      " --issue $(ISSUE) --verdict skip"],
     }
 
     def recipes(self, path, target):
@@ -1571,6 +1749,30 @@ class TestLockstep(unittest.TestCase):
         self.assertIn("github.event.pull_request.head.repo.full_name"
                       " == github.repository", text)
 
+    def test_a_body_edit_retriggers_the_check(self):
+        # Detector B reads the PR body, so the body is an input to the
+        # check and correcting it has to re-run it. Without `edited` the
+        # only route is close/reopen, and that dispatches a closed-event
+        # run against the pre-edit payload whose failure then sits in the
+        # PR's status rollup for good (issue #216).
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("types: [opened, reopened, synchronize, edited,"
+                      " closed]", text)
+
+    def test_the_review_job_names_the_actions_it_runs_on(self):
+        # An allow-list, not `!= 'closed'`: the reviewer posts a comment
+        # per run, so a deny-list would enrol it in every title and body
+        # edit the moment `edited` was added — and in any trigger type
+        # added later.
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("(github.event.action == 'opened'\n"
+                      "          || github.event.action == 'reopened'\n"
+                      "          || github.event.action == 'synchronize')",
+                      text)
+        self.assertNotIn("&& github.event.action != 'closed'\n"
+                         "      && github.event.pull_request.head.repo",
+                         text)
+
     def test_the_claim_step_gates_the_agent_step(self):
         # ADR-0032: the claim step flips ready -> in-progress and its
         # transitioned output is the dispatch idempotency verdict — the
@@ -1579,6 +1781,41 @@ class TestLockstep(unittest.TestCase):
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("make wo-in-progress", text)
         self.assertIn("steps.claim.outputs.transitioned == 'true'", text)
+
+    def test_a_failed_dispatch_flips_the_order_it_claimed(self):
+        # ADR-0045: without this step a dying agent run leaves its order on
+        # wo:in-progress forever. Gated on the claim's verdict, not on
+        # failure() alone — a run that died before claiming the order must
+        # leave its state alone (the order is still someone else's to
+        # dispatch).
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("make wo-failed", text)
+        self.assertIn("failure()", text)
+        failed = text.split("make wo-failed")[0].rsplit("- name:", 1)[1]
+        self.assertIn("failure()", failed)
+        self.assertIn("steps.claim.outputs.transitioned == 'true'", failed)
+
+    def test_both_makefiles_expose_the_wo_record_target(self):
+        self.assertEqual(self.recipes(self.MAKEFILE, "wo-record"),
+                         self.RECORD_TARGET)
+        self.assertEqual(self.recipes(self.TEMPLATE_MAKEFILE, "wo-record"),
+                         [product_form(c) for c in self.RECORD_TARGET])
+
+    def test_a_finished_dispatch_records_its_spend(self):
+        # Issue #222: the ledger's success-path caller. always() — a
+        # failed agent still spent money; gated on the claim's verdict
+        # and on the execution file existing (the harness's own spend
+        # record, never a hand-typed figure). continue-on-error — a
+        # ledger refusal must not flip a finished order to wo:failed;
+        # the miss shows red here and detector G reds the merge if the
+        # line never lands.
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("make wo-record", text)
+        record = text.split("make wo-record")[0].rsplit("- name:", 1)[1]
+        self.assertIn("always()", record)
+        self.assertIn("steps.claim.outputs.transitioned == 'true'", record)
+        self.assertIn("steps.agent.outputs.execution_file != ''", record)
+        self.assertIn("continue-on-error: true", record)
 
     def test_both_makefiles_expose_the_assembler_target(self):
         self.assertEqual(self.recipes(self.MAKEFILE, "assembler"),
@@ -1589,7 +1826,8 @@ class TestLockstep(unittest.TestCase):
     def test_the_assembler_workflow_names_no_command_of_its_own(self):
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("make assembler", text)
-        for tool in ("gates.py", "validator.py", "assembler.py", "unittest"):
+        for tool in ("gates.py", "validator.py", "assembler.py",
+                     "budget_guard.py", "unittest"):
             self.assertNotIn(
                 f"python3 {tool}", text,
                 f"{tool} is invoked directly in CI; it belongs in a make"
@@ -1763,6 +2001,7 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # exempt: never mirrored into a stamped repo's CI
             "python3 sweeps.py ensure-labels",
             "python3 sweeps.py label-drift",
+            "python3 sweeps.py reconcile",
             "python3 sweeps.py sentry --payload sentry.json",
             # shell glue: names the missing-secret cause, then fetches the
             # Sentry payload with the token passed on stdin, never argv
