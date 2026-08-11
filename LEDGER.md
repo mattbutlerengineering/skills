@@ -29,6 +29,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | factory-init | draft | — | — |
 | doctor | draft | — | — |
 | interactive-architecture-diagram | draft | — | — |
+| animated-diagram | draft | — | — |
 | work-queue | draft | — | — |
 | audit | draft | — | — |
 | deepen | draft | — | — |

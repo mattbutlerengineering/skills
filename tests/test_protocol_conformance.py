@@ -131,7 +131,13 @@ class TestIntakeBoundIsStated(unittest.TestCase):
     """Issue #218. The bound follows from ADR-0026 and ADR-0032, but it
     was written nowhere a reader would find it, so it got re-derived from
     the ADRs every time someone asked how a bug becomes a run. Pinning
-    the sentence keeps a future edit from quietly dropping it."""
+    the sentence keeps a future edit from quietly dropping it.
+
+    ADR-0030 Decision 2 was accepted 2026-08-10 (issue #202), lifting the
+    stated bound exactly as the spec anticipated: the intake convention
+    is now the one door through it, and the pins below keep the door
+    exactly that wide — user-initiated inside capture, never polled,
+    never a substitute for the interview, never re-read after seeding."""
 
     def unwrapped(self, path):
         """Prose with its hard line wrapping collapsed to single spaces —
@@ -145,13 +151,16 @@ class TestIntakeBoundIsStated(unittest.TestCase):
                       " tracker starts a run.", text)
         self.assertIn("intake is never a work order", text)
 
-    def test_the_spec_names_the_bound_as_currently_unconditional(self):
-        # ADR-0030's inbound leg is provisional; the spec must say the
-        # bound holds *today* without implying the door is shut for good,
-        # or accepting that ADR later reads as contradicting the spec.
+    def test_the_spec_states_the_intake_convention(self):
+        # The accepted inbound leg: a marked issue may seed capture, and
+        # only there. Each pin guards one edge of the door.
         text = self.unwrapped(SPEC)
-        self.assertIn("provisional and unimplemented", text)
-        self.assertIn("holds without exception", text)
+        self.assertIn("seeding is not orientation, and nothing polls",
+                      text)
+        self.assertIn("intake seeds the interview; it does not replace it",
+                      text)
+        self.assertIn("never re-read after seeding", text)
+        self.assertIn("closes at Ship", text)
 
 
 class TestRouterRoutesOnlyStageSkills(unittest.TestCase):

@@ -28,7 +28,23 @@ interviews — it does not draft.
    not through `idea`: it is still a defect, and a maintenance run is
    what keeps Verify mandatory.
 
-3. **Interview.** One question at a time, each with your recommended
+3. **Seed from tracker intake (optional).** A defect may arrive as a
+   tracker issue carrying the project's intake marker (the protocol's
+   tracker-mirror section names the convention; packaging names the
+   concrete label). Two entry paths, both user-initiated: the user names
+   the issue directly ("capture #123"), or asks what intake is waiting —
+   list the intake-marked issues and let them pick. Copy into the brief
+   the issue title as the working title, the filed date, and the body's
+   observed-behavior and reproduction content — verbatim quotes are
+   fine — as raw material for the interview below; intake seeds the
+   interview, it does not replace it. Record the issue in frontmatter as
+   `intake: #123` (duplicates of the same defect join
+   `intake-duplicates:`), then never read it again — the brief is the
+   state from here. The issue closes at Ship, not now; a run abandoned
+   before then un-marks the issue instead. An intake-marked feature
+   request seeds nothing — route it to `idea` and leave the issue open.
+
+4. **Interview.** One question at a time, each with your recommended
    answer when you have one. For a defect brief, cover at least:
    - What exactly is broken — observed behavior vs expected?
    - Reproduction evidence: steps, a failing test, logs, a user report?
@@ -42,7 +58,7 @@ interviews — it does not draft.
    of degradation (build times, incident count, versions behind), and the
    target state that would end the run.
 
-4. **Decide re-entry depth.** A scoped fix with no design decisions
+5. **Decide re-entry depth.** A scoped fix with no design decisions
    re-enters at Implement; anything design-touching re-enters at
    Architect. Record the decision in frontmatter as
    `re-entry: implement` or `re-entry: architect`. With
@@ -51,10 +67,10 @@ interviews — it does not draft.
    `re-entry: architect`, leave work items out; the `architecture.md` +
    `breakdown.md` chain owns them.
 
-5. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
+6. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `defect.md`, with protocol frontmatter.
 
-6. **Hand off.** State the next stage per the recorded re-entry — the
+7. **Hand off.** State the next stage per the recorded re-entry — the
    `implement` skill or the `architect` skill (or the router).
 
 ## Rules

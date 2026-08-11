@@ -36,6 +36,11 @@ branch.
 5. **Post-release.** Check the shipped thing actually works where users get
    it (smoke check the deployed surface, install the published package).
    Record the evidence.
+   - A maintenance run seeded from a tracker intake issue (`intake:` in
+     `defect.md` frontmatter): close that issue — and any
+     `intake-duplicates:` — with a comment referencing the run directory.
+     "Closed" on the tracker means fixed in a release, not "a run
+     started" (the protocol's tracker-mirror section).
 
 6. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `release.md` with protocol frontmatter.
