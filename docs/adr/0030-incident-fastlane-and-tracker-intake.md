@@ -1,6 +1,6 @@
 # Incident fast lane and tracker intake
 
-- Status: provisional
+- Status: accepted (Decision 2, 2026-08-10; Decision 1 remains provisional)
 - Date: 2026-07-05
 
 The maintenance run (ADR-0025) closed the on-ramp gap for defects, but two

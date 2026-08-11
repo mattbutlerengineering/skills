@@ -91,6 +91,22 @@ class TestTriageTable(unittest.TestCase):
             for label in labels:
                 self.assertFalse(label.startswith("wo:"), label)
 
+    def test_the_intake_marker_is_a_real_taxonomy_label(self):
+        # ADR-0030 Decision 2 (accepted 2026-08-10): a sweep-filed defect
+        # is a capture seed, so it carries the marker capture lists by.
+        # The bootstrap must be able to create it (TRIAGE_LABELS), and
+        # screen() must find it in the shipped taxonomy.
+        self.assertIn(sweeps.INTAKE_MARKER, LABEL_NAMES)
+        self.assertIn(sweeps.INTAKE_MARKER, sweeps.TRIAGE_LABELS)
+
+    def test_only_defect_intake_carries_the_marker(self):
+        # Chore intake (label drift, plane drift) seeds no defect brief,
+        # so offering it to capture would route a report into a run.
+        drift = sweeps.drift_intake(["L: missing label x"])
+        reconcile = sweeps.reconcile_intake(["drift line"])
+        self.assertNotIn(sweeps.INTAKE_MARKER, drift.labels)
+        self.assertNotIn(sweeps.INTAKE_MARKER, reconcile.labels)
+
 
 class TestSanitize(unittest.TestCase):
     """The untrusted-input boundary: external text becomes bounded data."""
@@ -134,7 +150,8 @@ class TestSentryIntakes(unittest.TestCase):
         [intake], problems = sweeps.sentry_intakes([SENTRY_ENTRY])
         self.assertEqual(problems, [])
         self.assertEqual(intake.key, "sentry:PROJ-7K")
-        self.assertEqual(intake.labels, ("source:sentry", "type:defect"))
+        self.assertEqual(intake.labels,
+                         ("source:sentry", "type:defect", "pipeline-intake"))
         self.assertEqual(
             intake.title,
             "[sentry] PROJ-7K: TypeError: cannot read property 'id' of"
@@ -312,7 +329,7 @@ class TestEnsureLabels(unittest.TestCase):
                              sorted(sweeps.TRIAGE_LABELS))
 
     def test_it_creates_only_the_labels_a_sweep_must_stamp(self):
-        # Deliberately NOT the whole taxonomy: force-syncing all 27 labels
+        # Deliberately NOT the whole taxonomy: force-syncing all 28 labels
         # here would leave the label-drift sweep with nothing to report, ever
         # — it would heal the drift it exists to surface to a human.
         with tempfile.TemporaryDirectory() as tmp:
@@ -392,10 +409,11 @@ class TestEnsureLabels(unittest.TestCase):
             self.assertEqual(created_labels(runner), [])
 
     def test_every_label_a_sweep_can_stamp_is_ensured(self):
-        # TRIAGE_LABELS is derived from TRIAGE, so a new sweep kind cannot
-        # ship a label the bootstrap forgets to create.
+        # TRIAGE_LABELS is derived from TRIAGE plus the intake marker, so
+        # a new sweep kind cannot ship a label the bootstrap forgets to
+        # create.
         stampable = {label for labels in sweeps.TRIAGE.values()
-                     for label in labels}
+                     for label in labels} | {sweeps.INTAKE_MARKER}
         self.assertEqual(set(sweeps.TRIAGE_LABELS), stampable)
 
 
@@ -416,7 +434,9 @@ class TestFileIssues(unittest.TestCase):
                              intakes[0].title)
             labels = [create[i + 1] for i, arg in enumerate(create)
                       if arg == "--label"]
-            self.assertEqual(labels, ["source:sentry", "type:defect"])
+            self.assertEqual(labels,
+                             ["source:sentry", "type:defect",
+                              "pipeline-intake"])
 
     def test_an_open_issue_with_the_same_key_is_not_refiled(self):
         with tempfile.TemporaryDirectory() as tmp:

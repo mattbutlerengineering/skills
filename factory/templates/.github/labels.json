@@ -120,6 +120,11 @@
     "description": "Intake provenance"
   },
   {
+    "name": "pipeline-intake",
+    "color": "d876e3",
+    "description": "Tracker intake: offered to capture as a defect-brief seed (ADR-0030)"
+  },
+  {
     "name": "budget-exhausted",
     "color": "b60205",
     "description": "Flag: hard stop hit; owner must clear to re-dispatch"

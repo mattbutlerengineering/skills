@@ -104,9 +104,28 @@ issue filed there — including one a sweep filed unattended, carrying
 order: a work order exists only once its breakdown row does, and the
 dispatch plane never runs ahead of the knowledge plane (ADR-0032). A bug
 therefore reaches a work order only after a person starts a run for it,
-today through `capture`. ADR-0030's inbound leg would add an intake
-convention; it is provisional and unimplemented, so this bound currently
-holds without exception.
+through `capture`.
+
+**Tracker intake (ADR-0030).** A marked tracker issue may seed that
+capture step — the one inbound door in the bound above, and it opens
+only inside capture: seeding is not orientation, and nothing polls; an
+unclaimed intake issue just waits. An issue carrying the project's
+designated **intake marker** (the concrete marker — a tracker label —
+and the tracker CLI live in packaging) is offered two user-initiated
+ways: the user names the issue directly, or asks capture to list
+intake-marked issues and picks one. Seeding copies into `defect.md` the
+issue title as the working title, the filed date, and the body's
+observed-behavior and reproduction content as interview raw material —
+intake seeds the interview; it does not replace it. The issue itself is
+recorded in frontmatter as `intake: #123` (the tracker's own notation;
+duplicates of the same defect join an `intake-duplicates:` list and
+close together) and is never re-read after seeding — from that moment
+the tracker copy is a mirror again, updates flowing one way, out. The
+intake issue closes at Ship, when `release.md` exists, with a closing
+comment referencing the run directory; a run abandoned before then
+un-marks the issue, never silently closes it. An intake-marked feature
+request seeds nothing: a missing capability is a feature, and capture
+routes it to `idea`, leaving the issue open.
 
 A work item mirroring a tracker issue records the reference at the end of
 its checkbox line, in exactly this form:
@@ -185,6 +204,8 @@ date: 2026-07-01
 # stage-specific fields, e.g. ux: required | not-applicable
 #                          or re-entry: implement | architect (defect.md, at capture time)
 # ux-reason: <one line>   when ux is not-applicable
+# intake: #123            tracker issue that seeded defect.md (ADR-0030);
+#                         duplicates of the same defect join intake-duplicates: [...]
 # assumptions: [...]      any decision made without live user input
 ---
 ```

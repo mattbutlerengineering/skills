@@ -3,6 +3,8 @@ stage: capture
 run: maintenance:<slug>
 date: YYYY-MM-DD
 re-entry: implement | architect
+# intake: #123 — when a tracker intake issue seeded this brief (ADR-0030);
+#                duplicates of the same defect join intake-duplicates: [...]
 ---
 
 # Defect: <working title>

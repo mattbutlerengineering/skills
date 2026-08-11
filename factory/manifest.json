@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "files": {
     "templates/.github/CODEOWNERS": "419b0f05d7f1ee6e1660b1017e7528b76a3ca13f5e48ae8885cfa76070e321e4",
-    "templates/.github/labels.json": "b243dba1ded4003aeda499a0b95357c54179cb9b112af0781a2f6078b6bdb2dd",
+    "templates/.github/labels.json": "754d2c9792c8216e5db5f4c2e9f49e14d6ca5131da8598a9caea7ecf346fd4a8",
     "templates/.github/workflows/assembler.yml": "a3f9ed080f525de996c2a08d7120360b14a7a48cbad4b2446ff82a9d5935d400",
     "templates/.github/workflows/cost-report.yml": "c8501cfc10c122a9644852c60ef958d6e5e12c10308fff5c7dbe43ed854ccf5e",
     "templates/.github/workflows/design.yml": "1d717103b2e18cc5a2c291ad5cc8cc91e8c091c2e19657e194c2645eeef107ce",
@@ -33,7 +33,7 @@
     "templates/tools/factory/knowledge_plane.py": "376cb275d0f17c1185b20bfdd5171667c97b20030d9abf93a02db866e422a063",
     "templates/tools/factory/label_sync.py": "2dd74d12942271d71d64cb60bc54923f0589f14cedf7bf41bb56413a4e55c3d9",
     "templates/tools/factory/orientation_pack.py": "b67c338ba8f4ae762d891b1c329976c6daa8c46d95f377e4c1f3bfd22a85168c",
-    "templates/tools/factory/protocol.py": "be198f326c16d1bdbf92a30c4990d0477dd687536b4d5c20e092389a8cb2634d",
+    "templates/tools/factory/protocol.py": "4788aa4779d22bc71eaa628a94efe5350051b39c1264418a66bf91abd9d893ef",
     "templates/tools/factory/validator.py": "389f96816c83a4844d39ee57aac1cf709b41b9b65f55ab99050be3189495d47b",
     "templates/tools/factory/work_queue.py": "b19a3626501b6f78dc02b2aa31caedfe6df936d08fa7dcc262159a713025b07e"
   }

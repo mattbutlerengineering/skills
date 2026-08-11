@@ -108,7 +108,12 @@ read in both light and dark renderers, and
 `interactive-architecture-diagram` goes further for the cases that want
 showing rather than telling — one self-contained dark-mode HTML file with an
 inline-SVG system diagram, a narrated step-through presenter mode, and
-PNG/SVG export, with no build step and no external requests. `factory-init` stamps a product repo
+PNG/SVG export, with no build step and no external requests.
+`animated-diagram` is its ambient cousin — the same dark inline-SVG
+language, but always moving on its own: dashed connectors streaming in the
+direction of execution and dots traveling the request path, built from a
+description or an existing mermaid source, for READMEs, docs pages, and
+landing pages. `factory-init` stamps a product repo
 with the factory scaffold — offline gates, dispatch workflows, and the cost
 ledger — so promoted work orders can run there unattended. `doctor` is the
 read-only counterpart to that stamp: run in the repo that *uses* these

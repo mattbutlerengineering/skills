@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order intake — animated diagram</title>
+<style>
+  /* Palette mirrors references/design-system.md — change both together. */
+  :root {
+    --bg: #0d1117;
+    --grid: #1c2128;
+    --surface: #161b22;
+    --border: #30363d;
+    --conn: #6e7681;
+    --t1: #e6edf3;
+    --t2: #8b949e;
+    --t3: #6e7681;
+    --service: #4493f8;
+    --data: #a371f7;
+    --gateway: #3fb950;
+    --queue: #d29922;
+    --external: #8b949e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--t1);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .frame { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+  header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 16px; margin-bottom: 16px;
+  }
+  h1 { font-size: 15px; font-weight: 600; margin: 0; }
+  .sub { font-size: 12px; color: var(--t2); margin: 4px 0 0; }
+  #toggle {
+    background: var(--surface); color: var(--t2);
+    border: 1px solid var(--border); border-radius: 6px;
+    font: 500 12px system-ui, sans-serif; padding: 6px 14px; cursor: pointer;
+  }
+  #toggle:hover { color: var(--t1); border-color: var(--conn); }
+  svg { display: block; width: 100%; height: auto; }
+
+  text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .t1 { fill: var(--t1); font-size: 13px; font-weight: 600; }
+  .t2 { fill: var(--t2); font-size: 11px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 10px; }
+  .t3 {
+    fill: var(--t3); font-size: 9px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  /* Animation contract (references/design-system.md):
+     dasharray period == |stroke-dashoffset delta|, or the loop snaps.
+     Dashes are ALWAYS on (sync vs async stays legible with reduced
+     motion); only the animation itself is motion-gated. */
+  .flow { stroke-dasharray: 6 6; }
+  .flow.async { stroke-dasharray: 2 5; }
+  @media (prefers-reduced-motion: no-preference) {
+    .flow { animation: dashflow 0.8s linear infinite; }
+    .flow.async { animation-name: dashflow-async; animation-duration: 1.2s; }
+  }
+  @keyframes dashflow { to { stroke-dashoffset: -12; } }
+  @keyframes dashflow-async { to { stroke-dashoffset: -7; } }
+
+  .dot { transition: opacity 0.2s ease; }
+  .paused .flow { animation-play-state: paused; }
+  .paused .dot { opacity: 0; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <header>
+    <div>
+      <h1>Order intake</h1>
+      <p class="sub">Requests flow left to right; events fan out async below.</p>
+    </div>
+    <button id="toggle" aria-pressed="false">Pause</button>
+  </header>
+
+  <svg id="diagram" viewBox="0 0 880 392" role="img"
+       aria-label="Animated diagram: client requests flow through the API gateway to the order service and Postgres; the order service emits async events to the event bus, consumed by the email worker.">
+    <defs>
+      <pattern id="dotgrid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <circle cx="1.5" cy="1.5" r="1.5" fill="var(--grid)"/>
+      </pattern>
+      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+              markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--conn)"/>
+      </marker>
+      <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.35"/>
+      </filter>
+    </defs>
+
+    <rect x="0" y="0" width="880" height="392" fill="url(#dotgrid)"/>
+
+    <!-- boundaries (never animated) -->
+    <g class="boundaryg">
+      <rect x="240" y="48" width="592" height="272" rx="12"
+            fill="rgba(255,255,255,0.015)" stroke="var(--border)"
+            stroke-width="1.25" stroke-dasharray="6 4"/>
+      <text class="t3" x="264" y="72">vpc · us-west-2</text>
+    </g>
+
+    <!-- connectors: d always authored source → target, fill="none",
+         endpoints stopped 4px short of node edges -->
+    <g class="edgeg">
+      <path id="e1" class="flow" d="M 180 148 H 276" fill="none"
+            stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
+    </g>
+    <g class="edgeg">
+      <path id="e2" class="flow" d="M 420 148 H 484" fill="none"
+            stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
+    </g>
+    <g class="edgeg">
+      <path id="e3" class="flow" d="M 636 148 H 700" fill="none"
+            stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
+    </g>
+    <g class="edgeg">
+      <path id="e4" class="flow async" d="M 560 180 V 228" fill="none"
+            stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text class="t2 mono" x="572" y="208">order.created</text>
+    </g>
+    <g class="edgeg">
+      <path id="e5" class="flow async" d="M 636 256 H 700" fill="none"
+            stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
+    </g>
+
+    <!-- traveling dots: mpath reuses the connector path verbatim;
+         color = destination type accent; begin offsets stagger starts -->
+    <circle class="dot" r="3" fill="var(--gateway)">
+      <animateMotion dur="2s" repeatCount="indefinite" begin="0s">
+        <mpath href="#e1"/>
+      </animateMotion>
+    </circle>
+    <circle class="dot" r="3" fill="var(--service)">
+      <animateMotion dur="2s" repeatCount="indefinite" begin="-1s">
+        <mpath href="#e2"/>
+      </animateMotion>
+    </circle>
+    <circle class="dot" r="3" fill="var(--data)">
+      <animateMotion dur="2s" repeatCount="indefinite" begin="-0.4s">
+        <mpath href="#e3"/>
+      </animateMotion>
+    </circle>
+    <circle class="dot" r="3" fill="var(--queue)">
+      <animateMotion dur="2.8s" repeatCount="indefinite" begin="-1.6s">
+        <mpath href="#e4"/>
+      </animateMotion>
+    </circle>
+
+    <!-- nodes: opaque mask rect first, styled rect over it -->
+    <g class="nodeg">
+      <rect x="48" y="120" width="128" height="56" rx="8" fill="var(--surface)"/>
+      <rect x="48" y="120" width="128" height="56" rx="8"
+            fill="rgba(139,148,158,0.10)" stroke="var(--external)"
+            stroke-width="1.5" filter="url(#soft-shadow)"/>
+      <text class="t1" x="112" y="144" text-anchor="middle">Client</text>
+      <text class="t2" x="112" y="162" text-anchor="middle">browser · mobile</text>
+    </g>
+    <g class="nodeg">
+      <rect x="280" y="120" width="136" height="56" rx="8" fill="var(--surface)"/>
+      <rect x="280" y="120" width="136" height="56" rx="8"
+            fill="rgba(63,185,80,0.12)" stroke="var(--gateway)"
+            stroke-width="1.5" filter="url(#soft-shadow)"/>
+      <text class="t1" x="348" y="144" text-anchor="middle">API Gateway</text>
+      <text class="t2" x="348" y="162" text-anchor="middle">auth · rate limit</text>
+    </g>
+    <g class="nodeg">
+      <rect x="488" y="120" width="144" height="56" rx="8" fill="var(--surface)"/>
+      <rect x="488" y="120" width="144" height="56" rx="8"
+            fill="rgba(68,147,248,0.12)" stroke="var(--service)"
+            stroke-width="1.5" filter="url(#soft-shadow)"/>
+      <text class="t1" x="560" y="144" text-anchor="middle">Order Service</text>
+      <text class="t2" x="560" y="162" text-anchor="middle">REST · Node</text>
+    </g>
+    <g class="nodeg">
+      <rect x="704" y="120" width="104" height="56" rx="8" fill="var(--surface)"/>
+      <rect x="704" y="120" width="104" height="56" rx="8"
+            fill="rgba(163,113,247,0.12)" stroke="var(--data)"
+            stroke-width="1.5" filter="url(#soft-shadow)"/>
+      <text class="t1" x="756" y="144" text-anchor="middle">Postgres</text>
+      <text class="t2" x="756" y="162" text-anchor="middle">orders db</text>
+    </g>
+    <g class="nodeg">
+      <rect x="488" y="232" width="144" height="48" rx="8" fill="var(--surface)"/>
+      <rect x="488" y="232" width="144" height="48" rx="8"
+            fill="rgba(210,153,34,0.12)" stroke="var(--queue)"
+            stroke-width="1.5" filter="url(#soft-shadow)"/>
+      <text class="t1" x="560" y="252" text-anchor="middle">Event Bus</text>
+      <text class="t2" x="560" y="268" text-anchor="middle">SNS / SQS</text>
+    </g>
+    <g class="nodeg">
+      <rect x="704" y="232" width="104" height="48" rx="8" fill="var(--surface)"/>
+      <rect x="704" y="232" width="104" height="48" rx="8"
+            fill="rgba(68,147,248,0.12)" stroke="var(--service)"
+            stroke-width="1.5" filter="url(#soft-shadow)"/>
+      <text class="t1" x="756" y="252" text-anchor="middle">Email Worker</text>
+      <text class="t2" x="756" y="268" text-anchor="middle">Lambda</text>
+    </g>
+
+    <!-- legend: exactly the types and connector kinds used -->
+    <g class="legend">
+      <rect x="48" y="348" width="12" height="12" rx="3"
+            fill="rgba(68,147,248,0.12)" stroke="var(--service)" stroke-width="1.5"/>
+      <text class="t3" x="68" y="358">service</text>
+      <rect x="128" y="348" width="12" height="12" rx="3"
+            fill="rgba(163,113,247,0.12)" stroke="var(--data)" stroke-width="1.5"/>
+      <text class="t3" x="148" y="358">data</text>
+      <rect x="196" y="348" width="12" height="12" rx="3"
+            fill="rgba(63,185,80,0.12)" stroke="var(--gateway)" stroke-width="1.5"/>
+      <text class="t3" x="216" y="358">gateway</text>
+      <rect x="284" y="348" width="12" height="12" rx="3"
+            fill="rgba(210,153,34,0.12)" stroke="var(--queue)" stroke-width="1.5"/>
+      <text class="t3" x="304" y="358">queue</text>
+      <rect x="360" y="348" width="12" height="12" rx="3"
+            fill="rgba(139,148,158,0.10)" stroke="var(--external)" stroke-width="1.5"/>
+      <text class="t3" x="380" y="358">external</text>
+      <path class="flow" d="M 452 354 H 492" fill="none"
+            stroke="var(--conn)" stroke-width="1.5"/>
+      <text class="t3" x="500" y="358">sync request</text>
+      <path class="flow async" d="M 588 354 H 628" fill="none"
+            stroke="var(--conn)" stroke-width="1.5"/>
+      <text class="t3" x="636" y="358">async event</text>
+    </g>
+  </svg>
+</div>
+<script>
+  // Pause covers both animation worlds at once: SMIL dots via
+  // pauseAnimations(), CSS dashes via the body class. Reduced motion
+  // starts paused — SMIL does not honor the CSS media query on its own.
+  var svg = document.getElementById('diagram');
+  var btn = document.getElementById('toggle');
+  var paused = false;
+  function apply() {
+    document.body.classList.toggle('paused', paused);
+    if (paused) { svg.pauseAnimations(); btn.textContent = 'Play'; }
+    else { svg.unpauseAnimations(); btn.textContent = 'Pause'; }
+    btn.setAttribute('aria-pressed', String(paused));
+  }
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    paused = true;
+  }
+  apply();
+  btn.addEventListener('click', function () { paused = !paused; apply(); });
+</script>
+</body>
+</html>

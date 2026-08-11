@@ -25,10 +25,13 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
    the ground rules instead (language, framework, storage, deployment
    target) — these are the questions to ask first.
 
-4. **Draft.** Fill `TEMPLATE.md` (in this skill's directory) end to end:
-   approach, components and their responsibilities, data model, interfaces/
-   contracts between components, stack choices. For every decision that had
-   real alternatives, record the alternative and why it lost — one line each.
+4. **Draft.** Read [`references/canon.md`](references/canon.md) first — the
+   design rules that constrain what you may draft, and the vocabulary they
+   are written in. Then fill `TEMPLATE.md` (in this skill's directory) end
+   to end: approach, components and their responsibilities, data model,
+   interfaces/contracts between components, stack choices. For every
+   decision that had real alternatives, record the alternative and why it
+   lost — one line each.
 
 5. **Surface the trade-offs.** Present the draft with the 2–4 decisions that
    genuinely could have gone another way, each with your recommendation.
@@ -39,8 +42,11 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
    trade-off. If any is missing, the one-line record in the artifact is
    enough. ADRs go in the target repo's `docs/adr/`.
 
-7. **Write the artifact.** Save as `architecture.md` in the run directory
-   with protocol frontmatter. If UX Design was skipped, echo it:
+7. **Write the artifact.** Walk the closing checklist in
+   [`references/canon.md`](references/canon.md) against the draft first —
+   it is written against the template's own sections, so a miss names the
+   line to fix. Then save as `architecture.md` in the run directory with
+   protocol frontmatter. If UX Design was skipped, echo it:
    `ux: skipped — <ux-reason from prd.md>`.
 
 8. **Hand off.** Next stage is Decompose.

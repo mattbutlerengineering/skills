@@ -35,6 +35,7 @@ EXPECTED_NAMES = {
     "type:feature", "type:defect", "type:chore", "type:support",
     "type:sweep",
     "source:human", "source:sentry", "source:validator", "source:sweep",
+    "pipeline-intake",
     "budget-exhausted", "needs-human", "blueprint-drift",
 }
 
@@ -54,9 +55,9 @@ def gh(listing, **kwargs):
 
 
 class TestTaxonomyTemplate(unittest.TestCase):
-    def test_template_parses_with_exactly_the_27_names(self):
+    def test_template_parses_with_exactly_the_28_names(self):
         labels = taxonomy()
-        self.assertEqual(len(labels), 27)
+        self.assertEqual(len(labels), 28)
         self.assertEqual({label["name"] for label in labels}, EXPECTED_NAMES)
         for label in labels:
             self.assertEqual(sorted(label), ["color", "description", "name"],
@@ -159,7 +160,7 @@ class TestPlan(unittest.TestCase):
         problems = label_sync.plan([], desired)
         self.assertEqual(problems, [f"L: missing label {label['name']}"
                                     for label in desired])
-        self.assertEqual(len(problems), 27)
+        self.assertEqual(len(problems), 28)
 
     def test_tampered_color_yields_exact_mismatch_line(self):
         desired = taxonomy()
@@ -359,9 +360,9 @@ class TestCli(cli_contract.CliContract, cli_contract.ReportContract,
         code, out = self.run_cli([], gh([]))
         self.assertEqual(code, 1)
         lines = out.splitlines()
-        self.assertEqual(len(lines), 28)
+        self.assertEqual(len(lines), 29)
         self.assertEqual(lines[0], "L: missing label wo:draft")
-        self.assertEqual(lines[-1], "label-sync: 27 problem(s)")
+        self.assertEqual(lines[-1], "label-sync: 28 problem(s)")
 
 
 
