@@ -49,7 +49,7 @@ import factory_config
 import handoff
 from cli import CLI_FAILURES as GIT_FAILURES
 from cli import detail as _git_detail
-from cli import read_execution, runner
+from cli import read_execution, report, runner
 from knowledge_plane import repo_root
 
 CONTINUE = "CONTINUE"
@@ -265,17 +265,13 @@ def main(argv, clock=None, root=None):
         try:
             spend_usd = float(spend_raw)
         except ValueError:
-            print(f"bg: {spend_raw!r} is not a number")
-            print("budget_guard: 1 problem(s)")
-            return 1
+            return report("budget_guard",
+                          [f"bg: {spend_raw!r} is not a number"])
         root = repo_root()
         verdict, reason, problems = guard(root, size, spend_usd)
         print(reason)
-        for problem in problems:
-            print(problem)
         print(verdict)
-        print(f"budget_guard: {len(problems)} problem(s)")
-        return 1 if problems else 0
+        return report("budget_guard", problems)
     print(__doc__.strip())
     return 2
 

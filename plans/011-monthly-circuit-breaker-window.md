@@ -6,7 +6,7 @@
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 2e63a04..HEAD -- cost_ledger.py cost_report.py budget_guard.py gate_digest.py .github/workflows/cost-report.yml tests/test_cost_ledger.py tests/test_cost_report.py tests/test_budget_guard.py tests/test_gate_digest.py tests/test_factory_gates.py`
+> **Drift check (run first)**: `git diff --stat 2e63a04..HEAD -- cost_ledger.py cost_report.py budget_guard.py gate_digest.py .github/workflows/cost-report.yml tests/test_cost_ledger.py tests/test_cost_report.py tests/test_budget_guard.py tests/test_gate_digest.py tests/test_gates.py`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -79,7 +79,7 @@ as ADR-0034 says** — this plan makes the code agree.
 
 - Conventions: functions return label-prefixed problem strings
   (`ledger:`/`cr:` prefixes); tests assert exact strings through public
-  interfaces (see `tests/test_lint_checkers.py` for the idiom, and the
+  interfaces (see `tests/test_lint.py` for the idiom, and the
   existing `tests/test_cost_ledger.py` / `tests/test_cost_report.py`
   suites as the structural pattern). Repo is Python stdlib only.
   `cost_ledger.py`, `cost_report.py`, `budget_guard.py`, `gate_digest.py`,
@@ -106,7 +106,7 @@ as ADR-0034 says** — this plan makes the code agree.
 - `.github/workflows/cost-report.yml`
 - `tests/test_cost_ledger.py`, `tests/test_cost_report.py`,
   `tests/test_budget_guard.py`, `tests/test_gate_digest.py`,
-  `tests/test_factory_gates.py` (workflow-shape assertions only)
+  `tests/test_gates.py` (workflow-shape assertions only)
 - `factory/templates/**` and `factory/manifest.json` — **only** via
   `python3 factory_init.py update-manifest`, never by hand
 - `plans/README.md` (status row)
@@ -266,7 +266,7 @@ arity failures remain (step 4).
   appended ledger line carries `at`.
 - `tests/test_gate_digest.py`: assert captured gate rows carry `at`
   equal to the passage date.
-- `tests/test_factory_gates.py`: find the cost-report workflow assertions
+- `tests/test_gates.py`: find the cost-report workflow assertions
   (grep `COST_REPORT_WORKFLOW`) and add one test asserting the workflow
   text contains `gh variable set FACTORY_PAUSED --body false` (the
   resume leg exists).

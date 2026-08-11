@@ -137,19 +137,40 @@ class TestDecide(unittest.TestCase):
         verdict, _ = cost_report.decide(310, 300)
         self.assertEqual(verdict, cost_report.PAUSE)
 
+    def test_nonsense_spend_pauses_not_continues(self):
+        # NaN >= cap is False: without validation, nonsense would slip
+        # past the comparison and silently CONTINUE — the fail-open
+        # direction the breaker must not have. Same boundary discipline
+        # as budget_guard's _validate_spend, PAUSE-shaped.
+        for bad in (float("nan"), float("inf"), -1.0, "12", None, True):
+            verdict, reason = cost_report.decide(bad, 300)
+            self.assertEqual(verdict, cost_report.PAUSE, bad)
+            self.assertIn("is not a finite, non-negative number", reason)
+
 
 class TestGuard(unittest.TestCase):
+    def test_guard_returns_a_named_result(self):
+        # Six fields used to travel as a positional tuple unpacked (and
+        # mostly discarded) at every call site; the names are the
+        # contract now. Field order stays pinned because GuardResult is
+        # still a tuple — positional unpacking keeps working.
+        result = cost_report.guard("/does/not/exist", config=CONFIG)
+        self.assertEqual(
+            result._fields,
+            ("verdict", "reason", "totals", "month_totals", "cap",
+             "problems"))
+        self.assertEqual(result.verdict, cost_report.CONTINUE)
+
     def test_under_cap_continues_using_repo_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).factory()
             tree.ledger([entry("WO-0001", "r-1", "m", 1000, 50.0, "merged",
                                "2026-07-06")])
-            verdict, reason, totals, month_totals, cap, problems = \
-                cost_report.guard(tree.root)
-            self.assertEqual(problems, [])
-            self.assertEqual(verdict, cost_report.CONTINUE)
-            self.assertEqual(cap, 300)
-            self.assertEqual(totals["total_cost"], 50.0)
+            result = cost_report.guard(tree.root)
+            self.assertEqual(result.problems, [])
+            self.assertEqual(result.verdict, cost_report.CONTINUE)
+            self.assertEqual(result.cap, 300)
+            self.assertEqual(result.totals["total_cost"], 50.0)
 
     def test_a_simulated_cap_breach_pauses(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -160,12 +181,11 @@ class TestGuard(unittest.TestCase):
                 entry("WO-0002", "r-2", "m", 50000, 75.0, "merged",
                       "2026-07-08"),
             ])
-            verdict, reason, totals, month_totals, cap, problems = \
-                cost_report.guard(tree.root)
-            self.assertEqual(problems, [])
-            self.assertEqual(verdict, cost_report.PAUSE)
-            self.assertIn("FACTORY_PAUSED", reason)
-            self.assertEqual(totals["total_cost"], 325.0)
+            result = cost_report.guard(tree.root)
+            self.assertEqual(result.problems, [])
+            self.assertEqual(result.verdict, cost_report.PAUSE)
+            self.assertIn("FACTORY_PAUSED", result.reason)
+            self.assertEqual(result.totals["total_cost"], 325.0)
 
     def test_no_month_decides_on_the_lifetime_total(self):
         # guard(month=None) keeps the pre-window behavior: month_totals is
@@ -174,10 +194,9 @@ class TestGuard(unittest.TestCase):
             tree = FixtureTree(tmp).factory()
             tree.ledger([entry("WO-0001", "r-1", "m", 1000, 50.0, "merged",
                                "2026-07-06")])
-            verdict, reason, totals, month_totals, cap, problems = \
-                cost_report.guard(tree.root)
-            self.assertEqual(problems, [])
-            self.assertEqual(month_totals, totals)
+            result = cost_report.guard(tree.root)
+            self.assertEqual(result.problems, [])
+            self.assertEqual(result.month_totals, result.totals)
 
     def test_a_month_windows_the_verdict(self):
         # An over-cap June plus a quiet July: windowed on July, the guard
@@ -190,64 +209,58 @@ class TestGuard(unittest.TestCase):
                 entry("WO-0002", "r-2", "m", 1000, 5.0, "merged",
                       "2026-07-06"),
             ])
-            verdict, reason, totals, month_totals, cap, problems = \
-                cost_report.guard(tree.root, month="2026-07")
-            self.assertEqual(problems, [])
-            self.assertEqual(verdict, cost_report.CONTINUE)
-            self.assertEqual(month_totals["total_cost"], 5.0)
-            self.assertEqual(totals["total_cost"], 310.0)
+            result = cost_report.guard(tree.root, month="2026-07")
+            self.assertEqual(result.problems, [])
+            self.assertEqual(result.verdict, cost_report.CONTINUE)
+            self.assertEqual(result.month_totals["total_cost"], 5.0)
+            self.assertEqual(result.totals["total_cost"], 310.0)
 
     def test_no_runs_yet_is_well_under_cap(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).factory()
-            verdict, reason, totals, month_totals, cap, problems = \
-                cost_report.guard(tree.root)
-            self.assertEqual(problems, [])
-            self.assertEqual(verdict, cost_report.CONTINUE)
-            self.assertEqual(totals["total_cost"], 0.0)
+            result = cost_report.guard(tree.root)
+            self.assertEqual(result.problems, [])
+            self.assertEqual(result.verdict, cost_report.CONTINUE)
+            self.assertEqual(result.totals["total_cost"], 0.0)
 
     def test_an_injected_config_skips_the_repo_lookup(self):
-        verdict, reason, totals, month_totals, cap, problems = \
-            cost_report.guard("/does/not/exist", config=CONFIG)
-        self.assertEqual(problems, [])
-        self.assertEqual(verdict, cost_report.CONTINUE)
-        self.assertEqual(cap, 300)
+        result = cost_report.guard("/does/not/exist", config=CONFIG)
+        self.assertEqual(result.problems, [])
+        self.assertEqual(result.verdict, cost_report.CONTINUE)
+        self.assertEqual(result.cap, 300)
 
     def test_a_missing_factory_json_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
-            verdict, reason, totals, month_totals, cap, problems = \
-                cost_report.guard(tmp)
-            self.assertEqual(verdict, cost_report.PAUSE)
+            result = cost_report.guard(tmp)
+            self.assertEqual(result.verdict, cost_report.PAUSE)
             self.assertEqual(
-                reason,
+                result.reason,
                 "cr: no monthly cap could be resolved — failing closed")
-            self.assertIsNone(cap)
-            self.assertTrue(problems)
-            self.assertTrue(problems[0].startswith("config: missing"),
-                            problems)
+            self.assertIsNone(result.cap)
+            self.assertTrue(result.problems)
+            self.assertTrue(result.problems[0].startswith("config: missing"),
+                            result.problems)
 
     def test_an_uncapped_config_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
             tree.write("factory/templates/factory.json",
                        json.dumps({"budgets_usd": {"S": 5}}))
-            verdict, reason, totals, month_totals, cap, problems = \
-                cost_report.guard(tree.root)
-            self.assertEqual(verdict, cost_report.PAUSE)
-            self.assertEqual(problems, [
+            result = cost_report.guard(tree.root)
+            self.assertEqual(result.verdict, cost_report.PAUSE)
+            self.assertEqual(result.problems, [
                 "config: factory.json names no positive monthly_cap_usd"])
 
     def test_an_unparseable_ledger_line_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).factory()
             tree.write("docs/factory/costs.jsonl", "not json\n")
-            verdict, reason, totals, month_totals, cap, problems = \
-                cost_report.guard(tree.root)
-            self.assertEqual(verdict, cost_report.PAUSE)
+            result = cost_report.guard(tree.root)
+            self.assertEqual(result.verdict, cost_report.PAUSE)
             self.assertEqual(
-                reason, "cr: unreadable ledger — failing closed")
-            self.assertIsNone(cap)
-            self.assertTrue(problems)
+                result.reason, "cr: unreadable ledger — failing closed")
+            self.assertIsNone(result.cap)
+            self.assertTrue(result.problems)
 
 
 class TestComposeReport(unittest.TestCase):
@@ -403,13 +416,18 @@ class TestMonthlyWindow(unittest.TestCase):
                           outputs["body"])
 
 
-class TestMain(cli_contract.CliContract, unittest.TestCase):
+class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
+               unittest.TestCase):
     usage_fragment = "python3 cost_report.py report"
+    summary_line = "cost_report: 0 problem(s)"
 
     def run_cli(self, argv, env=None):
         return cli_contract.capture(
             cost_report.main, argv,
             env=env if env is not None else {})
+
+    def clean_cli(self):
+        return self.run_cli(["report"])
 
     def test_check_against_the_real_repo_config_exits_zero(self):
         # The real docs/factory/costs.jsonl holds only legacy (pre-at) and

@@ -12,8 +12,8 @@ The 8-commit diff `main...feat/seed-backlog` (1ac1042..df6323e): run
 artifacts, `docs/pipeline-protocol.md` seed-backlog section, `protocol.py`
 grammar (`_BACKLOG_RUN_REF`, `_BACKLOG_ENTRY`, `parse_backlog`,
 `check_backlog`), `lint.py` checker registration, prose wiring in
-`skills/operate|next|idea|capture/SKILL.md`, `tests/test_backlog.py`,
-`tests/test_lint_checkers.py` additions, and the real `docs/backlog.md`.
+`skills/operate|next|idea|capture/SKILL.md`, `tests/test_protocol_backlog.py`,
+`tests/test_lint.py` additions, and the real `docs/backlog.md`.
 Reviewed inline in three passes (correctness, design, security) after a
 dispatched reviewer agent stalled twice with no output.
 
@@ -54,7 +54,7 @@ dispatched reviewer agent stalled twice with no output.
   `products`); `splitlines` handles CRLF; duplicate/extra claim markers and
   trailing whitespace fail closed (reported by check, skipped by parse);
   parse/check divergence on malformed lines is the documented contract.
-  Tests (9 in `test_backlog.py`, 3 exact-string in `test_lint_checkers.py`)
+  Tests (9 in `test_protocol_backlog.py`, 3 exact-string in `test_lint.py`)
   cover conformant, malformed-bullet, bad-run-ref, claimed, and
   non-bullet inputs through public functions only. Suite 146 OK, lint 0/15.
 - **Design** — code matches `architecture.md`'s contracts exactly: grammar

@@ -22,6 +22,42 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from factory_fixture import CONFIG, FixtureTree  # noqa: E402
 
 
+class TestBands(unittest.TestCase):
+    """The routing-band vocabulary's one home (ADR-0048): gates' detector
+    F and the WO-0007 routing evidence read this tuple instead of
+    restating it."""
+
+    def test_the_three_bands_in_routing_order(self):
+        self.assertEqual(factory_config.BANDS,
+                         ("mechanical", "implementation",
+                          "architecture_review"))
+
+
+class TestArtifactPaths(unittest.TestCase):
+    """The installed-vs-payload path grammar's one home (ADR-0048): each
+    dual-home artifact's ordered candidate paths, installed first, with
+    the payload-side .github/ asymmetry stated exactly once."""
+
+    def test_factory_json_candidates_are_installed_first(self):
+        root = Path("/repo")
+        self.assertEqual(
+            factory_config.artifact_paths(root, "factory.json"),
+            ((root / ".github" / "factory.json", True),
+             (root / "factory" / "templates" / "factory.json", False)))
+
+    def test_labels_json_payload_home_keeps_its_github_segment(self):
+        root = Path("/repo")
+        self.assertEqual(
+            factory_config.artifact_paths(root, "labels.json"),
+            ((root / ".github" / "labels.json", True),
+             (root / "factory" / "templates" / ".github" / "labels.json",
+              False)))
+
+    def test_a_string_root_is_accepted(self):
+        paths = factory_config.artifact_paths("/repo", "factory.json")
+        self.assertEqual(paths[0][0], Path("/repo/.github/factory.json"))
+
+
 class TestLoad(unittest.TestCase):
     def test_loads_the_template_payload_copy(self):
         with tempfile.TemporaryDirectory() as tmp:

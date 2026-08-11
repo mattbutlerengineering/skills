@@ -20,20 +20,15 @@ has been modified from the original: multi-skill routing detection,
 per-run isolated project directories, settings-source isolation, and a
 routing-case schema with confusion-matrix reporting.
 
-POSIX-only (uses select.select on pipes). Requires the `claude` CLI
-(or the `omp` CLI with --harness omp).
+POSIX-only (cli.harness_run selects on pipes). Requires the `claude`
+CLI (or the `omp` CLI with --harness omp).
 """
 import argparse
 import datetime
 import json
-import os
-import select
-import signal
 import shutil
-import subprocess
 import sys
 import tempfile
-import time
 import uuid
 from collections import Counter, namedtuple
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -41,23 +36,25 @@ from pathlib import Path
 
 import cli
 import eval_schema
+import protocol
 from protocol import ALL_SKILLS, read_frontmatter
 
 ROOT = Path(__file__).resolve().parent
 
 
-def load_descriptions(skills_dir):
-    """Parse every skill's frontmatter description. Fails loudly on gaps."""
-    descriptions = {}
-    for slug in ALL_SKILLS:
-        path = skills_dir / slug / "SKILL.md"
-        fields = read_frontmatter(path)
-        if fields is None:
-            raise ValueError(f"{path} has no frontmatter block")
-        if not fields.get("description"):
-            raise ValueError(f"{path} frontmatter has no description")
-        descriptions[slug] = fields["description"]
-    return descriptions
+def load_descriptions(root):
+    """Parse every skill's frontmatter description under a plugin root.
+
+    Fails loudly on gaps with lint's exact strings —
+    protocol.skill_frontmatter_problems is the one frontmatter contract
+    (ADR-0052), so a description over Pi's 1024-char limit refuses to
+    eval just as it refuses to lint."""
+    problems = [p for slug in ALL_SKILLS
+                for p in protocol.skill_frontmatter_problems(root, slug)]
+    if problems:
+        raise ValueError("; ".join(problems))
+    return {slug: read_frontmatter(protocol.skill_path(root, slug))
+            ["description"] for slug in ALL_SKILLS}
 
 
 def build_project_dir(descriptions, run_id):
@@ -210,56 +207,15 @@ def detect_omp_fired(events, name_to_slug):
     return None
 
 
-def _stream_events(process, timeout):
-    """Yield decoded JSON-lines events from a live harness pipe until the
-    process exits AND its buffered output is drained, the stream closes,
-    or timeout elapses. Lines that are not valid JSON are skipped.
-
-    The drain-after-exit order is load-bearing: a harness that writes its
-    whole stream and exits within milliseconds is often dead before the
-    reader's first poll, and breaking on exit alone silently drops
-    whatever is still in the pipe — a fired run scores 'none' (observed
-    as a CI-only flake in the fake-harness suite). After exit the reader
-    stops the first time the pipe reads empty, so an orphaned child
-    holding the write end open but idle costs nothing; one that keeps
-    writing is bounded by the overall timeout. A trailing line with no
-    newline is dropped — harness streams are newline-terminated."""
-    start_time = time.time()
-    buffer = ""
-    while time.time() - start_time < timeout:
-        exited = process.poll() is not None
-        ready, _, _ = select.select([process.stdout], [], [],
-                                    0 if exited else 1.0)
-        if not ready:
-            if exited:
-                break
-            continue
-
-        chunk = os.read(process.stdout.fileno(), 8192)
-        if not chunk:
-            break
-        buffer += chunk.decode("utf-8", errors="replace")
-
-        while "\n" in buffer:
-            line, buffer = buffer.split("\n", 1)
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                yield json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-
-def _watch_stream(process, name_to_slug, timeout, detect=detect_fired):
-    """Live-pipe adapter: feed the decoded event stream to a detector."""
-    return detect(_stream_events(process, timeout), name_to_slug)
-
-
-def _claude_invocation(query, descriptions, run_id, model, isolate):
-    """(project_dir, cmd) for one claude -p run."""
+def _claude_command(prompt, model, isolate, run_id=None):
+    """argv for one claude -p run — the one home for the claude flag
+    grammar. --include-partial-messages is load-bearing for every
+    consumer: it emits the current stream_event frames, so no caller
+    depends exclusively on the legacy full assistant message shape
+    (ADR-0053). run_id is unused: claude isolation is flag-based
+    (--setting-sources), not name-based like omp's glob."""
     cmd = [
-        "claude", "-p", query,
+        "claude", "-p", prompt,
         "--output-format", "stream-json",
         "--verbose",
         "--include-partial-messages",
@@ -268,16 +224,17 @@ def _claude_invocation(query, descriptions, run_id, model, isolate):
         cmd.extend(["--setting-sources", "project"])
     if model:
         cmd.extend(["--model", model])
-    return build_project_dir(descriptions, run_id), cmd
+    return cmd
 
 
-def _omp_invocation(query, descriptions, run_id, model, isolate):
-    """(project_dir, cmd) for one omp -p run.
+def _omp_command(prompt, model, isolate, run_id=None):
+    """argv for one omp -p run — the one home for the omp flag grammar.
 
-    omp has no --setting-sources equivalent, so isolation is always on:
-    --skills restricts discovery to this run's own skills, and
+    omp has no --setting-sources equivalent, so isolation is always on
+    and the isolate flag is unused (claude-only): --skills restricts
+    discovery to the run's own *-skill-<run_id> entries, and
     --no-extensions/--no-rules/--no-session keep the user's omp
-    environment out of the run (the isolate flag is claude-only).
+    environment out of the run.
     """
     cmd = [
         "omp", "--mode", "json", "-p",
@@ -286,61 +243,60 @@ def _omp_invocation(query, descriptions, run_id, model, isolate):
     ]
     if model:
         cmd.extend(["--model", model])
-    cmd.append(query)
-    return build_omp_project_dir(descriptions, run_id), cmd
+    cmd.append(prompt)
+    return cmd
 
 
-# One registration per harness (ADR-0038): everything harness-specific
-# the runner — or a transcript recorder — needs, as one adapter. The
-# invocation composes the project builder with the CLI flags, so
+def _claude_invocation(query, descriptions, run_id, model, isolate):
+    """(project_dir, cmd) for one claude -p run."""
+    return (build_project_dir(descriptions, run_id),
+            _claude_command(query, model, isolate, run_id))
+
+
+def _omp_invocation(query, descriptions, run_id, model, isolate):
+    """(project_dir, cmd) for one omp -p run."""
+    return (build_omp_project_dir(descriptions, run_id),
+            _omp_command(query, model, isolate, run_id))
+
+
+# One registration per harness (ADR-0038, ADR-0053): everything
+# harness-specific a runner — trigger eval, charter replay, or a
+# transcript recorder — needs, as one adapter. binary is the executable
+# (provenance probes, fake-harness installs); command is the flag
+# grammar, uniform signature (prompt, model, isolate, run_id=None);
+# invocation composes the project builder with command, so
 # (project_dir, cmd) can only come from the tested path; detect is the
-# matching stream detector. Keys are pinned to eval_schema.HARNESSES,
+# matching stream detector; decode names the stream's line framing
+# (cli.decode_events — the shared JSON-lines decode) for consumers that
+# hold raw lines themselves. Keys are pinned to eval_schema.HARNESSES,
 # the vocabulary owner, by test.
-Harness = namedtuple("Harness", ("invocation", "detect"))
+Harness = namedtuple("Harness",
+                     ("binary", "command", "invocation", "detect", "decode"))
 
 HARNESSES = {
-    "claude": Harness(_claude_invocation, detect_fired),
-    "omp": Harness(_omp_invocation, detect_omp_fired),
+    "claude": Harness("claude", _claude_command, _claude_invocation,
+                      detect_fired, cli.decode_events),
+    "omp": Harness("omp", _omp_command, _omp_invocation,
+                   detect_omp_fired, cli.decode_events),
 }
 
 
 def run_single_query(query, descriptions, timeout, model, isolate,
                      harness="claude"):
-    """Run one query in a fresh isolated project; return fired slug or None."""
+    """Run one query in a fresh isolated project; return fired slug or None.
+
+    cli.harness_run owns the child's whole lifecycle (own process group,
+    drain-after-exit reader, unconditional group kill — ADR-0053); this
+    function's residual duty is the per-run project dir."""
     run_id = uuid.uuid4().hex[:8]
     name_to_slug = {f"{slug}-skill-{run_id}": slug for slug in descriptions}
     adapter = HARNESSES[harness]
     project_dir, cmd = adapter.invocation(query, descriptions, run_id,
                                           model, isolate)
-
-    env = cli.child_env()
-
-    process = None
     try:
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            cwd=project_dir,
-            env=env,
-            start_new_session=True,
-        )
-        return _watch_stream(process, name_to_slug, timeout,
-                             detect=adapter.detect)
+        with cli.harness_run(cmd, cwd=project_dir, timeout=timeout) as events:
+            return adapter.detect(events, name_to_slug)
     finally:
-        if process is not None:
-            # Signal the group even when the leader has already exited:
-            # start_new_session makes the leader's pid the pgid, and the
-            # kernel keeps that pgid alive while any grandchild survives.
-            try:
-                os.killpg(process.pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                # Group empty (then Popen.kill is a no-op — poll already
-                # recorded the exit) or a leader that setpgid itself out
-                # of the group; the leader-only kill covers the latter.
-                process.kill()
-            process.wait()
-            process.stdout.close()
         shutil.rmtree(project_dir, ignore_errors=True)
 
 
@@ -457,7 +413,9 @@ def main():
                         default="claude",
                         help="which CLI drives the queries (ADR-0031)")
     parser.add_argument("--eval-set", default=str(ROOT / "evals" / "routing.json"))
-    parser.add_argument("--skills-dir", default=str(ROOT / "skills"))
+    parser.add_argument("--skills-root", default=str(ROOT),
+                        help="plugin root; skill descriptions are read "
+                             "from <skills-root>/skills")
     parser.add_argument("--num-workers", type=int, default=10)
     parser.add_argument("--timeout", type=int, default=30,
                         help="seconds per claude -p run")
@@ -490,14 +448,14 @@ def main():
                   file=sys.stderr)
             return 1
 
-    descriptions = load_descriptions(Path(args.skills_dir))
+    descriptions = load_descriptions(Path(args.skills_root))
     isolate = not args.no_isolate_settings
 
     output = {
         "date": datetime.date.today().isoformat(),
         "harness": args.harness,
         "model": args.model,
-        "cli_version": cli.version(args.harness),
+        "cli_version": cli.version(HARNESSES[args.harness].binary),
         "runs_per_query": args.runs_per_query,
         "threshold": args.threshold,
         "isolated_settings": isolate,

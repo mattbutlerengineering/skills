@@ -57,7 +57,7 @@ import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json
+from cli import full_window, gh_json, label_names, report
 from knowledge_plane import (WO_TOKEN, breakdown_files, repo_root,
                              row_tracker_issue)
 from cli import gh_runner
@@ -395,7 +395,7 @@ def ensure_labels(root, run=gh_runner):
     problems = [f"sweeps: {suffix}" for suffix in suffixes]
     if listing is None:
         return problems
-    live = {label.get("name") for label in listing}
+    live = set(label_names(listing))
     for name in TRIAGE_LABELS:
         if name in live:
             continue
@@ -460,7 +460,11 @@ def known_keys(run=gh_runner):
     if suffix:
         return None, [f"sweeps: gh issue list {suffix}"]
     problems = []
-    if len(issues) >= LIST_WINDOW:
+    # The full-window RULE is cli.full_window's (one owner, made shared
+    # from this very check). The message stays this sweep's own — pinned,
+    # and it says what a full window means HERE: intake keys fall out of
+    # view and their intake is re-filed as a duplicate.
+    if full_window(issues, LIST_WINDOW):
         problems.append(f"sweeps: gh issue list returned a full {LIST_WINDOW}"
                         "-issue window; intake keys older than it are"
                         " invisible and would be re-filed as duplicates")
@@ -566,11 +570,7 @@ def main(argv, run=gh_runner):
         return 2
     root = repo_root()
     if kind == "ensure-labels":
-        problems = ensure_labels(root, run=run)
-        for problem in problems:
-            print(problem)
-        print(f"sweeps: {len(problems)} problem(s)")
-        return 1 if problems else 0
+        return report("sweeps", ensure_labels(root, run=run))
     if kind == "sentry":
         intakes, problems = sentry(path)
     elif kind == "reconcile":
@@ -582,14 +582,10 @@ def main(argv, run=gh_runner):
     # the valid intake — a signal nobody files is an outage nobody notices.
     # With no plans (bad JSON, non-array, failed gh) file_issues is a no-op.
     filed, file_problems = file_issues(root, intakes, run=run)
-    problems = problems + file_problems
-    for problem in problems:
-        print(problem)
     for key in filed:
         print(f"sweeps: filed intake issue for {key}")
-    print(f"sweeps: {len(filed)} issue(s) filed,"
-          f" {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("sweeps", problems + file_problems,
+                  prefix=f"{len(filed)} issue(s) filed, ")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """factory_init.py (manifest stamping) — fixture-tree tests.
 
-Same discipline as test_factory_gates: every function is exercised through
+Same discipline as test_gates: every function is exercised through
 its public interface against a temp fixture tree, and tests assert the
 exact problem strings callers will print. One deliberate exception: stamp's
 defense-in-depth refusals are unreachable through an honest tree (the
@@ -25,12 +25,14 @@ import gates
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling fixture_tree import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Every rel key update_manifest must record for the minimal fixture repo.
 EXPECTED_RELS = {
+    "templates/.github/CODEOWNERS",
     "templates/.github/workflows/validator.yml",
     "templates/.github/workflows/assembler.yml",
     "templates/.github/workflows/design.yml",
@@ -60,6 +62,7 @@ SEEDED_ADRS = REPO_ROOT / "factory" / "templates" / "docs" / "adr"
 # Hand-maintained map: the expected install destination for every
 # manifested rel, in target-relative form.
 EXPECTED_INSTALLS = {
+    "templates/.github/CODEOWNERS": ".github/CODEOWNERS",
     "templates/.github/workflows/validator.yml":
         ".github/workflows/validator.yml",
     "templates/.github/workflows/assembler.yml":
@@ -99,19 +102,26 @@ TAMPER_PROBLEM = (
 def make_factory_repo(root):
     """Minimal factory repo: a stub per mirrored root file (driven by
     factory_init.MIRRORS, so a newly mirrored tool is covered here without
-    another hand-written stub), plugin.json, and two templates that are
-    authored in place (not mirrored)."""
+    another hand-written stub; the Makefile and CODEOWNERS get bespoke
+    stubs shaped for their transforms), plugin.json, and one template that
+    is authored in place (not mirrored)."""
     tree = FixtureTree(root)
-    for src in factory_init.MIRRORS:
+    for src, _, _ in factory_init.MIRRORS:
         stem = Path(src).stem
         if src.endswith(".py"):
             tree.write(src, f"# {stem} stub\n{stem.upper()} = 1\n")
-        else:
+        elif src.endswith(".yml"):
             tree.write(src, f"name: {stem}\njobs: {{}}\n")
+    tree.write("Makefile",
+               "# root stub header\n"
+               "\n"
+               "check:\n"
+               "\tpython3 lint.py\n"
+               "\tpython3 gates.py\n"
+               "\tpython3 -m unittest discover tests\n")
+    tree.write(".github/CODEOWNERS", "* @owner\n")
     tree.write(".claude-plugin/plugin.json",
                json.dumps({"name": "software-factory", "version": "1.2.3"}))
-    tree.write("factory/templates/Makefile",
-               "check:\n\tpython3 tools/factory/gates.py\n")
     tree.write("factory/templates/factory.json",
                json.dumps({"wip_cap": 3}))
     return tree
@@ -141,17 +151,39 @@ class TestUpdateManifest(unittest.TestCase):
                     f"stale sha256 for {rel}")
             self.assertEqual(gates.check_scaffold_sync(tree.root), [])
 
-    def test_every_mirrored_root_file_lands_verbatim_in_the_payload(self):
-        """The payload is machine-copied from the repo root, so a stamped
-        product repo runs the same tools and the same CI as this one."""
+    def test_every_mirror_lands_as_its_transform_of_the_root_file(self):
+        """The payload is machine-generated from the repo root — verbatim
+        for identity entries, through product_makefile for the Makefile —
+        so a stamped product repo runs the same tools and the same CI as
+        this one."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = make_factory_repo(tmp)
             self.assertEqual(factory_init.update_manifest(tree.root), [])
-            for name, rel in factory_init.MIRRORS.items():
+            for name, rel, transform in factory_init.MIRRORS:
                 self.assertEqual(
-                    (tree.root / "factory" / "templates" / rel).read_bytes(),
-                    (tree.root / name).read_bytes(),
-                    f"{name} is not mirrored verbatim to templates/{rel}")
+                    (tree.root / "factory" / "templates" / rel).read_text(
+                        encoding="utf-8"),
+                    transform((tree.root / name).read_text(encoding="utf-8")),
+                    f"{name} does not land in templates/{rel} as its"
+                    " transform of the root file")
+
+    def test_codeowners_lands_verbatim_and_the_makefile_in_product_form(self):
+        """The two twins that used to be hand-authored: CODEOWNERS is a
+        byte-for-byte mirror, the Makefile is generated in product form
+        (header swapped, plugin lint dropped, commands respelled)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = make_factory_repo(tmp)
+            self.assertEqual(factory_init.update_manifest(tree.root), [])
+            templates = tree.root / "factory" / "templates"
+            self.assertEqual(
+                (templates / ".github" / "CODEOWNERS").read_bytes(),
+                (tree.root / ".github" / "CODEOWNERS").read_bytes())
+            self.assertEqual(
+                (templates / "Makefile").read_text(encoding="utf-8"),
+                factory_init.PRODUCT_MAKEFILE_HEADER + "\n"
+                "check:\n"
+                "\tpython3 tools/factory/gates.py\n"
+                "\tpython3 -m unittest discover -q tests\n")
 
     def test_recomputes_after_template_edit(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -194,13 +226,68 @@ class TestRealTreeMirrors(unittest.TestCase):
     REPO = Path(__file__).resolve().parents[1]
 
     def test_every_mirrored_root_file_matches_its_payload_copy(self):
-        for name, rel in factory_init.MIRRORS.items():
+        for name, rel, transform in factory_init.MIRRORS:
             with self.subTest(mirror=name):
                 self.assertEqual(
-                    (self.REPO / name).read_bytes(),
-                    (self.REPO / "factory" / "templates" / rel).read_bytes(),
+                    transform((self.REPO / name).read_text(encoding="utf-8")),
+                    (self.REPO / "factory" / "templates" / rel).read_text(
+                        encoding="utf-8"),
                     f"{name} differs from factory/templates/{rel} — run"
                     " python3 factory_init.py update-manifest")
+
+
+class TestProductForm(unittest.TestCase):
+    """The per-command root->product respelling. Public on purpose:
+    product_makefile generates the payload Makefile through it, and
+    TestLockstep (tests/test_gates.py) asserts both Makefiles'
+    command sets against it — never a test-private copy."""
+
+    def test_each_factory_tool_moves_under_tools_factory(self):
+        for tool in ("gates.py", "validator.py", "assembler.py",
+                     "cost_report.py", "gate_digest.py"):
+            with self.subTest(tool=tool):
+                self.assertEqual(
+                    factory_init.product_form(f"python3 {tool} --flag"),
+                    f"python3 tools/factory/{tool} --flag")
+
+    def test_the_stamped_test_run_is_quiet(self):
+        self.assertEqual(
+            factory_init.product_form("python3 -m unittest discover tests"),
+            "python3 -m unittest discover -q tests")
+
+    def test_a_path_agnostic_command_is_untouched(self):
+        command = "npx --yes playwright@1.62.1 test"
+        self.assertEqual(factory_init.product_form(command), command)
+
+
+class TestProductMakefile(unittest.TestCase):
+    """The Makefile's MIRRORS transform — the one production statement of
+    the root->product translation. Swap the root header comment for the
+    product one, drop the plugin-only lint line, respell every command."""
+
+    ROOT_TEXT = ("# The factory's canonical command set.\n"
+                 "# A second header line.\n"
+                 "\n"
+                 ".PHONY: check\n"
+                 "\n"
+                 "check:\n"
+                 "\tpython3 lint.py\n"
+                 "\tpython3 gates.py\n"
+                 "\tpython3 -m unittest discover tests\n")
+
+    def test_swaps_the_header_drops_lint_and_respells_commands(self):
+        self.assertEqual(
+            factory_init.product_makefile(self.ROOT_TEXT),
+            factory_init.PRODUCT_MAKEFILE_HEADER + "\n"
+            ".PHONY: check\n"
+            "\n"
+            "check:\n"
+            "\tpython3 tools/factory/gates.py\n"
+            "\tpython3 -m unittest discover -q tests\n")
+
+    def test_identity_returns_its_input_unchanged(self):
+        text = "* @owner\n"
+        self.assertEqual(factory_init.identity(text), text)
 
 
 class TestInstallPath(unittest.TestCase):
@@ -393,6 +480,21 @@ class TestStamp(unittest.TestCase):
             self.assertEqual((target / "Makefile").read_text(
                 encoding="utf-8"), "pre-existing\n")
             self.assertEqual(all_files(target), ["Makefile"])
+
+
+class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
+               unittest.TestCase):
+    usage_fragment = "update-manifest"
+    summary_line = "factory-init: 0 problem(s)"
+
+    def run_cli(self, argv):
+        return cli_contract.capture(factory_init.main, argv)
+
+    def clean_cli(self):
+        # Stamping the real payload into an empty target is the
+        # problem-free run (live-tree, like the acceptance test below).
+        with tempfile.TemporaryDirectory() as tmp:
+            return self.run_cli(["stamp", str(Path(tmp) / "product")])
 
 
 class TestUpdate(unittest.TestCase):

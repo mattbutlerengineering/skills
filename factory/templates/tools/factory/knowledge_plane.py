@@ -67,6 +67,25 @@ def row_tracker_issue(line):
     return int(match.group(1)) if match else None
 
 
+# A row merged before the cost ledger was born carries this trailing
+# annotation (ADR-0043): the exemption is a fact about a work order, so
+# it lives on the row it describes, never as a repo-specific list in a
+# mirrored module. The grammar lives here with its row siblings; the
+# skip policy (detector G exempts annotated rows from its
+# merged-row-must-be-recorded check) stays with gates.py.
+PRE_LEDGER_MARK = "(pre-ledger)"
+_PRE_LEDGER = re.compile(re.escape(PRE_LEDGER_MARK) + r"\s*$")
+
+
+def row_pre_ledger(line):
+    """Does this breakdown row carry the (pre-ledger) annotation
+    (ADR-0043)? The annotation is written TRAILING — the mark ends the
+    row, after the tracker mirror — so only a checkbox row ending with
+    it is annotated. The mark as mid-row prose (a row about the
+    annotation) marks nothing, and a non-row line never does."""
+    return bool(ROW.match(line)) and bool(_PRE_LEDGER.search(line))
+
+
 # A row's own declared metadata. `size:` is the cost band (factory_config
 # resolves it to a dollar budget) and `blocked by:` is the dependency edge
 # the ROW comment above refers to as "later tokens". Both are clause-scoped

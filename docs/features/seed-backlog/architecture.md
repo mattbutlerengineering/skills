@@ -46,7 +46,7 @@ for orientation.
   `check_backlog` lint checker registered in `lint.py`'s `CHECKERS`
   validating `docs/backlog.md` when present (absent file = no problems —
   strictly opt-in, like the tracker bridge).
-- Collaborators: `lint.py`, `tests/test_lint_checkers.py`.
+- Collaborators: `lint.py`, `tests/test_lint.py`.
 
 ## Data model
 

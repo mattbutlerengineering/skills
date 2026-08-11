@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 79b08fc..HEAD -- trigger_eval.py tests/test_run_eval.py`
+> **Drift check (run first)**: `git diff --stat 79b08fc..HEAD -- trigger_eval.py tests/test_trigger_eval_run_eval.py`
 > If `trigger_eval.py`'s `run_eval` changed since this plan was written,
 > compare the "Current state" excerpt against the live code before
 > proceeding; on a mismatch, treat it as a STOP condition.
@@ -27,8 +27,8 @@
 `runs_per_query` out over a `ProcessPoolExecutor`, folds each run's fired
 slug (or a worker exception) into per-case `Counter`s, and assembles the
 scored results. `score_case`/`summarize` are covered
-(`tests/test_trigger_scoring.py`) and detection is covered
-(`tests/test_trigger_detection.py`), but the fan-out itself has zero
+(`tests/test_trigger_eval_scoring.py`) and detection is covered
+(`tests/test_trigger_eval_detection.py`), but the fan-out itself has zero
 coverage. A defect here (miscounted runs, a case silently dropped, an
 exception mishandled) makes the measurement tool lie — and LEDGER evidence
 is built from this tool's output, so a silent miscount poisons the repo's
@@ -94,31 +94,31 @@ def run_eval(cases, descriptions, workers, runs_per_query, timeout,
   - Detection (`detect_fired`) fires on a `stream_event` /
     `content_block_start` with tool `Skill` followed by a
     `content_block_delta` whose `partial_json` contains the command stem —
-    see `tests/test_trigger_detection.py` helpers `block_start`/`delta`
+    see `tests/test_trigger_eval_detection.py` helpers `block_start`/`delta`
     for the exact JSON shapes.
 - Repo conventions: stdlib-only, plain `unittest`, module docstring
   explaining the seam, tests through public interfaces. Exemplars:
-  `tests/test_trigger_scoring.py` (case-dict helper), 
-  `tests/test_trigger_detection.py` (subprocess + stream-json shapes).
+  `tests/test_trigger_eval_scoring.py` (case-dict helper), 
+  `tests/test_trigger_eval_detection.py` (subprocess + stream-json shapes).
 
 ## Commands you will need
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
 | Tests   | `python3 -m unittest discover tests` | `OK`, exit 0 |
-| One test module | `python3 -m unittest tests.test_run_eval -v` | all pass |
+| One test module | `python3 -m unittest tests.test_trigger_eval_run_eval -v` | all pass |
 | Lint    | `python3 lint.py` | `lint: 0 problem(s) across 13 skills`, exit 0 |
 
 ## Scope
 
 **In scope**:
-- `tests/test_run_eval.py` (create) — the only file this plan adds.
+- `tests/test_trigger_eval_run_eval.py` (create) — the only file this plan adds.
 - `trigger_eval.py` — **read-only**. This plan must not modify it.
 
 **Out of scope** (do NOT touch):
 - Any production file. If `run_eval` turns out to need a change to be
   testable, that's a STOP condition, not a refactor license.
-- `tests/test_trigger_scoring.py`, `tests/test_trigger_detection.py` —
+- `tests/test_trigger_eval_scoring.py`, `tests/test_trigger_eval_detection.py` —
   reuse their *patterns*, don't edit them.
 
 ## Git workflow
@@ -131,7 +131,7 @@ def run_eval(cases, descriptions, workers, runs_per_query, timeout,
 
 ### Step 1: Write the fake-CLI test module
 
-Create `tests/test_run_eval.py`:
+Create `tests/test_trigger_eval_run_eval.py`:
 
 ```python
 """run_eval fan-out seam: cases x runs_per_query over a process pool,
@@ -261,7 +261,7 @@ fake executable, and *replacing* PATH instead of prepending). If
 platform, keep the system dirs but not the claude dir — e.g.
 `os.environ["PATH"] = "/usr/bin:/bin"` — and add a comment saying why.
 
-**Verify**: `python3 -m unittest tests.test_run_eval -v` → all 4 tests pass
+**Verify**: `python3 -m unittest tests.test_trigger_eval_run_eval -v` → all 4 tests pass
 in under ~30 seconds. (These are characterization tests of existing
 behavior — they should pass immediately; a failure means either the fake's
 JSON shapes are wrong or you found a real fan-out bug. If the latter,
@@ -275,7 +275,7 @@ that's a STOP condition — report it, don't fix production code here.)
 ### Step 3: Commit
 
 ```bash
-git add tests/test_run_eval.py
+git add tests/test_trigger_eval_run_eval.py
 git commit -m "test: cover run_eval fan-out and counter assembly via fake CLI"
 ```
 
@@ -285,15 +285,15 @@ This plan IS the test plan. Cases covered: happy-path counting across
 workers and repeat runs; wrong-slug firing feeding the confusion matrix;
 result order preserved relative to input cases; worker exception bucketed
 as `"none"` with a warning (the silent-failure path). Structural pattern:
-`tests/test_trigger_detection.py` (stream-json shapes) and
-`tests/test_trigger_scoring.py` (case helper).
+`tests/test_trigger_eval_detection.py` (stream-json shapes) and
+`tests/test_trigger_eval_scoring.py` (case helper).
 
 ## Done criteria
 
-- [ ] `python3 -m unittest tests.test_run_eval -v` → 4 tests, all pass
+- [ ] `python3 -m unittest tests.test_trigger_eval_run_eval -v` → 4 tests, all pass
 - [ ] `python3 -m unittest discover tests` exits 0
 - [ ] `python3 lint.py` exits 0
-- [ ] `git status --short` shows only `tests/test_run_eval.py` added; `trigger_eval.py` unmodified
+- [ ] `git status --short` shows only `tests/test_trigger_eval_run_eval.py` added; `trigger_eval.py` unmodified
 - [ ] No test makes a network/API call (fake CLI only)
 - [ ] `plans/README.md` status row updated
 

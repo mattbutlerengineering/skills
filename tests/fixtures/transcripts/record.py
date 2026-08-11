@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Record a real claude -p stream-json transcript for detection pinning.
 
-The project layout, flags, and detector come from the runner's own
-harness adapter (trigger_eval.HARNESSES["claude"], ADR-0038), so the
-recording and run_single_query cannot drift — this script adds only the
-tee of every raw stdout line to <name>.jsonl in this directory.
+The project layout, flags, detector, and line decode come from the
+runner's own harness adapter (trigger_eval.HARNESSES["claude"],
+ADR-0038, ADR-0045), so the recording and run_single_query cannot
+drift — this script adds only the tee of every raw stdout line to
+<name>.jsonl in this directory.
 Like the runner, it stops as soon as the detector decides, then writes
 the outcome, query, date, CLI version, and invocation facts into
 provenance.json. See README.md here for when to re-record; transcripts
@@ -36,7 +37,7 @@ RUN_ID = "pinned01"
 
 
 def record(name, query):
-    descriptions = load_descriptions(ROOT / "skills")
+    descriptions = load_descriptions(ROOT)
     name_to_slug = {f"{slug}-skill-{RUN_ID}": slug for slug in descriptions}
     # model=None, isolate=True: the same invocation the eval runner uses
     # (and provenance.json records below)
@@ -48,19 +49,13 @@ def record(name, query):
                                stderr=subprocess.DEVNULL, cwd=project_dir,
                                env=env, text=True)
 
-    def teed_events():
+    def teed_lines():
         for line in process.stdout:
             lines.append(line.rstrip("\n"))
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                yield json.loads(stripped)
-            except json.JSONDecodeError:
-                continue
+            yield line
 
     try:
-        fired = ADAPTER.detect(teed_events(), name_to_slug)
+        fired = ADAPTER.detect(ADAPTER.decode(teed_lines()), name_to_slug)
     finally:
         if process.poll() is None:
             process.kill()

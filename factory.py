@@ -30,8 +30,7 @@ import sys
 # verb -> (module, calling convention). Pinned derived, never grown by
 # hand alone: test_factory_cli asserts one verb per CLI-bearing root
 # module and that each verb is its module's name. Conventions: "argv"
-# mains take argv[1:]-shaped args, "argv0" mains take full argv (their
-# [0] a program name), "bare" mains take nothing.
+# mains take argv[1:]-shaped args, "bare" mains take nothing.
 VERBS = {
     "assembler": ("assembler", "argv"),
     "budget-guard": ("budget_guard", "argv"),
@@ -43,7 +42,6 @@ VERBS = {
     "handoff": ("handoff", "argv"),
     "label-sync": ("label_sync", "argv"),
     "lint": ("lint", "bare"),
-    "orientation": ("orientation", "argv0"),
     "sweeps": ("sweeps", "argv"),
     "trigger-eval": ("trigger_eval", "bare"),
     "validator": ("validator", "argv"),
@@ -86,8 +84,6 @@ def main(argv):
                   f" (got {' '.join(rest)!r})")
             return 2
         return module.main()
-    if style == "argv0":
-        return module.main([f"{module_name}.py"] + rest)
     return module.main(rest)
 
 

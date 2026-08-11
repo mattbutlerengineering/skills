@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 import cost_ledger
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json, write_outputs
+from cli import full_window, gh_json, label_names, report, write_outputs
 from knowledge_plane import (breakdown_files, repo_root, row_tracker_issue,
                              row_work_order)
 from cli import gh_runner
@@ -186,10 +186,6 @@ def mirror_map(root):
     return mapping
 
 
-def _issue_labels(entry):
-    return [(label.get("name") or "") for label in entry.get("labels") or []]
-
-
 def _timelines(mirrored, run, problems):
     """{issue number: label events} for every mirrored issue gh can
     answer for; a failed fetch is a problem, never a lost queue item
@@ -215,17 +211,18 @@ def _timelines(mirrored, run, problems):
 
 def _capture_latency(root, mirror, events_by_issue, problems):
     """Append every not-yet-recorded gate passage to the cost ledger and
-    return the new rows. run_id keys the passage timestamp, so a daily
-    re-scan of the same history appends nothing."""
+    return the new rows. The dedup identity is cost_ledger.row_key
+    (ADR-0041): gate_entry keys run_id on the passage timestamp, so a
+    daily re-scan of the same history appends nothing."""
     existing, ledger_problems = cost_ledger.read(root)
     problems.extend(ledger_problems)
-    recorded = {(entry["wo"], entry["run_id"]) for entry in existing}
+    recorded = {cost_ledger.row_key(entry) for entry in existing}
     new_rows = []
     for number, events in sorted(events_by_issue.items()):
         for gate, waited, passed_at in gate_passages(events):
             row = cost_ledger.gate_entry(mirror[number], gate, waited,
                                          passed_at)
-            if (row["wo"], row["run_id"]) not in recorded:
+            if cost_ledger.row_key(row) not in recorded:
                 new_rows.append(row)
     for row in new_rows:
         cost_ledger.append(root, row)
@@ -243,7 +240,7 @@ def _queues(mirror, open_issues, events_by_issue, now):
         for entry in sorted(open_issues, key=lambda e: e["number"]):
             number = entry["number"]
             if number not in mirror or \
-                    queue_label not in _issue_labels(entry):
+                    queue_label not in label_names(entry):
                 continue
             since = waiting_since(events_by_issue.get(number, []),
                                   queue_label)
@@ -338,10 +335,7 @@ def main(argv, env=None, root=None, run=gh_runner, clock=None):
     else:
         print(__doc__.strip())
         return 2
-    for problem in problems:
-        print(problem)
-    print(f"gate_digest: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("gate_digest", problems)
 
 
 if __name__ == "__main__":

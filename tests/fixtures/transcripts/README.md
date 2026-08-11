@@ -2,7 +2,7 @@
 
 Real `claude -p` stream-json transcripts, pinned as test fixtures so the
 trigger-eval detection seam has a second adapter beside the live pipe
-(issue #24). `tests/test_trigger_detection.py` replays each transcript
+(issue #24). `tests/test_trigger_eval_detection.py` replays each transcript
 through `detect_fired` and asserts the outcome recorded here — a CLI
 output-shape change breaks CI instead of silently corrupting eval
 results. (These are not eval fixtures in the CONTEXT.md sense — no seed

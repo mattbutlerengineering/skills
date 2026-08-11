@@ -60,12 +60,6 @@ class TestDispatch(unittest.TestCase):
             self.assertEqual(factory.main(["gates", "--selftest"]), 3)
         fake.assert_called_once_with(["--selftest"])
 
-    def test_an_argv0_main_gets_a_program_name_before_the_args(self):
-        with mock.patch("orientation.main", return_value=0) as fake:
-            factory.main(["orientation", "docs/features/demo"])
-        fake.assert_called_once_with(["orientation.py",
-                                      "docs/features/demo"])
-
     def test_a_bare_main_refuses_extra_arguments(self):
         """lint/trigger-eval/charter-replay mains take nothing; dropping
         the caller's arguments silently would look like they applied."""

@@ -41,6 +41,11 @@ ai-tooling suite where the rule is the same idea):
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
 
+The letter namespace does not end at I. Detector L (LABEL-SYNC) is
+network-side and lives in label_sync.py, driven by scheduled sweeps —
+network calls stay out of this offline gate — and J/K are unclaimed.
+DETECTORS (beside CHECKERS below) is the full roster.
+
 `--selftest` runs the checkers against fixture trees and exits nonzero
 on a failing assertion. Both run in CI (validator.yml, via `make check`)
 on every push/PR.
@@ -60,10 +65,11 @@ from pathlib import Path
 
 import cost_ledger
 import factory_config
-from cli import read_event
+from cli import read_event, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             breakdown_files, repo_root, run_dirs)
+                             breakdown_files, repo_root, row_pre_ledger,
+                             run_dirs)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
@@ -77,8 +83,6 @@ from protocol import read_frontmatter
 # gate no longer assumes every PR is a work order.)
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
-
-CONFIG_ROUTES = ("mechanical", "implementation", "architecture_review")
 
 # ADR status vocabulary (docs/adr/README.md), as a status head plus an
 # optional free-text annotation: "accepted (shipped by ...)" is accepted.
@@ -100,12 +104,6 @@ ADR_INDEX_ROW = re.compile(
 # not the tracker, is the state). Bullet-and-whitespace shape aligned with
 # knowledge_plane.ROW; separate owner because only the checked form counts.
 MERGED_ROW = re.compile(r"^\s*[-*+]\s+\[x\]", re.IGNORECASE)
-
-# A row merged before the cost ledger was born carries this annotation
-# (ADR-0043); G's merged-row-must-be-recorded check skips it. The
-# exemption lives on the row it describes — a repo-specific list in this
-# mirrored module would leak one repo's WO ids into every stamped repo.
-PRE_LEDGER_MARK = "(pre-ledger)"
 
 # Markdown links to repo paths; URLs, autolinks and bare anchors are not.
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
@@ -577,7 +575,8 @@ def check_blueprint_drift(root):
 def merged_wo_rows(root):
     """(breakdown path, lineno, WO token) for every checked breakdown row —
     the artifact-side record that a work order merged (ADR-0004). Rows
-    annotated (pre-ledger) are excluded: they merged before the ledger
+    carrying the trailing (pre-ledger) annotation — knowledge_plane's
+    row_pre_ledger grammar — are excluded: they merged before the ledger
     existed and G owes them no ledger line (ADR-0043)."""
     rows = []
     for breakdown, lines in breakdown_files(root):
@@ -585,7 +584,7 @@ def merged_wo_rows(root):
         for lineno, line in enumerate(lines, 1):
             wo = WO_TOKEN.search(line)
             if (MERGED_ROW.match(line) and wo
-                    and PRE_LEDGER_MARK not in line):
+                    and not row_pre_ledger(line)):
                 rows.append((rel, lineno, wo.group(0)))
     return rows
 
@@ -598,29 +597,26 @@ def check_cost_ledger(root):
     records into it, so a freshly stamped repo has no runs to account for
     — the rule bites once the ledger exists.
 
-    The line grammar itself is cost_ledger.parse — the same rule the
-    weekly report reads with (ADR-0037), so the two cannot diverge. What
-    stays here is G's own work: the cross-checks between ledger and
-    breakdown (a recorded wo must have a row; a merged row must be
-    recorded).
+    The file read and line grammar are cost_ledger.load — the same
+    labelled read the weekly report is built on (ADR-0037, ADR-0049), so
+    the two cannot diverge, down to the cannot-read string. What stays
+    here is G's own work: the cross-checks between ledger and breakdown
+    (a recorded wo must have a row; a merged row must be recorded).
 
     A gate-latency row (ADR-0041) never satisfies the merged-order
     check: it records queue time at $0 with no tokens, and the monthly
     breaker's sum excludes it — counting it as spend coverage kept G
     green on a ledger that accounted for nothing (issue #222)."""
-    ledger = root / COST_LEDGER
-    if not ledger.is_file():
-        return []
-    try:
-        text = ledger.read_text(encoding="utf-8")
-    except OSError as err:
-        return [f"G: cannot read {COST_LEDGER}: {err}"]
-    problems = []
+    rows, problems = cost_ledger.load(root, "G")
+    if rows is None:
+        # Absent (silent, no runs yet) or unreadable (the labelled
+        # cannot-read problem) — either way the line walk and the
+        # merged-row cross-check have no ledger to bite on.
+        return problems
     wo_rows = collect_wo_rows(root)
     recorded = set()
-    for lineno, entry, suffixes in cost_ledger.parse(text):
-        problems.extend(f"G: {COST_LEDGER}:{lineno} {suffix}"
-                        for suffix in suffixes)
+    for lineno, entry, located in rows:
+        problems.extend(located)
         wo = cost_ledger.wo_token(entry) if entry is not None else None
         if wo:
             if cost_ledger.gate_wait(entry) is None:
@@ -867,9 +863,18 @@ def check_label_wiring(root):
 
 
 def check_config_shape(root):
-    """F: factory config must parse and every field be a valid token."""
-    candidates = [root / "factory" / "templates" / "factory.json",
-                  root / ".github" / "factory.json"]
+    """F: factory config must parse and every field be a valid token.
+
+    Every candidate home, not the first hit: the payload copy and the
+    installed copy drift independently, so F validates each one that
+    exists, where the runtime's factory_config.load reads the first. The
+    candidates are the seam's (ADR-0048); only the REPORT order stays
+    payload-first — the order F has always printed, pinned by its tests —
+    which is the inverse of the seam's installed-first read order. The
+    retained divergence is the order of report lines, never which files
+    are checked."""
+    candidates = [path for path, _ in reversed(
+        factory_config.artifact_paths(root, "factory.json"))]
     problems = []
     for path in candidates:
         if not path.is_file():
@@ -888,8 +893,9 @@ def check_config_shape(root):
         if not isinstance(budgets, dict) or sorted(budgets) != ["L", "M", "S"]:
             problems.append(f"F: {rel} budgets_usd must map exactly S, M, L")
         routing = config.get("routing")
-        if not isinstance(routing, dict) or sorted(routing) != sorted(CONFIG_ROUTES):
-            expected = ", ".join(CONFIG_ROUTES)
+        if not isinstance(routing, dict) \
+                or sorted(routing) != sorted(factory_config.BANDS):
+            expected = ", ".join(factory_config.BANDS)
             problems.append(f"F: {rel} routing must map exactly {expected}")
         problems += [f"F: {rel} {problem}"
                      for problem in factory_config.config_problems(config)]
@@ -938,21 +944,26 @@ def _fence_closes(line, char, length):
     return marker[0] == char and len(marker) >= length
 
 
-def _verification_sections(text):
-    """Split a verification artifact into heading-delimited sections, each
-    recording — IN ITS OWN SCOPE — whether it shows literal output, discloses
-    a check as NOT RUN, and what verdicts it asserts. Scope is the point:
-    evidence parked in an appendix does not vouch for a criterion three
-    headings away. Fenced content is inert: a heading, a `Result:` line, or a
-    "not run" quoted inside evidence is output, not the author's assertion.
+def verification_sections(text):
+    """Split a verification artifact's TEXT into heading-delimited sections,
+    each recording — IN ITS OWN SCOPE — whether it shows literal output,
+    discloses a check as NOT RUN, and what verdicts it asserts. Scope is the
+    point: evidence parked in an appendix does not vouch for a criterion
+    three headings away. Fenced content is inert: a heading, a `Result:`
+    line, or a "not run" quoted inside evidence is output, not the author's
+    assertion.
 
     A section asserts a verdict exactly one way: `results` holds its LABELLED
-    verdict lines (the verdict-noun vocabulary — see RESULT_LINE). Prose and
-    heading text assert nothing. YAML frontmatter is metadata and is skipped
-    outright, so a `status:` field is never mistaken for an author's verdict.
+    verdict lines as (lineno, verdict) pairs (the verdict-noun vocabulary —
+    see RESULT_LINE). Prose and heading text assert nothing. YAML frontmatter
+    is metadata and is skipped outright, so a `status:` field is never
+    mistaken for an author's verdict.
 
-    Returns (sections, unclosed), where `unclosed` is the line number of a
-    fence that is never closed, or None."""
+    Public with evidence_problems: pure text in, structure out, so the H
+    grammar is exercisable without a fixture tree. Returns (sections,
+    unclosed), where each section is {"title", "lineno", "evidence",
+    "not_run", "results"} and `unclosed` is the line number of a fence that
+    is never closed, or None."""
     sections = []
 
     def blank(title, lineno):
@@ -1005,11 +1016,14 @@ def _verification_sections(text):
     return sections, (fence[2] if fence else None)
 
 
-def check_evidence_honesty(root):
-    """H: a criterion that asserts a verdict must show literal output or
-    disclose that the check was NOT RUN. Prose confidence is not evidence
-    (PRD-0001: a change whose verification is asserted but not evidenced
-    fails the build).
+def evidence_problems(text):
+    """The H grammar over one verification artifact's TEXT: [(lineno,
+    suffix)] for every violation, in artifact order — an unclosed fence
+    first (it would otherwise swallow every criterion after it), then each
+    section's unevidenced claim, then the artifact-wide backstop. Suffixes
+    carry no label and no path; check_evidence_honesty prefixes
+    "H: {rel}:{lineno}" (the cost_ledger.parse convention: the grammar is
+    pure over text, so its rules are exercisable without a fixture tree).
 
     The rule is per-criterion, uniform, and UNEXCUSED: every section holding
     a labelled verdict line carries its own evidence or its own disclaimer.
@@ -1021,6 +1035,47 @@ def check_evidence_honesty(root):
     the acceptance criterion demands: literal command output, or an explicit
     NOT-RUN disclaimer. Neither one present means the build fails."""
     problems = []
+    sections, unclosed = verification_sections(text)
+    if unclosed is not None:
+        problems.append((unclosed, "unclosed code fence — every criterion"
+                                   " after it is unread"))
+    for section in sections:
+        if section["evidence"]:
+            continue
+        claims = [(lineno, verdict)
+                  for lineno, verdict in section["results"]
+                  if not _is_disclosure(verdict)]
+        if not claims:
+            continue
+        lineno, verdict = claims[0]
+        problems.append(
+            (lineno,
+             f'criterion "{section["title"]}" asserts {verdict} with'
+             " neither literal evidence nor a NOT-RUN disclaimer (evidence"
+             " must be a fenced code block in this section)"))
+    # An artifact that asserts no verdict at all escapes the per-criterion
+    # rule; it still owes the reader output or a disclosure.
+    if not any(s["results"] for s in sections) and not any(
+            s["evidence"] or s["not_run"] for s in sections):
+        problems.append(
+            (1, "verification artifact shows neither literal evidence nor"
+                " a NOT-RUN disclaimer (evidence must be a fenced code"
+                " block)"))
+    return problems
+
+
+def check_evidence_honesty(root):
+    """H: a criterion that asserts a verdict must show literal output or
+    disclose that the check was NOT RUN. Prose confidence is not evidence
+    (PRD-0001: a change whose verification is asserted but not evidenced
+    fails the build).
+
+    The grammar — what asserts, what evidences, what discloses — is
+    evidence_problems, pure over the artifact's text. What stays here is
+    the detector's own job: find each run's verification.md, read it (an
+    unreadable artifact is a problem, never a traceback), and prefix each
+    (lineno, suffix) the grammar returns."""
+    problems = []
     for run in run_dirs(root):
         artifact = run / "verification.md"
         if not artifact.is_file():
@@ -1031,35 +1086,37 @@ def check_evidence_honesty(root):
         except (OSError, UnicodeDecodeError) as err:
             problems.append(f"H: {rel} cannot be read: {err}")
             continue
-        sections, unclosed = _verification_sections(text)
-        if unclosed is not None:
-            problems.append(
-                f"H: {rel}:{unclosed} unclosed code fence — every criterion"
-                " after it is unread")
-        for section in sections:
-            if section["evidence"]:
-                continue
-            claims = [(lineno, verdict)
-                      for lineno, verdict in section["results"]
-                      if not _is_disclosure(verdict)]
-            if not claims:
-                continue
-            lineno, verdict = claims[0]
-            problems.append(
-                f'H: {rel}:{lineno} criterion "{section["title"]}"'
-                f" asserts {verdict} with neither literal evidence nor a"
-                " NOT-RUN disclaimer (evidence must be a fenced code block"
-                " in this section)")
-        # An artifact that asserts no verdict at all escapes the per-criterion
-        # rule; it still owes the reader output or a disclosure.
-        if not any(s["results"] for s in sections) and not any(
-                s["evidence"] or s["not_run"] for s in sections):
-            problems.append(
-                f"H: {rel}:1 verification artifact shows neither literal"
-                " evidence nor a NOT-RUN disclaimer (evidence must be a"
-                " fenced code block)")
+        problems.extend(f"H: {rel}:{lineno} {suffix}"
+                        for lineno, suffix in evidence_problems(text))
     return problems
 
+
+# The detector letter namespace, indexed in ONE place: letter -> (name,
+# home module, plane). A letter's plane decides where its code goes.
+# Offline detectors live in this module and gate every push/PR through
+# CHECKERS — hermetic and deterministic, no network (B reads a local event
+# file, so it is offline too; it just SKIPs outside a PR run). Network
+# detectors read live services, so they live beside the scheduled sweeps
+# that drive them and are NEVER wired into CHECKERS: L reads the repo's
+# live label set through gh, which is why it lives in label_sync.py and
+# not here (the same posture that keeps every ADR-0037 seam offline).
+# J and K are unclaimed — the shared ai-tooling letter namespace assigns
+# nothing to them, so a new detector takes the next free letter and adds
+# its row here.
+DETECTORS = {
+    "A": ("WO-CITATION", "gates.py", "offline"),
+    "B": ("PR-TRACEABILITY", "gates.py", "offline"),
+    "C": ("LINK-INTEGRITY", "gates.py", "offline"),
+    "D": ("BLUEPRINT-DRIFT", "gates.py", "offline"),
+    "E": ("SCAFFOLD-SYNC", "gates.py", "offline"),
+    "F": ("CONFIG-SHAPE", "gates.py", "offline"),
+    "G": ("COST-LEDGER", "gates.py", "offline"),
+    "H": ("EVIDENCE-HONESTY", "gates.py", "offline"),
+    "I": ("STALENESS", "gates.py", "offline"),
+    "J": (None, None, "unused"),
+    "K": (None, None, "unused"),
+    "L": ("LABEL-SYNC", "label_sync.py", "network"),
+}
 
 CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
             check_blueprint_drift, check_scaffold_sync, check_label_wiring,
@@ -1362,12 +1419,7 @@ def selftest():
 def main(argv):
     if "--selftest" in argv:
         return selftest()
-    root = repo_root()
-    problems = run_all(root)
-    for problem in problems:
-        print(problem)
-    print(f"gates: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("gates", run_all(repo_root()))
 
 
 if __name__ == "__main__":

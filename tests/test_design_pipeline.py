@@ -1,7 +1,7 @@
 """Design pipeline (origin: WO-0012): design.yml + the web-quality make
 target + the docs/design seed shipped in the template payload.
 
-Same discipline as test_factory_gates::TestLockstep and test_sweeps'
+Same discipline as test_gates::TestLockstep and test_sweeps'
 workflow tests: the workflow names no command of its own (every step goes
 through `make`), the payload copy is a byte mirror of the root one, and the
 web-quality target is identical in both Makefiles. The design-system seed the
@@ -94,9 +94,10 @@ class TestWorkflowMirror(unittest.TestCase):
                / "design.yml")
 
     def test_design_yml_is_a_registered_mirror(self):
-        self.assertEqual(
-            factory_init.MIRRORS.get(".github/workflows/design.yml"),
-            ".github/workflows/design.yml")
+        self.assertIn(
+            (".github/workflows/design.yml", ".github/workflows/design.yml",
+             factory_init.identity),
+            factory_init.MIRRORS)
 
     def test_the_payload_workflow_is_the_byte_mirror_of_the_root_one(self):
         self.assertTrue(self.PAYLOAD.is_file(),

@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 79b08fc..HEAD -- eval_schema.py lint.py tests/test_eval_schema.py tests/test_lint_checkers.py`
+> **Drift check (run first)**: `git diff --stat 79b08fc..HEAD -- eval_schema.py lint.py tests/test_eval_schema.py tests/test_lint.py`
 > If `eval_schema.py` or `lint.py` changed since this plan was written,
 > compare the "Current state" excerpts against the live code before
 > proceeding; on a mismatch, treat it as a STOP condition.
@@ -86,7 +86,7 @@ branches is covered.
 reads as a flat human sentence — see the existing strings in `validate`
 (`eval_schema.py:106-127`). New problems must follow the same
 `f"{label} ..."` shape. Tests assert the **exact** string through the public
-function (see `tests/test_eval_schema.py` and `tests/test_lint_checkers.py`).
+function (see `tests/test_eval_schema.py` and `tests/test_lint.py`).
 
 ## Commands you will need
 
@@ -103,7 +103,7 @@ function (see `tests/test_eval_schema.py` and `tests/test_lint_checkers.py`).
   helper if you add one.
 - `lint.py` — only the `check_output_evals` `run_fixture` comprehension
   (`:111-115`).
-- `tests/test_eval_schema.py` (add cases), `tests/test_lint_checkers.py` (add
+- `tests/test_eval_schema.py` (add cases), `tests/test_lint.py` (add
   one case).
 
 **Out of scope** (do NOT touch):
@@ -191,7 +191,7 @@ iterate only dict entries of a list so a malformed file reported by
 See Test plan. Then:
 
 ```bash
-git add eval_schema.py lint.py tests/test_eval_schema.py tests/test_lint_checkers.py
+git add eval_schema.py lint.py tests/test_eval_schema.py tests/test_lint.py
 git commit -m "fix: eval validators diagnose malformed input instead of raising"
 ```
 
@@ -213,7 +213,7 @@ membership/equality on the returned list):
 - `validate_output` with a scalar entry in `evals` → contains the
   `"evals entry #0 is not an object"` problem; no exception.
 
-Add to `tests/test_lint_checkers.py` (model after the existing
+Add to `tests/test_lint.py` (model after the existing
 `check_output_evals` fixture-tree test — it writes an `evals/output/<slug>.json`
 into a temp root and asserts on the returned problems):
 

@@ -1,14 +1,13 @@
 """validator.py (the validator workflow's brain) — pure-function + fixture
 tests.
 
-Same discipline as test_label_sync/test_factory_gates: every function is
+Same discipline as test_label_sync/test_gates: every function is
 exercised through its public interface, tests assert the EXACT problem
 strings callers will print, and the gh runner is injected so no test ever
 touches the network.
 """
 import json
 import re
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -19,6 +18,7 @@ import validator
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling fixture_tree import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fake_gh import FakeGh  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 import cli_contract  # noqa: E402
 
@@ -43,54 +43,23 @@ BREAKDOWN = (
     "- 2026-07-12: a note naming WO-0004 (PRD-0001) is not a row.\n"
 )
 
-LIFECYCLE = ["wo:draft", "wo:prd-approved", "wo:blueprint-approved",
-             "wo:ready-for-agent", "wo:in-progress", "wo:needs-review",
-             "wo:merged", "wo:failed", "wo:blocked"]
+# The lifecycle labels come from the shipped taxonomy, exactly as the
+# other gh-seam suites load it — a wo:* label added to the template
+# reaches this suite too, instead of dying against a hand-copied list.
+LIFECYCLE = [label["name"] for label in json.loads(
+    (REPO_ROOT / "factory" / "templates" / ".github" / "labels.json")
+    .read_text(encoding="utf-8")) if label["name"].startswith("wo:")]
 
 
-class RecordingRunner:
-    """Injected gh runner: records every call (resolving --body-file to its
-    content, which the real gh reads before the caller deletes it), answers
-    `issue view` with a canned label set and `api user` with the login the
-    token actually posts as, and never touches the network."""
-
-    def __init__(self, labels=(), login="github-actions[bot]"):
-        self.labels = list(labels)
-        self.login = login
-        self.calls = []
-
-    def __call__(self, args):
-        call = list(args)
-        if "--body-file" in call:
-            index = call.index("--body-file") + 1
-            call[index] = Path(call[index]).read_text(encoding="utf-8")
-        self.calls.append(call)
-        if call[:2] == ["issue", "view"]:
-            return json.dumps(
-                {"labels": [{"name": name} for name in self.labels]})
-        if call[:2] == ["api", "user"]:
-            return f"{self.login}\n"
-        return ""
-
-    def called(self, *prefix):
-        return [c for c in self.calls if c[:len(prefix)] == list(prefix)]
-
-
-class FailingRunner(RecordingRunner):
-    """Injected gh runner that fails the way a real gh does on a chosen
-    subcommand: raises what subprocess.run(check=True) would raise."""
-
-    def __init__(self, labels=(), error=None, failing=(),
-                 login="github-actions[bot]"):
-        super().__init__(labels, login)
-        self.error = error or subprocess.CalledProcessError(1, "gh")
-        self.failing = list(failing)
-
-    def __call__(self, args):
-        result = super().__call__(args)
-        if list(args[:len(self.failing)]) == self.failing:
-            raise self.error
-        return result
+def gh(labels=(), login="github-actions[bot]", **kwargs):
+    """A fake gh for the validator's traffic: `issue view` answers with
+    a canned label set, `api user` with the login the token actually
+    posts as (failure declared via FakeGh's failing=/error=)."""
+    return FakeGh(answers={
+        ("issue", "view"): json.dumps(
+            {"labels": [{"name": name} for name in labels]}),
+        ("api", "user"): f"{login}\n",
+    }, **kwargs)
 
 
 def pr_env(tmp, **pr):
@@ -138,7 +107,7 @@ class TestTrackerIssue(unittest.TestCase):
 
 
 class TestLifecycleLabels(unittest.TestCase):
-    def test_taxonomy_yields_the_nine_lifecycle_labels_in_order(self):
+    def test_taxonomy_yields_the_lifecycle_labels_in_order(self):
         names, problems = validator.lifecycle_labels(REPO_ROOT)
         self.assertEqual(problems, [])
         self.assertEqual(names, LIFECYCLE)
@@ -215,14 +184,14 @@ class TestReviewerLogin(unittest.TestCase):
         github-actions[bot] while actually posting as factory-bot. Detector E
         pins factory/templates/**, not a downstream repo's other workflows,
         so nothing else catches it."""
-        run = RecordingRunner(login="factory-bot")
+        run = gh(login="factory-bot")
         self.assertEqual(validator.reviewer_login({}, run), (
             None, ["V: the review step did not declare the token's provenance"
                    " (FACTORY_REVIEW_TOKEN_SET) — refusing to post"]))
         self.assertEqual(run.calls, [])
 
     def test_a_garbled_provenance_fails_closed(self):
-        run = RecordingRunner(login="factory-bot")
+        run = gh(login="factory-bot")
         self.assertEqual(
             validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "yes"}, run),
             (None, ["V: the review step did not declare the token's"
@@ -235,7 +204,7 @@ class TestReviewerLogin(unittest.TestCase):
         GITHUB_TOKEN, whose posting identity GitHub fixes — that is derived
         from the token's provenance, not from a human-maintained variable, so
         there is nothing to ask."""
-        run = RecordingRunner(login="never-asked")
+        run = gh(login="never-asked")
         self.assertEqual(
             validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "false"},
                                      run),
@@ -243,7 +212,7 @@ class TestReviewerLogin(unittest.TestCase):
         self.assertEqual(run.calls, [])
 
     def test_a_review_token_is_asked_who_it_actually_is(self):
-        run = RecordingRunner(login="factory-bot")
+        run = gh(login="factory-bot")
         self.assertEqual(
             validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "true"}, run),
             ("factory-bot", []))
@@ -251,8 +220,7 @@ class TestReviewerLogin(unittest.TestCase):
                          [["api", "user", "--jq", ".login"]])
 
     def test_an_unresolvable_identity_fails_closed(self):
-        run = FailingRunner(error=OSError("gh: not found"),
-                            failing=["api", "user"])
+        run = gh(error=OSError("gh: not found"), failing=["api", "user"])
         self.assertEqual(
             validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "true"}, run),
             (None, ["V: cannot resolve the reviewing identity from"
@@ -260,7 +228,7 @@ class TestReviewerLogin(unittest.TestCase):
                     " found) — refusing to post"]))
 
     def test_an_empty_login_fails_closed(self):
-        run = RecordingRunner(login="")
+        run = gh(login="")
         self.assertEqual(
             validator.reviewer_login({"FACTORY_REVIEW_TOKEN_SET": "true"}, run),
             (None, ["V: FACTORY_REVIEW_TOKEN resolves to no login —"
@@ -336,7 +304,7 @@ class TestRunReview(unittest.TestCase):
             tree = self.tree(tmp)
             env = self.env(tmp, author="factory-bot", login="")
             del env["FACTORY_REVIEW_TOKEN_SET"]
-            run = RecordingRunner(login="factory-bot")
+            run = gh(login="factory-bot")
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0, env=env, run=run)
             self.assertEqual(problems, [
@@ -347,7 +315,7 @@ class TestRunReview(unittest.TestCase):
     def test_posts_findings_as_the_non_authoring_actor(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner()
+            run = gh()
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0,
                 env=self.env(tmp), run=run)
@@ -364,7 +332,7 @@ class TestRunReview(unittest.TestCase):
         authored is one it cannot review."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner()
+            run = gh()
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0,
                 env=self.env(tmp, author="github-actions[bot]", login=""),
@@ -387,7 +355,7 @@ class TestRunReview(unittest.TestCase):
             env = self.env(tmp, author="factory-bot",
                            login="github-actions[bot]")
             env["FACTORY_REVIEW_TOKEN_SET"] = "true"
-            run = RecordingRunner(login="factory-bot")
+            run = gh(login="factory-bot")
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0, env=env, run=run)
             self.assertIn(
@@ -402,8 +370,8 @@ class TestRunReview(unittest.TestCase):
             tree = self.tree(tmp)
             env = self.env(tmp)
             env["FACTORY_REVIEW_TOKEN_SET"] = "true"
-            run = FailingRunner(error=OSError("gh: not found"),
-                                failing=["api", "user"])
+            run = gh(error=OSError("gh: not found"),
+                     failing=["api", "user"])
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0, env=env, run=run)
             self.assertEqual(problems, [
@@ -417,7 +385,7 @@ class TestRunReview(unittest.TestCase):
             tree = self.tree(tmp)
             env = self.env(tmp, author="mattb", login="")
             env["FACTORY_REVIEW_TOKEN_SET"] = "true"
-            run = RecordingRunner(login="factory-bot")
+            run = gh(login="factory-bot")
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0, env=env, run=run)
             self.assertEqual(problems, [])
@@ -429,7 +397,7 @@ class TestRunReview(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             tree.write("findings.txt", "A: uncited row\ngates: 1 problem(s)\n")
-            run = RecordingRunner()
+            run = gh()
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 1,
                 env=self.env(tmp), run=run)
@@ -441,7 +409,7 @@ class TestRunReview(unittest.TestCase):
     def test_first_comment_falls_back_when_there_is_none_to_edit(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = FailingRunner(failing=["pr", "comment", "42", "--edit-last"])
+            run = gh(failing=["pr", "comment", "42", "--edit-last"])
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0,
                 env=self.env(tmp), run=run)
@@ -453,7 +421,7 @@ class TestRunReview(unittest.TestCase):
     def test_a_failing_post_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = FailingRunner(
+            run = gh(
                 error=OSError("gh: not found"), failing=["pr", "comment"])
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0,
@@ -465,7 +433,7 @@ class TestRunReview(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             missing = tree.root / "nope.txt"
-            run = RecordingRunner()
+            run = gh()
             problems = validator.run_review(
                 tree.root, missing, 0, env=self.env(tmp), run=run)
             self.assertEqual(len(problems), 1)
@@ -476,7 +444,7 @@ class TestRunReview(unittest.TestCase):
     def test_outside_a_pull_request_event_nothing_is_posted(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner()
+            run = gh()
             problems = validator.run_review(
                 tree.root, tree.root / "findings.txt", 0, env={}, run=run)
             self.assertEqual(
@@ -580,7 +548,7 @@ class TestRunLifecycle(unittest.TestCase):
     def test_merged_pr_flips_the_work_order_to_the_target_label(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner(labels=["wo:needs-review", "size:M"])
+            run = gh(labels=["wo:needs-review", "size:M"])
             problems = validator.run_lifecycle(
                 tree.root, "wo:merged", env=self.env(tmp), run=run)
             self.assertEqual(problems, [])
@@ -593,7 +561,7 @@ class TestRunLifecycle(unittest.TestCase):
     def test_an_already_merged_issue_needs_no_edit(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner(labels=["wo:merged"])
+            run = gh(labels=["wo:merged"])
             self.assertEqual(validator.run_lifecycle(
                 tree.root, "wo:merged", env=self.env(tmp), run=run), [])
             self.assertEqual(run.called("issue", "edit"), [])
@@ -601,7 +569,7 @@ class TestRunLifecycle(unittest.TestCase):
     def test_a_label_outside_the_state_machine_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner()
+            run = gh()
             self.assertEqual(
                 validator.run_lifecycle(
                     tree.root, "wo:done", env=self.env(tmp), run=run),
@@ -611,7 +579,7 @@ class TestRunLifecycle(unittest.TestCase):
     def test_a_pr_citing_no_work_order_is_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner()
+            run = gh()
             self.assertEqual(
                 validator.run_lifecycle(tree.root, "wo:merged",
                                         env=self.env(tmp, body="no tokens"),
@@ -624,7 +592,7 @@ class TestRunLifecycle(unittest.TestCase):
         first. #109 (WO-0004's issue) must not be touched — #110 is."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner(labels=["wo:in-progress"])
+            run = gh(labels=["wo:in-progress"])
             body = ("Builds on WO-0004. This is WO-0005 (PRD-0001).\n\n"
                     "Closes #110\n")
             problems = validator.run_lifecycle(
@@ -635,12 +603,33 @@ class TestRunLifecycle(unittest.TestCase):
                 "--add-label", "wo:merged",
                 "--remove-label", "wo:in-progress"]])
 
+    def test_a_nameless_label_entry_is_dropped_not_compared(self):
+        # gh can answer `issue view` with a label entry carrying no usable
+        # name. The seam (cli.label_names) drops it, so the lifecycle
+        # transition never compares a non-name against the state machine
+        # and the flip proceeds on the labels that ARE named.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = FakeGh(answers={
+                ("issue", "view"): json.dumps({"labels": [
+                    "junk", {"id": 4321},
+                    {"name": "wo:needs-review"}, {"name": "size:M"}]}),
+                ("api", "user"): "github-actions[bot]\n",
+            })
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp), run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit", "109"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:merged",
+                "--remove-label", "wo:needs-review"]])
+
     def test_a_failing_gh_call_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = FailingRunner(labels=["wo:needs-review"],
-                                error=OSError("gh: not found"),
-                                failing=["issue", "view"])
+            run = gh(labels=["wo:needs-review"],
+                     error=OSError("gh: not found"),
+                     failing=["issue", "view"])
             self.assertEqual(
                 validator.run_lifecycle(
                     tree.root, "wo:merged", env=self.env(tmp), run=run),
@@ -652,7 +641,7 @@ class TestRunLifecycle(unittest.TestCase):
         # traffic, not an error. Nothing is resolved, nothing is called.
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner()
+            run = gh()
             problems = validator.run_lifecycle(
                 tree.root, "wo:needs-review",
                 env=self.env(tmp, body="chore: housekeeping"), run=run,
@@ -667,7 +656,7 @@ class TestRunLifecycle(unittest.TestCase):
         # ever retrying it (the job fires on opened/reopened only).
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner()
+            run = gh()
             problems = validator.run_lifecycle(
                 tree.root, "wo:needs-review",
                 env=self.env(tmp, body="Implements WO-0004."), run=run,
@@ -681,7 +670,7 @@ class TestRunLifecycle(unittest.TestCase):
     def test_uncited_skip_still_flips_a_cited_work_order(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner(labels=["wo:in-progress"])
+            run = gh(labels=["wo:in-progress"])
             problems = validator.run_lifecycle(
                 tree.root, "wo:needs-review", env=self.env(tmp), run=run,
                 uncited="skip")
@@ -697,29 +686,18 @@ class TestRunLifecycle(unittest.TestCase):
         # wrong issue silently would be worse than a red job).
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner()
+            run = gh()
             problems = validator.run_lifecycle(
                 tree.root, "wo:merged",
                 env=self.env(tmp, body="chore: housekeeping"), run=run)
             self.assertEqual(
                 problems, ["V: PR body cites no work-order id"])
 
-    class BannerViewRunner(RecordingRunner):
-        """Records like RecordingRunner but answers `issue view` with raw
-        non-JSON (or wrong-shape) stdout — gh ran, exited 0, said nonsense."""
-
-        def __init__(self, stdout):
-            super().__init__()
-            self.stdout = stdout
-
-        def __call__(self, args):
-            out = super().__call__(args)
-            return self.stdout if list(args[:2]) == ["issue", "view"] else out
-
     def test_an_unparseable_issue_view_is_a_problem_not_a_traceback(self):
+        # gh ran, exited 0, answered `issue view` with raw non-JSON.
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = self.BannerViewRunner("gh: banner text")
+            run = FakeGh(answers={("issue", "view"): "gh: banner text"})
             problems = validator.run_lifecycle(
                 tree.root, "wo:merged", env=self.env(tmp), run=run)
             self.assertEqual(problems, [
@@ -730,7 +708,7 @@ class TestRunLifecycle(unittest.TestCase):
     def test_a_non_object_issue_view_is_a_problem_not_a_crash(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = self.BannerViewRunner("[]")
+            run = FakeGh(answers={("issue", "view"): "[]"})
             problems = validator.run_lifecycle(
                 tree.root, "wo:merged", env=self.env(tmp), run=run)
             self.assertEqual(problems, [
@@ -765,7 +743,7 @@ class TestRunClaim(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             env = self.env(tmp)
-            run = RecordingRunner(labels=["wo:ready-for-agent", "size:M"])
+            run = gh(labels=["wo:ready-for-agent", "size:M"])
             problems = validator.run_claim(
                 tree.root, "wo:in-progress", "109", env=env, run=run)
             self.assertEqual(problems, [])
@@ -783,7 +761,7 @@ class TestRunClaim(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             env = self.env(tmp)
-            run = RecordingRunner(labels=["wo:in-progress"])
+            run = gh(labels=["wo:in-progress"])
             problems = validator.run_claim(
                 tree.root, "wo:in-progress", "109", env=env, run=run)
             self.assertEqual(problems, [])
@@ -797,7 +775,7 @@ class TestRunClaim(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             env = self.env(tmp)
-            run = RecordingRunner(labels=["wo:blocked"])
+            run = gh(labels=["wo:blocked"])
             problems = validator.run_claim(
                 tree.root, "wo:in-progress", "109", env=env, run=run)
             self.assertEqual(problems, [])
@@ -815,7 +793,7 @@ class TestRunClaim(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             env = self.env(tmp)
-            run = RecordingRunner(labels=["size:M"])
+            run = gh(labels=["size:M"])
             problems = validator.run_claim(
                 tree.root, "wo:in-progress", "109", env=env, run=run)
             self.assertEqual(problems, [])
@@ -828,7 +806,7 @@ class TestRunClaim(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             env = self.env(tmp)
-            run = RecordingRunner()
+            run = gh()
             self.assertEqual(
                 validator.run_claim(
                     tree.root, "wo:done", "109", env=env, run=run),
@@ -847,7 +825,7 @@ class TestRunClaim(unittest.TestCase):
                   "description": "lifecycle"}
                  for name in LIFECYCLE if name != "wo:ready-for-agent"]))
             env = self.env(tmp)
-            run = RecordingRunner(labels=["wo:in-progress"])
+            run = gh(labels=["wo:in-progress"])
             self.assertEqual(
                 validator.run_claim(
                     tree.root, "wo:in-progress", "109", env=env, run=run),
@@ -862,8 +840,8 @@ class TestRunClaim(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             env = self.env(tmp)
-            run = FailingRunner(error=OSError("gh: not found"),
-                                failing=["issue", "view"])
+            run = gh(error=OSError("gh: not found"),
+                     failing=["issue", "view"])
             self.assertEqual(
                 validator.run_claim(
                     tree.root, "wo:in-progress", "109", env=env, run=run),
@@ -888,7 +866,7 @@ class TestRunOutcome(unittest.TestCase):
     def test_a_dispatched_order_lands_on_failed(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner(labels=["wo:in-progress", "size:M"])
+            run = gh(labels=["wo:in-progress", "size:M"])
             problems = validator.run_outcome(
                 tree.root, "wo:failed", "109", run=run)
             self.assertEqual(problems, [])
@@ -904,7 +882,7 @@ class TestRunOutcome(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             outputs = Path(tmp) / "outputs.txt"
-            run = RecordingRunner(labels=["wo:in-progress"])
+            run = gh(labels=["wo:in-progress"])
             # run_outcome takes no env at all — the signature is the
             # guarantee. Nothing may appear at $GITHUB_OUTPUT.
             validator.run_outcome(tree.root, "wo:failed", "109", run=run)
@@ -914,7 +892,7 @@ class TestRunOutcome(unittest.TestCase):
         # A re-run of a failed job must not churn the label.
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner(labels=["wo:failed"])
+            run = gh(labels=["wo:failed"])
             self.assertEqual(
                 validator.run_outcome(tree.root, "wo:failed", "109",
                                       run=run), [])
@@ -923,7 +901,7 @@ class TestRunOutcome(unittest.TestCase):
     def test_a_label_outside_the_state_machine_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = RecordingRunner()
+            run = gh()
             self.assertEqual(
                 validator.run_outcome(tree.root, "wo:exploded", "109",
                                       run=run),
@@ -940,7 +918,7 @@ class TestRunOutcome(unittest.TestCase):
                 [{"name": name, "color": "ededed",
                   "description": "lifecycle"}
                  for name in LIFECYCLE if name != "wo:ready-for-agent"]))
-            run = RecordingRunner(labels=["wo:in-progress"])
+            run = gh(labels=["wo:in-progress"])
             self.assertEqual(
                 validator.run_outcome(tree.root, "wo:failed", "109",
                                       run=run), [])
@@ -952,8 +930,8 @@ class TestRunOutcome(unittest.TestCase):
     def test_a_failing_gh_call_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            run = FailingRunner(error=OSError("gh: not found"),
-                                failing=["issue", "view"])
+            run = gh(error=OSError("gh: not found"),
+                     failing=["issue", "view"])
             self.assertEqual(
                 validator.run_outcome(tree.root, "wo:failed", "109",
                                       run=run),
@@ -985,7 +963,7 @@ class TestClaimOutputLockstep(unittest.TestCase):
             env = {"GITHUB_OUTPUT": str(Path(tmp) / "outputs.txt")}
             problems = validator.run_claim(
                 tree.root, "wo:in-progress", "7", env=env,
-                run=RecordingRunner(labels=["wo:ready-for-agent"]))
+                run=gh(labels=["wo:ready-for-agent"]))
             self.assertEqual(problems, [])
             written = Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8")
         keys = {line.split("=", 1)[0]
@@ -1058,12 +1036,21 @@ class TestParseLifecycle(unittest.TestCase):
             (None, None))
 
 
-class TestMain(cli_contract.CliContract, unittest.TestCase):
+class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
+               unittest.TestCase):
     usage_fragment = "python3 validator.py review"
+    summary_line = "validator: 0 problem(s)"
 
     def run_cli(self, argv):
         return cli_contract.capture(validator.main, argv, env={},
-                                    run=RecordingRunner())
+                                    run=gh())
+
+    def clean_cli(self):
+        # The claim leg needs no PR event; a ready issue flips cleanly.
+        return cli_contract.capture(
+            validator.main,
+            ["lifecycle", "--label", "wo:in-progress", "--issue", "7"],
+            env={}, run=gh(labels=["wo:ready-for-agent"]))
 
     def test_a_non_numeric_status_is_a_usage_error(self):
         self.assertEqual(
@@ -1084,7 +1071,7 @@ class TestMain(cli_contract.CliContract, unittest.TestCase):
         # No event payload in env, yet the claim succeeds: --issue N
         # names the issue outright, so main must route to run_claim, not
         # the PR-shaped leg (which would fail here on the missing event).
-        run = RecordingRunner(labels=["wo:ready-for-agent"])
+        run = gh(labels=["wo:ready-for-agent"])
         code, out = cli_contract.capture(
             validator.main,
             ["lifecycle", "--label", "wo:in-progress", "--issue", "7"],
@@ -1098,7 +1085,7 @@ class TestMain(cli_contract.CliContract, unittest.TestCase):
     def test_a_verdict_skip_invocation_routes_past_the_pr_event(self):
         # Like the claim, the failure leg names its issue outright: no
         # event payload in env, and it must still reach run_outcome.
-        run = RecordingRunner(labels=["wo:in-progress"])
+        run = gh(labels=["wo:in-progress"])
         code, out = cli_contract.capture(
             validator.main,
             ["lifecycle", "--label", "wo:failed", "--issue", "7",

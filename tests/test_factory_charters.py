@@ -3,35 +3,33 @@
 The subagent registry keys agents by frontmatter `name:`, not filename —
 a charter that fails these checks is silently undispatchable. Each role
 is encoded as two files (agent stub + full charter in
-factory/skills/<role>/SKILL.md); tests assert the exact paths and fields
-the dispatch plane (ADR-0032) depends on.
+factory/charters/<role>/CHARTER.md); tests assert the exact paths and
+fields the dispatch plane (ADR-0032) depends on.
 
 Charters carry a routing *band* (`route:`), never a model id: the band
 resolves to a model through the per-repo `factory.json` routing table
 (ADR-0034), which is the single routing source of truth (ADR-0004).
-Resolution itself is `assembler.resolve_model` (band -> model id),
+Resolution itself is `factory_config.resolve_model` (band -> model id),
 pinned end to end against the real charter files here by WO-0007's
 tests/test_model_routing.py — these tests only pin that the charters
 name a real band and assert no model of their own.
 
-The nine roles are the ones PRD-0001 §Actors names (PM, architect, UX
-designer, planner, engineer, QA, reviewer, support, toolsmith); the
-engineer role ships as `swe`. `factory/CHARTERS.md` indexes them and
-carries the three human-gate checklists (ADR-0033).
+The role vocabulary and both per-role paths are factory_roles' (the
+seam, ADR-0047) — this file is a thin caller asserting the real files
+honour it. `factory/CHARTERS.md` indexes the roles for the human reader
+and carries the three human-gate checklists (ADR-0033).
 """
-import json
 import re
 import unittest
 from pathlib import Path
 
+import factory_config
+import factory_roles
 import protocol
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-ROLES = ("pm", "architect", "ux", "planner", "swe", "qa", "reviewer",
-         "support", "toolsmith")
-
-REQUIRED_FIELDS = ("description", "tools", "route")
+ROLES = factory_roles.ROLES  # the seam owns the vocabulary (ADR-0047)
 
 CHARTERS_INDEX = REPO_ROOT / "factory" / "CHARTERS.md"
 
@@ -43,28 +41,30 @@ CHECKBOX = re.compile(r"^- \[ \] ", re.MULTILINE)
 
 
 def agent_path(role):
-    return REPO_ROOT / "factory" / "agents" / f"factory-{role}.md"
+    return factory_roles.agent_path(REPO_ROOT, role)
 
 
-def skill_path(role):
-    return REPO_ROOT / "factory" / "skills" / role / "SKILL.md"
+def charter_path(role):
+    return factory_roles.charter_path(REPO_ROOT, role)
 
 
-def factory_config():
-    return json.loads(
-        (REPO_ROOT / "factory" / "templates" / "factory.json")
-        .read_text(encoding="utf-8"))
+def real_config():
+    """The repo's factory config through the one reader (factory_config
+    .load, ADR-0037) — never a direct read of the template file."""
+    config, problems = factory_config.load(REPO_ROOT)
+    assert not problems, problems
+    return config
 
 
 def routing_bands():
     """The band names defined by the factory config's routing table."""
-    return set(factory_config()["routing"])
+    return set(real_config()["routing"])
 
 
 def routed_model_ids():
     """The model ids the routing table resolves bands to. No charter may
     name one — that would be a second routing source (ADR-0004)."""
-    return set(factory_config()["routing"].values())
+    return set(real_config()["routing"].values())
 
 
 def agent_body(role):
@@ -76,7 +76,7 @@ def agent_body(role):
 def charter_files():
     """Every file a charter is written in, index included."""
     return ([agent_path(role) for role in ROLES]
-            + [skill_path(role) for role in ROLES]
+            + [charter_path(role) for role in ROLES]
             + [CHARTERS_INDEX])
 
 
@@ -91,13 +91,6 @@ def gate_sections(text):
         elif current is not None:
             sections[current].append(line)
     return {head: "\n".join(body) for head, body in sections.items()}
-
-
-class TestRoleSet(unittest.TestCase):
-    def test_nine_roles(self):
-        """PRD-0001 §Actors names nine chartered roles."""
-        self.assertEqual(len(ROLES), 9)
-        self.assertEqual(len(set(ROLES)), 9)
 
 
 class TestAgentStubs(unittest.TestCase):
@@ -123,15 +116,15 @@ class TestAgentStubs(unittest.TestCase):
     def test_required_fields_present_and_non_empty(self):
         for role in ROLES:
             fields = protocol.read_frontmatter(agent_path(role)) or {}
-            for field in REQUIRED_FIELDS:
+            for field in factory_roles.REQUIRED_FIELDS:
                 with self.subTest(role=role, field=field):
                     self.assertTrue(fields.get(field, "").strip(),
                                     f"factory-{role}.md {field} is empty")
 
-    def test_body_loads_the_charter_skill(self):
+    def test_body_loads_the_charter(self):
         for role in ROLES:
             with self.subTest(role=role):
-                self.assertIn(f"factory/skills/{role}/SKILL.md",
+                self.assertIn(f"factory/charters/{role}/CHARTER.md",
                               agent_body(role))
 
     def test_route_names_a_band_the_factory_config_defines(self):
@@ -167,16 +160,16 @@ class TestAgentStubs(unittest.TestCase):
                                  " with the stub's route")
 
 
-class TestCharterSkills(unittest.TestCase):
-    def test_skill_file_exists(self):
+class TestCharterFiles(unittest.TestCase):
+    def test_charter_file_exists(self):
         for role in ROLES:
             with self.subTest(role=role):
-                self.assertTrue(skill_path(role).is_file(),
-                                f"missing factory/skills/{role}/SKILL.md")
+                self.assertTrue(charter_path(role).is_file(),
+                                f"missing factory/charters/{role}/CHARTER.md")
 
     def test_charter_has_must_never_and_escalation_sections(self):
         for role in ROLES:
-            text = skill_path(role).read_text(encoding="utf-8")
+            text = charter_path(role).read_text(encoding="utf-8")
             with self.subTest(role=role, section="Must never"):
                 self.assertIn("Must never", text)
             with self.subTest(role=role, section="Escalat"):
@@ -187,7 +180,7 @@ class TestCharterSkills(unittest.TestCase):
         charter has to say which gate binds it (ADR-0033)."""
         for role in ROLES:
             with self.subTest(role=role):
-                text = skill_path(role).read_text(encoding="utf-8")
+                text = charter_path(role).read_text(encoding="utf-8")
                 self.assertIn("ADR-0033", text)
 
     def test_merge_authority_tracks_the_amendment(self):
@@ -207,7 +200,7 @@ class TestCharterSkills(unittest.TestCase):
                  "merge is one of the three human gates",
                  "the human reads it at gate 3")
         surfaces = ([CHARTERS_INDEX]
-                    + [skill_path(role) for role in ROLES]
+                    + [charter_path(role) for role in ROLES]
                     + [agent_path(role) for role in ROLES])
         for path in surfaces:
             flat = " ".join(
@@ -215,7 +208,7 @@ class TestCharterSkills(unittest.TestCase):
             for phrase in stale:
                 with self.subTest(path=path.name, phrase=phrase):
                     self.assertNotIn(phrase, flat)
-        for path in (skill_path("reviewer"), agent_path("reviewer"),
+        for path in (charter_path("reviewer"), agent_path("reviewer"),
                      CHARTERS_INDEX):
             with self.subTest(path=path.name, cites="ADR-0036"):
                 self.assertIn("ADR-0036",
@@ -248,7 +241,7 @@ class TestCharterSkills(unittest.TestCase):
         for role in ROLES:
             with self.subTest(role=role):
                 fields = protocol.read_frontmatter(agent_path(role)) or {}
-                text = skill_path(role).read_text(encoding="utf-8")
+                text = charter_path(role).read_text(encoding="utf-8")
                 self.assertIn(f"`{fields.get('route')}`", text)
 
 
@@ -274,8 +267,8 @@ class TestChartersIndex(unittest.TestCase):
         for role in ROLES:
             with self.subTest(role=role, file="agent"):
                 self.assertIn(f"factory/agents/factory-{role}.md", text)
-            with self.subTest(role=role, file="skill"):
-                self.assertIn(f"factory/skills/{role}/SKILL.md", text)
+            with self.subTest(role=role, file="charter"):
+                self.assertIn(f"factory/charters/{role}/CHARTER.md", text)
 
     def test_index_carries_a_checklist_for_each_human_gate(self):
         sections = gate_sections(CHARTERS_INDEX.read_text(encoding="utf-8"))

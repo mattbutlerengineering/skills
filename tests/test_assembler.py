@@ -1,7 +1,7 @@
 """assembler.py (the assembler workflow's brain) — pure-function + fixture
 tests.
 
-Same discipline as test_validator/test_factory_gates: every function is
+Same discipline as test_validator/test_gates: every function is
 exercised through its public interface, tests assert the EXACT problem
 strings callers will print, and no test touches the network — resolving a
 work order is pure I/O over the repo-controlled breakdown row.
@@ -221,7 +221,7 @@ class TestAssemblePrompt(unittest.TestCase):
                 "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
         self.assertIn("WO-0005", prompt)
         self.assertIn("assembler.yml", prompt)
-        self.assertIn("factory/skills/swe/SKILL.md", prompt)
+        self.assertIn("factory/charters/swe/CHARTER.md", prompt)
 
     def test_the_prompt_bundles_the_orientation_pack(self):
         """WO-0015: assemble_prompt now folds in CONTEXT.md, the row's cited
@@ -377,12 +377,19 @@ class TestWorkflowOutputLockstep(unittest.TestCase):
                              self.yaml_refs())
 
 
-class TestMain(cli_contract.CliContract, unittest.TestCase):
+class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
+               unittest.TestCase):
     usage_fragment = "python3 assembler.py resolve"
+    summary_line = "assembler: 0 problem(s)"
 
     def run_cli(self, argv, env=None):
         return cli_contract.capture(assembler.main, argv,
                                     env=env if env is not None else {})
+
+    def clean_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            return self.run_cli(["resolve"],
+                                label_event(tmp, sender="drive-by"))
 
     def test_a_no_op_dispatch_exits_zero(self):
         with tempfile.TemporaryDirectory() as tmp:

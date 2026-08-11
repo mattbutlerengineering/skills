@@ -6,7 +6,7 @@
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 2e63a04..HEAD -- validator.py Makefile factory/templates/Makefile .github/workflows/assembler.yml .github/workflows/validator.yml tests/test_validator.py tests/test_factory_gates.py`
+> **Drift check (run first)**: `git diff --stat 2e63a04..HEAD -- validator.py Makefile factory/templates/Makefile .github/workflows/assembler.yml .github/workflows/validator.yml tests/test_validator.py tests/test_gates.py`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -64,7 +64,7 @@ the two middle labels. Three concrete costs:
   wo:merged`; `FINDINGS ?=`/`STATUS ?=` at the top show the
   variable-passing idiom. `factory/templates/Makefile` is the
   hand-maintained product-repo twin (`tools/factory/validator.py` paths);
-  `tests/test_factory_gates.py::TestLockstep` pins both via
+  `tests/test_gates.py::TestLockstep` pins both via
   `tests/make_parse.py::make_recipe` and a `product_form` transform.
 - `.github/workflows/assembler.yml`: `permissions:` on the dispatch job
   already include `issues: write`. Steps: resolve (`make assembler`,
@@ -93,7 +93,7 @@ the two middle labels. Three concrete costs:
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
 | Full local gate | `make check` | exit 0 |
-| Affected suites | `python3 -m unittest tests.test_validator tests.test_factory_gates -v` | all pass |
+| Affected suites | `python3 -m unittest tests.test_validator tests.test_gates -v` | all pass |
 | Refresh mirrors + manifest | `python3 factory_init.py update-manifest` | exit 0 |
 
 ## Scope
@@ -101,7 +101,7 @@ the two middle labels. Three concrete costs:
 **In scope**:
 - `validator.py`, `Makefile`, `factory/templates/Makefile`
 - `.github/workflows/assembler.yml`, `.github/workflows/validator.yml`
-- `tests/test_validator.py`, `tests/test_factory_gates.py`
+- `tests/test_validator.py`, `tests/test_gates.py`
 - `factory/templates/**`, `factory/manifest.json` — workflow/tool
   mirrors only via `update-manifest` (the template **Makefile** is
   hand-edited, that's its convention)
@@ -167,10 +167,10 @@ wo-needs-review:
 ```
 
 Add both to `.PHONY`. Update `TestLockstep`'s target table in
-`tests/test_factory_gates.py` (grep `VALIDATOR_TARGETS`) so the pair
+`tests/test_gates.py` (grep `VALIDATOR_TARGETS`) so the pair
 stays pinned.
 
-**Verify**: `python3 -m unittest tests.test_factory_gates -v -k Lockstep`
+**Verify**: `python3 -m unittest tests.test_gates -v -k Lockstep`
 → pass.
 
 ### Step 3: Wire the workflows
@@ -221,7 +221,7 @@ stays pinned.
          run: make wo-needs-review
    ```
 
-**Verify**: `python3 -m unittest tests.test_factory_gates -v` — the
+**Verify**: `python3 -m unittest tests.test_gates -v` — the
 "names no command of its own" guards still pass (both new steps go
 through `make`).
 
@@ -238,7 +238,7 @@ through `make`).
 - `--uncited skip` with a cited WO → flips to `wo:needs-review`.
 - `parse` rejects `--issue abc` and `--uncited yes`.
 
-`tests/test_factory_gates.py`:
+`tests/test_gates.py`:
 - Assembler workflow: agent step's `if:` references
   `steps.claim.outputs.transitioned == 'true'`; claim step runs
   `make wo-in-progress`.
@@ -261,7 +261,7 @@ tools updated in `git status`.
 ## Test plan
 
 Step 4 in full. Structural patterns: `tests/test_validator.py`'s
-RecordingRunner/FailingRunner classes; `tests/test_factory_gates.py`'s
+RecordingRunner/FailingRunner classes; `tests/test_gates.py`'s
 workflow-text assertions.
 
 ## Done criteria

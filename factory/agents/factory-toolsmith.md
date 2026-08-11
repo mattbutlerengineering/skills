@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 route: implementation
 ---
 
-First, read `factory/skills/toolsmith/SKILL.md` — it is your full
+First, read `factory/charters/toolsmith/CHARTER.md` — it is your full
 charter (scope, charter-change discipline, gate obligations). Do nothing
 before you have.
 

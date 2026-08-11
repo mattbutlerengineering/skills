@@ -66,7 +66,7 @@ import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import gh_json, gh_runner, write_outputs
+from cli import gh_json, gh_runner, label_names, report, write_outputs
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              repo_root, row_tracker_issue, row_work_order)
 
@@ -89,8 +89,8 @@ GITHUB_TOKEN_LOGIN = "github-actions[bot]"
 def lifecycle_labels(root):
     """(the wo: state machine's labels in taxonomy order, problems)."""
     labels, problems = label_sync.load_labels(root)
-    names = [label["name"] for label in labels
-             if label["name"].startswith(LIFECYCLE_PREFIX)]
+    names = [name for name in label_names(labels)
+             if name.startswith(LIFECYCLE_PREFIX)]
     return names, problems
 
 
@@ -328,7 +328,10 @@ def _flip(number, label, lifecycle, run):
                     f" {gh_detail(err)}"]
     if suffix:
         return [], [f"V: gh issue view {number} {suffix}"]
-    names = [entry.get("name") for entry in current.get("labels", [])]
+    # The seam drops a nameless label entry outright: it cannot be
+    # compared, added, or removed by name, and passing None through
+    # would put a non-name into the lifecycle comparison below.
+    names = label_names(current)
     add, remove = transition(names, lifecycle, label)
     if not add and not remove:
         return [], []
@@ -483,10 +486,7 @@ def main(argv, env=None, run=gh_runner):
     else:
         print(__doc__.strip())
         return 2
-    for problem in problems:
-        print(problem)
-    print(f"validator: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("validator", problems)
 
 
 if __name__ == "__main__":

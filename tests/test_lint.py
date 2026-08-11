@@ -19,8 +19,42 @@ sys.path.insert(0, str(ROOT))
 
 import lint  # noqa: E402
 import protocol  # noqa: E402
-from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,  # noqa: E402
-                      TEMPLATED_STAGES)
+from protocol import (ALL_SKILLS, MAINTENANCE_STAGES,  # noqa: E402
+                      STAGE_ARTIFACTS, STAGES, TEMPLATED_STAGES)
+
+SPINE = [stage for stage, _ in STAGE_ARTIFACTS]
+SPINE_ARTIFACT = dict(STAGE_ARTIFACTS)
+
+
+def recital_body(slug):
+    """The smallest body whose recitals state the protocol facts
+    check_skill_recitals pins — one canonical phrasing per convention,
+    derived from the protocol tables so the clean tree tracks them."""
+    if slug == "capture":
+        return ("## Process\n\n"
+                "1. Record `re-entry: implement` or `re-entry: architect`.\n"
+                "2. Write the artifact as `defect.md`.\n"
+                "3. Hand off per the recorded re-entry.\n")
+    if slug not in SPINE:
+        return "body\n"
+    i = SPINE.index(slug)
+    lines = []
+    if i > 0:
+        gate = f"Predecessor artifact: `{SPINE_ARTIFACT[SPINE[i - 1]]}`."
+        if SPINE[i - 1] == "ux-design":
+            gate = (f"Predecessor artifacts: `{SPINE_ARTIFACT[SPINE[i - 2]]}`,"
+                    f" plus `{SPINE_ARTIFACT[SPINE[i - 1]]}`.")
+        lines.append(f"1. **Soft gate.** {gate}")
+    lines.append(f"2. Write the artifact as `{SPINE_ARTIFACT[slug]}`.")
+    if i + 1 < len(SPINE):
+        hand = f"Next stage is {SPINE[i + 1].replace('-', ' ')}."
+        if SPINE[i + 1] == "ux-design":
+            hand += f" When skipped, next is {SPINE[i + 2]}."
+        lines.append(f"3. **Hand off.** {hand}")
+    return "## Process\n\n" + "\n".join(lines) + "\n"
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
 
 
 def protocol_table(rows):
@@ -48,7 +82,7 @@ def make_clean_tree(root):
         skill_dir = root / "skills" / slug
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
-            f"---\nname: {slug}\ndescription: d\n---\n\nbody\n",
+            f"---\nname: {slug}\ndescription: d\n---\n\n{recital_body(slug)}",
             encoding="utf-8")
     for slug in TEMPLATED_STAGES:
         (root / "skills" / slug / "TEMPLATE.md").write_text(
@@ -234,6 +268,104 @@ class TestSkills(CheckerTreeTest):
         self.assertEqual(
             lint.check_skills(self.root),
             ["skills/idea/SKILL.md description exceeds Pi's 1024-char limit"])
+
+
+class TestSkillRecitals(CheckerTreeTest):
+    """Stage-skill prose recites the protocol (soft-gate predecessor,
+    own artifact, hand-off successor). Vended skills can't import
+    protocol.py, so the copies are forced — check_skill_recitals pins
+    them to the protocol tables instead (ADR-0052)."""
+
+    def seed(self, slug, body):
+        (self.root / "skills" / slug / "SKILL.md").write_text(
+            f"---\nname: {slug}\ndescription: d\n---\n\n{body}",
+            encoding="utf-8")
+
+    def test_wrong_gate_artifact_is_flagged_both_ways(self):
+        self.seed("prd",
+                  "1. **Soft gate.** Predecessor artifact: `ux.md`.\n"
+                  "2. Write the artifact as `prd.md`.\n"
+                  "3. **Hand off.** Next stage is ux design. When skipped, "
+                  "next is architect.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            ["skills/prd/SKILL.md soft gate never names predecessor "
+             "artifact 'idea.md'",
+             "skills/prd/SKILL.md soft gate names downstream artifact "
+             "'ux.md'"])
+
+    def test_missing_soft_gate_step(self):
+        self.seed("review",
+                  "1. Write the artifact as `review.md`.\n"
+                  "2. **Hand off.** Next stage is ship.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            ["skills/review/SKILL.md has no soft-gate step"])
+
+    def test_wrong_successor_is_flagged_both_ways(self):
+        self.seed("decompose",
+                  "1. **Soft gate.** Predecessor artifact: "
+                  "`architecture.md`.\n"
+                  "2. Write the artifact as `breakdown.md`.\n"
+                  "3. **Hand off.** Next stage is verify.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            ["skills/decompose/SKILL.md never states next stage "
+             "'implement'",
+             "skills/decompose/SKILL.md states next stage 'verify', "
+             "expected 'implement'"])
+
+    def test_terminal_stage_claims_no_next_stage(self):
+        self.seed("operate",
+                  "1. **Soft gate.** Predecessor artifact: `release.md`.\n"
+                  "2. Write the artifact as `retro.md`.\n"
+                  "3. **Hand off.** Next stage is idea.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            ["skills/operate/SKILL.md states next stage 'idea', "
+             "but 'operate' completes the run"])
+
+    def test_missing_own_artifact(self):
+        self.seed("verify",
+                  "1. **Soft gate.** Predecessor artifact: `breakdown.md`.\n"
+                  "2. **Hand off.** Next stage is review.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            ["skills/verify/SKILL.md never names its artifact "
+             "'verification.md'"])
+
+    def test_capture_must_record_both_re_entry_options(self):
+        self.seed("capture",
+                  "1. Record `re-entry: implement`.\n"
+                  "2. Write the artifact as `defect.md`.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            ["skills/capture/SKILL.md never records re-entry option "
+             "'re-entry: architect'"])
+
+    def test_ux_skip_target_must_be_named(self):
+        self.seed("prd",
+                  "1. **Soft gate.** Predecessor artifact: `idea.md`.\n"
+                  "2. Write the artifact as `prd.md`.\n"
+                  "3. **Hand off.** Next stage is ux design.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            ["skills/prd/SKILL.md never names the ux-skip target "
+             "'architect'"])
+
+    def test_line_wrapped_hand_off_phrase_still_counts(self):
+        # the real implement skill wraps "next\n   stage is Verify"
+        self.seed("implement",
+                  "1. **Soft gate.** Predecessor artifact: `breakdown.md`.\n"
+                  "2. Check items off in `breakdown.md`.\n"
+                  "3. **Hand off.** The stage is complete; next\n"
+                  "   stage is verify.\n")
+        self.assertEqual(lint.check_skill_recitals(self.root), [])
+
+    def test_missing_skill_md_reports_nothing(self):
+        # absence is check_skills' finding, not a recital problem
+        (self.root / "skills" / "idea" / "SKILL.md").unlink()
+        self.assertEqual(lint.check_skill_recitals(self.root), [])
 
 
 class TestSkillAssets(CheckerTreeTest):
@@ -756,6 +888,19 @@ class TestLedgerLinks(CheckerTreeTest):
             "(evals/results/output/idea-2026-01-01-2/grading.json) |\n",
             encoding="utf-8")
         self.assertEqual(lint.check_ledger_links(self.root), [])
+
+
+class TestMainSummary(cli_contract.ReportContract, unittest.TestCase):
+    """lint.main against the real repo — the one summary with a coda
+    (`across N skills`) after the count clause. CI greps this line."""
+
+    @property
+    def summary_line(self):
+        checked = len(lint.ALL_SKILLS) + len(lint.extra_skills(ROOT))
+        return f"lint: 0 problem(s) across {checked} skills"
+
+    def clean_cli(self):
+        return cli_contract.capture(lint.main)
 
 
 if __name__ == "__main__":

@@ -118,6 +118,38 @@ class TestRowTrackerIssue(unittest.TestCase):
             "2026-07-12: a note naming WO-0005 (tracker: #110)"))
 
 
+class TestRowPreLedger(unittest.TestCase):
+    """The pre-ledger annotation is knowledge-plane grammar (ADR-0043): a
+    TRAILING mark ending a breakdown row, the way the annotated bootstrap
+    rows write it. A substring read would match the mark as prose anywhere
+    in a row — sibling of row_work_order and row_tracker_issue, the
+    grammar lives here and the skip policy (detector G) with the caller."""
+
+    def test_a_row_ending_with_the_mark_is_annotated(self):
+        self.assertTrue(knowledge_plane.row_pre_ledger(
+            "- [x] **WO-0002** labels.json + label-sync — size:S"
+            " (PRD-0001 §Solution) (tracker: #107) (pre-ledger)"))
+
+    def test_trailing_whitespace_after_the_mark_still_counts(self):
+        self.assertTrue(knowledge_plane.row_pre_ledger(
+            "- [x] WO-0002 two (PRD-0001) (pre-ledger)  "))
+
+    def test_the_mark_as_mid_row_prose_marks_nothing(self):
+        self.assertFalse(knowledge_plane.row_pre_ledger(
+            "- [x] WO-0020 document the (pre-ledger) annotation"
+            " (PRD-0001 §Solution) (tracker: #150)"))
+
+    def test_a_non_row_line_is_never_annotated(self):
+        for line in ("A note about the mark. (pre-ledger)",
+                     "  - Accept: rows may end with (pre-ledger)"):
+            with self.subTest(line=line):
+                self.assertFalse(knowledge_plane.row_pre_ledger(line))
+
+    def test_an_unannotated_row_is_not_annotated(self):
+        self.assertFalse(knowledge_plane.row_pre_ledger(
+            "- [x] WO-0001 one (PRD-0001) (tracker: #106)"))
+
+
 class TestBreakdownFiles(unittest.TestCase):
     def test_yields_each_runs_breakdown_with_its_lines(self):
         with tempfile.TemporaryDirectory() as tmp:

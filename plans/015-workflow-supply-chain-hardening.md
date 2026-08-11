@@ -6,7 +6,7 @@
 > report — do not improvise. When done, update the status row for this plan
 > in `plans/README.md`.
 >
-> **Drift check (run first)**: `git diff --stat 2e63a04..HEAD -- .github/workflows/ Makefile factory/templates/Makefile tests/test_factory_gates.py tests/test_design_pipeline.py tests/test_charter_replay.py`
+> **Drift check (run first)**: `git diff --stat 2e63a04..HEAD -- .github/workflows/ Makefile factory/templates/Makefile tests/test_gates.py tests/test_design_pipeline.py tests/test_charter_replay.py`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition.
@@ -76,7 +76,7 @@ verbatim by `factory_init.py`:
   	fi
   ```
 
-- Denylist guards in `tests/test_factory_gates.py:1568-1645` — four
+- Denylist guards in `tests/test_gates.py:1568-1645` — four
   tests named `test_the_*_workflow_names_no_command_of_its_own`, each
   iterating a literal tuple of tool names and asserting
   `python3 {tool}` absent. The structural form to generalize:
@@ -108,7 +108,7 @@ verbatim by `factory_init.py`:
 **In scope**:
 - `.github/workflows/charter-replay.yml`, `assembler.yml`, `design.yml`
 - `Makefile` and `factory/templates/Makefile` (web-quality pin only)
-- `tests/workflow_parse.py` (new), `tests/test_factory_gates.py`,
+- `tests/workflow_parse.py` (new), `tests/test_gates.py`,
   `tests/test_charter_replay.py`
 - `factory/templates/**`, `factory/manifest.json` — only via
   `update-manifest`
@@ -227,7 +227,7 @@ say only `make web-quality`).
    Handle the two forms present in this repo's workflows: inline
    (`run: make check`) and block (`run: |` followed by deeper-indented
    lines — return the block joined with newlines as one step).
-2. In `tests/test_factory_gates.py`, add a test class:
+2. In `tests/test_gates.py`, add a test class:
 
    ```python
    class TestWorkflowRunStepInvariant(unittest.TestCase):
@@ -254,7 +254,7 @@ say only `make web-quality`).
    `.github/workflows/` **except** `charter-replay.yml` for the string
    `charter_replay.py`.
 
-**Verify**: `python3 -m unittest tests.test_factory_gates tests.test_charter_replay -v` → all pass at HEAD (the allowlist covers
+**Verify**: `python3 -m unittest tests.test_gates tests.test_charter_replay -v` → all pass at HEAD (the allowlist covers
 exactly what exists; nothing else).
 
 ### Step 5: Refresh mirrors

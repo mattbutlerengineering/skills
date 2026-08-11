@@ -42,7 +42,6 @@ printf '%s%s%s\n' "$prefix" "$name" "$suffix"
 
 
 class FakeOmpTest(RunEvalContract, unittest.TestCase):
-    BINARY = "omp"
     FAKE = FAKE_OMP
     HARNESS = "omp"
 

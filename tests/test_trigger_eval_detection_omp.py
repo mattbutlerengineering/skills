@@ -22,7 +22,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from protocol import ALL_SKILLS  # noqa: E402
-from trigger_eval import _watch_stream, detect_omp_fired  # noqa: E402
+import cli  # noqa: E402
+from trigger_eval import detect_omp_fired  # noqa: E402
 
 NAMES = {"prd-skill-abc123": "prd", "idea-skill-abc123": "idea"}
 
@@ -117,7 +118,7 @@ class TestTerminalEvents(unittest.TestCase):
 
 
 class TestLivePipeAdapter(unittest.TestCase):
-    """_watch_stream feeds a real pipe through the omp state machine:
+    """cli.EventStream feeds a real pipe through the omp state machine:
     one subprocess emitting omp-shaped JSON lines, non-JSON noise
     skipped."""
 
@@ -136,8 +137,8 @@ class TestLivePipeAdapter(unittest.TestCase):
                                    stdout=subprocess.PIPE)
         try:
             self.assertEqual(
-                _watch_stream(process, NAMES, timeout=10,
-                              detect=detect_omp_fired),
+                detect_omp_fired(cli.EventStream(process, timeout=10),
+                                 NAMES),
                 "prd")
         finally:
             process.kill()
@@ -161,7 +162,7 @@ class TestRecordedTranscripts(unittest.TestCase):
         cls.names = {f"{slug}-skill-{run_id}": slug for slug in ALL_SKILLS}
 
     def replay(self, name):
-        # strict, unlike _stream_events' half-line tolerance: a committed
+        # strict, unlike cli.decode_events' junk tolerance: a committed
         # transcript must decode fully or the pinning is compromised
         text = (self.DIR / f"{name}.jsonl").read_text(encoding="utf-8")
         events = [json.loads(line) for line in text.splitlines()

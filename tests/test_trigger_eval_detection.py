@@ -5,7 +5,7 @@ detect_fired is pure (no process, pipe, or clock), so synthetic event
 dicts drive every branch the state machine distinguishes: early detection
 via input_json_delta, the content_block_stop/message_stop fallbacks, the
 legacy full assistant message shape, a different tool firing first, and
-the result event. The live-pipe adapter (_watch_stream/_stream_events)
+the result event. The live-pipe adapter (cli.EventStream, ADR-0053)
 gets one real-subprocess test proving the feed, plus the exit-order seam:
 buffered output must survive a process that exits before the reader's
 first poll, without an orphan-held pipe stalling the run. Recorded
@@ -24,8 +24,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import cli  # noqa: E402
 from protocol import ALL_SKILLS  # noqa: E402
-from trigger_eval import _stream_events, _watch_stream, detect_fired  # noqa: E402
+from trigger_eval import detect_fired  # noqa: E402
 
 NAMES = {"prd-skill-abc123": "prd", "idea-skill-abc123": "idea"}
 
@@ -155,7 +156,7 @@ class TestTerminalEvents(unittest.TestCase):
 
 
 class TestLivePipeAdapter(unittest.TestCase):
-    """_watch_stream feeds a real pipe through the same state machine:
+    """cli.EventStream feeds a real pipe through the same state machine:
     one subprocess emitting stream-json lines, non-JSON noise skipped."""
 
     def test_detects_through_a_real_subprocess_pipe(self):
@@ -171,8 +172,9 @@ class TestLivePipeAdapter(unittest.TestCase):
         process = subprocess.Popen([sys.executable, "-c", script],
                                    stdout=subprocess.PIPE)
         try:
-            self.assertEqual(_watch_stream(process, NAMES, timeout=10),
-                             "prd")
+            self.assertEqual(
+                detect_fired(cli.EventStream(process, timeout=10), NAMES),
+                "prd")
         finally:
             process.kill()
             process.wait()
@@ -199,7 +201,7 @@ class TestStreamEventsDrainsAfterExit(unittest.TestCase):
                                    stdout=subprocess.PIPE)
         self.addCleanup(process.stdout.close)
         process.wait(timeout=10)  # dead before the reader's first poll
-        self.assertEqual(list(_stream_events(process, timeout=10)),
+        self.assertEqual(list(cli.EventStream(process, timeout=10)),
                          [{"n": n} for n in range(1000)])
 
     class DeadLeaderOpenPipe:
@@ -230,7 +232,7 @@ class TestStreamEventsDrainsAfterExit(unittest.TestCase):
         process = self.DeadLeaderOpenPipe(b'{"n": 1}\n')
         self.addCleanup(process.close)
         start = time.time()
-        events = list(_stream_events(process, timeout=timeout))
+        events = list(cli.EventStream(process, timeout=timeout))
         self.assertEqual(events, [{"n": 1}])
         self.assertLess(time.time() - start, timeout / 3)
 
@@ -251,7 +253,7 @@ class TestRecordedTranscripts(unittest.TestCase):
         cls.names = {f"{slug}-skill-{run_id}": slug for slug in ALL_SKILLS}
 
     def replay(self, name):
-        # strict, unlike _stream_events' half-line tolerance: a committed
+        # strict, unlike cli.decode_events' junk tolerance: a committed
         # transcript must decode fully or the pinning is compromised
         text = (self.DIR / f"{name}.jsonl").read_text(encoding="utf-8")
         events = [json.loads(line) for line in text.splitlines()

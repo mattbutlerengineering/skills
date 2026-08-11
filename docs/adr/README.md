@@ -41,7 +41,7 @@ the canonical vocabulary.
 | [0018](0018-git-bootstrap.md) | Git bootstrap | accepted |
 | [0019](0019-trigger-and-output-evals.md) | Evals: routing discrimination + on-demand output grading | accepted |
 | [0020](0020-hybrid-recall-policy.md) | Hybrid recall policy for skill descriptions | accepted |
-| [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | accepted |
+| [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | amended by ADR-0052 |
 | [0022](0022-eval-schema-module.md) | One eval-schema module beside the protocol module | accepted |
 | [0023](0023-utility-skills.md) | Utility skills alongside stage skills and the router | provisional |
 | [0024](0024-eval-schema-charter.md) | eval_schema's charter covers all eval knowledge, not one file's schema | provisional |
@@ -58,11 +58,19 @@ the canonical vocabulary.
 | [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | accepted |
 | [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | accepted |
 | [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | amended by ADR-0039 |
-| [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | accepted |
+| [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | amended by ADR-0045 |
 | [0039](0039-tracker-grammar-joins-the-knowledge-plane.md) | Tracker-mirror grammar joins the knowledge plane | amended by ADR-0040 |
 | [0040](0040-write-outputs-joins-the-cli-seam.md) | write_outputs joins the cli seam | amended by ADR-0042 |
-| [0041](0041-gate-latency-rows-join-the-cost-ledger.md) | Gate-latency observations are cost-ledger rows | accepted |
-| [0042](0042-gh-runner-and-event-read-join-the-cli-seam.md) | gh_runner and the event read join the cli seam | accepted |
+| [0041](0041-gate-latency-rows-join-the-cost-ledger.md) | Gate-latency observations are cost-ledger rows | amended by ADR-0049 |
+| [0042](0042-gh-runner-and-event-read-join-the-cli-seam.md) | gh_runner and the event read join the cli seam | amended by ADR-0051 |
 | [0043](0043-pre-ledger-rows-are-annotated-in-the-knowledge-plane.md) | Pre-ledger rows are annotated in the knowledge plane | accepted |
 | [0044](0044-daily-improvement-routine.md) | A daily routine drives the factory's improvement loop | accepted |
 | [0045](0045-lifecycle-label-writers.md) | Every lifecycle label has a named writer; wo:blocked's is a human | accepted |
+| [0046](0046-tools-factory-symmetry-deferred.md) | tools/factory root symmetry deferred — flat root is load-bearing | accepted |
+| [0047](0047-factory-roles-seam.md) | Factory roles seam: factory_roles.py owns the role vocabulary | accepted |
+| [0048](0048-artifact-path-grammar-joins-factory-config.md) | The installed-vs-payload path grammar joins factory_config | accepted |
+| [0049](0049-row-identity-joins-the-cost-ledger.md) | The row identity joins the cost ledger | accepted |
+| [0050](0050-mirrors-carry-a-transform.md) | MIRRORS carries a transform: one authority per payload file | accepted |
+| [0051](0051-report-joins-the-cli-seam.md) | The report epilogue joins the cli seam | accepted |
+| [0052](0052-skill-file-contract-joins-the-protocol-seam.md) | The skill-file contract joins the protocol seam; lint pins the recitals | accepted |
+| [0053](0053-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |

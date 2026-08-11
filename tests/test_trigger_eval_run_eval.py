@@ -19,7 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 # discover puts tests/ on sys.path; selective package-style runs
-# (python3 -m unittest tests.test_run_eval) need it added for the
+# (python3 -m unittest tests.test_trigger_eval_run_eval) need it added for the
 # sibling harness_contract import
 sys.path.insert(0, str(ROOT / "tests"))
 
@@ -50,7 +50,6 @@ printf '%s%s%s\n' "$prefix" "$name" "$suffix"
 
 
 class FakeClaudeTest(RunEvalContract, unittest.TestCase):
-    BINARY = "claude"
     FAKE = FAKE_CLAUDE
     HARNESS = "claude"
 

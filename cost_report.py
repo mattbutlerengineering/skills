@@ -29,17 +29,25 @@ mutations, so they stay in the YAML, never here.
         or unresolvable cap decides PAUSE and still exits nonzero, so a
         broken config can never silently wave spend through unpaused).
 """
+import math
 import os
 import sys
+from collections import namedtuple
 from datetime import datetime, timezone
 
 import cost_ledger
 import factory_config
-from cli import write_outputs
+from cli import report, write_outputs
 from knowledge_plane import repo_root
 
 PAUSE = "PAUSE"
 CONTINUE = "CONTINUE"
+
+# guard's named result. Still a tuple (positional unpacking keeps
+# working), but call sites name the field they want instead of unpacking
+# six positions to use two. cap is None only on a failing-closed path.
+GuardResult = namedtuple("GuardResult", (
+    "verdict", "reason", "totals", "month_totals", "cap", "problems"))
 
 
 def aggregate(entries, month=None):
@@ -79,7 +87,16 @@ def aggregate(entries, month=None):
 def decide(total_cost, cap):
     """(verdict, reason): PAUSE once total spend has reached or crossed the
     monthly cap — the same >= boundary as budget_guard.decide (a month that
-    has just reached its ceiling has no more to spend)."""
+    has just reached its ceiling has no more to spend), and the same
+    input validation: a NaN, infinite, or negative spend would slip past
+    the comparison and silently CONTINUE (fail open), so it PAUSEs with
+    its own reason instead — failing closed, budget_guard's
+    _validate_spend discipline on this twin's boundary."""
+    if isinstance(total_cost, bool) \
+            or not isinstance(total_cost, (int, float)) \
+            or not math.isfinite(total_cost) or total_cost < 0:
+        return PAUSE, (f"cr: spend {total_cost!r} is not a finite,"
+                       " non-negative number — failing closed")
     if total_cost >= cap:
         return PAUSE, (f"cr: spend ${total_cost:.2f} has reached or"
                        f" exceeded the ${cap:.2f} monthly cap — pausing"
@@ -89,34 +106,36 @@ def decide(total_cost, cap):
 
 
 def guard(root, config=None, ledger_path=None, month=None):
-    """(verdict, reason, totals, month_totals, cap, problems): recompute
-    spend from the ledger and decide against factory.json's monthly cap.
-    The verdict decides on `month_totals` — the aggregate windowed to
-    `month` ("YYYY-MM", the report month), which IS the lifetime aggregate
-    when no month is given — while `totals` stays lifetime for the report
-    body. FAILS CLOSED: any read or resolution problem decides PAUSE
-    rather than letting unaccountable spend continue — a report that
-    cannot prove it is under the cap is treated as over it (same
-    discipline as budget_guard.guard). Both aggregates are always the
-    best-effort rollup of what WAS readable, even on a failing path, so a
-    human reading the report still sees something."""
+    """GuardResult: recompute spend from the ledger and decide against
+    factory.json's monthly cap. The verdict decides on `month_totals` —
+    the aggregate windowed to `month` ("YYYY-MM", the report month),
+    which IS the lifetime aggregate when no month is given — while
+    `totals` stays lifetime for the report body. FAILS CLOSED: any read
+    or resolution problem decides PAUSE rather than letting
+    unaccountable spend continue — a report that cannot prove it is
+    under the cap is treated as over it (same discipline as
+    budget_guard.guard). Both aggregates are always the best-effort
+    rollup of what WAS readable, even on a failing path, so a human
+    reading the report still sees something."""
     entries, problems = cost_ledger.read(root, ledger_path=ledger_path)
     totals = aggregate(entries)
     month_totals = aggregate(entries, month)
     if problems:
-        return PAUSE, "cr: unreadable ledger — failing closed", totals, \
-            month_totals, None, problems
+        return GuardResult(PAUSE, "cr: unreadable ledger — failing closed",
+                           totals, month_totals, None, problems)
     if config is None:
         config, problems = factory_config.load(root)
         if problems:
-            return (PAUSE, "cr: no monthly cap could be resolved — failing"
-                    " closed", totals, month_totals, None, problems)
+            return GuardResult(
+                PAUSE, "cr: no monthly cap could be resolved — failing"
+                " closed", totals, month_totals, None, problems)
     cap, problems = factory_config.resolve_cap(config)
     if problems:
-        return (PAUSE, "cr: no monthly cap could be resolved — failing"
-                " closed", totals, month_totals, None, problems)
+        return GuardResult(
+            PAUSE, "cr: no monthly cap could be resolved — failing"
+            " closed", totals, month_totals, None, problems)
     verdict, reason = decide(month_totals["total_cost"], cap)
-    return verdict, reason, totals, month_totals, cap, []
+    return GuardResult(verdict, reason, totals, month_totals, cap, [])
 
 
 def report_title(as_of):
@@ -165,16 +184,16 @@ def run_report(root, clock=None, ledger_path=None):
     clock = clock or _utcnow
     as_of = clock().date().isoformat()
     month = as_of[:7]
-    verdict, reason, totals, month_totals, cap, problems = guard(
-        root, ledger_path=ledger_path, month=month)
+    result = guard(root, ledger_path=ledger_path, month=month)
     outputs = {
-        "pause": "true" if verdict == PAUSE else "false",
+        "pause": "true" if result.verdict == PAUSE else "false",
         "title": report_title(as_of),
-        "body": compose_report(totals, verdict, reason, cap, as_of, month,
-                               month_totals),
-        "reason": reason,
+        "body": compose_report(result.totals, result.verdict, result.reason,
+                               result.cap, as_of, month,
+                               result.month_totals),
+        "reason": result.reason,
     }
-    return outputs, problems
+    return outputs, result.problems
 
 
 def main(argv, env=None, clock=None):
@@ -188,10 +207,7 @@ def main(argv, env=None, clock=None):
     else:
         print(__doc__.strip())
         return 2
-    for problem in problems:
-        print(problem)
-    print(f"cost_report: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("cost_report", problems)
 
 
 if __name__ == "__main__":

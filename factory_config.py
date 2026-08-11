@@ -11,6 +11,11 @@ lives behind one interface; factory.json stays the single routing source
 of truth (ADR-0004), resolved in exactly one place, and detector F
 (gates.check_config_shape) remains the CI gate over the whole shape.
 
+This module also owns two vocabularies its accessors resolve over
+(ADR-0048): BANDS, the legal routing bands, and ARTIFACT_HOMES /
+artifact_paths, the installed-vs-payload location grammar every
+dual-home factory artifact is read through.
+
 Conventions match gates.py: functions return (value, problems) with
 config:-prefixed problem strings; a field the config does not cover is a
 problem, never a silent default.
@@ -18,18 +23,52 @@ problem, never a silent default.
 import json
 from pathlib import Path
 
+# The routing-band vocabulary (ADR-0034): the exact key set factory.json's
+# routing table must map. One home (ADR-0048) — gates' detector F and the
+# WO-0007 acceptance evidence read this tuple. resolve_model stays
+# fail-closed per lookup, so a band outside the vocabulary is already a
+# problem there without a second membership check.
+BANDS = ("mechanical", "implementation", "architecture_review")
+
+# The installed-vs-payload location grammar (ADR-0048): artifact name ->
+# (installed rel to the repo root, payload rel to factory/ — the manifest
+# key grammar of gates.manifest_files). The .github/ asymmetry is stated
+# here once: factory.json sits at the payload root and is mapped at stamp
+# time (factory_init.INSTALL_MAP derives from this table); labels.json
+# already sits under templates/.github/, so the stamp's default strip
+# rule lands it installed.
+ARTIFACT_HOMES = {
+    "factory.json": (".github/factory.json", "templates/factory.json"),
+    "labels.json": (".github/labels.json",
+                    "templates/.github/labels.json"),
+}
+
+
+def artifact_paths(root, name):
+    """The ordered candidate homes of a dual-home factory artifact:
+    ((installed path, True), (payload path, False)) — installed first,
+    the read order every runtime loader uses (load here,
+    label_sync.load_labels); detector F checks every candidate. `name`
+    must be an ARTIFACT_HOMES key — call sites pass literals, so a typo
+    is a KeyError at test time, not a runtime state."""
+    installed, payload = ARTIFACT_HOMES[name]
+    root = Path(root)
+    return ((root / installed, True),
+            (root / "factory" / payload, False))
+
 
 def load(root):
     """(the factory config, problems): the installed .github/factory.json
-    when stamped, else the template payload copy — same fallback shape as
-    label_sync.load_labels."""
+    when stamped, else the template payload copy — the first existing
+    candidate in artifact_paths' installed-first order, same fallback
+    shape as label_sync.load_labels."""
     root = Path(root)
-    candidates = (root / ".github" / "factory.json",
-                  root / "factory" / "templates" / "factory.json")
-    path = next((p for p in candidates if p.is_file()), None)
+    candidates = artifact_paths(root, "factory.json")
+    path = next((p for p, _ in candidates if p.is_file()), None)
     if path is None:
-        return None, ["config: missing factory.json (.github/factory.json or"
-                      " factory/templates/factory.json)"]
+        homes = " or ".join(
+            p.relative_to(root).as_posix() for p, _ in candidates)
+        return None, [f"config: missing factory.json ({homes})"]
     try:
         return json.loads(path.read_text(encoding="utf-8")), []
     except json.JSONDecodeError as err:

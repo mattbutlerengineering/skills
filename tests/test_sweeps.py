@@ -1,6 +1,6 @@
 """sweeps.py — pure-function + fixture tests (origin: WO-0010).
 
-Same discipline as test_label_sync/test_factory_gates: every function is
+Same discipline as test_label_sync/test_gates: every function is
 exercised through its public interface, tests assert the EXACT problem
 strings callers will print, and the gh runner is injected so NO test ever
 touches the network. The two invariants of ADR-0032 get their own class:
@@ -20,6 +20,7 @@ import sweeps
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling fixture_tree import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fake_gh import FakeGh  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 import cli_contract  # noqa: E402
 
@@ -48,44 +49,20 @@ SENTRY_ENTRY = {
 }
 
 
-class RecordingRunner:
-    """Injected gh runner: records every call, answers the list calls with a
-    canned listing, and never touches the network."""
-
-    def __init__(self, issues=(), labels=None):
-        self.issues = list(issues)
-        self.labels = TAXONOMY if labels is None else labels
-        self.calls = []
-
-    def __call__(self, args):
-        self.calls.append(list(args))
-        if args[:2] == ["issue", "list"]:
-            return json.dumps(self.issues)
-        if args[:2] == ["label", "list"]:
-            return json.dumps(self.labels)
-        return ""
-
-    def created(self):
-        return [call for call in self.calls if call[:2] == ["issue", "create"]]
-
-    def created_labels(self):
-        return [call[2] for call in self.calls
-                if call[:2] == ["label", "create"]]
+def gh(issues=(), labels=None, **kwargs):
+    """A fake gh for a sweep's traffic: `issue list` answers with the
+    canned issue listing, `label list` with the taxonomy — or a canned
+    subset (failure declared via FakeGh's failing=/error=)."""
+    return FakeGh(answers={
+        ("issue", "list"): json.dumps(list(issues)),
+        ("label", "list"): json.dumps(
+            TAXONOMY if labels is None else labels),
+    }, **kwargs)
 
 
-class FailingRunner(RecordingRunner):
-    """Fails the way a real gh does on the named subcommand."""
-
-    def __init__(self, error, failing, **kwargs):
-        super().__init__(**kwargs)
-        self.error = error
-        self.failing = list(failing)
-
-    def __call__(self, args):
-        if list(args[:len(self.failing)]) == self.failing:
-            self.calls.append(list(args))
-            raise self.error
-        return super().__call__(args)
+def created_labels(runner):
+    """The label names the runner was asked to create."""
+    return [call[2] for call in runner.called("label", "create")]
 
 
 def taxonomy_tree(tmp):
@@ -329,9 +306,9 @@ class TestEnsureLabels(unittest.TestCase):
     def test_missing_triage_labels_are_created(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = RecordingRunner(labels=[])
+            runner = gh(labels=[])
             self.assertEqual(sweeps.ensure_labels(tree.root, run=runner), [])
-            self.assertEqual(sorted(runner.created_labels()),
+            self.assertEqual(sorted(created_labels(runner)),
                              sorted(sweeps.TRIAGE_LABELS))
 
     def test_it_creates_only_the_labels_a_sweep_must_stamp(self):
@@ -340,9 +317,9 @@ class TestEnsureLabels(unittest.TestCase):
         # — it would heal the drift it exists to surface to a human.
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = RecordingRunner(labels=[])
+            runner = gh(labels=[])
             sweeps.ensure_labels(tree.root, run=runner)
-            created = set(runner.created_labels())
+            created = set(created_labels(runner))
             self.assertNotIn("wo:draft", created)
             self.assertNotIn("size:S", created)
             self.assertEqual(created, set(sweeps.TRIAGE_LABELS))
@@ -350,16 +327,16 @@ class TestEnsureLabels(unittest.TestCase):
     def test_a_live_taxonomy_is_left_alone(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = RecordingRunner()  # every label already live
+            runner = gh()  # every label already live
             self.assertEqual(sweeps.ensure_labels(tree.root, run=runner), [])
-            self.assertEqual(runner.created_labels(), [])
+            self.assertEqual(created_labels(runner), [])
 
     def test_the_created_label_carries_its_taxonomy_color_and_description(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             want = next(label for label in TAXONOMY
                         if label["name"] == "source:sweep")
-            runner = RecordingRunner(labels=[])
+            runner = gh(labels=[])
             sweeps.ensure_labels(tree.root, run=runner)
             [create] = [call for call in runner.calls
                         if call[:3] == ["label", "create", "source:sweep"]]
@@ -371,11 +348,12 @@ class TestEnsureLabels(unittest.TestCase):
     def test_a_failing_gh_create_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = FailingRunner(
-                subprocess.CalledProcessError(
+            runner = gh(
+                labels=[], failing=("label", "create"),
+                error=subprocess.CalledProcessError(
                     1, ["gh", "label", "create"],
-                    stderr="HTTP 403: Resource not accessible by integration\n"),
-                failing=("label", "create"), labels=[])
+                    stderr="HTTP 403: Resource not accessible by"
+                           " integration\n"))
             problems = sweeps.ensure_labels(tree.root, run=runner)
             self.assertIn(
                 "sweeps: gh label create source:sentry failed:"
@@ -385,10 +363,10 @@ class TestEnsureLabels(unittest.TestCase):
     def test_a_failing_gh_list_is_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = FailingRunner(
-                subprocess.CalledProcessError(
-                    1, ["gh", "label", "list"], stderr="HTTP 401\n"),
-                failing=("label", "list"))
+            runner = gh(
+                failing=("label", "list"),
+                error=subprocess.CalledProcessError(
+                    1, ["gh", "label", "list"], stderr="HTTP 401\n"))
             self.assertEqual(sweeps.ensure_labels(tree.root, run=runner),
                              ["sweeps: gh label list failed: HTTP 401"])
 
@@ -396,27 +374,22 @@ class TestEnsureLabels(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
             tree.write(".github/labels.json", "[]")
-            runner = RecordingRunner()
+            runner = gh()
             self.assertEqual(sweeps.ensure_labels(tree.root, run=runner), [
                 "L: .github/labels.json must be a non-empty JSON array"
                 " of label entries"])
             self.assertEqual(runner.calls, [])
 
     def test_an_unparseable_label_listing_creates_nothing(self):
-        class BannerLabels(RecordingRunner):
-            def __call__(self, args):
-                out = super().__call__(args)
-                return ("gh: banner text" if args[:2] == ["label", "list"]
-                        else out)
-
+        # gh ran, exited 0, answered `label list` with raw non-JSON.
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = BannerLabels()
+            runner = FakeGh(answers={("label", "list"): "gh: banner text"})
             problems = sweeps.ensure_labels(tree.root, run=runner)
             self.assertEqual(problems, [
                 "sweeps: gh label list returned unparseable JSON:"
                 " Expecting value: line 1 column 1 (char 0)"])
-            self.assertEqual(runner.created_labels(), [])
+            self.assertEqual(created_labels(runner), [])
 
     def test_every_label_a_sweep_can_stamp_is_ensured(self):
         # TRIAGE_LABELS is derived from TRIAGE, so a new sweep kind cannot
@@ -431,13 +404,13 @@ class TestFileIssues(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
-            runner = RecordingRunner()
+            runner = gh()
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner)
             self.assertEqual(problems, [])
             self.assertEqual(filed, ["sentry:PROJ-7K"])
             self.assertEqual(runner.calls[0], LIST_CALL)
-            [create] = runner.created()
+            [create] = runner.called("issue", "create")
             self.assertEqual(create[:2], ["issue", "create"])
             self.assertEqual(create[create.index("--title") + 1],
                              intakes[0].title)
@@ -449,12 +422,12 @@ class TestFileIssues(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
-            runner = RecordingRunner(issues=[
+            runner = gh(issues=[
                 {"number": 3, "body": "intake-key: sentry:PROJ-7K\n"}])
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner)
             self.assertEqual((filed, problems), ([], []))
-            self.assertEqual(runner.created(), [])
+            self.assertEqual(runner.called("issue", "create"), [])
 
     def test_a_closed_issue_with_the_same_key_is_not_refiled(self):
         # A maintainer who triages [sentry] PROJ-7K and closes it (wontfix,
@@ -464,20 +437,20 @@ class TestFileIssues(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
-            runner = RecordingRunner(issues=[
+            runner = gh(issues=[
                 {"number": 3, "state": "CLOSED",
                  "body": "intake-key: sentry:PROJ-7K\n"}])
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner)
             self.assertEqual((filed, problems), ([], []))
-            self.assertEqual(runner.created(), [])
+            self.assertEqual(runner.called("issue", "create"), [])
             self.assertEqual(runner.calls, [LIST_CALL])
 
     def test_the_dedupe_listing_asks_for_every_state(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
-            runner = RecordingRunner()
+            runner = gh()
             sweeps.file_issues(tree.root, intakes, run=runner)
             self.assertEqual(runner.calls[0], LIST_CALL)
             self.assertNotIn("open", runner.calls[0])
@@ -489,7 +462,7 @@ class TestFileIssues(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
-            runner = RecordingRunner(issues=[
+            runner = gh(issues=[
                 {"number": n, "body": f"intake-key: old:{n}\n"}
                 for n in range(sweeps.LIST_WINDOW)])
             filed, problems = sweeps.file_issues(tree.root, intakes,
@@ -528,7 +501,7 @@ class TestFileIssues(unittest.TestCase):
             payload = [dict(SENTRY_ENTRY, shortId=f"PROJ-{n}")
                        for n in range(sweeps.MAX_INTAKE + 5)]
             intakes, _ = sweeps.sentry_intakes(payload)
-            runner = RecordingRunner()
+            runner = gh()
             notes = []
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner,
@@ -552,7 +525,7 @@ class TestFileIssues(unittest.TestCase):
             intakes, _ = sweeps.sentry_intakes(payload)
             already = [{"number": n, "body": f"intake-key: sentry:PROJ-{n}\n"}
                        for n in range(sweeps.MAX_INTAKE)]
-            runner = RecordingRunner(issues=already)
+            runner = gh(issues=already)
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner)
             self.assertEqual(problems, [])
@@ -563,7 +536,7 @@ class TestFileIssues(unittest.TestCase):
     def test_no_plans_makes_no_network_call(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = RecordingRunner()
+            runner = gh()
             self.assertEqual(sweeps.file_issues(tree.root, [], run=runner),
                              ([], []))
             self.assertEqual(runner.calls, [])
@@ -573,7 +546,7 @@ class TestFileIssues(unittest.TestCase):
             tree = taxonomy_tree(tmp)
             bad = sweeps.Intake(key="k", title="t", body="b",
                                 labels=("wo:in-progress",))
-            runner = RecordingRunner()
+            runner = gh()
             filed, problems = sweeps.file_issues(tree.root, [bad], run=runner)
             self.assertEqual(filed, [])
             self.assertEqual(problems, [
@@ -585,28 +558,28 @@ class TestFileIssues(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
-            runner = FailingRunner(
-                subprocess.CalledProcessError(
+            runner = gh(
+                failing=("issue", "list"),
+                error=subprocess.CalledProcessError(
                     1, ["gh", "issue", "list"],
-                    stderr="gh: Bad credentials (HTTP 401)\n"),
-                failing=("issue", "list"))
+                    stderr="gh: Bad credentials (HTTP 401)\n"))
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner)
             self.assertEqual(filed, [])
             self.assertEqual(problems, [
                 "sweeps: gh issue list failed:"
                 " gh: Bad credentials (HTTP 401)"])
-            self.assertEqual(runner.created(), [])
+            self.assertEqual(runner.called("issue", "create"), [])
 
     def test_failing_gh_create_reports_a_per_plan_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
-            runner = FailingRunner(
-                subprocess.CalledProcessError(
+            runner = gh(
+                failing=("issue", "create"),
+                error=subprocess.CalledProcessError(
                     1, ["gh", "issue", "create"],
-                    stderr="HTTP 403: rate limit exceeded\n"),
-                failing=("issue", "create"))
+                    stderr="HTTP 403: rate limit exceeded\n"))
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner)
             self.assertEqual(filed, [])
@@ -619,14 +592,14 @@ class TestLabelDriftSweep(unittest.TestCase):
     def test_a_clean_taxonomy_files_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = RecordingRunner()
+            runner = gh()
             self.assertEqual(sweeps.label_drift(tree.root, run=runner),
                              ([], []))
 
     def test_drift_becomes_an_intake_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = RecordingRunner(labels=TAXONOMY[1:])
+            runner = gh(labels=TAXONOMY[1:])
             intakes, problems = sweeps.label_drift(tree.root, run=runner)
             self.assertEqual(problems, [])
             [intake] = intakes
@@ -637,10 +610,10 @@ class TestLabelDriftSweep(unittest.TestCase):
     def test_a_failing_gh_is_a_problem_not_a_filed_signal(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = FailingRunner(
-                subprocess.CalledProcessError(
-                    1, ["gh", "label", "list"], stderr="HTTP 401\n"),
-                failing=("label", "list"))
+            runner = gh(
+                failing=("label", "list"),
+                error=subprocess.CalledProcessError(
+                    1, ["gh", "label", "list"], stderr="HTTP 401\n"))
             intakes, problems = sweeps.label_drift(tree.root, run=runner)
             self.assertEqual(intakes, [])
             self.assertEqual(problems,
@@ -660,7 +633,7 @@ class TestLabelDriftSweep(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
             tree.write(".github/labels.json", "[]")
-            runner = RecordingRunner()
+            runner = gh()
             intakes, problems = sweeps.label_drift(tree.root, run=runner)
             self.assertEqual(intakes, [])
             self.assertEqual(problems, [
@@ -859,8 +832,7 @@ class TestReconcileSweep(unittest.TestCase):
     def test_it_reads_every_state_in_one_listing(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            runner = RecordingRunner(
-                issues=[issue(109, "CLOSED", ["wo:merged"])])
+            runner = gh(issues=[issue(109, "CLOSED", ["wo:merged"])])
             intakes, problems = sweeps.reconcile(tree.root, run=runner)
             self.assertEqual((intakes, problems), ([], []))
             self.assertEqual(runner.calls, [[
@@ -871,8 +843,7 @@ class TestReconcileSweep(unittest.TestCase):
     def test_drift_becomes_one_plan_naming_the_breakdown_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            runner = RecordingRunner(
-                issues=[issue(109, "OPEN", ["wo:ready-for-agent"])])
+            runner = gh(issues=[issue(109, "OPEN", ["wo:ready-for-agent"])])
             intakes, problems = sweeps.reconcile(tree.root, run=runner)
             self.assertEqual(problems, [])
             [intake] = intakes
@@ -885,8 +856,7 @@ class TestReconcileSweep(unittest.TestCase):
         # a report full of drift that does not exist.
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            runner = RecordingRunner(
-                issues=[issue(n) for n in range(sweeps.LIST_WINDOW)])
+            runner = gh(issues=[issue(n) for n in range(sweeps.LIST_WINDOW)])
             intakes, problems = sweeps.reconcile(tree.root, run=runner)
             self.assertEqual(intakes, [])
             self.assertEqual(problems, [
@@ -897,10 +867,9 @@ class TestReconcileSweep(unittest.TestCase):
     def test_a_failing_gh_is_a_problem_not_a_filed_signal(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            runner = FailingRunner(
-                subprocess.CalledProcessError(
-                    1, ["gh", "issue", "list"], stderr="HTTP 401\n"),
-                failing=("issue", "list"))
+            runner = gh(error=subprocess.CalledProcessError(
+                            1, ["gh", "issue", "list"], stderr="HTTP 401\n"),
+                        failing=("issue", "list"))
             intakes, problems = sweeps.reconcile(tree.root, run=runner)
             self.assertEqual(intakes, [])
             self.assertEqual(problems,
@@ -919,8 +888,7 @@ class TestReconcileSweep(unittest.TestCase):
     def test_a_repo_with_no_breakdown_compares_the_issue_side_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
-            runner = RecordingRunner(
-                issues=[issue(109, "OPEN", ["wo:in-progress"])])
+            runner = gh(issues=[issue(109, "OPEN", ["wo:in-progress"])])
             intakes, problems = sweeps.reconcile(tree.root, run=runner)
             self.assertEqual(problems, [])
             [intake] = intakes
@@ -966,44 +934,50 @@ class TestLoadPayload(unittest.TestCase):
             self.assertEqual(len(intakes), sweeps.MAX_INTAKE + 2)
 
 
-class TestCli(cli_contract.CliContract, unittest.TestCase):
+class TestCli(cli_contract.CliContract, cli_contract.ReportContract,
+              unittest.TestCase):
     """The CLI runs against the real repo root (its own taxonomy), with the
     gh runner injected — no network, no issues filed anywhere."""
 
     usage_fragment = "sweeps"
     bad_argv = ("nope",)
+    summary_line = "sweeps: 0 problem(s)"
 
     def run_cli(self, argv, runner=None):
         return cli_contract.capture(
             sweeps.main, argv,
-            run=runner if runner is not None else RecordingRunner())
+            run=runner if runner is not None else gh())
+
+    def clean_cli(self):
+        # The ensure-labels epilogue — the plain summary shape.
+        return self.run_cli(["ensure-labels"], gh(labels=[]))
 
     def test_sentry_sweep_files_and_reports(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = FixtureTree(tmp).write("sentry.json",
                                           json.dumps([SENTRY_ENTRY]))
-            runner = RecordingRunner()
+            runner = gh()
             code, out = self.run_cli(["sentry", "--payload", str(path)],
                                       runner)
             self.assertEqual(code, 0)
             self.assertEqual(out.splitlines(), [
                 "sweeps: filed intake issue for sentry:PROJ-7K",
                 "sweeps: 1 issue(s) filed, 0 problem(s)"])
-            self.assertEqual(len(runner.created()), 1)
+            self.assertEqual(len(runner.called("issue", "create")), 1)
 
     def test_label_drift_sweep_on_a_clean_repo_files_nothing(self):
-        runner = RecordingRunner()
+        runner = gh()
         code, out = self.run_cli(["label-drift"], runner)
         self.assertEqual(code, 0)
         self.assertEqual(out, "sweeps: 0 issue(s) filed, 0 problem(s)\n")
-        self.assertEqual(runner.created(), [])
+        self.assertEqual(runner.called("issue", "create"), [])
 
     def test_label_drift_sweep_files_one_issue_on_drift(self):
-        runner = RecordingRunner(labels=[])
+        runner = gh(labels=[])
         code, out = self.run_cli(["label-drift"], runner)
         self.assertEqual(code, 0)
         self.assertIn("sweeps: filed intake issue for sweep:label-drift", out)
-        [create] = runner.created()
+        [create] = runner.called("issue", "create")
         labels = [create[i + 1] for i, arg in enumerate(create)
                   if arg == "--label"]
         self.assertEqual(labels, ["source:sweep", "type:chore"])
@@ -1020,11 +994,11 @@ class TestCli(cli_contract.CliContract, unittest.TestCase):
                        dict(SENTRY_ENTRY, shortId="PROJ-2"),
                        dict(SENTRY_ENTRY, shortId="PROJ-3")]
             path = FixtureTree(tmp).write("sentry.json", json.dumps(payload))
-            runner = RecordingRunner()
+            runner = gh()
             code, out = self.run_cli(["sentry", "--payload", str(path)],
                                       runner)
             filed_titles = [create[create.index("--title") + 1]
-                            for create in runner.created()]
+                            for create in runner.called("issue", "create")]
             self.assertEqual(sorted(filed_titles), [
                 "[sentry] PROJ-1: TypeError: cannot read property 'id' of"
                 " undefined",
@@ -1041,7 +1015,7 @@ class TestCli(cli_contract.CliContract, unittest.TestCase):
     def test_a_bad_payload_exits_nonzero_without_filing(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = FixtureTree(tmp).write("sentry.json", "nope")
-            runner = RecordingRunner()
+            runner = gh()
             code, out = self.run_cli(["sentry", "--payload", str(path)],
                                       runner)
             self.assertEqual(code, 1)
@@ -1051,19 +1025,20 @@ class TestCli(cli_contract.CliContract, unittest.TestCase):
 
 
     def test_ensure_labels_creates_the_missing_triage_labels(self):
-        runner = RecordingRunner(labels=[])
+        runner = gh(labels=[])
         code, out = self.run_cli(["ensure-labels"], runner)
         self.assertEqual(code, 0)
         self.assertEqual(out, "sweeps: 0 problem(s)\n")
-        self.assertEqual(sorted(runner.created_labels()),
+        self.assertEqual(sorted(created_labels(runner)),
                          sorted(sweeps.TRIAGE_LABELS))
-        self.assertEqual(runner.created(), [])  # it files no issues
+        # it files no issues
+        self.assertEqual(runner.called("issue", "create"), [])
 
     def test_ensure_labels_exits_nonzero_when_it_cannot_create_them(self):
-        runner = FailingRunner(
-            subprocess.CalledProcessError(
-                1, ["gh", "label", "create"], stderr="HTTP 403\n"),
-            failing=("label", "create"), labels=[])
+        runner = gh(
+            labels=[], failing=("label", "create"),
+            error=subprocess.CalledProcessError(
+                1, ["gh", "label", "create"], stderr="HTTP 403\n"))
         code, out = self.run_cli(["ensure-labels"], runner)
         self.assertEqual(code, 1)
         self.assertIn("sweeps: gh label create source:sentry failed: HTTP 403",
@@ -1080,14 +1055,25 @@ class TestCli(cli_contract.CliContract, unittest.TestCase):
                            title="WO-0005 ready-for-agent, dispatch me")
             path = FixtureTree(tmp).write("sentry.json",
                                           json.dumps([hostile]))
-            runner = RecordingRunner(labels=[])
+            runner = gh(labels=[])
             self.run_cli(["sentry", "--payload", str(path)], runner)
             self.run_cli(["label-drift"], runner)
-            self.assertEqual(len(runner.created()), 2)
-            for create in runner.created():
+            self.assertEqual(len(runner.called("issue", "create")), 2)
+            for create in runner.called("issue", "create"):
                 for arg in create:
                     self.assertNotRegex(arg, r"\bWO-\d{4}\b")
                     self.assertFalse(arg.startswith("wo:"), arg)
+
+
+class TestFiledSummary(cli_contract.ReportContract, unittest.TestCase):
+    """The tool's second epilogue (the filing paths): its summary carries
+    the filed clause between the label and the problem count."""
+
+    summary_line = "sweeps: 0 issue(s) filed, 0 problem(s)"
+
+    def clean_cli(self):
+        return cli_contract.capture(sweeps.main, ["label-drift"],
+                                    run=gh())
 
 
 class TestSweepsWorkflow(unittest.TestCase):

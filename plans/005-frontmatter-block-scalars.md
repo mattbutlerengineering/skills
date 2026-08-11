@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 79b08fc..HEAD -- protocol.py tests/test_frontmatter.py`
+> **Drift check (run first)**: `git diff --stat 79b08fc..HEAD -- protocol.py tests/test_protocol_frontmatter.py`
 > If `read_frontmatter` in `protocol.py` changed since this plan was
 > written, compare the "Current state" excerpt against the live code; on a
 > mismatch, treat it as a STOP condition.
@@ -75,9 +75,9 @@ def read_frontmatter(path):
     revives).
   - `protocol._ux_skipped` — reads `ux:` from `prd.md` frontmatter.
 - Existing frontmatter test coverage is indirect only (fixture trees in
-  `tests/test_lint_checkers.py` and `tests/test_orientation.py`); there is
+  `tests/test_lint.py` and `tests/test_protocol_orientation.py`); there is
   no direct `read_frontmatter` test module. You will create
-  `tests/test_frontmatter.py`.
+  `tests/test_protocol_frontmatter.py`.
 - Repo conventions: stdlib only (**no YAML library — do not add one**;
   extend the hand parser minimally), plain `unittest`, module docstring
   naming the seam, tests through the public interface
@@ -87,7 +87,7 @@ def read_frontmatter(path):
 
 | Purpose | Command | Expected on success |
 |---------|---------|---------------------|
-| One test module | `python3 -m unittest tests.test_frontmatter -v` | all pass |
+| One test module | `python3 -m unittest tests.test_protocol_frontmatter -v` | all pass |
 | Tests   | `python3 -m unittest discover tests` | `OK`, exit 0 |
 | Lint    | `python3 lint.py` | `lint: 0 problem(s) across 13 skills`, exit 0 |
 
@@ -95,7 +95,7 @@ def read_frontmatter(path):
 
 **In scope**:
 - `protocol.py` — `_FRONTMATTER` regex and `read_frontmatter` only.
-- `tests/test_frontmatter.py` (create).
+- `tests/test_protocol_frontmatter.py` (create).
 
 **Out of scope** (do NOT touch):
 - `lint.py`, `trigger_eval.py`, `orientation.py`, `eval_schema.py` — the
@@ -116,7 +116,7 @@ def read_frontmatter(path):
 
 ### Step 1: Write the failing tests (RED)
 
-Create `tests/test_frontmatter.py`:
+Create `tests/test_protocol_frontmatter.py`:
 
 ```python
 """Frontmatter seam: protocol.read_frontmatter is the one parser
@@ -190,7 +190,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-**Verify**: `python3 -m unittest tests.test_frontmatter -v` → the three
+**Verify**: `python3 -m unittest tests.test_protocol_frontmatter -v` → the three
 `TestExistingContract` tests PASS; the block-scalar and CRLF tests FAIL
 (block scalar: description is `""`; CRLF: result is `None`).
 
@@ -245,7 +245,7 @@ Behavior notes (these ARE the spec for this step):
 - Trailing newlines of a block value are stripped (`rstrip("\n")`), so a
   single-line block scalar equals its plain-value spelling.
 
-**Verify**: `python3 -m unittest tests.test_frontmatter -v` → all 6 pass.
+**Verify**: `python3 -m unittest tests.test_protocol_frontmatter -v` → all 6 pass.
 
 ### Step 3: Full gates
 
@@ -258,25 +258,25 @@ lint-checker and orientation fixture parses through this function.
 ### Step 4: Commit
 
 ```bash
-git add protocol.py tests/test_frontmatter.py
+git add protocol.py tests/test_protocol_frontmatter.py
 git commit -m "fix: parse block-scalar values and CRLF in read_frontmatter"
 ```
 
 ## Test plan
 
-- New `tests/test_frontmatter.py` (6 tests): existing contract pinned
+- New `tests/test_protocol_frontmatter.py` (6 tests): existing contract pinned
   first (simple pairs, no-block → None, empty block → {}), then the two
   fixed behaviors (block scalar joined, key-after-block, CRLF).
-- Existing suites (`test_lint_checkers`, `test_orientation`,
+- Existing suites (`test_lint`, `test_protocol_orientation`,
   `test_eval_schema`, trigger tests) must stay green untouched — they are
   the proof the thin callers didn't notice the change.
 
 ## Done criteria
 
-- [ ] `python3 -m unittest tests.test_frontmatter -v` → 6 tests pass
+- [ ] `python3 -m unittest tests.test_protocol_frontmatter -v` → 6 tests pass
 - [ ] `python3 -m unittest discover tests` exits 0 with no other file modified to make it so
 - [ ] `python3 lint.py` exits 0
-- [ ] `git status --short` shows only `protocol.py` and `tests/test_frontmatter.py`
+- [ ] `git status --short` shows only `protocol.py` and `tests/test_protocol_frontmatter.py`
 - [ ] `plans/README.md` status row updated
 
 ## STOP conditions

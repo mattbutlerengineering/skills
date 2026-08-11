@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 route: implementation
 ---
 
-First, read `factory/skills/qa/SKILL.md` — it is your full charter
+First, read `factory/charters/qa/CHARTER.md` — it is your full charter
 (evidence rules, independence, gate obligations). Do nothing before you
 have.
 

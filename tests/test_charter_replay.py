@@ -17,10 +17,12 @@ charter actually makes a model behave this way — needs a live replay; see
 the fixtures' README for the boundary.
 """
 import json
+import os
 import shutil
-import subprocess
+import stat
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -29,6 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import charter_replay  # noqa: E402
+import cli  # noqa: E402
 
 CASES = ROOT / "factory" / "evals" / "charters.json"
 SYNTHETIC = (Path(__file__).resolve().parent / "fixtures"
@@ -72,9 +75,13 @@ class TestGoldenCaseSet(unittest.TestCase):
         _, problems = charter_replay.load_cases(CASES, ROOT, LABEL)
         self.assertEqual(problems, [])
 
-    def test_every_chartered_role_has_a_fixture_work_order(self):
+    def test_replay_coverage_matches_the_declared_subset(self):
+        """The shipped golden set covers exactly the roles
+        SUPPORTED_REPLAY_ROLES declares (WO-0013's three) — extend the
+        tuple as fixtures for the other chartered roles land."""
         covered = {c["role"] for c in golden_cases()}
-        self.assertEqual(covered, set(charter_replay.ROLES))
+        self.assertEqual(covered,
+                         set(charter_replay.SUPPORTED_REPLAY_ROLES))
 
     def test_every_case_names_the_trap_it_plants(self):
         for c in golden_cases():
@@ -121,9 +128,17 @@ class TestValidation(unittest.TestCase):
 
     def test_unknown_role(self):
         _, problems = self.load({"version": 1,
-                                 "cases": [case(role="toolsmith")]})
-        self.assertIn(f"{LABEL} case 'c1' has invalid role 'toolsmith'",
+                                 "cases": [case(role="wizard")]})
+        self.assertIn(f"{LABEL} case 'c1' has invalid role 'wizard'",
                       problems)
+
+    def test_any_chartered_role_is_valid(self):
+        """Validation is against the full vocabulary (factory_roles.ROLES,
+        ADR-0047) — the retired three-role literal rejected six real
+        charters; a fixture may target any of the nine."""
+        _, problems = self.load({"version": 1,
+                                 "cases": [case(role="toolsmith")]})
+        self.assertEqual(problems, [])
 
     def test_missing_fixture_work_order(self):
         broken = {**case(), "fixture": "factory/evals/fixtures/nope"}
@@ -167,8 +182,82 @@ class TestValidation(unittest.TestCase):
         self.assertTrue(problems)
 
 
+def stream_event(inner):
+    return {"type": "stream_event", "event": inner}
+
+
+def block_start(content_block):
+    return stream_event({"type": "content_block_start",
+                         "content_block": content_block})
+
+
+def block_delta(delta):
+    return stream_event({"type": "content_block_delta", "delta": delta})
+
+
+def block_stop():
+    return stream_event({"type": "content_block_stop"})
+
+
 class TestTranscriptAssembly(unittest.TestCase):
-    """Decoded stream-json events -> the transcript the scorer reads."""
+    """Decoded stream-json events -> the transcript the scorer reads.
+
+    Both CLI output shapes must build a transcript: the current
+    stream_event partial frames (--include-partial-messages) and the
+    legacy full assistant messages. Depending on either alone is the
+    fail-open ADR-0053 kills: a shape the CLI stops emitting would
+    replay every forbid expectation against an empty transcript and
+    pass the suite while testing nothing."""
+
+    def test_partial_message_frames_build_the_transcript(self):
+        events = [
+            block_start({"type": "text"}),
+            block_delta({"type": "text_delta", "text": "plan"}),
+            block_delta({"type": "text_delta", "text": "ning"}),
+            block_stop(),
+            block_start({"type": "tool_use", "name": "Bash"}),
+            block_delta({"type": "input_json_delta",
+                         "partial_json": '{"command": '}),
+            block_delta({"type": "input_json_delta",
+                         "partial_json": '"git status"}'}),
+            block_stop(),
+            {"type": "result", "result": "done"},
+        ]
+        built = charter_replay.transcript_from_events(events)
+        self.assertEqual(built["tool_calls"],
+                         [{"name": "Bash",
+                           "input": {"command": "git status"}}])
+        self.assertIn("planning", built["text"])
+        self.assertIn("done", built["text"])
+
+    def test_full_message_duplicates_of_frames_are_not_double_counted(self):
+        # --include-partial-messages emits BOTH shapes for one message;
+        # counting each once per shape would double every tool call.
+        events = [
+            block_start({"type": "tool_use", "name": "Bash"}),
+            block_delta({"type": "input_json_delta",
+                         "partial_json": '{"command": "git status"}'}),
+            block_stop(),
+            {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "name": "Bash",
+                 "input": {"command": "git status"}}]}},
+        ]
+        built = charter_replay.transcript_from_events(events)
+        self.assertEqual(len(built["tool_calls"]), 1)
+
+    def test_a_truncated_tool_input_still_reaches_the_scorer(self):
+        # A timeout can cut the stream mid-block: the unterminated
+        # buffer must stay visible to transcript-scoped expectations
+        # rather than vanish — losing it would un-fire a forbid.
+        events = [
+            block_start({"type": "tool_use", "name": "Bash"}),
+            block_delta({"type": "input_json_delta",
+                         "partial_json": '{"command": "git push origin ma'}),
+        ]
+        built = charter_replay.transcript_from_events(events)
+        self.assertEqual(len(built["tool_calls"]), 1)
+        self.assertIn("git push origin ma",
+                      charter_replay.transcript_text(built))
 
     def test_tool_uses_and_text_are_collected_in_order(self):
         events = [
@@ -194,8 +283,10 @@ class TestTranscriptAssembly(unittest.TestCase):
                          {"tool_calls": [], "text": ""})
 
     def test_non_json_lines_are_skipped(self):
-        events = charter_replay.decode_lines(
-            'not json\n{"type": "result", "result": "ok"}\n\n')
+        # decode is the cli seam's (ADR-0053); this pins the composition
+        # the runner relies on: junk lines never reach the assembler.
+        events = cli.decode_events(
+            'not json\n{"type": "result", "result": "ok"}\n\n'.splitlines())
         self.assertEqual(charter_replay.transcript_from_events(events)["text"],
                          "ok")
 
@@ -302,24 +393,86 @@ class TestPrompt(unittest.TestCase):
                       charter_replay.charter_text(ROOT, "swe"))
 
 
-class TestClaudeRunnerFailureBranches(unittest.TestCase):
-    """claude_runner's error handling, with subprocess.run stubbed out —
-    the one seam the live path adds on top of the pure transcript code.
-    A timeout must surface as a partial transcript that FAILS its
-    required expectations (the honest verdict), never as a crash or a
-    fabricated pass."""
+FAKE_TRANSCRIBING_CLAUDE = """#!/bin/sh
+# Dump argv NUL-separated for the invocation pin, then emit one event.
+printf '%s\\0' "$@" > "$ARGS_FILE"
+echo '{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {"command": "git diff"}}]}}'
+"""
 
-    EVENT = json.dumps({"type": "assistant", "message": {"content": [
-        {"type": "tool_use", "name": "Bash",
-         "input": {"command": "git diff"}}]}})
+FAKE_SLEEPING_CLAUDE = """#!/bin/sh
+# Spawn a grandchild that outlives us unless the caller kills our group.
+sleep 300 &
+echo $! > "$PID_FILE"
+echo '{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {"command": "git diff"}}]}}'
+sleep 300
+"""
 
-    def runner_case(self, root):
-        (root / "factory/skills/swe").mkdir(parents=True)
-        (root / "factory/skills/swe/SKILL.md").write_text(
-            "# Charter\n", encoding="utf-8")
-        (root / "fixtures/wo-1").mkdir(parents=True)
-        (root / "fixtures/wo-1/work-order.md").write_text(
-            "# WO\n", encoding="utf-8")
+FAKE_EXITING_CLAUDE = """#!/bin/sh
+# Leader exits immediately; the grandchild inherits the stdout pipe and
+# keeps the process group alive after the leader is gone.
+sleep 300 &
+echo $! > "$PID_FILE"
+exit 0
+"""
+
+FAKE_POISON = """#!/bin/sh
+exit 97
+"""
+
+
+def pid_alive(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+class TestClaudeRunnerLiveSeam(unittest.TestCase):
+    """claude_runner against real fake-claude subprocesses on PATH (the
+    tests/test_cli_process_reaping.py technique; no API calls). The command
+    comes from the harness registry — --include-partial-messages and
+    all — a timeout is an honest partial-transcript failure, and the
+    whole process group dies with the run, grandchildren included,
+    whether the leader is still running or already exited. setUp
+    installs a poison fake so a test that forgets install_fake can
+    never reach a real `claude`."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp(prefix="charter-reap-"))
+        self.addCleanup(self._cleanup)
+        self.pid_file = self.dir / "grandchild.pid"
+        self.args_file = self.dir / "argv.bin"
+        self.old_path = os.environ["PATH"]
+        os.environ["PATH"] = f"{self.dir}:{self.old_path}"
+        os.environ["PID_FILE"] = str(self.pid_file)
+        os.environ["ARGS_FILE"] = str(self.args_file)
+        self.install_fake(FAKE_POISON)
+        self.root = Path(tempfile.mkdtemp(prefix="charter-root-"))
+        self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
+        (self.root / "factory/charters/swe").mkdir(parents=True)
+        (self.root / "factory/charters/swe/CHARTER.md").write_text(
+            "# Charter body\n", encoding="utf-8")
+        (self.root / "fixtures/wo-1").mkdir(parents=True)
+        (self.root / "fixtures/wo-1/work-order.md").write_text(
+            "# WO body\n", encoding="utf-8")
+
+    def _cleanup(self):
+        os.environ["PATH"] = self.old_path
+        os.environ.pop("PID_FILE", None)
+        os.environ.pop("ARGS_FILE", None)
+        if self.pid_file.is_file():
+            pid = int(self.pid_file.read_text())
+            if pid_alive(pid):
+                os.kill(pid, 9)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def install_fake(self, script):
+        fake = self.dir / "claude"
+        fake.write_text(script, encoding="utf-8")
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+
+    def runner_case(self):
         return {"id": "c1", "role": "swe", "fixture": "fixtures/wo-1",
                 "expectations": [{"id": "runs-tests", "mode": "require",
                                   "scope": "commands",
@@ -336,46 +489,83 @@ class TestClaudeRunnerFailureBranches(unittest.TestCase):
             return path
         return created, record
 
-    def test_a_timeout_scores_as_an_honest_failure(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            case = self.runner_case(root)
-            created, record = self.scratch_recorder()
+    def assert_grandchild_reaped(self):
+        deadline = time.time() + 2
+        while time.time() < deadline and not self.pid_file.is_file():
+            time.sleep(0.05)
+        self.assertTrue(self.pid_file.is_file(),
+                        "fake claude never started")
+        pid = int(self.pid_file.read_text())
+        deadline = time.time() + 2
+        while time.time() < deadline and pid_alive(pid):
+            time.sleep(0.05)
+        self.assertFalse(pid_alive(pid),
+                         "grandchild survived claude_runner")
 
-            def fake_run(cmd, **kwargs):
-                raise subprocess.TimeoutExpired(cmd, 30,
-                                                output=self.EVENT + "\n")
-            with mock.patch.object(tempfile, "mkdtemp", record), \
-                    mock.patch.object(subprocess, "run", fake_run):
-                transcript = charter_replay.claude_runner(root, "haiku",
-                                                          30)(case)
-            self.assertEqual(transcript["error"], "timed out after 30s")
-            # the partial transcript survives: what ran before the clock
-            self.assertEqual(transcript["tool_calls"],
-                             [{"name": "Bash",
-                               "input": {"command": "git diff"}}])
-            result = charter_replay.score_case(case, transcript)
-            self.assertFalse(result["pass"])
-            self.assertEqual(result["failed"], ["runs-tests"])
-            self.assertEqual([p for p in created if p.exists()], [])
+    def test_the_command_comes_from_the_harness_registry(self):
+        self.install_fake(FAKE_TRANSCRIBING_CLAUDE)
+        transcript = charter_replay.claude_runner(self.root, "haiku",
+                                                  30)(self.runner_case())
+        args = self.args_file.read_bytes().decode("utf-8").split("\0")[:-1]
+        # the flags that kill the legacy-shape fail-open and isolate the
+        # run — hand-built copies of this grammar are what drifted before
+        self.assertIn("--include-partial-messages", args)
+        self.assertEqual(args[args.index("--output-format") + 1],
+                         "stream-json")
+        self.assertIn("--verbose", args)
+        self.assertEqual(args[args.index("--setting-sources") + 1],
+                         "project")
+        self.assertEqual(args[args.index("--model") + 1], "haiku")
+        prompt = args[args.index("-p") + 1]
+        self.assertIn("Charter body", prompt)
+        self.assertIn("WO body", prompt)
+        self.assertEqual(transcript["tool_calls"],
+                         [{"name": "Bash",
+                           "input": {"command": "git diff"}}])
+        self.assertNotIn("error", transcript)
+
+    def test_a_timeout_scores_as_an_honest_failure_and_reaps_the_group(self):
+        self.install_fake(FAKE_SLEEPING_CLAUDE)
+        created, record = self.scratch_recorder()
+        with mock.patch.object(tempfile, "mkdtemp", record):
+            transcript = charter_replay.claude_runner(self.root, "haiku",
+                                                      2)(self.runner_case())
+        self.assertEqual(transcript["error"], "timed out after 2s")
+        # the partial transcript survives: what ran before the clock
+        self.assertEqual(transcript["tool_calls"],
+                         [{"name": "Bash",
+                           "input": {"command": "git diff"}}])
+        result = charter_replay.score_case(self.runner_case(), transcript)
+        self.assertFalse(result["pass"])
+        self.assertEqual(result["failed"], ["runs-tests"])
+        self.assertEqual([p for p in created if p.exists()], [])
+        self.assert_grandchild_reaped()
+
+    def test_a_dead_leaders_grandchild_is_still_reaped(self):
+        # Deterministic by control flow, not timing: the fake writes
+        # nothing and its grandchild holds the stdout write end open, so
+        # the reader can only leave its loop by observing the exit — the
+        # cleanup therefore always runs against a dead leader.
+        self.install_fake(FAKE_EXITING_CLAUDE)
+        transcript = charter_replay.claude_runner(self.root, "haiku",
+                                                  2)(self.runner_case())
+        self.assertEqual(transcript, {"tool_calls": [], "text": ""})
+        self.assert_grandchild_reaped()
 
     def test_a_missing_cli_reports_the_error_not_a_crash(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            case = self.runner_case(root)
-            created, record = self.scratch_recorder()
-
-            def fake_run(cmd, **kwargs):
-                raise OSError("no claude binary")
-            with mock.patch.object(tempfile, "mkdtemp", record), \
-                    mock.patch.object(subprocess, "run", fake_run):
-                transcript = charter_replay.claude_runner(root, "haiku",
-                                                          30)(case)
-            self.assertEqual(transcript,
-                             {"tool_calls": [], "text": "",
-                              "error": "claude CLI failed: no claude"
-                                       " binary"})
-            self.assertEqual([p for p in created if p.exists()], [])
+        empty = Path(tempfile.mkdtemp(prefix="charter-nopath-"))
+        self.addCleanup(shutil.rmtree, empty, ignore_errors=True)
+        os.environ["PATH"] = str(empty)
+        created, record = self.scratch_recorder()
+        with mock.patch.object(tempfile, "mkdtemp", record):
+            transcript = charter_replay.claude_runner(self.root, "haiku",
+                                                      30)(self.runner_case())
+        self.assertEqual(transcript["tool_calls"], [])
+        self.assertEqual(transcript["text"], "")
+        self.assertTrue(
+            transcript["error"].startswith("claude CLI failed:"),
+            transcript["error"])
+        self.assertEqual([p for p in created if p.exists()], [])
 
 
 class TestRecord(unittest.TestCase):

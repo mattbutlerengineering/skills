@@ -2,14 +2,16 @@
 """orientation_pack: the knowledge-plane context bundle folded into a
 dispatched work order's prompt (WO-0015; ADR-0032 dispatch plane).
 
-Named orientation_pack.py, not orientation.py: this repo's root already
-carries an unrelated orientation.py — ADR-0021's CLI adapter over
-protocol.py's next_stage, the idea-to-prod pipeline's "which stage is
-next" tool, with its own tests/test_orientation.py and
-tests/fixtures/orientation/. The factory shares this repo's root
-namespace with that pipeline, so the two "orientation" concepts needed
-different names; see docs/features/software-factory/breakdown.md's
-WO-0015 Notes for the citation.
+Named orientation_pack.py, not orientation.py: "orientation" already
+names an unrelated concept in this repo — the idea-to-prod pipeline's
+"which stage is next" decision table (ADR-0021, protocol.py's
+next_stage, pinned by tests/test_protocol_orientation.py against
+tests/fixtures/orientation/; the root orientation.py CLI adapter over
+it has since been deleted as a zero-caller pass-through). The factory
+shares this repo's root namespace with that pipeline, so the two
+"orientation" concepts needed different names; see
+docs/features/software-factory/breakdown.md's WO-0015 Notes for the
+citation.
 
 Same seam discipline as assembler.py: every function takes `root` (a repo
 tree, not an injected reader object) and reads real files under it, tested
