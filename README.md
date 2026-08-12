@@ -112,8 +112,13 @@ PNG/SVG export, with no build step and no external requests.
 `animated-diagram` is its ambient cousin — the same dark inline-SVG
 language, but always moving on its own: dashed connectors streaming in the
 direction of execution and dots traveling the request path, built from a
-description or an existing mermaid source, for READMEs, docs pages, and
-landing pages. `factory-init` stamps a product repo
+description or an existing mermaid source, as a pause-able HTML page or a
+pure `.svg` whose motion GitHub plays right inside a README.
+`architecture-diagram` is the still member of the family — a designed,
+theme-aware `.svg` system figure on light editorial paper that flips to
+the shared dark palette with the reader's color-scheme preference and
+embeds in READMEs, docs pages, and design docs as a plain image.
+`factory-init` stamps a product repo
 with the factory scaffold — offline gates, dispatch workflows, and the cost
 ledger — so promoted work orders can run there unattended. `doctor` is the
 read-only counterpart to that stamp: run in the repo that *uses* these

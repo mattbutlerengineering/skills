@@ -1,6 +1,6 @@
 ---
 name: interactive-architecture-diagram
-description: Generate an interactive architecture demo as one self-contained dark-mode HTML file — an SVG system diagram with a step-through presenter mode (narrated stages, keyboard controls), flow pulses along active edges, click-to-inspect detail panels, and PNG/SVG export. Use when the user wants to demonstrate or present how a system works, or asks for an interactive or step-through diagram of services, infrastructure, pipelines, or data flow. An always-moving ambient diagram with no presenter — for a README, docs page, or landing page — is animated-diagram instead.
+description: Generate an interactive architecture demo as one self-contained dark-mode HTML file — an SVG system diagram with a step-through presenter mode (narrated stages, keyboard controls), flow pulses along active edges, click-to-inspect detail panels, and PNG/SVG export. Use when the user wants to demonstrate or present how a system works, or asks for an interactive or step-through diagram of services, infrastructure, pipelines, or data flow. An always-moving ambient diagram with no presenter — for a README, docs page, or landing page — is animated-diagram instead; a still, designed .svg figure is architecture-diagram.
 ---
 
 # Interactive Architecture Diagram

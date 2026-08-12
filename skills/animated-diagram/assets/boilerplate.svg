@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 392" role="img"
+     aria-labelledby="ad-title ad-desc">
+<title id="ad-title">Order intake — animated diagram</title>
+<desc id="ad-desc">Client requests flow through the API gateway to the
+order service and Postgres; the order service emits async events to the
+event bus, consumed by the email worker. Connectors stream in the
+direction of execution; dots trace the request path.</desc>
+<style>
+  /* Palette mirrors references/design-system.md — change both together.
+     This is the no-JS output: no pause button, so reduced motion is
+     handled entirely in CSS — dash animation gated by the media query,
+     dots hidden under it (SMIL can't be paused without a script). */
+  :root {
+    --bg: #0d1117;
+    --grid: #1c2128;
+    --surface: #161b22;
+    --border: #30363d;
+    --conn: #6e7681;
+    --t1: #e6edf3;
+    --t2: #8b949e;
+    --t3: #6e7681;
+    --service: #4493f8;
+    --data: #a371f7;
+    --gateway: #3fb950;
+    --queue: #d29922;
+    --external: #8b949e;
+  }
+  text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .t1 { fill: var(--t1); font-size: 13px; font-weight: 600; }
+  .t2 { fill: var(--t2); font-size: 11px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 10px; }
+  .t3 {
+    fill: var(--t3); font-size: 9px; font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  /* Animation contract (references/design-system.md):
+     dasharray period == |stroke-dashoffset delta|, or the loop snaps.
+     Dashes are ALWAYS on (sync vs async stays legible with reduced
+     motion); only the animation itself is motion-gated. */
+  .flow { stroke-dasharray: 6 6; }
+  .flow.async { stroke-dasharray: 2 5; }
+  @media (prefers-reduced-motion: no-preference) {
+    .flow { animation: dashflow 0.8s linear infinite; }
+    .flow.async { animation-name: dashflow-async; animation-duration: 1.2s; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dot { display: none; }
+  }
+  @keyframes dashflow { to { stroke-dashoffset: -12; } }
+  @keyframes dashflow-async { to { stroke-dashoffset: -7; } }
+</style>
+
+<defs>
+  <pattern id="dotgrid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <circle cx="1.5" cy="1.5" r="1.5" fill="var(--grid)"/>
+  </pattern>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M 0 1 L 9 5 L 0 9 z" fill="var(--conn)"/>
+  </marker>
+  <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+    <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.35"/>
+  </filter>
+</defs>
+
+<!-- rounded panel: embedded in a light README this reads as a framed
+     figure, not a hole in the page -->
+<rect x="0" y="0" width="880" height="392" rx="12" fill="var(--bg)"/>
+<rect x="0" y="0" width="880" height="392" rx="12" fill="url(#dotgrid)"/>
+
+<!-- boundaries (never animated) -->
+<g>
+  <rect x="240" y="48" width="592" height="272" rx="12"
+        fill="rgba(255,255,255,0.015)" stroke="var(--border)"
+        stroke-width="1.25" stroke-dasharray="6 4"/>
+  <text class="t3" x="264" y="72">vpc · us-west-2</text>
+</g>
+
+<!-- connectors: d always authored source → target, fill="none",
+     endpoints stopped 4px short of node edges. Off-axis runs are
+     two-bend r=8 elbows per the design system's routing rules. -->
+<g>
+  <path id="e1" class="flow" d="M 180 148 H 276" fill="none"
+        stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
+</g>
+<g>
+  <path id="e2" class="flow" d="M 420 148 H 484" fill="none"
+        stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
+</g>
+<g>
+  <path id="e3" class="flow" d="M 636 148 H 700" fill="none"
+        stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
+</g>
+<g>
+  <path id="e4" class="flow async"
+        d="M 560 180 V 196 Q 560 204 552 204 H 356 Q 348 204 348 212 V 228"
+        fill="none" stroke="var(--conn)" stroke-width="1.5"
+        marker-end="url(#arrow)"/>
+  <rect x="414" y="184" width="80" height="12" rx="2" fill="var(--bg)"/>
+  <text class="t2 mono" x="454" y="193" text-anchor="middle">order.created</text>
+</g>
+<g>
+  <path id="e5" class="flow async" d="M 420 256 H 700" fill="none"
+        stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
+</g>
+
+<!-- traveling dots: mpath reuses the connector path verbatim;
+     color = destination type accent; begin offsets stagger starts -->
+<circle class="dot" r="3" fill="var(--gateway)">
+  <animateMotion dur="2s" repeatCount="indefinite" begin="0s">
+    <mpath href="#e1"/>
+  </animateMotion>
+</circle>
+<circle class="dot" r="3" fill="var(--service)">
+  <animateMotion dur="2s" repeatCount="indefinite" begin="-1s">
+    <mpath href="#e2"/>
+  </animateMotion>
+</circle>
+<circle class="dot" r="3" fill="var(--data)">
+  <animateMotion dur="2s" repeatCount="indefinite" begin="-0.4s">
+    <mpath href="#e3"/>
+  </animateMotion>
+</circle>
+<circle class="dot" r="3" fill="var(--queue)">
+  <animateMotion dur="2.8s" repeatCount="indefinite" begin="-1.6s">
+    <mpath href="#e4"/>
+  </animateMotion>
+</circle>
+
+<!-- nodes: opaque mask rect first, styled rect over it -->
+<g>
+  <rect x="48" y="120" width="128" height="56" rx="8" fill="var(--surface)"/>
+  <rect x="48" y="120" width="128" height="56" rx="8"
+        fill="rgba(139,148,158,0.10)" stroke="var(--external)"
+        stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <text class="t1" x="112" y="144" text-anchor="middle">Client</text>
+  <text class="t2" x="112" y="162" text-anchor="middle">browser · mobile</text>
+</g>
+<g>
+  <rect x="280" y="120" width="136" height="56" rx="8" fill="var(--surface)"/>
+  <rect x="280" y="120" width="136" height="56" rx="8"
+        fill="rgba(63,185,80,0.12)" stroke="var(--gateway)"
+        stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <text class="t1" x="348" y="144" text-anchor="middle">API Gateway</text>
+  <text class="t2" x="348" y="162" text-anchor="middle">auth · rate limit</text>
+</g>
+<g>
+  <rect x="488" y="120" width="144" height="56" rx="8" fill="var(--surface)"/>
+  <rect x="488" y="120" width="144" height="56" rx="8"
+        fill="rgba(68,147,248,0.12)" stroke="var(--service)"
+        stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <text class="t1" x="560" y="144" text-anchor="middle">Order Service</text>
+  <text class="t2" x="560" y="162" text-anchor="middle">REST · Node</text>
+</g>
+<g>
+  <rect x="704" y="120" width="104" height="56" rx="8" fill="var(--surface)"/>
+  <rect x="704" y="120" width="104" height="56" rx="8"
+        fill="rgba(163,113,247,0.12)" stroke="var(--data)"
+        stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <text class="t1" x="756" y="144" text-anchor="middle">Postgres</text>
+  <text class="t2" x="756" y="162" text-anchor="middle">orders db</text>
+</g>
+<g>
+  <rect x="280" y="232" width="136" height="48" rx="8" fill="var(--surface)"/>
+  <rect x="280" y="232" width="136" height="48" rx="8"
+        fill="rgba(210,153,34,0.12)" stroke="var(--queue)"
+        stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <text class="t1" x="348" y="252" text-anchor="middle">Event Bus</text>
+  <text class="t2" x="348" y="268" text-anchor="middle">SNS / SQS</text>
+</g>
+<g>
+  <rect x="704" y="232" width="104" height="48" rx="8" fill="var(--surface)"/>
+  <rect x="704" y="232" width="104" height="48" rx="8"
+        fill="rgba(68,147,248,0.12)" stroke="var(--service)"
+        stroke-width="1.5" filter="url(#soft-shadow)"/>
+  <text class="t1" x="756" y="252" text-anchor="middle">Email Worker</text>
+  <text class="t2" x="756" y="268" text-anchor="middle">Lambda</text>
+</g>
+
+<!-- legend: exactly the types and connector kinds used -->
+<g>
+  <rect x="48" y="348" width="12" height="12" rx="3"
+        fill="rgba(68,147,248,0.12)" stroke="var(--service)" stroke-width="1.5"/>
+  <text class="t3" x="68" y="358">service</text>
+  <rect x="128" y="348" width="12" height="12" rx="3"
+        fill="rgba(163,113,247,0.12)" stroke="var(--data)" stroke-width="1.5"/>
+  <text class="t3" x="148" y="358">data</text>
+  <rect x="196" y="348" width="12" height="12" rx="3"
+        fill="rgba(63,185,80,0.12)" stroke="var(--gateway)" stroke-width="1.5"/>
+  <text class="t3" x="216" y="358">gateway</text>
+  <rect x="284" y="348" width="12" height="12" rx="3"
+        fill="rgba(210,153,34,0.12)" stroke="var(--queue)" stroke-width="1.5"/>
+  <text class="t3" x="304" y="358">queue</text>
+  <rect x="360" y="348" width="12" height="12" rx="3"
+        fill="rgba(139,148,158,0.10)" stroke="var(--external)" stroke-width="1.5"/>
+  <text class="t3" x="380" y="358">external</text>
+  <path class="flow" d="M 452 354 H 492" fill="none"
+        stroke="var(--conn)" stroke-width="1.5"/>
+  <text class="t3" x="500" y="358">sync request</text>
+  <path class="flow async" d="M 588 354 H 628" fill="none"
+        stroke="var(--conn)" stroke-width="1.5"/>
+  <text class="t3" x="636" y="358">async event</text>
+</g>
+</svg>

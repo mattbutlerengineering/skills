@@ -106,7 +106,8 @@
     </g>
 
     <!-- connectors: d always authored source → target, fill="none",
-         endpoints stopped 4px short of node edges -->
+         endpoints stopped 4px short of node edges. Off-axis runs are
+         two-bend r=8 elbows per the design system's routing rules. -->
     <g class="edgeg">
       <path id="e1" class="flow" d="M 180 148 H 276" fill="none"
             stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
@@ -120,12 +121,15 @@
             stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
     </g>
     <g class="edgeg">
-      <path id="e4" class="flow async" d="M 560 180 V 228" fill="none"
-            stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
-      <text class="t2 mono" x="572" y="208">order.created</text>
+      <path id="e4" class="flow async"
+            d="M 560 180 V 196 Q 560 204 552 204 H 356 Q 348 204 348 212 V 228"
+            fill="none" stroke="var(--conn)" stroke-width="1.5"
+            marker-end="url(#arrow)"/>
+      <rect x="414" y="184" width="80" height="12" rx="2" fill="var(--bg)"/>
+      <text class="t2 mono" x="454" y="193" text-anchor="middle">order.created</text>
     </g>
     <g class="edgeg">
-      <path id="e5" class="flow async" d="M 636 256 H 700" fill="none"
+      <path id="e5" class="flow async" d="M 420 256 H 700" fill="none"
             stroke="var(--conn)" stroke-width="1.5" marker-end="url(#arrow)"/>
     </g>
 
@@ -186,12 +190,12 @@
       <text class="t2" x="756" y="162" text-anchor="middle">orders db</text>
     </g>
     <g class="nodeg">
-      <rect x="488" y="232" width="144" height="48" rx="8" fill="var(--surface)"/>
-      <rect x="488" y="232" width="144" height="48" rx="8"
+      <rect x="280" y="232" width="136" height="48" rx="8" fill="var(--surface)"/>
+      <rect x="280" y="232" width="136" height="48" rx="8"
             fill="rgba(210,153,34,0.12)" stroke="var(--queue)"
             stroke-width="1.5" filter="url(#soft-shadow)"/>
-      <text class="t1" x="560" y="252" text-anchor="middle">Event Bus</text>
-      <text class="t2" x="560" y="268" text-anchor="middle">SNS / SQS</text>
+      <text class="t1" x="348" y="252" text-anchor="middle">Event Bus</text>
+      <text class="t2" x="348" y="268" text-anchor="middle">SNS / SQS</text>
     </g>
     <g class="nodeg">
       <rect x="704" y="232" width="104" height="48" rx="8" fill="var(--surface)"/>
