@@ -1,8 +1,9 @@
 # Design system — professional dark, ambient motion
 
-The source for every visual and timing value. `assets/boilerplate.html`'s
-`:root` and CSS classes mirror the palette below; change a color in one
-place and match it in the other. The palette is shared with the
+The source for every visual and timing value. The `:root` and CSS
+classes of both scaffolds — `assets/boilerplate.html` and
+`assets/boilerplate.svg` — mirror the palette below; change a color in
+one place and match it in the others. The palette is shared with the
 `interactive-architecture-diagram` skill so the two families of diagram
 read as one system.
 
@@ -15,7 +16,10 @@ encoding a node's **type**; motion earns its place by encoding
 
 - [Canvas](#canvas) · [Text tiers](#text--three-tiers)
 - [Node types](#node-types--color-is-the-type) · [Shapes](#shapes)
-- [Spacing](#spacing--8px-grid) · [The two modes](#the-two-modes)
+- [Connector routing](#connector-routing--five-rules)
+- [Spacing](#spacing--8px-grid) · [Complexity budget](#complexity-budget)
+- [The two modes](#the-two-modes)
+- [The two output targets](#the-two-output-targets) — `.html` vs `.svg`
 - [Animation contract](#animation-contract) — dashes, dots, timing
 - [Pause and reduced motion](#pause-and-reduced-motion)
 - [Assumed markers](#assumed-markers)
@@ -89,12 +93,56 @@ Each node draws with its type's stroke and fill. The fill is a hint
   width `1.5`, `marker-end=url(#arrow)`, authored **source → target**,
   endpoints stopping 4px short of node edges.
 
+## Connector routing — five rules
+
+Animated lines punish sloppy routing twice: a diagonal or an overlap is
+not just ugly, it makes the motion untraceable. In force for every edge:
+
+1. **Orthogonal elbows for off-axis runs.** Never a diagonal line
+   between nodes that don't share an x or y. Every bend is a quarter-arc
+   of radius 8 — the two-bend elbow, right-and-down (flip signs for the
+   other quadrants; `mid` = midpoint of the turn):
+
+   ```svg
+   <path d="M x1,y1 H mid-8 Q mid,y1 mid,y1+8 V y2-8 Q mid,y2 mid+8,y2 H x2"/>
+   ```
+
+   Plain `H`/`V` lines are for endpoints that share an axis — and that
+   is the layout to prefer. Dots ride elbows perfectly: `mpath` follows
+   whatever the connector draws.
+2. **Ports follow the travel direction.** A mainly-vertical run exits
+   the source's top/bottom edge and enters the destination's top/bottom
+   edge; left/right edges serve mainly-horizontal runs.
+3. **Labels keep a visible gap.** An edge label sits above a horizontal
+   segment (beside a vertical one) with 6–10px clear between its opaque
+   `--bg` mask rect and the stroke — a label on a moving line is
+   unreadable.
+4. **No two connectors merge.** A flowing line that crosses or rides
+   another cannot be followed. Hop the less important line at a crossing
+   (`a 8,8 0 0,1 16,0` mid-segment — an 8px bridge; `a 8,8 0 0,0 0,16`
+   for a vertical hop), keep parallel runs ≥16px apart end-to-end, and
+   fan connectors sharing a node edge to their own attach points (edge
+   length · k/(N+1), snapped to 8, ≥16px apart).
+5. **No transit behind a non-endpoint node.** Reroute around intervening
+   boxes — a dash streaming under an unrelated node reads as a
+   connection to it.
+
 ## Spacing — 8px grid
 
-Snap every coordinate to 8. Node height 56 (48 for compact steps, 40 for
-pills). Minimum gap 40 vertical, 48 horizontal. Boundary padding 24.
-Legend ≥24 below the lowest content. `viewBox` = content bounds + 32
-margin.
+Snap every coordinate to 8; connector endpoints derive from node edges
+±4px breathing room, so path coordinates land on 4s. Node height 56 (48
+for compact steps, 40 for pills). Minimum gap 40 vertical, 48
+horizontal. Boundary padding 24. Legend ≥24 below the lowest content.
+`viewBox` = content bounds + 32 margin.
+
+## Complexity budget
+
+Motion tolerates less density than a still figure: **≤7 nodes, ≤10
+connectors, ≤3 boundaries** per diagram, on top of the 3–6 dot cap in
+the animation contract. Over budget means two diagrams — an overview
+and a detail — not a denser one. Dots stay on the main request path
+plus at most one spur; a dot on every line is confetti, and confetti is
+the first thing that reads as generated output.
 
 ## The two modes
 
@@ -106,6 +154,27 @@ margin.
   (client → edge → services → stores), with fan-outs stacked vertically
   and async spurs (queues, workers) below the main line. Boundaries group
   deployment or trust zones.
+
+## The two output targets
+
+Same diagram, two containers — pick by destination:
+
+- **`.html`** (`assets/boilerplate.html`) — for a docs page, landing
+  page, or anywhere that hosts an HTML file or an `<iframe>`. Carries
+  the page frame (heading, subtitle), the pause button, and the
+  reduced-motion script.
+- **`.svg`** (`assets/boilerplate.svg`) — for a README or any
+  markdown page: GitHub renders SMIL and CSS animation inside
+  `<img>`-embedded SVGs, so the file moves right in the page — a
+  one-line markdown image reference is the whole embed. No scripts run in
+  an image context, so there is no pause button and reduced motion is
+  handled entirely in CSS (below). The canvas is a **rounded panel**
+  (`rx=12` on the background rect) so the dark figure reads as framed
+  scenery on a light page, not a hole in it; `<title>` + `<desc>`
+  carry the accessible description the HTML page frame would have.
+
+Everything else — palette, node types, routing, spacing, the animation
+contract — is identical across both.
 
 ## Animation contract
 
@@ -144,20 +213,24 @@ for dots. Both loop indefinitely; both must loop **seamlessly**.
 
 ## Pause and reduced motion
 
-Non-negotiable accessibility, wired in the boilerplate — reuse, don't
+Non-negotiable accessibility, wired in both boilerplates — reuse, don't
 reinvent:
 
 - All CSS animation lives inside
   `@media (prefers-reduced-motion: no-preference)` — with reduced motion
   set, the dashes are simply static.
-- SMIL ignores that media query, so the script calls
+- **`.html`**: SMIL ignores that media query, so the script calls
   `svg.pauseAnimations()` when `matchMedia('(prefers-reduced-motion: reduce)')`
-  matches at load.
-- The pause button toggles both worlds at once: `svg.pauseAnimations()` /
-  `svg.unpauseAnimations()` plus a `paused` class on `<body>` that sets
-  `animation-play-state: paused` and hides the dots (`.paused .dot
-  { opacity: 0 }`) — a paused diagram reads as a clean static diagram,
-  not a freeze-frame with stranded dots.
+  matches at load. The pause button toggles both worlds at once:
+  `svg.pauseAnimations()` / `svg.unpauseAnimations()` plus a `paused`
+  class on `<body>` that sets `animation-play-state: paused` and hides
+  the dots (`.paused .dot { opacity: 0 }`) — a paused diagram reads as
+  a clean static diagram, not a freeze-frame with stranded dots.
+- **`.svg`**: no script can run, so the dots are removed instead of
+  paused — `@media (prefers-reduced-motion: reduce) { .dot
+  { display: none } }`. SMIL keeps animating a hidden element, which is
+  fine: the reader sees a clean static diagram, dashes still legible
+  (dash patterns are always on; only their motion is gated).
 
 ## Assumed markers
 

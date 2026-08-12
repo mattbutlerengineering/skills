@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 448" role="img"
+     aria-labelledby="ad-title ad-desc">
+<title id="ad-title">Order intake — system overview</title>
+<desc id="ad-desc">Client requests flow through the API gateway to the
+order service and Postgres; the order service emits async events to the
+event bus, consumed by the email worker, which reads orders back from
+Postgres.</desc>
+<style>
+  /* Tokens mirror references/design-system.md — change both together.
+     Dark overrides ONLY the custom properties; every painted element
+     resolves a token, so the whole figure flips at once. */
+  :root {
+    --paper: #f6f5f1;
+    --raised: #ffffff;
+    --ink: #262a33;
+    --muted: #5b6472;
+    --soft: #878e9c;
+    --rule: rgba(38,42,51,0.12);
+    --accent: #d9622b;
+    --accent-tint: rgba(217,98,43,0.08);
+    --fill-zone: rgba(38,42,51,0.02);
+    --fill-store: rgba(38,42,51,0.05);
+    --fill-ext: rgba(38,42,51,0.03);
+    --stroke-ext: rgba(38,42,51,0.30);
+    --fill-queue: rgba(38,42,51,0.02);
+    --stroke-queue: rgba(38,42,51,0.20);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0d1117;
+      --raised: #161b22;
+      --ink: #e6edf3;
+      --muted: #8b949e;
+      --soft: #6e7681;
+      --rule: rgba(230,237,243,0.12);
+      --accent: #f0925e;
+      --accent-tint: rgba(240,146,94,0.10);
+      --fill-zone: rgba(230,237,243,0.02);
+      --fill-store: rgba(230,237,243,0.05);
+      --fill-ext: rgba(230,237,243,0.03);
+      --stroke-ext: rgba(230,237,243,0.30);
+      --fill-queue: rgba(230,237,243,0.02);
+      --stroke-queue: rgba(230,237,243,0.20);
+    }
+  }
+
+  text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+  .title { font-family: Georgia, 'Times New Roman', serif; font-size: 20px; fill: var(--ink); }
+  .eyebrow { font-size: 8px; font-weight: 500; fill: var(--soft);
+             text-transform: uppercase; letter-spacing: 0.14em; }
+  .sub { font-size: 11px; fill: var(--muted); }
+  .name { font-size: 13px; font-weight: 600; fill: var(--ink); }
+  .sublabel { font-size: 10px; fill: var(--muted); }
+  .elabel { font-size: 9px; fill: var(--soft);
+            text-transform: uppercase; letter-spacing: 0.06em; }
+  .legend-t { font-size: 9px; font-weight: 500; fill: var(--soft);
+              text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .bg { fill: var(--paper); }
+  .mask { fill: var(--paper); }
+  .zone { fill: var(--fill-zone); stroke: var(--rule); stroke-width: 0.8; }
+  .hairline { stroke: var(--rule); stroke-width: 0.8; }
+
+  .conn { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+  .conn.async { stroke-width: 1; stroke-dasharray: 4 3; }
+  .arrowhead { fill: var(--muted); }
+
+  .node-focal { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 1.2; }
+  .node-solid { fill: var(--raised); stroke: var(--ink); stroke-width: 1; }
+  .node-store { fill: var(--fill-store); stroke: var(--muted); stroke-width: 1; }
+  .node-ext { fill: var(--fill-ext); stroke: var(--stroke-ext); stroke-width: 1; }
+  .node-queue { fill: var(--fill-queue); stroke: var(--stroke-queue);
+                stroke-width: 1; stroke-dasharray: 4 3; }
+</style>
+
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path class="arrowhead" d="M 0 1 L 9 5 L 0 9 z"/>
+  </marker>
+</defs>
+
+<rect class="bg" width="880" height="448"/>
+
+<!-- header: eyebrow, serif title, one-line subtitle -->
+<text class="eyebrow mono" x="48" y="44">System overview</text>
+<text class="title" x="48" y="72">Order intake</text>
+<text class="sub" x="48" y="92">Requests flow left to right; events fan out async below.</text>
+
+<!-- zone: 2% ink wash, hairline stroke, eyebrow label ≥16px above first node -->
+<rect class="zone" x="240" y="120" width="592" height="248" rx="8"/>
+<text class="eyebrow mono" x="264" y="140">vpc · us-west-2</text>
+
+<!-- connectors: drawn before nodes; d authored source → target,
+     endpoints 4px short of node edges. Straight where endpoints share
+     an axis; the one off-axis run (e4) is a two-bend r=8 elbow. -->
+<path id="e1" class="conn" d="M 180,188 H 276" marker-end="url(#arrow)"/>
+<path id="e2" class="conn" d="M 420,188 H 484" marker-end="url(#arrow)"/>
+<path id="e3" class="conn" d="M 636,188 H 708" marker-end="url(#arrow)"/>
+<path id="e4" class="conn async"
+      d="M 560,220 V 244 Q 560,252 552,252 H 356 Q 348,252 348,260 V 284"
+      marker-end="url(#arrow)"/>
+<path id="e5" class="conn async" d="M 420,312 H 708" marker-end="url(#arrow)"/>
+<path id="e6" class="conn" d="M 760,284 V 220" marker-end="url(#arrow)"/>
+
+<!-- edge labels: opaque paper mask, 6–10px visible gap above the stroke;
+     vertical runs take the label beside the line instead -->
+<rect class="mask" x="434" y="168" width="36" height="12" rx="2"/>
+<text class="elabel mono" x="452" y="177" text-anchor="middle">rest</text>
+<rect class="mask" x="650" y="168" width="44" height="12" rx="2"/>
+<text class="elabel mono" x="672" y="177" text-anchor="middle">write</text>
+<rect class="mask" x="414" y="232" width="80" height="12" rx="2"/>
+<text class="elabel mono" x="454" y="241" text-anchor="middle">order.created</text>
+<text class="elabel mono" x="772" y="256">read</text>
+
+<!-- nodes: opaque paper mask first, styled rect over it -->
+<g>
+  <rect class="mask" x="48" y="160" width="128" height="56" rx="6"/>
+  <rect class="node-ext" x="48" y="160" width="128" height="56" rx="6"/>
+  <text class="name" x="112" y="184" text-anchor="middle">Client</text>
+  <text class="sublabel mono" x="112" y="202" text-anchor="middle">browser · mobile</text>
+</g>
+<g>
+  <rect class="mask" x="280" y="160" width="136" height="56" rx="6"/>
+  <rect class="node-solid" x="280" y="160" width="136" height="56" rx="6"/>
+  <text class="name" x="348" y="184" text-anchor="middle">API Gateway</text>
+  <text class="sublabel mono" x="348" y="202" text-anchor="middle">auth · rate limit</text>
+</g>
+<g>
+  <!-- the focal node: the one place the accent appears -->
+  <rect class="mask" x="488" y="160" width="144" height="56" rx="6"/>
+  <rect class="node-focal" x="488" y="160" width="144" height="56" rx="6"/>
+  <text class="name" x="560" y="184" text-anchor="middle">Order Service</text>
+  <text class="sublabel mono" x="560" y="202" text-anchor="middle">REST · Node</text>
+</g>
+<g>
+  <rect class="mask" x="712" y="160" width="96" height="56" rx="6"/>
+  <rect class="node-store" x="712" y="160" width="96" height="56" rx="6"/>
+  <text class="name" x="760" y="184" text-anchor="middle">Postgres</text>
+  <text class="sublabel mono" x="760" y="202" text-anchor="middle">orders db</text>
+</g>
+<g>
+  <rect class="mask" x="280" y="288" width="136" height="48" rx="6"/>
+  <rect class="node-queue" x="280" y="288" width="136" height="48" rx="6"/>
+  <text class="name" x="348" y="308" text-anchor="middle">Event Bus</text>
+  <text class="sublabel mono" x="348" y="324" text-anchor="middle">SNS / SQS</text>
+</g>
+<g>
+  <rect class="mask" x="712" y="288" width="96" height="48" rx="6"/>
+  <rect class="node-solid" x="712" y="288" width="96" height="48" rx="6"/>
+  <text class="name" x="760" y="308" text-anchor="middle">Email Worker</text>
+  <text class="sublabel mono" x="760" y="324" text-anchor="middle">Lambda</text>
+</g>
+
+<!-- legend: hairline, then exactly the treatments and line kinds used -->
+<line class="hairline" x1="48" y1="400" x2="832" y2="400"/>
+<rect class="node-focal" x="48" y="414" width="12" height="12" rx="3"/>
+<text class="legend-t" x="68" y="424">focal service</text>
+<rect class="node-solid" x="160" y="414" width="12" height="12" rx="3"/>
+<text class="legend-t" x="180" y="424">service · gateway</text>
+<rect class="node-store" x="288" y="414" width="12" height="12" rx="3"/>
+<text class="legend-t" x="308" y="424">data</text>
+<rect class="node-queue" x="356" y="414" width="12" height="12" rx="3"/>
+<text class="legend-t" x="376" y="424">queue</text>
+<rect class="node-ext" x="432" y="414" width="12" height="12" rx="3"/>
+<text class="legend-t" x="452" y="424">external</text>
+<path class="conn" d="M 524,420 H 564"/>
+<text class="legend-t" x="572" y="424">sync request</text>
+<path class="conn async" d="M 664,420 H 704"/>
+<text class="legend-t" x="712" y="424">async event</text>
+</svg>
