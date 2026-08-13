@@ -245,10 +245,7 @@ def main(argv, clock=None, root=None):
             at = (clock or (lambda: datetime.now(timezone.utc)))()
             problems = record(root or repo_root(),
                               at=at.date().isoformat(), **fields)
-        for problem in problems:
-            print(problem)
-        print(f"budget_guard: {len(problems)} problem(s)")
-        return 1 if problems else 0
+        return report("budget_guard", problems)
     if len(argv) in (5, 6) and argv[0] == "record-run":
         wo, run_id, model, execution_path = argv[1:5]
         outcome = argv[5] if len(argv) == 6 else "completed"
@@ -256,10 +253,7 @@ def main(argv, clock=None, root=None):
         problems = record_run(root or repo_root(), wo, run_id, model,
                               execution_path, outcome,
                               at.date().isoformat())
-        for problem in problems:
-            print(problem)
-        print(f"budget_guard: {len(problems)} problem(s)")
-        return 1 if problems else 0
+        return report("budget_guard", problems)
     if len(argv) == 3 and argv[0] == "check":
         _, size, spend_raw = argv
         try:

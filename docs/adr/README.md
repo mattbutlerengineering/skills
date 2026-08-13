@@ -74,3 +74,4 @@ the canonical vocabulary.
 | [0051](0051-report-joins-the-cli-seam.md) | The report epilogue joins the cli seam | accepted |
 | [0052](0052-skill-file-contract-joins-the-protocol-seam.md) | The skill-file contract joins the protocol seam; lint pins the recitals | accepted |
 | [0053](0053-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
+| [0054](0054-front-door-routes-humans.md) | The front door routes humans, not files | provisional |

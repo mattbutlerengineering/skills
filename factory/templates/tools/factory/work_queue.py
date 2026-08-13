@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 
 import cost_ledger
 import factory_config
-from cli import CLI_FAILURES, full_window, gh_json, gh_runner
+from cli import CLI_FAILURES, full_window, gh_json, gh_runner, report
 from cli import detail as gh_detail
 from knowledge_plane import (breakdown_files, repo_root, row_blockers,
                              row_done, row_size, row_tracker_issue,
@@ -160,23 +160,32 @@ def plan_batch(found, ready_issues, config, spent_usd):
 
 
 def ready_issue_numbers(run=None):
-    """(issue numbers carrying the ready label, problems). NETWORK.
+    """(issue numbers carrying the ready label, problems), or (None,
+    problems) when the listing cannot be trusted — the caller must then
+    hold back every row rather than explain it. NETWORK.
 
     An unreachable tracker is a problem, never an empty queue: "nothing is
     ready" and "I could not ask" must not look the same to the caller, or
     a broken token reads as a drained backlog.
+
+    A truncated window REFUSES here rather than warning, the same rule as
+    sweeps.live_issues: past the window an issue is simply absent, and
+    absence is exactly what `eligible` reads as a finding — it would
+    defer a ready order with "no open issue #N carries the label" and
+    send the owner to apply a label the issue may already carry.
     """
     try:
         payload, suffix = gh_json(list(LIST_ARGS), run or gh_runner,
                                   expect=list)
     except CLI_FAILURES as err:
-        return set(), [f"wq: gh issue list failed: {gh_detail(err)}"]
+        return None, [f"wq: gh issue list failed: {gh_detail(err)}"]
     if suffix:
-        return set(), [f"wq: gh issue list {suffix}"]
+        return None, [f"wq: gh issue list {suffix}"]
     window = full_window(payload, LIST_WINDOW)
-    return ({item["number"] for item in payload if isinstance(item, dict)
-             and isinstance(item.get("number"), int)},
-            [f"wq: gh issue list {window}"] if window else [])
+    if window:
+        return None, [f"wq: gh issue list {window}"]
+    return {item["number"] for item in payload if isinstance(item, dict)
+            and isinstance(item.get("number"), int)}, []
 
 
 def month_to_date(root, now):
@@ -188,7 +197,11 @@ def month_to_date(root, now):
     return total, problems
 
 
-def report(batch, deferred, spent, wip):
+def compose_plan(batch, deferred, spent, wip):
+    """The batch as report lines — the human half of `plan`, next to the
+    `--json` payload's machine half. Named for what it renders: `report`
+    belongs to the cli seam's epilogue (ADR-0051), which this tool's main
+    also ends with."""
     lines = [f"wq: {len(batch)} work order(s) ready to run in parallel"
              f" (wip_cap {wip})"]
     lines += [f"  {row['wo']}  size:{row['size']}  ${row['budget']:.2f}"
@@ -207,26 +220,42 @@ def main(argv, run=None, clock=None):
     root = repo_root()
     config, problems = factory_config.load(root)
     if problems:
-        for problem in problems:
-            print(problem)
-        print(f"wq: {len(problems)} problem(s)")
-        return 1
+        return report("wq", problems)
     ready, problems = ready_issue_numbers(run)
     spent, ledger_problems = month_to_date(root, (clock or _utcnow)())
     problems += ledger_problems
-    batch, deferred, plan_problems = plan_batch(rows(root), ready, config,
-                                                spent)
-    problems += plan_problems
+    trusted = ready is not None
+    if not trusted:
+        # An untrusted listing plans nothing and explains nothing: every
+        # per-row deferral would be a claim about a listing that does not
+        # cover the row. The problems already say why.
+        batch, deferred = [], []
+    else:
+        batch, deferred, plan_problems = plan_batch(rows(root), ready,
+                                                    config, spent)
+        problems += plan_problems
     if "--json" in argv:
+        # The one leg cli.report does not fit: the problems already ride
+        # inside the payload, so printing them again would both duplicate
+        # them and put prose above the object a reader parses. Carved out
+        # the way ADR-0051 carved out the usage epilogue — the seam does
+        # not grow a "summary only" parameter for one caller. The summary
+        # line stays in lockstep with the seam's grammar by test, since
+        # nothing else bridges the two.
         print(json.dumps({"batch": batch, "deferred": deferred,
                           "problems": problems}, indent=2))
-    else:
-        for line in report(batch, deferred, spent, config.get("wip_cap")):
+        print(f"wq: {len(problems)} problem(s)")
+        return 1 if problems else 0
+    if trusted:
+        # No plan is rendered over an untrusted listing either: "0 work
+        # order(s) ready" is a count of the queue, and this run is the one
+        # that decided a broken listing must not be able to produce that
+        # sentence. Refusing the rows and then announcing the batch size
+        # would put the claim back in the first line a reader skims.
+        for line in compose_plan(batch, deferred, spent,
+                                 config.get("wip_cap")):
             print(line)
-        for problem in problems:
-            print(problem)
-    print(f"wq: {len(problems)} problem(s)")
-    return 1 if problems else 0
+    return report("wq", problems)
 
 
 if __name__ == "__main__":

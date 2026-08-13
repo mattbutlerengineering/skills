@@ -12,11 +12,14 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import cli  # noqa: E402
 import work_queue  # noqa: E402
 
 CONFIG = {"budgets_usd": {"S": 5, "M": 15, "L": 40},
@@ -189,16 +192,19 @@ class TestReadyIssueNumbers(unittest.TestCase):
     def test_an_unreachable_tracker_is_a_problem_not_an_empty_queue(self):
         numbers, problems = work_queue.ready_issue_numbers(
             FailingRunner(subprocess.CalledProcessError(1, "gh")))
-        self.assertEqual(numbers, set())
+        self.assertIsNone(numbers)
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith("wq: gh issue list failed:"))
 
-    def test_a_full_listing_window_is_reported(self):
+    def test_a_full_window_is_refused_rather_than_trusted(self):
+        """Same rule as sweeps.live_issues: past the window an issue is
+        simply absent, and absence is what the ready check reads as a
+        finding. A truncated listing is no listing."""
         runner = RecordingRunner([{"number": n} for n in range(100)])
         numbers, problems = work_queue.ready_issue_numbers(runner)
-        self.assertEqual(len(numbers), 100)
+        self.assertIsNone(numbers)
         self.assertEqual(len(problems), 1)
-        self.assertIn("wq: gh issue list", problems[0])
+        self.assertIn("full 100-entry window", problems[0])
 
 
 class TestRowsAndSpend(unittest.TestCase):
@@ -238,6 +244,138 @@ class TestRowsAndSpend(unittest.TestCase):
             spent, problems = work_queue.month_to_date(
                 Path(tmp), datetime(2026, 8, 6, tzinfo=timezone.utc))
             self.assertEqual((spent, problems), (0, []))
+
+
+class TestMain(cli_contract.ReportContract, unittest.TestCase):
+    """main's summary line, on every leg that emits one.
+
+    work_queue reaches its root through knowledge_plane.repo_root (no
+    root parameter), so a leg that needs a tree of its own patches the
+    name work_queue imported; the clean leg runs against the real repo,
+    the same precedent as test_cost_report/test_budget_guard's TestMain.
+    """
+    summary_line = "wq: 0 problem(s)"
+
+    def planned(self, argv, run=None, root=None):
+        """(code, stdout) of one `plan` run, gh injected, optionally
+        rooted at a fixture tree."""
+        run = run or RecordingRunner([])
+        if root is None:
+            return cli_contract.capture(work_queue.main, argv, run=run)
+        with mock.patch.object(work_queue, "repo_root", lambda: root):
+            return cli_contract.capture(work_queue.main, argv, run=run)
+
+    def clean_cli(self):
+        # nothing carries the ready label, so nothing is eligible — and
+        # nothing eligible is not a problem
+        return self.planned(["plan"])
+
+    def config_tree(self, tmp, breakdown=None):
+        tree = FixtureTree(tmp)
+        tree.write(".github/factory.json", json.dumps(CONFIG))
+        if breakdown:
+            tree.write("docs/features/demo/breakdown.md", breakdown)
+        return tree
+
+    def test_an_untrusted_listing_defers_no_row_for_a_reason_it_cannot_know(
+            self):
+        """The hazard the refusal closes. Past the 100-entry window an
+        issue is invisible, and `eligible` reads a miss as "no open issue
+        #N carries the ready label" — inventing drift and sending the
+        owner to apply a label the issue may already carry."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.config_tree(
+                tmp,
+                "- [ ] **WO-0001** past the window — size:S, blocked by: —"
+                " (PRD-0001 §S) (tracker: #999)\n")
+            code, out = self.planned(
+                ["plan"],
+                run=RecordingRunner([{"number": n} for n in range(100)]),
+                root=tree.root)
+        self.assertEqual(code, 1)
+        self.assertIn("full 100-entry window", out)
+        self.assertNotIn("no open issue #999", out)
+        self.assertEqual(out.splitlines()[-1], "wq: 1 problem(s)")
+
+    def test_an_untrusted_listing_claims_no_count_either(self):
+        """The refusal's other half. Holding every row back is only honest
+        if the tool also stops announcing a batch size: "0 work order(s)
+        ready" is the very sentence ready_issue_numbers refuses to let a
+        broken listing produce, and it is the line a reader skims first."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.config_tree(
+                tmp,
+                "- [ ] **WO-0001** past the window — size:S, blocked by: —"
+                " (PRD-0001 §S) (tracker: #999)\n")
+            code, out = self.planned(
+                ["plan"],
+                run=RecordingRunner([{"number": n} for n in range(100)]),
+                root=tree.root)
+        self.assertEqual(code, 1)
+        self.assertNotIn("ready to run in parallel", out)
+        self.assertEqual(
+            out.splitlines(),
+            ["wq: gh issue list returned a full 100-entry window — older"
+             " entries are invisible; raise the window or narrow the query",
+             "wq: 1 problem(s)"])
+
+    def test_a_config_failure_ends_with_the_same_summary_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self.planned(["plan"], root=Path(tmp))
+        lines = out.splitlines()
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[-1], "wq: 1 problem(s)")
+        self.assertTrue(lines[0].startswith("config: missing factory.json"))
+
+    def test_the_json_leg_prints_the_payload_then_the_summary(self):
+        code, out = self.planned(["plan", "--json"])
+        lines = out.splitlines()
+        self.assertEqual(code, 0)
+        self.assertEqual(lines[-1], "wq: 0 problem(s)")
+        payload = json.loads("\n".join(lines[:-1]))
+        self.assertEqual(payload["problems"], [])
+        self.assertIn("batch", payload)
+
+    def test_the_json_leg_carries_problems_instead_of_printing_them(self):
+        # the one leg the ADR-0051 epilogue does not fit: problems ride
+        # inside the payload, so printing them again would both duplicate
+        # them and put non-JSON above the object a reader parses
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self.planned(
+                ["plan", "--json"],
+                run=FailingRunner(subprocess.CalledProcessError(1, "gh")),
+                root=self.config_tree(tmp).root)
+        lines = out.splitlines()
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[-1], "wq: 1 problem(s)")
+        payload = json.loads("\n".join(lines[:-1]))
+        self.assertEqual(len(payload["problems"]), 1)
+        self.assertEqual(out.count("gh issue list failed"), 1)
+
+    def test_the_json_summary_is_the_seam_s_own_grammar(self):
+        """The --json leg prints its summary itself (ADR-0051's epilogue
+        cannot serve a leg whose problems ride inside the payload), so
+        this lockstep is the only thing holding the two spellings
+        together — the same split-contract idiom as the workflow-output
+        lockstep tests."""
+        with tempfile.TemporaryDirectory() as tmp:
+            _, out = self.planned(
+                ["plan", "--json"],
+                run=FailingRunner(subprocess.CalledProcessError(1, "gh")),
+                root=self.config_tree(tmp).root)
+        _, seam = cli_contract.capture(cli.report, "wq", ["one problem"])
+        self.assertEqual(out.splitlines()[-1], seam.splitlines()[-1])
+
+    def test_the_report_leg_prints_problems_above_the_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self.planned(
+                ["plan"],
+                run=FailingRunner(subprocess.CalledProcessError(1, "gh")),
+                root=self.config_tree(tmp).root)
+        lines = out.splitlines()
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[-1], "wq: 1 problem(s)")
+        self.assertTrue(lines[-2].startswith("wq: gh issue list failed:"))
 
 
 if __name__ == "__main__":
