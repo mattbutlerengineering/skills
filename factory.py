@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """factory: the one front door over the root tools' CLI legs
-(issue #237). Fifteen root modules carry a CLI and every one is invoked
+(issue #237). Fourteen root modules carry a CLI and every one is invoked
 by filename; this is the index that did not exist and a dispatcher over
 the mains that already do.
 
@@ -19,8 +19,8 @@ that stopped being testable where it lives now.
                                         --selftest`)
   python3 factory.py help               the verb index
 
-Verbs whose main() takes no arguments (lint, trigger-eval,
-charter-replay) refuse extras rather than dropping them silently.
+Verbs whose main() takes no arguments (lint, trigger-eval) refuse extras
+rather than dropping them silently.
 `cli.py` is the external-CLI/harness-IO seam (ADR-0037/0040/0042), which
 is why this file is not called that.
 """
@@ -30,11 +30,13 @@ import sys
 # verb -> (module, calling convention). Pinned derived, never grown by
 # hand alone: test_factory_cli asserts one verb per CLI-bearing root
 # module and that each verb is its module's name. Conventions: "argv"
-# mains take argv[1:]-shaped args, "bare" mains take nothing.
+# mains take argv[1:]-shaped args, "bare" mains have no argv slot at all
+# — a main whose slot merely carries a default must still be routed
+# "argv", or calling it bare leaves it reading THIS process's sys.argv.
 VERBS = {
     "assembler": ("assembler", "argv"),
     "budget-guard": ("budget_guard", "argv"),
-    "charter-replay": ("charter_replay", "bare"),
+    "charter-replay": ("charter_replay", "argv"),
     "cost-report": ("cost_report", "argv"),
     "factory-init": ("factory_init", "argv"),
     "gate-digest": ("gate_digest", "argv"),

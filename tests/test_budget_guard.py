@@ -452,11 +452,37 @@ class TestRecordRun(unittest.TestCase):
             self.assertEqual(len(self.ledger(tmp)), 1)
 
 
-class TestRecordRunCLI(unittest.TestCase):
-    def run_cli(self, argv, root, at="2026-08-10"):
+class TestRecordRunCLI(cli_contract.ReportContract, unittest.TestCase):
+    summary_line = "budget_guard: 0 problem(s)"
+
+    def capture_cli(self, argv, root, at="2026-08-10"):
+        """(code, stdout) of one main(...) call, root and clock injected."""
         clock = lambda: datetime(*(int(part) for part in at.split("-")),
                                  tzinfo=timezone.utc)
-        return budget_guard.main(argv, clock=clock, root=Path(root))
+        return cli_contract.capture(budget_guard.main, argv, clock=clock,
+                                    root=Path(root))
+
+    def run_cli(self, argv, root, at="2026-08-10"):
+        return self.capture_cli(argv, root, at)[0]
+
+    def clean_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "execution.json"
+            path.write_text(json.dumps([TestRecordRun.RESULT]),
+                            encoding="utf-8")
+            return self.capture_cli(
+                ["record-run", "WO-0007", "run-9", "claude-sonnet-5",
+                 str(path)], tmp)
+
+    def test_a_refused_run_ends_with_the_same_summary_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self.capture_cli(
+                ["record-run", "WO-0007", "run-9", "claude-sonnet-5",
+                 str(Path(tmp) / "nope.json")], tmp)
+        lines = out.splitlines()
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[-1], "budget_guard: 1 problem(s)")
+        self.assertIn("nope.json", lines[0])
 
     def test_outcome_defaults_to_completed_and_the_clock_stamps_at(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -503,15 +529,39 @@ class TestRecordRunCLI(unittest.TestCase):
             self.assertEqual(self.run_cli(["record-run", "WO-0007"], tmp), 2)
 
 
-class TestRecordCLI(unittest.TestCase):
-    def run_cli(self, argv, root, at="2026-08-07"):
-        """The root is INJECTED. repo_root() resolves from __file__, so a
-        chdir-only harness would write these fabricated rows straight into
-        the real append-only ledger — which is how this test was first
-        written, and it did exactly that."""
+class TestRecordCLI(cli_contract.ReportContract, unittest.TestCase):
+    summary_line = "budget_guard: 0 problem(s)"
+
+    def capture_cli(self, argv, root, at="2026-08-07"):
+        """(code, stdout) of one main(...) call. The root is INJECTED.
+        repo_root() resolves from __file__, so a chdir-only harness would
+        write these fabricated rows straight into the real append-only
+        ledger — which is how this test was first written, and it did
+        exactly that."""
         clock = lambda: datetime(*(int(part) for part in at.split("-")),
                                  tzinfo=timezone.utc)
-        return budget_guard.main(argv, clock=clock, root=Path(root))
+        return cli_contract.capture(budget_guard.main, argv, clock=clock,
+                                    root=Path(root))
+
+    def run_cli(self, argv, root, at="2026-08-07"):
+        return self.capture_cli(argv, root, at)[0]
+
+    def clean_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            return self.capture_cli(
+                ["record", "WO-0007", "r-1", "claude-sonnet-5", "4200",
+                 "1.25"], tmp)
+
+    def test_a_refused_row_ends_with_the_same_summary_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code, out = self.capture_cli(
+                ["record", "WO-0007", "r-1", "claude-sonnet-5", "lots",
+                 "free"], tmp)
+        lines = out.splitlines()
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[-1], "budget_guard: 2 problem(s)")
+        self.assertEqual(lines[:2], ["bg: tokens 'lots' is not an integer",
+                                     "bg: cost 'free' is not a number"])
 
     def test_outcome_defaults_to_completed_and_the_clock_stamps_at(self):
         with tempfile.TemporaryDirectory() as tmp:

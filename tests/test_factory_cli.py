@@ -5,6 +5,8 @@ calling convention), that the verb table is DERIVED from the CLI-bearing
 root modules rather than restated beside them, and that the index the
 tools never had (`factory.py help`) names every verb.
 """
+import importlib
+import inspect
 import io
 import unittest
 from contextlib import redirect_stdout
@@ -40,6 +42,51 @@ class TestVerbTableIsDerived(unittest.TestCase):
         for verb, (module_name, _) in factory.VERBS.items():
             self.assertEqual(verb, module_name.replace("_", "-"))
 
+    def test_each_row_declares_the_convention_its_main_accepts(self):
+        """ADR-0054: the convention column was the table's last hand-kept
+        fact, so it is derived here too — a main that grows or loses its
+        argv parameter fails this test until its row follows. The
+        derivation lives in the test, not in the router: factory.py runs
+        on every push and must import one module per invocation, not
+        fourteen.
+
+        `bare` means the main has NO argv slot, not merely that it can be
+        called with no arguments. A main whose argv slot carries a
+        default (`main(argv=None)`) binds `main()` happily and then reads
+        the *process's* argv — under the front door that is
+        `["charter-replay"]`, and argparse rejects it. So the discriminator
+        is the slot's existence, and the row must say `argv` wherever one
+        exists.
+        """
+        for verb, (module_name, style) in sorted(factory.VERBS.items()):
+            with self.subTest(verb=verb):
+                positional = [
+                    p for p in inspect.signature(
+                        importlib.import_module(module_name)
+                        .main).parameters.values()
+                    if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)]
+                if positional:
+                    # what makes the slot's existence readable as "argv":
+                    # every root main spells its first positional that way
+                    self.assertEqual(positional[0].name, "argv")
+                self.assertEqual(style, "argv" if positional else "bare")
+
+    def test_a_bare_verb_reads_nothing_from_the_process_argv(self):
+        """The failure the rule above prevents, driven end to end: a
+        `bare` row means factory calls `main()`, so any argv the main
+        then resolves for itself comes from `sys.argv` — which under the
+        front door holds the verb, not the tool's arguments."""
+        for verb, (module_name, style) in sorted(factory.VERBS.items()):
+            if style != "bare":
+                continue
+            with self.subTest(verb=verb):
+                params = inspect.signature(
+                    importlib.import_module(module_name).main).parameters
+                self.assertEqual(
+                    list(params), [],
+                    f"{verb} is routed bare but its main takes parameters;"
+                    " factory.main() would leave them to sys.argv")
+
 
 class TestDispatch(unittest.TestCase):
     def test_every_verb_reaches_its_module_main(self):
@@ -50,8 +97,6 @@ class TestDispatch(unittest.TestCase):
                     self.assertEqual(factory.main([verb]), 0)
                 if style == "bare":
                     fake.assert_called_once_with()
-                elif style == "argv0":
-                    fake.assert_called_once_with([f"{module_name}.py"])
                 else:
                     fake.assert_called_once_with([])
 
@@ -61,8 +106,8 @@ class TestDispatch(unittest.TestCase):
         fake.assert_called_once_with(["--selftest"])
 
     def test_a_bare_main_refuses_extra_arguments(self):
-        """lint/trigger-eval/charter-replay mains take nothing; dropping
-        the caller's arguments silently would look like they applied."""
+        """lint/trigger-eval mains take nothing; dropping the caller's
+        arguments silently would look like they applied."""
         with mock.patch("lint.main") as fake:
             out = io.StringIO()
             with redirect_stdout(out):
