@@ -24,15 +24,31 @@ dashboard:-prefixed problem strings; the CLI prints them and exits
 nonzero via cli.report.
 """
 import json
+import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-from cli import report
+from cli import CLI_FAILURES, full_window, gh_json, gh_runner, label_names
+from cli import detail as run_detail
+from cli import report, runner
+from gate_digest import GATES, label_events, mirror_map, waiting_since
 from knowledge_plane import run_dirs
 from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
                       next_stage)
 
 CONFIG_PATH = Path.home() / ".process-dashboard.json"
+
+git_runner = runner("git")
+
+# The two shapes a github.com origin takes; group 1 is the owner/repo
+# slug either way.
+_REMOTE = re.compile(
+    r"^(?:git@github\.com:|https://github\.com/)([^/]+/[^/]+?)(?:\.git)?$")
+
+# gh truncates a windowed listing silently (the gate_digest rule); the
+# window is declared once beside the --limit that carries it.
+LIST_WINDOW = 1000
 
 # Every artifact filename that marks a run dir as *a run at all* — the
 # protocol's active-run rule ("at least one artifact") over both
@@ -77,17 +93,103 @@ def _run_ref(root, run_dir):
     return f"{scale}:{rel.name}"
 
 
-def gather(repo_path):
-    """One repo path -> the per-repo state dict (WO-0019: repo, active
-    runs with orientation stage, problems; later orders grow the dict).
-    Active per the protocol: at least one artifact and not complete.
-    Every failure is a problem string in the dict — fail loud, render
-    on."""
+def remote_slug(repo_path, git=git_runner):
+    """(owner/repo slug, problems) from the checkout's origin — how the
+    dispatch-plane reads scope their gh calls and how the page builds
+    links. A repo without a readable github.com origin yields (None,
+    [the one problem]); callers skip the dispatch plane and render on."""
+    try:
+        url = git(["-C", str(repo_path), "config", "--get",
+                   "remote.origin.url"]).stdout.strip()
+    except CLI_FAILURES:
+        return None, [f"dashboard: {repo_path} has no readable"
+                      " remote.origin.url"]
+    match = _REMOTE.match(url)
+    if not match:
+        return None, [f"dashboard: {repo_path} remote {url} is not"
+                      " a github.com remote"]
+    return match.group(1), []
+
+
+def _age_seconds(since, now):
+    """Whole seconds from a GitHub timestamp to now. The Z-suffix
+    replace is gate_digest's documented compat quirk (fromisoformat
+    accepts Z only from 3.11)."""
+    then = datetime.fromisoformat(since.replace("Z", "+00:00"))
+    return int((now - then).total_seconds())
+
+
+def _timeline(slug, number, run, problems):
+    """One issue's label events, [] on a failed or unparseable fetch —
+    the item still lists, just without an age (the gate_digest rule:
+    a failed fetch is a problem, never a lost queue item)."""
+    path = f"repos/{slug}/issues/{number}/timeline"
+    try:
+        pages, suffix = gh_json(["api", path, "--paginate", "--slurp"],
+                                run, expect=list)
+    except CLI_FAILURES as err:
+        problems.append(f"dashboard: gh api timeline for #{number}"
+                        f" failed: {run_detail(err)}")
+        return []
+    if suffix:
+        problems.append(f"dashboard: gh api timeline for #{number}"
+                        f" {suffix}")
+        return []
+    return label_events([event for page in pages for event in page])
+
+
+def _queues(slug, mirror, run, now, problems):
+    """The open mirrored issues waiting at each human gate, in gate
+    then issue order, aged from the current stay's labeled event when
+    the timeline yields one."""
+    listing, suffix = None, None
+    try:
+        listing, suffix = gh_json(
+            ["issue", "list", "-R", slug, "--state", "open", "--json",
+             "number,title,labels,url", "--limit", str(LIST_WINDOW)],
+            run, expect=list)
+    except CLI_FAILURES as err:
+        problems.append(f"dashboard: gh issue list failed:"
+                        f" {run_detail(err)}")
+        return []
+    if suffix:
+        problems.append(f"dashboard: gh issue list {suffix}")
+        return []
+    window = full_window(listing, LIST_WINDOW)
+    if window:
+        problems.append(f"dashboard: gh issue list {window}")
+    entries = []
+    for gate, queue_label, _, _ in GATES:
+        for issue in sorted(listing, key=lambda e: e.get("number") or 0):
+            number = issue.get("number")
+            if number not in mirror or \
+                    queue_label not in label_names(issue):
+                continue
+            events = _timeline(slug, number, run, problems)
+            since = waiting_since(events, queue_label)
+            entries.append({
+                "gate": gate,
+                "issue": number,
+                "title": issue.get("title") or "",
+                "waited_s": _age_seconds(since, now) if since else None,
+                "url": issue.get("url") or "",
+            })
+    return entries
+
+
+def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
+    """One repo path -> the per-repo state dict (WO-0019 skeleton;
+    WO-0020 adds the gate queues). Active runs per the protocol: at
+    least one artifact and not complete. Every failure is a problem
+    string in the dict — fail loud, render on. A repo with no mirrored
+    rows is a plain pipeline repo: no git or gh call is made at all."""
+    clock = clock or (lambda: datetime.now(timezone.utc))
     root = Path(repo_path)
     # resolve() for the name only: `gather .` must not report name ""
     # (path stays as given — it is the caller's vocabulary).
-    state = {"repo": {"path": str(root), "name": root.resolve().name},
-             "runs": [], "problems": []}
+    state = {"repo": {"path": str(root), "name": root.resolve().name,
+                      "remote": None},
+             "runs": [], "queues": [], "problems": []}
     if not root.is_dir():
         state["problems"].append(
             f"dashboard: {repo_path} is not a directory")
@@ -104,6 +206,14 @@ def gather(repo_path):
             "dir": str(run_dir.relative_to(root)),
             "stage": stage,
         })
+    mirror = mirror_map(root)
+    if mirror:
+        slug, remote_problems = remote_slug(root, git)
+        state["repo"]["remote"] = slug
+        state["problems"].extend(remote_problems)
+        if slug:
+            state["queues"] = _queues(slug, mirror, run, clock(),
+                                      state["problems"])
     return state
 
 
