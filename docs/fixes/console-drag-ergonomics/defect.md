@@ -88,7 +88,7 @@ claim markers are preserved server-side. Review and Ship scale small.
     last movable row's ▼ disabled), and the click path produces the
     same order/dirty state `applyMove` gives a drag. Full battery
     green.
-- [ ] **Hand-in-browser reorder lands** — with the operator, perform
+- [x] **Hand-in-browser reorder lands** — with the operator, perform
   one reorder from the page using the new controls and Save it.
   - Accept: `docs/backlog.md` is rewritten — git diff shows the seed
     lines permuted with every origin/claim marker intact — and the
@@ -106,6 +106,12 @@ claim markers are preserved server-side. Review and Ship scale small.
   pinned by `test_backlog_move_button_edges_follow_list_position`.
 - Tracker mirror: single issue #277 for the run (no WO ids — same
   ADR-0025 shape as deepening-cli-seams).
+- 2026-08-14 (implement, item 2 closed): the operator's reorder landed
+  from the page — `docs/backlog.md` rewritten with the
+  `next-maintenance-1` seed moved down two slots, every origin/claim
+  marker intact, gather clean. Operator's verdict on the flow: "good
+  enough for now" — usable, not yet delightful; the residue is a retro
+  seed, not more scope here.
 
 Origin seed claimed in `docs/backlog.md`:
 "Console backlog drag is finicky in a real browser — add click-to-move
