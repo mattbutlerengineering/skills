@@ -60,7 +60,7 @@ per ADR-0032 after each row exists here first.
   - Accept: all nine agent+skill charter pairs exist; CHARTERS.md indexes them with the three gate checklists; structural lint passes.
 - [x] **WO-0016** charter regression suite (golden fixture replays) — size:M, blocked by: WO-0013 (PRD-0001 §Actors) (tracker: #121) (pre-ledger)
   - Accept: golden fixture work orders replay on plugin PRs via a cheap model; a deliberately degraded charter fails the suite.
-- [ ] **WO-0018** rejection mining into the toolsmith queue — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #123)
+- [x] **WO-0018** rejection mining into the toolsmith queue — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #123)
   - Accept: a weekly job harvests gate rejections and PR change-requests into the toolsmith/claude-reflect queue.
 
 ## Design gaps found

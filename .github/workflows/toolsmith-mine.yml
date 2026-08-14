@@ -1,0 +1,46 @@
+# The weekly toolsmith-queue harvest (PRD-0001 user stories; WO-0018).
+#
+# Mirrored VERBATIM into the template payload by `factory_init.py
+# update-manifest`, so a stamped product repo runs this same file — which
+# is why it names no commands of its own. Everything gh-shaped (reading
+# the wo: label timelines and PR reviews, creating-or-updating the pinned
+# toolsmith-queue issue) goes through `make toolsmith-mine`
+# (rejection_mining.py, unit-tested offline against an injected gh).
+# Unlike gate-digest.yml there is no commit step: the harvest mutates
+# only the tracker, never the tree.
+#
+# Editing this file means re-running update-manifest; detector E fails
+# the build otherwise.
+name: toolsmith-mine
+
+on:
+  schedule:
+    # Weekly, Mondays 04:47 UTC (off the hour — GitHub's cron peaks are
+    # lossy; before gate-digest's daily 05:17 slot so the scheduled jobs
+    # never contend for the same runner minute).
+    - cron: "47 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: toolsmith-mine
+  cancel-in-progress: false
+
+jobs:
+  mine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Harvest gate rejections and change-requested reviews for the
+      # mirrored work orders, then create-or-update the pinned
+      # toolsmith-queue issue.
+      - name: Mine the correction stream into the toolsmith queue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make toolsmith-mine

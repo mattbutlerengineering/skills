@@ -38,6 +38,7 @@ EXPECTED_RELS = {
     "templates/.github/workflows/design.yml",
     "templates/.github/workflows/cost-report.yml",
     "templates/.github/workflows/gate-digest.yml",
+    "templates/.github/workflows/toolsmith-mine.yml",
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
@@ -55,6 +56,7 @@ EXPECTED_RELS = {
     "templates/tools/factory/orientation_pack.py",
     "templates/tools/factory/cost_report.py",
     "templates/tools/factory/gate_digest.py",
+    "templates/tools/factory/rejection_mining.py",
 }
 
 SEEDED_ADRS = REPO_ROOT / "factory" / "templates" / "docs" / "adr"
@@ -244,7 +246,8 @@ class TestProductForm(unittest.TestCase):
 
     def test_each_factory_tool_moves_under_tools_factory(self):
         for tool in ("gates.py", "validator.py", "assembler.py",
-                     "cost_report.py", "gate_digest.py"):
+                     "cost_report.py", "gate_digest.py",
+                     "rejection_mining.py"):
             with self.subTest(tool=tool):
                 self.assertEqual(
                     factory_init.product_form(f"python3 {tool} --flag"),

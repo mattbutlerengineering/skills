@@ -21,3 +21,4 @@
 {"wo": "WO-0027", "run_id": "gate-merge-2026-08-14T05:26:23Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:46s", "at": "2026-08-14"}
 {"wo": "WO-0028", "run_id": "gate-merge-2026-08-14T05:30:42Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:38s", "at": "2026-08-14"}
 {"wo": "WO-0029", "run_id": "gate-merge-2026-08-14T05:37:44Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:49s", "at": "2026-08-14"}
+{"wo": "WO-0018", "run_id": "session-2026-08-14-wo-0018", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-14"}
