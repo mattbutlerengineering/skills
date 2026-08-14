@@ -150,6 +150,29 @@ class TestRowPreLedger(unittest.TestCase):
             "- [x] WO-0001 one (PRD-0001) (tracker: #106)"))
 
 
+class TestRowTitle(unittest.TestCase):
+    """The row's human title — the text between its bold WO token and
+    the em-dash metadata clause — is row grammar, so it lives beside
+    row_work_order and row_tracker_issue (ADR-0037), read by the
+    dashboard's factory-output table."""
+
+    def test_the_title_sits_between_the_token_and_the_dash_clause(self):
+        self.assertEqual(knowledge_plane.row_title(
+            "- [ ] **WO-0017** gate-queue digest — size:S, blocked by: —"
+            " (PRD-0001 §Solution) (tracker: #245)"), "gate-queue digest")
+
+    def test_a_row_without_a_metadata_clause_titles_to_the_rest(self):
+        self.assertEqual(knowledge_plane.row_title(
+            "- [x] **WO-0002** labels.json + label-sync"),
+            "labels.json + label-sync")
+
+    def test_an_unbolded_token_or_non_row_line_yields_none(self):
+        for line in ("- [ ] WO-0008 unmirrored row (PRD-0001 §Solution)",
+                     "A note naming **WO-0005** mid-prose — size:S"):
+            with self.subTest(line=line):
+                self.assertIsNone(knowledge_plane.row_title(line))
+
+
 class TestBreakdownFiles(unittest.TestCase):
     def test_yields_each_runs_breakdown_with_its_lines(self):
         with tempfile.TemporaryDirectory() as tmp:

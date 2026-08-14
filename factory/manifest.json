@@ -30,7 +30,7 @@
     "templates/tools/factory/gate_digest.py": "0b763ce7378e4ecb2382871320d55d66cfd5dc68ed4b04403839f35d1bbcd5c7",
     "templates/tools/factory/gates.py": "197152bc9ee415239692b988b52a9e3985f29c08398a02e5ac6e086de468df7e",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
-    "templates/tools/factory/knowledge_plane.py": "376cb275d0f17c1185b20bfdd5171667c97b20030d9abf93a02db866e422a063",
+    "templates/tools/factory/knowledge_plane.py": "c7c99b6429c56f41fb218b6779969f3b0987092f8ba7de4cec14703e85db73dd",
     "templates/tools/factory/label_sync.py": "2dd74d12942271d71d64cb60bc54923f0589f14cedf7bf41bb56413a4e55c3d9",
     "templates/tools/factory/orientation_pack.py": "b67c338ba8f4ae762d891b1c329976c6daa8c46d95f377e4c1f3bfd22a85168c",
     "templates/tools/factory/protocol.py": "58598b15b71d6ef8ace0c6051a0f6cf162b554fc73b19da9b193bf7b42b76e6f",

@@ -2,3 +2,4 @@
 {"wo": "WO-0019", "run_id": "session-2026-08-13-wo-0019", "model": "claude-opus-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-14"}
 {"wo": "WO-0020", "run_id": "session-2026-08-13-wo-0020", "model": "claude-opus-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-14"}
 {"wo": "WO-0021", "run_id": "session-2026-08-13-wo-0021", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-14"}
+{"wo": "WO-0022", "run_id": "session-2026-08-13-wo-0022", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-14"}

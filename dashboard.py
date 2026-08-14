@@ -32,8 +32,10 @@ from pathlib import Path
 from cli import CLI_FAILURES, full_window, gh_json, gh_runner, label_names
 from cli import detail as run_detail
 from cli import report, runner
+import cost_ledger
 from gate_digest import GATES, label_events, mirror_map, waiting_since
-from knowledge_plane import (breakdown_files, row_done, row_tracker_issue,
+from knowledge_plane import (CLOSES_TOKEN, breakdown_files, row_done,
+                             row_size, row_title, row_tracker_issue,
                              row_work_order, run_dirs)
 from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
                       next_stage)
@@ -211,20 +213,103 @@ def _drift(root, states):
     return findings
 
 
+def _pr_by_issue(slug, run, problems):
+    """{issue number: PR entry} from one windowed pr list — the PR that
+    names the issue in its body's closing clause (the validator's
+    CLOSES_TOKEN grammar: how a merged PR names the one work order it
+    implements). A merged PR outranks an open one outranks a
+    closed-unmerged one; within a rank the newest wins. None on a
+    failed list — the table renders on without PR joins."""
+    try:
+        listing, suffix = gh_json(
+            ["pr", "list", "-R", slug, "--state", "all", "--json",
+             "number,state,body,url", "--limit", str(LIST_WINDOW)],
+            run, expect=list)
+    except CLI_FAILURES as err:
+        problems.append(f"dashboard: gh pr list failed:"
+                        f" {run_detail(err)}")
+        return None
+    if suffix:
+        problems.append(f"dashboard: gh pr list {suffix}")
+        return None
+    window = full_window(listing, LIST_WINDOW)
+    if window:
+        problems.append(f"dashboard: gh pr list {window}")
+    rank = {"MERGED": 2, "OPEN": 1, "CLOSED": 0}
+    best = {}
+    for entry in listing:
+        number = entry.get("number")
+        if not isinstance(number, int):
+            continue
+        key = (rank.get((entry.get("state") or "").upper(), 0), number)
+        for issue in CLOSES_TOKEN.findall(entry.get("body") or ""):
+            held = best.get(int(issue))
+            if held is None or key > held[0]:
+                best[int(issue)] = (key, entry)
+    return {issue: entry for issue, (_, entry) in best.items()}
+
+
+def _spend(root, problems):
+    """{WO token: recorded ledger spend}. A work order with no rows has
+    no spend (None downstream), never $0 — an absent ledger is silent
+    (no runs yet, cost_ledger.read's own convention), and a malformed
+    line arrives as read()'s ledger:-prefixed problem, never a silently
+    smaller sum."""
+    entries, ledger_problems = cost_ledger.read(root)
+    problems.extend(ledger_problems)
+    spend = {}
+    for entry in entries:
+        spend[entry["wo"]] = spend.get(entry["wo"], 0.0) + entry["cost"]
+    return spend
+
+
+def _output(root, by_number, prs, spend):
+    """The factory-output table: one lifecycle entry per mirrored
+    breakdown row, in breakdown order. state is the mirror's wo:* label
+    (ADR-0032: the dispatch plane owns lifecycle; the row is the drift
+    cross-check, never a second source), pr/url prefer the closing PR
+    over the issue, spend is the ledger's recorded total for the work
+    order."""
+    entries = []
+    for _, lines in breakdown_files(root):
+        for line in lines:
+            number = row_tracker_issue(line)
+            wo = row_work_order(line)
+            if number is None or wo is None:
+                continue
+            issue = by_number.get(number, {})
+            lifecycle = next((name[len("wo:"):]
+                              for name in label_names(issue)
+                              if name.startswith("wo:")), None)
+            pr = (prs or {}).get(number)
+            entries.append({
+                "wo": wo,
+                "title": row_title(line),
+                "size": row_size(line),
+                "state": lifecycle,
+                "pr": pr.get("number") if pr else None,
+                "url": (pr.get("url") if pr else None)
+                       or issue.get("url") or "",
+                "spend": spend.get(wo),
+            })
+    return entries
+
+
 def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
     """One repo path -> the per-repo state dict (WO-0019 skeleton;
-    WO-0020 adds the gate queues, WO-0021 the drift findings). Active
-    runs per the protocol: at least one artifact and not complete.
-    Every failure is a problem string in the dict — fail loud, render
-    on. A repo with no mirrored rows is a plain pipeline repo: no git
-    or gh call is made at all."""
+    WO-0020 adds the gate queues, WO-0021 the drift findings, WO-0022
+    the factory-output join). Active runs per the protocol: at least
+    one artifact and not complete. Every failure is a problem string in
+    the dict — fail loud, render on. A repo with no mirrored rows is a
+    plain pipeline repo: no git or gh call is made at all."""
     clock = clock or (lambda: datetime.now(timezone.utc))
     root = Path(repo_path)
     # resolve() for the name only: `gather .` must not report name ""
     # (path stays as given — it is the caller's vocabulary).
     state = {"repo": {"path": str(root), "name": root.resolve().name,
                       "remote": None},
-             "runs": [], "queues": [], "drift": [], "problems": []}
+             "runs": [], "queues": [], "output": [], "drift": [],
+             "problems": []}
     if not root.is_dir():
         state["problems"].append(
             f"dashboard: {repo_path} is not a directory")
@@ -249,12 +334,17 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
         if slug:
             listing = _listing(slug, run, state["problems"])
             if listing is not None:
+                by_number = {entry["number"]: entry for entry in listing
+                             if isinstance(entry.get("number"), int)}
                 state["queues"] = _queues(slug, listing, mirror, run,
                                           clock(), state["problems"])
                 state["drift"] = _drift(root, {
-                    entry["number"]: (entry.get("state") or "").upper()
-                    for entry in listing
-                    if isinstance(entry.get("number"), int)})
+                    number: (entry.get("state") or "").upper()
+                    for number, entry in by_number.items()})
+                state["output"] = _output(
+                    root, by_number,
+                    _pr_by_issue(slug, run, state["problems"]),
+                    _spend(root, state["problems"]))
     return state
 
 
