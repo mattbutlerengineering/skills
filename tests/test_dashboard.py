@@ -172,10 +172,10 @@ def queue_gh(timelines=None, issues=None, **kwargs):
     from fake_gh import FakeGh
     canned = timelines or {}
     listing = issues if issues is not None else [
-        {"number": 7, "title": "WO-0101: first",
+        {"number": 7, "title": "WO-0101: first", "state": "OPEN",
          "labels": [{"name": "wo:draft"}, {"name": "size:S"}],
          "url": "https://github.com/o/r/issues/7"},
-        {"number": 8, "title": "WO-0102: second",
+        {"number": 8, "title": "WO-0102: second", "state": "OPEN",
          "labels": [{"name": "wo:needs-review"}],
          "url": "https://github.com/o/r/issues/8"},
     ]
@@ -285,6 +285,63 @@ class TestQueues(unittest.TestCase):
         self.assertEqual(state["queues"], [])
         self.assertEqual(state["problems"], [
             f"dashboard: {tmp} has no readable remote.origin.url"])
+
+
+class TestDrift(unittest.TestCase):
+    def test_a_closed_mirror_with_an_unchecked_row_is_flagged(self):
+        # The class of drift issue #123 exposed: the work landed but the
+        # row never flipped. A closed issue also never queues.
+        issues = [
+            {"number": 7, "title": "WO-0101: first", "state": "CLOSED",
+             "labels": [{"name": "wo:draft"}],
+             "url": "https://github.com/o/r/issues/7"},
+            {"number": 8, "title": "WO-0102: second", "state": "OPEN",
+             "labels": [{"name": "wo:needs-review"}],
+             "url": "https://github.com/o/r/issues/8"},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            state = dashboard.gather(tmp, run=queue_gh(issues=issues),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["drift"], [
+            "drift: WO-0101 row is unchecked but its mirror #7 is"
+            " closed"])
+        self.assertEqual([q["issue"] for q in state["queues"]], [8])
+
+    def test_an_open_mirror_with_a_checked_row_is_the_inverse_flag(self):
+        issues = [
+            {"number": 9, "title": "WO-0103: done", "state": "OPEN",
+             "labels": [], "url": "https://github.com/o/r/issues/9"},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            state = dashboard.gather(tmp, run=queue_gh(issues=issues),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["drift"], [
+            "drift: WO-0103 row is checked but its mirror #9 is still"
+            " open"])
+
+    def test_a_clean_fixture_is_silent(self):
+        # #7/#8 open with unchecked rows agree across planes; #9's
+        # checked row has no listing entry, and absence says nothing —
+        # only definite cross-plane disagreement is a finding.
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            state = dashboard.gather(tmp, run=queue_gh(),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["drift"], [])
+        self.assertEqual(state["problems"], [])
+
+    def test_a_failed_listing_leaves_drift_empty_not_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            state = dashboard.gather(tmp,
+                                     run=queue_gh(failing=["issue",
+                                                           "list"]),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["drift"], [])
+        self.assertEqual(state["problems"],
+                         ["dashboard: gh issue list failed: boom"])
 
 
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,

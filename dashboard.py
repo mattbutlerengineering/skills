@@ -33,7 +33,8 @@ from cli import CLI_FAILURES, full_window, gh_json, gh_runner, label_names
 from cli import detail as run_detail
 from cli import report, runner
 from gate_digest import GATES, label_events, mirror_map, waiting_since
-from knowledge_plane import run_dirs
+from knowledge_plane import (breakdown_files, row_done, row_tracker_issue,
+                             row_work_order, run_dirs)
 from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
                       next_stage)
 
@@ -138,31 +139,40 @@ def _timeline(slug, number, run, problems):
     return label_events([event for page in pages for event in page])
 
 
-def _queues(slug, mirror, run, now, problems):
-    """The open mirrored issues waiting at each human gate, in gate
-    then issue order, aged from the current stay's labeled event when
-    the timeline yields one."""
-    listing, suffix = None, None
+def _listing(slug, run, problems):
+    """The one windowed issue listing (--state all) both dispatch-plane
+    sections read — the queues filter it to open issues, the drift
+    check compares row checkboxes against its states. None on a failed
+    or unparseable list; the sections stay empty and render on."""
     try:
         listing, suffix = gh_json(
-            ["issue", "list", "-R", slug, "--state", "open", "--json",
-             "number,title,labels,url", "--limit", str(LIST_WINDOW)],
+            ["issue", "list", "-R", slug, "--state", "all", "--json",
+             "number,title,state,labels,url", "--limit",
+             str(LIST_WINDOW)],
             run, expect=list)
     except CLI_FAILURES as err:
         problems.append(f"dashboard: gh issue list failed:"
                         f" {run_detail(err)}")
-        return []
+        return None
     if suffix:
         problems.append(f"dashboard: gh issue list {suffix}")
-        return []
+        return None
     window = full_window(listing, LIST_WINDOW)
     if window:
         problems.append(f"dashboard: gh issue list {window}")
+    return listing
+
+
+def _queues(slug, listing, mirror, run, now, problems):
+    """The open mirrored issues waiting at each human gate, in gate
+    then issue order, aged from the current stay's labeled event when
+    the timeline yields one."""
     entries = []
     for gate, queue_label, _, _ in GATES:
         for issue in sorted(listing, key=lambda e: e.get("number") or 0):
             number = issue.get("number")
             if number not in mirror or \
+                    (issue.get("state") or "").upper() != "OPEN" or \
                     queue_label not in label_names(issue):
                 continue
             events = _timeline(slug, number, run, problems)
@@ -177,19 +187,44 @@ def _queues(slug, mirror, run, now, problems):
     return entries
 
 
+def _drift(root, states):
+    """Cross-plane disagreement (ADR-0032: the row, never the issue, is
+    authoritative — so the mirror must follow it): a row unchecked while
+    its mirror is closed (the class issue #123 exposed), or checked
+    while its mirror is still open. `states` maps issue number to its
+    listed state; a mirror outside the listing says nothing — only
+    definite disagreement is a finding."""
+    findings = []
+    for _, lines in breakdown_files(root):
+        for line in lines:
+            number = row_tracker_issue(line)
+            state = states.get(number)
+            if state is None:
+                continue
+            wo = row_work_order(line)
+            if row_done(line) and state == "OPEN":
+                findings.append(f"drift: {wo} row is checked but its"
+                                f" mirror #{number} is still open")
+            elif not row_done(line) and state == "CLOSED":
+                findings.append(f"drift: {wo} row is unchecked but its"
+                                f" mirror #{number} is closed")
+    return findings
+
+
 def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
     """One repo path -> the per-repo state dict (WO-0019 skeleton;
-    WO-0020 adds the gate queues). Active runs per the protocol: at
-    least one artifact and not complete. Every failure is a problem
-    string in the dict — fail loud, render on. A repo with no mirrored
-    rows is a plain pipeline repo: no git or gh call is made at all."""
+    WO-0020 adds the gate queues, WO-0021 the drift findings). Active
+    runs per the protocol: at least one artifact and not complete.
+    Every failure is a problem string in the dict — fail loud, render
+    on. A repo with no mirrored rows is a plain pipeline repo: no git
+    or gh call is made at all."""
     clock = clock or (lambda: datetime.now(timezone.utc))
     root = Path(repo_path)
     # resolve() for the name only: `gather .` must not report name ""
     # (path stays as given — it is the caller's vocabulary).
     state = {"repo": {"path": str(root), "name": root.resolve().name,
                       "remote": None},
-             "runs": [], "queues": [], "problems": []}
+             "runs": [], "queues": [], "drift": [], "problems": []}
     if not root.is_dir():
         state["problems"].append(
             f"dashboard: {repo_path} is not a directory")
@@ -212,8 +247,14 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
         state["repo"]["remote"] = slug
         state["problems"].extend(remote_problems)
         if slug:
-            state["queues"] = _queues(slug, mirror, run, clock(),
-                                      state["problems"])
+            listing = _listing(slug, run, state["problems"])
+            if listing is not None:
+                state["queues"] = _queues(slug, listing, mirror, run,
+                                          clock(), state["problems"])
+                state["drift"] = _drift(root, {
+                    entry["number"]: (entry.get("state") or "").upper()
+                    for entry in listing
+                    if isinstance(entry.get("number"), int)})
     return state
 
 
