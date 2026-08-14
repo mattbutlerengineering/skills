@@ -609,11 +609,11 @@ class TestRespond(unittest.TestCase):
 
 
 class TestPage(unittest.TestCase):
-    """WO-0026: the console page. / serves dashboard.html as-is; the
-    page's render half is pure string functions, exercised here against
-    canned payloads under node (the DOM shim is guarded, so the script
-    loads without a browser). Skipped only where node is absent — CI
-    runners carry it."""
+    """WO-0026/WO-0027: the console page. / serves dashboard.html
+    as-is; the page's render half is pure string functions, exercised
+    here against canned payloads under node (the DOM shim is guarded,
+    so the script loads without a browser). Skipped only where node is
+    absent — CI runners carry it."""
 
     def repos_fn(self):
         return ["/repos/alpha"], []
@@ -661,6 +661,28 @@ class TestPage(unittest.TestCase):
         "problems": ["dashboard: docs/backlog.md is unreadable"],
     }
 
+    OUTPUT_STATES = [
+        {"name": "alpha", "payload": {"output": [
+            {"wo": "WO-0101", "title": "gate-queue digest", "size": "S",
+             "state": "merged", "pr": 245,
+             "url": "https://github.com/octo/alpha/pull/245",
+             "spend": 3.2},
+            {"wo": "WO-0102", "title": "drift <i>x</i>", "size": "M",
+             "state": None, "pr": None,
+             "url": "https://github.com/octo/alpha/issues/8",
+             "spend": None},
+        ]}},
+        {"name": "beta", "payload": {"output": []}},
+    ]
+
+    METRICS_STATES = [
+        {"name": "alpha", "payload": {"metrics": {
+            "month_spend": 84.1, "cap": 300.0, "cost_per_wo": 4.1,
+            "gate_wait_median": 93600, "acceptance": 0.8,
+            "rework": 0.25}}},
+        {"name": "beta", "payload": {"metrics": None}},
+    ]
+
     @classmethod
     def rendered(cls):
         """Run the page's render functions under node against the
@@ -676,6 +698,8 @@ class TestPage(unittest.TestCase):
                                re.DOTALL).group(1)
             harness = script + """
 const PAYLOAD = %s;
+const OUTPUT_STATES = %s;
+const METRICS_STATES = %s;
 console.log(JSON.stringify({
   needsYou: renderNeedsYou([{name: "alpha", payload: PAYLOAD}]),
   needsYouEmpty: renderNeedsYou([]),
@@ -687,8 +711,12 @@ console.log(JSON.stringify({
     [{i: 0, name: "alpha"}, {i: 1, name: "beta"}, {i: 2, name: "c"}],
     {0: "ok", 1: "error"}),
   wait: [fmtWait(189000), fmtWait(7200), fmtWait(120), fmtWait(null)],
+  output: renderOutput(OUTPUT_STATES),
+  metrics: renderMetrics(METRICS_STATES),
+  metricsEmpty: renderMetrics([METRICS_STATES[1]]),
 }));
-""" % json.dumps(cls.PAYLOAD)
+""" % (json.dumps(cls.PAYLOAD), json.dumps(cls.OUTPUT_STATES),
+       json.dumps(cls.METRICS_STATES))
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "render_check.js"
                 path.write_text(harness, encoding="utf-8")
@@ -736,6 +764,37 @@ console.log(JSON.stringify({
     def test_wait_ages_match_the_gate_digest_format(self):
         self.assertEqual(self.rendered()["wait"],
                          ["2d 4h", "2h", "<1h", None])
+
+    def test_output_renders_work_orders_per_repo(self):
+        table = self.rendered()["output"]
+        self.assertIn("Factory output", table)
+        self.assertIn("WO-0101", table)
+        self.assertIn("gate-queue digest", table)
+        self.assertIn("merged", table)
+        self.assertIn('href="https://github.com/octo/alpha/pull/245"',
+                      table)
+        self.assertIn("#245", table)
+        self.assertIn("$3.20", table)
+        self.assertIn("drift &lt;i&gt;x&lt;/i&gt;", table)
+        self.assertIn('href="https://github.com/octo/alpha/issues/8"',
+                      table)
+        self.assertIn("No factory stamped in this repo.", table)
+
+    def test_metrics_renders_headline_and_per_repo_rows(self):
+        metrics = self.rendered()["metrics"]
+        self.assertIn("Metrics", metrics)
+        self.assertIn("month spend $84.10 / $300 caps", metrics)
+        self.assertIn("alpha", metrics)
+        self.assertIn("$84.10 / $300", metrics)
+        self.assertIn("cost/WO $4.10", metrics)
+        self.assertIn("gate wait 1d 2h", metrics)
+        self.assertIn("acceptance 80%", metrics)
+        self.assertIn("rework 25%", metrics)
+        self.assertIn("No runs recorded yet.", metrics)
+
+    def test_metrics_empty_state(self):
+        self.assertIn("No runs recorded yet.",
+                      self.rendered()["metricsEmpty"])
 
 
 class TestServe(unittest.TestCase):

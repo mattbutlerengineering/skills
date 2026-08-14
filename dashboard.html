@@ -22,6 +22,10 @@ li { margin: .3rem 0; }
 .repo { color: #777; font-size: .85em; }
 .empty { color: #777; font-style: italic; }
 .error { color: #b00020; }
+table { border-collapse: collapse; font-size: .9rem; }
+th, td { text-align: left; padding: .2rem .8rem .2rem 0; }
+th { color: #777; font-weight: 600; }
+h3 { margin: .8rem 0 .3rem; font-size: .9rem; }
 a { color: #0b5cad; text-decoration: none; }
 a:hover { text-decoration: underline; }
 </style>
@@ -35,6 +39,8 @@ a:hover { text-decoration: underline; }
 <p id="page-error" class="error"></p>
 <section id="needs-you"></section>
 <section><h2>Runs</h2><div id="runs" class="cards"></div></section>
+<section id="output"></section>
+<section id="metrics"></section>
 <script>
 "use strict";
 
@@ -104,6 +110,70 @@ const renderRepoCard = (name, payload, error) => {
   return `<div class="card"><h3>${esc(name)}</h3>${body}</div>`;
 };
 
+const fmtMoney = (value) => "$" + (Number.isInteger(value)
+  ? String(value) : value.toFixed(2));
+
+const renderOutput = (states) => {
+  const sections = states.map(({name, payload}) => {
+    const rows = (payload.output || []).map((entry) => {
+      const wo = entry.url && !entry.pr
+        ? `<a href="${esc(entry.url)}" target="_blank">` +
+          `${esc(entry.wo)}</a>`
+        : esc(entry.wo);
+      const pr = entry.pr
+        ? `<a href="${esc(entry.url)}" target="_blank">` +
+          `#${esc(entry.pr)}</a>`
+        : "—";
+      return `<tr><td>${wo}</td><td>${esc(entry.title || "")}</td>` +
+        `<td>${esc(entry.size || "—")}</td>` +
+        `<td>${entry.state ? esc(entry.state) : "—"}</td>` +
+        `<td>${pr}</td>` +
+        `<td>${entry.spend == null ? "—"
+          : esc(fmtMoney(entry.spend))}</td></tr>`;
+    }).join("");
+    const body = rows
+      ? `<table><tr><th>WO</th><th>title</th><th>size</th>` +
+        `<th>state</th><th>PR</th><th>spend</th></tr>${rows}</table>`
+      : `<p class="empty">No factory stamped in this repo.</p>`;
+    return `<h3>${esc(name)}</h3>${body}`;
+  }).join("");
+  return `<h2>Factory output</h2>${sections}`;
+};
+
+const renderMetrics = (states) => {
+  const present = states.filter((s) => s.payload.metrics);
+  const rows = states.map(({name, payload}) => {
+    const m = payload.metrics;
+    if (!m) {
+      return `<li>${esc(name)} — ` +
+        `<span class="empty">No runs recorded yet.</span></li>`;
+    }
+    const parts = [
+      `${fmtMoney(m.month_spend)}` +
+        `${m.cap == null ? "" : ` / ${fmtMoney(m.cap)}`}`,
+      m.cost_per_wo == null ? null
+        : `cost/WO ${fmtMoney(m.cost_per_wo)}`,
+      m.gate_wait_median == null ? null
+        : `gate wait ${fmtWait(m.gate_wait_median)}`,
+      m.acceptance == null ? null
+        : `acceptance ${Math.round(m.acceptance * 100)}%`,
+      m.rework == null ? null
+        : `rework ${Math.round(m.rework * 100)}%`,
+    ].filter(Boolean).map((part) => esc(part));
+    return `<li>${esc(name)} — ${parts.join(" · ")}</li>`;
+  }).join("");
+  const spend = present.reduce(
+    (sum, s) => sum + (s.payload.metrics.month_spend || 0), 0);
+  const caps = present.filter((s) => s.payload.metrics.cap != null)
+    .reduce((sum, s) => sum + s.payload.metrics.cap, 0);
+  const headline = present.length
+    ? `<p>month spend ${esc(fmtMoney(spend))}` +
+      `${caps ? esc(` / ${fmtMoney(caps)} caps`) : ""}</p>`
+    : `<p class="empty">No runs recorded yet.</p>`;
+  const list = present.length ? `<ul>${rows}</ul>` : "";
+  return `<h2>Metrics</h2>${headline}${list}`;
+};
+
 const renderStatus = (repos, answers) => repos.map((r) => {
   const mark = answers[r.i] === "ok" ? "✓"
     : answers[r.i] === "error" ? "✗" : "…";
@@ -126,6 +196,9 @@ const paint = () => {
   document.getElementById("runs").innerHTML = state.repos.map((r) =>
     renderRepoCard(r.name, state.payloads[r.i],
                    state.errors[r.i])).join("");
+  document.getElementById("output").innerHTML = renderOutput(answered);
+  document.getElementById("metrics").innerHTML =
+    renderMetrics(answered);
 };
 
 const gatherRepo = async (r) => {
