@@ -31,7 +31,7 @@ ADR-0032 after each row exists here first.
 
 - [x] **WO-0025** server + read endpoints — size:S, blocked by: WO-0019 (PRD-0002 §Solution) (tracker: #261)
   - Accept: `serve --port --config` binds 127.0.0.1 only; GET /api/repos lists the configured set, GET /api/repo?i=N returns the state dict, out-of-range → 404 — all pinned by handler tests, no real network.
-- [ ] **WO-0026** page: glance sections — size:M, blocked by: WO-0025 (PRD-0002 §Success criteria) (tracker: #262)
+- [x] **WO-0026** page: glance sections — size:M, blocked by: WO-0025 (PRD-0002 §Success criteria) (tracker: #262)
   - Accept: dashboard.html fires one request per repo and fills progressively; needs-you strip (queues + drift), repo run cards, GitHub links, and per-section empty/error states all render from canned payloads.
 - [ ] **WO-0027** page: output + metrics sections — size:S, blocked by: WO-0026 (PRD-0002 §Success criteria) (tracker: #263)
   - Accept: factory output table and metrics (totals + per-repo rows) render from canned payloads with their empty states.

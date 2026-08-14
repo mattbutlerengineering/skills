@@ -608,6 +608,136 @@ class TestRespond(unittest.TestCase):
                          {"problems": ["dashboard: no such path"]})
 
 
+class TestPage(unittest.TestCase):
+    """WO-0026: the console page. / serves dashboard.html as-is; the
+    page's render half is pure string functions, exercised here against
+    canned payloads under node (the DOM shim is guarded, so the script
+    loads without a browser). Skipped only where node is absent — CI
+    runners carry it."""
+
+    def repos_fn(self):
+        return ["/repos/alpha"], []
+
+    def test_root_serves_the_page(self):
+        status, payload = dashboard.respond("/", self.repos_fn, None)
+        self.assertEqual(status, 200)
+        self.assertIsInstance(payload, str)
+        self.assertIn("<!doctype html", payload.lower())
+
+    def test_a_missing_page_file_is_a_500(self):
+        page, dashboard.PAGE = dashboard.PAGE, Path("/nope/dashboard.html")
+        try:
+            status, payload = dashboard.respond("/", self.repos_fn, None)
+        finally:
+            dashboard.PAGE = page
+        self.assertEqual(status, 500)
+        self.assertEqual(len(payload["problems"]), 1)
+        self.assertTrue(payload["problems"][0].startswith(
+            "dashboard: cannot read dashboard.html: "))
+
+    def test_page_fires_one_request_per_repo(self):
+        page = dashboard.PAGE.read_text(encoding="utf-8")
+        self.assertIn("/api/repos", page)
+        self.assertIn("/api/repo?i=", page)
+
+    def test_page_carries_the_no_repos_empty_state(self):
+        page = dashboard.PAGE.read_text(encoding="utf-8")
+        self.assertIn("No repos configured", page)
+        self.assertIn(".process-dashboard.json", page)
+
+    PAYLOAD = {
+        "repo": {"path": "/repos/alpha", "name": "alpha",
+                 "remote": "octo/alpha"},
+        "runs": [{"ref": "feature:process-dashboard",
+                  "dir": "docs/features/process-dashboard",
+                  "stage": "prd"}],
+        "queues": [{"gate": "prd", "issue": 7,
+                    "title": "WO-0101 <b>seed</b>", "waited_s": 189000,
+                    "url": "https://github.com/octo/alpha/issues/7"}],
+        "output": [],
+        "drift": ["drift: WO-0102 row is checked but its mirror #8 "
+                  "is still open"],
+        "metrics": None,
+        "problems": ["dashboard: docs/backlog.md is unreadable"],
+    }
+
+    @classmethod
+    def rendered(cls):
+        """Run the page's render functions under node against the
+        canned payload once; assertions read the printed JSON."""
+        if not hasattr(cls, "_rendered"):
+            import re
+            import shutil
+            import subprocess
+            if not shutil.which("node"):
+                raise unittest.SkipTest("node not available")
+            page = dashboard.PAGE.read_text(encoding="utf-8")
+            script = re.search(r"<script>(.*)</script>", page,
+                               re.DOTALL).group(1)
+            harness = script + """
+const PAYLOAD = %s;
+console.log(JSON.stringify({
+  needsYou: renderNeedsYou([{name: "alpha", payload: PAYLOAD}]),
+  needsYouEmpty: renderNeedsYou([]),
+  card: renderRepoCard("alpha", PAYLOAD, null),
+  cardEmpty: renderRepoCard("alpha", {runs: [], problems: []}, null),
+  cardError: renderRepoCard("alpha", null, "HTTP 500"),
+  cardLoading: renderRepoCard("alpha", null, null),
+  status: renderStatus(
+    [{i: 0, name: "alpha"}, {i: 1, name: "beta"}, {i: 2, name: "c"}],
+    {0: "ok", 1: "error"}),
+  wait: [fmtWait(189000), fmtWait(7200), fmtWait(120), fmtWait(null)],
+}));
+""" % json.dumps(cls.PAYLOAD)
+            with tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "render_check.js"
+                path.write_text(harness, encoding="utf-8")
+                run = subprocess.run(["node", str(path)],
+                                     capture_output=True, text=True)
+            if run.returncode != 0:
+                raise AssertionError(
+                    f"render harness failed under node: {run.stderr}")
+            cls._rendered = json.loads(run.stdout)
+        return cls._rendered
+
+    def test_needs_you_renders_queues_and_drift_with_links(self):
+        strip = self.rendered()["needsYou"]
+        self.assertIn("Needs you (2)", strip)
+        self.assertIn("prd gate", strip)
+        self.assertIn('href="https://github.com/octo/alpha/issues/7"',
+                      strip)
+        self.assertIn("waiting 2d 4h", strip)
+        self.assertIn('href="https://github.com/octo/alpha/issues/8"',
+                      strip)
+        self.assertIn("[alpha]", strip)
+        self.assertIn("WO-0101 &lt;b&gt;seed&lt;/b&gt;", strip)
+        self.assertNotIn("<b>", strip)
+
+    def test_needs_you_empty_state(self):
+        strip = self.rendered()["needsYouEmpty"]
+        self.assertIn("Needs you (0)", strip)
+        self.assertIn("Nothing waits on you.", strip)
+
+    def test_repo_card_lists_runs_and_renders_problems_in_place(self):
+        card = self.rendered()["card"]
+        self.assertIn("alpha", card)
+        self.assertIn("process-dashboard ▸ prd", card)
+        self.assertIn("dashboard: docs/backlog.md is unreadable", card)
+
+    def test_repo_card_states(self):
+        self.assertIn("No active runs.", self.rendered()["cardEmpty"])
+        self.assertIn("HTTP 500", self.rendered()["cardError"])
+        self.assertIn("gathering", self.rendered()["cardLoading"])
+
+    def test_gather_status_marks_each_repo(self):
+        self.assertEqual(self.rendered()["status"],
+                         "alpha ✓  beta ✗  c …")
+
+    def test_wait_ages_match_the_gate_digest_format(self):
+        self.assertEqual(self.rendered()["wait"],
+                         ["2d 4h", "2h", "<1h", None])
+
+
 class TestServe(unittest.TestCase):
     class FakeServer:
         instances = []
