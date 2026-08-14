@@ -15,3 +15,4 @@ Seed inbox — advisory only, never orientation state; grammar and read moments 
 - Console backlog drag is finicky in a real browser — add click-to-move controls and verify one reorder lands from the page (from: feature:process-dashboard) (claimed: maintenance:console-drag-ergonomics)
 - Metrics trend history — persist per-month cost/WO and gate-wait so the console headline can say improving, not just current (from: feature:process-dashboard)
 - Issue sweeps should refuse to close a mirror whose breakdown row is unchecked — the #123 class at its source (from: feature:process-dashboard)
+- Backlog reorder polish — operator verdict "good enough for now": drag still rough, move buttons lack aria-labels, repaint drops keyboard focus after each nudge; consider drop indicators (from: maintenance:console-drag-ergonomics)
