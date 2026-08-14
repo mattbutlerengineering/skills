@@ -16,3 +16,4 @@ Seed inbox — advisory only, never orientation state; grammar and read moments 
 - Metrics trend history — persist per-month cost/WO and gate-wait so the console headline can say improving, not just current (from: feature:process-dashboard)
 - Issue sweeps should refuse to close a mirror whose breakdown row is unchecked — the #123 class at its source (from: feature:process-dashboard)
 - Backlog reorder polish — operator verdict "good enough for now": drag still rough, move buttons lack aria-labels, repaint drops keyboard focus after each nudge; consider drop indicators (from: maintenance:console-drag-ergonomics)
+- A drift detector for retyped seam grammar — post-fold adopters are never re-checked: two mirrored tools retyped cli.report's epilogue days after the ADR-0051 fold and only a manual deepening review caught it; the detector suite covers citations, checksums and staleness but not "a tool restates a seam it should call" (from: maintenance:deepening-cli-seams)
