@@ -459,7 +459,8 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(state["problems"], [])
         self.assertEqual(state["metrics"], {
             "month_spend": 5.0, "cap": 300.0, "cost_per_wo": 3.0,
-            "gate_wait_median": 200})
+            "gate_wait_median": 200, "acceptance": None,
+            "rework": None})
 
     def test_an_absent_ledger_is_no_runs_recorded_never_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -483,6 +484,74 @@ class TestMetrics(unittest.TestCase):
             "config: missing factory.json"))
         self.assertEqual(state["metrics"]["cap"], None)
         self.assertEqual(state["metrics"]["month_spend"], 5.0)
+
+
+RATED_PRS = [
+    {"number": 40, "state": "MERGED", "body": "Closes #9",
+     "url": "https://github.com/o/r/pull/40",
+     "reviews": [{"state": "APPROVED"}]},
+    {"number": 41, "state": "MERGED", "body": "Closes #8",
+     "url": "https://github.com/o/r/pull/41",
+     "reviews": [{"state": "CHANGES_REQUESTED"},
+                 {"state": "APPROVED"}]},
+    {"number": 42, "state": "OPEN", "body": "Closes #7",
+     "url": "https://github.com/o/r/pull/42", "reviews": []},
+]
+
+
+class TestImprovementRates(unittest.TestCase):
+    def test_rates_derive_from_reviews_on_merged_wo_cited_prs(self):
+        # Two mirrored work orders have landed: WO-0103 (#40) merged
+        # first-pass, WO-0102 (#41) after a changes-requested round.
+        # The open PR (#42) is not output yet. No ledger, so the spend
+        # fields stay None while the rates render.
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            state = dashboard.gather(tmp, run=queue_gh(prs=RATED_PRS),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        self.assertEqual(state["metrics"], {
+            "month_spend": None, "cap": None, "cost_per_wo": None,
+            "gate_wait_median": None, "acceptance": 0.5, "rework": 0.5})
+
+    def test_corrections_fold_in_and_widen_rework(self):
+        # A correction row against review-clean WO-0103: acceptance
+        # (review data) holds at 0.5, rework widens to 1.0.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/corrections.jsonl",
+                       '{"wo": "WO-0103", "kind": "post-merge fix"}\n')
+            state = dashboard.gather(tmp, run=queue_gh(prs=RATED_PRS),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        self.assertEqual(state["metrics"]["acceptance"], 0.5)
+        self.assertEqual(state["metrics"]["rework"], 1.0)
+
+    def test_no_merged_output_is_nothing_to_rate_never_zero(self):
+        prs = [{"number": 42, "state": "OPEN", "body": "Closes #7",
+                "url": "https://github.com/o/r/pull/42", "reviews": []}]
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            state = dashboard.gather(tmp, run=queue_gh(prs=prs),
+                                     git=git_remote(), clock=clock)
+        self.assertIsNone(state["metrics"])
+        self.assertEqual(state["problems"], [])
+
+    def test_a_malformed_corrections_line_is_a_problem_not_a_skip(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/corrections.jsonl",
+                       '{nope\n{"kind": "no wo field"}\n')
+            state = dashboard.gather(tmp, run=queue_gh(prs=RATED_PRS),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(len(state["problems"]), 2)
+        self.assertTrue(state["problems"][0].startswith(
+            "dashboard: docs/factory/corrections.jsonl:1 is not valid"
+            " JSON:"))
+        self.assertEqual(state["problems"][1],
+                         "dashboard: docs/factory/corrections.jsonl:2"
+                         " names no wo")
+        self.assertEqual(state["metrics"]["acceptance"], 0.5)
 
 
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
