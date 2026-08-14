@@ -109,6 +109,25 @@ def row_size(line):
     return match.group(1) if match else None
 
 
+TITLE = re.compile(r"\*\*WO-\d{4}\*\*\s*(.*)")
+
+
+def row_title(line):
+    """The row's human title — the text between its bold WO token and
+    the em-dash metadata clause (size, blockers, citations) — or None
+    when the line is not a checkbox row or writes no bold token. Read
+    by the dashboard's factory-output table; the mirrored issue's title
+    leads with the WO token instead, so neither derives from the
+    other."""
+    if not ROW.match(line):
+        return None
+    match = TITLE.search(line)
+    if not match:
+        return None
+    title = match.group(1).split(" — ")[0].strip()
+    return title or None
+
+
 def row_blockers(line):
     """The work orders this row declares it is blocked by.
 

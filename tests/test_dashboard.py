@@ -165,10 +165,10 @@ def clock():
     return datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
 
 
-def queue_gh(timelines=None, issues=None, **kwargs):
-    """A fake gh for the queue traffic: issue list -R and per-issue
-    timelines in --slurp's array-of-pages shape (the gate_digest
-    idiom)."""
+def queue_gh(timelines=None, issues=None, prs=None, **kwargs):
+    """A fake gh for the dispatch-plane traffic: issue list -R, pr list
+    -R, and per-issue timelines in --slurp's array-of-pages shape (the
+    gate_digest idiom)."""
     from fake_gh import FakeGh
     canned = timelines or {}
     listing = issues if issues is not None else [
@@ -178,6 +178,9 @@ def queue_gh(timelines=None, issues=None, **kwargs):
         {"number": 8, "title": "WO-0102: second", "state": "OPEN",
          "labels": [{"name": "wo:needs-review"}],
          "url": "https://github.com/o/r/issues/8"},
+        {"number": 9, "title": "WO-0103: done", "state": "CLOSED",
+         "labels": [{"name": "wo:merged"}],
+         "url": "https://github.com/o/r/issues/9"},
     ]
 
     def timeline(args):
@@ -186,6 +189,7 @@ def queue_gh(timelines=None, issues=None, **kwargs):
 
     return FakeGh(answers={
         ("issue", "list"): json.dumps(listing),
+        ("pr", "list"): json.dumps(list(prs or [])),
         ("api",): timeline,
     }, **kwargs)
 
@@ -342,6 +346,81 @@ class TestDrift(unittest.TestCase):
         self.assertEqual(state["drift"], [])
         self.assertEqual(state["problems"],
                          ["dashboard: gh issue list failed: boom"])
+
+
+class TestOutput(unittest.TestCase):
+    PRS = [
+        {"number": 40, "state": "MERGED",
+         "body": "Implements WO-0103.\n\nCloses #9",
+         "url": "https://github.com/o/r/pull/40"},
+        {"number": 41, "state": "OPEN", "body": "Closes #8",
+         "url": "https://github.com/o/r/pull/41"},
+        {"number": 39, "state": "CLOSED", "body": "closes #9 (abandoned)",
+         "url": "https://github.com/o/r/pull/39"},
+    ]
+
+    def test_rows_join_label_state_pr_and_spend(self):
+        # WO-0101: no PR cites #7 and no ledger row — issue link, no
+        # spend. WO-0102: an open PR. WO-0103: the merged PR wins over
+        # the abandoned closed one citing the same issue, and its two
+        # ledger rows sum.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write(
+                "docs/factory/costs.jsonl",
+                '{"wo": "WO-0103", "run_id": "r1", "model": "m",'
+                ' "tokens": 10, "cost": 2.0, "outcome": "completed",'
+                ' "at": "2026-08-10"}\n'
+                '{"wo": "WO-0103", "run_id": "r2", "model": "m",'
+                ' "tokens": 5, "cost": 1.25, "outcome": "completed",'
+                ' "at": "2026-08-11"}\n')
+            state = dashboard.gather(tmp, run=queue_gh(prs=self.PRS),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        self.assertEqual(state["output"], [
+            {"wo": "WO-0101", "title": "first", "size": "S",
+             "state": "draft", "pr": None,
+             "url": "https://github.com/o/r/issues/7", "spend": None},
+            {"wo": "WO-0102", "title": "second", "size": "S",
+             "state": "needs-review", "pr": 41,
+             "url": "https://github.com/o/r/pull/41", "spend": None},
+            {"wo": "WO-0103", "title": "done", "size": "S",
+             "state": "merged", "pr": 40,
+             "url": "https://github.com/o/r/pull/40", "spend": 3.25},
+        ])
+
+    def test_an_absent_ledger_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            state = dashboard.gather(tmp, run=queue_gh(prs=self.PRS),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        self.assertEqual([o["spend"] for o in state["output"]],
+                         [None, None, None])
+
+    def test_a_failing_pr_list_is_a_problem_and_rows_render_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            state = dashboard.gather(tmp,
+                                     run=queue_gh(failing=["pr", "list"]),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"],
+                         ["dashboard: gh pr list failed: boom"])
+        self.assertEqual([o["pr"] for o in state["output"]],
+                         [None, None, None])
+        self.assertEqual(state["output"][2]["url"],
+                         "https://github.com/o/r/issues/9")
+
+    def test_a_malformed_ledger_line_is_a_problem_never_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/costs.jsonl", "{nope\n")
+            state = dashboard.gather(tmp, run=queue_gh(prs=self.PRS),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(len(state["problems"]), 1)
+        self.assertTrue(state["problems"][0].startswith(
+            "ledger: docs/factory/costs.jsonl:1"))
+        self.assertEqual(len(state["output"]), 3)
 
 
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
