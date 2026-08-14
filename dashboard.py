@@ -18,10 +18,13 @@ and no product repo runs it in CI).
   python3 dashboard.py serve [--port N] [--config PATH]
                                             the localhost console:
                                             binds 127.0.0.1 only,
+                                            GET / serves the page,
                                             GET /api/repos lists the
                                             configured set, GET
                                             /api/repo?i=N gathers one
-                                            repo fresh per request
+                                            repo fresh per request,
+                                            POST /api/backlog-order
+                                            saves a backlog order
 
 The repo set (which checkouts the console observes) is operator state,
 not repo state: argv paths win, else ~/.process-dashboard.json
@@ -411,7 +414,8 @@ def _rates(prs, mirror, corrections):
 def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
     """One repo path -> the per-repo state dict (WO-0019 skeleton;
     WO-0020 adds the gate queues, WO-0021 the drift findings, WO-0022
-    the factory-output join, WO-0023 the ledger metrics). Active runs
+    the factory-output join, WO-0023 the ledger metrics, WO-0029 the
+    backlog section). Active runs
     per the protocol: at least one artifact and not complete. Every
     failure is a problem string in the dict — fail loud, render on. A
     repo with no mirrored rows is a plain pipeline repo: no git or gh
@@ -422,12 +426,13 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
     # (path stays as given — it is the caller's vocabulary).
     state = {"repo": {"path": str(root), "name": root.resolve().name,
                       "remote": None},
-             "runs": [], "queues": [], "output": [], "drift": [],
-             "metrics": None, "problems": []}
+             "runs": [], "queues": [], "backlog": None, "output": [],
+             "drift": [], "metrics": None, "problems": []}
     if not root.is_dir():
         state["problems"].append(
             f"dashboard: {repo_path} is not a directory")
         return state
+    state["backlog"] = _backlog(root, state["problems"])
     for run_dir in run_dirs(root):
         if not any((run_dir / artifact).is_file()
                    for artifact in _ARTIFACTS):
@@ -475,10 +480,33 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
     return state
 
 
+BACKLOG = "docs/backlog.md"
+_STALE = "dashboard: backlog changed underneath; refresh"
+
+
 def backlog_hash(text):
     """The optimistic-concurrency token: gather stamps it, the Save
     posts it back, and reorder refuses when the file moved on."""
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _backlog(root, problems):
+    """The backlog section of the state dict: content hash plus the
+    seeds the page lists, or None on a repo without one — the backlog
+    is advisory and optional (ADR-0029), so absent is normal, never a
+    problem."""
+    path = root / BACKLOG
+    if not path.is_file():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as err:
+        problems.append(f"dashboard: cannot read {BACKLOG}: {err}")
+        return None
+    return {"hash": backlog_hash(text),
+            "seeds": [{"line": entry["line"], "text": entry["text"],
+                       "claimed": entry["claimed"]}
+                      for entry in parse_backlog(text)]}
 
 
 def reorder_backlog(text, posted_hash, order):
@@ -490,7 +518,7 @@ def reorder_backlog(text, posted_hash, order):
     malformed bullets — keeps its exact position. The console never
     adds, drops, or edits a seed; producers append (ADR-0029)."""
     if posted_hash != backlog_hash(text):
-        return None, ["dashboard: backlog changed underneath; refresh"]
+        return None, [_STALE]
     seed_lines = [entry["line"] for entry in parse_backlog(text)]
     if sorted(order) != seed_lines:
         return None, ["dashboard: order is not a permutation of the "
@@ -546,6 +574,54 @@ def respond(target, repos_fn, gather_fn):
     return 404, {"problems": ["dashboard: no such path"]}
 
 
+def respond_post(target, body, repos_fn):
+    """(status, payload) for one POST — the write endpoint's pure
+    half. /api/backlog-order applies a posted seed order to the
+    indexed repo's backlog: 204 rewrites the file once; a stale hash
+    is 409 and a non-permutation 400 (reorder_backlog's exact problem
+    strings); an unreadable or unwritable file is 500 with the OS
+    detail. Payload is None on 204 — the one bodyless response."""
+    url = urlsplit(target)
+    if url.path != "/api/backlog-order":
+        return 404, {"problems": ["dashboard: no such path"]}
+    repos, problems = repos_fn()
+    if problems:
+        return 500, {"problems": problems}
+    try:
+        posted = json.loads(body)
+        index = posted["i"]
+        posted_hash = posted["hash"]
+        order = posted["order"]
+    except (ValueError, KeyError, TypeError):
+        posted_hash = order = index = None
+    if not (isinstance(posted_hash, str) and isinstance(order, list)
+            and all(isinstance(line, int) and not isinstance(line, bool)
+                    for line in order)):
+        return 400, {"problems": [
+            "dashboard: body must be JSON with i, hash, and an order "
+            "of line numbers"]}
+    if not (isinstance(index, int) and not isinstance(index, bool)
+            and 0 <= index < len(repos)):
+        return 404, {"problems": ["dashboard: no such repo index"]}
+    path = Path(repos[index]) / BACKLOG
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as err:
+        return 500, {"problems": [
+            f"dashboard: cannot read {BACKLOG}: {err}"]}
+    new_text, reorder_problems = reorder_backlog(text, posted_hash,
+                                                 order)
+    if reorder_problems:
+        status = 409 if reorder_problems == [_STALE] else 400
+        return status, {"problems": reorder_problems}
+    try:
+        path.write_text(new_text, encoding="utf-8")
+    except OSError as err:
+        return 500, {"problems": [
+            f"dashboard: cannot write {BACKLOG}: {err}"]}
+    return 204, None
+
+
 class _Handler(BaseHTTPRequestHandler):
     """Thin shim over respond(): JSON in, JSON out, no logic. serve()
     subclasses it with the injected repos_fn/gather_fn; per-request
@@ -566,6 +642,20 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(length).decode("utf-8", "replace")
+        status, payload = respond_post(self.path, body,
+                                       type(self).repos_fn)
+        body_bytes = (b"" if payload is None
+                      else json.dumps(payload).encode("utf-8"))
+        self.send_response(status)
+        if payload is not None:
+            self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body_bytes)))
+        self.end_headers()
+        self.wfile.write(body_bytes)
 
     def log_message(self, *_args):
         pass
