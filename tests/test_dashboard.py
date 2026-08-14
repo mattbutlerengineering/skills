@@ -1098,6 +1098,24 @@ class TestServe(unittest.TestCase):
         self.assertEqual(out.getvalue(),
                          "dashboard: http://127.0.0.1:9123\n")
 
+    def test_a_failed_bind_is_a_problem_string_not_a_traceback(self):
+        class BoomServer:
+            def __init__(self, _address, _handler):
+                raise OSError("Address already in use")
+        problems = dashboard.serve(9123, None, server_cls=BoomServer)
+        self.assertEqual(problems, [
+            "dashboard: cannot bind 127.0.0.1:9123: "
+            "Address already in use"])
+
+    def test_an_out_of_range_port_is_a_problem_string(self):
+        class RangeServer:
+            def __init__(self, _address, _handler):
+                raise OverflowError("bind(): port must be 0-65535.")
+        problems = dashboard.serve(70000, None, server_cls=RangeServer)
+        self.assertEqual(problems, [
+            "dashboard: cannot bind 127.0.0.1:70000: "
+            "bind(): port must be 0-65535."])
+
     def test_serve_args_parse_port_and_config(self):
         self.assertEqual(dashboard._serve_args([]),
                          (dashboard.DEFAULT_PORT, None, []))

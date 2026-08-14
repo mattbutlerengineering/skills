@@ -670,8 +670,11 @@ def serve(port, config_path=None, server_cls=None):
     handler = type("Handler", (_Handler,), {
         "repos_fn": staticmethod(lambda: repo_set([], config_path)),
         "gather_fn": staticmethod(gather)})
-    httpd = (server_cls or ThreadingHTTPServer)(("127.0.0.1", port),
-                                                handler)
+    try:
+        httpd = (server_cls or ThreadingHTTPServer)(("127.0.0.1", port),
+                                                    handler)
+    except (OSError, OverflowError) as err:
+        return [f"dashboard: cannot bind 127.0.0.1:{port}: {err}"]
     print(f"dashboard: http://127.0.0.1:{port}")
     try:
         httpd.serve_forever()
