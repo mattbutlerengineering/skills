@@ -38,6 +38,7 @@ VERBS = {
     "budget-guard": ("budget_guard", "argv"),
     "charter-replay": ("charter_replay", "argv"),
     "cost-report": ("cost_report", "argv"),
+    "dashboard": ("dashboard", "argv"),
     "factory-init": ("factory_init", "argv"),
     "gate-digest": ("gate_digest", "argv"),
     "gates": ("gates", "argv"),

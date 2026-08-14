@@ -14,7 +14,7 @@ ADR-0032 after each row exists here first.
 
 ## Milestone 1: Gather (`dashboard.py gather <repo>` answers the glance in JSON)
 
-- [ ] **WO-0019** operator config + gather skeleton — size:S, blocked by: — (PRD-0002 §User stories) (tracker: #255)
+- [x] **WO-0019** operator config + gather skeleton — size:S, blocked by: — (PRD-0002 §User stories) (tracker: #255)
   - Accept: `gather` on this repo prints its runs with correct stage and next step from protocol orientation, reading the repo set from argv or `~/.process-dashboard.json`; an unreadable path yields a problem string and nonzero exit per the cli.report convention.
 - [ ] **WO-0020** gate queues in gather — size:S, blocked by: WO-0019 (PRD-0002 §User stories) (tracker: #256)
   - Accept: canned issues and timelines (FakeGh) yield queue entries whose ages match gate_digest's math; a failing gh call lands in problems while the rest of the gather renders on.
@@ -50,6 +50,15 @@ back to Architect.
 
 ## Notes
 
+- 2026-08-13: owner-session ledger policy — this run's orders are
+  implemented interactively (no dispatched agent, no execution file),
+  so each tick appends an honest $0 ledger row via `budget_guard
+  record`: run_id `session-<date>-wo-<n>`, tokens 0, cost 0.0, outcome
+  `owner-session:unmetered` — work-order-keyed so detector G's
+  merged-row cross-check stays meaningful, $0 because the owner's
+  subscription session adds nothing to the factory's metered monthly
+  spend, and the outcome string says plainly that tokens went unmetered
+  rather than unconsumed.
 - 2026-08-13: WO numbering continues the repo-global sequence where the
   software-factory run's last order (0018) left off — one sequence per
   repo, so the mirror, ledger, and detectors never need a run
