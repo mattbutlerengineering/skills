@@ -15,6 +15,13 @@ and no product repo runs it in CI).
                                             JSON on stdout — the
                                             testable seam and the
                                             scripting hook
+  python3 dashboard.py serve [--port N] [--config PATH]
+                                            the localhost console:
+                                            binds 127.0.0.1 only,
+                                            GET /api/repos lists the
+                                            configured set, GET
+                                            /api/repo?i=N gathers one
+                                            repo fresh per request
 
 The repo set (which checkouts the console observes) is operator state,
 not repo state: argv paths win, else ~/.process-dashboard.json
@@ -28,7 +35,9 @@ import re
 import statistics
 import sys
 from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from cli import CLI_FAILURES, full_window, gh_json, gh_runner, label_names
 from cli import detail as run_detail
@@ -465,11 +474,120 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
     return state
 
 
+DEFAULT_PORT = 7700
+
+
+def respond(target, repos_fn, gather_fn):
+    """(status, payload) for one GET — the read endpoints' pure half,
+    the seam every handler test pins (the HTTP class below is a thin
+    shim and never opens in tests). /api/repos lists the configured set
+    with indices so the page knows how many /api/repo calls to fire;
+    /api/repo?i=N gathers one repo fresh; an unparseable or
+    out-of-range index and any other path are 404. An unreadable
+    config is the whole-page 500 — the one failure the page cannot
+    render past."""
+    url = urlsplit(target)
+    if url.path == "/api/repos":
+        repos, problems = repos_fn()
+        if problems:
+            return 500, {"problems": problems}
+        return 200, {"repos": [
+            {"i": index, "path": path, "name": Path(path).name}
+            for index, path in enumerate(repos)]}
+    if url.path == "/api/repo":
+        repos, problems = repos_fn()
+        if problems:
+            return 500, {"problems": problems}
+        try:
+            index = int(parse_qs(url.query).get("i", [""])[0])
+        except ValueError:
+            index = -1
+        if not 0 <= index < len(repos):
+            return 404, {"problems": ["dashboard: no such repo index"]}
+        return 200, gather_fn(repos[index])
+    return 404, {"problems": ["dashboard: no such path"]}
+
+
+class _Handler(BaseHTTPRequestHandler):
+    """Thin shim over respond(): JSON in, JSON out, no logic. serve()
+    subclasses it with the injected repos_fn/gather_fn; per-request
+    logging is silenced — the CLI's stdout carries problem strings,
+    not access logs."""
+
+    repos_fn = None
+    gather_fn = None
+
+    def do_GET(self):
+        status, payload = respond(self.path, type(self).repos_fn,
+                                  type(self).gather_fn)
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args):
+        pass
+
+
+def serve(port, config_path=None, server_cls=None):
+    """Run the console server on 127.0.0.1 only — the write endpoint
+    exists (WO-0029), so the console is never exposed off-box in v1 (no
+    auth story by design). The repo set re-reads per request, so a
+    config edit shows on the next page load. Returns the problem list
+    for cli.report ([] on a clean Ctrl-C)."""
+    handler = type("Handler", (_Handler,), {
+        "repos_fn": staticmethod(lambda: repo_set([], config_path)),
+        "gather_fn": staticmethod(gather)})
+    httpd = (server_cls or ThreadingHTTPServer)(("127.0.0.1", port),
+                                                handler)
+    print(f"dashboard: http://127.0.0.1:{port}")
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    return []
+
+
+def _serve_args(argv):
+    """(port, config path, problems) for the serve leg: --port N and
+    --config PATH, both optional, anything else a problem."""
+    port, config, problems = DEFAULT_PORT, None, []
+    index = 0
+    while index < len(argv):
+        flag = argv[index]
+        if flag not in ("--port", "--config"):
+            problems.append(
+                f"dashboard: unrecognized serve argument {flag!r}")
+            index += 1
+            continue
+        if index + 1 >= len(argv):
+            problems.append(f"dashboard: {flag} needs a value")
+            break
+        value = argv[index + 1]
+        if flag == "--config":
+            config = value
+        else:
+            try:
+                port = int(value)
+            except ValueError:
+                problems.append(
+                    f"dashboard: --port {value!r} is not a number")
+        index += 2
+    return port, config, problems
+
+
 def main(argv):
     if len(argv) == 2 and argv[0] == "gather":
         state = gather(argv[1])
         print(json.dumps(state, indent=2))
         return report("dashboard", state["problems"])
+    if argv and argv[0] == "serve":
+        port, config, problems = _serve_args(argv[1:])
+        if problems:
+            return report("dashboard", problems)
+        return report("dashboard", serve(port, config))
     print(__doc__.strip())
     return 2
 
