@@ -25,6 +25,7 @@ nonzero via cli.report.
 """
 import json
 import re
+import statistics
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,6 +34,8 @@ from cli import CLI_FAILURES, full_window, gh_json, gh_runner, label_names
 from cli import detail as run_detail
 from cli import report, runner
 import cost_ledger
+import cost_report
+import factory_config
 from gate_digest import GATES, label_events, mirror_map, waiting_since
 from knowledge_plane import (CLOSES_TOKEN, breakdown_files, row_done,
                              row_size, row_title, row_tracker_issue,
@@ -249,14 +252,12 @@ def _pr_by_issue(slug, run, problems):
     return {issue: entry for issue, (_, entry) in best.items()}
 
 
-def _spend(root, problems):
-    """{WO token: recorded ledger spend}. A work order with no rows has
-    no spend (None downstream), never $0 — an absent ledger is silent
-    (no runs yet, cost_ledger.read's own convention), and a malformed
-    line arrives as read()'s ledger:-prefixed problem, never a silently
+def _spend(entries):
+    """{WO token: recorded ledger spend} over already-read entries. A
+    work order with no rows has no spend (None downstream), never $0 —
+    an absent ledger reads as no entries, and a malformed line already
+    arrived as read()'s ledger:-prefixed problem, never a silently
     smaller sum."""
-    entries, ledger_problems = cost_ledger.read(root)
-    problems.extend(ledger_problems)
     spend = {}
     for entry in entries:
         spend[entry["wo"]] = spend.get(entry["wo"], 0.0) + entry["cost"]
@@ -295,13 +296,46 @@ def _output(root, by_number, prs, spend):
     return entries
 
 
+def _metrics(root, entries, month, problems):
+    """The ledger metrics over already-read entries — the report
+    month's spend against factory.json's cap, mean cost per work order
+    (lifetime), median gate wait — or None when nothing is recorded
+    yet: an absent or empty ledger is "no runs recorded yet", never a
+    $0.00 that reads as measured-and-free. cost_report.aggregate owns
+    the rollup math (gate rows out of every spend figure),
+    cost_ledger.gate_wait the gate rows, factory_config the cap. The
+    cap resolves only once entries exist, so a plain pipeline repo
+    never reports a missing factory.json."""
+    if not entries:
+        return None
+    lifetime = cost_report.aggregate(entries)
+    config, config_problems = factory_config.load(root)
+    cap = None
+    if not config_problems:
+        cap, config_problems = factory_config.resolve_cap(config)
+    problems.extend(config_problems)
+    waits = [wait[1] for wait in map(cost_ledger.gate_wait, entries)
+             if wait is not None]
+    return {
+        "month_spend": cost_report.aggregate(entries,
+                                             month)["total_cost"],
+        "cap": cap,
+        "cost_per_wo": (round(lifetime["total_cost"]
+                              / len(lifetime["by_wo"]), 2)
+                        if lifetime["by_wo"] else None),
+        "gate_wait_median": (round(statistics.median(waits))
+                             if waits else None),
+    }
+
+
 def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
     """One repo path -> the per-repo state dict (WO-0019 skeleton;
     WO-0020 adds the gate queues, WO-0021 the drift findings, WO-0022
-    the factory-output join). Active runs per the protocol: at least
-    one artifact and not complete. Every failure is a problem string in
-    the dict — fail loud, render on. A repo with no mirrored rows is a
-    plain pipeline repo: no git or gh call is made at all."""
+    the factory-output join, WO-0023 the ledger metrics). Active runs
+    per the protocol: at least one artifact and not complete. Every
+    failure is a problem string in the dict — fail loud, render on. A
+    repo with no mirrored rows is a plain pipeline repo: no git or gh
+    call is made at all."""
     clock = clock or (lambda: datetime.now(timezone.utc))
     root = Path(repo_path)
     # resolve() for the name only: `gather .` must not report name ""
@@ -309,7 +343,7 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
     state = {"repo": {"path": str(root), "name": root.resolve().name,
                       "remote": None},
              "runs": [], "queues": [], "output": [], "drift": [],
-             "problems": []}
+             "metrics": None, "problems": []}
     if not root.is_dir():
         state["problems"].append(
             f"dashboard: {repo_path} is not a directory")
@@ -326,6 +360,12 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
             "dir": str(run_dir.relative_to(root)),
             "stage": stage,
         })
+    now = clock()
+    ledger, ledger_problems = cost_ledger.read(root)
+    state["problems"].extend(ledger_problems)
+    state["metrics"] = _metrics(root, ledger,
+                                now.date().isoformat()[:7],
+                                state["problems"])
     mirror = mirror_map(root)
     if mirror:
         slug, remote_problems = remote_slug(root, git)
@@ -337,14 +377,14 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
                 by_number = {entry["number"]: entry for entry in listing
                              if isinstance(entry.get("number"), int)}
                 state["queues"] = _queues(slug, listing, mirror, run,
-                                          clock(), state["problems"])
+                                          now, state["problems"])
                 state["drift"] = _drift(root, {
                     number: (entry.get("state") or "").upper()
                     for number, entry in by_number.items()})
                 state["output"] = _output(
                     root, by_number,
                     _pr_by_issue(slug, run, state["problems"]),
-                    _spend(root, state["problems"]))
+                    _spend(ledger))
     return state
 
 

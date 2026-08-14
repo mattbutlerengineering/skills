@@ -374,6 +374,8 @@ class TestOutput(unittest.TestCase):
                 '{"wo": "WO-0103", "run_id": "r2", "model": "m",'
                 ' "tokens": 5, "cost": 1.25, "outcome": "completed",'
                 ' "at": "2026-08-11"}\n')
+            tree.write(".github/factory.json",
+                       '{"monthly_cap_usd": 300.0}')
             state = dashboard.gather(tmp, run=queue_gh(prs=self.PRS),
                                      git=git_remote(), clock=clock)
         self.assertEqual(state["problems"], [])
@@ -421,6 +423,66 @@ class TestOutput(unittest.TestCase):
         self.assertTrue(state["problems"][0].startswith(
             "ledger: docs/factory/costs.jsonl:1"))
         self.assertEqual(len(state["output"]), 3)
+
+
+LEDGER = (
+    '{"wo": "WO-0101", "run_id": "r0", "model": "m", "tokens": 10,'
+    ' "cost": 1.0, "outcome": "completed", "at": "2026-07-05"}\n'
+    '{"wo": "WO-0101", "run_id": "r1", "model": "m", "tokens": 10,'
+    ' "cost": 2.0, "outcome": "completed", "at": "2026-08-10"}\n'
+    '{"wo": "WO-0103", "run_id": "r2", "model": "m", "tokens": 10,'
+    ' "cost": 3.0, "outcome": "completed", "at": "2026-08-01"}\n'
+    '{"wo": "WO-0101", "run_id": "gate-prd-1", "model": "none",'
+    ' "tokens": 0, "cost": 0.0, "outcome": "gate_wait:prd:100s",'
+    ' "at": "2026-08-02"}\n'
+    '{"wo": "WO-0103", "run_id": "gate-merge-1", "model": "none",'
+    ' "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:300s",'
+    ' "at": "2026-08-03"}\n'
+    '{"wo": "WO-0103", "run_id": "gate-merge-2", "model": "none",'
+    ' "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:200s",'
+    ' "at": "2026-08-04"}\n')
+
+
+class TestMetrics(unittest.TestCase):
+    def test_metrics_recompute_from_the_ledger_and_cap(self):
+        # Month window 2026-08 (the clock's month): $2 + $3 of the $6
+        # lifetime. cost/WO is the lifetime mean over the two work
+        # orders with run rows; gate rows feed the median wait and stay
+        # out of every spend figure (cost_report.aggregate's rule).
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/costs.jsonl", LEDGER)
+            tree.write(".github/factory.json",
+                       '{"monthly_cap_usd": 300.0}')
+            state = dashboard.gather(tmp, run=queue_gh(),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        self.assertEqual(state["metrics"], {
+            "month_spend": 5.0, "cap": 300.0, "cost_per_wo": 3.0,
+            "gate_wait_median": 200})
+
+    def test_an_absent_ledger_is_no_runs_recorded_never_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            state = dashboard.gather(tmp, run=queue_gh(),
+                                     git=git_remote(), clock=clock)
+        self.assertIsNone(state["metrics"])
+        self.assertEqual(state["problems"], [])
+
+    def test_a_recorded_ledger_without_a_cap_is_a_problem(self):
+        # Once runs are recorded the repo is a factory repo, and a
+        # missing factory.json is a real gap — cap None, everything
+        # else still renders.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/costs.jsonl", LEDGER)
+            state = dashboard.gather(tmp, run=queue_gh(),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(len(state["problems"]), 1)
+        self.assertTrue(state["problems"][0].startswith(
+            "config: missing factory.json"))
+        self.assertEqual(state["metrics"]["cap"], None)
+        self.assertEqual(state["metrics"]["month_spend"], 5.0)
 
 
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
