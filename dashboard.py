@@ -30,6 +30,7 @@ Conventions match the sibling tools: functions return
 dashboard:-prefixed problem strings; the CLI prints them and exits
 nonzero via cli.report.
 """
+import hashlib
 import json
 import re
 import statistics
@@ -50,7 +51,7 @@ from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              row_done, row_size, row_title,
                              row_tracker_issue, row_work_order, run_dirs)
 from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
-                      next_stage)
+                      next_stage, parse_backlog)
 
 CONFIG_PATH = Path.home() / ".process-dashboard.json"
 
@@ -472,6 +473,34 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
                     metrics["acceptance"], metrics["rework"] = rates
                     state["metrics"] = metrics
     return state
+
+
+def backlog_hash(text):
+    """The optimistic-concurrency token: gather stamps it, the Save
+    posts it back, and reorder refuses when the file moved on."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def reorder_backlog(text, posted_hash, order):
+    """(new text, problems) — apply a posted seed order to backlog
+    text. Permutation-only over the seed lines parse_backlog
+    identifies (ADR-0029): order lists their 1-based line numbers in
+    the desired sequence, each seed line moves wholesale (claim marker
+    riding along), and every other line — header prose, blanks,
+    malformed bullets — keeps its exact position. The console never
+    adds, drops, or edits a seed; producers append (ADR-0029)."""
+    if posted_hash != backlog_hash(text):
+        return None, ["dashboard: backlog changed underneath; refresh"]
+    seed_lines = [entry["line"] for entry in parse_backlog(text)]
+    if sorted(order) != seed_lines:
+        return None, ["dashboard: order is not a permutation of the "
+                      "current seed lines"]
+    lines = text.splitlines()
+    reordered = list(lines)
+    for position, source in zip(seed_lines, order):
+        reordered[position - 1] = lines[source - 1]
+    tail = "\n" if text.endswith("\n") else ""
+    return "\n".join(reordered) + tail, []
 
 
 DEFAULT_PORT = 7700

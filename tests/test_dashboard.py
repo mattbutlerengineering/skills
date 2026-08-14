@@ -797,6 +797,76 @@ console.log(JSON.stringify({
                       self.rendered()["metricsEmpty"])
 
 
+class TestReorderBacklog(unittest.TestCase):
+    """WO-0028: the backlog reorder function — permutation-only over
+    the seed lines protocol.parse_backlog identifies, claim markers
+    riding with their seeds, non-seed lines (header prose, blanks,
+    malformed bullets) keeping their exact positions, and the content
+    hash as the optimistic-concurrency token."""
+
+    TEXT = ("# Backlog\n"
+            "\n"
+            "Ordering is priority.\n"
+            "\n"
+            "- seed one (from: product)\n"
+            "- seed two (from: feature:alpha) (claimed: feature:beta)\n"
+            "- seed three (from: session:2026-08-01)\n"
+            "\n"
+            "Trailing prose.\n")
+
+    def test_reorders_seeds_preserving_markers_and_prose(self):
+        token = dashboard.backlog_hash(self.TEXT)
+        new_text, problems = dashboard.reorder_backlog(
+            self.TEXT, token, [7, 5, 6])
+        self.assertEqual(problems, [])
+        self.assertEqual(new_text, (
+            "# Backlog\n"
+            "\n"
+            "Ordering is priority.\n"
+            "\n"
+            "- seed three (from: session:2026-08-01)\n"
+            "- seed one (from: product)\n"
+            "- seed two (from: feature:alpha) (claimed: feature:beta)\n"
+            "\n"
+            "Trailing prose.\n"))
+
+    def test_identity_order_returns_the_text_unchanged(self):
+        token = dashboard.backlog_hash(self.TEXT)
+        self.assertEqual(
+            dashboard.reorder_backlog(self.TEXT, token, [5, 6, 7]),
+            (self.TEXT, []))
+
+    def test_a_malformed_bullet_is_not_movable_and_keeps_its_place(self):
+        text = ("- seed one (from: product)\n"
+                "- dangling seed\n"
+                "- seed two (from: product)\n")
+        token = dashboard.backlog_hash(text)
+        new_text, problems = dashboard.reorder_backlog(text, token,
+                                                       [3, 1])
+        self.assertEqual(problems, [])
+        self.assertEqual(new_text, ("- seed two (from: product)\n"
+                                    "- dangling seed\n"
+                                    "- seed one (from: product)\n"))
+
+    def test_a_stale_hash_is_refused(self):
+        new_text, problems = dashboard.reorder_backlog(
+            self.TEXT, "stale", [5, 6, 7])
+        self.assertIsNone(new_text)
+        self.assertEqual(problems, [
+            "dashboard: backlog changed underneath; refresh"])
+
+    def test_a_non_permutation_is_refused(self):
+        token = dashboard.backlog_hash(self.TEXT)
+        for order in ([5, 6], [5, 5, 6], [5, 6, 8], [5, 6, 7, 7], []):
+            with self.subTest(order=order):
+                new_text, problems = dashboard.reorder_backlog(
+                    self.TEXT, token, order)
+                self.assertIsNone(new_text)
+                self.assertEqual(problems, [
+                    "dashboard: order is not a permutation of the "
+                    "current seed lines"])
+
+
 class TestServe(unittest.TestCase):
     class FakeServer:
         instances = []
