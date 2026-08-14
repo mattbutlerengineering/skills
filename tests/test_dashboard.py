@@ -554,6 +554,104 @@ class TestImprovementRates(unittest.TestCase):
         self.assertEqual(state["metrics"]["acceptance"], 0.5)
 
 
+class TestRespond(unittest.TestCase):
+    """The read endpoints' pure half — every handler test pins
+    (status, payload) here; the HTTP class stays a thin shim and no
+    test opens a socket."""
+
+    def repos_fn(self):
+        return ["/repos/alpha", "/repos/beta"], []
+
+    def test_api_repos_lists_the_configured_set_with_indices(self):
+        status, payload = dashboard.respond("/api/repos", self.repos_fn,
+                                            None)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"repos": [
+            {"i": 0, "path": "/repos/alpha", "name": "alpha"},
+            {"i": 1, "path": "/repos/beta", "name": "beta"},
+        ]})
+
+    def test_an_unreadable_config_is_the_whole_page_500(self):
+        def repos_fn():
+            return [], ["dashboard: bad config"]
+        status, payload = dashboard.respond("/api/repos", repos_fn, None)
+        self.assertEqual(status, 500)
+        self.assertEqual(payload,
+                         {"problems": ["dashboard: bad config"]})
+
+    def test_api_repo_gathers_the_indexed_repo(self):
+        gathered = []
+
+        def gather_fn(path):
+            gathered.append(path)
+            return {"repo": {"path": path}}
+        status, payload = dashboard.respond("/api/repo?i=1",
+                                            self.repos_fn, gather_fn)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"repo": {"path": "/repos/beta"}})
+        self.assertEqual(gathered, ["/repos/beta"])
+
+    def test_an_out_of_range_or_unparseable_index_is_404(self):
+        for target in ("/api/repo?i=2", "/api/repo?i=-1",
+                       "/api/repo?i=x", "/api/repo"):
+            with self.subTest(target=target):
+                status, payload = dashboard.respond(
+                    target, self.repos_fn, None)
+                self.assertEqual(status, 404)
+                self.assertEqual(payload, {
+                    "problems": ["dashboard: no such repo index"]})
+
+    def test_any_other_path_is_404(self):
+        status, payload = dashboard.respond("/nope", self.repos_fn, None)
+        self.assertEqual(status, 404)
+        self.assertEqual(payload,
+                         {"problems": ["dashboard: no such path"]})
+
+
+class TestServe(unittest.TestCase):
+    class FakeServer:
+        instances = []
+
+        def __init__(self, address, handler):
+            self.address = address
+            self.handler = handler
+            TestServe.FakeServer.instances.append(self)
+
+        def serve_forever(self):
+            raise KeyboardInterrupt
+
+    def test_serve_binds_localhost_only_on_the_given_port(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            problems = dashboard.serve(9123, None,
+                                       server_cls=self.FakeServer)
+        self.assertEqual(problems, [])
+        self.assertEqual(self.FakeServer.instances[-1].address,
+                         ("127.0.0.1", 9123))
+        self.assertEqual(out.getvalue(),
+                         "dashboard: http://127.0.0.1:9123\n")
+
+    def test_serve_args_parse_port_and_config(self):
+        self.assertEqual(dashboard._serve_args([]),
+                         (dashboard.DEFAULT_PORT, None, []))
+        self.assertEqual(
+            dashboard._serve_args(["--port", "9000",
+                                   "--config", "/c.json"]),
+            (9000, "/c.json", []))
+
+    def test_a_bad_port_and_an_unknown_flag_are_problems(self):
+        _, _, problems = dashboard._serve_args(["--port", "x"])
+        self.assertEqual(problems,
+                         ["dashboard: --port 'x' is not a number"])
+        _, _, problems = dashboard._serve_args(["--nope"])
+        self.assertEqual(
+            problems, ["dashboard: unrecognized serve argument '--nope'"])
+        _, _, problems = dashboard._serve_args(["--config"])
+        self.assertEqual(problems, ["dashboard: --config needs a value"])
+
+
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                unittest.TestCase):
     summary_line = "dashboard: 0 problem(s)"
@@ -587,6 +685,11 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         code, out = self.run_cli(["gather"])
         self.assertEqual(code, 2)
         self.assertIn(self.usage_fragment, out)
+
+    def test_serve_with_a_bad_flag_reports_the_problem(self):
+        code, out = self.run_cli(["serve", "--port", "x"])
+        self.assertEqual(code, 1)
+        self.assertIn("dashboard: --port 'x' is not a number", out)
 
 
 if __name__ == "__main__":
