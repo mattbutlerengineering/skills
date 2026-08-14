@@ -10,3 +10,14 @@
 {"wo": "WO-0027", "run_id": "session-2026-08-13-wo-0027", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-14"}
 {"wo": "WO-0028", "run_id": "session-2026-08-13-wo-0028", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-14"}
 {"wo": "WO-0029", "run_id": "session-2026-08-13-wo-0029", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-14"}
+{"wo": "WO-0019", "run_id": "gate-merge-2026-08-14T04:03:01Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:1312s", "at": "2026-08-14"}
+{"wo": "WO-0020", "run_id": "gate-merge-2026-08-14T04:37:33Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:1829s", "at": "2026-08-14"}
+{"wo": "WO-0021", "run_id": "gate-merge-2026-08-14T04:49:31Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:394s", "at": "2026-08-14"}
+{"wo": "WO-0022", "run_id": "gate-merge-2026-08-14T04:56:57Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:60s", "at": "2026-08-14"}
+{"wo": "WO-0023", "run_id": "gate-merge-2026-08-14T05:02:39Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:55s", "at": "2026-08-14"}
+{"wo": "WO-0024", "run_id": "gate-merge-2026-08-14T05:07:59Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:110s", "at": "2026-08-14"}
+{"wo": "WO-0025", "run_id": "gate-merge-2026-08-14T05:13:46Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:47s", "at": "2026-08-14"}
+{"wo": "WO-0026", "run_id": "gate-merge-2026-08-14T05:21:08Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:51s", "at": "2026-08-14"}
+{"wo": "WO-0027", "run_id": "gate-merge-2026-08-14T05:26:23Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:46s", "at": "2026-08-14"}
+{"wo": "WO-0028", "run_id": "gate-merge-2026-08-14T05:30:42Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:38s", "at": "2026-08-14"}
+{"wo": "WO-0029", "run_id": "gate-merge-2026-08-14T05:37:44Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:49s", "at": "2026-08-14"}
