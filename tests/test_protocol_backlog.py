@@ -25,14 +25,15 @@ Seed backlog — advisory only (see docs/pipeline-protocol.md).
 class TestParseBacklog(unittest.TestCase):
     def test_conformant_entries_parse_with_origin_and_claim(self):
         self.assertEqual(protocol.parse_backlog(CONFORMANT), [
-            {"text": "Dark mode everywhere",
+            {"line": 3, "text": "Dark mode everywhere",
              "origin": "feature:dark-mode", "claimed": None},
-            {"text": "Fix flaky retry test",
+            {"line": 4, "text": "Fix flaky retry test",
              "origin": "maintenance:retry-flake", "claimed": None},
-            {"text": "A durable home for idea seeds",
+            {"line": 5, "text": "A durable home for idea seeds",
              "origin": "session:2026-07-05",
              "claimed": "feature:seed-backlog"},
-            {"text": "Ship faster", "origin": "product", "claimed": None},
+            {"line": 6, "text": "Ship faster", "origin": "product",
+             "claimed": None},
         ])
 
     def test_malformed_lines_are_skipped_not_raised(self):
@@ -40,17 +41,19 @@ class TestParseBacklog(unittest.TestCase):
                 "- valid seed (from: product)\n"
                 "- bad ref (from: sprint:12)\n")
         self.assertEqual(protocol.parse_backlog(text), [
-            {"text": "valid seed", "origin": "product", "claimed": None}])
+            {"line": 2, "text": "valid seed", "origin": "product",
+             "claimed": None}])
 
     def test_non_bullet_lines_are_ignored(self):
         text = "# header\n\nprose line\n- seed (from: feature:x)\n"
         self.assertEqual(protocol.parse_backlog(text), [
-            {"text": "seed", "origin": "feature:x", "claimed": None}])
+            {"line": 4, "text": "seed", "origin": "feature:x",
+             "claimed": None}])
 
     def test_seed_text_may_contain_parentheses(self):
         text = "- omp near-miss under-triggering (8/16) (from: session:2026-07-05)\n"
         self.assertEqual(protocol.parse_backlog(text), [
-            {"text": "omp near-miss under-triggering (8/16)",
+            {"line": 1, "text": "omp near-miss under-triggering (8/16)",
              "origin": "session:2026-07-05", "claimed": None}])
 
 

@@ -254,17 +254,18 @@ def _backlog_refs(match):
 
 
 def parse_backlog(text):
-    """Parse backlog text into entries {text, origin, claimed} (claimed
-    is None on unclaimed seeds). Never raises: malformed bullets and
-    non-bullet lines are skipped — check_backlog is where they become
-    problems."""
+    """Parse backlog text into entries {line, text, origin, claimed}
+    (line is the 1-based file line, claimed is None on unclaimed
+    seeds). Never raises: malformed bullets and non-bullet lines are
+    skipped — check_backlog is where they become problems."""
     entries = []
-    for line in text.splitlines():
+    for number, line in enumerate(text.splitlines(), 1):
         match = _BACKLOG_ENTRY.fullmatch(line)
         if not match or not all(_BACKLOG_RUN_REF.fullmatch(ref)
                                 for _, ref in _backlog_refs(match)):
             continue
-        entries.append({"text": match.group("text"),
+        entries.append({"line": number,
+                        "text": match.group("text"),
                         "origin": match.group("origin"),
                         "claimed": match.group("claimed")})
     return entries
