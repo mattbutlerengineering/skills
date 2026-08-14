@@ -40,7 +40,7 @@ ADR-0032 after each row exists here first.
 
 - [x] **WO-0028** backlog reorder function — size:S, blocked by: WO-0019 (PRD-0002 §Success criteria) (tracker: #264)
   - Accept: reordering a fixture backlog preserves claim markers and non-seed lines; a non-permutation and a stale content hash are both refused with the exact problem strings.
-- [ ] **WO-0029** backlog save path — size:M, blocked by: WO-0025, WO-0028 (PRD-0002 §User stories) (tracker: #265)
+- [x] **WO-0029** backlog save path — size:M, blocked by: WO-0025, WO-0028 (PRD-0002 §User stories) (tracker: #265)
   - Accept: POST /api/backlog-order honors the 409/400/500 contract; the page's drag + dirty-state + Save round-trip reorders a scratch repo's docs/backlog.md end to end, and a failed save keeps the dirty state.
 
 ## Design gaps found

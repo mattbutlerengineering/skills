@@ -683,6 +683,17 @@ class TestPage(unittest.TestCase):
         {"name": "beta", "payload": {"metrics": None}},
     ]
 
+    BACKLOG_STATES = [
+        {"i": 0, "name": "alpha", "payload": {"backlog": {
+            "hash": "h1", "seeds": [
+                {"line": 3, "text": "seed <one>", "claimed": None},
+                {"line": 4, "text": "seed two",
+                 "claimed": "feature:beta"},
+                {"line": 5, "text": "seed three", "claimed": None},
+            ]}}},
+        {"i": 1, "name": "beta", "payload": {"backlog": None}},
+    ]
+
     @classmethod
     def rendered(cls):
         """Run the page's render functions under node against the
@@ -700,6 +711,7 @@ class TestPage(unittest.TestCase):
 const PAYLOAD = %s;
 const OUTPUT_STATES = %s;
 const METRICS_STATES = %s;
+const BACKLOG_STATES = %s;
 console.log(JSON.stringify({
   needsYou: renderNeedsYou([{name: "alpha", payload: PAYLOAD}]),
   needsYouEmpty: renderNeedsYou([]),
@@ -714,9 +726,15 @@ console.log(JSON.stringify({
   output: renderOutput(OUTPUT_STATES),
   metrics: renderMetrics(METRICS_STATES),
   metricsEmpty: renderMetrics([METRICS_STATES[1]]),
+  backlogDirty: renderBacklog(BACKLOG_STATES, {0: [5, 3, 4]},
+                              {0: true}, {0: "HTTP 500: boom"}),
+  backlogClean: renderBacklog(BACKLOG_STATES, {0: [3, 4, 5]}, {}, {}),
+  moveDown: applyMove([3, 4, 5], 3, 5),
+  moveUp: applyMove([3, 4, 5], 5, 3),
+  moveSelf: applyMove([3, 4, 5], 4, 4),
 }));
 """ % (json.dumps(cls.PAYLOAD), json.dumps(cls.OUTPUT_STATES),
-       json.dumps(cls.METRICS_STATES))
+       json.dumps(cls.METRICS_STATES), json.dumps(cls.BACKLOG_STATES))
             with tempfile.TemporaryDirectory() as tmp:
                 path = Path(tmp) / "render_check.js"
                 path.write_text(harness, encoding="utf-8")
@@ -795,6 +813,194 @@ console.log(JSON.stringify({
     def test_metrics_empty_state(self):
         self.assertIn("No runs recorded yet.",
                       self.rendered()["metricsEmpty"])
+
+    def test_backlog_renders_the_posted_order_with_drag_and_dirty(self):
+        section = self.rendered()["backlogDirty"]
+        self.assertIn("Backlog", section)
+        self.assertIn("seed &lt;one&gt;", section)
+        self.assertLess(section.index("seed three"),
+                        section.index("seed &lt;one&gt;"))
+        self.assertIn('draggable="true" data-repo="0" data-line="3"',
+                      section)
+        self.assertIn('class="claimed"', section)
+        self.assertNotIn('data-line="4"', section)
+        self.assertIn("(unsaved order)", section)
+        self.assertIn("HTTP 500: boom", section)
+        self.assertIn('<button data-save="0">Save order</button>',
+                      section)
+        self.assertIn("No docs/backlog.md in this repo.", section)
+
+    def test_backlog_clean_state_disables_save(self):
+        section = self.rendered()["backlogClean"]
+        self.assertNotIn("(unsaved order)", section)
+        self.assertIn('<button data-save="0" disabled>Save order'
+                      "</button>", section)
+
+    def test_apply_move_is_a_pure_reorder(self):
+        self.assertEqual(self.rendered()["moveDown"], [4, 5, 3])
+        self.assertEqual(self.rendered()["moveUp"], [5, 3, 4])
+        self.assertEqual(self.rendered()["moveSelf"], [3, 4, 5])
+
+
+class TestGatherBacklog(unittest.TestCase):
+    """WO-0029: gather's backlog section — the hash the Save posts
+    back plus the seeds the page lists; a repo without a backlog is
+    null (normal, not a problem)."""
+
+    TEXT = ("# Backlog\n"
+            "\n"
+            "- seed one (from: product)\n"
+            "- seed two (from: feature:alpha) (claimed: feature:beta)\n")
+
+    def test_a_backlog_yields_hash_and_seeds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            FixtureTree(tmp).write("docs/backlog.md", self.TEXT)
+            state = dashboard.gather(tmp)
+            self.assertEqual(state["backlog"], {
+                "hash": dashboard.backlog_hash(self.TEXT),
+                "seeds": [
+                    {"line": 3, "text": "seed one", "claimed": None},
+                    {"line": 4, "text": "seed two",
+                     "claimed": "feature:beta"},
+                ]})
+            self.assertEqual(state["problems"], [])
+
+    def test_no_backlog_is_null_and_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            state = dashboard.gather(tmp)
+            self.assertIsNone(state["backlog"])
+            self.assertEqual(state["problems"], [])
+
+
+class TestRespondPost(unittest.TestCase):
+    """WO-0029: POST /api/backlog-order — the write endpoint's pure
+    half, same discipline as respond(): (status, payload) pinned here,
+    the HTTP shim stays logic-free. 204 rewrites the file; stale hash
+    409, non-permutation 400, unreadable/unwritable file 500, bad
+    index 404 — every refusal an exact problem string."""
+
+    TEXT = ("# Backlog\n"
+            "\n"
+            "- seed one (from: product)\n"
+            "- seed two (from: feature:alpha) (claimed: feature:beta)\n"
+            "- seed three (from: session:2026-08-01)\n")
+
+    def backlog(self, tmp, text=None):
+        FixtureTree(tmp).write("docs/backlog.md", text or self.TEXT)
+        return Path(tmp) / "docs" / "backlog.md"
+
+    def post(self, tmp, body):
+        return dashboard.respond_post("/api/backlog-order", body,
+                                      lambda: ([tmp], []))
+
+    def test_a_valid_order_rewrites_the_file_and_returns_204(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.backlog(tmp)
+            body = json.dumps({"i": 0,
+                               "hash": dashboard.backlog_hash(self.TEXT),
+                               "order": [5, 3, 4]})
+            status, payload = self.post(tmp, body)
+            self.assertEqual((status, payload), (204, None))
+            self.assertEqual(path.read_text(encoding="utf-8"), (
+                "# Backlog\n"
+                "\n"
+                "- seed three (from: session:2026-08-01)\n"
+                "- seed one (from: product)\n"
+                "- seed two (from: feature:alpha) "
+                "(claimed: feature:beta)\n"))
+
+    def test_a_stale_hash_is_409_and_leaves_the_file_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.backlog(tmp)
+            body = json.dumps({"i": 0, "hash": "stale",
+                               "order": [5, 3, 4]})
+            status, payload = self.post(tmp, body)
+            self.assertEqual(status, 409)
+            self.assertEqual(payload, {"problems": [
+                "dashboard: backlog changed underneath; refresh"]})
+            self.assertEqual(path.read_text(encoding="utf-8"),
+                             self.TEXT)
+
+    def test_a_non_permutation_is_400(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.backlog(tmp)
+            body = json.dumps({"i": 0,
+                               "hash": dashboard.backlog_hash(self.TEXT),
+                               "order": [3, 4]})
+            status, payload = self.post(tmp, body)
+            self.assertEqual(status, 400)
+            self.assertEqual(payload, {"problems": [
+                "dashboard: order is not a permutation of the "
+                "current seed lines"]})
+
+    def test_a_missing_backlog_is_500(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            body = json.dumps({"i": 0, "hash": "x", "order": []})
+            status, payload = self.post(tmp, body)
+            self.assertEqual(status, 500)
+            self.assertEqual(len(payload["problems"]), 1)
+            self.assertTrue(payload["problems"][0].startswith(
+                "dashboard: cannot read docs/backlog.md: "))
+
+    def test_an_unwritable_backlog_is_500_with_the_os_detail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.backlog(tmp)
+            body = json.dumps({"i": 0,
+                               "hash": dashboard.backlog_hash(self.TEXT),
+                               "order": [5, 3, 4]})
+            path.chmod(0o444)
+            try:
+                status, payload = self.post(tmp, body)
+            finally:
+                path.chmod(0o644)
+            self.assertEqual(status, 500)
+            self.assertEqual(len(payload["problems"]), 1)
+            self.assertTrue(payload["problems"][0].startswith(
+                "dashboard: cannot write docs/backlog.md: "))
+            self.assertEqual(path.read_text(encoding="utf-8"),
+                             self.TEXT)
+
+    def test_a_bad_index_is_404(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.backlog(tmp)
+            for index in (1, -1, "0"):
+                with self.subTest(index=index):
+                    body = json.dumps({"i": index, "hash": "x",
+                                       "order": []})
+                    status, payload = self.post(tmp, body)
+                    self.assertEqual(status, 404)
+                    self.assertEqual(payload, {"problems": [
+                        "dashboard: no such repo index"]})
+
+    def test_a_malformed_body_is_400(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.backlog(tmp)
+            for body in ("not json", "[]", json.dumps({"i": 0}),
+                         json.dumps({"i": 0, "hash": 5, "order": []}),
+                         json.dumps({"i": 0, "hash": "x",
+                                     "order": ["3"]}),
+                         json.dumps({"i": 0, "hash": "x",
+                                     "order": "35"})):
+                with self.subTest(body=body):
+                    status, payload = self.post(tmp, body)
+                    self.assertEqual(status, 400)
+                    self.assertEqual(payload, {"problems": [
+                        "dashboard: body must be JSON with i, hash, "
+                        "and an order of line numbers"]})
+
+    def test_an_unreadable_config_is_500(self):
+        status, payload = dashboard.respond_post(
+            "/api/backlog-order", "{}",
+            lambda: ([], ["dashboard: bad config"]))
+        self.assertEqual(status, 500)
+        self.assertEqual(payload, {"problems": ["dashboard: bad config"]})
+
+    def test_any_other_path_is_404(self):
+        status, payload = dashboard.respond_post(
+            "/nope", "{}", lambda: ([], []))
+        self.assertEqual(status, 404)
+        self.assertEqual(payload,
+                         {"problems": ["dashboard: no such path"]})
 
 
 class TestReorderBacklog(unittest.TestCase):

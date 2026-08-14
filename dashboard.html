@@ -22,6 +22,10 @@ li { margin: .3rem 0; }
 .repo { color: #777; font-size: .85em; }
 .empty { color: #777; font-style: italic; }
 .error { color: #b00020; }
+.claimed { color: #aaa; }
+.dirty { color: #8a6d00; font-size: .85em; }
+li[draggable] { cursor: grab; }
+button { font: inherit; font-size: .8rem; }
 table { border-collapse: collapse; font-size: .9rem; }
 th, td { text-align: left; padding: .2rem .8rem .2rem 0; }
 th { color: #777; font-weight: 600; }
@@ -39,6 +43,7 @@ a:hover { text-decoration: underline; }
 <p id="page-error" class="error"></p>
 <section id="needs-you"></section>
 <section><h2>Runs</h2><div id="runs" class="cards"></div></section>
+<section id="backlog"></section>
 <section id="output"></section>
 <section id="metrics"></section>
 <script>
@@ -108,6 +113,51 @@ const renderRepoCard = (name, payload, error) => {
       : `<p class="empty">No active runs.</p>`) + problems;
   }
   return `<div class="card"><h3>${esc(name)}</h3>${body}</div>`;
+};
+
+// Move seed `from` to the slot seed `to` occupies — pure; the drag
+// handlers own no list logic beyond calling this.
+const applyMove = (order, from, to) => {
+  if (from === to || !order.includes(from) || !order.includes(to)) {
+    return order.slice();
+  }
+  const without = order.filter((line) => line !== from);
+  const at = without.indexOf(to) +
+    (order.indexOf(from) < order.indexOf(to) ? 1 : 0);
+  return [...without.slice(0, at), from, ...without.slice(at)];
+};
+
+const renderBacklog = (states, orders, dirty, saveErrors) => {
+  const sections = states.map(({i, name, payload}) => {
+    const backlog = payload.backlog;
+    if (!backlog) {
+      return `<h3>${esc(name)}</h3>` +
+        `<p class="empty">No docs/backlog.md in this repo.</p>`;
+    }
+    const byLine = {};
+    for (const seed of backlog.seeds) byLine[seed.line] = seed;
+    const order = orders[i] || backlog.seeds.map((s) => s.line);
+    const items = order.map((line) => {
+      const seed = byLine[line];
+      if (!seed) return "";
+      return seed.claimed
+        ? `<li class="claimed">${esc(seed.text)} ` +
+          `<span class="repo">(claimed: ${esc(seed.claimed)})` +
+          `</span></li>`
+        : `<li draggable="true" data-repo="${i}" ` +
+          `data-line="${line}">⣿ ${esc(seed.text)}</li>`;
+    }).join("");
+    const button = `<button data-save="${i}"` +
+      `${dirty[i] ? "" : " disabled"}>Save order</button>`;
+    const marker = dirty[i]
+      ? ` <span class="dirty">(unsaved order)</span>` : "";
+    const error = saveErrors[i]
+      ? ` <span class="error">${esc(saveErrors[i])}</span>` : "";
+    return `<h3>${esc(name)} ${button}${marker}${error}</h3>` +
+      (items ? `<ol>${items}</ol>`
+        : `<p class="empty">No seeds in the backlog.</p>`);
+  }).join("");
+  return `<h2>Backlog — ordering is priority</h2>${sections}`;
 };
 
 const fmtMoney = (value) => "$" + (Number.isInteger(value)
@@ -183,19 +233,23 @@ const renderStatus = (repos, answers) => repos.map((r) => {
 // DOM shim: fresh gather at open, one request per repo, sections fill
 // as answers land; a repo that fails shows its error on its card.
 
-const state = {repos: [], answers: {}, payloads: {}, errors: {}};
+const state = {repos: [], answers: {}, payloads: {}, errors: {},
+               orders: {}, dirty: {}, saveErrors: {}, dragging: null};
 
 const paint = () => {
   document.getElementById("gather-status").innerHTML =
     renderStatus(state.repos, state.answers);
   const answered = state.repos
     .filter((r) => state.answers[r.i] === "ok")
-    .map((r) => ({name: r.name, payload: state.payloads[r.i]}));
+    .map((r) => ({i: r.i, name: r.name,
+                  payload: state.payloads[r.i]}));
   document.getElementById("needs-you").innerHTML =
     renderNeedsYou(answered);
   document.getElementById("runs").innerHTML = state.repos.map((r) =>
     renderRepoCard(r.name, state.payloads[r.i],
                    state.errors[r.i])).join("");
+  document.getElementById("backlog").innerHTML = renderBacklog(
+    answered, state.orders, state.dirty, state.saveErrors);
   document.getElementById("output").innerHTML = renderOutput(answered);
   document.getElementById("metrics").innerHTML =
     renderMetrics(answered);
@@ -211,11 +265,67 @@ const gatherRepo = async (r) => {
     }
     state.answers[r.i] = "ok";
     state.payloads[r.i] = payload;
+    if (!state.dirty[r.i]) {
+      state.orders[r.i] = (payload.backlog ? payload.backlog.seeds
+        : []).map((seed) => seed.line);
+    }
   } catch (err) {
     state.answers[r.i] = "error";
     state.errors[r.i] = String(err.message || err);
   }
   paint();
+};
+
+const saveOrder = async (i) => {
+  const backlog = (state.payloads[i] || {}).backlog;
+  if (!backlog) return;
+  try {
+    const res = await fetch("/api/backlog-order", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({i, hash: backlog.hash,
+                            order: state.orders[i]}),
+    });
+    if (res.status !== 204) {
+      const body = await res.json();
+      throw new Error((body.problems || []).join("; ") ||
+                      `HTTP ${res.status}`);
+    }
+    state.dirty[i] = false;
+    delete state.saveErrors[i];
+    const repo = state.repos.find((r) => r.i === i);
+    await gatherRepo(repo);
+  } catch (err) {
+    state.saveErrors[i] = String(err.message || err);
+    paint();
+  }
+};
+
+const wireBacklog = (section) => {
+  section.addEventListener("dragstart", (event) => {
+    const item = event.target.closest("li[draggable]");
+    if (!item) return;
+    state.dragging = {repo: Number(item.dataset.repo),
+                      line: Number(item.dataset.line)};
+  });
+  section.addEventListener("dragover",
+                           (event) => event.preventDefault());
+  section.addEventListener("drop", (event) => {
+    const item = event.target.closest("li[data-line]");
+    if (!item || !state.dragging) return;
+    const repo = Number(item.dataset.repo);
+    if (repo !== state.dragging.repo) return;
+    state.orders[repo] = applyMove(state.orders[repo],
+                                   state.dragging.line,
+                                   Number(item.dataset.line));
+    state.dirty[repo] = true;
+    state.dragging = null;
+    paint();
+  });
+  section.addEventListener("click", (event) => {
+    const save = event.target.dataset && event.target.dataset.save;
+    if (save !== undefined) saveOrder(Number(save));
+  });
 };
 
 const load = async () => {
@@ -249,6 +359,7 @@ const load = async () => {
 };
 
 if (typeof document !== "undefined") {
+  wireBacklog(document.getElementById("backlog"));
   load();
 }
 </script>
