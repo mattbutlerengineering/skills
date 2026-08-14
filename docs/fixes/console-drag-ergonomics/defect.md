@@ -79,7 +79,7 @@ claim markers are preserved server-side. Review and Ship scale small.
 
 ## Work items
 
-- [ ] **Click-to-move controls** — add ▲/▼ move buttons to each
+- [x] **Click-to-move controls** — add ▲/▼ move buttons to each
   unclaimed seed row in `dashboard.html`, wired through `applyMove` and
   the existing dirty/save path; real `<button>` elements so the flow is
   keyboard-usable.
@@ -96,6 +96,16 @@ claim markers are preserved server-side. Review and Ship scale small.
     controls, per the retro's Change entry.
 
 ## Notes
+
+- 2026-08-14 (implement, item 1 deviation): "edge rows" landed as
+  absolute list positions — the row at the very top/bottom of the panel
+  gets that direction's button disabled — not "first/last *movable*
+  row" as the acceptance sketched. A mid-list unclaimed row above a
+  claimed tail keeps ▼ enabled because the move is meaningful (it
+  displaces the claimed row's slot, exactly what a drop there does);
+  pinned by `test_backlog_move_button_edges_follow_list_position`.
+- Tracker mirror: single issue #277 for the run (no WO ids — same
+  ADR-0025 shape as deepening-cli-seams).
 
 Origin seed claimed in `docs/backlog.md`:
 "Console backlog drag is finicky in a real browser — add click-to-move

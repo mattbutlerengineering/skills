@@ -732,6 +732,11 @@ console.log(JSON.stringify({
   moveDown: applyMove([3, 4, 5], 3, 5),
   moveUp: applyMove([3, 4, 5], 5, 3),
   moveSelf: applyMove([3, 4, 5], 4, 4),
+  nudgeUp: nudge([3, 4, 5], 4, -1),
+  nudgeDown: nudge([3, 4, 5], 4, 1),
+  nudgeTopEdge: nudge([3, 4, 5], 3, -1),
+  nudgeBottomEdge: nudge([3, 4, 5], 5, 1),
+  nudgeUnknown: nudge([3, 4, 5], 9, 1),
 }));
 """ % (json.dumps(cls.PAYLOAD), json.dumps(cls.OUTPUT_STATES),
        json.dumps(cls.METRICS_STATES), json.dumps(cls.BACKLOG_STATES))
@@ -840,6 +845,42 @@ console.log(JSON.stringify({
         self.assertEqual(self.rendered()["moveDown"], [4, 5, 3])
         self.assertEqual(self.rendered()["moveUp"], [5, 3, 4])
         self.assertEqual(self.rendered()["moveSelf"], [3, 4, 5])
+
+    def test_backlog_rows_carry_move_buttons(self):
+        """Fix console-drag-ergonomics: every unclaimed row gets real
+        ▲/▼ buttons (keyboard-usable); claimed rows get none; the row
+        at the very top/bottom has that direction's button disabled."""
+        section = self.rendered()["backlogClean"]
+        self.assertIn('data-line="3">'
+                      '<button data-move="up" disabled>▲</button>'
+                      '<button data-move="down">▼</button>', section)
+        self.assertIn('data-line="5">'
+                      '<button data-move="up">▲</button>'
+                      '<button data-move="down" disabled>▼</button>',
+                      section)
+        self.assertEqual(section.count("data-move="), 4)
+
+    def test_backlog_move_button_edges_follow_list_position(self):
+        """Edges are absolute list positions: a mid-list unclaimed row
+        keeps ▼ enabled even when every row below it is claimed —
+        clicking still moves it, matching what a drop there does."""
+        section = self.rendered()["backlogDirty"]
+        self.assertIn('data-line="5">'
+                      '<button data-move="up" disabled>▲</button>'
+                      '<button data-move="down">▼</button>', section)
+        self.assertIn('data-line="3">'
+                      '<button data-move="up">▲</button>'
+                      '<button data-move="down">▼</button>', section)
+
+    def test_nudge_click_moves_match_drag_moves(self):
+        """nudge is the click path's applyMove: swap with the adjacent
+        slot, no-op at the edges or on an unknown line."""
+        r = self.rendered()
+        self.assertEqual(r["nudgeUp"], [4, 3, 5])
+        self.assertEqual(r["nudgeDown"], [3, 5, 4])
+        self.assertEqual(r["nudgeTopEdge"], [3, 4, 5])
+        self.assertEqual(r["nudgeBottomEdge"], [3, 4, 5])
+        self.assertEqual(r["nudgeUnknown"], [3, 4, 5])
 
 
 class TestGatherBacklog(unittest.TestCase):

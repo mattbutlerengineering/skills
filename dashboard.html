@@ -127,6 +127,15 @@ const applyMove = (order, from, to) => {
   return [...without.slice(0, at), from, ...without.slice(at)];
 };
 
+// The click path's applyMove: move `line` one slot up or down — pure;
+// edge and unknown-line clicks are no-ops.
+const nudge = (order, line, delta) => {
+  const at = order.indexOf(line);
+  const target = order[at + delta];
+  return at === -1 || target === undefined
+    ? order.slice() : applyMove(order, line, target);
+};
+
 const renderBacklog = (states, orders, dirty, saveErrors) => {
   const sections = states.map(({i, name, payload}) => {
     const backlog = payload.backlog;
@@ -137,7 +146,7 @@ const renderBacklog = (states, orders, dirty, saveErrors) => {
     const byLine = {};
     for (const seed of backlog.seeds) byLine[seed.line] = seed;
     const order = orders[i] || backlog.seeds.map((s) => s.line);
-    const items = order.map((line) => {
+    const items = order.map((line, at) => {
       const seed = byLine[line];
       if (!seed) return "";
       return seed.claimed
@@ -145,7 +154,11 @@ const renderBacklog = (states, orders, dirty, saveErrors) => {
           `<span class="repo">(claimed: ${esc(seed.claimed)})` +
           `</span></li>`
         : `<li draggable="true" data-repo="${i}" ` +
-          `data-line="${line}">⣿ ${esc(seed.text)}</li>`;
+          `data-line="${line}">` +
+          `<button data-move="up"${at ? "" : " disabled"}>▲</button>` +
+          `<button data-move="down"` +
+          `${at === order.length - 1 ? " disabled" : ""}>▼</button>` +
+          ` ⣿ ${esc(seed.text)}</li>`;
     }).join("");
     const button = `<button data-save="${i}"` +
       `${dirty[i] ? "" : " disabled"}>Save order</button>`;
@@ -323,6 +336,17 @@ const wireBacklog = (section) => {
     paint();
   });
   section.addEventListener("click", (event) => {
+    const move = event.target.closest("button[data-move]");
+    if (move) {
+      const item = move.closest("li[data-line]");
+      const repo = Number(item.dataset.repo);
+      state.orders[repo] = nudge(state.orders[repo],
+                                 Number(item.dataset.line),
+                                 move.dataset.move === "up" ? -1 : 1);
+      state.dirty[repo] = true;
+      paint();
+      return;
+    }
     const save = event.target.dataset && event.target.dataset.save;
     if (save !== undefined) saveOrder(Number(save));
   });
