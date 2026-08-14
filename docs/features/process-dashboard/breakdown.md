@@ -18,7 +18,7 @@ ADR-0032 after each row exists here first.
   - Accept: `gather` on this repo prints its runs with correct stage and next step from protocol orientation, reading the repo set from argv or `~/.process-dashboard.json`; an unreadable path yields a problem string and nonzero exit per the cli.report convention.
 - [x] **WO-0020** gate queues in gather — size:S, blocked by: WO-0019 (PRD-0002 §User stories) (tracker: #256)
   - Accept: canned issues and timelines (FakeGh) yield queue entries whose ages match gate_digest's math; a failing gh call lands in problems while the rest of the gather renders on.
-- [ ] **WO-0021** drift findings — size:S, blocked by: WO-0020 (PRD-0002 §Success criteria) (tracker: #257)
+- [x] **WO-0021** drift findings — size:S, blocked by: WO-0020 (PRD-0002 §Success criteria) (tracker: #257)
   - Accept: a closed-mirror-issue-with-unchecked-row fixture is flagged, as is the inverse (checked row, open issue); a clean fixture is silent.
 - [ ] **WO-0022** factory output join — size:S, blocked by: WO-0020 (PRD-0002 §User stories) (tracker: #258)
   - Accept: fixture rows join label state, PR, and ledger spend into lifecycle entries consistent with row and PR state; an absent ledger is silent.
