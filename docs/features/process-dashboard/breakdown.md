@@ -33,7 +33,7 @@ ADR-0032 after each row exists here first.
   - Accept: `serve --port --config` binds 127.0.0.1 only; GET /api/repos lists the configured set, GET /api/repo?i=N returns the state dict, out-of-range → 404 — all pinned by handler tests, no real network.
 - [x] **WO-0026** page: glance sections — size:M, blocked by: WO-0025 (PRD-0002 §Success criteria) (tracker: #262)
   - Accept: dashboard.html fires one request per repo and fills progressively; needs-you strip (queues + drift), repo run cards, GitHub links, and per-section empty/error states all render from canned payloads.
-- [ ] **WO-0027** page: output + metrics sections — size:S, blocked by: WO-0026 (PRD-0002 §Success criteria) (tracker: #263)
+- [x] **WO-0027** page: output + metrics sections — size:S, blocked by: WO-0026 (PRD-0002 §Success criteria) (tracker: #263)
   - Accept: factory output table and metrics (totals + per-repo rows) render from canned payloads with their empty states.
 
 ## Milestone 3: Backlog write (prioritize from the console)
@@ -59,6 +59,11 @@ back to Architect.
   subscription session adds nothing to the factory's metered monthly
   spend, and the outcome string says plainly that tokens went unmetered
   rather than unconsumed.
+- 2026-08-14: the metrics headline renders month spend vs summed caps
+  only; the UX mock's cost-per-order and gate-wait trend arrows need
+  trend arrays the v1 payload doesn't carry (architecture marked them
+  TBD-simple), so those figures render per-repo without trend marks
+  rather than inventing a headline aggregate the data can't support.
 - 2026-08-13: WO numbering continues the repo-global sequence where the
   software-factory run's last order (0018) left off — one sequence per
   repo, so the mirror, ledger, and detectors never need a run
