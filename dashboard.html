@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Process dashboard</title>
+<style>
+body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 2rem auto;
+       max-width: 60rem; padding: 0 1rem; color: #1a1a1a; }
+header { display: flex; justify-content: space-between;
+         align-items: baseline; border-bottom: 2px solid #1a1a1a; }
+h1 { font-size: 1.2rem; text-transform: uppercase; letter-spacing: .05em; }
+#gather { font-size: .85rem; color: #555; }
+h2 { font-size: .95rem; text-transform: uppercase; letter-spacing: .05em;
+     border-bottom: 1px solid #ccc; padding-bottom: .25rem;
+     margin-top: 1.5rem; }
+ul { list-style: none; padding-left: 0; }
+li { margin: .3rem 0; }
+.cards { display: flex; flex-wrap: wrap; gap: 1rem; }
+.card { border: 1px solid #ccc; border-radius: 4px; padding: .5rem 1rem;
+        min-width: 16rem; }
+.card h3 { margin: .2rem 0 .5rem; font-size: .9rem; }
+.repo { color: #777; font-size: .85em; }
+.empty { color: #777; font-style: italic; }
+.error { color: #b00020; }
+a { color: #0b5cad; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Process dashboard</h1>
+  <div id="gather"><span id="gather-status"></span>
+    <span id="as-of"></span></div>
+</header>
+<p id="page-error" class="error"></p>
+<section id="needs-you"></section>
+<section><h2>Runs</h2><div id="runs" class="cards"></div></section>
+<script>
+"use strict";
+
+// Render half: pure string functions, exercised under node by
+// tests/test_dashboard.py against canned /api/repo payloads. The DOM
+// shim at the bottom is the only code that touches the document.
+
+const esc = (value) => String(value).replace(/[&<>"']/g, (c) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[c]));
+
+// Mirrors gate_digest._format_wait so both surfaces age the same way.
+const fmtWait = (seconds) => {
+  if (seconds === null || seconds === undefined) return null;
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  if (days) return `${days}d ${hours}h`;
+  if (hours) return `${hours}h`;
+  return "<1h";
+};
+
+// Drift findings are plain strings; #N becomes the issue link when the
+// repo's remote slug is known.
+const issueLinks = (text, remote) => (remote
+  ? esc(text).replace(/#(\d+)/g,
+      `<a href="https://github.com/${esc(remote)}/issues/$1"` +
+      ` target="_blank">#$1</a>`)
+  : esc(text));
+
+const renderNeedsYou = (states) => {
+  const items = [];
+  for (const {name, payload} of states) {
+    const repoTag = `<span class="repo">[${esc(name)}]</span>`;
+    for (const q of payload.queues || []) {
+      const wait = fmtWait(q.waited_s);
+      items.push(`<li class="queue">● ${esc(q.gate)} gate — ` +
+        `<a href="${esc(q.url)}" target="_blank">#${esc(q.issue)} ` +
+        `${esc(q.title)}</a>` +
+        `${wait ? ` — waiting ${esc(wait)}` : ""} ${repoTag}</li>`);
+    }
+    for (const finding of payload.drift || []) {
+      items.push(`<li class="drift">⚠ ` +
+        `${issueLinks(finding, payload.repo && payload.repo.remote)}` +
+        ` ${repoTag}</li>`);
+    }
+  }
+  const body = items.length ? `<ul>${items.join("")}</ul>`
+    : `<p class="empty">Nothing waits on you.</p>`;
+  return `<h2>Needs you (${items.length})</h2>${body}`;
+};
+
+const renderRepoCard = (name, payload, error) => {
+  let body;
+  if (error) {
+    body = `<p class="error">${esc(error)}</p>`;
+  } else if (!payload) {
+    body = `<p class="empty">gathering…</p>`;
+  } else {
+    const runs = (payload.runs || []).map((r) =>
+      `<li>${esc(String(r.ref).replace(/^feature:/, ""))} ▸ ` +
+      `${esc(r.stage)}</li>`).join("");
+    const problems = (payload.problems || []).map((p) =>
+      `<p class="error">${esc(p)}</p>`).join("");
+    body = (runs ? `<ul>${runs}</ul>`
+      : `<p class="empty">No active runs.</p>`) + problems;
+  }
+  return `<div class="card"><h3>${esc(name)}</h3>${body}</div>`;
+};
+
+const renderStatus = (repos, answers) => repos.map((r) => {
+  const mark = answers[r.i] === "ok" ? "✓"
+    : answers[r.i] === "error" ? "✗" : "…";
+  return `${esc(r.name)} ${mark}`;
+}).join("  ");
+
+// DOM shim: fresh gather at open, one request per repo, sections fill
+// as answers land; a repo that fails shows its error on its card.
+
+const state = {repos: [], answers: {}, payloads: {}, errors: {}};
+
+const paint = () => {
+  document.getElementById("gather-status").innerHTML =
+    renderStatus(state.repos, state.answers);
+  const answered = state.repos
+    .filter((r) => state.answers[r.i] === "ok")
+    .map((r) => ({name: r.name, payload: state.payloads[r.i]}));
+  document.getElementById("needs-you").innerHTML =
+    renderNeedsYou(answered);
+  document.getElementById("runs").innerHTML = state.repos.map((r) =>
+    renderRepoCard(r.name, state.payloads[r.i],
+                   state.errors[r.i])).join("");
+};
+
+const gatherRepo = async (r) => {
+  try {
+    const res = await fetch(`/api/repo?i=${r.i}`);
+    const payload = await res.json();
+    if (!res.ok) {
+      throw new Error((payload.problems || []).join("; ") ||
+                      `HTTP ${res.status}`);
+    }
+    state.answers[r.i] = "ok";
+    state.payloads[r.i] = payload;
+  } catch (err) {
+    state.answers[r.i] = "error";
+    state.errors[r.i] = String(err.message || err);
+  }
+  paint();
+};
+
+const load = async () => {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  document.getElementById("as-of").textContent =
+    `as of ${now.getFullYear()}-${pad(now.getMonth() + 1)}-` +
+    `${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  let listing;
+  try {
+    const res = await fetch("/api/repos");
+    listing = await res.json();
+    if (!res.ok) {
+      throw new Error((listing.problems || []).join("; ") ||
+                      `HTTP ${res.status}`);
+    }
+  } catch (err) {
+    document.getElementById("page-error").textContent =
+      String(err.message || err);
+    return;
+  }
+  state.repos = listing.repos || [];
+  if (!state.repos.length) {
+    document.getElementById("page-error").textContent =
+      "No repos configured — add repo paths to " +
+      "~/.process-dashboard.json";
+    return;
+  }
+  paint();
+  state.repos.forEach(gatherRepo);
+};
+
+if (typeof document !== "undefined") {
+  load();
+}
+</script>
+</body>
+</html>

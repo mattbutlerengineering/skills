@@ -475,18 +475,27 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
 
 
 DEFAULT_PORT = 7700
+PAGE = Path(__file__).with_name("dashboard.html")
 
 
 def respond(target, repos_fn, gather_fn):
     """(status, payload) for one GET — the read endpoints' pure half,
     the seam every handler test pins (the HTTP class below is a thin
-    shim and never opens in tests). /api/repos lists the configured set
+    shim and never opens in tests). / serves the console page as-is
+    (a str payload — the shim's content-type cue), re-read per request
+    so an edit shows on reload. /api/repos lists the configured set
     with indices so the page knows how many /api/repo calls to fire;
     /api/repo?i=N gathers one repo fresh; an unparseable or
     out-of-range index and any other path are 404. An unreadable
     config is the whole-page 500 — the one failure the page cannot
     render past."""
     url = urlsplit(target)
+    if url.path == "/":
+        try:
+            return 200, PAGE.read_text(encoding="utf-8")
+        except OSError as err:
+            return 500, {"problems": [
+                f"dashboard: cannot read dashboard.html: {err}"]}
     if url.path == "/api/repos":
         repos, problems = repos_fn()
         if problems:
@@ -520,9 +529,11 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         status, payload = respond(self.path, type(self).repos_fn,
                                   type(self).gather_fn)
-        body = json.dumps(payload).encode("utf-8")
+        html = isinstance(payload, str)
+        body = (payload if html else json.dumps(payload)).encode("utf-8")
         self.send_response(status)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", "text/html; charset=utf-8"
+                         if html else "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
