@@ -7,7 +7,8 @@
 # structural lint has no product-repo counterpart).
 
 .PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
-.PHONY: wo-record assembler cost-report gate-digest web-quality
+.PHONY: wo-record assembler cost-report gate-digest toolsmith-mine
+.PHONY: web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
@@ -56,6 +57,9 @@ cost-report:
 
 gate-digest:
 	python3 tools/factory/gate_digest.py daily
+
+toolsmith-mine:
+	python3 tools/factory/rejection_mining.py mine
 
 # The design pipeline's job body (.github/workflows/design.yml; ADR-0033
 # gate 2), run when a PR touches docs/design/**. Playwright drives the UI

@@ -52,7 +52,8 @@ def identity(text):
 # product repo: its factory tools live under tools/factory/, and its
 # stamped test run is quiet.
 _PRODUCT_TOOLS = ("gates.py", "validator.py", "assembler.py",
-                  "budget_guard.py", "cost_report.py", "gate_digest.py")
+                  "budget_guard.py", "cost_report.py", "gate_digest.py",
+                  "rejection_mining.py")
 
 
 def product_form(command):
@@ -138,6 +139,7 @@ MIRRORS = (
     ("orientation_pack.py", "tools/factory/orientation_pack.py", identity),
     ("cost_report.py", "tools/factory/cost_report.py", identity),
     ("gate_digest.py", "tools/factory/gate_digest.py", identity),
+    ("rejection_mining.py", "tools/factory/rejection_mining.py", identity),
     ("work_queue.py", "tools/factory/work_queue.py", identity),
     (".github/workflows/validator.yml",
      ".github/workflows/validator.yml", identity),
@@ -149,6 +151,8 @@ MIRRORS = (
      ".github/workflows/cost-report.yml", identity),
     (".github/workflows/gate-digest.yml",
      ".github/workflows/gate-digest.yml", identity),
+    (".github/workflows/toolsmith-mine.yml",
+     ".github/workflows/toolsmith-mine.yml", identity),
     (".github/CODEOWNERS", ".github/CODEOWNERS", identity),
     ("Makefile", "Makefile", product_makefile),
 )
