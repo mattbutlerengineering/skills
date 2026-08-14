@@ -16,7 +16,7 @@ ADR-0032 after each row exists here first.
 
 - [x] **WO-0019** operator config + gather skeleton — size:S, blocked by: — (PRD-0002 §User stories) (tracker: #255)
   - Accept: `gather` on this repo prints its runs with correct stage and next step from protocol orientation, reading the repo set from argv or `~/.process-dashboard.json`; an unreadable path yields a problem string and nonzero exit per the cli.report convention.
-- [ ] **WO-0020** gate queues in gather — size:S, blocked by: WO-0019 (PRD-0002 §User stories) (tracker: #256)
+- [x] **WO-0020** gate queues in gather — size:S, blocked by: WO-0019 (PRD-0002 §User stories) (tracker: #256)
   - Accept: canned issues and timelines (FakeGh) yield queue entries whose ages match gate_digest's math; a failing gh call lands in problems while the rest of the gather renders on.
 - [ ] **WO-0021** drift findings — size:S, blocked by: WO-0020 (PRD-0002 §Success criteria) (tracker: #257)
   - Accept: a closed-mirror-issue-with-unchecked-row fixture is flagged, as is the inverse (checked row, open issue); a clean fixture is silent.
