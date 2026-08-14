@@ -37,9 +37,9 @@ import cost_ledger
 import cost_report
 import factory_config
 from gate_digest import GATES, label_events, mirror_map, waiting_since
-from knowledge_plane import (CLOSES_TOKEN, breakdown_files, row_done,
-                             row_size, row_title, row_tracker_issue,
-                             row_work_order, run_dirs)
+from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
+                             row_done, row_size, row_title,
+                             row_tracker_issue, row_work_order, run_dirs)
 from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
                       next_stage)
 
@@ -226,7 +226,8 @@ def _pr_by_issue(slug, run, problems):
     try:
         listing, suffix = gh_json(
             ["pr", "list", "-R", slug, "--state", "all", "--json",
-             "number,state,body,url", "--limit", str(LIST_WINDOW)],
+             "number,state,body,url,reviews", "--limit",
+             str(LIST_WINDOW)],
             run, expect=list)
     except CLI_FAILURES as err:
         problems.append(f"dashboard: gh pr list failed:"
@@ -325,7 +326,76 @@ def _metrics(root, entries, month, problems):
                         if lifetime["by_wo"] else None),
         "gate_wait_median": (round(statistics.median(waits))
                              if waits else None),
+        "acceptance": None,
+        "rework": None,
     }
+
+
+# WO-0018's correction stream: one JSON object per line naming the
+# corrected work order. The miner ships later; this reader depends on
+# nothing more than the wo field, so the stream can grow without
+# breaking the join.
+CORRECTIONS = "docs/factory/corrections.jsonl"
+
+
+def _corrections(root, problems):
+    """{WO token: correction count} from the corrections stream. An
+    absent file is silent — the stream starts when the miner ships,
+    absence is normal, not an error — but a present line that cannot be
+    accounted to a work order is a problem, never a silently smaller
+    rework rate."""
+    path = root / CORRECTIONS
+    if not path.is_file():
+        return {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as err:
+        problems.append(f"dashboard: cannot read {CORRECTIONS}: {err}")
+        return {}
+    counts = {}
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError as err:
+            problems.append(f"dashboard: {CORRECTIONS}:{lineno} is not"
+                            f" valid JSON: {err}")
+            continue
+        wo = record.get("wo") if isinstance(record, dict) else None
+        if not isinstance(wo, str) or not WO_TOKEN.fullmatch(wo):
+            problems.append(f"dashboard: {CORRECTIONS}:{lineno} names"
+                            " no wo")
+            continue
+        counts[wo] = counts.get(wo, 0) + 1
+    return counts
+
+
+def _rates(prs, mirror, corrections):
+    """(acceptance, rework) over the mirrored work orders' landed PRs,
+    or None when none have merged — nothing to rate is None, never a
+    0.0 that reads as measured. acceptance: the share merged with no
+    changes-requested review (first-pass at the merge gate). rework:
+    the share with a changes-requested review or a recorded correction
+    — review data alone makes the two complements; the corrections
+    stream (WO-0018) widens rework past what review saw."""
+    merged = []
+    for issue, entry in (prs or {}).items():
+        wo = mirror.get(issue)
+        if wo is None or (entry.get("state") or "").upper() != "MERGED":
+            continue
+        changes = any(
+            (review.get("state") or "").upper() == "CHANGES_REQUESTED"
+            for review in entry.get("reviews") or []
+            if isinstance(review, dict))
+        merged.append((wo, changes))
+    if not merged:
+        return None
+    accepted = sum(1 for _, changes in merged if not changes)
+    reworked = sum(1 for wo, changes in merged
+                   if changes or corrections.get(wo))
+    return (round(accepted / len(merged), 2),
+            round(reworked / len(merged), 2))
 
 
 def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
@@ -381,10 +451,17 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
                 state["drift"] = _drift(root, {
                     number: (entry.get("state") or "").upper()
                     for number, entry in by_number.items()})
-                state["output"] = _output(
-                    root, by_number,
-                    _pr_by_issue(slug, run, state["problems"]),
-                    _spend(ledger))
+                prs = _pr_by_issue(slug, run, state["problems"])
+                state["output"] = _output(root, by_number, prs,
+                                          _spend(ledger))
+                rates = _rates(prs, mirror,
+                               _corrections(root, state["problems"]))
+                if rates is not None:
+                    metrics = state["metrics"] or {
+                        "month_spend": None, "cap": None,
+                        "cost_per_wo": None, "gate_wait_median": None}
+                    metrics["acceptance"], metrics["rework"] = rates
+                    state["metrics"] = metrics
     return state
 
 

@@ -24,7 +24,7 @@ ADR-0032 after each row exists here first.
   - Accept: fixture rows join label state, PR, and ledger spend into lifecycle entries consistent with row and PR state; an absent ledger is silent.
 - [x] **WO-0023** ledger metrics — size:S, blocked by: WO-0019 (PRD-0002 §Success criteria) (tracker: #259)
   - Accept: month spend vs factory.json caps, cost per work order, and gate-wait trend recompute from a fixture costs.jsonl; an absent ledger reads as "no runs recorded yet", never zero.
-- [ ] **WO-0024** derived improvement metrics — size:M, blocked by: WO-0022, WO-0023 (PRD-0002 §User stories) (tracker: #260)
+- [x] **WO-0024** derived improvement metrics — size:M, blocked by: WO-0022, WO-0023 (PRD-0002 §User stories) (tracker: #260)
   - Accept: acceptance/rework rates derive from canned gh review data on WO-cited PRs; docs/factory/corrections.jsonl folds in when present and its absence is silent.
 
 ## Milestone 2: Read-only console (the morning glance in a browser, ≥2 repos)
