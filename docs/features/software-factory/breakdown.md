@@ -71,7 +71,7 @@ supervised live-dispatch exercise verification.md recommended.
 
 - [x] **WO-0030** factory PRs trigger their own validator — size:S, blocked by: WO-0005 (PRD-0001 §Success criteria) (tracker: #280)
   - Accept: validator.yml gains a workflow_dispatch trigger resolving a PR by number; the assembler dispatches it after the agent's PR opens (the GITHUB_TOKEN workflow_dispatch escape hatch), so a factory-opened PR gets check, review, and needs-review-label runs.
-- [ ] **WO-0031** run-spend ledger row survives the runner — size:S, blocked by: WO-0006 (PRD-0001 §Success criteria) (tracker: #281)
+- [x] **WO-0031** run-spend ledger row survives the runner — size:S, blocked by: WO-0006 (PRD-0001 §Success criteria) (tracker: #281)
   - Accept: assembler.yml commits and pushes the costs.jsonl row wo-record appended (gate-digest.yml's commit pattern); a run's spend row lands on main without human touch.
 - [ ] **WO-0032** hard_stop records before it pushes — size:S, blocked by: WO-0006 (PRD-0001 §Success criteria) (tracker: #282)
   - Accept: the exhaustion ledger row is appended before push_wip so it is inside the pushed commit; a test pins the persistence ordering, not just local file existence.
