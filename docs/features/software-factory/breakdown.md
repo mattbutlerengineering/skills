@@ -63,6 +63,25 @@ per ADR-0032 after each row exists here first.
 - [x] **WO-0018** rejection mining into the toolsmith queue — size:S, blocked by: WO-0009 (PRD-0001 §User stories) (tracker: #123)
   - Accept: a weekly job harvests gate rejections and PR change-requests into the toolsmith/claude-reflect queue.
 
+## Milestone E: Review re-entry (gate integrity + first live dispatch)
+
+Added 2026-08-14 from review.md's fix loop — the critical and the
+surgical majors the operator routed back to Implement, plus the
+supervised live-dispatch exercise verification.md recommended.
+
+- [ ] **WO-0030** factory PRs trigger their own validator — size:S, blocked by: WO-0005 (PRD-0001 §Success criteria) (tracker: #280)
+  - Accept: validator.yml gains a workflow_dispatch trigger resolving a PR by number; the assembler dispatches it after the agent's PR opens (the GITHUB_TOKEN workflow_dispatch escape hatch), so a factory-opened PR gets check, review, and needs-review-label runs.
+- [ ] **WO-0031** run-spend ledger row survives the runner — size:S, blocked by: WO-0006 (PRD-0001 §Success criteria) (tracker: #281)
+  - Accept: assembler.yml commits and pushes the costs.jsonl row wo-record appended (gate-digest.yml's commit pattern); a run's spend row lands on main without human touch.
+- [ ] **WO-0032** hard_stop records before it pushes — size:S, blocked by: WO-0006 (PRD-0001 §Success criteria) (tracker: #282)
+  - Accept: the exhaustion ledger row is appended before push_wip so it is inside the pushed commit; a test pins the persistence ordering, not just local file existence.
+- [ ] **WO-0033** fail-closed pause verdicts enforce — size:S, blocked by: WO-0009 (PRD-0001 §Success criteria) (tracker: #283)
+  - Accept: when run_report exits nonzero with pause=true, the cost-report workflow still sets FACTORY_PAUSED; a test pins that outputs are written before the failing exit.
+- [ ] **WO-0034** mechanical stops on the agent job — size:S, blocked by: WO-0005 (PRD-0001 §Solution) (tracker: #284)
+  - Accept: the agent step carries --max-turns and the job carries timeout-minutes (ADR-0034's two uncorrelated mechanical stops); setup.md discloses that the payload ships the dispatch workflow without charters; an ADR records the budget-hook and payload-charter deferrals.
+- [ ] **WO-0035** supervised live dispatch: rejection_mining hardening — size:S, blocked by: WO-0030, WO-0031, WO-0033, WO-0034 (PRD-0001 §Success criteria) (tracker: #285)
+  - Accept: excerpts in the toolsmith queue are sanitized and fenced per ADR-0032 (sweeps.py's pattern) and duplicate Closes refs are deduped; delivered by a real dispatch the owner drives through wo:draft → wo:prd-approved → wo:blueprint-approved → wo:ready-for-agent to a merged PR — the run's first end-to-end gate traversal.
+
 ## Design gaps found
 
 None — dispatch, gating, and budget design are settled in ADR-0032,
@@ -196,3 +215,14 @@ ADR-0033, and ADR-0034 (all accepted).
   corrected to match `main`. Git is authoritative for merge state; the
   checkboxes are the convenience that had drifted, and only the two open orders
   (trackers #122 and #123) are genuinely unbuilt.
+- 2026-08-14: Milestone E added at Review — review.md found 1 critical
+  (factory PRs never trigger validator.yml; GITHUB_TOKEN event
+  suppression) and 5 majors. The operator arbitrated: the critical and
+  the surgical majors route back here as the first five Milestone E
+  rows (WO-0030..WO-0034, PRD-0001 §Success criteria), with the
+  budget hook and payload charters deferred by ADR instead
+  (WO-0034, PRD-0001 §Solution, records the deferral); the last row
+  (WO-0035, PRD-0001 §Success criteria) is verification.md's
+  supervised live-dispatch exercise, carrying two of the review's
+  deferred minors as its payload. The run re-enters Implement; Verify
+  and Review re-run after Milestone E.
