@@ -22,7 +22,7 @@
     "templates/docs/design/TEMPLATE.md": "e1f91e3f34bb0f742ca40e2390e5dfbeaaca585eddb69437b9a71b56708500a0",
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/assembler.py": "82ed44bc91b7bd6da8e7f77cca1882c6d7771c00c59abcf831eb9ea95f9826ae",
+    "templates/tools/factory/assembler.py": "406d43992785c0e688c833ef3a8c8540a65ee5a8c13f783b81f2424f71c0dff8",
     "templates/tools/factory/budget_guard.py": "bb486bbef33c41f4e02b39a452ca6cbe639ad74703b14e141209dddc6577dd52",
     "templates/tools/factory/cli.py": "3fee7e3af9bd184611f241475bfd61569b9bad7e914a53972ddf8706dff54bee",
     "templates/tools/factory/cost_ledger.py": "10b5a2767c837b8cbdff36697ab4b64d67c91ad381c64ad4fcadbc010be5e21d",

@@ -40,6 +40,7 @@ BREAKDOWN = (
     " (PRD-0001 §Solution) (tracker: #109)\n"
     "- [ ] **WO-0005** assembler.yml + guards — size:L, blocked by: WO-0004"
     " (PRD-0001 §Solution) (tracker: #110)\n"
+    "  - Accept: the guard fails closed and every mutation is labelled\n"
     "- [ ] **WO-0008** unmirrored row (PRD-0001 §Solution)\n"
     "\n"
     "## Notes\n"
@@ -137,6 +138,18 @@ class TestResolveRow(unittest.TestCase):
             wo, row, problems = assembler.resolve_row(self.tree(tmp).root, 109)
             self.assertEqual((wo, problems), ("WO-0004", []))
             self.assertIn("validator.yml", row)
+
+    def test_the_row_carries_its_accept_sub_bullet(self):
+        """The Accept sub-bullet is the acceptance criterion the dispatched
+        agent is paid to meet — repo-controlled exactly like the row (it
+        lands through the same owner-reviewed PR), so it belongs in the
+        substrate. Capture stops at the next row: WO-0008's line must not
+        ride along."""
+        with tempfile.TemporaryDirectory() as tmp:
+            wo, row, problems = assembler.resolve_row(self.tree(tmp).root, 110)
+            self.assertEqual((wo, problems), ("WO-0005", []))
+            self.assertIn("Accept: the guard fails closed", row)
+            self.assertNotIn("WO-0008", row)
 
     def test_an_issue_with_no_row_is_not_dispatchable(self):
         with tempfile.TemporaryDirectory() as tmp:
