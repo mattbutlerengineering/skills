@@ -147,3 +147,8 @@ Unattended dispatch stays off until explicitly opted into:
 - `sweeps.yml` is factory-repo-only and is **not** stamped, so a product repo
   gets no Sentry intake, no label-drift sweep, and no cross-plane reconcile.
   Those stay here.
+- The payload ships `assembler.yml` + `assembler.py` but **no charter tree**
+  (`factory/agents/`, `factory/charters/` stay here), so a stamped repo's
+  dispatch fails closed at the charter lookup even with every secret set.
+  Stamped-repo dispatch needs charters authored for that repo — a deliberate
+  deferral, recorded in ADR-0055.
