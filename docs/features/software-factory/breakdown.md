@@ -226,3 +226,11 @@ ADR-0033, and ADR-0034 (all accepted).
   supervised live-dispatch exercise, carrying two of the review's
   deferred minors as its payload. The run re-enters Implement; Verify
   and Review re-run after Milestone E.
+- 2026-08-14: dispatch-substrate deviation, found pre-flighting the
+  supervised exercise (WO-0035, PRD-0001 §Success criteria):
+  `assembler.resolve_row` returned the bare row line, so the Accept
+  sub-bullet — the criterion the dispatched agent is paid to meet —
+  never reached the prompt. The row's indented sub-bullets now ride in
+  the substrate; they are repo-controlled exactly like the row (landing
+  through the same owner-reviewed PR), so ADR-0032's injection boundary
+  is unchanged.

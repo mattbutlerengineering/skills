@@ -118,7 +118,12 @@ def issue_event(env):
 
 
 def resolve_row(root, issue_number):
-    """(wo, row_text, problems): the breakdown row mirrored to this issue.
+    """(wo, row_text, problems): the breakdown row mirrored to this issue,
+    WITH its indented sub-bullets — the Accept line is the acceptance
+    criterion the dispatched agent is paid to meet, and it is
+    repo-controlled exactly like the row (it lands through the same
+    owner-reviewed PR), so it rides in the substrate. Capture stops at
+    the first blank or unindented line: the next row never bleeds in.
 
     The RETURNED ROW is the agent's prompt substrate — repo-controlled and
     one-way (ADR-0032). The lookup is the reverse of validator.tracker_issue:
@@ -127,7 +132,7 @@ def resolve_row(root, issue_number):
     ready-for-agent issue with no row is a real misconfiguration (the mirror
     ran ahead of the breakdown, which ADR-0032 forbids) — say so."""
     for _, lines in breakdown_files(root):
-        for line in lines:
+        for index, line in enumerate(lines):
             if row_tracker_issue(line) != issue_number:
                 continue
             wo = row_work_order(line)
@@ -135,7 +140,12 @@ def resolve_row(root, issue_number):
                 return None, None, [
                     f"asm: issue #{issue_number}'s breakdown row names no"
                     " work order"]
-            return wo, line.strip(), []
+            entry = [line.strip()]
+            for follower in lines[index + 1:]:
+                if not follower.strip() or not follower[:1].isspace():
+                    break
+                entry.append(follower.rstrip())
+            return wo, "\n".join(entry), []
     return None, None, [
         f"asm: no breakdown row mirrors issue #{issue_number} — a"
         " wo:ready-for-agent issue without a work-order row is not"
