@@ -69,7 +69,7 @@ Added 2026-08-14 from review.md's fix loop — the critical and the
 surgical majors the operator routed back to Implement, plus the
 supervised live-dispatch exercise verification.md recommended.
 
-- [ ] **WO-0030** factory PRs trigger their own validator — size:S, blocked by: WO-0005 (PRD-0001 §Success criteria) (tracker: #280)
+- [x] **WO-0030** factory PRs trigger their own validator — size:S, blocked by: WO-0005 (PRD-0001 §Success criteria) (tracker: #280)
   - Accept: validator.yml gains a workflow_dispatch trigger resolving a PR by number; the assembler dispatches it after the agent's PR opens (the GITHUB_TOKEN workflow_dispatch escape hatch), so a factory-opened PR gets check, review, and needs-review-label runs.
 - [ ] **WO-0031** run-spend ledger row survives the runner — size:S, blocked by: WO-0006 (PRD-0001 §Success criteria) (tracker: #281)
   - Accept: assembler.yml commits and pushes the costs.jsonl row wo-record appended (gate-digest.yml's commit pattern); a run's spend row lands on main without human touch.
