@@ -455,6 +455,42 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         code, out = self.run_cli(["report"], {})
         self.assertEqual(code, 0)
 
+    def test_a_fail_closed_verdict_writes_pause_before_the_failing_exit(self):
+        # WO-0033: the workflow's pause step reads steps.report.outputs
+        # AFTER this process has exited nonzero — a fail-closed verdict
+        # that exits before writing would leave FACTORY_PAUSED unset on
+        # exactly the paths the module promises never wave through
+        # (review.md major).
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/factory/costs.jsonl", "not json\n")
+            out_path = Path(tmp) / "gh_output.txt"
+            env = {"GITHUB_OUTPUT": str(out_path)}
+            code, printed = cli_contract.capture(
+                cost_report.main, ["report"], env=env, root=tree.root)
+            self.assertEqual(code, 1)
+            self.assertIn("pause=true", out_path.read_text(encoding="utf-8"))
+
+
+class TestFailClosedPause(unittest.TestCase):
+    """WO-0033's workflow half: the report step exits nonzero on exactly
+    the fail-closed verdicts, so a pause step gated on implicit success()
+    is skipped at the moment it matters most."""
+
+    WORKFLOW = (Path(__file__).resolve().parents[1] / ".github"
+                / "workflows" / "cost-report.yml")
+
+    def test_the_pause_step_survives_a_failing_report_step(self):
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("always()\n          && steps.report.outputs.pause"
+                      " == 'true'", text)
+
+    def test_the_resume_step_does_not(self):
+        # The asymmetry is the safety property: a failing run may pause,
+        # only a clean under-cap verdict may resume.
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("if: steps.report.outputs.pause == 'false'", text)
+
 
 class TestWorkflowOutputLockstep(unittest.TestCase):
     """The $GITHUB_OUTPUT seam, cost-report side: run_report's output keys
