@@ -500,5 +500,31 @@ class TestValidatorDispatchLockstep(unittest.TestCase):
         self.assertIn("steps.find.outputs.pr", text)
 
 
+class TestSpendRowPersistence(unittest.TestCase):
+    """WO-0031: the row `make wo-record` appends exists only on the
+    ephemeral runner until something pushes it — and the agent step may
+    have left the workspace on its WO branch, so the push must come from
+    a fresh origin/main worktree, never from HEAD."""
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "assembler.yml"
+
+    def test_the_record_step_is_addressable(self):
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("id: record", text)
+
+    def test_the_spend_row_is_committed_when_recorded(self):
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("Commit the run's spend row", text)
+        self.assertIn("steps.record.outcome == 'success'", text)
+
+    def test_the_push_leaves_from_a_fresh_main_worktree_not_head(self):
+        # Pushing the workspace HEAD could smuggle the agent's branch
+        # commits onto main; only the appended row may travel.
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("git worktree add", text)
+        self.assertIn('git -C "$RUNNER_TEMP/spend" push origin HEAD:main',
+                      text)
+
+
 if __name__ == "__main__":
     unittest.main()

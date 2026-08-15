@@ -2041,6 +2041,11 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # keeps in YAML (the PR number it consumes comes from
             # `make find-pr`, the tested authority)
             "gh workflow run validator.yml -f pr=${{ steps.find.outputs.pr }}",
+            # git mutation glue (WO-0031): pushes the spend row `make
+            # wo-record` just appended from a fresh origin/main worktree —
+            # the agent step may have left HEAD on its WO branch, and only
+            # the appended row may travel to main
+            'git config user.name "github-actions[bot]"',
         ),
     }
 

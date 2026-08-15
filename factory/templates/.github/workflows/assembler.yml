@@ -118,6 +118,7 @@ jobs:
       # to wo:failed — the miss shows red on this step, and detector G reds
       # the merge if the line truly never lands (the gating backstop).
       - name: Record the run's spend in the cost ledger
+        id: record
         if: >-
           always()
           && steps.claim.outputs.transitioned == 'true'
@@ -129,6 +130,31 @@ jobs:
           MODEL=${{ steps.resolve.outputs.model }}
           FILE=${{ steps.agent.outputs.execution_file }}
           OUTCOME=${{ steps.agent.outcome == 'success' && 'completed' || 'agent-failed' }}
+      # The row wo-record just appended exists only on this runner — with
+      # no push, every dispatched run's spend is discarded with the
+      # checkout and the monthly circuit breaker never sees it (WO-0031;
+      # review.md major: the #222 gap surviving its own fix). The agent
+      # step may have left the workspace on its WO branch, so the row is
+      # re-applied to a fresh origin/main worktree and pushed from there —
+      # never from HEAD, which could smuggle agent commits onto main.
+      # tail -1 IS the appended row: wo-record appends exactly one line
+      # and runs after every other writer in this job. continue-on-error
+      # mirrors the record step — a lost row shows red here, and detector
+      # G reds the merge if the line truly never lands.
+      - name: Commit the run's spend row
+        if: >-
+          always()
+          && steps.record.outcome == 'success'
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git worktree add "$RUNNER_TEMP/spend" origin/main
+          tail -n 1 docs/factory/costs.jsonl >> "$RUNNER_TEMP/spend/docs/factory/costs.jsonl"
+          git -C "$RUNNER_TEMP/spend" add docs/factory/costs.jsonl
+          git -C "$RUNNER_TEMP/spend" commit -m "chore(factory): run-spend row (assembler)"
+          git -C "$RUNNER_TEMP/spend" push origin HEAD:main
       # GitHub suppresses pull_request events for PRs the GITHUB_TOKEN
       # opens, so the agent's PR would otherwise reach gate 3 with no
       # check, no reviewer, and no queue entry (WO-0030). find-pr joins
