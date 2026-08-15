@@ -64,8 +64,15 @@ jobs:
       # missing optional feature — so this names the cause and fails loudly
       # rather than skipping gracefully (unlike the Sentry sweep's vars.*
       # skip, there is no "unconfigured, working as intended" reading here).
+      # always(): the report step exits nonzero on exactly the fail-closed
+      # verdicts (malformed ledger line, unresolvable cap — WO-0033), and
+      # those verdicts carry pause=true; an implicit success() gate would
+      # skip the pause at the moment it matters most. The report step's
+      # own failure still fails the job, so nothing is hidden.
       - name: Pause dispatch on a cap breach
-        if: steps.report.outputs.pause == 'true'
+        if: >-
+          always()
+          && steps.report.outputs.pause == 'true'
         env:
           GH_TOKEN: ${{ secrets.FACTORY_PAUSE_TOKEN }}
         run: |

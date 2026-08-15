@@ -196,9 +196,9 @@ def run_report(root, clock=None, ledger_path=None):
     return outputs, result.problems
 
 
-def main(argv, env=None, clock=None):
+def main(argv, env=None, clock=None, root=None):
     env = os.environ if env is None else env
-    root = repo_root()
+    root = root or repo_root()
     if argv == ["report"]:
         outputs, problems = run_report(root, clock=clock)
         write_outputs(env, outputs)
