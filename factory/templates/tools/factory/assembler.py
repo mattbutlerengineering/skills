@@ -30,6 +30,15 @@ Two invariants here are security properties, not conveniences (ADR-0032):
         unflagged issue with no work-order row, a charter with no band, a
         band the routing table does not cover — is a problem (exit nonzero)
         so the owner sees it.
+
+  python3 assembler.py find-pr <issue>
+        Locate the open PR whose body Closes the issue (the dispatched
+        agent's delivery) and write pr=<number> to $GITHUB_OUTPUT for
+        the validator-dispatch step — GitHub suppresses pull_request
+        events for GITHUB_TOKEN-created PRs (WO-0030), so the workflow
+        triggers validator.yml by hand with this number. No match
+        writes pr= empty and exits nonzero: the agent ran but delivered
+        no traceable PR, which the owner must see.
 """
 import os
 import sys
@@ -37,12 +46,20 @@ from pathlib import Path
 
 import factory_config
 import orientation_pack
-from cli import read_event, report, write_outputs
-from knowledge_plane import (breakdown_files, repo_root,
+from cli import (CLI_FAILURES, detail, full_window, gh_json, gh_runner,
+                 read_event, report, write_outputs)
+from knowledge_plane import (CLOSES_TOKEN, breakdown_files, repo_root,
                              row_tracker_issue, row_work_order)
 from protocol import read_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
+
+# gh truncates a windowed listing silently; the window size is declared
+# once so the full-window report and the --limit can never drift apart
+# (rejection_mining's discipline).
+LIST_WINDOW = 1000
+PR_ARGS = ("pr", "list", "--state", "open", "--json", "number,body",
+           "--limit", str(LIST_WINDOW))
 
 # ADR-0034: a hard-stopped order is re-dispatched only after the owner
 # clears this flag — the dispatcher itself enforces the no-self-retry rule.
@@ -220,7 +237,36 @@ def run_resolve(root, env, agents_dir=None):
              "prompt": assemble_prompt(role, wo, row, root)}, [])
 
 
-def main(argv, env=None):
+def pr_for_issue(issue_number, run=gh_runner):
+    """(the newest open PR whose body Closes the issue, problems). The
+    join is the Closes link — the same CLOSES_TOKEN grammar the mirror
+    and detector B read (ADR-0032) — never a branch-name convention:
+    the PR the dispatched agent delivered is exactly the one that cites
+    its order, and an agent that delivered no such PR is a problem, not
+    a silent miss. gh answers newest-first, so the first match is the
+    agent's latest attempt."""
+    try:
+        listing, suffix = gh_json(list(PR_ARGS), run, expect=list)
+    except CLI_FAILURES as err:
+        return None, [f"asm: gh pr list failed: {detail(err)}"]
+    if suffix:
+        return None, [f"asm: gh pr list {suffix}"]
+    problems = []
+    window = full_window(listing, LIST_WINDOW)
+    if window:
+        problems.append(f"asm: gh pr list {window}")
+    for entry in listing:
+        number = entry.get("number")
+        refs = CLOSES_TOKEN.findall(entry.get("body") or "")
+        if isinstance(number, int) and issue_number in map(int, refs):
+            return number, problems
+    problems.append(
+        f"asm: no open PR closes issue #{issue_number} — the dispatched"
+        " agent delivered no traceable PR")
+    return None, problems
+
+
+def main(argv, env=None, run=gh_runner):
     env = os.environ if env is None else env
     root = repo_root()
     if argv == ["resolve"]:
@@ -228,6 +274,11 @@ def main(argv, env=None):
         write_outputs(env, outputs)
         if outputs.get("reason"):
             print(outputs["reason"])
+    elif len(argv) == 2 and argv[0] == "find-pr" and argv[1].isdigit():
+        number, problems = pr_for_issue(int(argv[1]), run=run)
+        write_outputs(env, {"pr": "" if number is None else str(number)})
+        if number is not None:
+            print(f"asm: PR #{number} closes issue #{argv[1]}")
     else:
         print(__doc__.strip())
         return 2

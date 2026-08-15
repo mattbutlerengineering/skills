@@ -1766,8 +1766,8 @@ class TestLockstep(unittest.TestCase):
         # added later.
         text = self.WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("(github.event.action == 'opened'\n"
-                      "          || github.event.action == 'reopened'\n"
-                      "          || github.event.action == 'synchronize')",
+                      "           || github.event.action == 'reopened'\n"
+                      "           || github.event.action == 'synchronize')",
                       text)
         self.assertNotIn("&& github.event.action != 'closed'\n"
                          "      && github.event.pull_request.head.repo",
@@ -2028,6 +2028,19 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # shell glue capturing `make check`'s findings and exit code
             # for the review step; the command underneath is still make
             "set +e",
+            # the dispatched-PR path (WO-0030): synthesizes the webhook
+            # payload from the REST API so the make steps read
+            # GITHUB_EVENT_PATH identically on both trigger paths — a gh
+            # read plus env glue, no computation to move into make
+            'gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" \\',
+        ),
+        "assembler.yml": (
+            # the gate-3 hand-off (WO-0030): GITHUB_TOKEN-authored PRs
+            # raise no pull_request events, so the validator is dispatched
+            # by name — a gh mutation, which the compute/mutate boundary
+            # keeps in YAML (the PR number it consumes comes from
+            # `make find-pr`, the tested authority)
+            "gh workflow run validator.yml -f pr=${{ steps.find.outputs.pr }}",
         ),
     }
 

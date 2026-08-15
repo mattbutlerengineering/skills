@@ -17,6 +17,18 @@ on:
     # and a re-run is no help — it replays the payload it was dispatched
     # with, stale body and all (issue #216).
     types: [opened, reopened, synchronize, edited, closed]
+  # The factory's own PRs never arrive as pull_request events: the agent
+  # opens them with the workflow's GITHUB_TOKEN, whose events GitHub
+  # suppresses (WO-0030). The assembler hands gate 3 the PR by number
+  # through this trigger — the one event exempt from the suppression.
+  # Each dispatched job synthesizes the pull_request payload from the
+  # REST API (the same object shape a webhook delivers) so the make
+  # steps read GITHUB_EVENT_PATH identically on both paths.
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number to validate (a factory-opened PR)"
+        required: true
 
 permissions:
   contents: read
@@ -29,9 +41,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A dispatched run checks the dispatched PR's head; every other
+          # event keeps checkout's default ref ('' falls through to it).
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', inputs.pr) || '' }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Synthesize the PR event payload
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ inputs.pr }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" \
+            | python3 -c 'import json, sys; print(json.dumps({"action": "opened", "pull_request": json.load(sys.stdin)}))' \
+            > "${RUNNER_TEMP}/pr-event.json"
+          echo "GITHUB_EVENT_PATH=${RUNNER_TEMP}/pr-event.json" >> "$GITHUB_ENV"
       - name: Detectors and tests
         run: make check
 
@@ -57,22 +83,39 @@ jobs:
   # a comment per run, and `edited` (added for detector B) would otherwise
   # enrol it in every title and body tweak. Naming the three actions keeps
   # any future trigger type from signing the reviewer up silently.
+  # The workflow_dispatch arm is the factory path (WO-0030): only this
+  # repo's workflows and collaborators with write can dispatch, and the
+  # factory's PRs are same-repo branch PRs, so the fork guard's concern
+  # cannot arise there.
   review:
     if: >-
-      github.event_name == 'pull_request'
-      && (github.event.action == 'opened'
-          || github.event.action == 'reopened'
-          || github.event.action == 'synchronize')
-      && github.event.pull_request.head.repo.full_name == github.repository
+      (github.event_name == 'pull_request'
+       && (github.event.action == 'opened'
+           || github.event.action == 'reopened'
+           || github.event.action == 'synchronize')
+       && github.event.pull_request.head.repo.full_name == github.repository)
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', inputs.pr) || '' }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Synthesize the PR event payload
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ inputs.pr }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" \
+            | python3 -c 'import json, sys; print(json.dumps({"action": "opened", "pull_request": json.load(sys.stdin)}))' \
+            > "${RUNNER_TEMP}/pr-event.json"
+          echo "GITHUB_EVENT_PATH=${RUNNER_TEMP}/pr-event.json" >> "$GITHUB_ENV"
       - name: Collect findings
         run: |
           set +e
@@ -97,18 +140,31 @@ jobs:
   # review job: their token cannot write labels.
   needs-review-label:
     if: >-
-      github.event_name == 'pull_request'
-      && (github.event.action == 'opened' || github.event.action == 'reopened')
-      && github.event.pull_request.head.repo.full_name == github.repository
+      (github.event_name == 'pull_request'
+       && (github.event.action == 'opened' || github.event.action == 'reopened')
+       && github.event.pull_request.head.repo.full_name == github.repository)
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
     steps:
+      # Default checkout on both paths: the breakdown row the flip reads
+      # landed on the default branch before the mirror existed (ADR-0032).
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Synthesize the PR event payload
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ inputs.pr }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" \
+            | python3 -c 'import json, sys; print(json.dumps({"action": "opened", "pull_request": json.load(sys.stdin)}))' \
+            > "${RUNNER_TEMP}/pr-event.json"
+          echo "GITHUB_EVENT_PATH=${RUNNER_TEMP}/pr-event.json" >> "$GITHUB_ENV"
       - name: Flip the work order to wo:needs-review
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
