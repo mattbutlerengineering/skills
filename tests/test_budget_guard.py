@@ -232,6 +232,34 @@ class TestHardStop(unittest.TestCase):
             self.assertEqual(json.loads(line)["at"], "2026-08-02")
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
+    def test_the_exhaustion_row_is_inside_the_pushed_commit(self):
+        # WO-0032: the pushed WIP commit is the row's only escape from
+        # the ephemeral runner — `git add -A` must already see it on
+        # disk, or every successful hard stop strands ADR-0034's
+        # accountability record on the runner (review.md major; local
+        # existence after the fact proves nothing).
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/features/demo/breakdown.md",
+                       "- [ ] WO-0006 budget_guard (PRD-0001)\n")
+            ledger = tree.root / "docs" / "factory" / "costs.jsonl"
+            at_add_time = []
+
+            def snapshotting_run(args):
+                if args[0] == "add":
+                    at_add_time.append(
+                        ledger.read_text(encoding="utf-8")
+                        if ledger.exists() else "")
+                return None
+
+            budget_guard.hard_stop(
+                tree.root, "WO-0006", "over budget", done=[],
+                remaining=["finish"], resume="rerun",
+                run_id="r-1", model="m", tokens=1, cost=16.40,
+                at="2026-08-02", run=snapshotting_run, post=lambda _: None)
+            (staged,) = at_add_time
+            self.assertIn("WO-0006", staged)
+
     def test_the_real_runner_end_to_end_no_uncaught_raise(self):
         # The default git_runner against a real no-upstream repo: push
         # fails, yet hard_stop returns (does not raise) and still leaves the
