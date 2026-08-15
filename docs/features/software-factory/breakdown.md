@@ -77,7 +77,7 @@ supervised live-dispatch exercise verification.md recommended.
   - Accept: the exhaustion ledger row is appended before push_wip so it is inside the pushed commit; a test pins the persistence ordering, not just local file existence.
 - [x] **WO-0033** fail-closed pause verdicts enforce — size:S, blocked by: WO-0009 (PRD-0001 §Success criteria) (tracker: #283)
   - Accept: when run_report exits nonzero with pause=true, the cost-report workflow still sets FACTORY_PAUSED; a test pins that outputs are written before the failing exit.
-- [ ] **WO-0034** mechanical stops on the agent job — size:S, blocked by: WO-0005 (PRD-0001 §Solution) (tracker: #284)
+- [x] **WO-0034** mechanical stops on the agent job — size:S, blocked by: WO-0005 (PRD-0001 §Solution) (tracker: #284)
   - Accept: the agent step carries --max-turns and the job carries timeout-minutes (ADR-0034's two uncorrelated mechanical stops); setup.md discloses that the payload ships the dispatch workflow without charters; an ADR records the budget-hook and payload-charter deferrals.
 - [ ] **WO-0035** supervised live dispatch: rejection_mining hardening — size:S, blocked by: WO-0030, WO-0031, WO-0033, WO-0034 (PRD-0001 §Success criteria) (tracker: #285)
   - Accept: excerpts in the toolsmith queue are sanitized and fenced per ADR-0032 (sweeps.py's pattern) and duplicate Closes refs are deduped; delivered by a real dispatch the owner drives through wo:draft → wo:prd-approved → wo:blueprint-approved → wo:ready-for-agent to a merged PR — the run's first end-to-end gate traversal.
