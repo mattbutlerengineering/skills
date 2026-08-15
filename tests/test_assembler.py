@@ -26,6 +26,7 @@ import assembler
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from factory_fixture import FixtureTree as FactoryFixtureTree  # noqa: E402
+from fake_gh import FakeGh  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -399,6 +400,104 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
             code, out = self.run_cli(["resolve"], env)
             self.assertEqual(code, 0)
             self.assertIn("assembler: 0 problem(s)", out)
+
+
+class TestPrForIssue(unittest.TestCase):
+    """WO-0030: the agent's PR is located by its Closes link — the same
+    CLOSES_TOKEN join the mirror uses — never by branch-name convention."""
+
+    LISTING = json.dumps([
+        {"number": 7, "body": "chore: tidy\n\nNo work order: housekeeping"},
+        {"number": 6, "body": "feat: mining\n\nCloses #110 (WO-0005)"},
+        {"number": 5, "body": "stale attempt\n\nCloses #110"},
+    ])
+
+    def gh(self, **kwargs):
+        return FakeGh(answers={("pr", "list"): self.LISTING}, **kwargs)
+
+    def test_newest_open_pr_closing_the_issue_wins(self):
+        gh = self.gh()
+        self.assertEqual(assembler.pr_for_issue(110, run=gh), (6, []))
+
+    def test_a_pr_closing_another_issue_is_not_matched(self):
+        gh = self.gh()
+        number, problems = assembler.pr_for_issue(999, run=gh)
+        self.assertIsNone(number)
+        self.assertEqual(problems, [
+            "asm: no open PR closes issue #999 — the dispatched agent"
+            " delivered no traceable PR"])
+
+    def test_gh_failure_is_a_problem_not_a_traceback(self):
+        gh = FakeGh(failing=["pr", "list"])
+        number, problems = assembler.pr_for_issue(110, run=gh)
+        self.assertIsNone(number)
+        self.assertEqual(problems, ["asm: gh pr list failed: boom"])
+
+
+class TestFindPrVerb(unittest.TestCase):
+    """`find-pr <issue>` writes pr= to $GITHUB_OUTPUT for the workflow's
+    validator-dispatch step — empty when no PR matched, so the step's
+    guard can skip instead of dispatching the validator at nothing."""
+
+    LISTING = TestPrForIssue.LISTING
+
+    def run_verb(self, issue, gh):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            env = {"GITHUB_OUTPUT": str(out)}
+            code, printed = cli_contract.capture(
+                assembler.main, ["find-pr", issue], env=env, run=gh)
+            written = out.read_text(encoding="utf-8") if out.exists() else ""
+            return code, printed, written
+
+    def test_writes_the_matched_pr_number(self):
+        gh = FakeGh(answers={("pr", "list"): self.LISTING})
+        code, printed, written = self.run_verb("110", gh)
+        self.assertEqual(code, 0)
+        self.assertIn("pr=6", written)
+
+    def test_no_match_writes_empty_and_exits_nonzero(self):
+        gh = FakeGh(answers={("pr", "list"): self.LISTING})
+        code, printed, written = self.run_verb("999", gh)
+        self.assertEqual(code, 1)
+        self.assertIn("pr=\n", written)
+        self.assertIn("asm: no open PR closes issue #999", printed)
+
+
+class TestValidatorDispatchLockstep(unittest.TestCase):
+    """WO-0030's split contract: GitHub suppresses pull_request events for
+    GITHUB_TOKEN-created PRs, so assembler.yml must trigger validator.yml
+    by hand and validator.yml must be dispatchable against a PR number.
+    Root and payload YAML are byte-identical (detector E), so pinning the
+    root copies pins both."""
+
+    VALIDATOR = (REPO_ROOT / ".github" / "workflows" / "validator.yml")
+    ASSEMBLER = (REPO_ROOT / ".github" / "workflows" / "assembler.yml")
+
+    def test_validator_accepts_a_dispatched_pr_number(self):
+        text = self.VALIDATOR.read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", text)
+        self.assertIn("pr:", text)
+
+    def test_dispatch_path_synthesizes_the_event_payload(self):
+        # The make steps read the PR through GITHUB_EVENT_PATH
+        # (cli.read_event); the dispatch path must hand them the same
+        # pull_request shape a webhook delivers, or detector B and the
+        # label flip silently skip.
+        text = self.VALIDATOR.read_text(encoding="utf-8")
+        self.assertIn("GITHUB_EVENT_PATH=", text)
+        self.assertIn('"action": "opened"', text)
+
+    def test_review_and_label_jobs_admit_the_dispatch_path(self):
+        text = self.VALIDATOR.read_text(encoding="utf-8")
+        self.assertGreaterEqual(
+            text.count("github.event_name == 'workflow_dispatch'"), 2)
+
+    def test_assembler_finds_the_pr_and_dispatches_the_validator(self):
+        text = self.ASSEMBLER.read_text(encoding="utf-8")
+        self.assertIn("make find-pr", text)
+        self.assertIn("gh workflow run validator.yml", text)
+        self.assertIn("steps.find.outputs.pr", text)
 
 
 if __name__ == "__main__":

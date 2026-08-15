@@ -88,8 +88,8 @@ plugin-only, which is a legitimate install.
 
 6. **The Makefile carries its full target set.** `check`, `review`, the four
    lifecycle targets (`wo-merged`, `wo-in-progress`, `wo-needs-review`,
-   `wo-failed`), `wo-record`, `assembler`, `cost-report`, `gate-digest`,
-   `toolsmith-mine`, `web-quality`. A missing lifecycle target is a hole
+   `wo-failed`), `wo-record`, `assembler`, `find-pr`, `cost-report`,
+   `gate-digest`, `toolsmith-mine`, `web-quality`. A missing lifecycle target is a hole
    in the work-order
    state machine that nothing else reports: without `wo-failed`, for
    instance, a dispatched run that dies leaves its order on

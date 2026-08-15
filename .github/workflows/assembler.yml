@@ -51,6 +51,10 @@ jobs:
       contents: write
       pull-requests: write
       issues: write
+      # For the validator hand-off only (gh workflow run, WO-0030) — the
+      # agent's PR is GITHUB_TOKEN-authored, so its pull_request events
+      # are suppressed and gate 3 must be dispatched by name.
+      actions: write
     env:
       # Job-level so a step if: can gate on the secret's PRESENCE — secrets are
       # not readable in an if:, but an env sourced from one is. This is our
@@ -125,6 +129,29 @@ jobs:
           MODEL=${{ steps.resolve.outputs.model }}
           FILE=${{ steps.agent.outputs.execution_file }}
           OUTCOME=${{ steps.agent.outcome == 'success' && 'completed' || 'agent-failed' }}
+      # GitHub suppresses pull_request events for PRs the GITHUB_TOKEN
+      # opens, so the agent's PR would otherwise reach gate 3 with no
+      # check, no reviewer, and no queue entry (WO-0030). find-pr joins
+      # the delivered PR to this order by its Closes link (assembler.py,
+      # the tested authority — never a branch-name convention), and the
+      # hand-off uses workflow_dispatch, the one event GitHub exempts
+      # from the suppression. An agent that ran but delivered no
+      # traceable PR fails the find step — the owner must see that, and
+      # the failure() step below flips the order to wo:failed.
+      - name: Find the agent's PR
+        id: find
+        if: >-
+          steps.resolve.outputs.dispatch == 'true'
+          && steps.claim.outputs.transitioned == 'true'
+          && env.ANTHROPIC_API_KEY != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: make find-pr ISSUE=${{ github.event.issue.number }}
+      - name: Trigger the validator on the agent's PR
+        if: steps.find.outputs.pr != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run validator.yml -f pr=${{ steps.find.outputs.pr }}
       # The order's exit when the run dies (ADR-0032's terminal state,
       # ADR-0045's writer): without this the dispatched agent's failure
       # leaves the order on wo:in-progress forever, where the gate digest

@@ -10,7 +10,7 @@
 # tests/test_gates.py::TestLockstep pins the command sets.
 
 .PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
-.PHONY: wo-record assembler cost-report gate-digest toolsmith-mine
+.PHONY: wo-record assembler find-pr cost-report gate-digest toolsmith-mine
 .PHONY: web-quality
 
 # Set by the validator workflow's review job; defaults keep `make review`
@@ -55,6 +55,9 @@ wo-record:
 
 assembler:
 	python3 assembler.py resolve
+
+find-pr:
+	python3 assembler.py find-pr $(ISSUE)
 
 cost-report:
 	python3 cost_report.py report
