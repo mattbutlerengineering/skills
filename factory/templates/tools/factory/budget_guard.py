@@ -137,24 +137,27 @@ def push_wip(wo, run=git_runner):
 def hard_stop(root, wo, reason, done, remaining, resume, *, run_id, model,
               tokens, cost, at, outcome="budget-exhausted", run=git_runner,
               post=print):
-    """The ADR-0034 hard-stop sequence, made RESILIENT: push WIP, post the
-    handoff, append the ledger line — in that order, but a push failure
-    NEVER prevents the handoff and ledger from being produced. The handoff
-    and the ledger line ARE the accountability record; they must exist even
-    when the WIP push fails (a fresh WO branch with no upstream, git exit
-    128, is the normal case). Returns any bg: problems (a failed push),
-    having still completed the handoff + ledger. Pure orchestration over the
-    tested pieces; all IO is injected (run/post) so tests need touch neither
-    git nor the network.
+    """The ADR-0034 hard-stop sequence, made RESILIENT: append the ledger
+    line, push WIP, post the handoff — the append comes FIRST so the row
+    is on disk when push_wip's `add -A` stages the tree, and the pushed
+    WIP commit carries it off the ephemeral runner (WO-0032; a row
+    appended after the push exists only until the job ends). The order
+    costs no resilience: the append is local file IO a push failure
+    cannot touch, so the handoff and ledger — the accountability record
+    ADR-0034 promises — still exist when the WIP push fails (a fresh WO
+    branch with no upstream, git exit 128, is the normal case). Returns
+    any bg: problems (a failed push), having still completed the handoff
+    + ledger. Pure orchestration over the tested pieces; all IO is
+    injected (run/post) so tests need touch neither git nor the network.
 
     done/remaining are short acceptance-criterion strings the run tracked,
     never a raw issue body — handoff.compose draws that ADR-0032 boundary.
     `at` is the UTC date the caller stamps on the ledger row (injected,
     not computed here, to keep the function's IO injected)."""
-    problems = push_wip(wo, run=run)
-    post(handoff.compose(wo, reason, done, remaining, resume))
     cost_ledger.append(root, cost_ledger.entry(
         wo, run_id, model, tokens, cost, outcome, at))
+    problems = push_wip(wo, run=run)
+    post(handoff.compose(wo, reason, done, remaining, resume))
     return problems
 
 
