@@ -526,5 +526,22 @@ class TestSpendRowPersistence(unittest.TestCase):
                       text)
 
 
+class TestMechanicalStops(unittest.TestCase):
+    """WO-0034: ADR-0034's two runner-side uncorrelated stops. The dollar
+    budget is post-hoc (wo-record + the monthly breaker) until the token
+    hook lands (ADR-0055 defers it); these two are the mechanical bounds
+    a runaway run cannot argue with."""
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "assembler.yml"
+
+    def test_the_dispatch_job_carries_a_wall_clock_timeout(self):
+        self.assertIn("timeout-minutes:",
+                      self.WORKFLOW.read_text(encoding="utf-8"))
+
+    def test_the_agent_step_carries_a_max_turns_cap(self):
+        self.assertIn("--max-turns",
+                      self.WORKFLOW.read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

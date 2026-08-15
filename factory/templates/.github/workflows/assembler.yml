@@ -44,6 +44,10 @@ jobs:
       && github.event.sender.login == github.repository_owner
       && vars.FACTORY_PAUSED != 'true'
     runs-on: ubuntu-latest
+    # ADR-0034's wall-clock stop (WO-0034): a generous outer bound, not
+    # the budget — the dollar budget is the routing band's job. A size-L
+    # order's agent run fits comfortably; a hung run cannot outlive it.
+    timeout-minutes: 60
     # The chartered agent branches, pushes, and opens a PR; it never merges
     # its own PR — gate 3 requires an independent, non-authoring reviewer
     # (ADR-0033, amended by ADR-0036). No merge permission is granted here.
@@ -109,7 +113,10 @@ jobs:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.resolve.outputs.prompt }}
-          claude_args: --model ${{ steps.resolve.outputs.model }}
+          # --max-turns is ADR-0034's second mechanical stop (WO-0034):
+          # like the job timeout, a backstop a runaway loop cannot argue
+          # with — generous enough that no honest size-L run meets it.
+          claude_args: --model ${{ steps.resolve.outputs.model }} --max-turns 100
       # The run's own spend, machine-written to the append-only cost ledger
       # (issue #222; ADR-0034): tokens and cost come from the action's
       # execution file — the harness's record, never a hand-typed figure.
