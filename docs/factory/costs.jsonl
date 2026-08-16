@@ -27,3 +27,9 @@
 {"wo": "WO-0032", "run_id": "session-2026-08-14-wo-0032", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-15"}
 {"wo": "WO-0033", "run_id": "session-2026-08-14-wo-0033", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-15"}
 {"wo": "WO-0034", "run_id": "session-2026-08-14-wo-0034", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-15"}
+{"wo": "WO-0018", "run_id": "gate-merge-2026-08-14T23:23:04Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:50s", "at": "2026-08-14"}
+{"wo": "WO-0030", "run_id": "gate-merge-2026-08-15T05:37:08Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:53s", "at": "2026-08-15"}
+{"wo": "WO-0031", "run_id": "gate-merge-2026-08-15T05:40:39Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:53s", "at": "2026-08-15"}
+{"wo": "WO-0032", "run_id": "gate-merge-2026-08-15T05:43:40Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:64s", "at": "2026-08-15"}
+{"wo": "WO-0033", "run_id": "gate-merge-2026-08-15T05:46:22Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:52s", "at": "2026-08-15"}
+{"wo": "WO-0034", "run_id": "gate-merge-2026-08-15T05:51:40Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:48s", "at": "2026-08-15"}
