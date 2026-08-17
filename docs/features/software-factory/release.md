@@ -43,7 +43,7 @@ plus this artifact, landing as one docs-only commit.
 
 ```
 # The release is one docs-only commit on main; undoing it is one revert:
-git revert <close-out-sha> && git push origin main
+git revert de8ebd7 && git push origin main
 # Factory kill switch, independent of this release (halts all dispatch):
 gh variable set FACTORY_PAUSED --body true
 ```
@@ -67,7 +67,16 @@ gh variable set FACTORY_PAUSED --body true
 4. Ship commit: `docs/features/software-factory/{verification,review,release}.md`
    committed to main as the close-out (this artifact rides the
    release commit; the code it closes out was already on main).
-5. `git push origin main` → recorded in Post-release checks below.
+5. `git push origin main` → REJECTED (non-fast-forward): the factory's
+   own gate-digest automation had pushed latency rows to main
+   (`ce15007`) while this release was in flight — the machinery
+   shipping itself mid-ship. Second hiccup, recorded.
+6. `git pull --rebase origin main` → clean rebase of the close-out
+   over `ce15007`; `git push origin main` →
+   `ce15007..de8ebd7  main -> main`. The release commit is `de8ebd7`.
+7. Release-log amendment (this entry and the SHAs above) committed and
+   pushed as a follow-up docs commit — the log records the push it
+   describes, so the SHA lands one commit after the release itself.
 
 ## Post-release checks
 
@@ -75,9 +84,15 @@ gh variable set FACTORY_PAUSED --body true
   without this commit's help: weekly report #296 posted at
   2026-08-17T08:01Z, recomputed from 18 real ledger rows — the first
   report ever to post with rows (issue #222's fix demonstrated live).
-- Push verified: `git log origin/main -1` shows the close-out commit;
-  the battery that gates main ran clean on the identical tree
-  immediately before the push (log entry 1).
+- Push verified:
+  ```
+  $ git log origin/main -2 --oneline
+  de8ebd7 docs(software-factory): ship — post-Milestone-E verify + review re-runs, release close-out
+  ce15007 chore(factory): gate-latency rows (gate-digest)
+  ```
+  Battery re-run on the merged tree (close-out + the automation's rows)
+  after the push: `Ran 1234 tests … OK`, `lint: 0 problem(s)`,
+  `gates: 0 problem(s)`, `selftest: ok`.
 - Run completeness: all 24 breakdown rows checked; verification.md,
   review.md, release.md present; the run's only open thread — the
   supervised end-to-end gate traversal — lives as a named seed in
