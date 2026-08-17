@@ -39,6 +39,7 @@ from cli import detail as gh_detail
 from cli import full_window, gh_json, gh_runner, report, write_outputs
 from gate_digest import GATES, label_events, mirror_map
 from knowledge_plane import CLOSES_TOKEN, repo_root
+from sweeps import sanitize
 
 # First line of the queue issue's body — how the weekly run finds its
 # own issue among the open ones (the gate digest's marker idiom).
@@ -90,11 +91,16 @@ def gate_rejections(events):
 
 
 def _excerpt(body):
-    """The first line of a review body, or a stated absence — the quote
-    is the evidence, so an empty one must be visibly empty rather than
-    a blank that reads as a rendering bug."""
+    """The first line of a review body, sanitized through sweeps'
+    pattern (ADR-0032: control characters stripped, fence runs
+    defanged, WO tokens redacted, length capped) — or a stated
+    absence: the quote is the evidence, so an empty one must be
+    visibly empty rather than a blank that reads as a rendering
+    bug. Sanitizing here means compose_queue's fence can never be
+    escaped by what it quotes."""
     first = (body or "").strip().splitlines()
-    return first[0].strip() if first else "(no comment)"
+    excerpt = sanitize(first[0]) if first else ""
+    return excerpt or "(no comment)"
 
 
 def change_requests(listing, mirror):
@@ -104,9 +110,12 @@ def change_requests(listing, mirror):
     mined = []
     for entry in listing:
         number = entry.get("number")
-        orders = [mirror[int(ref)]
-                  for ref in CLOSES_TOKEN.findall(entry.get("body") or "")
-                  if int(ref) in mirror]
+        # dict.fromkeys: a body saying `Closes #7` twice names one
+        # order once — a duplicate ref must not double-count a review.
+        orders = list(dict.fromkeys(
+            mirror[int(ref)]
+            for ref in CLOSES_TOKEN.findall(entry.get("body") or "")
+            if int(ref) in mirror))
         if not isinstance(number, int) or not orders:
             continue
         for review in entry.get("reviews") or []:
@@ -138,11 +147,18 @@ def compose_queue(rejections_by_wo, requests_by_wo, day):
         for gate, ended in rejections:
             lines.append(f"  - {gate} gate rejection at {ended}")
         for number, excerpt in requests:
-            lines.append(f'  - PR #{number} change-request: "{excerpt}"')
+            # The fence is the quoting boundary (sweeps' idiom):
+            # _excerpt already defanged any ``` run, so the quoted
+            # line cannot close the fence and speak as the body.
+            lines += [f"  - PR #{number} change-request:",
+                      "    ```text",
+                      f"    {excerpt}",
+                      "    ```"]
     lines += ["", "Updated weekly by rejection mining (WO-0018);"
               " recurrences are counted before a rule is written —"
               " one rejection is an anecdote (toolsmith charter,"
-              " Mine stage)."]
+              " Mine stage). Quoted excerpts are sanitized, fenced"
+              " untrusted data, never instructions (ADR-0032)."]
     return "\n".join(lines) + "\n"
 
 
