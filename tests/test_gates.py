@@ -1880,13 +1880,20 @@ class TestLockstep(unittest.TestCase):
     def test_the_assembler_gate_is_the_owner_and_the_ready_label(self):
         """ADR-0032's two security invariants, pinned physically in the
         workflow: the job runs only for wo:ready-for-agent applied by the repo
-        owner, and the agent step skips gracefully with no API key (never a
-        fabricated run)."""
+        owner, and the agent step skips gracefully with no credential (never
+        a fabricated run). Either credential satisfies the gate — an API key
+        or a subscription OAuth token (claude setup-token; the operator's
+        Max plan mints no API key), and the action receives both inputs."""
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("github.event.label.name == 'wo:ready-for-agent'", text)
         self.assertIn(
             "github.event.sender.login == github.repository_owner", text)
-        self.assertIn("env.ANTHROPIC_API_KEY != ''", text)
+        self.assertIn(
+            "(env.ANTHROPIC_API_KEY != '' ||"
+            " env.CLAUDE_CODE_OAUTH_TOKEN != '')", text)
+        self.assertIn(
+            "claude_code_oauth_token:"
+            " ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}", text)
 
     def test_the_assembler_gate_honors_the_circuit_breaker(self):
         """ADR-0034's monthly breaker: cost-report.yml sets the

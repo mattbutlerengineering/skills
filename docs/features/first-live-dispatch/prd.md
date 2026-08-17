@@ -60,7 +60,7 @@ produces — no criterion is reworded to pass.
 
 ## Success criteria
 
-- [ ] Both secrets exist in Actions (`ANTHROPIC_API_KEY`,
+- [ ] Both secrets exist in Actions (`CLAUDE_CODE_OAUTH_TOKEN`,
       `FACTORY_PAUSE_TOKEN`) — names visible in `gh secret list`,
       values console-set and never in the repo.
 - [ ] The payload order's mirror issue carries the full gate history:
@@ -82,8 +82,10 @@ produces — no criterion is reworded to pass.
       subsequent ready-label is demonstrably inert until Matt clears
       the flag. Staging mechanism is Architect's call — but the pause
       must be set by automation, never a hand.
-- [ ] Total run spend (dispatch + retries + breaker test) ≤ $10,
-      readable from the ledger.
+- [ ] Total run spend (dispatch + retries + breaker test) ≤ $10 in
+      notional list-rate dollars, readable from the ledger —
+      subscription auth bills nothing per-run, so the ledger's figures
+      are the harness's notional record, not an invoice.
 - [ ] The J-roster fix itself lands correct: gates.py's docstring and
       DETECTORS table agree that J is claimed, pinned by the existing
       battery staying green.
@@ -114,3 +116,18 @@ produces — no criterion is reworded to pass.
 - Whether the breaker test runs before or after the dispatch (armed
   breaker before first paid run is the safer order; the pause blocks
   dispatch while set) — Architect sequences it.
+
+## Amendments
+
+- **2026-08-17 — Max-subscription pivot.** The operator's Claude plan
+  is a Max subscription and issues no API key, so the dispatch
+  credential named in criterion 1 changed from `ANTHROPIC_API_KEY` to
+  `CLAUDE_CODE_OAUTH_TOKEN` (minted by `claude setup-token`,
+  officially supported for CI). The spend ceiling in criterion 8 now
+  reads as notional list-rate dollars — subscription auth has no
+  per-run bill, and the harness's reported cost may be zero. If the
+  dispatched run's recorded cost is $0.00, the breaker criterion's
+  staged breach has no honest trigger (no fabricated ledger rows,
+  ever) and that criterion returns to arbitration instead of being
+  quietly softened. Design detail lives in architecture.md's dated
+  amendment; no other criterion changed.

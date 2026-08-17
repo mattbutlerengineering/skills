@@ -60,11 +60,16 @@ jobs:
       # are suppressed and gate 3 must be dispatched by name.
       actions: write
     env:
-      # Job-level so a step if: can gate on the secret's PRESENCE — secrets are
+      # Job-level so a step if: can gate on the secrets' PRESENCE — secrets are
       # not readable in an if:, but an env sourced from one is. This is our
       # equivalent of the sweeps sentry job's `vars.* != ''` graceful skip:
-      # no key configured -> the agent step is skipped, never a fabricated run.
+      # no credential configured -> the agent step is skipped, never a
+      # fabricated run. Two credentials, either satisfies: an API key, or the
+      # subscription OAuth token `claude setup-token` mints (the operator's
+      # Max plan issues no API key — the action accepts both inputs and an
+      # empty string reads as not-provided).
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -91,19 +96,21 @@ jobs:
         id: claim
         if: >-
           steps.resolve.outputs.dispatch == 'true'
-          && env.ANTHROPIC_API_KEY != ''
+          && (env.ANTHROPIC_API_KEY != '' || env.CLAUDE_CODE_OAUTH_TOKEN != '')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make wo-in-progress ISSUE=${{ github.event.issue.number }}
       # The chartered agent, on the model its charter's band routes to. Skips
-      # gracefully when no API key is configured (the graceful-skip pattern):
-      # nothing is dispatched, nothing is labelled, nothing is faked.
+      # gracefully when no credential is configured (the graceful-skip
+      # pattern): nothing is dispatched, nothing is labelled, nothing is
+      # faked. Both auth inputs are passed; the action treats an empty one
+      # as absent, so whichever secret exists wins.
       - name: Run the chartered agent
         id: agent
         if: >-
           steps.resolve.outputs.dispatch == 'true'
           && steps.claim.outputs.transitioned == 'true'
-          && env.ANTHROPIC_API_KEY != ''
+          && (env.ANTHROPIC_API_KEY != '' || env.CLAUDE_CODE_OAUTH_TOKEN != '')
         # Pinned by SHA: this job holds write scopes + the API key, so its
         # third-party code must change only by reviewed commit, never by a
         # re-pointed tag. Bump deliberately: re-resolve the tag, update the
@@ -111,6 +118,7 @@ jobs:
         uses: anthropics/claude-code-action@86180fa9e4d311eed10c9cc49854c53dab5d517a  # v1 as of 2026-08-04
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: ${{ steps.resolve.outputs.prompt }}
           # --max-turns is ADR-0034's second mechanical stop (WO-0034):
@@ -176,7 +184,7 @@ jobs:
         if: >-
           steps.resolve.outputs.dispatch == 'true'
           && steps.claim.outputs.transitioned == 'true'
-          && env.ANTHROPIC_API_KEY != ''
+          && (env.ANTHROPIC_API_KEY != '' || env.CLAUDE_CODE_OAUTH_TOKEN != '')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make find-pr ISSUE=${{ github.event.issue.number }}

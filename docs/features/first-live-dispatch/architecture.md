@@ -9,7 +9,9 @@ ux: skipped — operator's surface is the existing tracker, labels, and PRs — 
 
 ## Approach
 
-Zero new factory code. The factory's dispatch, validation, spend, and
+Zero new factory code — with one recorded exception (the 2026-08-17
+amendment below: the assembler's either-credential auth change, order
+0044 in breakdown.md). The factory's dispatch, validation, spend, and
 breaker planes shipped in v1 and were review-hardened in Milestone E;
 this run's design is the *exercise* of those planes in an order that
 keeps every piece of evidence honest, plus the one tiny code change
@@ -30,8 +32,9 @@ timeout, --max-turns 100) plus the size-S $5 band bounding the blast.
 
 ## Components (phases over shipped planes)
 
-1. **Arming** — owner, consoles only. `ANTHROPIC_API_KEY`: Anthropic
-   console key → Actions secret. `FACTORY_PAUSE_TOKEN`: fine-grained
+1. **Arming** — owner, consoles only. `CLAUDE_CODE_OAUTH_TOKEN`:
+   `claude setup-token` in the operator's own terminal (Max-subscription
+   OAuth, ~1-year expiry) → Actions secret. `FACTORY_PAUSE_TOKEN`: fine-grained
    PAT scoped to this repo alone with Variables read/write (the
    Actions-variables API is what GITHUB_TOKEN cannot reach —
    cost-report.yml's header records why). Contract: `gh secret list`
@@ -135,3 +138,35 @@ validator hand-off + needs-review flip → 4/5; manual merge +
 inert ready label → 6; ≤ $10 total → 4+6 (band $5 + free CI runs +
 retry headroom); J-fix correct → 2/4 (Accept criterion) with the
 battery as the check.
+
+## Amendments
+
+- **2026-08-17 — auth model (Max-subscription pivot).** The operator's
+  Claude plan is a Max subscription, which issues no API key — an
+  `ANTHROPIC_API_KEY` will never exist for this factory. The dispatch
+  credential is the subscription OAuth token `claude setup-token`
+  mints (officially supported for CI; the action input is
+  `claude_code_oauth_token`). This forced the run's one factory-code
+  change, executed in the owner session because the dispatch plane
+  cannot dispatch the fix that makes it dispatch-capable:
+  assembler.yml's job env now carries both credentials, every
+  credential-gated step `if:` accepts either
+  (`env.ANTHROPIC_API_KEY != '' || env.CLAUDE_CODE_OAUTH_TOKEN != ''`),
+  and the action receives both auth inputs (an empty one reads as
+  not-provided). Template mirror + manifest regenerated in the same
+  commit; the graceful-skip property is preserved — a repo with
+  neither secret still dispatches nothing and fakes nothing.
+- **2026-08-17 — money-model contingency.** Under subscription auth
+  the run itself costs nothing incremental — the plan covers it — so
+  the execution file's cost figure is a notional list-rate number and
+  is reported unreliable (possibly zero) under OAuth. Consequences,
+  decided now rather than discovered mid-run: the ledger keeps
+  recording whatever the harness reports (the harness's record, never
+  hand-typed — unchanged); the PRD's $10 ceiling reads as notional
+  dollars; and phase 6's staged breach depends on real recorded rows
+  summing ≥ $0.01 — if the dispatched run's recorded cost is $0.00,
+  no honest breach exists at any positive cap, fabricating a row
+  stays forbidden (eval-honesty), and the breaker criterion routes
+  back to arbitration (candidate resolutions there, not here:
+  re-scope the criterion to a variable-set + inertness proof, or
+  defer it to the first run whose recorded cost is nonzero).
