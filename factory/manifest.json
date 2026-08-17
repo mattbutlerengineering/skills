@@ -8,7 +8,7 @@
     "templates/.github/workflows/cost-report.yml": "d956ee88bb68b42e0062996e86f4602d31fc3026ad32513f5cd2340e63c3ddb8",
     "templates/.github/workflows/design.yml": "1d717103b2e18cc5a2c291ad5cc8cc91e8c091c2e19657e194c2645eeef107ce",
     "templates/.github/workflows/gate-digest.yml": "5abc8a86c8bcebc0ab41e217f13b32843dcb91eb0d90390ca3a5f6b892539552",
-    "templates/.github/workflows/toolsmith-mine.yml": "6b30cab1e046af2893524a372138e61788164fa152e415b21397e3f84069f015",
+    "templates/.github/workflows/toolsmith-mine.yml": "d1629e967ad32f449dbeef3f941b0e0bc70ab57d2667bf0cfb2090d1b50e7590",
     "templates/.github/workflows/validator.yml": "0c20e49f475195252e3b119c62b6c0036bd34cedef653b75c74366b7f08b2998",
     "templates/Makefile": "a3d9f87c7e4ef7a47040df4127fd5346f7b97c2ae7c76e62a2c842df67c30b24",
     "templates/docs/adr/0001-decisions-are-recorded-here.md": "2dda45634398a0a29d04f073fadaf51ecbdf7c1ccbb3795583355396382c02e5",

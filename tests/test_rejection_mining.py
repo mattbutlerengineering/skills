@@ -23,6 +23,9 @@ import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
+ROOT = Path(__file__).resolve().parent.parent
+WORKFLOW = ROOT / ".github" / "workflows" / "toolsmith-mine.yml"
+
 BREAKDOWN = (
     "# Breakdown\n"
     "\n"
@@ -297,6 +300,19 @@ class TestRunMine(unittest.TestCase):
                              ["rm: gh pr list failed: boom"])
             self.assertIn(["issue", "create"],
                           [c[:2] for c in run.calls])
+
+
+class TestWorkflowPermissions(unittest.TestCase):
+
+    def test_the_workflow_grants_pull_request_read(self):
+        # _change_requests runs PR_ARGS ("gh pr list") every harvest; a
+        # token without pull-requests:read can list issues but never PRs,
+        # so the change-request half of the weekly harvest fails on every
+        # scheduled run (observed 2026-08-17: "gh pr list failed:
+        # Resource not accessible by integration").
+        text = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("permissions:\n  contents: read\n  issues: write"
+                      "\n  pull-requests: read", text)
 
 
 class TestMain(cli_contract.ReportContract, cli_contract.CliContract,
