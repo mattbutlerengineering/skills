@@ -34,3 +34,4 @@
 {"wo": "WO-0033", "run_id": "gate-merge-2026-08-15T05:46:22Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:52s", "at": "2026-08-15"}
 {"wo": "WO-0034", "run_id": "gate-merge-2026-08-15T05:51:40Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:48s", "at": "2026-08-15"}
 {"wo": "WO-0035", "run_id": "session-2026-08-15-wo-0035", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-16"}
+{"wo": "WO-0035", "run_id": "gate-merge-2026-08-17T00:43:23Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:401s", "at": "2026-08-17"}
