@@ -1,225 +1,160 @@
 ---
 stage: review
 run: feature:software-factory
-date: 2026-08-14
+date: 2026-08-16
 ---
 
-# Review: software-factory
+# Review: software-factory (Milestone E re-review)
 
 ## Scope
 
-The run's span: 003f263 (PRD-0001 merge, 2026-07-05) through 5719599 —
-107 commits, 57 of them factory/work-order commits across 29 merged PRs.
-Every WO was PR-reviewed at merge time, so this run-level review does
-not re-read every diff line; it examined the system as built in three
-passes (correctness, design conformance, security), each finding
-re-verified against the code before being recorded here. Files read:
-the dispatch plane (assembler.py/.yml, validator.yml), the money plane
-(budget_guard.py, handoff.py, cost_ledger.py, cost_report.py/.yml), the
-observation plane (gate_digest.py/.yml, rejection_mining.py, sweeps),
-the seams (cli.py, knowledge_plane.py, factory_config.py), gates.py,
-factory_init.py and the template payload, against their test files and
-architecture.md's contracts.
+Re-review after the fix loop, per the breakdown's 2026-08-14 mandate
+("Verify and Review re-run after Milestone E"); supersedes the
+2026-08-14 review (git history). Two jobs: audit every prior finding's
+disposition against the tree, and review the delta the fix loop
+produced — 5719599..663265c, 15 commits (PRs #286–#293 plus close-out
+chores), 1,144 insertions across 30 files. Files read in full diff:
+assembler.yml, validator.yml, cost-report.yml, Makefile, assembler.py,
+budget_guard.py, cost_report.py, rejection_mining.py, setup.md,
+ADR-0055, docs/backlog.md, skills/doctor/SKILL.md, and the five test
+files; template mirrors verified by detector E (today's battery:
+`gates: 0 problem(s)`, `selftest: ok`; full suite `Ran 1234 tests …
+OK`). Three passes over the delta: correctness, design conformance,
+security.
 
-## Findings
+## Prior findings — dispositions verified in-tree
 
-### Critical: agent-opened PRs never trigger validator.yml — gate 3 is silent for exactly the PRs the factory produces
+- **Critical (gate 3 silent for factory PRs)** — FIXED, WO-0030.
+  validator.yml gains the `workflow_dispatch` arm with a synthesized
+  PR payload; assembler.yml finds the agent's PR by its Closes link
+  (`assembler.pr_for_issue`, the tested authority) and dispatches
+  gate 3 by name. No-match fails the find step through `cli.report`'s
+  nonzero exit and the `failure()` step flips the order to `wo:failed`
+  (`test_no_match_writes_empty_and_exits_nonzero`,
+  `test_assembler_finds_the_pr_and_dispatches_the_validator`).
+- **Major (success-path ledger row dies with the runner)** — FIXED,
+  WO-0031. The row is re-applied to a fresh `origin/main` worktree and
+  pushed — never from HEAD, which could smuggle agent commits onto
+  main (`test_the_push_leaves_from_a_fresh_main_worktree_not_head`).
+- **Major (hard_stop pushes before it records)** — FIXED, WO-0032.
+  Append now precedes push_wip so the WIP commit carries the row
+  (`test_the_exhaustion_row_is_inside_the_pushed_commit`).
+- **Major (fail-closed PAUSE never sets FACTORY_PAUSED)** — FIXED,
+  WO-0033. The pause step is gated `always() && pause == 'true'`;
+  outputs are written before the failing exit
+  (`test_the_pause_step_survives_a_failing_report_step`, and the
+  resume step deliberately does not survive one).
+- **Major (ADR-0034 stops not wired)** — FIXED in its surgical half,
+  WO-0034: `timeout-minutes: 60` on the job, `--max-turns 100` on the
+  agent step. The token-budget hook is DEFERRED by ADR-0055 (accepted)
+  — a recorded decision now, not an undocumented gap.
+- **Major (stamped-repo dispatch impossible, undisclosed)** — FIXED as
+  disclosure: setup.md names the charter gap and its fail-closed
+  consequence; shipping payload charters is DEFERRED by ADR-0055.
+- **Minors** — two FIXED via WO-0035 (excerpts sanitized through
+  sweeps' `sanitize`, fenced with pre-defanged runs, duplicate Closes
+  refs deduped via ordered `dict.fromkeys`). The remaining seven
+  (gates.py's J-roster contradiction, the WIP-cap claim, digest title
+  sanitize, NaN cost row, gate_digest row discard, duplicate tracker
+  refs, the predictable heredoc delimiter) stay DEFERRED on their
+  2026-08-14 reasons — none was in this delta's touched files.
 
-- Scenario: assembler.yml:106 hands the dispatched agent
-  `github_token: ${{ secrets.GITHUB_TOKEN }}`; GitHub suppresses
-  `push`/`pull_request` workflow events created with that token, so a
-  factory-opened PR gets no `check` run, no reviewer job, no
-  `wo:needs-review` flip — either permanently unmergeable (if the check
-  is required) or mergeable ungated. The repo demonstrably knows the
-  property — gate-digest.yml:12 relies on it so its ledger commit
-  "cannot recurse into CI" — but no ADR, setup.md, or comment records
-  the consequence for the dispatch path.
-- Decision: fix before Ship — routes to Implement. Non-trivial: needs
-  either a separately-scoped token (PAT/App) for the agent's PR
-  creation, or a validator reconciliation trigger. Owner input needed
-  (a new secret only the owner can mint).
+## Findings (new, this delta)
 
-### Major: the success-path ledger row is appended to the ephemeral runner and never committed
+### Minor: dispatched validator runs attach no check to the PR head — the critical's ghost returns under branch protection
 
-- Scenario: assembler.yml's "Record the run's spend" step runs
-  `make wo-record`, appending to docs/factory/costs.jsonl in the
-  runner's checkout — and no later step commits or pushes it (contrast
-  gate-digest.yml's explicit commit step). Every dispatched run's spend
-  row is discarded with the runner; the monthly circuit breaker never
-  sees dispatched spend, surviving the very #222 fix that step exists
-  to implement. The step's comment names detector G as backstop, but G
-  reads repo content — a row that never lands is exactly what it can't
-  see until the merge gate, and `continue-on-error: true` keeps the
-  step green-ish meanwhile.
-- Decision: fix proposed (add a commit step mirroring gate-digest.yml's)
-  — operator arbitration pending.
+- Scenario: `gh workflow run` binds the run to main's ref, so no check
+  run or commit status lands on the factory PR's head SHA. Today the
+  verdict still reaches gate 3 — `make check`'s findings ride the
+  reviewer comment and the `wo:needs-review` flip lands — but the PR's
+  own Checks surface stays empty. The day physical branch protection
+  activates (breakdown note: when the repo goes Pro or public),
+  required checks on factory PRs never report, and the original
+  critical resurfaces as "permanently unmergeable."
+- Decision: deferred — paired explicitly to branch-protection
+  activation; fix shape is the dispatched check job POSTing a commit
+  status to the PR head SHA. Must land in the same change that turns
+  protection on.
 
-### Major: hard_stop pushes WIP before appending the ledger row, so the exhaustion record never persists
+### Minor (security): the agent's token gained `actions: write`
 
-- Scenario: budget_guard.py:155-158 — `push_wip` (add/commit/push)
-  runs first, then `cost_ledger.append` writes to the now-already-pushed
-  working tree; nothing commits afterward. Even a fully successful hard
-  stop leaves ADR-0034's accountability row on the runner disk.
-  tests/test_budget_guard.py asserts only local file existence.
-- Decision: fix proposed (append before push_wip, plus a persistence
-  assertion in the test) — operator arbitration pending.
+- Scenario: the hand-off needs `actions: write` at job level, and the
+  claude-code-action step receives the same GITHUB_TOKEN — a
+  dispatched agent can `gh workflow run` any workflow_dispatch
+  workflow, including the charter replay, a paid model run. Bounded by
+  ADR-0032 (the prompt substrate is repo-controlled), so near the
+  owner-attacks-self floor.
+- Decision: deferred — next assembler.yml touch: move find-pr + the
+  validator trigger to a follow-on job (`needs: assemble`) that alone
+  carries `actions: write`, restoring the agent job's narrower token.
 
-### Major: fail-closed PAUSE verdicts never set FACTORY_PAUSED
+### Minor (security): the dispatch arm's fork guard is a comment, not a condition
 
-- Scenario: cost_report.py's fail-closed paths (malformed ledger line,
-  unresolvable cap) emit `pause=true` to $GITHUB_OUTPUT *and* exit 1;
-  the "Recompute spend" step has no `continue-on-error`, so the job
-  fails there and "Pause dispatch on a cap breach" (implicit
-  `success()`) is skipped. On exactly the paths the module's docstring
-  says "can never silently wave spend through unpaused," dispatch stays
-  unpaused.
-- Decision: fix proposed (`continue-on-error` on the report step, or
-  `always() &&` on the pause step's condition) — operator arbitration
-  pending.
+- Scenario: the review job admits `workflow_dispatch` unconditionally;
+  nothing verifies the dispatched PR is same-repo (the comment asserts
+  factory PRs always are). A write-collaborator induced to run
+  `gh workflow run validator.yml -f pr=<fork PR#>` executes the fork's
+  Makefile in a job whose post step holds FACTORY_REVIEW_TOKEN (a PAT)
+  — the exfiltration the pull_request arm's head-repo guard exists to
+  block. Today the dispatcher set is the owner alone.
+- Decision: deferred — next validator touch: the synthesize step fails
+  unless `head.repo.full_name == GITHUB_REPOSITORY` (all three jobs),
+  converting the comment into an enforced condition.
 
-### Major: ADR-0034's three uncorrelated stops are not wired into the dispatch path
+### Minor (design): the synthesize step breaks validator.yml's every-step-calls-make contract
 
-- Scenario: the agent step passes only `--model` (no `--max-turns`),
-  the job declares no `timeout-minutes`, and no hook calls
-  `budget_guard.py check` — `check` and `hard_stop` have zero runtime
-  callers (only the post-hoc `record-run` is wired, Makefile:54). The
-  budget stop as built is SWE-charter prose — the self-policing
-  ADR-0034's mechanical stops were designed to not rely on. No ADR or
-  breakdown Note records the deferral; verification.md §3 attributed
-  the gap to "no live dispatch," which understated it.
-- Decision: fix proposed in two parts — `--max-turns` +
-  `timeout-minutes` now (two lines); the 80%/100% budget hook routed
-  to Implement as its own item — operator arbitration pending.
+- Scenario (decayed contract): the one-file-two-repos design rests on
+  "it names no command of its own: every step calls a make target"
+  (breakdown note, 2026-07-12) — each repo's Makefile knows where its
+  tools live. The payload-synthesis step inlines `gh api` plus a
+  python one-liner, three identical times; a stamped repo that
+  relocates its tools cannot relocate this logic through its Makefile.
+- Decision: deferred — fold into a make target (`make pr-event PR=…`)
+  on the next validator touch; the Makefile↔CI lockstep test then
+  pins it like every other step.
 
-### Major: stamped-repo dispatch is structurally impossible and undisclosed
+### Minor: a manual validator re-dispatch re-flips `wo:needs-review`
 
-- Scenario: the payload ships assembler.yml + assembler.py but no
-  `factory/agents/` stubs and no `factory/charters/` tree
-  (factory/templates/factory/ does not exist), so every stamped-repo
-  dispatch fails closed at `charter_band` (assembler.py:144). The
-  charters' exclusion predates the workflows entering the payload;
-  docs/setup.md's "Deliberately not in scope" list never mentions the
-  composition gap.
-- Decision: fix proposed (disclose in setup.md now; shipping charter
-  stubs in the payload is a scope decision) — operator arbitration
-  pending.
-
-### Minor: gates.py's detector roster contradicts itself on J
-
-- Scenario: detector J is implemented and runs in CHECKERS, but
-  gates.py:46 still says "J/K are unclaimed" and DETECTORS maps
-  `"J": (None, None, "unused")` — the docstring architecture.md names
-  as the authority is self-contradictory (PR #215 claimed J without
-  updating either spot).
-- Decision: deferred — doc-only drift, no behavior at stake; cheap to
-  fold into the next gates.py touch.
-
-### Minor: the WIP-cap guard the architecture claims does not exist in the dispatch path
-
-- Scenario: nothing in assembler.py/.yml reads `wip_cap`; concurrency
-  groups per-issue, so N ready labels dispatch N parallel paid runs.
-  ADR-0037 documents the knob's dormancy, but architecture.md:251's
-  guard claim and WO-0005's checked accept line ("WIP-cap guards hold")
-  were never amended.
-- Decision: deferred — the owner is the only labeler, so the cap is
-  currently advisory; needs an architecture.md amendment note rather
-  than code.
-
-### Minor: PR-review excerpts flow unsanitized and unfenced into the pinned toolsmith queue
-
-- Scenario: any GitHub user's "request changes" review on a factory PR
-  reaches `_excerpt` (rejection_mining.py:92) — no control-char strip,
-  no fence, no length cap — and lands verbatim in the repo-owned pinned
-  issue, outside the ADR-0032 quoting discipline sweeps.py already
-  implements (sanitize + QUOTE_HEADER + fenced block). Bounded
-  markdown-injection today; latent prompt text if a toolsmith consumer
-  ever automates.
-- Decision: deferred — mirror sweeps.py's sanitize/fence pattern in the
-  next rejection_mining touch; no automated consumer exists yet.
-
-### Minor: mirrored-issue titles flow unsanitized into the digest the improvement routine reads
-
-- Scenario: compose_digest embeds issue titles raw; the ADR-0044 cloud
-  routine reads the pinned digest as context. Requires collaborator
-  access plus an owner-reviewed breakdown row, so near the
-  "owner-attacks-self" floor.
-- Decision: deferred — same sanitize pattern, same next touch.
-
-### Minor: line_problems accepts NaN/Infinity cost — a permanent poison row
-
-- Scenario: `budget_guard.py record WO-X r-1 m 4200 nan` — the cost
-  rule checks only `< 0` (NaN comparisons are False); the row appends,
-  and the append-only ledger then makes every monthly rollup print
-  "$nan" and PAUSE forever. read_execution requires isfinite; the
-  hand-typed leg doesn't.
-- Decision: deferred — add `math.isfinite` to line_problems in the next
-  cost_ledger touch; owner-only entry point today.
-
-### Minor: any gate_digest problem discards the day's appended latency rows
-
-- Scenario: run_daily appends rows (`changed=true`) but one failed
-  timeline fetch makes main exit 1; the commit step (implicit
-  `success()`) is skipped, discarding the rows. The 1000-entry LIST
-  window makes a permanent version of this inevitable as history grows.
-- Decision: deferred — same fix shape as the cost-report major
-  (`always() &&` gating); lower stakes since rows regenerate next
-  passage.
-
-### Minor: duplicate (tracker: #N) rows dispatch ambiguously
-
-- Scenario: two breakdown rows carrying the same tracker number (a
-  breakdown copied as template) — resolve_row dispatches the first
-  match as prompt substrate while the digest attributes to the last;
-  no detector checks tracker uniqueness.
-- Decision: deferred — candidate new gates.py detector; no duplicate
-  exists in the repo today.
-
-### Minor: write_outputs' predictable heredoc delimiter
-
-- Scenario: the assembler prompt embeds CONTEXT.md and ADRs wholesale;
-  a content line exactly `__PROMPT_EOF__` terminates the $GITHUB_OUTPUT
-  heredoc early and remaining lines parse as new outputs. GitHub's
-  toolkit randomizes delimiters for exactly this.
-- Decision: deferred — randomize the delimiter in the next cli.py
-  touch; no repo file contains the sentinel today.
-
-### Minor: duplicate Closes refs double-count change-requests in the toolsmith queue
-
-- Scenario: a PR body with "Closes #7 … Fixes #7" mines each
-  CHANGES_REQUESTED review once per ref, inflating the recurrence count
-  that ranks the toolsmith queue.
-- Decision: deferred — dedup `orders` in the next rejection_mining
-  touch (same touch as the excerpt fence).
+- Scenario: the pull_request arm deliberately excludes `synchronize`
+  from the label job so a push to an open PR "must not re-flip an
+  order a human already moved along" — but the synthesized payload
+  always says `action: opened`, so an owner re-dispatching the
+  validator on an already-reviewed PR (after a body fix, say) re-flips
+  the order and the digest's queue-entry math double-counts, skewing
+  ADR-0041's latency rows.
+- Decision: deferred — rare, owner-driven path; make the flip
+  idempotent (skip when the order is already past `wo:needs-review`)
+  on the next validator touch.
 
 ## Passes with no findings
 
-No pass came back empty, but the load-bearing surfaces held: all 16
-template mirrors are byte-identical to their root counterparts; seam
-discipline is uniform (no typed-ID regexes outside knowledge_plane, no
-subprocess outside cli, no factory.json reads outside factory_config,
-no ledger-shape knowledge outside cost_ledger); the problem-string
-contract holds through cli.report; the dispatch prompt boundary is
-sound (breakdown row + repo files only — the issue body/title never
-reach the prompt); the owner gate is enforced twice and fails closed;
-write-scoped and secret-bearing jobs exclude fork PRs; every gh/git
-call uses argv lists; secrets are never echoed; and the stop/pause
-decision logic itself (>= boundaries, month windows, passage/rejection
-partition, dedup keys) is correct and pinned — every defect found
-lives in persistence ordering, workflow step gating, or unpinned input
-edges, not in the rules.
+Correctness came back clean beyond the above: `pr_for_issue` fails
+closed on gh errors, silent truncation (LIST_WINDOW discipline,
+mirrored from rejection_mining), and no-match; `resolve_row`'s
+sub-bullet capture stops at the first blank or unindented line so the
+next row never bleeds into the substrate; the spend-push race loses
+only a row that detector G recovers at the merge gate on the one path
+that reaches it, and shows red on the step either way; hard_stop's
+reorder costs no resilience (the append is local IO a push failure
+cannot touch); sanitize-before-fence ordering means the quoted line
+can never close the fence. Security beyond the two minors: every new
+gh/git call is an argv list; the dispatched PR number is int-derived
+before it reaches `-f pr=`; no secret is echoed; the synthesized
+payload is fetched fresh from REST (which also heals issue #216's
+stale-payload class for the dispatch path). Design: seam discipline
+held (Closes grammar stays in knowledge_plane, subprocess in cli,
+problem strings through cli.report); all template mirrors are
+byte-identical (detector E green); doctor's target roster and the
+lockstep test were extended with `find-pr` rather than drifting.
 
 ## Verdict
 
-Not ready to ship. One critical (factory PRs bypass their own gate 3)
-plus five majors — three of which share one theme: the machinery
-records its verdicts on ephemeral runner disks or skips its own
-enforcement step on the fail-closed path. The critical routes to
-Implement per the fix loop. The majors await operator arbitration:
-the proposed split is (a) fix now as new breakdown rows alongside the
-critical — the ledger-commit step, the hard_stop ordering, the pause
-gating, the two-line mechanical stops; (b) decide separately whether
-the budget hook and payload charters are v1 scope or deferred with an
-ADR note. Minors are deferred with reasons above. This dovetails with
-verification.md's routing recommendation: the supervised end-to-end
-dispatch it proposes would have surfaced the critical and both
-persistence majors on first contact.
+Ready to ship. The 2026-08-14 review's critical and all five majors
+are fixed in-tree with pinning tests or explicitly recorded in
+ADR-0055 — the operator's arbitration, now a citable decision. This
+delta introduces no critical or major findings; its five minors are
+deferred with logged reasons, one (the PR-head check status) bound to
+a named future trigger so it cannot resurface silently. The
+verification FAILs that remain (no live gate traversal) are
+operator-adjudicated to `docs/backlog.md` and are Operate-stage
+graduation material, not review blockers. Next stage is Ship.
