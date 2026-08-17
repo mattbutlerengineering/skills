@@ -79,8 +79,8 @@ supervised live-dispatch exercise verification.md recommended.
   - Accept: when run_report exits nonzero with pause=true, the cost-report workflow still sets FACTORY_PAUSED; a test pins that outputs are written before the failing exit.
 - [x] **WO-0034** mechanical stops on the agent job — size:S, blocked by: WO-0005 (PRD-0001 §Solution) (tracker: #284)
   - Accept: the agent step carries --max-turns and the job carries timeout-minutes (ADR-0034's two uncorrelated mechanical stops); setup.md discloses that the payload ships the dispatch workflow without charters; an ADR records the budget-hook and payload-charter deferrals.
-- [ ] **WO-0035** supervised live dispatch: rejection_mining hardening — size:S, blocked by: WO-0030, WO-0031, WO-0033, WO-0034 (PRD-0001 §Success criteria) (tracker: #285)
-  - Accept: excerpts in the toolsmith queue are sanitized and fenced per ADR-0032 (sweeps.py's pattern) and duplicate Closes refs are deduped; delivered by a real dispatch the owner drives through wo:draft → wo:prd-approved → wo:blueprint-approved → wo:ready-for-agent to a merged PR — the run's first end-to-end gate traversal.
+- [x] **WO-0035** supervised live dispatch: rejection_mining hardening — size:S, blocked by: WO-0030, WO-0031, WO-0033, WO-0034 (PRD-0001 §Success criteria) (tracker: #285)
+  - Accept: excerpts in the toolsmith queue are sanitized and fenced per ADR-0032 (sweeps.py's pattern) and duplicate Closes refs are deduped; delivered by operator-directed direct implementation (2026-08-16 note below) — the supervised end-to-end gate traversal is reseeded in docs/backlog.md, not silently dropped.
 
 ## Design gaps found
 
@@ -234,3 +234,18 @@ ADR-0033, and ADR-0034 (all accepted).
   the substrate; they are repo-controlled exactly like the row (landing
   through the same owner-reviewed PR), so ADR-0032's injection boundary
   is unchanged.
+- 2026-08-16: supervised-dispatch deviation — the hardening payload
+  (WO-0035, PRD-0001 §Success criteria) shipped by operator-directed
+  direct implementation, not the supervised live dispatch the accept
+  line originally named. The dispatch path itself is built and was
+  pre-flighted offline 2026-08-14 (resolve → claim → agent → spend →
+  find-pr, with the Accept criterion confirmed in the resolved
+  prompt), but the repo carries no ANTHROPIC_API_KEY Actions secret —
+  the assembler's key-gated steps skip by design — and the owner did
+  not drive the label gates in the supervision window, so the operator
+  directed close-out instead (2026-08-15 /goal). The accept line is
+  amended to match what shipped, same as the labels.json and
+  orientation_pack deviations above; the first end-to-end gate
+  traversal is reseeded in docs/backlog.md rather than claimed. No
+  run evidence is fabricated: the traversal did not happen and the
+  ledger gets no row for it.
