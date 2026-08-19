@@ -1,24 +1,23 @@
-"""The gate vocabulary and one issue's gate history, tested at the
-interface it is moving to (ADR-0056).
+"""human_gates.py (ADR-0056) — the three gates and one issue's gate
+history.
 
-Written against today's code, where the vocabulary still lives inside
-gate_digest.py and the rejection half inside rejection_mining.py — the
-import lines below are the whole of the awkwardness, and they are the
-measurement: a suite about what a gate IS should not have to name two
-leaf tools to get at it. When human_gates.py lands, only those lines
-move; no case here changes.
+The suite was written at this interface before it existed, against the
+copies inside gate_digest.py and rejection_mining.py; re-pointing it
+here changed the import lines and nothing else, which is what makes it
+the net for the move rather than a restatement of it.
 
-What this suite owns that neither tool's suite has: the partition
-property. For one event history, the passages and the rejections
-together are exactly the completed stays, and no stay is in both. That
-invariant lives today as prose in a docstring (rejection_mining.py), so
-nothing catches the day the two hand-written window tests stop
-agreeing.
+What it owns that neither tool's suite had: the partition property. For
+one event history, the passages and the rejections together are exactly
+the completed stays, and no stay is in both. That invariant lived as
+prose in a docstring, so nothing caught the day the two hand-written
+window tests stopped agreeing — now there is one window test, in
+completed_stays, and this asserts what it guarantees.
 """
 import unittest
 
-from gate_digest import GATES, gate_passages, label_events, waiting_since
-from rejection_mining import gate_rejections
+from human_gates import (GATES, completed_stays, gate_labels,
+                         gate_passages, gate_rejections, label_events,
+                         waited_seconds, waiting_since)
 
 
 def labeled(ts, name):
@@ -43,6 +42,40 @@ class TestGates(unittest.TestCase):
         # six label slots across the three gates, five distinct labels:
         # passing the PRD gate is entering the blueprint gate's queue
         self.assertEqual(GATES[0][2], GATES[1][1])
+
+    def test_a_gate_row_names_its_fields(self):
+        """Why the row is a namedtuple: detector J asks for the labels by
+        name instead of slicing gate[1:3], and the three sites that
+        iterate the rows keep unpacking them positionally."""
+        prd = GATES[0]
+        self.assertEqual((prd.name, prd.queue, prd.passed, prd.heading),
+                         tuple(prd))
+
+
+class TestGateLabels(unittest.TestCase):
+    def test_every_label_the_gates_name_five_distinct_of_six(self):
+        self.assertEqual(gate_labels(),
+                         {"wo:draft", "wo:prd-approved",
+                          "wo:blueprint-approved", "wo:needs-review",
+                          "wo:merged"})
+
+    def test_it_is_the_queue_and_pass_labels_of_every_gate(self):
+        for gate in GATES:
+            with self.subTest(gate=gate.name):
+                self.assertIn(gate.queue, gate_labels())
+                self.assertIn(gate.passed, gate_labels())
+
+
+class TestWaitedSeconds(unittest.TestCase):
+    def test_whole_seconds_between_two_github_timestamps(self):
+        self.assertEqual(waited_seconds("2026-07-01T09:00:00Z",
+                                        "2026-07-02T09:00:00Z"), 86400)
+
+    def test_the_z_suffix_is_read_on_every_supported_python(self):
+        # fromisoformat accepts Z only from 3.11; the replace is why this
+        # runs the same on 3.9
+        self.assertEqual(waited_seconds("2026-07-01T09:00:00Z",
+                                        "2026-07-01T09:00:00+00:00"), 0)
 
 
 class TestLabelEvents(unittest.TestCase):
@@ -171,6 +204,40 @@ COMPLETED_STAYS = {
     ("prd", "2026-08-04T09:00:00Z"),
     ("merge", "2026-08-07T09:00:00Z"),
 }
+
+
+class TestCompletedStays(unittest.TestCase):
+    """One walk and one window test, returning the list the digest and
+    the miner divide between them."""
+
+    PRD = GATES[0]
+
+    def test_a_pass_label_inside_the_window_confirms_the_stay(self):
+        events = label_events([
+            labeled("2026-07-01T09:00:00Z", "wo:draft"),
+            labeled("2026-07-02T09:00:00Z", "wo:prd-approved"),
+            unlabeled("2026-07-02T09:00:00Z", "wo:draft"),
+        ])
+        self.assertEqual(completed_stays(events, self.PRD),
+                         [("2026-07-01T09:00:00Z",
+                           "2026-07-02T09:00:00Z", True)])
+
+    def test_a_confirmation_past_the_next_re_entry_confirms_nothing(self):
+        # the window runs from a stay's start up to the gate's next
+        # re-entry, so the second stay's pass cannot reach back
+        events = label_events(PARTITION_HISTORY)
+        self.assertEqual(completed_stays(events, self.PRD), [
+            ("2026-08-01T09:00:00Z", "2026-08-02T09:00:00Z", False),
+            ("2026-08-03T09:00:00Z", "2026-08-04T09:00:00Z", True),
+        ])
+
+    def test_an_open_stay_is_absent_still_waiting(self):
+        events = label_events([
+            labeled("2026-07-01T09:00:00Z", "wo:draft")])
+        self.assertEqual(completed_stays(events, self.PRD), [])
+
+    def test_an_empty_history_yields_no_stays(self):
+        self.assertEqual(completed_stays([], self.PRD), [])
 
 
 class TestThePartition(unittest.TestCase):
