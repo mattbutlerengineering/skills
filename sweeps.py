@@ -60,7 +60,7 @@ import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json, label_names, report
+from cli import gh_read, label_names, report
 from knowledge_plane import (WO_TOKEN, breakdown_files, repo_root,
                              row_tracker_issue)
 from cli import gh_runner
@@ -333,19 +333,12 @@ def live_issues(run=gh_runner):
     listing in known_keys: past the window an issue is simply absent, and
     absence is exactly what two of the drift checks read as a finding. A
     windowed reconcile would file a report full of invented drift."""
-    try:
-        issues, suffix = gh_json(["issue", "list", "--state", "all",
-                                  "--json", "number,state,labels",
-                                  "--limit", str(LIST_WINDOW)], run,
-                                 expect=list)
-    except GH_FAILURES as err:
-        return None, [f"sweeps: gh issue list failed: {gh_detail(err)}"]
-    if suffix:
-        return None, [f"sweeps: gh issue list {suffix}"]
-    window = full_window(issues, LIST_WINDOW)
-    if window:
-        return None, [f"sweeps: gh issue list {window}"]
-    return issues, []
+    read = gh_read(["issue", "list", "--state", "all", "--json",
+                    "number,state,labels"], "gh issue list",
+                   label="sweeps", run=run, window=LIST_WINDOW)
+    if read.value is None or read.truncated:
+        return None, read.problems
+    return read.value, []
 
 
 def reconcile(root, run=gh_runner):
@@ -399,10 +392,7 @@ def ensure_labels(root, run=gh_runner):
     if problems:
         return problems
     want = {label["name"]: label for label in desired}
-    try:
-        listing, suffixes = label_sync.live_labels(run)
-    except GH_FAILURES as err:
-        return [f"sweeps: gh label list failed: {gh_detail(err)}"]
+    listing, suffixes = label_sync.live_labels(run)
     problems = [f"sweeps: {suffix}" for suffix in suffixes]
     if listing is None:
         return problems
@@ -461,24 +451,20 @@ def known_keys(run=gh_runner):
     The listing is windowed and gh truncates it silently, so a full window is
     reported: past it, old keys are invisible and their intake is re-filed as a
     duplicate — which would otherwise look just like a clean sweep."""
-    try:
-        issues, suffix = gh_json(["issue", "list", "--state", "all",
-                                  "--json", "number,body",
-                                  "--limit", str(LIST_WINDOW)], run,
-                                 expect=list)
-    except GH_FAILURES as err:
-        return None, [f"sweeps: gh issue list failed: {gh_detail(err)}"]
-    if suffix:
-        return None, [f"sweeps: gh issue list {suffix}"]
-    problems = []
-    # The full-window RULE is cli.full_window's (one owner, made shared
-    # from this very check). The message stays this sweep's own — pinned,
-    # and it says what a full window means HERE: intake keys fall out of
-    # view and their intake is re-filed as a duplicate.
-    if full_window(issues, LIST_WINDOW):
-        problems.append(f"sweeps: gh issue list returned a full {LIST_WINDOW}"
-                        "-issue window; intake keys older than it are"
-                        " invisible and would be re-filed as duplicates")
+    # The full-window RULE is cli.gh_read's (one owner, made shared from
+    # this very check). The message stays this sweep's own — pinned, and
+    # it says what a full window means HERE: intake keys fall out of
+    # view and their intake is re-filed as a duplicate — so it travels
+    # as full_note rather than being written after the fact.
+    read = gh_read(["issue", "list", "--state", "all", "--json",
+                    "number,body"], "gh issue list", label="sweeps",
+                   run=run, window=LIST_WINDOW,
+                   full_note=(f"returned a full {LIST_WINDOW}-issue window;"
+                              " intake keys older than it are invisible and"
+                              " would be re-filed as duplicates"))
+    if read.value is None:
+        return None, read.problems
+    issues, problems = read.value, list(read.problems)
     keys = set()
     for issue in issues:
         for line in (issue.get("body") or "").splitlines():
@@ -534,10 +520,7 @@ def label_drift(root, run=gh_runner):
     desired, problems = label_sync.load_labels(root)
     if problems:
         return [], problems
-    try:
-        current, suffixes = label_sync.live_labels(run)
-    except GH_FAILURES as err:
-        return [], [f"sweeps: gh label list failed: {gh_detail(err)}"]
+    current, suffixes = label_sync.live_labels(run)
     problems = [f"sweeps: {suffix}" for suffix in suffixes]
     if current is None:
         return [], problems
