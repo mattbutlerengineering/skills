@@ -163,6 +163,25 @@ choice — both follow mechanically from authorities the design already names:
   *.py` names `cli.py` alone, `grep -rnw -e gh_json -e full_window *.py
   tests/ factory/templates/` finds nothing, and `grep -n '"100"'
   work_queue.py` finds nothing.
+- **2026-08-18, review — two closed Accept lines carry claims narrower
+  than the truth; both stand as written, corrected here.** B3's line
+  requires `human_gates.py` be "raising nowhere", and Verify checked it
+  as `raise sites: 0` — a grep for the keyword, which cannot see an
+  exception that propagates. `waited_seconds` → `fromisoformat` raises
+  `ValueError` on a completed stay whose timestamp is truthy but not
+  ISO-8601, which `label_events` admits on truthiness alone. Review drove
+  the same input against main's `gate_digest.gate_passages` and got the
+  identical error: relocated byte-for-byte, not introduced, so the module
+  is what the item asked for and the false claim is the artifacts'.
+  `architecture.md`'s failure-modes line is corrected in place;
+  hardening `_parse_ts` is a behavior change to a shipped tool with no
+  evidence behind it and is seeded, not taken. B4's line names two
+  sanctioned exact-string edits; a third moved — `gates.py:1270`, the
+  expectation inside `gates.selftest()`, which is an expectation *of* the
+  string B4 renames and would have made `--selftest` red in every
+  stamped repo. `6ec22a5`'s message and `verification.md` both already
+  record it. The rows stay closed as written: rewriting a checked Accept
+  line after the fact edits the run's history instead of recording it.
 - **Milestone order.** A first, because it is the widest leverage and because
   three of the modules milestone B re-points are modules milestone A has
   already touched — doing A first means B's diffs are about the gate

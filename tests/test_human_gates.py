@@ -243,8 +243,8 @@ class TestCompletedStays(unittest.TestCase):
 class TestThePartition(unittest.TestCase):
     """The invariant that joins the digest and the miner: a completed
     stay is confirmed or it is not, so the two of them divide one list
-    between them. Nothing executes this today — it is a sentence in a
-    docstring, and the window test it describes is spelled two ways."""
+    between them. This class is what executes it, and the window test it
+    describes now has one spelling to execute."""
 
     def stays(self):
         events = label_events(PARTITION_HISTORY)

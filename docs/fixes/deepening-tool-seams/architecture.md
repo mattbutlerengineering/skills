@@ -276,10 +276,19 @@ appending to the `problems` list they are handed;
   only from 3.11). Used by `gate_passages` and by
   `gate_digest._queues`, which today calls `_seconds` for the same
   reason.
-- Failure modes across the module: none raise. Malformed events are
-  skipped, an empty history yields empty lists. The module is pure, so
-  every one of these is testable with a literal list of events and no
-  network — which is why it is the module and the fetch is not.
+- Failure modes across the module: it is pure and does no I/O, and
+  malformed *events* are skipped — an empty history yields empty lists.
+  It is not exception-free: a completed stay whose timestamp is truthy
+  but not ISO-8601 propagates `ValueError` out of `fromisoformat`, since
+  `label_events` admits an event on truthiness alone. That behavior is
+  relocated from `gate_digest`, not introduced here, and `run_daily`
+  catches only `CLI_FAILURES` — hardening it is a separate change with
+  its own evidence. Purity is why every one of these is testable with a
+  literal list of events and no network — which is why it is the module
+  and the fetch is not.
+  *(Corrected 2026-08-18 by this run's review, which drove the
+  `ValueError` at both revisions; the original line claimed "none
+  raise", which a grep for the keyword cannot establish.)*
 
 **What does not move, and why** (the way this item dies is by growing
 past its evidence):
