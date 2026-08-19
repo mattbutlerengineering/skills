@@ -11,9 +11,12 @@ cost_report.read_ledger) — one grammar, one home, one test file.
 import json
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 import cost_ledger
+import cost_report
+import work_queue
 
 
 # fixture records come from the seam under test — entry() itself is
@@ -391,6 +394,61 @@ class TestRead(unittest.TestCase):
             self.assertEqual(
                 cost_ledger.read("/does/not/exist", ledger_path=custom),
                 ([e1], []))
+
+
+class TestWhatCountsAsSpend(unittest.TestCase):
+    """The two month-to-date sums, over one ledger carrying a gate row
+    that cost money.
+
+    ADR-0041 decided the rule — a gate-latency observation is a wait
+    record, not a run, and never counts as spend — and cost_report
+    implements it while work_queue does not. The disagreement cannot be
+    reached through any production path: cost_ledger.gate_entry writes
+    every gate row 0 tokens and 0.0 cost BY CONSTRUCTION, so both sums
+    return the same number over the real ledger and always have. The
+    costly gate row below is therefore hand-assembled into a fixture, and
+    exists nowhere else: docs/factory/costs.jsonl is append-only and
+    carries no such line.
+    """
+
+    MONTH = "2026-08"
+    NOW = datetime(2026, 8, 15, tzinfo=timezone.utc)
+
+    def fixture(self, tmp):
+        """(a dispatched run, a gate passage that cost money), written to
+        a ledger under `tmp`. gate_entry cannot build the second one, so
+        it comes from the same field builder every well-formed row does."""
+        run = entry("WO-0001", "r-1", "claude-sonnet-5", 9000, 12.50,
+                    "merged", "2026-08-02")
+        gate = entry("WO-0001", "gate-merge-2026-08-03T05:17:00Z", "none",
+                     500, 3.25, "gate_wait:merge:7260s", "2026-08-03")
+        # The row is a well-formed gate row: read() admits it and
+        # gate_wait recognises it, so nothing but the spend rule is at
+        # stake in the numbers below.
+        self.assertEqual(cost_ledger.line_problems(gate), [])
+        self.assertEqual(cost_ledger.gate_wait(gate), ("merge", 7260))
+        path = Path(tmp) / cost_ledger.COST_LEDGER
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(run) + "\n" + json.dumps(gate) + "\n",
+                        encoding="utf-8")
+        return run, gate
+
+    def test_the_two_month_totals_disagree_on_a_costly_gate_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.fixture(tmp)
+            entries, problems = cost_ledger.read(tmp)
+            self.assertEqual(problems, [])
+            report_total = cost_report.aggregate(
+                entries, self.MONTH)["total_cost"]
+            queue_total, queue_problems = work_queue.month_to_date(
+                tmp, self.NOW)
+            self.assertEqual(queue_problems, [])
+            # $12.50 versus $15.75: the report keeps the $3.25 gate row
+            # out of the month (ADR-0041), the queue's breaker input
+            # counts it as spend.
+            self.assertEqual(report_total, 12.50)
+            self.assertEqual(queue_total, 15.75)
+            self.assertNotEqual(report_total, queue_total)
 
 
 if __name__ == "__main__":
