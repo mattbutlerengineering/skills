@@ -24,7 +24,7 @@
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
     "templates/tools/factory/assembler.py": "406d43992785c0e688c833ef3a8c8540a65ee5a8c13f783b81f2424f71c0dff8",
     "templates/tools/factory/budget_guard.py": "bb486bbef33c41f4e02b39a452ca6cbe639ad74703b14e141209dddc6577dd52",
-    "templates/tools/factory/cli.py": "3fee7e3af9bd184611f241475bfd61569b9bad7e914a53972ddf8706dff54bee",
+    "templates/tools/factory/cli.py": "ec79b0b113803925ad89c20a965e6c9aa875433a17d98cde27bee4a14bfed8b1",
     "templates/tools/factory/cost_ledger.py": "10b5a2767c837b8cbdff36697ab4b64d67c91ad381c64ad4fcadbc010be5e21d",
     "templates/tools/factory/cost_report.py": "f4a8c59e90277a394c5a2cf9482f61192ef775669d36d06f10eee22cd9353bdb",
     "templates/tools/factory/factory_config.py": "a040880859269d993076a250e4ad61ea52a7595e696f8e2d9ad98e90842a260d",

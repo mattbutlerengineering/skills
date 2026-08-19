@@ -54,7 +54,7 @@ nine touched modules are MIRRORS entries (`cli.py`, `label_sync.py`,
 `validator.py`, `assembler.py`, `gate_digest.py`, `rejection_mining.py`,
 `work_queue.py`); `dashboard.py` and `sweeps.py` mirror nothing.
 
-- [ ] **A1** land `cli.gh_read` beside the halves it will replace — size:M, blocked by: —
+- [x] **A1** land `cli.gh_read` beside the halves it will replace — size:M, blocked by: —
   - Accept: `TestGhRead` in tests/test_cli.py covers the contract's five failure modes (gh failed, unparseable JSON, wrong shape, full window, clean read), `label=None` leaving problems unprefixed, `window` reaching gh as a trailing `--limit <window>` asserted on the exact argv the fake runner receives, `truncated` true only on a full window, and `full_note` replacing the shared sentence. Each case is written and watched to fail against today's code before the seam is written. `gh_json`, `full_window`, `TestGhJson` (tests/test_cli.py:129) and `TestFullWindow` (:156) are untouched and green; no caller changes in this item. `cli.py` is a MIRRORS entry, so the payload twin and the manifest are regenerated in the same commit and detector E is green.
 - [ ] **A2** the two single-site callers: validator and assembler — size:S, blocked by: A1
   - Accept: validator.py:323 reads through `cli.gh_read` with `expect=dict` and no window; assembler.py:259 reads through it with `window=` its own `LIST_WINDOW` (assembler.py:60), and neither module embeds a window in a `--limit` argument any more. assembler's copied drift-warning comment (assembler.py:57-59) goes with the coupling it warned about. tests/test_validator.py and tests/test_assembler.py pass UNCHANGED. Manifest regenerated in the same commit; detector E green.

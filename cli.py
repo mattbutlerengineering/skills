@@ -30,7 +30,9 @@ count, return the exit code — retyped in ten mains before it moved here
 gh_runner, the stdout port over runner("gh"), lives beside runner for the
 same reason write_outputs moved here (ADR-0040): it had grown four real
 callers (label_sync, validator, gate_digest, sweeps), three of them
-importing it tool-to-tool from label_sync.
+importing it tool-to-tool from label_sync. gh_read is the whole gh read
+above it — run, catch, parse, shape-check, window, prefix — one call
+where fourteen sites each composed five undocumented facts by hand.
 """
 import contextlib
 import json
@@ -40,6 +42,7 @@ import select
 import signal
 import subprocess
 import time
+from collections import namedtuple
 from pathlib import Path
 
 # A failed or missing binary raises one of these; callers turn that into
@@ -344,6 +347,64 @@ def full_window(entries, limit):
         return (f"returned a full {limit}-entry window — older entries"
                 " are invisible; raise the window or narrow the query")
     return None
+
+
+# A gh read's named result. Still a tuple, but `truncated` is a fact the
+# caller reads rather than infers from "a problem on a usable listing" —
+# that inference is correct today and silently wrong the first time this
+# seam adds a second advisory problem.
+GhResult = namedtuple("GhResult", ("value", "problems", "truncated"))
+
+
+def gh_read(args, operation, label=None, run=gh_runner, expect=list,
+            window=None, full_note=None):
+    """The whole windowed gh read as one call: run gh, catch the binary's
+    failure vocabulary, parse and shape-check the JSON, own the window,
+    and answer with already-prefixed problem strings.
+
+    `args` is the gh argument list WITHOUT --limit: the seam appends
+    `--limit <window>` when a window is given, so the limit that was sent
+    and the limit the truncation check tests are the same number by
+    construction (the drift three copied comments used to warn about).
+    `operation` is the caller's name for the call as it appears in a
+    problem string ("gh pr list", "gh api timeline for #12") — passed in,
+    never derived from args, because the second is not derivable and
+    deriving the rest would move strings the exact-string tests pin.
+    `label` is the caller's problem-string label ("asm", "gd", "V"), or
+    None for a reader whose own callers own the label (live_labels, used
+    with `L: ` and with `sweeps: `).
+
+    Answers GhResult(value, problems, truncated). `value` is the parsed
+    JSON, or None when the read is unusable — a failed, missing, or
+    rate-limited gh (CLI_FAILURES, caught here rather than at fourteen
+    call sites), unreadable output, or the wrong top-level shape. A full
+    window leaves the value usable and flips `truncated`: the seam states
+    the fact and the CALLER decides what it means — most report and
+    continue, work_queue and sweeps.live_issues refuse the value outright,
+    and sweeps.known_keys replaces the shared sentence through
+    `full_note` because truncation costs something different there."""
+    prefix = f"{label}: " if label else ""
+    argv = list(args) if window is None else [*args, "--limit", str(window)]
+    try:
+        out = run(argv)
+    except CLI_FAILURES as err:
+        return GhResult(None, [f"{prefix}{operation} failed:"
+                               f" {detail(err)}"], False)
+    try:
+        value = json.loads(out)
+    except json.JSONDecodeError as err:
+        return GhResult(None, [f"{prefix}{operation} returned unparseable"
+                               f" JSON: {err}"], False)
+    if not isinstance(value, expect):
+        return GhResult(None, [f"{prefix}{operation} returned"
+                               f" {type(value).__name__} where"
+                               f" {expect.__name__} was expected"], False)
+    if window is not None and len(value) >= window:
+        note = full_note or (
+            f"returned a full {window}-entry window — older entries are"
+            " invisible; raise the window or narrow the query")
+        return GhResult(value, [f"{prefix}{operation} {note}"], True)
+    return GhResult(value, [], False)
 
 
 def label_names(payload):
