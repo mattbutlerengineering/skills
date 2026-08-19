@@ -43,8 +43,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from cli import CLI_FAILURES, full_window, gh_json, gh_runner, label_names
-from cli import detail as run_detail
+from cli import CLI_FAILURES, gh_read, gh_runner, label_names
 from cli import report, runner
 import cost_ledger
 import cost_report
@@ -65,8 +64,9 @@ git_runner = runner("git")
 _REMOTE = re.compile(
     r"^(?:git@github\.com:|https://github\.com/)([^/]+/[^/]+?)(?:\.git)?$")
 
-# gh truncates a windowed listing silently (the gate_digest rule); the
-# window is declared once beside the --limit that carries it.
+# How far back the dispatch-plane listings can see. cli.gh_read sends it
+# as the --limit and reports the truncation, so the two can no longer
+# drift.
 LIST_WINDOW = 1000
 
 # Every artifact filename that marks a run dir as *a run at all* — the
@@ -143,18 +143,13 @@ def _timeline(slug, number, run, problems):
     the item still lists, just without an age (the gate_digest rule:
     a failed fetch is a problem, never a lost queue item)."""
     path = f"repos/{slug}/issues/{number}/timeline"
-    try:
-        pages, suffix = gh_json(["api", path, "--paginate", "--slurp"],
-                                run, expect=list)
-    except CLI_FAILURES as err:
-        problems.append(f"dashboard: gh api timeline for #{number}"
-                        f" failed: {run_detail(err)}")
+    read = gh_read(["api", path, "--paginate", "--slurp"],
+                   f"gh api timeline for #{number}", label="dashboard",
+                   run=run)
+    problems.extend(read.problems)
+    if read.value is None:
         return []
-    if suffix:
-        problems.append(f"dashboard: gh api timeline for #{number}"
-                        f" {suffix}")
-        return []
-    return label_events([event for page in pages for event in page])
+    return label_events([event for page in read.value for event in page])
 
 
 def _listing(slug, run, problems):
@@ -162,23 +157,12 @@ def _listing(slug, run, problems):
     sections read — the queues filter it to open issues, the drift
     check compares row checkboxes against its states. None on a failed
     or unparseable list; the sections stay empty and render on."""
-    try:
-        listing, suffix = gh_json(
-            ["issue", "list", "-R", slug, "--state", "all", "--json",
-             "number,title,state,labels,url", "--limit",
-             str(LIST_WINDOW)],
-            run, expect=list)
-    except CLI_FAILURES as err:
-        problems.append(f"dashboard: gh issue list failed:"
-                        f" {run_detail(err)}")
-        return None
-    if suffix:
-        problems.append(f"dashboard: gh issue list {suffix}")
-        return None
-    window = full_window(listing, LIST_WINDOW)
-    if window:
-        problems.append(f"dashboard: gh issue list {window}")
-    return listing
+    read = gh_read(
+        ["issue", "list", "-R", slug, "--state", "all", "--json",
+         "number,title,state,labels,url"],
+        "gh issue list", label="dashboard", run=run, window=LIST_WINDOW)
+    problems.extend(read.problems)
+    return read.value
 
 
 def _queues(slug, listing, mirror, run, now, problems):
@@ -236,25 +220,16 @@ def _pr_by_issue(slug, run, problems):
     implements). A merged PR outranks an open one outranks a
     closed-unmerged one; within a rank the newest wins. None on a
     failed list — the table renders on without PR joins."""
-    try:
-        listing, suffix = gh_json(
-            ["pr", "list", "-R", slug, "--state", "all", "--json",
-             "number,state,body,url,reviews", "--limit",
-             str(LIST_WINDOW)],
-            run, expect=list)
-    except CLI_FAILURES as err:
-        problems.append(f"dashboard: gh pr list failed:"
-                        f" {run_detail(err)}")
+    read = gh_read(
+        ["pr", "list", "-R", slug, "--state", "all", "--json",
+         "number,state,body,url,reviews"],
+        "gh pr list", label="dashboard", run=run, window=LIST_WINDOW)
+    problems.extend(read.problems)
+    if read.value is None:
         return None
-    if suffix:
-        problems.append(f"dashboard: gh pr list {suffix}")
-        return None
-    window = full_window(listing, LIST_WINDOW)
-    if window:
-        problems.append(f"dashboard: gh pr list {window}")
     rank = {"MERGED": 2, "OPEN": 1, "CLOSED": 0}
     best = {}
-    for entry in listing:
+    for entry in read.value:
         number = entry.get("number")
         if not isinstance(number, int):
             continue
