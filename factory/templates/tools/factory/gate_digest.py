@@ -38,7 +38,7 @@ from datetime import datetime, timezone
 import cost_ledger
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json, label_names, report, write_outputs
+from cli import gh_read, label_names, report, write_outputs
 from knowledge_plane import (breakdown_files, repo_root, row_tracker_issue,
                              row_work_order)
 from cli import gh_runner
@@ -164,11 +164,11 @@ def compose_digest(queues, as_of):
     return "\n".join(lines) + "\n"
 
 
-# gh truncates a windowed listing silently; the window size is declared
-# once so the full-window report and the --limit can never drift apart.
+# How far back the issue listing can see. cli.gh_read sends it as the
+# --limit and reports the truncation, so the two can no longer drift.
 LIST_WINDOW = 1000
 LIST_ARGS = ("issue", "list", "--state", "all", "--json",
-             "number,title,state,labels,body", "--limit", str(LIST_WINDOW))
+             "number,title,state,labels,body")
 
 
 def mirror_map(root):
@@ -194,18 +194,14 @@ def _timelines(mirrored, run, problems):
     events = {}
     for number in mirrored:
         path = f"repos/{{owner}}/{{repo}}/issues/{number}/timeline"
-        try:
-            pages, suffix = gh_json(["api", path, "--paginate", "--slurp"],
-                                    run, expect=list)
-        except GH_FAILURES as err:
-            problems.append(f"gd: gh api timeline for #{number} failed:"
-                            f" {gh_detail(err)}")
-            continue
-        if suffix:
-            problems.append(f"gd: gh api timeline for #{number} {suffix}")
+        read = gh_read(["api", path, "--paginate", "--slurp"],
+                       f"gh api timeline for #{number}", label="gd",
+                       run=run)
+        problems.extend(read.problems)
+        if read.value is None:
             continue
         events[number] = label_events(
-            [event for page in pages for event in page])
+            [event for page in read.value for event in page])
     return events
 
 
@@ -291,17 +287,11 @@ def run_daily(root, run=gh_runner, clock=None):
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
     mirror = mirror_map(root)
-    try:
-        listing, suffix = gh_json(list(LIST_ARGS), run, expect=list)
-    except GH_FAILURES as err:
-        return ({"changed": "false"},
-                [f"gd: gh issue list failed: {gh_detail(err)}"])
-    if suffix:
-        return {"changed": "false"}, [f"gd: gh issue list {suffix}"]
-    problems = []
-    window = full_window(listing, LIST_WINDOW)
-    if window:
-        problems.append(f"gd: gh issue list {window}")
+    read = gh_read(list(LIST_ARGS), "gh issue list", label="gd", run=run,
+                   window=LIST_WINDOW)
+    if read.value is None:
+        return {"changed": "false"}, read.problems
+    listing, problems = read.value, list(read.problems)
     mirrored = sorted(entry["number"] for entry in listing
                       if entry.get("number") in mirror)
     events_by_issue = _timelines(mirrored, run, problems)

@@ -36,7 +36,7 @@ from datetime import datetime, timezone
 
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json, gh_runner, report, write_outputs
+from cli import gh_read, gh_runner, report, write_outputs
 from gate_digest import GATES, label_events, mirror_map
 from knowledge_plane import CLOSES_TOKEN, repo_root
 from sweeps import sanitize
@@ -46,14 +46,13 @@ from sweeps import sanitize
 MARKER = "<!-- factory-toolsmith-queue -->"
 QUEUE_TITLE = "Toolsmith queue — mined rejections"
 
-# gh truncates a windowed listing silently; the window size is declared
-# once so the full-window report and the --limit can never drift apart.
+# How far back the two listings can see. cli.gh_read sends it as the
+# --limit and reports the truncation, so the two can no longer drift.
 LIST_WINDOW = 1000
 ISSUE_ARGS = ("issue", "list", "--state", "all", "--json",
-              "number,title,state,labels,body", "--limit",
-              str(LIST_WINDOW))
+              "number,title,state,labels,body")
 PR_ARGS = ("pr", "list", "--state", "all", "--json",
-           "number,state,body,reviews", "--limit", str(LIST_WINDOW))
+           "number,state,body,reviews")
 
 
 def gate_rejections(events):
@@ -170,18 +169,14 @@ def _timelines(mirrored, run, problems):
     events = {}
     for number in mirrored:
         path = f"repos/{{owner}}/{{repo}}/issues/{number}/timeline"
-        try:
-            pages, suffix = gh_json(["api", path, "--paginate",
-                                     "--slurp"], run, expect=list)
-        except GH_FAILURES as err:
-            problems.append(f"rm: gh api timeline for #{number} failed:"
-                            f" {gh_detail(err)}")
-            continue
-        if suffix:
-            problems.append(f"rm: gh api timeline for #{number} {suffix}")
+        read = gh_read(["api", path, "--paginate", "--slurp"],
+                       f"gh api timeline for #{number}", label="rm",
+                       run=run)
+        problems.extend(read.problems)
+        if read.value is None:
             continue
         events[number] = label_events(
-            [event for page in pages for event in page])
+            [event for page in read.value for event in page])
     return events
 
 
@@ -189,18 +184,12 @@ def _change_requests(mirror, run, problems):
     """change_requests over a live pr listing; a failed listing is a
     problem plus an empty stream, never a lost harvest — the gate
     rejections still post."""
-    try:
-        listing, suffix = gh_json(list(PR_ARGS), run, expect=list)
-    except GH_FAILURES as err:
-        problems.append(f"rm: gh pr list failed: {gh_detail(err)}")
+    read = gh_read(list(PR_ARGS), "gh pr list", label="rm", run=run,
+                   window=LIST_WINDOW)
+    problems.extend(read.problems)
+    if read.value is None:
         return []
-    if suffix:
-        problems.append(f"rm: gh pr list {suffix}")
-        return []
-    window = full_window(listing, LIST_WINDOW)
-    if window:
-        problems.append(f"rm: gh pr list {window}")
-    return change_requests(listing, mirror)
+    return change_requests(read.value, mirror)
 
 
 def _post_queue(existing, body, run, problems):
@@ -240,16 +229,11 @@ def run_mine(root, run=gh_runner, clock=None):
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
     mirror = mirror_map(root)
-    try:
-        listing, suffix = gh_json(list(ISSUE_ARGS), run, expect=list)
-    except GH_FAILURES as err:
-        return {}, [f"rm: gh issue list failed: {gh_detail(err)}"]
-    if suffix:
-        return {}, [f"rm: gh issue list {suffix}"]
-    problems = []
-    window = full_window(listing, LIST_WINDOW)
-    if window:
-        problems.append(f"rm: gh issue list {window}")
+    read = gh_read(list(ISSUE_ARGS), "gh issue list", label="rm", run=run,
+                   window=LIST_WINDOW)
+    if read.value is None:
+        return {}, read.problems
+    listing, problems = read.value, list(read.problems)
 
     mirrored = sorted(entry["number"] for entry in listing
                       if entry.get("number") in mirror)
