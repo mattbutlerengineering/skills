@@ -8,9 +8,11 @@ plane, and this tool reads both through the injected gh runner (same
 seam as gate_digest.py, so tests never touch the network):
 
 - gate rejections — a `wo:` queue stay that ended WITHOUT the gate's
-  pass label. These are exactly the stays gate_digest.gate_passages
+  pass label. These are exactly the stays human_gates.gate_passages
   deliberately skips: a flip to wo:failed / wo:blocked records no
   latency row there, so this tool is where those flips finally land.
+  One walk answers both (human_gates.completed_stays, ADR-0056): the
+  digest keeps the confirmed stays, this keeps the rest.
 - PR change-requests — CHANGES_REQUESTED reviews on the work orders'
   PRs, joined to their WO through the `Closes #N` grammar
   (knowledge_plane.CLOSES_TOKEN).
@@ -37,7 +39,8 @@ from datetime import datetime, timezone
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, report, write_outputs
-from gate_digest import GATES, label_events, mirror_map
+from gate_digest import mirror_map
+from human_gates import gate_rejections, label_events
 from knowledge_plane import CLOSES_TOKEN, repo_root
 from sweeps import sanitize
 
@@ -54,40 +57,6 @@ ISSUE_ARGS = ("issue", "list", "--state", "all", "--json",
               "number,title,state,labels,body")
 PR_ARGS = ("pr", "list", "--state", "all", "--json",
            "number,state,body,reviews")
-
-
-def gate_rejections(events):
-    """[(gate, stay ended at)] — every completed queue stay in one
-    issue's label history that the gate's pass label never confirmed.
-    The confirmation window matches gate_digest.gate_passages — from
-    the stay's start up to the gate's next re-entry — so the two tools
-    partition completed stays between them: every stay is a passage
-    there or a rejection here, never both. An open stay is still
-    waiting, not rejected."""
-    rejections = []
-    for gate, queue, pass_label, _ in GATES:
-        confirmations = [ts for ts, kind, name in events
-                         if kind == "labeled" and name == pass_label]
-        stays = []
-        entered = None
-        for ts, kind, name in events:
-            if name != queue:
-                continue
-            if kind == "labeled":
-                entered = ts
-            elif kind == "unlabeled" and entered is not None:
-                stays.append((entered, ts))
-                entered = None
-        entries = [start for start, _ in stays]
-        for index, (start, left) in enumerate(stays):
-            window_end = entries[index + 1] if index + 1 < len(entries) \
-                else None
-            confirmed = any(
-                start <= ts and (window_end is None or ts < window_end)
-                for ts in confirmations)
-            if not confirmed:
-                rejections.append((gate, left))
-    return sorted(rejections, key=lambda item: item[1])
 
 
 def _excerpt(body):

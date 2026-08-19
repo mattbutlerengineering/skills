@@ -48,7 +48,8 @@ from cli import report, runner
 import cost_ledger
 import cost_report
 import factory_config
-from gate_digest import GATES, label_events, mirror_map, waiting_since
+from gate_digest import mirror_map
+from human_gates import GATES, label_events, waiting_since
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              row_done, row_size, row_title,
                              row_tracker_issue, row_work_order, run_dirs)
@@ -131,9 +132,11 @@ def remote_slug(repo_path, git=git_runner):
 
 
 def _age_seconds(since, now):
-    """Whole seconds from a GitHub timestamp to now. The Z-suffix
-    replace is gate_digest's documented compat quirk (fromisoformat
-    accepts Z only from 3.11)."""
+    """Whole seconds from a GitHub timestamp to now. Not
+    human_gates.waited_seconds: that one takes two GitHub timestamps,
+    this takes a live datetime for `now`, and the rendering is the
+    dashboard's. The Z-suffix replace is the same documented compat
+    quirk (fromisoformat accepts Z only from 3.11)."""
     then = datetime.fromisoformat(since.replace("Z", "+00:00"))
     return int((now - then).total_seconds())
 

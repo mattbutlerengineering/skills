@@ -4,8 +4,13 @@ gate-latency capture.
 Same discipline as test_validator: the gh CLI is injected (a recording
 fake, never the network), the clock is injected, and tests assert the
 exact problem strings and ledger rows through the public interface. The
-pure parts — timeline parsing, passage detection, digest composition —
+pure parts this tool still owns — digest composition, the mirror map —
 are exercised directly; run_daily composes them against the fakes.
+
+The gate vocabulary and the stay walk are human_gates.py's (ADR-0056),
+so timeline parsing, passage detection and waiting_since are covered in
+tests/test_human_gates.py — one frame further out, where the miner's
+half of the same partition is covered too.
 """
 import json
 import sys
@@ -76,87 +81,6 @@ def labeled(ts, name):
 
 def unlabeled(ts, name):
     return {"event": "unlabeled", "label": {"name": name}, "created_at": ts}
-
-
-class TestLabelEvents(unittest.TestCase):
-    def test_keeps_only_label_flips_in_timeline_order(self):
-        timeline = [
-            {"event": "commented", "created_at": "2026-07-01T09:00:00Z"},
-            labeled("2026-07-01T09:00:00Z", "wo:draft"),
-            {"event": "labeled", "label": {}},
-            unlabeled("2026-07-02T09:00:00Z", "wo:draft"),
-        ]
-        self.assertEqual(gate_digest.label_events(timeline), [
-            ("2026-07-01T09:00:00Z", "labeled", "wo:draft"),
-            ("2026-07-02T09:00:00Z", "unlabeled", "wo:draft"),
-        ])
-
-
-class TestGatePassages(unittest.TestCase):
-    def test_a_confirmed_flip_is_a_passage(self):
-        events = gate_digest.label_events([
-            labeled("2026-07-01T09:00:00Z", "wo:draft"),
-            labeled("2026-07-02T09:00:00Z", "wo:prd-approved"),
-            unlabeled("2026-07-02T09:00:00Z", "wo:draft"),
-        ])
-        self.assertEqual(gate_digest.gate_passages(events),
-                         [("prd", 86400, "2026-07-02T09:00:00Z")])
-
-    def test_a_flip_to_anything_but_the_pass_label_is_not_a_passage(self):
-        # wo:draft -> wo:blocked is a rejection, not a PRD-gate pass.
-        events = gate_digest.label_events([
-            labeled("2026-07-01T09:00:00Z", "wo:draft"),
-            unlabeled("2026-07-03T09:00:00Z", "wo:draft"),
-            labeled("2026-07-03T09:00:00Z", "wo:blocked"),
-        ])
-        self.assertEqual(gate_digest.gate_passages(events), [])
-
-    def test_a_rejected_stay_is_not_confirmed_by_a_later_pass(self):
-        # First stay ends in wo:blocked (rejection); the gate is re-entered
-        # and passed later. Only the second stay is a passage — the later
-        # confirmation must not reach back past the re-entry.
-        events = gate_digest.label_events([
-            labeled("2026-07-01T09:00:00Z", "wo:draft"),
-            unlabeled("2026-07-02T09:00:00Z", "wo:draft"),
-            labeled("2026-07-02T09:00:00Z", "wo:blocked"),
-            labeled("2026-07-05T09:00:00Z", "wo:draft"),
-            labeled("2026-07-06T09:00:00Z", "wo:prd-approved"),
-            unlabeled("2026-07-06T09:00:00Z", "wo:draft"),
-        ])
-        self.assertEqual(gate_digest.gate_passages(events),
-                         [("prd", 86400, "2026-07-06T09:00:00Z")])
-
-    def test_a_re_entered_gate_yields_one_passage_per_pair(self):
-        events = gate_digest.label_events([
-            labeled("2026-07-01T09:00:00Z", "wo:needs-review"),
-            unlabeled("2026-07-01T10:00:00Z", "wo:needs-review"),
-            labeled("2026-07-01T10:00:00Z", "wo:merged"),
-            labeled("2026-07-05T09:00:00Z", "wo:needs-review"),
-            unlabeled("2026-07-05T11:00:00Z", "wo:needs-review"),
-            labeled("2026-07-05T11:00:00Z", "wo:merged"),
-        ])
-        self.assertEqual(gate_digest.gate_passages(events), [
-            ("merge", 3600, "2026-07-01T10:00:00Z"),
-            ("merge", 7200, "2026-07-05T11:00:00Z"),
-        ])
-
-
-class TestWaitingSince(unittest.TestCase):
-    def test_a_still_applied_queue_label_reports_its_timestamp(self):
-        events = gate_digest.label_events([
-            labeled("2026-07-20T09:00:00Z", "wo:draft"),
-        ])
-        self.assertEqual(
-            gate_digest.waiting_since(events, "wo:draft"),
-            "2026-07-20T09:00:00Z")
-
-    def test_a_removed_or_never_applied_label_is_none(self):
-        events = gate_digest.label_events([
-            labeled("2026-07-01T09:00:00Z", "wo:draft"),
-            unlabeled("2026-07-02T09:00:00Z", "wo:draft"),
-        ])
-        self.assertIsNone(gate_digest.waiting_since(events, "wo:draft"))
-        self.assertIsNone(gate_digest.waiting_since([], "wo:draft"))
 
 
 class TestComposeDigest(unittest.TestCase):
