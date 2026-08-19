@@ -81,7 +81,7 @@ tracker-mirror grammar. This is the milestone that carries the run's CI
 landmine: a new file in the payload needs its MIRRORS row, `EXPECTED_RELS`,
 the `docs/setup.md` counts and a regenerated manifest, all in one commit.
 
-- [ ] **B1** pin the gate walk at the intended interface, against today's code — size:M, blocked by: —
+- [x] **B1** pin the gate walk at the intended interface, against today's code — size:M, blocked by: —
   - Accept: `tests/test_human_gates.py` exists and is green against unmodified `gate_digest.py` and `rejection_mining.py`, importing `GATES`, `label_events`, `gate_passages` and `waiting_since` from `gate_digest` and `gate_rejections` from `rejection_mining` — the awkwardness is the measurement, and the import lines are the whole of it. It covers the passage cases (today at tests/test_gate_digest.py:95-143), the rejection cases (tests/test_rejection_mining.py:104-135), `label_events` (tests/test_gate_digest.py:81), `waiting_since` (:144), and the case neither suite has: **the partition property** — for one hand-written event history, the passages and the rejections together are exactly the completed stays, and no stay is in both. No production file changes in this item.
 - [ ] **B2** pin `mirror_map` at the knowledge plane, against today's code — size:S, blocked by: —
   - Accept: a `mirror_map` case in tests/test_knowledge_plane.py builds a breakdown tree and asserts the `{tracker issue number: token}` mapping through `gate_digest.mirror_map`, where it still lives, covering a row carrying both, a row with no tracker reference, and an issue with no row. Green against unmodified sources; no production file changes.
