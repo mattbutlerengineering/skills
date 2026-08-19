@@ -53,8 +53,9 @@ from protocol import read_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
 
-# How far back the PR listing can see. cli.gh_read sends it as the
-# --limit and reports the truncation, so the two can no longer drift.
+# How far back the PR listing can see. cli.gh_read owns the window —
+# the limit it sends gh and the truncation it reports are the same
+# number, so the two can no longer drift apart.
 LIST_WINDOW = 1000
 PR_ARGS = ("pr", "list", "--state", "open", "--json", "number,body")
 

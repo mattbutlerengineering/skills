@@ -64,7 +64,7 @@ nine touched modules are MIRRORS entries (`cli.py`, `label_sync.py`,
   - Accept: dashboard.py:147 (timeline, no window), :166 and :240 (`window=` dashboard.py:70's `LIST_WINDOW`) read through `cli.gh_read`; `_timeline` still appends to the problems list it is handed and dashboard.py:171-177 still returns `None` after appending. tests/test_dashboard.py passes UNCHANGED. `dashboard.py` is not a MIRRORS entry — no payload twin, no manifest churn, and that is asserted by the item leaving `factory/` untouched.
 - [x] **A5** the digest's and the miner's five reads — size:M, blocked by: A1
   - Accept: gate_digest.py:198 and :295, and rejection_mining.py:174, :193 and :244 read through `cli.gh_read`; both modules pass their own `LIST_WINDOW` (gate_digest.py:169, rejection_mining.py:51) as `window=` and the byte-identical drift-warning comment above each is gone. `run_daily`'s `{"changed": "false"}` early return and the miner's `{}` and `[]` empties are unchanged; the two `_timelines` fetchers keep their own labels and their own local meaning, and neither moves. tests/test_gate_digest.py and tests/test_rejection_mining.py pass UNCHANGED. Both modules are mirrored: payload twins plus manifest regenerated in the same commit; detector E green.
-- [ ] **A6** work_queue's read, and the halves die — size:M, blocked by: A2, A3, A4, A5
+- [x] **A6** work_queue's read, and the halves die — size:M, blocked by: A2, A3, A4, A5
   - Accept: work_queue.py:178 reads through `cli.gh_read` with `window=100`, `ready_issue_numbers` still returning `(None, problems)` on `truncated`, and the duplicate window literal — `"100"` inside `LIST_ARGS` at work_queue.py:41 — is gone, so `grep -n '"100"' work_queue.py` finds nothing. `cli.gh_json` and `cli.full_window` are deleted in this same change, together with `TestGhJson` and `TestFullWindow`, whose unparseable / wrong-shape / full-window coverage now lives in `TestGhRead` one frame further out; the commit message says exactly that. Demonstrable at the close of this milestone: `--limit` appears in no root module but `cli.py`, and no root module, payload twin or test names `gh_json` or `full_window`. Manifest regenerated in the same commit; detector E green; the full battery green.
 
 ## Milestone B: the gate vocabulary has a home (no module reaches into a leaf tool for what a gate is; one stay walk, one spelling of the window test)
@@ -148,6 +148,21 @@ choice — both follow mechanically from authorities the design already names:
 
 ## Notes
 
+- **2026-08-18, A6 — the closing `--limit` grep cost a reword in five
+  modules A2–A5 owned.** Each of A2 through A5 replaced its module's
+  drift-warning comment with a one-liner that still named the flag ("cli
+  .gh_read sends it as the `--limit`…"). True, and useful prose, but it
+  left the milestone's demonstration — "`--limit` appears in no root
+  module but `cli.py`" — literally false at A6. The comments now say "the
+  limit it sends gh" instead, which is both greppable and more honest: a
+  caller that no longer passes the flag should not be spelling it. The
+  consequence is that A6's commit touches assembler, dashboard,
+  gate_digest, label_sync and rejection_mining for comment text only, and
+  their payload twins move with it. No behavior and no problem string
+  changed. Verified at the close of the milestone: `grep -ln -- '--limit'
+  *.py` names `cli.py` alone, `grep -rnw -e gh_json -e full_window *.py
+  tests/ factory/templates/` finds nothing, and `grep -n '"100"'
+  work_queue.py` finds nothing.
 - **Milestone order.** A first, because it is the widest leverage and because
   three of the modules milestone B re-points are modules milestone A has
   already touched — doing A first means B's diffs are about the gate

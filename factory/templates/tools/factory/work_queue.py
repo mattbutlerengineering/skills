@@ -31,15 +31,18 @@ from datetime import datetime, timezone
 
 import cost_ledger
 import factory_config
-from cli import CLI_FAILURES, full_window, gh_json, gh_runner, report
-from cli import detail as gh_detail
+from cli import gh_read, gh_runner, report
 from knowledge_plane import (breakdown_files, repo_root, row_blockers,
                              row_done, row_size, row_tracker_issue,
                              row_work_order)
 
 READY_LABEL = "wo:ready-for-agent"
 LIST_ARGS = ["issue", "list", "--label", READY_LABEL, "--state", "open",
-             "--json", "number", "--limit", "100"]
+             "--json", "number"]
+# How far back the ready listing can see. cli.gh_read owns the window —
+# the limit it sends gh and the truncation it reports are the same
+# number — so it can only be typed once, and the duplicate literal this
+# constant used to disagree with has nowhere left to live.
 LIST_WINDOW = 100
 # Cheapest band first: a batch that spends its cap on one L order drains
 # less queue than the same money across three S ones, and a cheap order
@@ -174,17 +177,11 @@ def ready_issue_numbers(run=None):
     defer a ready order with "no open issue #N carries the label" and
     send the owner to apply a label the issue may already carry.
     """
-    try:
-        payload, suffix = gh_json(list(LIST_ARGS), run or gh_runner,
-                                  expect=list)
-    except CLI_FAILURES as err:
-        return None, [f"wq: gh issue list failed: {gh_detail(err)}"]
-    if suffix:
-        return None, [f"wq: gh issue list {suffix}"]
-    window = full_window(payload, LIST_WINDOW)
-    if window:
-        return None, [f"wq: gh issue list {window}"]
-    return {item["number"] for item in payload if isinstance(item, dict)
+    read = gh_read(list(LIST_ARGS), "gh issue list", label="wq",
+                   run=run or gh_runner, window=LIST_WINDOW)
+    if read.value is None or read.truncated:
+        return None, read.problems
+    return {item["number"] for item in read.value if isinstance(item, dict)
             and isinstance(item.get("number"), int)}, []
 
 

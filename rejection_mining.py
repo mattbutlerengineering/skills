@@ -46,8 +46,9 @@ from sweeps import sanitize
 MARKER = "<!-- factory-toolsmith-queue -->"
 QUEUE_TITLE = "Toolsmith queue — mined rejections"
 
-# How far back the two listings can see. cli.gh_read sends it as the
-# --limit and reports the truncation, so the two can no longer drift.
+# How far back the two listings can see. cli.gh_read owns the window —
+# the limit it sends gh and the truncation it reports are the same
+# number, so the two can no longer drift apart.
 LIST_WINDOW = 1000
 ISSUE_ARGS = ("issue", "list", "--state", "all", "--json",
               "number,title,state,labels,body")
