@@ -28,6 +28,9 @@ import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
+WORKFLOW = (Path(__file__).resolve().parent.parent
+            / ".github" / "workflows" / "toolsmith-mine.yml")
+
 BREAKDOWN = (
     "# Breakdown\n"
     "\n"
@@ -270,6 +273,35 @@ class TestRunMine(unittest.TestCase):
                              ["rm: gh pr list failed: boom"])
             self.assertIn(["issue", "create"],
                           [c[:2] for c in run.calls])
+
+
+class TestWorkflowPermissions(unittest.TestCase):
+    """The harvest reads two correction streams off two different gh
+    surfaces: the wo: label timelines (issues) and the
+    CHANGES_REQUESTED reviews (pull requests, PR_ARGS). A token granted
+    only `issues: write` lists the first and is refused the second, so
+    the harvest fails *partially* — the queue issue still posts, gate
+    rejections only, and nothing about the tracker announces the gap.
+    This pins the grant to the surface the tool actually reaches.
+
+    Stdlib means no YAML parser: the assertion is over file text, the
+    idiom test_charter_replay.py:640 uses for charter-replay.yml's
+    grant. Root and payload YAML are byte-identical (detector E +
+    test_gates.TestLockstep), so pinning the root copy pins both."""
+
+    def permissions(self):
+        """The body of the workflow's top-level `permissions:` block."""
+        lines = WORKFLOW.read_text(encoding="utf-8").splitlines()
+        start = lines.index("permissions:")
+        body = []
+        for line in lines[start + 1:]:
+            if line and not line[0].isspace():
+                break
+            body.append(line)
+        return "\n".join(body)
+
+    def test_the_pr_listing_surface_is_granted(self):
+        self.assertIn("pull-requests: read", self.permissions())
 
 
 class TestMain(cli_contract.ReportContract, cli_contract.CliContract,

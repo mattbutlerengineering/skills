@@ -182,19 +182,19 @@ the deferred detector idea recorded in Notes.
 Dependency-ordered. The test is watched failing before the grant lands —
 "fails before, passes after" is a thing to observe, not to assert.
 
-- [ ] **Pin the grant with a failing test** — write a stdlib text
+- [x] **Pin the grant with a failing test** — write a stdlib text
   assertion over `.github/workflows/toolsmith-mine.yml` requiring
   `pull-requests: read` in its `permissions:` block, and run it against
   the unmodified file.
   - Accept: the new test fails on the pre-fix workflow, and its failure
     output is recorded verbatim for Verify to quote.
-- [ ] **Grant `pull-requests: read`** — add the one line to the workflow's
+- [x] **Grant `pull-requests: read`** — add the one line to the workflow's
   `permissions:` block alongside `contents: read` and `issues: write`.
   Add no command to the YAML: the file deliberately names none, so a
   stamped product repo runs the same file.
   - Accept: `git diff` on `.github/workflows/toolsmith-mine.yml` is
     exactly one added line, and the test from the previous item passes.
-- [ ] **Regenerate the payload mirror and the manifest** — run
+- [x] **Regenerate the payload mirror and the manifest** — run
   `python3 factory_init.py update-manifest` and commit its output with the
   change.
   - Accept: re-running `update-manifest` leaves the tree clean;
@@ -271,6 +271,28 @@ actually there.
   referencing this run directory. No other issue is created or closed, and
   no work item above carries a `(tracker: #N)` reference — detector B's
   `Closes #N` requirement on the PR is satisfied by #297 itself.
+- **The regression test's home, decided 2026-08-18 (Implement):
+  `tests/test_rejection_mining.py`**, class `TestWorkflowPermissions`,
+  following the precedent recorded above — a tool's own test file owns
+  the assertions over its workflow. The assertion reads the body of the
+  top-level `permissions:` block (a `permissions()` helper mirroring
+  `tests/test_charter_replay.py`'s `triggers()`), so the grant has to be
+  *in the block* rather than anywhere in the file. No second byte-mirror
+  test was added; `tests/test_gates.py`'s `TestLockstep` already covers
+  the payload twin and stayed green.
+- **Deviation, 2026-08-18 (Implement): the three items landed in one
+  commit, not three.** Neither of the first two can leave the tree green
+  on its own — item 1's whole deliverable *is* a failing test, and item 2
+  changes a root file whose payload twin still holds the old bytes, which
+  fails `tests/test_gates.py`'s
+  `TestLockstep.test_the_payload_toolsmith_workflow_is_the_mirror_of_this_repo_s`.
+  Observed precisely: with the grant added and the mirror stale,
+  `python3 gates.py` still reports `gates: 0 problem(s)` (manifest↔payload
+  remains self-consistent, so detector E is not what fires), and the red
+  comes from the unittest suite. One commit is therefore the only
+  decomposition with a green battery at every commit boundary. The
+  pre-fix failure output is preserved verbatim in that commit's message
+  body, which is where Verify should quote it from.
 - **Capture interviews; this one read a brief.** Every question the stage
   asks was answered up front in `autorun-brief.md`. What is mine rather
   than the operator's: the target-state sentence, the sufficiency caveat
