@@ -329,7 +329,22 @@ log is a lie:
   Listing the names rather than counting them showed 16 real tools on the
   control and no `human_gates.py`. Count files by name, not by `wc -l`.
 
-**6. Not smoke-checked, carried forward from Verify's *Not verified* list**,
+**6. One thing did go wrong, after the release was already done.** The
+`validator` run on this artifact's own commit (`7cc5207`, docs-only) sat
+**queued for over seventeen minutes with no runner picking up its single
+`check` job**, and was still queued when this note was written. That is
+runner starvation, not a broken workflow, and the distinction is evidenced
+rather than assumed: the same workflow completed in **21s** on the merge
+commit `60f867f` six minutes earlier (run `32212715818`, **success**), and
+green on the merge commit is the condition the release authorization
+actually names. The artifact commit changes one markdown file and no code;
+the full battery was run locally with it present and is green (quoted at the
+top of this section plus `gates: 0 problem(s)` / `selftest: ok` /
+`lint: 0 problem(s)` / 1,271 tests OK). Nothing was merged on the strength of
+a stalled run, and no workflow YAML was touched in response — the standing
+rule for this signature is to record it, not to edit CI.
+
+**7. Not smoke-checked, carried forward from Verify's *Not verified* list**,
 which Review confirmed it did not close:
 
 - **Nothing was driven against real GitHub, at any stage of this run.** Still
