@@ -66,7 +66,7 @@ import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import gh_json, gh_runner, label_names, report, write_outputs
+from cli import gh_read, gh_runner, label_names, report, write_outputs
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              repo_root, row_tracker_issue, row_work_order)
 
@@ -319,19 +319,15 @@ def run_review(root, findings, status, env, run=gh_runner):
 def _flip(number, label, lifecycle, run):
     """(labels removed, problems): make `label` the only lifecycle label
     on issue `number`. An already-correct issue is a no-op ([], [])."""
-    try:
-        current, suffix = gh_json(
-            ["issue", "view", str(number), "--json", "labels"], run,
-            expect=dict)
-    except GH_FAILURES as err:
-        return [], [f"V: gh issue view {number} failed:"
-                    f" {gh_detail(err)}"]
-    if suffix:
-        return [], [f"V: gh issue view {number} {suffix}"]
+    read = gh_read(["issue", "view", str(number), "--json", "labels"],
+                   f"gh issue view {number}", label="V", run=run,
+                   expect=dict)
+    if read.value is None:
+        return [], read.problems
     # The seam drops a nameless label entry outright: it cannot be
     # compared, added, or removed by name, and passing None through
     # would put a non-name into the lifecycle comparison below.
-    names = label_names(current)
+    names = label_names(read.value)
     add, remove = transition(names, lifecycle, label)
     if not add and not remove:
         return [], []
