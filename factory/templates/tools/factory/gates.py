@@ -774,8 +774,7 @@ def check_scaffold_sync(root):
 LABEL_DECLARERS = {
     "assembler": lambda mod: ({mod.READY_LABEL, mod.EXHAUSTED_LABEL}
                               | set(mod.CHARTER_BY_TYPE)),
-    "gate_digest": lambda mod: {name for gate in mod.GATES
-                                for name in gate[1:3]},
+    "human_gates": lambda mod: mod.gate_labels(),
 }
 
 # The Makefile's lifecycle targets hand validator.py the label to flip, so
@@ -816,7 +815,7 @@ def check_label_wiring(root):
     the label taxonomy.
 
     The couplings are all runtime-only otherwise. assembler reads
-    wo:ready-for-agent and budget-exhausted, gate_digest counts the six
+    wo:ready-for-agent and budget-exhausted, human_gates counts the six
     gate labels, and each Makefile lifecycle target hands validator.py one
     to flip — and validator refuses a label the taxonomy does not carry
     (`V: <label> is not a lifecycle label in the taxonomy`). So a taxonomy
@@ -1268,7 +1267,7 @@ def selftest():
             taxonomy([name for name in wired if name != "wo:merged"]),
             encoding="utf-8")
         expect("J", check_label_wiring(root), "Makefile:2 names wo:merged",
-               "gate_digest.py names wo:merged", "no such label")
+               "human_gates.py names wo:merged", "no such label")
         labels.write_text(taxonomy(wired), encoding="utf-8")
 
         (factory / "factory.json").write_text(json.dumps(

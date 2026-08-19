@@ -690,13 +690,13 @@ class TestLabelWiring(unittest.TestCase):
             tree.write(".github/labels.json", self.taxonomy(
                 [name for name in named if name != "wo:merged"]))
             # wo:merged is named twice over — the Makefile target that
-            # flips it and the gate_digest entry that counts it — and both
+            # flips it and the human_gates entry that counts it — and both
             # sites are reported, because both break
             self.assertEqual(gates.check_label_wiring(tree.root), [
                 "J: Makefile:2 names wo:merged but the taxonomy has no such"
                 " label (add it to .github/labels.json, or the flip fails"
                 " when CI runs it)",
-                "J: gate_digest.py names wo:merged but the taxonomy has no"
+                "J: human_gates.py names wo:merged but the taxonomy has no"
                 " such label (add it to .github/labels.json, or the flip"
                 " fails when CI runs it)"])
 
@@ -766,7 +766,7 @@ class TestLabelWiring(unittest.TestCase):
                           "wo:ready-for-agent"])
         # five distinct, not six: wo:prd-approved is the PRD gate's
         # confirming label and the blueprint gate's waiting one
-        self.assertEqual(declared_by("gate_digest.py"),
+        self.assertEqual(declared_by("human_gates.py"),
                          ["wo:blueprint-approved", "wo:draft", "wo:merged",
                           "wo:needs-review", "wo:prd-approved"])
         # every lifecycle target's --label argument, read off the Makefile
