@@ -25,8 +25,8 @@
     "templates/tools/factory/assembler.py": "8d6c5d394526f300c2050e7902b08e2749268a0e3e8f4feeea9ebed65cfb8a3d",
     "templates/tools/factory/budget_guard.py": "bb486bbef33c41f4e02b39a452ca6cbe639ad74703b14e141209dddc6577dd52",
     "templates/tools/factory/cli.py": "daa27406dd2e50d63a0672603d40c4e721f47d17b886feccc6987fe4ab66ee41",
-    "templates/tools/factory/cost_ledger.py": "10b5a2767c837b8cbdff36697ab4b64d67c91ad381c64ad4fcadbc010be5e21d",
-    "templates/tools/factory/cost_report.py": "f4a8c59e90277a394c5a2cf9482f61192ef775669d36d06f10eee22cd9353bdb",
+    "templates/tools/factory/cost_ledger.py": "f4c5fffec5a2fcdcb796515920ba3ee72f3e1fa556fc4b603333468f27aab6ce",
+    "templates/tools/factory/cost_report.py": "b5541ade4c49f9af1fdbf0e25e9cd14232b86e1104a0f540df6c98d322c0ab00",
     "templates/tools/factory/factory_config.py": "a040880859269d993076a250e4ad61ea52a7595e696f8e2d9ad98e90842a260d",
     "templates/tools/factory/gate_digest.py": "4356864dcc965d2b184fb51a866a8e8e2739aca71f359550408c446fa961fdde",
     "templates/tools/factory/gates.py": "69223bf02a48a45232ad0b96428385e2ede8c0b84038b3a193f2758b1375f52a",
@@ -38,6 +38,6 @@
     "templates/tools/factory/protocol.py": "fd97a9f790cf77f9aea18f8b72376daf972fbd0c92935cdf6dbfe16f58957fc5",
     "templates/tools/factory/rejection_mining.py": "eced49d3e488b51f5a12a31f363e883defe98f5fb6373c69a368744eae707c2c",
     "templates/tools/factory/validator.py": "5b68cc6ad3cc9e4f692555e6f89f5c11bdbc40226ce52450473d61a87d1f4b15",
-    "templates/tools/factory/work_queue.py": "130732a05d8e34126d8fd49ca3e6f7603f7331cb3f931ea0705db88394ee7b31"
+    "templates/tools/factory/work_queue.py": "14ba47b3c55c873cadf41e22360d2c76fce756b48074af89ffb4fa6222093df2"
   }
 }

@@ -186,11 +186,16 @@ def ready_issue_numbers(run=None):
 
 
 def month_to_date(root, now):
-    """(dollars recorded for `now`'s month, problems) — ADR-0034."""
+    """(dollars recorded for `now`'s month, problems) — ADR-0034. What
+    counts as spend is cost_ledger.dispatched's rule, the same row set the
+    weekly cost report's month total is built from: a gate-latency
+    observation is a wait record, not a run, and never counts (ADR-0041).
+    The breaker's input and the report's figure therefore cannot drift
+    apart."""
     entries, problems = cost_ledger.read(root)
     month = now.strftime("%Y-%m")
-    total = sum(entry.get("cost") or 0 for entry in entries
-                if cost_ledger.in_month(entry, month))
+    total = sum(entry["cost"] for entry
+                in cost_ledger.dispatched(entries, month))
     return total, problems
 
 
