@@ -344,6 +344,13 @@ top of this section plus `gates: 0 problem(s)` / `selftest: ok` /
 a stalled run, and no workflow YAML was touched in response — the standing
 rule for this signature is to record it, not to edit CI.
 
+**Closed, and the diagnosis held.** The commit that added the paragraph
+above (`06c7108`, a strict superset of `7cc5207`'s content) was picked up
+immediately and its run — `32214099071` — completed **success** in the
+normal time. So `main` is green at its tip on a run that contains every line
+`7cc5207` introduced. Run `32213104308` never left the queue; it is a
+starved run on superseded content, not a red one, and nothing depends on it.
+
 **7. Not smoke-checked, carried forward from Verify's *Not verified* list**,
 which Review confirmed it did not close:
 
