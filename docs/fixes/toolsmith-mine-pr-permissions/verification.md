@@ -205,16 +205,32 @@ someone else sees it. The reproduction below is independent.
   criterion is satisfied **iff** the string `rm: gh pr list failed:` does
   not appear in it. Ship must quote the log and name every problem that
   remains, saying for each whether it is this run's.
-- Result: **NOT YET VERIFIABLE** — recorded as a finding, not a pass.
+- Result: **NOT RUN** — the workflow is unmerged and the dispatch is
+  Ship's obligation, so this stage could not execute the check. Recorded
+  as a finding, not a pass.
 
 ### Criterion 6 (defect.md, work item 1) — the new test fails on the pre-fix workflow, and its failure output is recorded verbatim for Verify to quote
 
 - Check: the re-derivation under Criterion 3, plus reading `d70216b`'s
   message body for the recorded verbatim output.
-- Evidence: the RED block quoted under Criterion 3 is that output,
-  reproduced independently and matching what `d70216b`'s body records. The
-  Accept criterion asks for two things — a real failure and a preserved
-  record of it — and both hold.
+- Evidence: the same RED reproduced under Criterion 3, re-quoted here so
+  this criterion carries its own evidence rather than pointing at a
+  neighbour's:
+  ```
+  FAIL: test_the_pr_listing_surface_is_granted (tests.test_rejection_mining.TestWorkflowPermissions.test_the_pr_listing_surface_is_granted)
+  ----------------------------------------------------------------------
+  Traceback (most recent call last):
+    File ".../scratchpad/prefix-repro/tests/test_rejection_mining.py", line 304, in test_the_pr_listing_surface_is_granted
+      self.assertIn("pull-requests: read", self.permissions())
+  AssertionError: 'pull-requests: read' not found in '  contents: read\n  issues: write\n'
+
+  Ran 1 test in 0.002s
+
+  FAILED (failures=1)
+  ```
+  It matches what `d70216b`'s message body records, line for line, with
+  only the path differing. The Accept criterion asks for two things — a
+  real failure and a preserved record of it — and both hold.
 - Result: **PASS**
 
 ### Criterion 7 (defect.md, work item 2) — `git diff` on the workflow is exactly one added line, and the test from the previous item passes
@@ -277,9 +293,10 @@ The honest split:
 - **The resolution is not demonstrated.** No offline check can show the
   refusal gone; only the dispatched run can. Sufficiency of `read` is the
   specific unproven step — see *Not verified*.
-- Result: **NOT YET VERIFIABLE.** Not a failure — nothing found here
-  contradicts the fix — but not a pass either, and it must not be reported
-  as one.
+- Result: **NOT RUN.** The only check that would settle it is the
+  dispatched run, which this stage may not trigger. Not a failure —
+  nothing found here contradicts the fix — but not a pass either, and it
+  must not be reported as one.
 
 ## Testing the test
 
