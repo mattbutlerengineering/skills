@@ -55,6 +55,7 @@ EXPECTED_RELS = {
     "templates/tools/factory/handoff.py",
     "templates/tools/factory/orientation_pack.py",
     "templates/tools/factory/cost_report.py",
+    "templates/tools/factory/human_gates.py",
     "templates/tools/factory/gate_digest.py",
     "templates/tools/factory/rejection_mining.py",
 }

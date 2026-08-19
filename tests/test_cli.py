@@ -118,49 +118,153 @@ class TestDetail(unittest.TestCase):
 class TestFailureVocabulary(unittest.TestCase):
     def test_covers_ran_and_failed_and_never_ran(self):
         # The three ways a shell-out goes wrong: ran-and-failed and
-        # never-ran raise CLI_FAILURES; ran-but-said-nonsense is gh_json's
-        # (None, suffix). Callers catch CLI_FAILURES, never a bare
-        # Exception — JSONDecodeError (a ValueError) stays excluded so the
-        # third mode can't hide inside the first two.
+        # never-ran raise CLI_FAILURES; ran-but-said-nonsense is the
+        # unparseable-JSON problem gh_read reports. A caller that still
+        # catches (budget_guard's git calls, the gh mutations) catches
+        # CLI_FAILURES, never a bare Exception — JSONDecodeError (a
+        # ValueError) stays excluded so the third mode can't hide inside
+        # the first two.
         self.assertTrue(issubclass(subprocess.CalledProcessError,
                                    cli.CLI_FAILURES))
         self.assertTrue(issubclass(FileNotFoundError, cli.CLI_FAILURES))
         self.assertFalse(issubclass(ValueError, cli.CLI_FAILURES))
 
 
-class TestGhJson(unittest.TestCase):
-    def test_covers_ran_succeeded_and_said_nonsense(self):
-        value, suffix = cli.gh_json([], run=lambda args: "gh: banner text")
-        self.assertIsNone(value)
-        self.assertEqual(suffix, "returned unparseable JSON: Expecting"
-                         " value: line 1 column 1 (char 0)")
+class TestGhRead(unittest.TestCase):
+    """The whole windowed gh read as one call: run gh, catch the binary's
+    failure vocabulary, parse and shape-check the JSON, own the window
+    (both the --limit it sends and the truncation it reports), and answer
+    with already-prefixed problem strings. The five facts fourteen call
+    sites each carried by hand, none of them in a signature."""
 
-    def test_a_wrong_top_level_shape_is_a_suffix_not_a_crash(self):
-        value, suffix = cli.gh_json([], run=lambda args: "{}", expect=list)
-        self.assertEqual((value, suffix),
-                         (None, "returned dict where list was expected"))
+    @staticmethod
+    def _recorder(out):
+        """A fake gh port that records the argv it was handed."""
+        seen = []
 
-    def test_parsed_json_of_the_expected_shape_passes_through(self):
-        value, suffix = cli.gh_json([], run=lambda args: '[{"a": 1}]',
-                                    expect=list)
-        self.assertEqual((value, suffix), ([{"a": 1}], None))
+        def run(args):
+            seen.append(list(args))
+            return out
+        return run, seen
 
-    def test_a_failed_gh_still_raises_for_the_callers_catch(self):
+    def test_a_failed_gh_is_a_problem_not_the_callers_catch(self):
         def failing(args):
-            raise subprocess.CalledProcessError(1, ["gh", *args])
-        with self.assertRaises(subprocess.CalledProcessError):
-            cli.gh_json(["issue", "list"], run=failing)
+            raise subprocess.CalledProcessError(
+                1, ["gh", *args], stderr="GraphQL: rate limited\n")
+        result = cli.gh_read(["issue", "list"], "gh issue list",
+                            label="gd", run=failing)
+        self.assertIsNone(result.value)
+        self.assertEqual(result.problems,
+                         ["gd: gh issue list failed: GraphQL: rate limited"])
+        self.assertFalse(result.truncated)
 
+    def test_ran_and_said_nonsense_is_a_prefixed_problem(self):
+        result = cli.gh_read([], "gh pr list", label="asm",
+                            run=lambda args: "gh: banner text")
+        self.assertIsNone(result.value)
+        self.assertEqual(result.problems,
+                         ["asm: gh pr list returned unparseable JSON:"
+                          " Expecting value: line 1 column 1 (char 0)"])
+        self.assertFalse(result.truncated)
 
-class TestFullWindow(unittest.TestCase):
-    def test_a_full_window_is_a_problem_suffix(self):
+    def test_a_wrong_top_level_shape_is_a_prefixed_problem(self):
+        result = cli.gh_read([], "gh issue list", label="wq",
+                            run=lambda args: "{}", expect=list)
+        self.assertIsNone(result.value)
         self.assertEqual(
-            cli.full_window([{}] * 1000, 1000),
-            "returned a full 1000-entry window — older entries"
-            " are invisible; raise the window or narrow the query")
+            result.problems,
+            ["wq: gh issue list returned dict where list was expected"])
 
-    def test_a_partial_window_is_fine(self):
-        self.assertIsNone(cli.full_window([{}], 1000))
+    def test_a_dict_read_names_its_own_expected_shape(self):
+        result = cli.gh_read([], "gh issue view 12", label="V",
+                            run=lambda args: "[]", expect=dict)
+        self.assertIsNone(result.value)
+        self.assertEqual(
+            result.problems,
+            ["V: gh issue view 12 returned list where dict was expected"])
+
+    def test_a_clean_read_is_the_value_and_no_problems(self):
+        result = cli.gh_read([], "gh pr list", label="asm",
+                            run=lambda args: '[{"number": 4}]')
+        self.assertEqual(result.value, [{"number": 4}])
+        self.assertEqual(result.problems, [])
+        self.assertFalse(result.truncated)
+
+    def test_a_full_window_is_truncated_with_the_shared_sentence(self):
+        payload = json.dumps([{}] * 3)
+        result = cli.gh_read([], "gh issue list", label="gd",
+                            run=lambda args: payload, window=3)
+        # The value stays usable — the caller decides what truncation
+        # means here (seven report and continue, two refuse outright).
+        self.assertEqual(result.value, [{}] * 3)
+        self.assertTrue(result.truncated)
+        self.assertEqual(result.problems,
+                         ["gd: gh issue list returned a full 3-entry window"
+                          " — older entries are invisible; raise the window"
+                          " or narrow the query"])
+
+    def test_a_partial_window_is_not_truncated(self):
+        result = cli.gh_read([], "gh issue list", label="gd",
+                            run=lambda args: '[{}]', window=1000)
+        self.assertFalse(result.truncated)
+        self.assertEqual(result.problems, [])
+
+    def test_an_unwindowed_read_is_never_truncated(self):
+        # The four timeline/issue-view reads pass no window; a long
+        # listing must not invent a truncation report for them.
+        result = cli.gh_read([], "gh api timeline for #12", label="rm",
+                            run=lambda args: json.dumps([{}] * 5000))
+        self.assertFalse(result.truncated)
+        self.assertEqual(result.problems, [])
+
+    def test_the_window_reaches_gh_as_a_trailing_limit(self):
+        run, seen = self._recorder("[]")
+        cli.gh_read(["issue", "list", "--json", "number"], "gh issue list",
+                    label="wq", run=run, window=100)
+        # The limit sent and the limit the truncation check tests are the
+        # same number by construction — work_queue's duplicate literal has
+        # nowhere left to live.
+        self.assertEqual(seen,
+                         [["issue", "list", "--json", "number",
+                           "--limit", "100"]])
+
+    def test_an_unwindowed_read_sends_no_limit(self):
+        run, seen = self._recorder("{}")
+        cli.gh_read(["issue", "view", "12", "--json", "labels"],
+                    "gh issue view 12", label="V", run=run, expect=dict)
+        self.assertEqual(seen, [["issue", "view", "12", "--json", "labels"]])
+
+    def test_the_callers_args_are_not_mutated(self):
+        args = ["issue", "list"]
+        cli.gh_read(args, "gh issue list", run=lambda a: "[]", window=500)
+        self.assertEqual(args, ["issue", "list"])
+
+    def test_no_label_leaves_the_problems_unprefixed(self):
+        # label_sync.live_labels' three callers each own a different
+        # label (L:, sweeps:), so the reader must not pick one.
+        err = FileNotFoundError(2, "No such file or directory: 'gh'")
+
+        def failing(args):
+            raise err
+        result = cli.gh_read([], "gh label list", run=failing)
+        self.assertEqual(result.problems,
+                         [f"gh label list failed: {err}"])
+        unparseable = cli.gh_read([], "gh label list",
+                                  run=lambda args: "not json")
+        self.assertEqual(unparseable.problems,
+                         ["gh label list returned unparseable JSON:"
+                          " Expecting value: line 1 column 1 (char 0)"])
+
+    def test_full_note_replaces_the_shared_sentence(self):
+        # sweeps.known_keys says what a full window costs THERE; the seam
+        # states the fact, the meaning stays local.
+        note = ("returned a full 500-issue window; intake keys older than"
+                " it are invisible and would be re-filed as duplicates")
+        result = cli.gh_read([], "gh issue list", label="sweeps",
+                            run=lambda args: json.dumps([{}] * 500),
+                            window=500, full_note=note)
+        self.assertTrue(result.truncated)
+        self.assertEqual(result.problems, [f"sweeps: gh issue list {note}"])
 
 
 class TestLabelNames(unittest.TestCase):

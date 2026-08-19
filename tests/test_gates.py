@@ -690,13 +690,13 @@ class TestLabelWiring(unittest.TestCase):
             tree.write(".github/labels.json", self.taxonomy(
                 [name for name in named if name != "wo:merged"]))
             # wo:merged is named twice over — the Makefile target that
-            # flips it and the gate_digest entry that counts it — and both
+            # flips it and the human_gates entry that counts it — and both
             # sites are reported, because both break
             self.assertEqual(gates.check_label_wiring(tree.root), [
                 "J: Makefile:2 names wo:merged but the taxonomy has no such"
                 " label (add it to .github/labels.json, or the flip fails"
                 " when CI runs it)",
-                "J: gate_digest.py names wo:merged but the taxonomy has no"
+                "J: human_gates.py names wo:merged but the taxonomy has no"
                 " such label (add it to .github/labels.json, or the flip"
                 " fails when CI runs it)"])
 
@@ -766,7 +766,7 @@ class TestLabelWiring(unittest.TestCase):
                           "wo:ready-for-agent"])
         # five distinct, not six: wo:prd-approved is the PRD gate's
         # confirming label and the blueprint gate's waiting one
-        self.assertEqual(declared_by("gate_digest.py"),
+        self.assertEqual(declared_by("human_gates.py"),
                          ["wo:blueprint-approved", "wo:draft", "wo:merged",
                           "wo:needs-review", "wo:prd-approved"])
         # every lifecycle target's --label argument, read off the Makefile
@@ -1623,21 +1623,6 @@ class TestRunAll(unittest.TestCase):
                  if p.startswith("B:")], [])
 
 
-def product_form(command):
-    """A root command as its product-repo twin spells it: the factory tools
-    live under tools/factory/ there, and the stamped test run is quiet."""
-    return (command.replace("python3 gates.py", "python3 tools/factory/gates.py")
-            .replace("python3 validator.py", "python3 tools/factory/validator.py")
-            .replace("python3 assembler.py", "python3 tools/factory/assembler.py")
-            .replace("python3 cost_report.py",
-                     "python3 tools/factory/cost_report.py")
-            .replace("python3 gate_digest.py",
-                     "python3 tools/factory/gate_digest.py")
-            .replace("python3 budget_guard.py",
-                     "python3 tools/factory/budget_guard.py")
-            .replace("unittest discover tests", "unittest discover -q tests"))
-
-
 class TestLockstep(unittest.TestCase):
     """Makefile <-> CI lockstep (origin: WO-0003, tightened by WO-0004).
 
@@ -1673,6 +1658,12 @@ class TestLockstep(unittest.TestCase):
                                     / ".github" / "workflows"
                                     / "gate-digest.yml")
     GATE_DIGEST_TARGET = ["python3 gate_digest.py daily"]
+    TOOLSMITH_MINE_WORKFLOW = (REPO / ".github" / "workflows"
+                               / "toolsmith-mine.yml")
+    PAYLOAD_TOOLSMITH_MINE_WORKFLOW = (REPO / "factory" / "templates"
+                                       / ".github" / "workflows"
+                                       / "toolsmith-mine.yml")
+    TOOLSMITH_MINE_TARGET = ["python3 rejection_mining.py mine"]
     RECORD_TARGET = ["python3 budget_guard.py record-run $(WO) $(RUN_ID)"
                      " $(MODEL) $(FILE) $(OUTCOME)"]
 
@@ -1876,6 +1867,26 @@ class TestLockstep(unittest.TestCase):
     def test_the_payload_gate_digest_workflow_is_the_mirror_of_this_repo_s(self):
         self.assertEqual(self.PAYLOAD_GATE_DIGEST_WORKFLOW.read_bytes(),
                          self.GATE_DIGEST_WORKFLOW.read_bytes())
+
+    def test_both_makefiles_expose_the_toolsmith_mine_target(self):
+        self.assertEqual(self.recipes(self.MAKEFILE, "toolsmith-mine"),
+                         self.TOOLSMITH_MINE_TARGET)
+        self.assertEqual(
+            self.recipes(self.TEMPLATE_MAKEFILE, "toolsmith-mine"),
+            [product_form(c) for c in self.TOOLSMITH_MINE_TARGET])
+
+    def test_the_toolsmith_mine_workflow_names_no_command_of_its_own(self):
+        text = self.TOOLSMITH_MINE_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("make toolsmith-mine", text)
+        for tool in ("rejection_mining.py", "gates.py", "unittest"):
+            self.assertNotIn(
+                f"python3 {tool}", text,
+                f"{tool} is invoked directly in CI; it belongs in a make"
+                " target, or the two repos' CI will diverge")
+
+    def test_the_payload_toolsmith_workflow_is_the_mirror_of_this_repo_s(self):
+        self.assertEqual(self.PAYLOAD_TOOLSMITH_MINE_WORKFLOW.read_bytes(),
+                         self.TOOLSMITH_MINE_WORKFLOW.read_bytes())
 
     def test_the_assembler_gate_is_the_owner_and_the_ready_label(self):
         """ADR-0032's two security invariants, pinned physically in the

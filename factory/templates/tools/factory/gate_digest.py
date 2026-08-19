@@ -3,12 +3,12 @@
 (PRD-0001 user story 4, WO-0017; ADR-0041).
 
 The three gates are human decision points (CONTEXT.md: PRD approval,
-blueprint/ADR approval, PR merge), so their queues live on the work
-orders' mirrored issues as `wo:` lifecycle labels (ADR-0032, ADR-0035):
-`wo:draft` waits at the PRD gate, `wo:prd-approved` at the blueprint
-gate, `wo:needs-review` at the merge gate. This tool reads those queues
-and each mirrored issue's label timeline through an injected gh runner
-(same seam as validator.py, so tests never touch the network), then:
+blueprint/ADR approval, PR merge) whose queues live on the work orders'
+mirrored issues as `wo:` lifecycle labels (ADR-0032, ADR-0035); what a
+gate IS and how to read one issue's label history against it is
+human_gates.py's (ADR-0056). This tool reads those queues and each
+mirrored issue's label timeline through an injected gh runner (same
+seam as validator.py, so tests never touch the network), then:
 
 - posts the digest — one marker-tagged issue, created and pinned on
   first run, edited in place every day after (ADR-0035: the digest posts
@@ -38,96 +38,16 @@ from datetime import datetime, timezone
 import cost_ledger
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json, label_names, report, write_outputs
-from knowledge_plane import (breakdown_files, repo_root, row_tracker_issue,
-                             row_work_order)
+from cli import gh_read, label_names, report, write_outputs
+from human_gates import (GATES, gate_passages, label_events, waited_seconds,
+                         waiting_since)
+from knowledge_plane import mirror_map, repo_root
 from cli import gh_runner
-
-# The three gates in pipeline order: ledger gate name, the wo: label an
-# issue carries while waiting, the label whose application confirms the
-# pass (a flip to anything else — wo:blocked, wo:failed — is not a
-# passage), and the digest heading.
-GATES = (
-    ("prd", "wo:draft", "wo:prd-approved", "PRD gate"),
-    ("blueprint", "wo:prd-approved", "wo:blueprint-approved",
-     "Blueprint gate"),
-    ("merge", "wo:needs-review", "wo:merged", "Merge gate"),
-)
 
 # First line of the digest issue's body — how the daily run finds its own
 # issue among the open ones (same idiom as validator.py's REVIEW_MARKER).
 DIGEST_MARKER = "<!-- factory-gate-digest -->"
 DIGEST_TITLE = "Factory gate queue"
-
-
-def _parse_ts(iso):
-    """GitHub timestamps end in Z; fromisoformat only accepts that from
-    3.11, and local runs may be older."""
-    return datetime.fromisoformat(iso.replace("Z", "+00:00"))
-
-
-def _seconds(start, end):
-    return int((_parse_ts(end) - _parse_ts(start)).total_seconds())
-
-
-def label_events(timeline):
-    """[(timestamp, 'labeled'|'unlabeled', label name)] from a GitHub
-    issue timeline, in timeline (chronological) order. Anything that is
-    not a well-formed label flip is not this tool's business."""
-    events = []
-    for event in timeline:
-        kind = event.get("event")
-        if kind not in ("labeled", "unlabeled"):
-            continue
-        name = (event.get("label") or {}).get("name")
-        ts = event.get("created_at")
-        if name and ts:
-            events.append((ts, kind, name))
-    return events
-
-
-def gate_passages(events):
-    """[(gate, waited seconds, passed at)] — every confirmed gate passage
-    in one issue's label history. A passage needs the queue label applied
-    then removed AND the gate's pass label applied within that stay —
-    from the wait's start up to the gate's next re-entry — so a flip to
-    any other label (rejection, block) records nothing even when the
-    gate is re-entered and passed later. Re-entering a gate yields one
-    passage per confirmed stay."""
-    passages = []
-    for gate, queue, pass_label, _ in GATES:
-        confirmations = [ts for ts, kind, name in events
-                         if kind == "labeled" and name == pass_label]
-        stays = []
-        entered = None
-        for ts, kind, name in events:
-            if name != queue:
-                continue
-            if kind == "labeled":
-                entered = ts
-            elif kind == "unlabeled" and entered is not None:
-                stays.append((entered, ts))
-                entered = None
-        for index, (start, end) in enumerate(stays):
-            next_start = (stays[index + 1][0] if index + 1 < len(stays)
-                          else None)
-            if any(c >= start and (next_start is None or c < next_start)
-                   for c in confirmations):
-                passages.append((gate, _seconds(start, end), end))
-    return passages
-
-
-def waiting_since(events, queue_label):
-    """The timestamp the issue's current stay in `queue_label` began, or
-    None when the label is not currently applied (or the labeled event
-    fell off the fetched timeline — the item still lists, just without an
-    age)."""
-    since = None
-    for ts, kind, name in events:
-        if name != queue_label:
-            continue
-        since = ts if kind == "labeled" else None
-    return since
 
 
 def _format_wait(seconds):
@@ -164,26 +84,12 @@ def compose_digest(queues, as_of):
     return "\n".join(lines) + "\n"
 
 
-# gh truncates a windowed listing silently; the window size is declared
-# once so the full-window report and the --limit can never drift apart.
+# How far back the issue listing can see. cli.gh_read owns the window —
+# the limit it sends gh and the truncation it reports are the same
+# number, so the two can no longer drift apart.
 LIST_WINDOW = 1000
 LIST_ARGS = ("issue", "list", "--state", "all", "--json",
-             "number,title,state,labels,body", "--limit", str(LIST_WINDOW))
-
-
-def mirror_map(root):
-    """{tracker issue number: WO token} from the breakdown rows. The
-    knowledge plane is authoritative and the mirror one-way (ADR-0032):
-    a row with no (tracker: #N) simply is not in any queue, and an issue
-    with no row is not a work order."""
-    mapping = {}
-    for _, lines in breakdown_files(root):
-        for line in lines:
-            wo = row_work_order(line)
-            number = row_tracker_issue(line)
-            if wo and number is not None:
-                mapping[number] = wo
-    return mapping
+             "number,title,state,labels,body")
 
 
 def _timelines(mirrored, run, problems):
@@ -194,18 +100,14 @@ def _timelines(mirrored, run, problems):
     events = {}
     for number in mirrored:
         path = f"repos/{{owner}}/{{repo}}/issues/{number}/timeline"
-        try:
-            pages, suffix = gh_json(["api", path, "--paginate", "--slurp"],
-                                    run, expect=list)
-        except GH_FAILURES as err:
-            problems.append(f"gd: gh api timeline for #{number} failed:"
-                            f" {gh_detail(err)}")
-            continue
-        if suffix:
-            problems.append(f"gd: gh api timeline for #{number} {suffix}")
+        read = gh_read(["api", path, "--paginate", "--slurp"],
+                       f"gh api timeline for #{number}", label="gd",
+                       run=run)
+        problems.extend(read.problems)
+        if read.value is None:
             continue
         events[number] = label_events(
-            [event for page in pages for event in page])
+            [event for page in read.value for event in page])
     return events
 
 
@@ -244,7 +146,8 @@ def _queues(mirror, open_issues, events_by_issue, now):
                 continue
             since = waiting_since(events_by_issue.get(number, []),
                                   queue_label)
-            waited = _seconds(since, now.isoformat()) if since else None
+            waited = (waited_seconds(since, now.isoformat())
+                      if since else None)
             items.append((number, entry.get("title") or "", waited))
         queues.append((heading, queue_label, items))
     return queues
@@ -291,17 +194,11 @@ def run_daily(root, run=gh_runner, clock=None):
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
     mirror = mirror_map(root)
-    try:
-        listing, suffix = gh_json(list(LIST_ARGS), run, expect=list)
-    except GH_FAILURES as err:
-        return ({"changed": "false"},
-                [f"gd: gh issue list failed: {gh_detail(err)}"])
-    if suffix:
-        return {"changed": "false"}, [f"gd: gh issue list {suffix}"]
-    problems = []
-    window = full_window(listing, LIST_WINDOW)
-    if window:
-        problems.append(f"gd: gh issue list {window}")
+    read = gh_read(list(LIST_ARGS), "gh issue list", label="gd", run=run,
+                   window=LIST_WINDOW)
+    if read.value is None:
+        return {"changed": "false"}, read.problems
+    listing, problems = read.value, list(read.problems)
     mirrored = sorted(entry["number"] for entry in listing
                       if entry.get("number") in mirror)
     events_by_issue = _timelines(mirrored, run, problems)

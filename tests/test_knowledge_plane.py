@@ -8,8 +8,8 @@ from pathlib import Path
 
 import knowledge_plane
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, ROW,
-                             WO_TOKEN, breakdown_files, repo_root,
-                             row_work_order, run_dirs)
+                             WO_TOKEN, breakdown_files, mirror_map,
+                             repo_root, row_work_order, run_dirs)
 
 
 class TestTokens(unittest.TestCase):
@@ -194,6 +194,52 @@ class TestBreakdownFiles(unittest.TestCase):
     def test_a_tree_without_docs_walks_to_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(list(breakdown_files(Path(tmp))), [])
+
+
+class TestMirrorMap(unittest.TestCase):
+    """The tracker mirror map, asserted at the seam that owns the rest of
+    the mirror grammar. It is built from three knowledge-plane names —
+    breakdown_files, row_work_order, row_tracker_issue — and names no
+    gate, which is why it lives here rather than in the digest that
+    happened to need it first.
+
+    ADR-0032: the row is authoritative and the mirror one-way, so the
+    map's two absences are its contract, not its edge cases."""
+
+    BREAKDOWN = (
+        "# Breakdown\n"
+        "\n"
+        "- [ ] **WO-0018** mirrored — size:S, blocked by: —"
+        " (PRD-0001 §User stories) (tracker: #123)\n"
+        "- [x] **WO-0010** also mirrored — size:S, blocked by: —"
+        " (PRD-0001 §Solution) (tracker: #131)\n"
+        "- [ ] **WO-0007** a row with no tracker reference"
+        " (PRD-0001 §Solution)\n"
+    )
+
+    def mapping(self, tmp):
+        root = Path(tmp)
+        (root / "docs/features/demo").mkdir(parents=True)
+        (root / "docs/features/demo/breakdown.md").write_text(
+            self.BREAKDOWN, encoding="utf-8")
+        return mirror_map(root)
+
+    def test_a_row_carrying_both_maps_its_issue_to_its_work_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(self.mapping(tmp),
+                             {123: "WO-0018", 131: "WO-0010"})
+
+    def test_a_row_with_no_tracker_reference_is_in_no_queue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertNotIn("WO-0007", self.mapping(tmp).values())
+
+    def test_an_issue_with_no_row_is_not_a_work_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertNotIn(999, self.mapping(tmp))
+
+    def test_a_tree_with_no_breakdown_mirrors_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(mirror_map(Path(tmp)), {})
 
 
 class TestRepoRoot(unittest.TestCase):

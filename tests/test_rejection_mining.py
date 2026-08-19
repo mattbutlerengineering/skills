@@ -3,9 +3,14 @@
 Same discipline as test_gate_digest: the gh CLI is injected (the shared
 recording fake, never the network), the clock is injected, and tests
 assert the exact problem strings through the public interface. The pure
-parts — rejection detection (the complement of gate_digest's passages),
-change-request extraction, queue composition — are exercised directly;
-run_mine composes them against the fakes.
+parts this tool still owns — change-request extraction, queue
+composition — are exercised directly; run_mine composes them against
+the fakes.
+
+Rejection detection moved to human_gates.py (ADR-0056) with the
+passages it is the complement of, so its cases live in
+tests/test_human_gates.py, beside the property that says the two halves
+partition one list.
 """
 import json
 import sys
@@ -99,38 +104,6 @@ CONFIRMED_STAY = [
     unlabeled("2026-08-11T09:00:00Z", "wo:needs-review"),
     labeled("2026-08-11T09:00:00Z", "wo:merged"),
 ]
-
-
-class TestGateRejections(unittest.TestCase):
-    def events(self, raw):
-        import gate_digest
-        return gate_digest.label_events(raw)
-
-    def test_a_stay_ending_without_the_pass_label_is_a_rejection(self):
-        rejections = rejection_mining.gate_rejections(
-            self.events(REJECTED_STAY))
-        self.assertEqual(rejections,
-                         [("merge", "2026-08-11T09:00:00Z")])
-
-    def test_a_confirmed_passage_is_not_a_rejection(self):
-        self.assertEqual(
-            rejection_mining.gate_rejections(self.events(CONFIRMED_STAY)),
-            [])
-
-    def test_an_open_stay_is_still_waiting_not_rejected(self):
-        events = self.events([
-            labeled("2026-08-10T09:00:00Z", "wo:needs-review")])
-        self.assertEqual(rejection_mining.gate_rejections(events), [])
-
-    def test_a_rejected_stay_then_a_passed_reentry_mines_one(self):
-        events = self.events(
-            REJECTED_STAY + [
-                labeled("2026-08-12T09:00:00Z", "wo:needs-review"),
-                unlabeled("2026-08-13T09:00:00Z", "wo:needs-review"),
-                labeled("2026-08-13T09:00:00Z", "wo:merged"),
-            ])
-        self.assertEqual(rejection_mining.gate_rejections(events),
-                         [("merge", "2026-08-11T09:00:00Z")])
 
 
 class TestChangeRequests(unittest.TestCase):

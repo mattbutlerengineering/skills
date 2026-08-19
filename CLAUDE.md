@@ -33,9 +33,12 @@ On demand only (real model runs, costs money, never CI; both need the
   naming grammar), and the four factory seams (ADR-0037, ADR-0039,
   ADR-0040 — `knowledge_plane.py` typed-ID grammar + run walk, `cli.py`
   external-CLI + harness-IO conventions, `factory_config.py` factory.json
-  reader/resolvers, `cost_ledger.py` cost-ledger shape). A new shared module needs multiple
-  real callers AND observed divergence between their copies — anticipated
-  reuse doesn't qualify.
+  reader/resolvers, `cost_ledger.py` cost-ledger shape), plus
+  `human_gates.py` (ADR-0056 — what a gate is: its ledger name, its
+  queue and passed labels, its digest heading, the label-event walk, and
+  the stay partition the digest and the miner divide between them). A new
+  shared module needs multiple real callers AND observed divergence
+  between their copies — anticipated reuse doesn't qualify.
 - **Three skill kinds**: stage skills (own a run artifact, routed to by
   `next`), the `next` router, and utility skills (ADR-0023 —
   directly-invoked, own no artifact, never routed to; `protocol.py`

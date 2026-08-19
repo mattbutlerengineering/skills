@@ -119,7 +119,12 @@ def product_makefile(text):
 # only, the workflow is the one that mutates (gh issue create, gh variable
 # set). knowledge_plane.py, cli.py, factory_config.py, and cost_ledger.py
 # are the ADR-0037 seam modules the tools above import as siblings —
-# mirrored for the same reason protocol.py is. validator.yml is
+# mirrored for the same reason protocol.py is. human_gates.py is the gate
+# vocabulary and the stay partition (ADR-0056), and it ships for that same
+# reason and not optionally: gate_digest.py and rejection_mining.py both
+# ship and both import it as a bare sibling, so a stamped repo without it
+# is a broken stamp. It is absent from _PRODUCT_TOOLS on purpose — that
+# tuple respells Makefile commands, and no target invokes it. validator.yml is
 # path-agnostic (it runs `make` targets), which is what lets it be mirrored
 # byte-for-byte instead of forked per repo. .github/CODEOWNERS is the
 # human-gate surface (ADR-0033), identical in both repos, so it mirrors
@@ -138,6 +143,7 @@ MIRRORS = (
     ("handoff.py", "tools/factory/handoff.py", identity),
     ("orientation_pack.py", "tools/factory/orientation_pack.py", identity),
     ("cost_report.py", "tools/factory/cost_report.py", identity),
+    ("human_gates.py", "tools/factory/human_gates.py", identity),
     ("gate_digest.py", "tools/factory/gate_digest.py", identity),
     ("rejection_mining.py", "tools/factory/rejection_mining.py", identity),
     ("work_queue.py", "tools/factory/work_queue.py", identity),

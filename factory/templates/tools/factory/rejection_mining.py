@@ -8,9 +8,11 @@ plane, and this tool reads both through the injected gh runner (same
 seam as gate_digest.py, so tests never touch the network):
 
 - gate rejections — a `wo:` queue stay that ended WITHOUT the gate's
-  pass label. These are exactly the stays gate_digest.gate_passages
+  pass label. These are exactly the stays human_gates.gate_passages
   deliberately skips: a flip to wo:failed / wo:blocked records no
   latency row there, so this tool is where those flips finally land.
+  One walk answers both (human_gates.completed_stays, ADR-0056): the
+  digest keeps the confirmed stays, this keeps the rest.
 - PR change-requests — CHANGES_REQUESTED reviews on the work orders'
   PRs, joined to their WO through the `Closes #N` grammar
   (knowledge_plane.CLOSES_TOKEN).
@@ -36,9 +38,9 @@ from datetime import datetime, timezone
 
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import full_window, gh_json, gh_runner, report, write_outputs
-from gate_digest import GATES, label_events, mirror_map
-from knowledge_plane import CLOSES_TOKEN, repo_root
+from cli import gh_read, gh_runner, report, write_outputs
+from human_gates import gate_rejections, label_events
+from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root
 from sweeps import sanitize
 
 # First line of the queue issue's body — how the weekly run finds its
@@ -46,48 +48,14 @@ from sweeps import sanitize
 MARKER = "<!-- factory-toolsmith-queue -->"
 QUEUE_TITLE = "Toolsmith queue — mined rejections"
 
-# gh truncates a windowed listing silently; the window size is declared
-# once so the full-window report and the --limit can never drift apart.
+# How far back the two listings can see. cli.gh_read owns the window —
+# the limit it sends gh and the truncation it reports are the same
+# number, so the two can no longer drift apart.
 LIST_WINDOW = 1000
 ISSUE_ARGS = ("issue", "list", "--state", "all", "--json",
-              "number,title,state,labels,body", "--limit",
-              str(LIST_WINDOW))
+              "number,title,state,labels,body")
 PR_ARGS = ("pr", "list", "--state", "all", "--json",
-           "number,state,body,reviews", "--limit", str(LIST_WINDOW))
-
-
-def gate_rejections(events):
-    """[(gate, stay ended at)] — every completed queue stay in one
-    issue's label history that the gate's pass label never confirmed.
-    The confirmation window matches gate_digest.gate_passages — from
-    the stay's start up to the gate's next re-entry — so the two tools
-    partition completed stays between them: every stay is a passage
-    there or a rejection here, never both. An open stay is still
-    waiting, not rejected."""
-    rejections = []
-    for gate, queue, pass_label, _ in GATES:
-        confirmations = [ts for ts, kind, name in events
-                         if kind == "labeled" and name == pass_label]
-        stays = []
-        entered = None
-        for ts, kind, name in events:
-            if name != queue:
-                continue
-            if kind == "labeled":
-                entered = ts
-            elif kind == "unlabeled" and entered is not None:
-                stays.append((entered, ts))
-                entered = None
-        entries = [start for start, _ in stays]
-        for index, (start, left) in enumerate(stays):
-            window_end = entries[index + 1] if index + 1 < len(entries) \
-                else None
-            confirmed = any(
-                start <= ts and (window_end is None or ts < window_end)
-                for ts in confirmations)
-            if not confirmed:
-                rejections.append((gate, left))
-    return sorted(rejections, key=lambda item: item[1])
+           "number,state,body,reviews")
 
 
 def _excerpt(body):
@@ -170,18 +138,14 @@ def _timelines(mirrored, run, problems):
     events = {}
     for number in mirrored:
         path = f"repos/{{owner}}/{{repo}}/issues/{number}/timeline"
-        try:
-            pages, suffix = gh_json(["api", path, "--paginate",
-                                     "--slurp"], run, expect=list)
-        except GH_FAILURES as err:
-            problems.append(f"rm: gh api timeline for #{number} failed:"
-                            f" {gh_detail(err)}")
-            continue
-        if suffix:
-            problems.append(f"rm: gh api timeline for #{number} {suffix}")
+        read = gh_read(["api", path, "--paginate", "--slurp"],
+                       f"gh api timeline for #{number}", label="rm",
+                       run=run)
+        problems.extend(read.problems)
+        if read.value is None:
             continue
         events[number] = label_events(
-            [event for page in pages for event in page])
+            [event for page in read.value for event in page])
     return events
 
 
@@ -189,18 +153,12 @@ def _change_requests(mirror, run, problems):
     """change_requests over a live pr listing; a failed listing is a
     problem plus an empty stream, never a lost harvest — the gate
     rejections still post."""
-    try:
-        listing, suffix = gh_json(list(PR_ARGS), run, expect=list)
-    except GH_FAILURES as err:
-        problems.append(f"rm: gh pr list failed: {gh_detail(err)}")
+    read = gh_read(list(PR_ARGS), "gh pr list", label="rm", run=run,
+                   window=LIST_WINDOW)
+    problems.extend(read.problems)
+    if read.value is None:
         return []
-    if suffix:
-        problems.append(f"rm: gh pr list {suffix}")
-        return []
-    window = full_window(listing, LIST_WINDOW)
-    if window:
-        problems.append(f"rm: gh pr list {window}")
-    return change_requests(listing, mirror)
+    return change_requests(read.value, mirror)
 
 
 def _post_queue(existing, body, run, problems):
@@ -240,16 +198,11 @@ def run_mine(root, run=gh_runner, clock=None):
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
     mirror = mirror_map(root)
-    try:
-        listing, suffix = gh_json(list(ISSUE_ARGS), run, expect=list)
-    except GH_FAILURES as err:
-        return {}, [f"rm: gh issue list failed: {gh_detail(err)}"]
-    if suffix:
-        return {}, [f"rm: gh issue list {suffix}"]
-    problems = []
-    window = full_window(listing, LIST_WINDOW)
-    if window:
-        problems.append(f"rm: gh issue list {window}")
+    read = gh_read(list(ISSUE_ARGS), "gh issue list", label="rm", run=run,
+                   window=LIST_WINDOW)
+    if read.value is None:
+        return {}, read.problems
+    listing, problems = read.value, list(read.problems)
 
     mirrored = sorted(entry["number"] for entry in listing
                       if entry.get("number") in mirror)

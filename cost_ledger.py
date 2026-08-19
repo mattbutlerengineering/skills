@@ -94,6 +94,24 @@ def gate_wait(entry):
     return match.group(1), int(match.group(2))
 
 
+def dispatched(entries, month=None):
+    """The rows that count as spend, in ledger order: never a
+    gate-latency observation (ADR-0041 — a wait record, not a run), and
+    when `month` ("YYYY-MM") is given only the rows in_month admits.
+
+    The ONE row-selection rule behind both month-to-date figures — the
+    weekly report's spend breakdown and the work queue's circuit-breaker
+    input — so the number ADR-0034's cap is compared against has one
+    definition rather than one per caller. Each caller keeps its own
+    arithmetic and its own cap comparison; only which rows to walk is
+    shared. A pure filter over already-validated rows (read()'s
+    contract), in the same family as in_month, gate_wait, row_key and
+    wo_token."""
+    return [entry for entry in entries
+            if gate_wait(entry) is None
+            and (month is None or in_month(entry, month))]
+
+
 def append(root, entry):
     """Append one line to docs/factory/costs.jsonl. APPEND ONLY: opens in
     "a" mode and never reads or rewrites existing lines — the ledger is the

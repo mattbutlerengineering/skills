@@ -53,24 +53,22 @@ GuardResult = namedtuple("GuardResult", (
 def aggregate(entries, month=None):
     """PURE: recompute the weekly report's numbers from already-parsed
     ledger entries — total spend, total tokens, run count, and spend by
-    work order. Gate-latency observations (ADR-0041) are skipped: they are
-    $0 wait records, not runs, and counting them would inflate run_count
-    and pad by_wo with $0.00 lines. When `month` ("YYYY-MM") is given,
-    only rows cost_ledger.in_month places in that month are counted — the
-    seam owns the window predicate, and rows without `at` are legacy
-    (pre-timestamp), belonging to closed months by construction. Trusts
-    the full ledger shape cost_ledger.read already established
-    (coding-style.md: no defensive re-validation of an invariant enforced
-    one call up)."""
+    work order. Which rows count is cost_ledger.dispatched's rule, shared
+    with work_queue.month_to_date so the cap is compared against one
+    definition: gate-latency observations (ADR-0041) are skipped, being
+    wait records rather than runs, and counting them would inflate
+    run_count and pad by_wo with $0.00 lines; and when `month`
+    ("YYYY-MM") is given only rows cost_ledger.in_month places in that
+    month are counted, rows without `at` being legacy (pre-timestamp) and
+    belonging to closed months by construction. Every number below is
+    then the SAME row set by construction. Trusts the full ledger shape
+    cost_ledger.read already established (coding-style.md: no defensive
+    re-validation of an invariant enforced one call up)."""
     total_cost = 0.0
     total_tokens = 0
     run_count = 0
     by_wo = {}
-    for entry in entries:
-        if cost_ledger.gate_wait(entry) is not None:
-            continue
-        if month is not None and not cost_ledger.in_month(entry, month):
-            continue
+    for entry in cost_ledger.dispatched(entries, month):
         cost = entry["cost"]
         total_cost += cost
         total_tokens += entry["tokens"]

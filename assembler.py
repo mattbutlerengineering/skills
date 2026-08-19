@@ -46,20 +46,18 @@ from pathlib import Path
 
 import factory_config
 import orientation_pack
-from cli import (CLI_FAILURES, detail, full_window, gh_json, gh_runner,
-                 read_event, report, write_outputs)
+from cli import gh_read, gh_runner, read_event, report, write_outputs
 from knowledge_plane import (CLOSES_TOKEN, breakdown_files, repo_root,
                              row_tracker_issue, row_work_order)
 from protocol import read_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
 
-# gh truncates a windowed listing silently; the window size is declared
-# once so the full-window report and the --limit can never drift apart
-# (rejection_mining's discipline).
+# How far back the PR listing can see. cli.gh_read owns the window —
+# the limit it sends gh and the truncation it reports are the same
+# number, so the two can no longer drift apart.
 LIST_WINDOW = 1000
-PR_ARGS = ("pr", "list", "--state", "open", "--json", "number,body",
-           "--limit", str(LIST_WINDOW))
+PR_ARGS = ("pr", "list", "--state", "open", "--json", "number,body")
 
 # ADR-0034: a hard-stopped order is re-dispatched only after the owner
 # clears this flag — the dispatcher itself enforces the no-self-retry rule.
@@ -255,16 +253,11 @@ def pr_for_issue(issue_number, run=gh_runner):
     its order, and an agent that delivered no such PR is a problem, not
     a silent miss. gh answers newest-first, so the first match is the
     agent's latest attempt."""
-    try:
-        listing, suffix = gh_json(list(PR_ARGS), run, expect=list)
-    except CLI_FAILURES as err:
-        return None, [f"asm: gh pr list failed: {detail(err)}"]
-    if suffix:
-        return None, [f"asm: gh pr list {suffix}"]
-    problems = []
-    window = full_window(listing, LIST_WINDOW)
-    if window:
-        problems.append(f"asm: gh pr list {window}")
+    read = gh_read(list(PR_ARGS), "gh pr list", label="asm", run=run,
+                   window=LIST_WINDOW)
+    if read.value is None:
+        return None, read.problems
+    listing, problems = read.value, list(read.problems)
     for entry in listing:
         number = entry.get("number")
         refs = CLOSES_TOKEN.findall(entry.get("body") or "")
