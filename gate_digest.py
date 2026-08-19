@@ -41,8 +41,7 @@ from cli import detail as gh_detail
 from cli import gh_read, label_names, report, write_outputs
 from human_gates import (GATES, gate_passages, label_events, waited_seconds,
                          waiting_since)
-from knowledge_plane import (breakdown_files, repo_root, row_tracker_issue,
-                             row_work_order)
+from knowledge_plane import mirror_map, repo_root
 from cli import gh_runner
 
 # First line of the digest issue's body — how the daily run finds its own
@@ -91,21 +90,6 @@ def compose_digest(queues, as_of):
 LIST_WINDOW = 1000
 LIST_ARGS = ("issue", "list", "--state", "all", "--json",
              "number,title,state,labels,body")
-
-
-def mirror_map(root):
-    """{tracker issue number: WO token} from the breakdown rows. The
-    knowledge plane is authoritative and the mirror one-way (ADR-0032):
-    a row with no (tracker: #N) simply is not in any queue, and an issue
-    with no row is not a work order."""
-    mapping = {}
-    for _, lines in breakdown_files(root):
-        for line in lines:
-            wo = row_work_order(line)
-            number = row_tracker_issue(line)
-            if wo and number is not None:
-                mapping[number] = wo
-    return mapping
 
 
 def _timelines(mirrored, run, problems):

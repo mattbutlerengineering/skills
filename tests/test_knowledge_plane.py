@@ -7,10 +7,9 @@ import unittest
 from pathlib import Path
 
 import knowledge_plane
-from gate_digest import mirror_map
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, ROW,
-                             WO_TOKEN, breakdown_files, repo_root,
-                             row_work_order, run_dirs)
+                             WO_TOKEN, breakdown_files, mirror_map,
+                             repo_root, row_work_order, run_dirs)
 
 
 class TestTokens(unittest.TestCase):
@@ -201,8 +200,8 @@ class TestMirrorMap(unittest.TestCase):
     """The tracker mirror map, asserted at the seam that owns the rest of
     the mirror grammar. It is built from three knowledge-plane names —
     breakdown_files, row_work_order, row_tracker_issue — and names no
-    gate, but it still lives inside gate_digest.py, which is why the
-    import above reaches into a leaf tool from this suite.
+    gate, which is why it lives here rather than in the digest that
+    happened to need it first.
 
     ADR-0032: the row is authoritative and the mirror one-way, so the
     map's two absences are its contract, not its edge cases."""

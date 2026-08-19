@@ -4,13 +4,14 @@ gate-latency capture.
 Same discipline as test_validator: the gh CLI is injected (a recording
 fake, never the network), the clock is injected, and tests assert the
 exact problem strings and ledger rows through the public interface. The
-pure parts this tool still owns — digest composition, the mirror map —
-are exercised directly; run_daily composes them against the fakes.
+pure part this tool still owns — digest composition — is exercised
+directly; run_daily composes it against the fakes.
 
 The gate vocabulary and the stay walk are human_gates.py's (ADR-0056),
 so timeline parsing, passage detection and waiting_since are covered in
 tests/test_human_gates.py — one frame further out, where the miner's
-half of the same partition is covered too.
+half of the same partition is covered too. The mirror map is the
+knowledge plane's (ADR-0039), covered in tests/test_knowledge_plane.py.
 """
 import json
 import sys
@@ -106,13 +107,6 @@ class TestComposeDigest(unittest.TestCase):
         queues = [("PRD gate", "wo:draft", [(7, "WO-0001 a title", None)])]
         body = gate_digest.compose_digest(queues, "2026-07-22")
         self.assertIn("- #7 WO-0001 a title\n", body)
-
-
-class TestMirrorMap(unittest.TestCase):
-    def test_maps_tracker_numbers_to_work_orders(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(gate_digest.mirror_map(tree(tmp).root),
-                             {123: "WO-0018", 131: "WO-0010"})
 
 
 class TestRunDaily(unittest.TestCase):

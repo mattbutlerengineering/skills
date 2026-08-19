@@ -48,10 +48,9 @@ from cli import report, runner
 import cost_ledger
 import cost_report
 import factory_config
-from gate_digest import mirror_map
 from human_gates import GATES, label_events, waiting_since
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             row_done, row_size, row_title,
+                             mirror_map, row_done, row_size, row_title,
                              row_tracker_issue, row_work_order, run_dirs)
 from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
                       next_stage, parse_backlog)

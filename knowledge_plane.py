@@ -180,6 +180,26 @@ def breakdown_files(root):
                 encoding="utf-8").splitlines()
 
 
+def mirror_map(root):
+    """{tracker issue number: WO token} from the breakdown rows. The
+    knowledge plane is authoritative and the mirror one-way (ADR-0032):
+    a row with no (tracker: #N) simply is not in any queue, and an issue
+    with no row is not a work order.
+
+    The one composition of the three names above that the tracker-facing
+    tools — the gate digest, the miner, the dashboard — all need, and
+    the reason ADR-0039 put the mirror grammar here in the first place:
+    it reads rows, and it names no gate."""
+    mapping = {}
+    for _, lines in breakdown_files(root):
+        for line in lines:
+            wo = row_work_order(line)
+            number = row_tracker_issue(line)
+            if wo and number is not None:
+                mapping[number] = wo
+    return mapping
+
+
 def repo_root():
     """Nearest ancestor containing .git (dir or worktree file): correct at
     the factory repo root and stamped at tools/factory/ in a product repo."""
