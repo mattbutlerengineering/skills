@@ -106,7 +106,7 @@ new assertion lands genuinely RED and a red tree cannot close an item; the
 red-to-green happens inside the commit and is the evidence the shadow was
 a live defect rather than a tidiness complaint.
 
-- [ ] **C1** the missing lockstep target, then the shadow — size:S, blocked by: —
+- [x] **C1** the missing lockstep target, then the shadow — size:S, blocked by: —
   - Accept: `TOOLSMITH_MINE_TARGET = ["python3 rejection_mining.py mine"]` and three `toolsmith-mine` methods join `TestLockstep`, shaped exactly like the gate-digest trio (both Makefiles expose the target; the workflow names no command of its own; the payload workflow is a byte mirror). Run against today's code the Makefile assertion FAILS, because the shadow leaves `rejection_mining.py` unrespelled while factory/templates/Makefile:64 carries `python3 tools/factory/rejection_mining.py mine` — that failure is reproduced and recorded in the commit message before the fix. The module-level `product_form` at tests/test_gates.py:1626 is then deleted, the line-18 import becomes the only binding, and the suite goes green; the other five call sites resolve to the import with no change in outcome. `grep -n "def product_form" tests/test_gates.py` finds nothing, and the docstring at tests/test_gates.py:1649-1652 becomes true. No manifest churn.
 
 ## Milestone D: one month-to-date definition (the rule ADR-0041 decided has one implementation, and a nonzero-cost gate row is what proves it)
