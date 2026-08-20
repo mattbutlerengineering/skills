@@ -36,3 +36,6 @@
 {"wo": "WO-0035", "run_id": "session-2026-08-15-wo-0035", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-16"}
 {"wo": "WO-0035", "run_id": "gate-merge-2026-08-17T00:43:23Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:401s", "at": "2026-08-17"}
 {"wo": "WO-0044", "run_id": "session-2026-08-17-wo-0044", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-17"}
+{"wo": "WO-0002", "run_id": "gate-merge-2026-08-19T14:51:32Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:3324459s", "at": "2026-08-19"}
+{"wo": "WO-0003", "run_id": "gate-merge-2026-08-19T14:51:36Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:3324462s", "at": "2026-08-19"}
+{"wo": "WO-0013", "run_id": "gate-merge-2026-08-19T14:51:38Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:3324462s", "at": "2026-08-19"}
