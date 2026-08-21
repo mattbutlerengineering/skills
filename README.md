@@ -138,7 +138,14 @@ narrower architectural question instead: where is the codebase **shallow**,
 its interfaces nearly as costly to learn as the implementations behind them?
 It confirms each candidate against real call sites rather than a feeling of
 friction, presents the deepenings as a self-contained before/after report
-outside the repo, and designs the chosen interface with you.
+outside the repo, and designs the chosen interface with you. `automate`
+turns the same evidence discipline on the tooling instead of the code:
+what Claude Code automation is this repo missing — hooks, subagents,
+skills, plugins, MCP servers, or a drift detector for a rule nothing
+checks — where every recommendation has to name the friction it removes,
+the thing that would construct it, and what it costs. File presence never
+justifies a recommendation; a repeated manual step written down in the
+repo's own artifacts does.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
