@@ -281,7 +281,7 @@
     {"id": "automate-3", "kind": "situational", "expected": "automate",
      "query": "Our contributor docs are full of rules nobody checks \u2014 what's worth automating here?"},
     {"id": "automate-vs-doctor-1", "kind": "near-miss", "expected": "automate",
-     "query": "Look at what we've got set up for Claude and tell me what's missing",
+     "query": "We've got a CLAUDE.md and a couple of skills installed and that's it — what else should we be running here?",
      "notes": "adjacency: automate vs doctor \u2014 what automation the repo should ADD; doctor asks whether what is already installed is wired up correctly"},
     {"id": "doctor-vs-automate-1", "kind": "near-miss", "expected": "doctor",
      "query": "None of the skills seem to be loading and make check fails on a fresh stamp \u2014 is any of this actually installed right?",

@@ -47,6 +47,19 @@ that is **inert** — installed and unable to fire — is one of the best
 findings available, and it belongs in the report as a defect, not a
 recommendation.
 
+**Then check what is already in flight, before recommending anything:**
+
+    gh pr list --state open
+    gh issue list --state open --limit 50
+
+An automation an unmerged PR already adds is not a recommendation — it is
+a duplicate of work in flight, and it reads as new, which is worse than
+saying nothing. The same goes for an open issue that already proposes it
+and for a seed already sitting in `docs/backlog.md`. Read all three
+before the sweep, not after. This is not hypothetical bookkeeping: a run
+in this repo rebuilt a one-line fix that was sitting in an open PR the
+whole time, because discovery listed open issues and never open PRs.
+
 ### 2. Find the friction
 
 Read [`references/catalog.md`](references/catalog.md) now — it carries the
@@ -170,9 +183,11 @@ top recommendation is a complete result, and the hand-off is that spec.
 - No recommendation without a located friction. `path/file:line`, an
   artifact that records the manual step, or a named rule with the check that
   does not exist. "Repos like this usually want X" is not a finding.
-- Never recommend something the repo already has. Check step 1's table
-  first; a report that recommends an installed hook has proved it did not
-  look.
+- Never recommend something the repo already has, or something already in
+  flight. Check step 1's table and its open-PR/open-issue read first; a
+  report that recommends an installed hook has proved it did not look, and
+  one that recommends what an open PR already adds is worse — it reads as
+  new work.
 - Every row carries its cost and its failure mode. Wins-only rows are how an
   automation gets approved and then discovered to be a permanent tax on
   every tool call.
