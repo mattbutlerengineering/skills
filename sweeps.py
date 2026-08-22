@@ -62,7 +62,7 @@ from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, label_names, report
 from knowledge_plane import (WO_TOKEN, breakdown_files, repo_root,
-                             row_tracker_issue)
+                             row_tracker_issue, sanitize)
 from cli import gh_runner
 
 # Sweep kind -> the two taxonomy labels its intake carries. Closed by
@@ -95,18 +95,14 @@ COMMANDS = tuple(TRIAGE) + ("ensure-labels",)
 SENTRY_FIELDS = ("shortId", "title", "culprit", "level", "count",
                  "lastSeen", "permalink")
 
-# ASCII C0/DEL plus the Unicode format characters that render as nothing but
-# reorder or hide text: zero-width (U+200B-200D), bidi marks and overrides
-# (U+200E-200F, U+202A-202E), directional isolates (U+2066-2069) and the BOM.
-CONTROL = re.compile(
-    "[\x00-\x08\x0b-\x1f\x7f\u200b-\u200f\u202a-\u202e"
-    "\u2066-\u2069\ufeff]")
-FENCE = re.compile(r"`{3,}")
+# The untrusted-text policy itself (CONTROL, FENCE, REDACTED_WO,
+# FIELD_LIMIT, sanitize) lives in knowledge_plane: rejection_mining.py
+# needs it too and IS mirrored into the stamped payload, where sweeps.py
+# is not (#305). What stays here is sweeps-only — the intake key's
+# character class and the two field widths this tool quotes at.
 UNSAFE_KEY = re.compile(r"[^A-Za-z0-9_.:-]")
-REDACTED_WO = "WO-[redacted]"
 
 TITLE_LIMIT = 100
-FIELD_LIMIT = 300
 KEY_LIMIT = 64
 # A signal source having a bad day must not open 500 issues. The cap is on how
 # many NEW issues one sweep may file — applied after dedupe (file_issues),
@@ -129,22 +125,6 @@ INTAKE_FOOTER = ("This issue is **intake**, not a work order: it carries"
                  " (ADR-0032).")
 
 Intake = namedtuple("Intake", "key title body labels")
-
-
-def sanitize(value, limit=FIELD_LIMIT):
-    """Untrusted external text -> one safe, bounded line of data. Control
-    characters go (they hide content in a terminal), fence runs are defanged
-    (they are how quoted text would escape its code block), whitespace
-    collapses to single spaces, WO ids are redacted (a sweep may not name a
-    work order), and the result is length-capped."""
-    text = "" if value is None else str(value)
-    text = CONTROL.sub(" ", text)
-    text = FENCE.sub("'''", text)
-    text = WO_TOKEN.sub(REDACTED_WO, text)
-    text = " ".join(text.split())
-    if len(text) > limit:
-        text = text[:limit - 3].rstrip() + "..."
-    return text
 
 
 def render(kind, key, summary, fields):

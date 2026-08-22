@@ -239,6 +239,49 @@ class TestRealTreeMirrors(unittest.TestCase):
                     " python3 factory_init.py update-manifest")
 
 
+class TestPayloadToolsImport(unittest.TestCase):
+    """Every mirrored tool must IMPORT inside the payload tree (#305).
+
+    TestRealTreeMirrors pins that each mirrored file matches its root
+    twin, and the acceptance stamp drives `make check` — but `check`
+    names only some of the targets, so a mirrored tool reached by any
+    other target (`toolsmith-mine`) had nothing importing it. That is
+    exactly how rejection_mining.py shipped for days importing
+    `sweeps`, a module MIRRORS does not carry: the root import resolved,
+    the payload import could not, and the failure waited for a
+    scheduled run to surface.
+
+    Each import runs in its own interpreter with the payload directory
+    as sys.path[0], so a root module of the same name can never satisfy
+    it.
+    """
+
+    REPO = Path(__file__).resolve().parents[1]
+
+    def payload_modules(self):
+        for _, rel, _ in factory_init.MIRRORS:
+            path = Path(rel)
+            if path.suffix == ".py":
+                yield path
+
+    def test_every_mirrored_tool_imports_from_the_payload_tree(self):
+        modules = list(self.payload_modules())
+        self.assertTrue(modules, "MIRRORS carries no python tools")
+        for rel in modules:
+            with self.subTest(module=rel.as_posix()):
+                directory = self.REPO / "factory" / "templates" / rel.parent
+                # -B: importing inside the payload would otherwise drop
+                # __pycache__/*.pyc into the mirrored tree, and the next
+                # update-manifest would checksum them in as payload.
+                done = subprocess.run(
+                    [sys.executable, "-B", "-c", f"import {rel.stem}"],
+                    cwd=directory, capture_output=True, text=True)
+                self.assertEqual(
+                    done.returncode, 0,
+                    f"factory/templates/{rel.as_posix()} does not import"
+                    f" inside the payload:\n{done.stderr}")
+
+
 class TestProductForm(unittest.TestCase):
     """The per-command root->product respelling. Public on purpose:
     product_makefile generates the payload Makefile through it, and

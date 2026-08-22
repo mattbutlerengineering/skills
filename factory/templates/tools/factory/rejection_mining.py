@@ -40,8 +40,7 @@ from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, report, write_outputs
 from human_gates import gate_rejections, label_events
-from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root
-from sweeps import sanitize
+from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root, sanitize
 
 # First line of the queue issue's body — how the weekly run finds its
 # own issue among the open ones (the gate digest's marker idiom).
