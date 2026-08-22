@@ -26,6 +26,41 @@ CLOSES_TOKEN = re.compile(
     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+#(\d+)\b",
     re.IGNORECASE)
 
+# Untrusted-text policy, homed here because its redaction rule IS the WO
+# token grammar above. Both tracker-facing writers need it — sweeps.py
+# quotes Sentry payloads and detector output, rejection_mining.py quotes
+# agent rejection excerpts — and only one of them is mirrored into the
+# stamped payload, so a home in sweeps.py left the stamped
+# rejection_mining.py importing a module that is not there (#305).
+#
+# ASCII C0/DEL plus the Unicode format characters that render as nothing but
+# reorder or hide text: zero-width (U+200B-200D), bidi marks and overrides
+# (U+200E-200F, U+202A-202E), directional isolates (U+2066-2069) and the BOM.
+CONTROL = re.compile(
+    "[\x00-\x08\x0b-\x1f\x7f\u200b-\u200f\u202a-\u202e"
+    "\u2066-\u2069\ufeff]")
+FENCE = re.compile(r"`{3,}")
+REDACTED_WO = "WO-[redacted]"
+FIELD_LIMIT = 300
+
+
+def sanitize(value, limit=FIELD_LIMIT):
+    """Untrusted external text -> one safe, bounded line of data. Control
+    characters go (they hide content in a terminal), fence runs are defanged
+    (they are how quoted text would escape its code block), whitespace
+    collapses to single spaces, WO ids are redacted (neither a sweep intake
+    nor a mined queue entry may name a work order — ADR-0032), and the
+    result is length-capped."""
+    text = "" if value is None else str(value)
+    text = CONTROL.sub(" ", text)
+    text = FENCE.sub("'''", text)
+    text = WO_TOKEN.sub(REDACTED_WO, text)
+    text = " ".join(text.split())
+    if len(text) > limit:
+        text = text[:limit - 3].rstrip() + "..."
+    return text
+
+
 # A breakdown row is a checkbox bullet line; its work order is its FIRST
 # WO token (later tokens are blocking edges). Notes and Accept: sub-bullets
 # are prose, never rows. One grammar for the whole dispatch plane:

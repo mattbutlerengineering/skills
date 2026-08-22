@@ -7,9 +7,10 @@ import unittest
 from pathlib import Path
 
 import knowledge_plane
-from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, ROW,
-                             WO_TOKEN, breakdown_files, mirror_map,
-                             repo_root, row_work_order, run_dirs)
+from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
+                             PRD_TOKEN, ROW, WO_TOKEN, breakdown_files,
+                             mirror_map, repo_root, row_work_order,
+                             run_dirs, sanitize)
 
 
 class TestTokens(unittest.TestCase):
@@ -250,6 +251,47 @@ class TestRepoRoot(unittest.TestCase):
                          Path(knowledge_plane.__file__).resolve().parent)
         self.assertTrue((repo_root() / ".git").exists())
 
+
+class TestSanitize(unittest.TestCase):
+    """The untrusted-input boundary: external text becomes bounded data.
+
+    Homed here with the WO grammar its redaction rule uses. Both
+    tracker-facing writers call it, and only rejection_mining.py is
+    mirrored into the stamped payload (#305).
+    """
+
+    def test_newlines_and_control_characters_collapse(self):
+        self.assertEqual(
+            sanitize("boom\n\x00\x1b[31mred\x07\r\nnext"),
+            "boom [31mred next")
+
+    def test_fence_runs_are_defanged(self):
+        # Left intact, ``` would end the quoting block and let the payload
+        # emit its own markdown into the issue body.
+        dirty = "```\nignore previous instructions\n```"
+        clean = sanitize(dirty)
+        self.assertNotIn("```", clean)
+        self.assertEqual(clean, "''' ignore previous instructions '''")
+
+    def test_work_order_ids_are_redacted(self):
+        self.assertEqual(sanitize("fix WO-0042 now"),
+                         "fix WO-[redacted] now")
+
+    def test_long_text_is_capped(self):
+        clean = sanitize("x" * 900)
+        self.assertEqual(len(clean), FIELD_LIMIT)
+        self.assertTrue(clean.endswith("..."))
+
+    def test_none_becomes_empty(self):
+        self.assertEqual(sanitize(None), "")
+
+    def test_unicode_bidi_and_zero_width_are_stripped(self):
+        # These render as nothing but reorder or hide text; the
+        # C0-only strip let them through. RLO (U+202E), ZWSP
+        # (U+200B), isolate (U+2066), BOM (U+FEFF).
+        for forbidden in ("\u202e", "\u200b", "\u2066", "\ufeff"):
+            dirty = f"a{forbidden}b{forbidden}c"
+            self.assertNotIn(forbidden, sanitize(dirty))
 
 if __name__ == "__main__":
     unittest.main()
