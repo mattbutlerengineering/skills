@@ -125,7 +125,7 @@ same payload keys — with no rule in the tool naming either one.
     continues. **An empty universe is never silently clean** — the empty-list
     case is asserted to carry a problem, so a broken environment cannot read
     as "no duplicates". `factory/` untouched.
-- [ ] **A5** `check`, `main`, and the acceptance fixture found unaided — size:M, blocked by: A3, A4
+- [x] **A5** `check`, `main`, and the acceptance fixture found unaided — size:M, blocked by: A3, A4
   - Accept: `check(root, run=git_runner)` returns a sorted list of
     `one-owner: `-prefixed problem strings, and an uncovered group renders as
     `… state the same value — one fact, one owner` or `… read the same

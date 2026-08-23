@@ -45,6 +45,7 @@ VERBS = {
     "handoff": ("handoff", "argv"),
     "label-sync": ("label_sync", "argv"),
     "lint": ("lint", "bare"),
+    "one-owner": ("one_owner", "argv"),
     "rejection-mining": ("rejection_mining", "argv"),
     "sweeps": ("sweeps", "argv"),
     "trigger-eval": ("trigger_eval", "bare"),

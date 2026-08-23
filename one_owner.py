@@ -19,10 +19,12 @@ NOT A GATE. It is outside `make check` and outside every workflow: a
 finding is a question for a human, and must never colour main red.
 """
 import ast
+import sys
 from collections import namedtuple
 from pathlib import Path
 
-from cli import CLI_FAILURES, detail, runner
+from cli import CLI_FAILURES, detail, report, runner
+from knowledge_plane import repo_root
 
 # The real git CLI (cli.runner): a failed or missing git raises
 # CLI_FAILURES, and source_files turns that into a one-owner: problem
@@ -122,8 +124,9 @@ def fact_sites(path, source):
     `same-keys` — a function definition anywhere in the module, read at
     least TWO named keys deep. Claim: these two functions read the same
     named external shape, which in this repo is what a seam owns. This is
-    the label_names / issue_lifecycle shape, and it works because the two
-    walks are about the same keys even though their code shares no text.
+    the retyped-seam shape defect.md's evidence table calls miss 3, and it
+    works because two walks over one shape agree about the keys even when
+    their code shares no text and their strictnesses differ.
     The floor is two keys and not three because the acceptance fixture's
     shared set is exactly {labels, name} — the fixture derives the
     threshold, rather than a threshold deciding the fixture.
@@ -192,3 +195,56 @@ def source_files(root, run=git_runner):
         problems.append("one-owner: no Python files to read — an empty"
                         " universe is never a clean one")
     return files, problems
+
+
+def _members(sites):
+    """Every owner of one fact, as a reader's list: `a and b` for a pair,
+    `a, b and c` beyond it."""
+    parts = [f"{site.path}:{site.lineno} {site.name}" for site in sites]
+    return f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+def _finding(group):
+    """One uncovered group, as the line a person reads."""
+    claim = ("state the same value" if group.sites[0].kind == "same-value"
+             else f"read the same payload keys ({group.identity})")
+    return f"one-owner: {_members(group.sites)} {claim} — one fact, one owner"
+
+
+def check(root, run=git_runner):
+    """The whole answer: a sorted list of `one-owner: `-prefixed problem
+    strings for one tree, read at one instant.
+
+    There is no storage, no state file and no baseline. Every comparison
+    is within a single read of a single working tree, so there is nothing
+    to be eventually consistent with — and a baseline of "findings we
+    already know about" would be a roster under another name, rotting the
+    way the roster this tool exists to replace did.
+
+    Deterministic: the same tree yields byte-identical output in the same
+    order, which is what lets the suite assert exact strings. Raises on
+    nothing — every failure is a problem string.
+    """
+    files, problems = source_files(root, run)
+    sites = []
+    for path, source in files:
+        found, trouble = fact_sites(path, source)
+        sites += found
+        problems += trouble
+    problems += [_finding(group) for group in groups(sites)]
+    return sorted(problems)
+
+
+def main(argv):
+    """`python3 one_owner.py` — no options in this cut. Exiting nonzero on
+    a finding is correct and is wired into no gate: a finding is a
+    question for a human, never a reason to colour main red."""
+    if argv:
+        print(f"one-owner: {' '.join(argv)!r} — this tool takes no"
+              " arguments\n\n  python3 one_owner.py")
+        return 2
+    return report("one-owner", check(repo_root()))
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

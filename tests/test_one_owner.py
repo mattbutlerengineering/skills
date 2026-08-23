@@ -11,14 +11,17 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
-from one_owner import (FactSite, Group, Marker, fact_sites, groups,
+import one_owner
+from one_owner import (FactSite, Group, Marker, check, fact_sites, groups,
                        source_files)
 
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling helper import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
 
@@ -38,6 +41,20 @@ def failing_git(err):
     def run(args):
         raise err
     return run
+
+
+def check_tree(**modules):
+    """check() against a fixture tree of literal modules — never the live
+    tree, so no case here decays as the tree is cleaned. A `|` in a name
+    is a path separator."""
+    with tempfile.TemporaryDirectory() as tmp:
+        fixture = FixtureTree(tmp)
+        listing = []
+        for name, source in modules.items():
+            rel = f"{name.replace('|', '/')}.py"
+            fixture.write(rel, source)
+            listing.append(rel)
+        return check(fixture.root, run=fake_git("\n".join(listing) + "\n"))
 
 
 def site(kind, path, lineno, name, identity):
@@ -434,6 +451,102 @@ class TestSourceFiles(unittest.TestCase):
                 self.assertEqual(problems,
                                  ["one-owner: no Python files to read — an"
                                   " empty universe is never a clean one"])
+
+
+class TestCheck(unittest.TestCase):
+    """The whole answer: a sorted list of one-owner:-prefixed problem
+    strings. These are the bytes a person reads, so they are pinned
+    exactly — against fixture trees, never the live tree."""
+
+    def test_an_uncovered_same_value_group_names_both_owners(self):
+        self.assertEqual(
+            check_tree(gates=f"MERGED_ROW = {CHECKED_ROW}\n",
+                       knowledge_plane=f"DONE_ROW = {CHECKED_ROW}\n"),
+            ["one-owner: gates.py:1 MERGED_ROW and knowledge_plane.py:1"
+             " DONE_ROW state the same value — one fact, one owner"])
+
+    def test_an_uncovered_same_keys_group_names_the_keys(self):
+        self.assertEqual(
+            check_tree(cli=LABEL_NAMES, plane_drift=ISSUE_LIFECYCLE),
+            ["one-owner: cli.py:1 label_names and plane_drift.py:1"
+             " issue_lifecycle read the same payload keys (labels, name)"
+             " — one fact, one owner"])
+
+    def test_every_member_is_listed_sorted_by_path_then_line(self):
+        self.assertEqual(
+            check_tree(assembler="\nREADY_LABEL = 'wo:ready-for-agent'\n",
+                       validator="READY_LABEL = 'wo:ready-for-agent'\n",
+                       work_queue="\n\nREADY_LABEL = 'wo:ready-for-agent'\n"),
+            ["one-owner: assembler.py:2 READY_LABEL, validator.py:1"
+             " READY_LABEL and work_queue.py:3 READY_LABEL state the same"
+             " value — one fact, one owner"])
+
+    def test_a_tree_with_one_owner_per_fact_reports_nothing(self):
+        self.assertEqual(check_tree(a="A = 'x'\n", b="B = 'y'\n"), [])
+
+    def test_the_same_tree_yields_byte_identical_output_twice(self):
+        """Determinism is part of the contract — it is what lets the suite
+        assert exact strings at all."""
+        modules = {"gates": f"MERGED_ROW = {CHECKED_ROW}\n",
+                   "knowledge_plane": f"DONE_ROW = {CHECKED_ROW}\n",
+                   "cli": LABEL_NAMES, "plane_drift": ISSUE_LIFECYCLE}
+        self.assertEqual(check_tree(**modules), check_tree(**modules))
+
+    def test_reading_and_parsing_problems_reach_the_caller(self):
+        found = check_tree(broken="def (:\n", gates="A = 'x'\n",
+                           knowledge_plane="B = 'x'\n")
+        self.assertEqual(len(found), 2, found)
+        self.assertTrue(found[0].startswith(
+            "one-owner: broken.py cannot be parsed: "), found[0])
+        self.assertEqual(found[1],
+                         "one-owner: gates.py:1 A and knowledge_plane.py:1 B"
+                         " state the same value — one fact, one owner")
+
+    def test_a_broken_environment_never_reads_as_no_duplicates(self):
+        err = subprocess.CalledProcessError(128, ["git"], stderr="fatal: x\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(check(tmp, run=failing_git(err)),
+                             ["one-owner: git ls-files failed: fatal: x"])
+
+    def test_check_raises_on_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsInstance(check(tmp, run=fake_git("")), list)
+
+
+class TestMain(cli_contract.CliContract, unittest.TestCase):
+    """The command. Exiting nonzero on a finding is correct AND is wired
+    into no gate: the tool is deliberately outside `make check`, so a
+    finding never colours main red."""
+
+    usage_fragment = "python3 one_owner.py"
+
+    def run_cli(self, argv):
+        return cli_contract.capture(one_owner.main, argv)
+
+    def test_a_finding_prints_through_the_report_epilogue(self):
+        with unittest.mock.patch.object(
+                one_owner, "check",
+                return_value=["one-owner: a.py:1 A and b.py:1 B state the"
+                              " same value — one fact, one owner"]):
+            code, out = self.run_cli([])
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines()[-1], "one-owner: 1 problem(s)")
+
+    def test_a_clean_tree_exits_zero_with_the_exact_summary_line(self):
+        with unittest.mock.patch.object(one_owner, "check", return_value=[]):
+            code, out = self.run_cli([])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines()[-1], "one-owner: 0 problem(s)")
+
+
+class TestFrontDoor(unittest.TestCase):
+    def test_the_tool_has_a_verb_and_a_docstring_summary(self):
+        """factory.index() reads each module's docstring first line, and
+        test_factory_cli derives the verb table from a scan for the
+        __main__ guard — so a guard with no verb breaks the build."""
+        import factory
+        self.assertEqual(factory.VERBS["one-owner"], ("one_owner", "argv"))
+        self.assertTrue((one_owner.__doc__ or "").strip().splitlines()[0])
 
 
 class TestDataModel(unittest.TestCase):
