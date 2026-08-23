@@ -37,6 +37,19 @@ the user's head at this stage, so this skill interviews — it does not draft.
    a why-now. For a feature run, scale down — a few sharp questions, not a
    product inquisition.
 
+   **Optional — corroborate the two evidence questions.** Where the
+   `last30days` skill is installed, "why now" and "what evidence exists"
+   can be checked against what people outside this conversation said in the
+   last 30 days. Offer it; never run it unasked — it is network-bound and
+   costs credits, and a research detour the user did not ask for is a worse
+   interview, not a better one. What comes back is anecdote at community
+   scale, so it enters `idea.md` labelled as anecdote like any other, never
+   as validation. It may corroborate the problem, sharpen the who, or
+   contradict the why-now — the contradiction is the most valuable of the
+   three, and it is recorded as an unknown, not used to argue the idea out
+   of existence. Where the skill is not installed, the interview alone is a
+   complete result.
+
 4. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `idea.md`, with protocol frontmatter.
 
@@ -46,6 +59,10 @@ the user's head at this stage, so this skill interviews — it does not draft.
 ## Rules
 
 - Capture the user's words, sharpened — don't replace their idea with yours.
+- Outside evidence corroborates or challenges; it never re-authors. And a
+  community that has not discussed the problem is not evidence the problem
+  is unreal — most real problems are undiscussed, so silence goes in as
+  silence, never as a finding.
 - Record uncertainty honestly: an unknown listed is worth more than a guess
   dressed as a fact.
 - No solution design here. If the user starts designing, note the hunch and

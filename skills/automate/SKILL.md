@@ -90,6 +90,18 @@ Marker files (`package.json`, `pyproject.toml`, `go.mod`) tell you the
 *shape* of a recommendation — which linter, which test runner. They never
 justify one.
 
+A fifth source sits outside the repo and is optional. Where the
+`last30days` skill is installed, it reads what the Claude Code ecosystem
+shipped and complained about in the last 30 days. That window is the right
+one for this category specifically — the harness moves fast enough that a
+six-month-old best practice is often already wrong, and this is the only
+source here that can tell you the repo is hand-rolling something the
+harness now does natively. It is network-bound and costs credits, so it is
+offered, never assumed. And it never promotes a candidate on its own: an
+ecosystem trend is not friction in *this* repo until one of the four
+sources above shows the repo actually feeling it. A recommendation whose
+only evidence is that something is popular is the inert kind step 4 kills.
+
 ### 3. Match each friction to exactly one category
 
 The catalog's six: **hooks**, **subagents**, **skills**, **plugins**, **MCP
