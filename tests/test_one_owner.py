@@ -43,18 +43,35 @@ def failing_git(err):
     return run
 
 
-def check_tree(**modules):
+def check_tree(adrs=("0037",), adr_status="accepted", **modules):
     """check() against a fixture tree of literal modules — never the live
     tree, so no case here decays as the tree is cleaned. A `|` in a name
-    is a path separator."""
+    is a path separator. `adrs` are the decision records the tree holds,
+    so a marker's citation has something to resolve against."""
     with tempfile.TemporaryDirectory() as tmp:
         fixture = FixtureTree(tmp)
+        for number in adrs:
+            fixture.write(f"docs/adr/{number}-a-decision.md",
+                          f"# A decision\n\n- Status: {adr_status}\n")
         listing = []
         for name, source in modules.items():
             rel = f"{name.replace('|', '/')}.py"
             fixture.write(rel, source)
             listing.append(rel)
         return check(fixture.root, run=fake_git("\n".join(listing) + "\n"))
+
+
+def carve(counterpart, adr="ADR-0037",
+          reason="ADR-0037 sanctions the alias so problem strings read"
+                 " unchanged"):
+    """One well-formed carve-out marker line."""
+    return f"# one-owner: {counterpart} ({adr}) — {reason}"
+
+
+def runner_git(*counterparts):
+    """A module whose git_runner carries the given carve-out markers."""
+    return "".join(f"{carve(c)}\n" for c in counterparts) + \
+        "git_runner = runner('git')\n"
 
 
 def site(kind, path, lineno, name, identity):
@@ -650,6 +667,98 @@ class TestMarkers(unittest.TestCase):
                     " dashboard.py:1 git_runner state the same value — one"
                     " fact, one owner", found)
                 self.assertEqual(len(found), 2, found)
+
+
+class TestCoverage(unittest.TestCase):
+    """The design question's answer, exercised. Silence is a property of
+    the whole GROUP, never of one marker — which is what makes ADR-0039's
+    failure (a fourth owner arriving nineteen days later and nothing
+    re-reading the roster) impossible rather than merely discouraged."""
+
+    def test_a_fully_covered_group_is_silent(self):
+        self.assertEqual(
+            check_tree(budget_guard=runner_git("dashboard.git_runner"),
+                       dashboard=runner_git("budget_guard.git_runner")), [])
+
+    def test_a_third_unmarked_owner_makes_the_group_speak_again(self):
+        """A NEW OWNER CANNOT ADMIT ITSELF. Admitting it means editing an
+        existing owner's file, where a reviewer is already looking. This
+        is the ADR-0039 failure, made impossible."""
+        self.assertEqual(
+            check_tree(budget_guard=runner_git("dashboard.git_runner"),
+                       dashboard=runner_git("budget_guard.git_runner"),
+                       one_owner="git_runner = runner('git')\n"),
+            ["one-owner: one_owner.py:1 git_runner joins a recorded"
+             " deliberate group without a marker — a new owner cannot admit"
+             " itself"])
+
+    def test_a_member_no_other_member_names_is_not_vouched_for(self):
+        """Self-admission through the back door: a newcomer that writes
+        its own marker still needs an existing owner to name it."""
+        self.assertEqual(
+            check_tree(budget_guard=runner_git("dashboard.git_runner"),
+                       dashboard=runner_git("budget_guard.git_runner"),
+                       one_owner=runner_git("budget_guard.git_runner")),
+            ["one-owner: one_owner.py:2 git_runner carries a marker but no"
+             " other owner names it — an existing owner must vouch for a new"
+             " one"])
+
+    def test_a_marker_pays_rent_or_it_is_a_finding(self):
+        """Over-coverage. A carve-out whose counterpart was deleted,
+        renamed or folded matches nothing — the list cannot rot quietly,
+        because dead entries are findings."""
+        self.assertEqual(
+            check_tree(budget_guard=runner_git("dashboard.git_runner"),
+                       dashboard="git_runner = runner('gh')\n"),
+            ["one-owner: budget_guard.py:1 git_runner is marked deliberate"
+             " against dashboard.git_runner, but nothing duplicates it —"
+             " remove the marker"])
+
+    def test_a_counterpart_this_repo_does_not_define(self):
+        self.assertEqual(
+            check_tree(budget_guard=runner_git("nowhere.gone")),
+            ["one-owner: budget_guard.py:1 names nowhere.gone, which is not"
+             " defined in this repo"])
+
+    def test_a_citation_must_resolve_to_a_file_in_docs_adr(self):
+        self.assertEqual(
+            check_tree(
+                budget_guard="".join([
+                    carve("dashboard.git_runner", adr="ADR-9999"), "\n",
+                    "git_runner = runner('git')\n"]).replace("\n\n", "\n"),
+                dashboard=runner_git("budget_guard.git_runner")),
+            ["one-owner: budget_guard.py:1 cites ADR-9999, which is not in"
+             " docs/adr/"])
+
+    def test_status_liveness_is_deliberately_not_checked(self):
+        """The status grammar's owner is gates.ADR_STATUS, and importing a
+        detector module from a tool is the coupling ADR-0058 removed.
+        Folding ADR_STATUS into knowledge_plane is its own decision, not a
+        ride-along — so a superseded citation resolves, and the deferral is
+        visible in the suite rather than only in prose."""
+        self.assertEqual(
+            check_tree(adr_status="superseded by ADR-0060",
+                       budget_guard=runner_git("dashboard.git_runner"),
+                       dashboard=runner_git("budget_guard.git_runner")), [])
+
+    def test_a_marker_that_cannot_be_read_never_buys_silence(self):
+        """The whole group speaks, because the unreadable marker covered
+        nothing."""
+        found = check_tree(
+            budget_guard=f"# one-owner: nonsense\n{runner_git()}",
+            dashboard=runner_git("budget_guard.git_runner"))
+        self.assertIn(
+            "one-owner: budget_guard.py:2 git_runner joins a recorded"
+            " deliberate group without a marker — a new owner cannot admit"
+            " itself", found)
+        self.assertIn(
+            "one-owner: budget_guard.py:1 is not a readable one-owner marker"
+            f" (expected `{GRAMMAR}`)", found)
+
+    def test_check_still_raises_on_nothing(self):
+        self.assertIsInstance(
+            check_tree(a=f"# one-owner: x.y (ADR-0037) —\n{runner_git()}",
+                       b=runner_git("nowhere.gone")), list)
 
 
 class TestDataModel(unittest.TestCase):

@@ -310,6 +310,92 @@ def markers(path, source):
     return found, problems
 
 
+def _ident(path, name):
+    """`<module>.<name>` — how a marker names an owner."""
+    return f"{Path(path).stem}.{name}"
+
+
+def _adr_ids(root):
+    """The decision records this repo holds, as citable ids."""
+    directory = Path(root) / "docs" / "adr"
+    return {f"ADR-{path.name[:4]}" for path
+            in directory.glob("[0-9][0-9][0-9][0-9]-*.md")
+            } if directory.is_dir() else set()
+
+
+def _coverage(found_groups, marks):
+    """UNDER-COVERAGE. A group is silent only when every member carries a
+    marker AND every member is named by some OTHER member's marker.
+
+    The rule is stated over the group rather than per-pair because that
+    is the only shape in which a new owner cannot admit itself: admitting
+    it means editing an existing owner's file, where a reviewer is
+    already looking. A group nobody has marked at all is the plain
+    finding.
+    """
+    by_owner = {}
+    for marker in marks:
+        by_owner.setdefault((marker.path, marker.owner), []).append(marker)
+    problems = []
+    for group in found_groups:
+        carried = {site: by_owner.get((site.path, site.name), [])
+                   for site in group.sites}
+        if not any(carried.values()):
+            problems.append(_finding(group))
+            continue
+        for site in group.sites:
+            if not carried[site]:
+                problems.append(f"one-owner: {site.path}:{site.lineno}"
+                                f" {site.name} joins a recorded deliberate"
+                                " group without a marker — a new owner"
+                                " cannot admit itself")
+            elif not any(marker.counterpart == _ident(site.path, site.name)
+                         for other in group.sites if other != site
+                         for marker in carried[other]):
+                problems.append(f"one-owner: {site.path}:{site.lineno}"
+                                f" {site.name} carries a marker but no other"
+                                " owner names it — an existing owner must"
+                                " vouch for a new one")
+    return problems
+
+
+def _rent(found_groups, marks, sites, adr_ids):
+    """OVER-COVERAGE. Every marker must match a duplicate this pass
+    actually finds, and must cite a record that exists.
+
+    A carve-out list nothing re-checks is the condition this tool exists
+    to fix, so a marker whose counterpart was deleted, renamed or folded
+    is itself a finding: the list cannot rot quietly.
+
+    Whether the cited record is still LIVE is deliberately not checked.
+    The status grammar's owner is gates.ADR_STATUS, and importing a
+    detector module from a tool is the coupling ADR-0058 removed; folding
+    that grammar into a seam is its own decision, not a ride-along.
+    """
+    defined = {_ident(site.path, site.name) for site in sites}
+    group_of = {(site.path, site.name): group
+                for group in found_groups for site in group.sites}
+    problems = []
+    for marker in marks:
+        if marker.counterpart not in defined:
+            problems.append(f"one-owner: {marker.path}:{marker.lineno} names"
+                            f" {marker.counterpart}, which is not defined in"
+                            " this repo")
+        else:
+            group = group_of.get((marker.path, marker.owner))
+            peers = {_ident(site.path, site.name)
+                     for site in group.sites} if group else set()
+            if marker.counterpart not in peers:
+                problems.append(f"one-owner: {marker.path}:{marker.lineno}"
+                                f" {marker.owner} is marked deliberate"
+                                f" against {marker.counterpart}, but nothing"
+                                " duplicates it — remove the marker")
+        if marker.adr not in adr_ids:
+            problems.append(f"one-owner: {marker.path}:{marker.lineno} cites"
+                            f" {marker.adr}, which is not in docs/adr/")
+    return problems
+
+
 def check(root, run=git_runner):
     """The whole answer: a sorted list of `one-owner: `-prefixed problem
     strings for one tree, read at one instant.
@@ -325,14 +411,17 @@ def check(root, run=git_runner):
     nothing — every failure is a problem string.
     """
     files, problems = source_files(root, run)
-    sites = []
+    sites, marks = [], []
     for path, source in files:
         found, trouble = fact_sites(path, source)
         sites += found
         problems += trouble
-        _, marker_trouble = markers(path, source)
+        marked, marker_trouble = markers(path, source)
+        marks += marked
         problems += marker_trouble
-    problems += [_finding(group) for group in groups(sites)]
+    found_groups = groups(sites)
+    problems += _coverage(found_groups, marks)
+    problems += _rent(found_groups, marks, sites, _adr_ids(root))
     return sorted(problems)
 
 

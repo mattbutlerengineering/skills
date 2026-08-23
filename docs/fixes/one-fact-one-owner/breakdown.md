@@ -177,7 +177,7 @@ marker makes the whole group speak up again.
     file, verified by running the tool against the live tree and finding
     `one_owner.py` reporting no stale marker of its own. `factory/`
     untouched.
-- [ ] **B2** silence is a property of the group, never of one marker — size:M, blocked by: A5, B1
+- [x] **B2** silence is a property of the group, never of one marker — size:M, blocked by: A5, B1
   - Accept: `check` joins markers to groups and adds the five remaining
     shapes from `architecture.md`'s contract, each pinned by exact string
     against a fixture tree: a member with no marker in an otherwise-marked
