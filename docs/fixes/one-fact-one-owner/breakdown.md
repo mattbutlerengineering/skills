@@ -211,7 +211,7 @@ marker makes the whole group speak up again.
     under `docs/adr/`, and it makes seven open provisionals, knowingly.
     `python3 gates.py && python3 gates.py --selftest` green. `factory/`
     untouched; `docs/` is not mirrored, so no manifest regeneration.
-- [ ] **B4** the first annotation, and the mechanism has a real user — size:S, blocked by: B2, B3 — **gap 1 answered 2026-08-23: the annotation stays in the `runner('git')` group, `budget_guard.py` included, and the manifest is regenerated with it**
+- [x] **B4** the first annotation, and the mechanism has a real user — size:S, blocked by: B2, B3 — **gap 1 answered 2026-08-23: the annotation stays in the `runner('git')` group, `budget_guard.py` included, and the manifest is regenerated with it**
   - Accept: every member of the live `runner('git')` group carries a
     `# one-owner:` marker citing the 0061 record with a non-empty reason naming
     the ADR-0037 sanction ("Callers alias to their own names … so their

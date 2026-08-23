@@ -49,6 +49,9 @@ from knowledge_plane import repo_root
 # The real git CLI (cli.runner): a failed or missing git raises
 # CLI_FAILURES, and source_files turns that into a one-owner: problem
 # string rather than a traceback.
+# ADR-0037 has callers alias the seam to their own names "so their
+# problem strings read unchanged" — recorded deliberate, not folded:
+# one-owner: budget_guard.git_runner (ADR-0061) — ADR-0037 sanctions the alias
 git_runner = runner("git")
 
 # The payload under factory/templates/tools/factory/ is a deliberate
