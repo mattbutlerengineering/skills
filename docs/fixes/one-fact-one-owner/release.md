@@ -721,3 +721,58 @@ gh pr view 318 --json state,mergeCommit
 
 Steps 7–9 (sync `main`, post-release checks, artifact commit — the last
 already done early as `f85808e`) follow the merge.
+
+## Merge and post-release — 2026-08-23
+
+**Step 6 ran after all.** The section above recorded step 6 as blocked by
+ADR-0036 clause 3, and that record stands as written rather than being
+edited away. What changed is not the analysis but the authority: the
+operator, who is the `CODEOWNERS` human code owner for `*` and for
+`docs/adr/`, was shown clause 3 and the unmet clause 2 explicitly and
+instructed the merge anyway.
+
+**This is a recorded clause-3 override, not a satisfied clause 3.** ADR-0036
+reserves exactly this: *"The human retains an override and a post-merge
+audit: any merge is revertible … a defect escape attributed to agent-merge
+narrows or revokes it."* So the override belongs in the audit trail:
+
+- **Clause 3 (gate change):** overridden. The PR adds
+  `docs/adr/0061-a-carve-out-lives-at-the-definition-site.md` and edits
+  `docs/adr/README.md`. The merge was executed by the agent on the code
+  owner's explicit, repeated instruction.
+- **Clause 2 (independent reviewer):** never satisfied. PR #318 had **0
+  reviews**; its author and its merger are the same party. No non-authoring
+  reviewer re-executed the verification. The CI `review` job passed, but
+  that is the workflow leg, not the ADR-0036 reviewer charter.
+- **Gate-latency / defect-escape:** any defect escaping from this change is
+  attributable to agent-merge under ADR-0033's weekly metrics, and this
+  entry is the marker an audit should find.
+
+| # | Step | Result |
+|---|---|---|
+| 6 | `gh pr merge 318 --squash --delete-branch` | **MERGED** as `b3d6d89` at 2026-08-23T23:42:06Z. Branch deleted local and remote. |
+| — | `Closes #317` | Issue **#317** auto-closed by the merge. |
+| 7 | `git switch main && git pull --ff-only` | `main` == `origin/main` == `b3d6d89`. |
+| 8 | Post-release checks on merged `main` | `Ran 1344 tests … OK`; `lint: 0 problem(s) across 24 skills`; `gates: 0 problem(s)`; `selftest: ok`. |
+| 8 | Smoke — the shipped thing works where users get it | `python3 one_owner.py` → `one-owner: 9 problem(s)`, **exit 1** (by design; not a gate). The acceptance fixture is still reported from `main`. `factory.VERBS` contains `one-owner`, so the front door reaches it. |
+
+### Rollback, if it is ever needed
+
+```
+git revert b3d6d89          # squash merge — one parent, no -m
+python3 factory_init.py update-manifest
+make check
+git push
+gh issue reopen 317
+```
+
+Not undone by that revert: any product repo already stamped from this
+payload (the payload is pulled, never pushed), and this artifact.
+
+### What is now newly answerable
+
+`retro.md` records the run's central question as UNANSWERED — whether a
+mechanical pre-pass actually prevents the one-fact-many-owners class from
+recurring. As of this merge the first settling condition is live: the
+daily routine's §2 step 9 now runs `one_owner.py` from `main`. The
+question is not answered; it is, for the first time, measurable.
