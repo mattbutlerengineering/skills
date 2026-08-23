@@ -8,8 +8,9 @@ historical fixtures in TestHistoricalInstances, which reproduce shapes
 the tree no longer holds.
 """
 import unittest
+from pathlib import Path
 
-from one_owner import FactSite, Group, Marker, groups
+from one_owner import FactSite, Group, Marker, fact_sites, groups
 
 
 def site(kind, path, lineno, name, identity):
@@ -22,6 +23,26 @@ def value(path, lineno, name, identity):
 
 def keys(path, lineno, name, identity):
     return site("same-keys", path, lineno, name, identity)
+
+
+def sites_of(**modules):
+    """fact_sites over literal module sources, keyed by module name.
+    Returns (every site, every problem) so a case can hand the sites
+    straight to groups()."""
+    found, problems = [], []
+    for name, source in modules.items():
+        module_sites, module_problems = fact_sites(f"{name}.py", source)
+        found += module_sites
+        problems += module_problems
+    return found, problems
+
+
+def named(found):
+    """(identity, [module.name, ...]) per group — what a case asserts
+    when the identity's exact bytes are not the point."""
+    return [(group.identity,
+             [f"{Path(s.path).stem}.{s.name}" for s in group.sites])
+            for group in groups(found)]
 
 
 class TestGroups(unittest.TestCase):
@@ -84,6 +105,107 @@ class TestGroups(unittest.TestCase):
         for argument in ([], (), iter([]), [value("a.py", 1, "N", "'x'")]):
             with self.subTest(argument=argument):
                 self.assertEqual(groups(argument), [])
+
+
+# The miss-1 shape from defect.md's evidence table: gates.MERGED_ROW
+# (208ffdb, 2026-07-11, #130) and knowledge_plane.DONE_ROW (4333370,
+# 2026-08-10, #221), byte-identical in pattern AND flags.
+CHECKED_ROW = r'''re.compile(r"^\s*[-*+]\s+\[x\]", re.IGNORECASE)'''
+CHECKED_ROW_IDENTITY = r"re.compile('^\\s*[-*+]\\s+\\[x\\]', re.IGNORECASE)"
+
+
+class TestSameValue(unittest.TestCase):
+    """`same-value`: a module-level `NAME = <expr>` binding, identified by
+    ast.unparse(value). The claim is narrow and exact — these two modules
+    state the same value — so nothing but structural equality groups."""
+
+    def test_two_modules_binding_one_compiled_pattern_are_two_owners(self):
+        found, problems = sites_of(
+            gates=f"MERGED_ROW = {CHECKED_ROW}\n",
+            knowledge_plane=f"DONE_ROW = {CHECKED_ROW}\n")
+        self.assertEqual(problems, [])
+        self.assertEqual(named(found),
+                         [(CHECKED_ROW_IDENTITY,
+                           ["gates.MERGED_ROW", "knowledge_plane.DONE_ROW"])])
+
+    def test_formatting_and_line_wrapping_do_not_hide_a_copy(self):
+        """ast.unparse normalises, so the identity is the value, not the
+        bytes: a re-wrapped, re-quoted copy is the same fact."""
+        found, problems = sites_of(
+            gates=f"MERGED_ROW = {CHECKED_ROW}\n",
+            knowledge_plane=(
+                "DONE_ROW = re.compile(\n"
+                "    '^\\\\s*[-*+]\\\\s+\\\\[x\\\\]',\n"
+                "    re.IGNORECASE,\n"
+                ")\n"))
+        self.assertEqual(problems, [])
+        self.assertEqual(named(found),
+                         [(CHECKED_ROW_IDENTITY,
+                           ["gates.MERGED_ROW", "knowledge_plane.DONE_ROW"])])
+
+    def test_a_bare_numeric_boolean_or_none_is_a_knob_not_a_fact(self):
+        """The floor is structural, not a character count: two modules
+        holding 100 have not stated a shared fact, they have tuned the
+        same knob."""
+        for literal in ("100", "1000", "True", "False", "None", "0.5"):
+            with self.subTest(literal=literal):
+                found, problems = sites_of(sweeps=f"TITLE_LIMIT = {literal}\n",
+                                           work_queue=f"LIST_WINDOW = {literal}\n")
+                self.assertEqual(problems, [])
+                self.assertEqual(groups(found), [])
+
+    def test_a_shared_string_or_call_is_a_fact(self):
+        """The other side of the same floor — a bare string IS a stated
+        fact (`CONTINUE`, `wo:ready-for-agent`), and drops nothing."""
+        found, problems = sites_of(budget_guard="CONTINUE = 'CONTINUE'\n",
+                                   cost_report="CONTINUE = 'CONTINUE'\n")
+        self.assertEqual(problems, [])
+        self.assertEqual(named(found),
+                         [("'CONTINUE'", ["budget_guard.CONTINUE",
+                                          "cost_report.CONTINUE"])])
+
+    def test_the_canonical_deliberate_pair_stays_silent_with_no_marker(self):
+        """defect.md's headline false-positive risk. protocol._CHECKBOX
+        and knowledge_plane.ROW, exactly as written at HEAD: near-identical
+        to a human, different in pattern AND flags, so an exact identity
+        never groups them. No carve-out is involved — the rule is exact,
+        which is why the marker mechanism has to earn its keep elsewhere."""
+        found, problems = sites_of(
+            protocol=('_CHECKBOX = re.compile(r"^\\s*[-*+]\\s+\\[([ xX])\\]",'
+                      " re.MULTILINE)\n"),
+            knowledge_plane='ROW = re.compile(r"^\\s*[-*+]\\s+\\[[ xX]\\]\\s")\n')
+        self.assertEqual(problems, [])
+        self.assertEqual(groups(found), [])
+
+    def test_only_module_level_bindings_count(self):
+        """A binding inside a function is local state, not a stated fact
+        the tree can have two owners of."""
+        found, problems = sites_of(
+            a="def build():\n    LABEL = 'wo:ready-for-agent'\n    return LABEL\n",
+            b="LABEL = 'wo:ready-for-agent'\n")
+        self.assertEqual(problems, [])
+        self.assertEqual(groups(found), [])
+
+    def test_sites_come_back_in_source_order(self):
+        found, problems = sites_of(
+            a="FIRST = 'x'\nSECOND = 'y'\nTHIRD = 'z'\n")
+        self.assertEqual(problems, [])
+        self.assertEqual([(s.kind, s.lineno, s.name) for s in found],
+                         [("same-value", 1, "FIRST"), ("same-value", 2, "SECOND"),
+                          ("same-value", 3, "THIRD")])
+
+    def test_a_module_that_cannot_be_parsed_is_reported_never_swallowed(self):
+        """A tool that silently skipped a module would go quiet exactly
+        when someone broke the module it was watching. Every other module
+        still contributes."""
+        found, problems = sites_of(broken="def (:\n", gates="A = 'x'\n",
+                                   knowledge_plane="B = 'x'\n")
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(
+            problems[0].startswith("one-owner: broken.py cannot be parsed: "),
+            problems[0])
+        self.assertEqual(named(found),
+                         [("'x'", ["gates.A", "knowledge_plane.B"])])
 
 
 class TestDataModel(unittest.TestCase):

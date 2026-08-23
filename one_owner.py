@@ -18,6 +18,7 @@ tests/test_one_owner.py rather than chased.
 NOT A GATE. It is outside `make check` and outside every workflow: a
 finding is a question for a human, and must never colour main red.
 """
+import ast
 from collections import namedtuple
 
 # What one module states, at one place. `identity` is the grouping key
@@ -55,3 +56,50 @@ def groups(sites):
              if len({member.path for member in members}) > 1]
     return sorted(found, key=lambda group: (group.identity,
                                             group.sites[0].kind))
+
+
+def _stated_value(node):
+    """The identity of a module-level binding's value, or None when the
+    value states no fact. ast.unparse normalises source text, so a
+    re-wrapped or re-quoted copy has the same identity and formatting
+    can never hide one.
+
+    The floor is STRUCTURAL, never a character count: a bare numeric,
+    boolean or None literal is a tuning knob two modules may set alike
+    without either owning anything. A knob has no principled length, so
+    a length threshold would be a number nobody could ever argue about.
+    """
+    if isinstance(node, ast.Constant) and (
+            node.value is None or isinstance(node.value, (bool, int, float,
+                                                          complex))):
+        return None
+    return ast.unparse(node)
+
+
+def fact_sites(path, source):
+    """([FactSite, ...], problems) for one module, in source order.
+
+    `same-value` — a module-level `NAME = <expr>` binding. Claim: these
+    two modules state the same value. This is the MERGED_ROW / DONE_ROW
+    shape.
+
+    Unparseable source is REPORTED, never swallowed: a module that
+    silently contributed nothing would take the tool quiet exactly when
+    someone broke the file it was watching. Every other module still
+    contributes.
+    """
+    try:
+        tree = ast.parse(source, filename=path)
+    except SyntaxError as err:
+        return [], [f"one-owner: {path} cannot be parsed: {err}"]
+    found = []
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        identity = _stated_value(node.value)
+        if identity is None:
+            continue
+        found += [FactSite("same-value", path, node.lineno, target.id,
+                           identity)
+                  for target in node.targets if isinstance(target, ast.Name)]
+    return sorted(found, key=lambda site: (site.lineno, site.name)), []

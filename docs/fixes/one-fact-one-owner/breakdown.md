@@ -74,7 +74,7 @@ same payload keys — with no rule in the tool naming either one.
     — a tool importing a detector module is the coupling ADR-0058 removed.
     No `__main__` guard yet (that is A5's, together with its verb row).
     `factory/` untouched; no manifest regeneration.
-- [ ] **A2** `same-value` — a module states a value a second module states — size:M, blocked by: A1
+- [x] **A2** `same-value` — a module states a value a second module states — size:M, blocked by: A1
   - Accept: `fact_sites(path, source)` returns `([FactSite, ...], problems)`
     in source order for the `same-value` kind: a module-level `NAME = <expr>`
     assignment whose identity is `ast.unparse(value)`, excluded when the
