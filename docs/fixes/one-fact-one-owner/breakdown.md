@@ -196,7 +196,7 @@ marker makes the whole group speak up again.
     citing a superseded ADR is asserted to produce no problem, so the
     deferral is visible in the suite rather than only in prose. `check`
     raises on nothing. `factory/` untouched.
-- [ ] **B3** the 0061 decision record is written — size:S, blocked by: —
+- [x] **B3** the 0061 decision record is written — size:S, blocked by: —
   - Accept: `docs/adr/0061-a-carve-out-lives-at-the-definition-site.md`
     exists with the text the operator agreed to in `architecture.md`'s *ADRs*
     section, status `provisional`, dated 2026-08-23. Its `- Status:` line
