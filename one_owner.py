@@ -20,6 +20,21 @@ finding is a question for a human, and must never colour main red.
 """
 import ast
 from collections import namedtuple
+from pathlib import Path
+
+from cli import CLI_FAILURES, detail, runner
+
+# The real git CLI (cli.runner): a failed or missing git raises
+# CLI_FAILURES, and source_files turns that into a one-owner: problem
+# string rather than a traceback.
+git_runner = runner("git")
+
+# The payload under factory/templates/tools/factory/ is a deliberate
+# byte-identical mirror of the root tools, whose equality detector E
+# already owns, and factory/evals/fixtures/ holds intentionally broken
+# repos. A test asserting an exact string IS that string's pin rather
+# than a second owner of it.
+EXCLUDED = ("factory/", "tests/")
 
 # What one module states, at one place. `identity` is the grouping key
 # and `lineno` is the definition's own line — the join key a marker
@@ -140,3 +155,40 @@ def fact_sites(path, source):
             found.append(FactSite("same-keys", path, node.lineno, node.name,
                                   ", ".join(sorted(keys))))
     return sorted(found, key=lambda site: (site.lineno, site.name)), []
+
+
+def source_files(root, run=git_runner):
+    """([(repo-relative posix path, source text), ...], problems), sorted
+    by path — every module this repo owns, and nothing else.
+
+    THE FILE LIST COMES FROM GIT, never from a filesystem walk. At HEAD an
+    rglob finds 248 Python files where git tracks 96: 152 of the
+    difference are stale `.claude/worktrees/agent-*` checkouts, months-old
+    full copies holding definitions the tracked tree has since deleted.
+    They are hidden by `.git/info/exclude`, which is LOCAL and
+    UNCOMMITTED, so no committed file can be relied on to hide them. A
+    walking tool would report a duplicate that does not exist, on its
+    first run.
+
+    An EMPTY universe is never silently clean: a broken environment must
+    never read as "no duplicates", so an empty file list carries a
+    problem of its own. One unreadable file is reported and skipped; the
+    rest of the run is unaffected.
+    """
+    try:
+        listed = run(["-C", str(root), "ls-files", "--", "*.py"]).stdout
+    except CLI_FAILURES as err:
+        return [], [f"one-owner: git ls-files failed: {detail(err)}"]
+    files, problems = [], []
+    for rel in sorted(line.strip() for line in listed.splitlines()
+                      if line.strip()):
+        if rel.startswith(EXCLUDED):
+            continue
+        try:
+            files.append((rel, (Path(root) / rel).read_text(encoding="utf-8")))
+        except (OSError, UnicodeDecodeError) as err:
+            problems.append(f"one-owner: {rel} cannot be read: {err}")
+    if not files:
+        problems.append("one-owner: no Python files to read — an empty"
+                        " universe is never a clean one")
+    return files, problems

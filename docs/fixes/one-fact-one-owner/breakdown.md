@@ -107,7 +107,7 @@ same payload keys — with no rule in the tool naming either one.
     "anywhere in the module". Demonstrable here rather than at A5: the two
     identities together cover both mechanical forms `defect.md`'s *Target
     state* names. `factory/` untouched.
-- [ ] **A4** the universe comes from git, never from a filesystem walk — size:M, blocked by: A1
+- [x] **A4** the universe comes from git, never from a filesystem walk — size:M, blocked by: A1
   - Accept: `source_files(root, run=git_runner)` returns
     `([(repo-relative posix path, source text), ...], problems)` sorted by
     path, with the list derived from `git -C <root> ls-files -- '*.py'` and
