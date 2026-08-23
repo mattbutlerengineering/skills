@@ -825,6 +825,140 @@ class TestHistoricalInstances(unittest.TestCase):
              " DONE_ROW state the same value — one fact, one owner"])
 
 
+class TestKnownMiss(unittest.TestCase):
+    """The third historical instance, pinned as a KNOWN MISS.
+
+    In the shape of tests/test_knowledge_plane.py:99-107: an absence
+    asserted on purpose, so the limit lives in the suite rather than in
+    someone's memory. The fixtures below are the two functions verbatim
+    at fbfa3c3 — 7 statements over 69 lines against 3 over 21 — which is
+    also what keeps this pin from passing vacuously: a fixture that
+    failed to parse would put a problem in the list and fail the
+    assertion.
+    """
+
+    RECONCILE_DRIFT = r'''def reconcile_drift(rows, issues):
+    """PURE: (breakdown rows, the live issue listing) -> (drift lines,
+    problems).
+
+    Every line names a breakdown path and an issue NUMBER, never a work
+    order id: the row is identified by where it lives, which is also where
+    a human goes to fix it. The knowledge plane is authoritative in every
+    comparison — a line says what the dispatch plane must be brought to,
+    never the reverse (ADR-0032).
+
+    `rows` is (display path, lines) per breakdown, so the caller owns how
+    paths are spelled and this stays a pure function.
+    """
+    index, problems = {}, []
+    for position, issue in enumerate(issues):
+        if not isinstance(issue, dict) or not isinstance(
+                issue.get("number"), int):
+            problems.append(f"sweeps: issue listing entry {position} has no"
+                            " usable number")
+            continue
+        index[issue["number"]] = issue
+    drift, mirrored = [], {}
+    for path, lines in rows:
+        for line in lines:
+            number = row_tracker_issue(line)
+            if number is None:
+                continue
+            mirrored.setdefault(number, []).append(path)
+            issue = index.get(number)
+            if issue is None:
+                drift.append(f"{path}: a row mirrors #{number}, which is not"
+                             " in the issue listing")
+                continue
+            labels = issue_lifecycle(issue)
+            merged = "wo:merged" in labels
+            state = str(issue.get("state") or "").lower()
+            if gates.MERGED_ROW.match(line):
+                if not merged:
+                    drift.append(f"{path}: a checked row mirrors #{number},"
+                                 f" which carries {_describe(labels)} — the"
+                                 " row says merged")
+                elif state == "open":
+                    drift.append(f"{path}: a checked row mirrors #{number},"
+                                 " which is labelled wo:merged but still open")
+            elif merged:
+                drift.append(f"{path}: an unchecked row mirrors #{number},"
+                             " which is labelled wo:merged — the issue is"
+                             " ahead of the row")
+            elif state == "closed":
+                drift.append(f"{path}: an unchecked row mirrors #{number},"
+                             f" which is closed carrying {_describe(labels)}"
+                             " — the row says the work is outstanding")
+    for number, paths in sorted(mirrored.items()):
+        if len(paths) > 1:
+            drift.append(f"#{number} is mirrored by {len(paths)} rows"
+                         f" ({', '.join(sorted(set(paths)))}) — an issue"
+                         " mirrors one work order")
+    for number, issue in sorted(index.items()):
+        labels = issue_lifecycle(issue)
+        if not labels:
+            continue
+        if len(labels) > 1:
+            drift.append(f"#{number} carries {len(labels)} lifecycle labels"
+                         f" at once ({', '.join(labels)}) — the state"
+                         " machine allows one")
+        if number not in mirrored:
+            drift.append(f"#{number} carries {_describe(labels)} but no"
+                         " breakdown row mirrors it — the dispatch plane is"
+                         " ahead of the knowledge plane")
+'''
+    DASHBOARD_DRIFT = r'''def _drift(root, states):
+    """Cross-plane disagreement (ADR-0032: the row, never the issue, is
+    authoritative — so the mirror must follow it): a row unchecked while
+    its mirror is closed (the class issue #123 exposed), or checked
+    while its mirror is still open. `states` maps issue number to its
+    listed state; a mirror outside the listing says nothing — only
+    definite disagreement is a finding."""
+    findings = []
+    for _, lines in breakdown_files(root):
+        for line in lines:
+            number = row_tracker_issue(line)
+            state = states.get(number)
+            if state is None:
+                continue
+            wo = row_work_order(line)
+            if row_done(line) and state == "OPEN":
+                findings.append(f"drift: {wo} row is checked but its"
+                                f" mirror #{number} is still open")
+            elif not row_done(line) and state == "CLOSED":
+                findings.append(f"drift: {wo} row is unchecked but its"
+                                f" mirror #{number} is closed")
+'''
+
+    def test_a_re_implementation_of_a_rule_is_not_found(self):
+        # THIS IS THE AMENDED SUCCESS CRITERION. defect.md asked for a
+        # test that would have caught each of the THREE historical
+        # instances; the operator accepted the substitution on 2026-08-23,
+        # and architecture.md records it under *Measured against the
+        # tree*: the suite catches misses 1 and 3 and PINS miss 2 as a
+        # known miss with the reason recorded. Verify scores against the
+        # amended form and must say it was amended and why.
+        #
+        # Why it is a miss: no cheap syntactic rule reaches a
+        # re-implementation. These two functions share no identical text
+        # and one side carries a strictly narrower rule (three of the
+        # eight classes, and a different absence policy). Two candidate
+        # rules were built and lost on measured evidence —
+        # whole-function-body identity yields ZERO groups at HEAD and at
+        # fbfa3c3, and a seam-call fingerprint fires hardest on six
+        # main()s that all call repo_root and report, while still missing
+        # this pair. See architecture.md, *Decisions & alternatives*.
+        # Closing it needs semantic comparison, which is exactly the
+        # over-cleverness defect.md's hazard 2 names as a way this dies.
+        self.assertEqual(
+            check_tree(sweeps=self.RECONCILE_DRIFT,
+                       dashboard=self.DASHBOARD_DRIFT), [],
+            "A finding here is WELCOME NEWS, not a broken test: it means"
+            " the rules got strong enough to reach a re-implementation."
+            " Do not delete this case to make it pass — move it to"
+            " TestHistoricalInstances and pin the string it now emits.")
+
+
 class TestDataModel(unittest.TestCase):
     """architecture.md's Data model, pinned: three namedtuples and their
     fields, because the fields are what every other interface passes."""

@@ -250,7 +250,7 @@ catch the third and why; and a reader of `CLAUDE.md` can run the tool.
     `4333370`/#221; `f38fbdd`/#204 and `622e2bf`/#247), so a later reader can
     tell a fixture from an invention. The suite injects a fake git runner and
     shells out nowhere. `factory/` untouched.
-- [ ] **C2** the third instance, pinned as a known miss — size:S, blocked by: C1
+- [x] **C2** the third instance, pinned as a known miss — size:S, blocked by: C1
   - Accept: a case in `tests/test_one_owner.py`, in the shape of
     `tests/test_knowledge_plane.py:99-107`, asserts that a fixture
     reproducing `sweeps.reconcile_drift` and `dashboard._drift` at `fbfa3c3`
