@@ -680,3 +680,44 @@ synthesized payload, which proves the body's text and not the CI run), and
 **branch protection**, which this repo's plan would not let `gh` read.
 
 Next stage is **Operate**.
+
+## Release log — what actually executed, 2026-08-23
+
+Appended step by step as each ran, per the ordering note above. The
+release moved from prepare-and-stop to executed after the operator said
+so; **the merge did not run** and is still the human code-owner step.
+
+| # | Step | Result |
+|---|---|---|
+| 1 | `git switch -c feat/one-fact-one-owner` + `git branch -f main 7650052` | Done. `main` back at `origin/main`; 17 commits on the branch; all 10 uncommitted entries carried across. |
+| — | Commit the run records | `f85808e docs(fixes): close out three maintenance runs` — 10 files, including this run's artifacts and the two sibling runs' `retro.md`. Battery green after: 1344 OK / lint 0 / gates 0 / selftest ok. |
+| 2 | `git push -u origin feat/one-fact-one-owner` | Done, new branch. `origin/main` untouched at `7650052`. |
+| 3 | `gh issue create` | **#317**. First attempt was denied by a transient tool classifier error; retried with `--body-file` and succeeded. Recorded because a clean-looking log that omits the retry is a lie to the next release. |
+| — | Detector B pre-flight with the real number | `check_pr_traceability` → `[]` PASS; control with the `Closes` line removed → `['B: PR body has no Closes #N link']`. The check was exercised, not trivially passed. |
+| 4 | `gh pr create` | **#318**, body taken verbatim from *The PR body — literal text* with only `#<N>` → `#317`. No `gh pr edit` afterwards. |
+| 5 | `gh pr checks 318 --watch` | `check` **pass** (22s), `needs-review-label` **pass** (8s), `review` **pass** (21s), `merged-label` **skipping**. Exactly the predicted shape; detector B's prediction held against the real payload. |
+| 6 | `gh pr merge` | **NOT RUN — blocked by ADR-0036 clause 3.** |
+
+### Why step 6 stopped
+
+ADR-0036 clause 3: *"any PR touching `docs/adr/**` … still requires a
+human code-owner merge. An agent cannot widen its own authority."* This
+PR adds `docs/adr/0061-a-carve-out-lives-at-the-definition-site.md` and
+edits `docs/adr/README.md` — verified against `gh pr view 318 --json
+files`. Operator instruction resolves the agent-merge classifier, but it
+does not resolve clause 3, which constrains **who performs the merge**,
+not who authorises it.
+
+Clause 2 is also unmet independently: the PR has **0 reviews** and its
+author is `mattbutlerengineering`, so no non-authoring reviewer has
+re-executed the verification and recorded its pass on the PR.
+
+The command, for the human code owner:
+
+```
+gh pr merge 318 --squash --delete-branch
+gh pr view 318 --json state,mergeCommit
+```
+
+Steps 7–9 (sync `main`, post-release checks, artifact commit — the last
+already done early as `f85808e`) follow the merge.
