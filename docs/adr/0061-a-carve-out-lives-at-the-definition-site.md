@@ -76,9 +76,15 @@ regenerated payload twin and the manifest land with the annotation.
   construction. That is the point, not an oversight.
 - Deleting a definition deletes its excuse, and moving it moves it. The
   carve-out cannot outlive the code it describes.
-- The first annotation this decision writes is `budget_guard.git_runner`
-  / `dashboard.git_runner`, the `runner('git')` pair ADR-0037 sanctions
-  explicitly. The canonical pair — `protocol._CHECKBOX` versus
+- The first annotation this decision writes is the `runner('git')` group
+  ADR-0037 sanctions explicitly, and it has three members rather than
+  two: `budget_guard.git_runner`, `dashboard.git_runner` and
+  `one_owner.git_runner` — the pass's own module-level binding joins the
+  group it exists to report. Each of the three carries a marker and each
+  is named by another's, so the markers close a cycle
+  (`budget_guard` → `dashboard` → `one_owner` → `budget_guard`),
+  which is what the under-coverage rule above requires of any group that
+  goes silent. The canonical pair — `protocol._CHECKBOX` versus
   `knowledge_plane.ROW` — needs no annotation, because the identity rule
   is exact and their patterns and flags genuinely differ.
 - Status is provisional: this records a mechanism on first use, and the
