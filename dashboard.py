@@ -58,6 +58,9 @@ from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
 
 CONFIG_PATH = Path.home() / ".process-dashboard.json"
 
+# ADR-0037 has callers alias the seam to their own names "so their
+# problem strings read unchanged" — recorded deliberate, not folded:
+# one-owner: one_owner.git_runner (ADR-0061) — ADR-0037 sanctions the alias
 git_runner = runner("git")
 
 # The two shapes a github.com origin takes; group 1 is the owner/repo

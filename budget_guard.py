@@ -108,6 +108,9 @@ def guard(root, size, spend_usd, config=None):
 # The real git CLI (cli.runner): a failed or missing git raises
 # GIT_FAILURES, and push_wip turns that into a bg: problem string rather
 # than a traceback.
+# ADR-0037 has callers alias the seam to their own names "so their
+# problem strings read unchanged" — recorded deliberate, not folded:
+# one-owner: dashboard.git_runner (ADR-0061) — ADR-0037 sanctions the alias
 git_runner = runner("git")
 
 

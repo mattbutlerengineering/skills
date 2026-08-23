@@ -22,6 +22,18 @@ On demand only (real model runs, costs money, never CI; both need the
   and injected, so CI covers degradation detection offline with recorded
   transcripts; only the live replay costs money.
 
+Also on demand, but free and needing nothing installed — a review
+pre-pass, deliberately **not** a gate:
+
+- `python3 one_owner.py` — which facts this repo's own Python modules
+  state twice (the same value in two modules, or two functions reading
+  the same payload keys), as `one-owner:` problem strings. It is outside
+  `make check` and outside every workflow, so a finding never colours
+  main red — it is a question for a human. A deliberate second owner is
+  recorded with a `# one-owner:` marker at the definition it excuses
+  (ADR-0061), and the pass re-derives that carve-out in both directions
+  on every run.
+
 ## Hard conventions
 
 - **Stdlib only.** Every script is standalone Python 3 standard library.
