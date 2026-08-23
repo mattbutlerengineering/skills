@@ -156,7 +156,7 @@ close of B4 — **once design gap 1 is answered** — the `runner('git')` group
 is silent because every member vouches for another, and deleting any one
 marker makes the whole group speak up again.
 
-- [ ] **B1** the marker grammar, read at the definition site — size:M, blocked by: A3
+- [x] **B1** the marker grammar, read at the definition site — size:M, blocked by: A3
   - Accept: `markers(path, source)` returns `([Marker, ...], problems)` for
     comment lines matching `# one-owner: <module>.<name> (ADR-####) —
     <reason>` inside the contiguous comment block immediately above a fact

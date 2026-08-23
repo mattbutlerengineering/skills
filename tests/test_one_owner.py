@@ -16,7 +16,7 @@ from pathlib import Path
 
 import one_owner
 from one_owner import (FactSite, Group, Marker, check, fact_sites, groups,
-                       source_files)
+                       markers, source_files)
 
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling helper import
@@ -547,6 +547,109 @@ class TestFrontDoor(unittest.TestCase):
         import factory
         self.assertEqual(factory.VERBS["one-owner"], ("one_owner", "argv"))
         self.assertTrue((one_owner.__doc__ or "").strip().splitlines()[0])
+
+
+# The real three-line comment block above budget_guard.py:111, the shape
+# the design's first annotation actually has to fit into.
+GIT_RUNNER_BLOCK = """# The real git CLI (cli.runner): a failed or missing git raises
+# GIT_FAILURES, and push_wip turns that into a bg: problem string rather
+# than a traceback.
+git_runner = runner("git")
+"""
+MARK = "# one-owner: dashboard.git_runner (ADR-0037) — callers alias to"\
+       " their own names"
+GRAMMAR = "# one-owner: <module>.<name> (ADR-####) — <reason>"
+
+
+class TestMarkers(unittest.TestCase):
+    """The carve-out, read where the definition is. It travels with the
+    code, dies with the code, and is read by whoever reviews the diff that
+    would otherwise add a second owner — which is the half of ADR-0039's
+    roster that stayed correct."""
+
+    def test_a_marker_directly_above_a_definition_is_read(self):
+        found, problems = markers(
+            "budget_guard.py", f"{MARK}\ngit_runner = runner('git')\n")
+        self.assertEqual(problems, [])
+        self.assertEqual(found, [Marker("budget_guard.py", 1, "git_runner",
+                                        "dashboard.git_runner", "ADR-0037",
+                                        "callers alias to their own names")])
+
+    def test_a_marker_mid_block_among_ordinary_comments_is_read(self):
+        source = GIT_RUNNER_BLOCK.replace(
+            "# GIT_FAILURES", f"{MARK}\n# GIT_FAILURES")
+        found, problems = markers("budget_guard.py", source)
+        self.assertEqual(problems, [])
+        self.assertEqual([(m.lineno, m.owner, m.counterpart) for m in found],
+                         [(2, "git_runner", "dashboard.git_runner")])
+
+    def test_a_blank_line_ends_the_block_so_the_marker_attaches_to_nothing(self):
+        """Locality is the whole mechanism: a marker one blank line away
+        is not above the definition, it is merely near it."""
+        found, problems = markers(
+            "budget_guard.py", f"{MARK}\n\ngit_runner = runner('git')\n")
+        self.assertEqual(found, [])
+        self.assertEqual(problems,
+                         ["one-owner: budget_guard.py:1 is a one-owner marker"
+                          " above no definition"])
+
+    def test_a_marker_above_something_that_states_no_fact_attaches_to_nothing(self):
+        found, problems = markers("a.py", f"{MARK}\nimport os\n")
+        self.assertEqual(found, [])
+        self.assertEqual(problems,
+                         ["one-owner: a.py:1 is a one-owner marker above no"
+                          " definition"])
+
+    def test_an_unreadable_marker_is_a_problem_never_a_permission(self):
+        for text in ("# one-owner: dashboard.git_runner — no citation",
+                     "# one-owner: (ADR-0037) — no counterpart",
+                     "# one-owner: dashboard.git_runner (0037) — bad token",
+                     "# one-owner: dashboard.git_runner (ADR-0037) no dash"):
+            with self.subTest(text=text):
+                found, problems = markers(
+                    "a.py", f"{text}\ngit_runner = runner('git')\n")
+                self.assertEqual(found, [])
+                self.assertEqual(
+                    problems,
+                    [f"one-owner: a.py:1 is not a readable one-owner marker"
+                     f" (expected `{GRAMMAR}`)"])
+
+    def test_a_bare_marker_waives_nothing(self):
+        """gates.NO_WO_DECLARATION already applies this rule to the other
+        place a change may excuse itself: the declaration owes a reason."""
+        for text in ("# one-owner: dashboard.git_runner (ADR-0037) —",
+                     "# one-owner: dashboard.git_runner (ADR-0037) —   "):
+            with self.subTest(text=text):
+                found, problems = markers(
+                    "a.py", f"{text}\ngit_runner = runner('git')\n")
+                self.assertEqual(found, [])
+                self.assertEqual(
+                    problems,
+                    ["one-owner: a.py:1 marks git_runner deliberate with no"
+                     " reason — a bare marker waives nothing"])
+
+    def test_a_hash_inside_a_string_or_docstring_is_not_a_comment(self):
+        """one_owner.py's own self-reference hazard, at its interface: the
+        tool is in its own universe and its grammar is a comment pattern,
+        so the grammar is documented in its DOCSTRING. A line scan would
+        read that documentation as a live marker."""
+        source = (f'"""Docs.\n\n    {MARK}\n"""\n'
+                  f'GRAMMAR = "{MARK}"\n')
+        self.assertEqual(markers("one_owner.py", source), ([], []))
+
+    def test_a_marker_problem_silences_nothing(self):
+        """In every failure case the group still reports: a marker that
+        cannot be read is not a permission."""
+        for text in (f"{MARK.split(' —')[0]} — ", "# one-owner: nonsense"):
+            with self.subTest(text=text):
+                found = check_tree(
+                    budget_guard=f"{text}\ngit_runner = runner('git')\n",
+                    dashboard="git_runner = runner('git')\n")
+                self.assertIn(
+                    "one-owner: budget_guard.py:2 git_runner and"
+                    " dashboard.py:1 git_runner state the same value — one"
+                    " fact, one owner", found)
+                self.assertEqual(len(found), 2, found)
 
 
 class TestDataModel(unittest.TestCase):

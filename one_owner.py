@@ -15,11 +15,31 @@ than the manual review it replaces. A re-implementation of a rule in
 different words is a known miss, pinned as one in
 tests/test_one_owner.py rather than chased.
 
+A DELIBERATE second owner is annotated where it is defined, in the
+contiguous comment block immediately above the definition:
+
+    # one-owner: <module>.<name> (ADR-####) — <reason>
+
+The reason is required — a bare marker waives nothing. Silence is a
+property of the whole GROUP, never of one marker: a group is quiet only
+when every member carries a marker AND every member is named by some
+other member's marker, so a new owner cannot admit itself. Every marker
+must also match a duplicate this pass actually finds, so a carve-out
+whose counterpart was deleted, renamed or folded is itself a finding.
+
+THE GRAMMAR IS DOCUMENTED HERE AND IN NO COMMENT IN THIS FILE. This
+module is inside its own file universe and its marker grammar is a
+comment pattern, so a `# one-owner:` comment written here would be read
+as a live carve-out of the tool's own.
+
 NOT A GATE. It is outside `make check` and outside every workflow: a
 finding is a question for a human, and must never colour main red.
 """
 import ast
+import io
+import re
 import sys
+import tokenize
 from collections import namedtuple
 from pathlib import Path
 
@@ -37,6 +57,15 @@ git_runner = runner("git")
 # repos. A test asserting an exact string IS that string's pin rather
 # than a second owner of it.
 EXCLUDED = ("factory/", "tests/")
+
+# The marker grammar, as a reader is told to write it. A string, never a
+# comment — see the docstring.
+MARKER_GRAMMAR = "# one-owner: <module>.<name> (ADR-####) — <reason>"
+
+_LEAD = re.compile(r"^#\s*one-owner:")
+_MARKER = re.compile(r"^#\s*one-owner:\s*"
+                     r"(?P<counterpart>[A-Za-z_]\w*\.[A-Za-z_]\w*)\s*"
+                     r"\((?P<adr>ADR-\d{4})\)\s*—(?P<reason>.*)$")
 
 # What one module states, at one place. `identity` is the grouping key
 # and `lineno` is the definition's own line — the join key a marker
@@ -211,6 +240,76 @@ def _finding(group):
     return f"one-owner: {_members(group.sites)} {claim} — one fact, one owner"
 
 
+def _standalone_comments(source):
+    """{lineno: comment text} for every comment that IS its own line.
+
+    Tokenized rather than line-scanned, and that is load-bearing: a `#`
+    inside a string or a docstring is not a comment, which is the only
+    thing that lets this tool document its own marker grammar in its own
+    docstring without reporting itself. A trailing comment after code is
+    not a carve-out either — a marker sits above what it excuses.
+    """
+    found = {}
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(source).readline):
+            if (token.type == tokenize.COMMENT
+                    and not token.line[:token.start[1]].strip()):
+                found[token.start[0]] = token.string
+    except (tokenize.TokenError, SyntaxError, IndentationError):
+        pass  # fact_sites reports the unparseable module; one report is enough
+    return found
+
+
+def markers(path, source):
+    """([Marker, ...], problems) for one module: the deliberate second
+    owners it records, read at the definitions they excuse.
+
+    Comments are absent from the AST, so this is a line scan joined to
+    fact_sites by the DEFINITION's lineno — the one place the two readers
+    of a file meet. A marker attaches only from inside the contiguous
+    comment block immediately above a fact site; a blank line ends the
+    block, because a marker one line away is near a definition rather
+    than above it.
+
+    In every failure below the marker silences nothing: a marker that
+    cannot be read is not a permission.
+    """
+    sites, _ = fact_sites(path, source)
+    comments = _standalone_comments(source)
+    owner_of = {}
+    for site in sites:
+        lineno = site.lineno - 1
+        while lineno in comments:
+            owner_of[lineno] = site
+            lineno -= 1
+    found, problems = [], []
+    for lineno in sorted(comments):
+        text = comments[lineno]
+        if not _LEAD.match(text):
+            continue
+        match = _MARKER.match(text)
+        if not match:
+            problems.append(f"one-owner: {path}:{lineno} is not a readable"
+                            " one-owner marker (expected"
+                            f" `{MARKER_GRAMMAR}`)")
+            continue
+        site = owner_of.get(lineno)
+        if site is None:
+            problems.append(f"one-owner: {path}:{lineno} is a one-owner"
+                            " marker above no definition")
+            continue
+        reason = match.group("reason").strip()
+        if not reason:
+            problems.append(f"one-owner: {path}:{lineno} marks {site.name}"
+                            " deliberate with no reason — a bare marker"
+                            " waives nothing")
+            continue
+        found.append(Marker(path, lineno, site.name,
+                            match.group("counterpart"), match.group("adr"),
+                            reason))
+    return found, problems
+
+
 def check(root, run=git_runner):
     """The whole answer: a sorted list of `one-owner: `-prefixed problem
     strings for one tree, read at one instant.
@@ -231,6 +330,8 @@ def check(root, run=git_runner):
         found, trouble = fact_sites(path, source)
         sites += found
         problems += trouble
+        _, marker_trouble = markers(path, source)
+        problems += marker_trouble
     problems += [_finding(group) for group in groups(sites)]
     return sorted(problems)
 
