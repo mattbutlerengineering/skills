@@ -680,10 +680,10 @@ class TestRunLifecycle(unittest.TestCase):
                 "--add-label", "wo:needs-review",
                 "--remove-label", "wo:in-progress"]])
 
-    def test_the_merged_leg_stays_strict_by_default(self):
-        # Only an explicit uncited="skip" relaxes the citation; the
-        # merged leg keeps failing loudly on an uncited PR (mutating the
-        # wrong issue silently would be worse than a red job).
+    def test_the_relaxation_must_be_asked_for(self):
+        # The FUNCTION default stays strict, so no caller gets the
+        # relaxation by accident. Both Makefile targets ask for it
+        # (ADR-0057) — TestLockstep in test_gates pins that they do.
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             run = gh()
@@ -692,6 +692,38 @@ class TestRunLifecycle(unittest.TestCase):
                 env=self.env(tmp, body="chore: housekeeping"), run=run)
             self.assertEqual(
                 problems, ["V: PR body cites no work-order id"])
+
+    def test_the_merged_leg_skips_an_uncited_pr_too(self):
+        # ADR-0057: the two legs agreed about a malformed citation and
+        # disagreed about no citation, which left a housekeeping PR with
+        # no body that could satisfy both — naming a work order failed
+        # the open leg, naming none failed the merged leg.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged",
+                env=self.env(tmp, body="chore: housekeeping"), run=run,
+                uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_the_merged_leg_keeps_a_malformed_citation_loud(self):
+        # The relaxation is gated on the body naming NO work order, so
+        # it cannot widen into the case the strictness actually exists
+        # for: a body that names one which resolves to none.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged",
+                env=self.env(tmp, body="Implements WO-0004."), run=run,
+                uncited="skip")
+            self.assertEqual(problems, [
+                "V: PR body has no Closes #N link, so the work order it"
+                " implements cannot be told from the ones it only"
+                " mentions"])
+            self.assertEqual(run.calls, [])
 
     def test_an_unparseable_issue_view_is_a_problem_not_a_traceback(self):
         # gh ran, exited 0, answered `issue view` with raw non-JSON.

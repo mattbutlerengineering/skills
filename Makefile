@@ -37,7 +37,7 @@ review:
 	python3 validator.py review --findings $(FINDINGS) --status $(STATUS)
 
 wo-merged:
-	python3 validator.py lifecycle --label wo:merged
+	python3 validator.py lifecycle --label wo:merged --uncited skip
 
 wo-in-progress:
 	python3 validator.py lifecycle --label wo:in-progress --issue $(ISSUE)
