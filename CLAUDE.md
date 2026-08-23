@@ -36,9 +36,14 @@ On demand only (real model runs, costs money, never CI; both need the
   reader/resolvers, `cost_ledger.py` cost-ledger shape), plus
   `human_gates.py` (ADR-0056 — what a gate is: its ledger name, its
   queue and passed labels, its digest heading, the label-event walk, and
-  the stay partition the digest and the miner divide between them). A new
-  shared module needs multiple real callers AND observed divergence
-  between their copies — anticipated reuse doesn't qualify.
+  the stay partition the digest and the miner divide between them) and
+  `plane_drift.py` (ADR-0060 — the ADR-0032 cross-plane drift rule the
+  reconcile sweep files and the dashboard renders; `absent_is_drift` is
+  the caller's claim about its own listing). A new shared module needs
+  multiple real callers AND observed divergence between their copies —
+  anticipated reuse doesn't qualify. It is mirrored into the payload iff
+  a payload tool imports it: `plane_drift.py` is root-only because
+  neither of its callers ships (ADR-0060).
 - **Three skill kinds**: stage skills (own a run artifact, routed to by
   `next`), the `next` router, and utility skills (ADR-0023 —
   directly-invoked, own no artifact, never routed to; `protocol.py`

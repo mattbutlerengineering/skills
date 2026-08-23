@@ -48,7 +48,8 @@ build. It reports; a human resolves, always in the knowledge plane's
 favor. It names drift by breakdown path and issue number, never by WO id
 — so the "a sweep may not mint WO ids" screen below stays mechanical,
 with no exception carved out for the one sweep that reads the dispatch
-plane.
+plane. The comparison itself is `plane_drift.reconcile_drift` (ADR-0060),
+shared with the dashboard; this module owns the sweep around it.
 """
 import json
 import re
@@ -60,8 +61,8 @@ import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, label_names, report
-from knowledge_plane import (WO_TOKEN, breakdown_files, repo_root,
-                             row_done, row_tracker_issue, sanitize)
+from knowledge_plane import WO_TOKEN, breakdown_files, repo_root, sanitize
+from plane_drift import reconcile_drift
 from cli import gh_runner
 
 # Sweep kind -> the two taxonomy labels its intake carries. Closed by
@@ -194,94 +195,6 @@ def drift_intake(drift):
                     " `python3 label_sync.py --apply`.",
                     fields),
         labels=(source, work_type))
-
-
-def issue_lifecycle(issue):
-    """The `wo:` labels one issue-listing entry carries, sorted. Anything
-    that is not a `{"name": ...}` object is ignored rather than guessed
-    at — the shape is gh's, and a changed shape becomes a drift report's
-    silence, not a traceback in a scheduled run."""
-    labels = issue.get("labels")
-    names = [entry.get("name") for entry in labels
-             if isinstance(entry, dict)] if isinstance(labels, list) else []
-    return sorted(name for name in names
-                  if isinstance(name, str) and name.startswith("wo:"))
-
-
-def _describe(labels):
-    return ", ".join(labels) if labels else "no wo: label"
-
-
-def reconcile_drift(rows, issues):
-    """PURE: (breakdown rows, the live issue listing) -> (drift lines,
-    problems).
-
-    Every line names a breakdown path and an issue NUMBER, never a work
-    order id: the row is identified by where it lives, which is also where
-    a human goes to fix it. The knowledge plane is authoritative in every
-    comparison — a line says what the dispatch plane must be brought to,
-    never the reverse (ADR-0032).
-
-    `rows` is (display path, lines) per breakdown, so the caller owns how
-    paths are spelled and this stays a pure function.
-    """
-    index, problems = {}, []
-    for position, issue in enumerate(issues):
-        if not isinstance(issue, dict) or not isinstance(
-                issue.get("number"), int):
-            problems.append(f"sweeps: issue listing entry {position} has no"
-                            " usable number")
-            continue
-        index[issue["number"]] = issue
-    drift, mirrored = [], {}
-    for path, lines in rows:
-        for line in lines:
-            number = row_tracker_issue(line)
-            if number is None:
-                continue
-            mirrored.setdefault(number, []).append(path)
-            issue = index.get(number)
-            if issue is None:
-                drift.append(f"{path}: a row mirrors #{number}, which is not"
-                             " in the issue listing")
-                continue
-            labels = issue_lifecycle(issue)
-            merged = "wo:merged" in labels
-            state = str(issue.get("state") or "").lower()
-            if row_done(line):
-                if not merged:
-                    drift.append(f"{path}: a checked row mirrors #{number},"
-                                 f" which carries {_describe(labels)} — the"
-                                 " row says merged")
-                elif state == "open":
-                    drift.append(f"{path}: a checked row mirrors #{number},"
-                                 " which is labelled wo:merged but still open")
-            elif merged:
-                drift.append(f"{path}: an unchecked row mirrors #{number},"
-                             " which is labelled wo:merged — the issue is"
-                             " ahead of the row")
-            elif state == "closed":
-                drift.append(f"{path}: an unchecked row mirrors #{number},"
-                             f" which is closed carrying {_describe(labels)}"
-                             " — the row says the work is outstanding")
-    for number, paths in sorted(mirrored.items()):
-        if len(paths) > 1:
-            drift.append(f"#{number} is mirrored by {len(paths)} rows"
-                         f" ({', '.join(sorted(set(paths)))}) — an issue"
-                         " mirrors one work order")
-    for number, issue in sorted(index.items()):
-        labels = issue_lifecycle(issue)
-        if not labels:
-            continue
-        if len(labels) > 1:
-            drift.append(f"#{number} carries {len(labels)} lifecycle labels"
-                         f" at once ({', '.join(labels)}) — the state"
-                         " machine allows one")
-        if number not in mirrored:
-            drift.append(f"#{number} carries {_describe(labels)} but no"
-                         " breakdown row mirrors it — the dispatch plane is"
-                         " ahead of the knowledge plane")
-    return drift, problems
 
 
 def reconcile_intake(drift):
