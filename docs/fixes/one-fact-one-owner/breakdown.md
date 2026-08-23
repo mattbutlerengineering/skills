@@ -268,7 +268,7 @@ catch the third and why; and a reader of `CLAUDE.md` can run the tool.
     **welcome** change and means the rules got stronger, not that the test
     broke. Verify scores against the amended form and must say it was amended
     and why. `factory/` untouched.
-- [ ] **C3** `CLAUDE.md` documents the command, and the battery closes the run — size:S, blocked by: A5
+- [x] **C3** `CLAUDE.md` documents the command, and the battery closes the run — size:S, blocked by: A5
   - Accept: `CLAUDE.md` names `python3 one_owner.py`, says in one line what
     it answers, and says that it is not part of `make check` and never
     colours main red. It sits beside the existing non-CI tools, and the
@@ -431,3 +431,48 @@ from the design.
   not, which is why gap 1 needs an answer rather than a workaround. Or
   someone "tidies up" `plane_drift.issue_lifecycle` while they are in there,
   and the run loses the only live proof it has.
+
+### Implement deviations, logged 2026-08-23
+
+Six, none design-level. Each is a mechanical choice the inputs left open,
+recorded here so Verify and Review do not have to rediscover it.
+
+1. **A5's live-tree acceptance criterion was verified by hand and quoted
+   in its commit message, not committed as a test.** The criterion is
+   real and was met (the tool prints the `cli.label_names` /
+   `plane_drift.issue_lifecycle` group, and the grep over `one_owner.py`
+   returns nothing). It is not a committed assertion because the fixture
+   is deliberately retained and is seeded for folding at
+   `docs/backlog.md:46` — a live-tree pin would decay exactly the way
+   `defect.md`'s success criterion forbids. Every committed case runs
+   against fixture trees. B4's marker-deletion check is by hand for the
+   same reason, which B4 already required.
+2. **C1 and C2 serve the ordering rule by mutation, not by an import
+   error.** Both items are pins over behaviour that already exists, so
+   there is nothing to watch fail into existence. C1's two pins were each
+   watched fail with the rule they depend on removed (`same-keys` floor
+   raised to three; `same-value` extraction disabled), and both mutations
+   were reverted. C2 asserts an ABSENCE, so it is guarded differently:
+   the assertion itself fails if the fixture stops parsing, which is the
+   only way that pin could pass vacuously.
+3. **B4's marker reason is short, and the ADR-0037 sanction is quoted in
+   the ordinary comment line directly above the marker.** The grammar is
+   one line, and the full quotation ("Callers alias to their own names …
+   so their problem strings read unchanged") would put the marker past
+   140 characters. The reason names the sanction; the line above carries
+   it. No line in the three annotated files exceeds 79 characters.
+4. **`markers(path, source)` keeps the signature `architecture.md` pins
+   and calls `fact_sites` internally** to get the sites it attaches to.
+   The join is by the definition's `lineno`, exactly as designed. The
+   parse problem is reported once, by `fact_sites`; `markers` returns
+   nothing for an unparseable module rather than double-reporting.
+5. **`main(argv)` refuses extra arguments with usage and exit 2** rather
+   than ignoring them. `factory.py` states the stance for its own bare
+   verbs ("refuse extras rather than dropping them silently"), and under
+   the front door `factory.py one-owner --foo` would otherwise drop the
+   flag. Pinned through `cli_contract.CliContract`.
+6. **Adjacent smell, logged not fixed:** `CLAUDE.md`'s heading reads
+   `## Verify (CI runs both on every push/PR)` over THREE bullets. It was
+   already false before this run and is not this run's to fix; C3 only
+   had to avoid leaving the on-demand preamble beneath it false, which it
+   does by giving `one_owner.py` its own framing.
