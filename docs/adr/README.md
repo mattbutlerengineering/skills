@@ -77,3 +77,4 @@ the canonical vocabulary.
 | [0054](0054-front-door-routes-humans.md) | The front door routes humans, not files | provisional |
 | [0055](0055-deferred-stops-and-payload-charters.md) | The budget hook and payload charters stay deferred | accepted |
 | [0056](0056-human-gates-module.md) | The three human gates get a module of their own | provisional |
+| [0057](0057-lifecycle-legs-agree-about-an-uncited-pr.md) | Both lifecycle legs treat an uncited PR the same way | provisional |

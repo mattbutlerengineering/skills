@@ -1676,7 +1676,12 @@ class TestLockstep(unittest.TestCase):
     VALIDATOR_TARGETS = {
         "review": ["python3 validator.py review --findings $(FINDINGS)"
                    " --status $(STATUS)"],
-        "wo-merged": ["python3 validator.py lifecycle --label wo:merged"],
+        # Both legs carry --uncited skip (ADR-0057): a PR naming no work
+        # order is a no-op on open AND on merge. Without it here, every
+        # housekeeping PR merged with a red post-merge run while the open
+        # leg passed the same body.
+        "wo-merged": ["python3 validator.py lifecycle --label wo:merged"
+                      " --uncited skip"],
         "wo-in-progress": ["python3 validator.py lifecycle --label"
                            " wo:in-progress --issue $(ISSUE)"],
         "wo-needs-review": ["python3 validator.py lifecycle --label"

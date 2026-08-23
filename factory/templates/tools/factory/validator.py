@@ -21,18 +21,20 @@ problem strings; the CLI prints them and exits nonzero.
         job: failing the build is the check job's work, and a reviewer that
         goes silent on red is useless.
 
-  python3 validator.py lifecycle --label wo:merged
-        Make <label> the only wo: lifecycle label on the work order's
-        mirrored issue (ADR-0032: exactly one at a time). The issue number
-        comes from the breakdown row, never from the issue itself — the
-        knowledge plane is authoritative and the mirror is one-way.
-        Strict: a PR citing no work order is a problem, because this leg
-        mutates an issue and only a resolved citation says which one.
+  python3 validator.py lifecycle --label wo:merged --uncited skip
+        The merge leg. Make <label> the only wo: lifecycle label on the
+        work order's mirrored issue (ADR-0032: exactly one at a time). The
+        issue number comes from the breakdown row, never from the issue
+        itself — the knowledge plane is authoritative and the mirror is
+        one-way.
 
   python3 validator.py lifecycle --label wo:needs-review --uncited skip
-        The PR-open leg: same PR-shaped resolution, but a PR citing no
-        work order is a silent no-op — human housekeeping PRs are normal
-        traffic, not errors.
+        The PR-open leg: same PR-shaped resolution.
+
+        Both legs pass --uncited skip (ADR-0057), so a PR citing no work
+        order is a silent no-op on each — human housekeeping PRs are
+        normal traffic, not errors. A PR that NAMES a work order which
+        resolves to none stays a problem on both.
 
   python3 validator.py lifecycle --label wo:in-progress --issue <N>
         The dispatch claim: flip a KNOWN issue (no PR to resolve) and
@@ -347,14 +349,25 @@ def _flip(number, label, lifecycle, run):
 def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     """The merged-label job: flip the cited work order's lifecycle label.
 
-    uncited="skip" (the PR-open leg) makes a PR that cites no work order
-    at all a silent no-op instead of a problem: human housekeeping PRs
-    are normal traffic. ONLY that case is relaxed — a body that names a
-    work order but resolves to none (no Closes line, ambiguous,
-    unmirrored) is a malformed WO PR and stays loud in both legs, as
-    does everything after resolution. The merged leg keeps the strict
-    default everywhere: it MUTATES an issue, and only a resolved
-    citation says which one."""
+    uncited="skip" makes a PR that cites no work order at all a silent
+    no-op instead of a problem: human housekeeping PRs are normal
+    traffic. ONLY that case is relaxed — a body that names a work order
+    but resolves to none (no Closes line, ambiguous, unmirrored) is a
+    malformed WO PR and stays loud in both legs, as does everything
+    after resolution. That is what the strictness protects: the skip
+    cannot mutate the wrong issue, because it fires only when nothing
+    resolves and nothing is mutated.
+
+    BOTH legs pass it (ADR-0057). They disagreed until then — the open
+    leg skipped and the merged leg did not — which left no PR body that
+    could satisfy both: naming a work order failed the open leg, and
+    naming none failed the merged leg. A work-order PR that merges
+    having lost its citation entirely no longer reddens the merge; it
+    surfaces as cross-plane drift in the reconcile sweep, which is where
+    ADR-0045 already puts disagreements of this kind.
+
+    The function default stays strict so a caller must ask for the
+    relaxation; the Makefile targets are the callers that do."""
     lifecycle, problems = lifecycle_labels(root)
     if problems:
         return problems
