@@ -478,7 +478,14 @@ recorded here so Verify and Review do not have to rediscover it.
    `assumptions:`, so taking it is the design's default; declining it
    would have been the deviation. The step is read-only, sits in §2
    Orient and not §3 Health sweep, and says so in the step itself.
-7. **Adjacent smell, logged not fixed:** `CLAUDE.md`'s heading reads
+7. **`one_owner.py` is 443 lines, not the ~250 `architecture.md`
+   estimated.** Under CLAUDE.md's 800 max but past its 200-400
+   "typical". The overrun is documentation, not logic: 161 lines are
+   docstrings, 62 blank and 22 comments, leaving 198 lines of code —
+   inside the estimate. Nothing was split, because every interface
+   `architecture.md` names is one of the five the module owns and no
+   second caller exists for any of them.
+8. **Adjacent smell, logged not fixed:** `CLAUDE.md`'s heading reads
    `## Verify (CI runs both on every push/PR)` over THREE bullets. It was
    already false before this run and is not this run's to fix; C3 only
    had to avoid leaving the on-demand preamble beneath it false, which it
