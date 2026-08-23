@@ -490,3 +490,47 @@ recorded here so Verify and Review do not have to rediscover it.
    already false before this run and is not this run's to fix; C3 only
    had to avoid leaving the on-demand preamble beneath it false, which it
    does by giving `one_owner.py` its own framing.
+
+### Review fix-pass deviations, logged 2026-08-23
+
+Two, both documentation, both routed back here by `review.md` as
+fix-before-Ship. Neither touches `one_owner.py`, `plane_drift.py` or any
+`factory_init.MIRRORS` entry, so no manifest regeneration follows and
+Verify's evidence survives both.
+
+9. **C4's step 9 was rewritten to test "already seeded" rather than
+   "new since the last routine run"** (`review.md`, major 2). As
+   written the step asked for a delta the routine cannot compute: §7
+   fixes the journal as the routine's only memory, its comment skeleton
+   has six slots and none holds a findings list, `architecture.md`
+   rejects a baseline or suppressions file on the record, and §2 is
+   read-only so the pass cannot be re-run at the prior commit. The step
+   now defines a group as new when `docs/backlog.md` does not already
+   name it — a tracked file, read in the same pass, already holding the
+   fixture's seed — and requires the proposal to quote the tool's line
+   so the group's `<module>.<name>` members travel with it and the next
+   run can match them. C4's criterion is unchanged and now true: the
+   step is one read-only §2 step, findings are report material, a new
+   group is a `docs/backlog.md` seed proposal under Proposals, and it
+   stays out of §3. Nothing else moved: no journal slot was added, no
+   baseline file exists, and `docs/backlog.md` is read there and never
+   written — the routine proposes, the human appends, so an unapplied
+   proposal is restated the next day rather than silently dropped.
+10. **ADR-0061's first-annotation consequence now says three markers,
+    not a pair** (`review.md`, minor 6). The bullet was copied from
+    `architecture.md`'s pre-tool proposal and never updated with design
+    gap 3 above, so the record claimed a `budget_guard` / `dashboard`
+    pair while the tree carries `one_owner.git_runner` as a third
+    member. Corrected in place rather than superseded: the record is
+    provisional, unshipped, and written by this same run, and only its
+    description of what it annotated was stale. The decision, the
+    status line, the reasoning and the mirrored-file paragraph the
+    operator required are untouched, and the `docs/adr/README.md` index
+    row still matches the status line byte for byte (detector D).
+
+Battery after both edits, from the repo root: `python3 -m unittest
+discover tests` → `Ran 1344 tests ... OK`; `python3 lint.py` →
+`lint: 0 problem(s) across 24 skills`; `python3 gates.py && python3
+gates.py --selftest` → `gates: 0 problem(s)` and `selftest: ok`;
+`python3 one_owner.py` → the same nine findings and `one-owner: 9
+problem(s)`, exit 1, unchanged by either edit.
