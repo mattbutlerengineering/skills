@@ -9,8 +9,8 @@ from pathlib import Path
 import knowledge_plane
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              PRD_TOKEN, ROW, WO_TOKEN, breakdown_files,
-                             mirror_map, repo_root, row_work_order,
-                             run_dirs, sanitize)
+                             mirror_map, repo_root, row_done,
+                             row_work_order, run_dirs, sanitize)
 
 
 class TestTokens(unittest.TestCase):
@@ -59,12 +59,12 @@ class TestRowGrammar(unittest.TestCase):
         self.assertIsNone(row_work_order("-[x] WO-0002 t"))
         self.assertEqual(row_work_order("-\t[x] WO-0002 t"), "WO-0002")
 
-    def test_alignment_with_the_completion_and_merged_grammars(self):
-        # protocol._CHECKBOX and gates.MERGED_ROW are separate owners
-        # (protocol stays factory-agnostic; MERGED_ROW wants only checked
-        # rows) but must agree with ROW about what a checkbox line IS —
-        # else stage completion and dispatch disagree about the same line.
-        import gates
+    def test_alignment_with_the_completion_grammar(self):
+        # protocol._CHECKBOX is a separate owner by design — it captures
+        # the box contents and protocol.py stays factory-agnostic — but
+        # must agree with ROW about what a checkbox line IS, else stage
+        # completion and dispatch disagree about the same line. It is the
+        # only other owner left; ADR-0058 retired the third.
         import protocol
         agree = ("- [x] WO-0002 t", "-\t[x] WO-0002 t", "+ [x] WO-0002 t")
         disagree = ("-[x] WO-0002 t",)
@@ -72,12 +72,40 @@ class TestRowGrammar(unittest.TestCase):
             with self.subTest(line=line, expect=True):
                 self.assertTrue(ROW.match(line))
                 self.assertTrue(protocol._CHECKBOX.search(line))
-                self.assertTrue(gates.MERGED_ROW.match(line))
         for line in disagree:
             with self.subTest(line=line, expect=False):
                 self.assertFalse(ROW.match(line))
                 self.assertFalse(protocol._CHECKBOX.search(line))
-                self.assertFalse(gates.MERGED_ROW.match(line))
+
+
+class TestRowDone(unittest.TestCase):
+    """The checked-row grammar at its own interface (ADR-0058). Five call
+    sites ask this question — detector G, the reconcile sweep, the work
+    queue, and the dashboard twice — and they must get one answer."""
+
+    def test_checked_boxes_across_every_bullet_and_indent(self):
+        for line in ("- [x] WO-0002 done", "- [X] WO-0002 done",
+                     "-\t[x] WO-0002 done", "+ [x] WO-0002 done",
+                     "* [x] WO-0002 done", "  - [x] WO-0002 indented"):
+            with self.subTest(line=line):
+                self.assertTrue(row_done(line))
+
+    def test_unchecked_prose_and_malformed_bullets_are_not_done(self):
+        for line in ("- [ ] WO-0002 open", "-[x] WO-0002 t",
+                     "text - [x] WO-0002 t", "## WO-0002 heading", ""):
+            with self.subTest(line=line):
+                self.assertFalse(row_done(line))
+
+    def test_the_checked_row_grammar_has_one_owner(self):
+        # ADR-0058 amends ADR-0039's roster from three owners to two.
+        # gates.MERGED_ROW was a fourth, added nineteen days after that
+        # roster was fixed and identical to this one in pattern AND
+        # flags. A re-added copy is the drift this pins.
+        import gates
+        self.assertFalse(
+            hasattr(gates, "MERGED_ROW"),
+            "gates.MERGED_ROW is back: the checked-row grammar has one"
+            " owner, knowledge_plane.row_done (ADR-0058)")
 
 
 class TestRunDirs(unittest.TestCase):

@@ -68,8 +68,8 @@ import factory_config
 from cli import read_event, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             breakdown_files, repo_root, row_pre_ledger,
-                             run_dirs)
+                             breakdown_files, repo_root, row_done,
+                             row_pre_ledger, run_dirs)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
@@ -99,11 +99,6 @@ ADR_STATUS_LINE = re.compile(r"^-\s*Status:\s*(.+?)\s*$")
 ADR_INDEX_ROW = re.compile(
     r"^\|\s*\[(?P<num>\d{4})\]\((?P<file>[^)]+)\)\s*\|[^|]*\|"
     r"\s*(?P<status>[^|]*?)\s*\|")
-
-# A merged work order is a checked breakdown row (ADR-0004: the artifact,
-# not the tracker, is the state). Bullet-and-whitespace shape aligned with
-# knowledge_plane.ROW; separate owner because only the checked form counts.
-MERGED_ROW = re.compile(r"^\s*[-*+]\s+\[x\]", re.IGNORECASE)
 
 # Markdown links to repo paths; URLs, autolinks and bare anchors are not.
 MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
@@ -583,7 +578,7 @@ def merged_wo_rows(root):
         rel = breakdown.relative_to(root)
         for lineno, line in enumerate(lines, 1):
             wo = WO_TOKEN.search(line)
-            if (MERGED_ROW.match(line) and wo
+            if (row_done(line) and wo
                     and not row_pre_ledger(line)):
                 rows.append((rel, lineno, wo.group(0)))
     return rows
