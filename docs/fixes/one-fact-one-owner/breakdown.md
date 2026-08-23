@@ -91,7 +91,7 @@ same payload keys — with no rule in the tool naming either one.
     no marker involved; a module whose source does not parse yields no sites
     and the problem `one-owner: <path> cannot be parsed: <err>`, with every
     other module still contributing. `factory/` untouched.
-- [ ] **A3** `same-keys` — two functions read the same named external shape — size:M, blocked by: A2
+- [x] **A3** `same-keys` — two functions read the same named external shape — size:M, blocked by: A2
   - Accept: `fact_sites` also returns the `same-keys` kind: a function
     definition anywhere in the module, whose identity is the sorted set of
     string literals used as `.get("...")` arguments or `[...]` subscripts,

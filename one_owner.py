@@ -76,12 +76,42 @@ def _stated_value(node):
     return ast.unparse(node)
 
 
+def _read_keys(node):
+    """The named external shape a function reads: every string literal it
+    uses as a `.get("...")` argument or a `[...]` subscript, anywhere in
+    its body. How the key is spelled does not matter — a seam retyped
+    with subscripts reads the same shape as one retyped with .get.
+    """
+    keys = set()
+    for child in ast.walk(node):
+        if (isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Attribute)
+                and child.func.attr == "get" and child.args
+                and isinstance(child.args[0], ast.Constant)
+                and isinstance(child.args[0].value, str)):
+            keys.add(child.args[0].value)
+        elif (isinstance(child, ast.Subscript)
+                and isinstance(child.slice, ast.Constant)
+                and isinstance(child.slice.value, str)):
+            keys.add(child.slice.value)
+    return keys
+
+
 def fact_sites(path, source):
     """([FactSite, ...], problems) for one module, in source order.
 
     `same-value` — a module-level `NAME = <expr>` binding. Claim: these
     two modules state the same value. This is the MERGED_ROW / DONE_ROW
     shape.
+
+    `same-keys` — a function definition anywhere in the module, read at
+    least TWO named keys deep. Claim: these two functions read the same
+    named external shape, which in this repo is what a seam owns. This is
+    the label_names / issue_lifecycle shape, and it works because the two
+    walks are about the same keys even though their code shares no text.
+    The floor is two keys and not three because the acceptance fixture's
+    shared set is exactly {labels, name} — the fixture derives the
+    threshold, rather than a threshold deciding the fixture.
 
     Unparseable source is REPORTED, never swallowed: a module that
     silently contributed nothing would take the tool quiet exactly when
@@ -102,4 +132,11 @@ def fact_sites(path, source):
         found += [FactSite("same-value", path, node.lineno, target.id,
                            identity)
                   for target in node.targets if isinstance(target, ast.Name)]
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        keys = _read_keys(node)
+        if len(keys) > 1:
+            found.append(FactSite("same-keys", path, node.lineno, node.name,
+                                  ", ".join(sorted(keys))))
     return sorted(found, key=lambda site: (site.lineno, site.name)), []

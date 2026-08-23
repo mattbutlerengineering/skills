@@ -208,6 +208,98 @@ class TestSameValue(unittest.TestCase):
                          [("'x'", ["gates.A", "knowledge_plane.B"])])
 
 
+# The miss-3 shape from defect.md's evidence table, still live at HEAD as
+# this run's acceptance fixture: cli.label_names (622e2bf, 2026-08-10,
+# #247) and the labels walk that became plane_drift.issue_lifecycle
+# (f38fbdd, 2026-08-10, #204). Two genuinely different walks — one drops
+# a nameless label at extraction, the other admits None and filters a
+# line later — over the same two keys.
+LABEL_NAMES = """def label_names(payload):
+    labels = payload.get("labels") if isinstance(payload, dict) else payload
+    if not isinstance(labels, list):
+        return []
+    return [entry["name"] for entry in labels
+            if isinstance(entry, dict)
+            and isinstance(entry.get("name"), str) and entry["name"]]
+"""
+ISSUE_LIFECYCLE = """def issue_lifecycle(issue):
+    labels = issue.get("labels")
+    names = [entry.get("name") for entry in labels
+             if isinstance(entry, dict)] if isinstance(labels, list) else []
+    return sorted(name for name in names
+                  if isinstance(name, str) and name.startswith("wo:"))
+"""
+
+
+class TestSameKeys(unittest.TestCase):
+    """`same-keys`: a function definition, identified by the named
+    external shape it reads. The claim is that two functions read the
+    same payload keys, which in this repo is what a seam owns — so it
+    finds a retyped seam even when the two bodies share no text."""
+
+    def test_two_walks_over_the_same_two_keys_are_two_owners(self):
+        found, problems = sites_of(cli=LABEL_NAMES,
+                                   plane_drift=ISSUE_LIFECYCLE)
+        self.assertEqual(problems, [])
+        self.assertEqual(named(found),
+                         [("labels, name", ["cli.label_names",
+                                            "plane_drift.issue_lifecycle"])])
+
+    def test_the_floor_is_two_keys_because_the_fixture_has_exactly_two(self):
+        """A floor of three loses the acceptance fixture. Asserted at the
+        boundary rather than assumed: one key is not a shape."""
+        one, problems = sites_of(a='def f(p):\n    return p.get("labels")\n')
+        self.assertEqual((one, problems), ([], []))
+        two, problems = sites_of(
+            a='def f(p):\n    return p.get("labels"), p.get("name")\n')
+        self.assertEqual(problems, [])
+        self.assertEqual([(s.kind, s.name, s.identity) for s in two],
+                         [("same-keys", "f", "labels, name")])
+
+    def test_get_and_subscript_are_the_same_read(self):
+        """The shape is what is read, not how — a seam retyped with
+        subscripts is the same second owner."""
+        found, problems = sites_of(
+            a='def f(p):\n    return p.get("labels"), p.get("name")\n',
+            b='def g(p):\n    return p["labels"], p["name"]\n')
+        self.assertEqual(problems, [])
+        self.assertEqual(named(found), [("labels, name", ["a.f", "b.g"])])
+
+    def test_key_sets_that_merely_overlap_are_not_one_fact(self):
+        """Identity is the whole set. Two functions sharing one key of
+        three have not stated the same shape, and treating them as one
+        owner is how a checker starts crying wolf."""
+        found, problems = sites_of(
+            a='def f(p):\n    return p["labels"], p["name"]\n',
+            b='def g(p):\n    return p["name"], p["state"]\n')
+        self.assertEqual(problems, [])
+        self.assertEqual(groups(found), [])
+
+    def test_a_nested_function_is_reached(self):
+        """The rule is "a function definition anywhere in the module" —
+        a retyped seam hidden one level down is still a second owner."""
+        found, problems = sites_of(a=(
+            "def outer(payload):\n"
+            "    def inner(entry):\n"
+            '        return entry.get("labels"), entry.get("name")\n'
+            "    return inner\n"))
+        self.assertEqual(problems, [])
+        self.assertIn(("same-keys", "inner", "labels, name"),
+                      [(s.kind, s.name, s.identity) for s in found])
+
+    def test_both_kinds_come_back_from_one_module_in_source_order(self):
+        """The two identities together cover both mechanical forms
+        defect.md's Target state names, and one module can state both."""
+        found, problems = sites_of(a=(
+            "LABEL = 'wo:ready-for-agent'\n"
+            "\n"
+            "\n"
+            'def f(p):\n    return p["labels"], p["name"]\n'))
+        self.assertEqual(problems, [])
+        self.assertEqual([(s.kind, s.lineno, s.name) for s in found],
+                         [("same-value", 1, "LABEL"), ("same-keys", 4, "f")])
+
+
 class TestDataModel(unittest.TestCase):
     """architecture.md's Data model, pinned: three namedtuples and their
     fields, because the fields are what every other interface passes."""
