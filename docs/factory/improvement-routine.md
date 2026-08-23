@@ -65,6 +65,15 @@ Read, in order:
    `bd` nor dolt, and the routine never edits `.beads/**`. Status
    changes it would have made (claim, close) go in the report for the
    human to apply.
+9. `python3 one_owner.py` — the one-fact-one-owner pre-pass (ADR-0061).
+   Read-only intel, like everything else in this section: findings are
+   report material, and a group that is NEW since the last routine run
+   is a `docs/backlog.md` seed proposal under Proposals. It lives here
+   and **not** in §3 Health sweep on purpose — §3 classifies main green
+   or red, and a one-owner finding must never colour main red; it is a
+   question for a human, which is the same bar that kept the pass out of
+   `make check`. The tool exits nonzero whenever it finds anything, so a
+   nonzero exit here is normal and is not a failure of the run.
 
 ## 3 Health sweep
 

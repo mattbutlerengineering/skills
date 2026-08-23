@@ -284,7 +284,7 @@ catch the third and why; and a reader of `CLAUDE.md` can run the tool.
     python3 gates.py --selftest` matching `gates: 0 problem(s)` and
     `selftest: ok`, all green on a clean checkout, with `git status` showing
     no unregenerated payload and no stray file.
-- [ ] **C4** OPTIONAL — the daily routine runs the pass — size:S, blocked by: C3
+- [x] **C4** OPTIONAL — the daily routine runs the pass — size:S, blocked by: C3
   - Accept: **This item is declinable and blocks nothing.**
     `architecture.md`'s own assumption says the design works on the
     documented command alone and the trigger degrades without taking the tool
@@ -471,7 +471,14 @@ recorded here so Verify and Review do not have to rediscover it.
    verbs ("refuse extras rather than dropping them silently"), and under
    the front door `factory.py one-owner --foo` would otherwise drop the
    flag. Pinned through `cli_contract.CliContract`.
-6. **Adjacent smell, logged not fixed:** `CLAUDE.md`'s heading reads
+6. **C4 was taken, not declined.** It is marked OPTIONAL and blocks
+   nothing, and the operator never spoke to it. `architecture.md`
+   designs the trigger as two parts (the documented command AND the
+   routine step) and logs the routine edit under its own
+   `assumptions:`, so taking it is the design's default; declining it
+   would have been the deviation. The step is read-only, sits in §2
+   Orient and not §3 Health sweep, and says so in the step itself.
+7. **Adjacent smell, logged not fixed:** `CLAUDE.md`'s heading reads
    `## Verify (CI runs both on every push/PR)` over THREE bullets. It was
    already false before this run and is not this run's to fix; C3 only
    had to avoid leaving the on-demand preamble beneath it false, which it
