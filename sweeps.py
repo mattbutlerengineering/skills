@@ -56,13 +56,12 @@ import sys
 from collections import namedtuple
 from pathlib import Path
 
-import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, label_names, report
 from knowledge_plane import (WO_TOKEN, breakdown_files, repo_root,
-                             row_tracker_issue, sanitize)
+                             row_done, row_tracker_issue, sanitize)
 from cli import gh_runner
 
 # Sweep kind -> the two taxonomy labels its intake carries. Closed by
@@ -249,7 +248,7 @@ def reconcile_drift(rows, issues):
             labels = issue_lifecycle(issue)
             merged = "wo:merged" in labels
             state = str(issue.get("state") or "").lower()
-            if gates.MERGED_ROW.match(line):
+            if row_done(line):
                 if not merged:
                     drift.append(f"{path}: a checked row mirrors #{number},"
                                  f" which carries {_describe(labels)} — the"

@@ -66,12 +66,13 @@ def sanitize(value, limit=FIELD_LIMIT):
 # are prose, never rows. One grammar for the whole dispatch plane:
 # validator (row -> tracker issue), assembler (row -> dispatch), and
 # orientation_pack (row -> owned block) all read it from here.
-# protocol._CHECKBOX (stage completion) and gates.MERGED_ROW (merged-row
-# detection) stay separate owners — protocol must not depend on this
-# factory seam, and each captures something this one doesn't — but their
-# bullet-and-whitespace shape is aligned with this regex; change them
-# together or completion counting and dispatch will disagree about the
-# same line.
+# protocol._CHECKBOX (stage completion) stays a separate owner — protocol
+# must not depend on this factory seam, and it captures the box contents
+# this one doesn't — but its bullet-and-whitespace shape is aligned with
+# this regex; change them together or completion counting and dispatch
+# will disagree about the same line. It is the ONLY other owner:
+# gates.MERGED_ROW was a third, identical to DONE_ROW below, and ADR-0058
+# retired it.
 ROW = re.compile(r"^\s*[-*+]\s+\[[ xX]\]\s")
 
 
@@ -180,11 +181,13 @@ def row_blockers(line):
 def row_done(line):
     """Whether a breakdown row is checked off.
 
-    gates.MERGED_ROW is a separate, older owner of the same bullet shape
-    and stays that way: it additionally excludes ADR-0043 pre-ledger rows,
-    which is detector G's rule and not the row grammar's. Same alignment
-    caveat as protocol._CHECKBOX — change the bullet shape in one and the
-    others must move with it.
+    The one owner of the checked-row grammar (ADR-0058). Five call sites
+    ask: detector G's merged_wo_rows, the reconcile sweep, the work
+    queue's row read, and the dashboard's drift check twice. G layers its
+    own ADR-0043 pre-ledger exclusion on top at the call site — that is
+    the detector's rule, not the row grammar's, which is why it is not
+    here. Same alignment caveat as protocol._CHECKBOX: change the bullet
+    shape in one and the other must move with it.
     """
     return bool(DONE_ROW.match(line))
 
