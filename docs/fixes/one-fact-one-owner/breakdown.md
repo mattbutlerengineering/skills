@@ -236,7 +236,7 @@ Demonstrable at the close: the suite would have caught two of the three
 historical instances and says out loud, in the suite itself, that it does not
 catch the third and why; and a reader of `CLAUDE.md` can run the tool.
 
-- [ ] **C1** the two historical instances the tool catches — size:M, blocked by: A5
+- [x] **C1** the two historical instances the tool catches — size:M, blocked by: A5
   - Accept: `tests/test_one_owner.py` pins the exact problem strings through
     `check` against **fixture trees**, never the live tree, so the suite does
     not decay as the tree is cleaned. Miss 1: a fixture reproducing

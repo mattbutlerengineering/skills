@@ -761,6 +761,70 @@ class TestCoverage(unittest.TestCase):
                        b=runner_git("nowhere.gone")), list)
 
 
+class TestHistoricalInstances(unittest.TestCase):
+    """defect.md's evidence table, reproduced as FIXTURES rather than read
+    off the live tree — two of the three instances a manual deepening
+    review read past at fbfa3c3 (2026-08-17), measured hit rate 4 of 7.
+
+    Fixture, not invention: each module below cites the commit and PR that
+    created the shape it reproduces, so a later reader can tell one from
+    the other. They are fixtures precisely so the suite does not decay as
+    the tree is cleaned — two of the three shapes are already gone from
+    HEAD, and the third is seeded for folding at docs/backlog.md:46.
+    """
+
+    # Miss 1 — gates.MERGED_ROW (208ffdb, 2026-07-11, #130) and
+    # knowledge_plane.DONE_ROW (4333370, 2026-08-10, #221): byte-identical
+    # in pattern AND flags, nineteen days after ADR-0039 fixed the roster
+    # at three owners. Closed by ADR-0058 at 7988962 (#312).
+    MISS_1_GATES = ('# gates.py:106 at fbfa3c3 — created 208ffdb (#130)\n'
+                    f'MERGED_ROW = {CHECKED_ROW}\n')
+    MISS_1_KNOWLEDGE_PLANE = (
+        '# knowledge_plane.py:94 at fbfa3c3 — created 4333370 (#221)\n'
+        f'DONE_ROW = {CHECKED_ROW}\n')
+
+    # Miss 3 — cli.label_names (622e2bf, 2026-08-10, #247) and
+    # sweeps.issue_lifecycle (f38fbdd, 2026-08-10, #204), created the same
+    # day. STILL OPEN at HEAD: ADR-0060 moved the copy into
+    # plane_drift.issue_lifecycle unchanged, which is why it is this run's
+    # acceptance fixture rather than its cleanup target.
+    MISS_3_CLI = ('# cli.py:349 at fbfa3c3 — created 622e2bf (#247)\n'
+                  + LABEL_NAMES)
+    MISS_3_SWEEPS = ('# sweeps.py:220 at fbfa3c3 — created f38fbdd (#204)\n'
+                     + ISSUE_LIFECYCLE)
+
+    def test_miss_1_the_checked_row_grammar_with_two_owners(self):
+        self.assertEqual(
+            check_tree(gates=self.MISS_1_GATES,
+                       knowledge_plane=self.MISS_1_KNOWLEDGE_PLANE),
+            ["one-owner: gates.py:2 MERGED_ROW and knowledge_plane.py:2"
+             " DONE_ROW state the same value — one fact, one owner"])
+
+    def test_miss_3_the_labels_walk_with_two_strictnesses(self):
+        """The two walks genuinely differ — one drops a nameless label at
+        extraction, the other admits None and filters a line later — and
+        share no identical text. Same rule, two strictnesses, one of them
+        undocumented; the shape they DO share is the two keys."""
+        self.assertEqual(
+            check_tree(cli=self.MISS_3_CLI, sweeps=self.MISS_3_SWEEPS),
+            ["one-owner: cli.py:2 label_names and sweeps.py:2"
+             " issue_lifecycle read the same payload keys (labels, name)"
+             " — one fact, one owner"])
+
+    def test_both_misses_in_one_tree_are_two_findings(self):
+        """The tree the review actually read: both shapes present at once,
+        each its own finding, sorted."""
+        self.assertEqual(
+            check_tree(cli=self.MISS_3_CLI, gates=self.MISS_1_GATES,
+                       knowledge_plane=self.MISS_1_KNOWLEDGE_PLANE,
+                       sweeps=self.MISS_3_SWEEPS),
+            ["one-owner: cli.py:2 label_names and sweeps.py:2"
+             " issue_lifecycle read the same payload keys (labels, name)"
+             " — one fact, one owner",
+             "one-owner: gates.py:2 MERGED_ROW and knowledge_plane.py:2"
+             " DONE_ROW state the same value — one fact, one owner"])
+
+
 class TestDataModel(unittest.TestCase):
     """architecture.md's Data model, pinned: three namedtuples and their
     fields, because the fields are what every other interface passes."""
