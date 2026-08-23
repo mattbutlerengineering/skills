@@ -292,6 +292,10 @@ class TestQueues(unittest.TestCase):
 
 
 class TestDrift(unittest.TestCase):
+    """The dashboard's half of plane_drift.reconcile_drift (ADR-0060):
+    that gather feeds it the right rows and the right policy. The rule's
+    own classes are pinned in tests/test_plane_drift.py."""
+
     def test_a_closed_mirror_with_an_unchecked_row_is_flagged(self):
         # The class of drift issue #123 exposed: the work landed but the
         # row never flipped. A closed issue also never queues.
@@ -308,8 +312,9 @@ class TestDrift(unittest.TestCase):
             state = dashboard.gather(tmp, run=queue_gh(issues=issues),
                                      git=git_remote(), clock=clock)
         self.assertEqual(state["drift"], [
-            "drift: WO-0101 row is unchecked but its mirror #7 is"
-            " closed"])
+            "docs/features/f/breakdown.md: an unchecked row mirrors #7,"
+            " which is closed carrying wo:draft — the row says the work"
+            " is outstanding"])
         self.assertEqual([q["issue"] for q in state["queues"]], [8])
 
     def test_an_open_mirror_with_a_checked_row_is_the_inverse_flag(self):
@@ -322,13 +327,14 @@ class TestDrift(unittest.TestCase):
             state = dashboard.gather(tmp, run=queue_gh(issues=issues),
                                      git=git_remote(), clock=clock)
         self.assertEqual(state["drift"], [
-            "drift: WO-0103 row is checked but its mirror #9 is still"
-            " open"])
+            "docs/features/f/breakdown.md: a checked row mirrors #9,"
+            " which carries no wo: label — the row says merged"])
 
     def test_a_clean_fixture_is_silent(self):
         # #7/#8 open with unchecked rows agree across planes; #9's
-        # checked row has no listing entry, and absence says nothing —
-        # only definite cross-plane disagreement is a finding.
+        # checked row has no listing entry, and this caller passes
+        # absent_is_drift=False — its window renders on when truncated,
+        # so a mirror it never saw says nothing.
         with tempfile.TemporaryDirectory() as tmp:
             factory_repo(tmp)
             state = dashboard.gather(tmp, run=queue_gh(),

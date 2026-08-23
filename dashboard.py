@@ -50,8 +50,9 @@ import cost_report
 import factory_config
 from human_gates import GATES, label_events, waiting_since
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             mirror_map, row_done, row_size, row_title,
+                             mirror_map, row_size, row_title,
                              row_tracker_issue, row_work_order, run_dirs)
+import plane_drift
 from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
                       next_stage, parse_backlog)
 
@@ -189,30 +190,6 @@ def _queues(slug, listing, mirror, run, now, problems):
                 "url": issue.get("url") or "",
             })
     return entries
-
-
-def _drift(root, states):
-    """Cross-plane disagreement (ADR-0032: the row, never the issue, is
-    authoritative — so the mirror must follow it): a row unchecked while
-    its mirror is closed (the class issue #123 exposed), or checked
-    while its mirror is still open. `states` maps issue number to its
-    listed state; a mirror outside the listing says nothing — only
-    definite disagreement is a finding."""
-    findings = []
-    for _, lines in breakdown_files(root):
-        for line in lines:
-            number = row_tracker_issue(line)
-            state = states.get(number)
-            if state is None:
-                continue
-            wo = row_work_order(line)
-            if row_done(line) and state == "OPEN":
-                findings.append(f"drift: {wo} row is checked but its"
-                                f" mirror #{number} is still open")
-            elif not row_done(line) and state == "CLOSED":
-                findings.append(f"drift: {wo} row is unchecked but its"
-                                f" mirror #{number} is closed")
-    return findings
 
 
 def _pr_by_issue(slug, run, problems):
@@ -440,9 +417,15 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
                              if isinstance(entry.get("number"), int)}
                 state["queues"] = _queues(slug, listing, mirror, run,
                                           now, state["problems"])
-                state["drift"] = _drift(root, {
-                    number: (entry.get("state") or "").upper()
-                    for number, entry in by_number.items()})
+                rows = [(str(path.relative_to(root)), lines)
+                        for path, lines in breakdown_files(root)]
+                # absent_is_drift=False: this listing is windowed and
+                # renders on when truncated, so a mirror it never saw
+                # says nothing. sweeps aborts instead, and claims True.
+                drift, drift_problems = plane_drift.reconcile_drift(
+                    rows, listing, absent_is_drift=False)
+                state["drift"] = drift
+                state["problems"].extend(drift_problems)
                 prs = _pr_by_issue(slug, run, state["problems"])
                 state["output"] = _output(root, by_number, prs,
                                           _spend(ledger))
