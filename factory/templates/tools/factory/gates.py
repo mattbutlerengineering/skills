@@ -656,13 +656,20 @@ def manifest_files(root):
     manifest's walk-hash-key grammar. update_manifest (factory_init.py)
     writes exactly this map and check_scaffold_sync diffs the manifest
     against it, so writer and verifier cannot diverge — the same
-    discipline detector G borrows from cost_ledger.parse."""
+    discipline detector G borrows from cost_ledger.parse.
+
+    __pycache__/ is not payload. Importing a payload tool from inside the
+    mirrored tree writes bytecode there and .gitignore keeps it untracked,
+    so hashing it would pin keys git never carries — the manifest would
+    verify only in the checkout that wrote it. Excluding it here rather
+    than at the call sites keeps the writer and the verifier agreeing."""
     payload = root / "factory" / "templates"
     if not payload.is_dir():
         return {}
     return {p.relative_to(root / "factory").as_posix():
             hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in sorted(payload.rglob("*")) if p.is_file()}
+            for p in sorted(payload.rglob("*"))
+            if p.is_file() and "__pycache__" not in p.parts}
 
 
 # The half of the payload a product repo must never edit: the tools and the
