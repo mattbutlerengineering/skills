@@ -188,7 +188,17 @@ def row_done(line):
     the detector's rule, not the row grammar's, which is why it is not
     here. Same alignment caveat as protocol._CHECKBOX: change the bullet
     shape in one and the other must move with it.
+
+    The ROW guard is the same one every sibling accessor opens with, and
+    it is load-bearing rather than ceremonial: ROW requires whitespace
+    after the closing bracket and DONE_ROW does not, so without it a
+    checked box followed immediately by text is a checked row here and no
+    row at all to row_size, row_title and the rest. The one place that
+    difference escaped was detector G, which reaches this accessor
+    through a raw WO_TOKEN.search rather than through a sibling.
     """
+    if not ROW.match(line):
+        return False
     return bool(DONE_ROW.match(line))
 
 
