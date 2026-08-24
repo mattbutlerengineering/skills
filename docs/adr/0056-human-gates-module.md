@@ -1,6 +1,6 @@
 # The three human gates get a module of their own
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-08-18
 
 ## Context

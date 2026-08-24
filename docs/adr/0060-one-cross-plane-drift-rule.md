@@ -1,6 +1,6 @@
 # One cross-plane drift rule; the caller declares what absence means
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-08-22
 
 ## Context

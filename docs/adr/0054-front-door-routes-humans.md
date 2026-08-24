@@ -1,6 +1,6 @@
 # The front door routes humans, not files
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-08-13
 
 ## Context

@@ -74,11 +74,11 @@ the canonical vocabulary.
 | [0051](0051-report-joins-the-cli-seam.md) | The report epilogue joins the cli seam | accepted |
 | [0052](0052-skill-file-contract-joins-the-protocol-seam.md) | The skill-file contract joins the protocol seam; lint pins the recitals | accepted |
 | [0053](0053-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
-| [0054](0054-front-door-routes-humans.md) | The front door routes humans, not files | provisional |
+| [0054](0054-front-door-routes-humans.md) | The front door routes humans, not files | accepted |
 | [0055](0055-deferred-stops-and-payload-charters.md) | The budget hook and payload charters stay deferred | accepted |
-| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | provisional |
-| [0057](0057-lifecycle-legs-agree-about-an-uncited-pr.md) | Both lifecycle legs treat an uncited PR the same way | provisional |
-| [0058](0058-checkbox-regex-roster-is-two-owners.md) | The checkbox-regex roster is two owners, not three | provisional |
-| [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | provisional |
-| [0060](0060-one-cross-plane-drift-rule.md) | One cross-plane drift rule; the caller declares what absence means | provisional |
+| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | accepted |
+| [0057](0057-lifecycle-legs-agree-about-an-uncited-pr.md) | Both lifecycle legs treat an uncited PR the same way | accepted |
+| [0058](0058-checkbox-regex-roster-is-two-owners.md) | The checkbox-regex roster is two owners, not three | accepted |
+| [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | accepted |
+| [0060](0060-one-cross-plane-drift-rule.md) | One cross-plane drift rule; the caller declares what absence means | accepted |
 | [0061](0061-a-carve-out-lives-at-the-definition-site.md) | A carve-out lives at the definition site and must pay rent | provisional |

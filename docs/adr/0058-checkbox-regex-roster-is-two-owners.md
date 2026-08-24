@@ -1,6 +1,6 @@
 # The checkbox-regex roster is two owners, not three
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-08-22
 
 Amends ADR-0039's Consequences, which read: "only the three
