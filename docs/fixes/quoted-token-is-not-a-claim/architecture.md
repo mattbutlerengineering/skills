@@ -80,7 +80,13 @@ No change. A PR body stays a string, read once per job.
 
 ## Stack & dependencies
 
-Stdlib `re`, already imported. No new module and no new dependency.
+No new import at all. The helper is a line walk over
+`str.lstrip`/`str.startswith`, so `validator.py`'s import block is
+unchanged — see the dated note in `breakdown.md`, which corrects an
+earlier draft of this paragraph that said stdlib `re` was already
+imported here. It is not, and the walk needs it less than a regex
+would: fence state across lines is not a thing a pattern expresses
+well.
 `validator.py` is a `factory_init.MIRRORS` entry, so the edit carries a
 regenerated payload copy and manifest. Its manifest line is not adjacent to
 `human_gates.py`'s or `knowledge_plane.py`'s, so this run does not add

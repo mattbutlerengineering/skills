@@ -346,6 +346,52 @@ def _flip(number, label, lifecycle, run):
     return remove, []
 
 
+# What "quoted" means to the skip gate below: a fenced region, and a
+# blockquote line. NOT inline code — backticks around an id are how this
+# repo writes identifiers in ordinary prose, genuine claims included, so
+# treating them as quotation would silence real work-order PRs (ADR-0062).
+FENCES = ("```", "~~~")
+
+
+def _unquoted(body):
+    """The body with quoted material removed, for the one question the
+    skip gate asks: does the author CLAIM a work order here?
+
+    A PR that tightens a detector quotes the detector's output, and a PR
+    that discusses a breakdown row quotes the row. Every work-order token
+    in that material is evidence, and reading it as an assertion is what
+    made this repo redact live ids to WO-00xx inside the very fences whose
+    purpose is to show what the tool printed.
+
+    Only the gate reads this. Resolution (`cited_work_order`) still reads
+    the whole body, so a quoted token that DOES resolve to an issue the PR
+    closes still flips its label — the gate is reached only after
+    resolution has failed.
+
+    Line numbers are not preserved: nothing downstream reads any. An
+    unterminated fence swallows the rest of the body, which biases the
+    gate toward skipping, and a skip is a no-op rather than a mutation of
+    an issue nobody named."""
+    kept = []
+    fence = None
+    for line in body.splitlines():
+        stripped = line.lstrip()
+        mark = next((f for f in FENCES if stripped.startswith(f)), None)
+        if fence is not None:
+            # Inside a fence, only its OWN marker closes it: a ~~~ line
+            # within a backtick block is content, not a delimiter.
+            if mark == fence:
+                fence = None
+            continue
+        if mark is not None:
+            fence = mark
+            continue
+        if stripped.startswith(">"):
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     """The merged-label job: flip the cited work order's lifecycle label.
 
@@ -383,7 +429,7 @@ def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
         # must not be silently unlabelled — the lost label is the very
         # queue-entry event this leg exists to record, and the job only
         # fires on opened/reopened, so nothing would ever retry it.
-        if uncited == "skip" and not WO_TOKEN.findall(body):
+        if uncited == "skip" and not WO_TOKEN.findall(_unquoted(body)):
             return []
         return problems
     number, problems = tracker_issue(root, wo)
