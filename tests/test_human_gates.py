@@ -117,6 +117,19 @@ class TestLabelEvents(unittest.TestCase):
         ])
         self.assertEqual(gate_passages(events), [])
 
+    def test_a_naive_timestamp_is_not_one_either(self):
+        # "2026-08-01" parses, to a datetime with no tzinfo. Subtracting
+        # it from an aware one raises TypeError, so parseability alone
+        # is not the precondition waited_seconds actually needs — the
+        # gate has to admit only aware timestamps.
+        events = label_events([
+            labeled("2026-08-01", "wo:draft"),
+            labeled("2026-08-02T00:00:00Z", "wo:prd-approved"),
+            unlabeled("2026-08-02T00:00:00Z", "wo:draft"),
+        ])
+        self.assertNotIn("2026-08-01", [ts for ts, _, _ in events])
+        self.assertEqual(gate_passages(events), [])
+
     def test_a_well_formed_timeline_is_unchanged_by_the_third_clause(self):
         # The same three flips with a parseable closing timestamp still
         # pass the gate — the guard rejects malformed input, not input.

@@ -95,3 +95,14 @@ and regenerating the manifest twice for one behavioural change. Both rows'
 criteria were checked independently before either box was ticked. The cut
 was right that they are separable concerns and wrong that they are
 separable diffs.
+
+**2026-08-23 — A1 reopened by review, then re-closed.** The guard as first
+written tested parseability only, so `"2026-08-01"` — which parses, to a
+NAIVE datetime — was still admitted and still crashed `gate_passages`, with
+`TypeError: can't subtract offset-naive and offset-aware datetimes`. Same
+defect, one step further along. `_parses` was renamed `_is_timestamp` and
+given its second clause (the parse must carry a UTC offset), a case was
+added and watched to fail, and Verify was re-run rather than reused. The
+cut is unchanged; A1's criterion was met by a guard that turned out to be
+half a guard.
+

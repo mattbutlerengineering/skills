@@ -57,27 +57,35 @@ def _parse_ts(iso):
     return datetime.fromisoformat(iso.replace("Z", "+00:00"))
 
 
-def _parses(value):
-    """Whether _parse_ts would accept this — the module's one answer to
-    "is this a timestamp", asked once at admission so nothing downstream
-    has to ask it again. The isinstance test is not decoration: `value`
-    is a field of a decoded API response, and a non-string one would
-    fail inside _parse_ts with an AttributeError from .replace rather
-    than a parse error, which is a worse thing to depend on."""
+def _is_timestamp(value):
+    """The module's one answer to "is this a timestamp", asked once at
+    admission so nothing downstream has to ask it again.
+
+    Two clauses, and the second is the one that is easy to miss: the
+    value must parse, AND it must carry a UTC offset. "2026-08-01"
+    parses cleanly to a naive datetime, and subtracting a naive datetime
+    from an aware one raises TypeError — the same crash this guard
+    exists to prevent, one step further along. Parseability alone is not
+    the precondition waited_seconds needs.
+
+    The isinstance test is not decoration either: `value` is a field of
+    a decoded API response, and a non-string one would fail inside
+    _parse_ts with an AttributeError from .replace rather than a parse
+    error, which is a worse thing to depend on."""
     if not isinstance(value, str):
         return False
     try:
-        _parse_ts(value)
+        return _parse_ts(value).tzinfo is not None
     except ValueError:
         return False
-    return True
 
 
 def waited_seconds(start, end):
     """Whole seconds between two GitHub timestamps.
 
-    Both are ISO-8601 by precondition, established by label_events,
-    which admits no event carrying a timestamp _parse_ts cannot read.
+    Both are offset-aware ISO-8601 by precondition, established by
+    label_events, which admits no event whose timestamp fails either
+    clause of _is_timestamp.
     So this raises only for a programming error at a future call site
     that sources its timestamps somewhere else — do not add a handler
     here, which would put a second owner on a policy the admission gate
@@ -101,7 +109,7 @@ def label_events(timeline):
             continue
         name = (event.get("label") or {}).get("name")
         ts = event.get("created_at")
-        if name and _parses(ts):
+        if name and _is_timestamp(ts):
             events.append((ts, kind, name))
     return events
 
