@@ -33,8 +33,11 @@ problem strings; the CLI prints them and exits nonzero.
 
         Both legs pass --uncited skip (ADR-0057), so a PR citing no work
         order is a silent no-op on each — human housekeeping PRs are
-        normal traffic, not errors. A PR that NAMES a work order which
-        resolves to none stays a problem on both.
+        normal traffic, not errors. "Citing" means naming one OUTSIDE
+        quoted material (ADR-0062): a token in a fenced block or a
+        blockquote is something the PR is discussing. A PR that NAMES a
+        work order in its own prose and resolves none stays a problem on
+        both.
 
   python3 validator.py lifecycle --label wo:in-progress --issue <N>
         The dispatch claim: flip a KNOWN issue (no PR to resolve) and
@@ -397,8 +400,11 @@ def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
 
     uncited="skip" makes a PR that cites no work order at all a silent
     no-op instead of a problem: human housekeeping PRs are normal
-    traffic. ONLY that case is relaxed — a body that names a work order
-    but resolves to none (no Closes line, ambiguous, unmirrored) is a
+    traffic. "Cites" is read off `_unquoted(body)` rather than the raw
+    body (ADR-0062) — a token inside a fenced block or a blockquote is
+    material the PR quotes, not a work order it claims. ONLY that case
+    is relaxed — a body that names a work order in its own prose but
+    resolves to none (no Closes line, ambiguous, unmirrored) is a
     malformed WO PR and stays loud in both legs, as does everything
     after resolution. That is what the strictness protects: the skip
     cannot mutate the wrong issue, because it fires only when nothing
@@ -425,10 +431,11 @@ def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     body = pr.get("body") or ""
     wo, problems = cited_work_order(root, body)
     if problems:
-        # The skip is exactly the no-citation case. A malformed WO PR
-        # must not be silently unlabelled — the lost label is the very
-        # queue-entry event this leg exists to record, and the job only
-        # fires on opened/reopened, so nothing would ever retry it.
+        # The skip is exactly the case where the body claims no work
+        # order of its own. A malformed WO PR must not be silently
+        # unlabelled — the lost label is the very queue-entry event this
+        # leg exists to record, and the job only fires on
+        # opened/reopened, so nothing would ever retry it.
         if uncited == "skip" and not WO_TOKEN.findall(_unquoted(body)):
             return []
         return problems
