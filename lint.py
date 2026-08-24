@@ -17,7 +17,7 @@ import eval_schema
 import protocol
 from cli import report
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
-                      TEMPLATED_STAGES)
+                      TEMPLATED_STAGES, UTILITY_SKILLS)
 
 
 def check_manifest(root):
@@ -31,6 +31,49 @@ def check_manifest(root):
     return [f"plugin.json missing field: {field}"
             for field in ("name", "description", "version")
             if not data.get(field)]
+
+
+# A skill slug as it appears in prose: lowercase, hyphens included, so
+# "interactive-architecture-diagram" is one token and never also counts
+# as "architecture-diagram".
+SLUG_TOKEN = re.compile(r"[a-z][a-z0-9-]*")
+
+
+def check_plugin_skills(root):
+    """Every utility skill in the taxonomy is named in plugin.json's
+    description. That string is what a reader sees first when deciding
+    whether to install, and check_manifest asserts only that the field is
+    non-empty — so a skill can be added, registered, tested and released
+    without the install surface ever hearing about it. That is the same
+    gap check_readme_skills closes for README.md, on the surface that had
+    no checker: three diagram skills went unnamed here while the README
+    and the ledger were held to the full list.
+
+    Utility skills only. The description names stages as title-case prose
+    ("Idea", "UX Design") rather than by slug, so holding the whole
+    taxonomy to a substring test would demand a restyling nobody asked
+    for. The parenthetical utility list is the part that claims to be
+    exhaustive, so it is the part held to the taxonomy.
+
+    Whole slugs, never substrings: `architecture-diagram` occurs inside
+    `interactive-architecture-diagram`, so a plain `in` test would call
+    the list complete after the shorter name was dropped from it — a
+    blind spot for one of the very skills this checker exists to catch.
+
+    A missing or unparseable manifest returns nothing: check_manifest
+    already reports both, and this checker reporting them too would give
+    one broken file two problem strings.
+    """
+    path = root / ".claude-plugin" / "plugin.json"
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    named = set(SLUG_TOKEN.findall(data.get("description") or ""))
+    return [f"plugin.json's description never names utility skill {slug!r}"
+            for slug in UTILITY_SKILLS if slug not in named]
 
 
 def check_pi_package(root):
@@ -543,7 +586,8 @@ def check_ledger_links(root):
     )
 
 
-CHECKERS = (check_manifest, check_pi_package, check_skills,
+CHECKERS = (check_manifest, check_plugin_skills,
+            check_pi_package, check_skills,
             check_skill_recitals, check_skill_assets, check_templates,
             check_router, check_readme_skills, check_protocol,
             check_protocol_tables, check_backlog, check_evals,
