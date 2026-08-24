@@ -1,6 +1,6 @@
 # Utility skills alongside stage skills and the router
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-02 (definition broadened 2026-07-03 when `autorun` joined
   the category)
 

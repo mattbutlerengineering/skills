@@ -1,6 +1,6 @@
 # Invocation: stage skills + thin router
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-01
 
 Every stage is its own directly-invocable skill (/prd, /architect, …). A thin

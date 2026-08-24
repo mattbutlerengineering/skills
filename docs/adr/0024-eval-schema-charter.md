@@ -1,6 +1,6 @@
 # eval_schema's charter covers all eval knowledge, not one file's schema
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-02
 
 ADR-0022 chartered `eval_schema.py` around evals/routing.json. Two

@@ -1,6 +1,6 @@
 # Self-evaluation: lightweight ledger
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-01
 
 One LEDGER.md tracking each skill's maturity (draft / used-once /

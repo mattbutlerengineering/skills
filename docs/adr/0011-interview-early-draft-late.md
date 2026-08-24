@@ -1,6 +1,6 @@
 # Skill style: interview early, draft late
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-01
 
 Front-end stages (Idea, PRD, UX Design) interview relentlessly — the

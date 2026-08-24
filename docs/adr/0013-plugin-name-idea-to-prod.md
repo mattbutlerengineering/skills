@@ -1,6 +1,6 @@
 # Plugin name: idea-to-prod
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-01
 
 Picked at scaffold time; repo stays `skills`, marketplace name `skills`.

@@ -1,6 +1,6 @@
 # Audience: you first, publishable always
 
-- Status: provisional
+- Status: accepted
 - Date: 2026-07-01
 
 Built for personal daily use, but written as if a stranger installs it

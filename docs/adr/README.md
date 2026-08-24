@@ -29,11 +29,11 @@ the canonical vocabulary.
 | [0006](0006-plugin-from-day-one.md) | Plugin from day one | accepted |
 | [0007](0007-claude-code-only-target.md) | Claude Code only target harness | amended by ADR-0027 |
 | [0008](0008-self-contained-skills.md) | Skills are self-contained | accepted |
-| [0009](0009-audience-you-first-publishable-always.md) | Audience: you first, publishable always | provisional |
-| [0010](0010-stage-skills-plus-thin-router.md) | Stage skills + thin router | provisional |
-| [0011](0011-interview-early-draft-late.md) | Interview early, draft late | provisional |
-| [0012](0012-lightweight-ledger.md) | Lightweight ledger | provisional |
-| [0013](0013-plugin-name-idea-to-prod.md) | Plugin name: idea-to-prod | provisional |
+| [0009](0009-audience-you-first-publishable-always.md) | Audience: you first, publishable always | accepted |
+| [0010](0010-stage-skills-plus-thin-router.md) | Stage skills + thin router | accepted |
+| [0011](0011-interview-early-draft-late.md) | Interview early, draft late | accepted |
+| [0012](0012-lightweight-ledger.md) | Lightweight ledger | accepted |
+| [0013](0013-plugin-name-idea-to-prod.md) | Plugin name: idea-to-prod | accepted |
 | [0014](0014-mit-license.md) | License: MIT | accepted |
 | [0015](0015-templates-per-stage.md) | Templates per stage | accepted |
 | [0016](0016-operate-scope.md) | Operate scope | accepted |
@@ -43,8 +43,8 @@ the canonical vocabulary.
 | [0020](0020-hybrid-recall-policy.md) | Hybrid recall policy for skill descriptions | accepted |
 | [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | amended by ADR-0052 |
 | [0022](0022-eval-schema-module.md) | One eval-schema module beside the protocol module | accepted |
-| [0023](0023-utility-skills.md) | Utility skills alongside stage skills and the router | provisional |
-| [0024](0024-eval-schema-charter.md) | eval_schema's charter covers all eval knowledge, not one file's schema | provisional |
+| [0023](0023-utility-skills.md) | Utility skills alongside stage skills and the router | accepted |
+| [0024](0024-eval-schema-charter.md) | eval_schema's charter covers all eval knowledge, not one file's schema | accepted |
 | [0025](0025-maintenance-run-scale.md) | A third run scale: the maintenance run | accepted |
 | [0026](0026-tracker-mirror-one-way.md) | The issue-tracker bridge is an opt-in one-way mirror | accepted |
 | [0027](0027-oh-my-pi-second-harness.md) | oh-my-pi is a supported second harness (Claude primary) | accepted |
