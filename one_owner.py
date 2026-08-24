@@ -211,12 +211,18 @@ def source_files(root, run=git_runner):
     rest of the run is unaffected.
     """
     try:
-        listed = run(["-C", str(root), "ls-files", "--", "*.py"]).stdout
+        listed = run(["-C", str(root), "ls-files", "-z", "--", "*.py"]).stdout
     except CLI_FAILURES as err:
         return [], [f"one-owner: git ls-files failed: {detail(err)}"]
     files, problems = [], []
-    for rel in sorted(line.strip() for line in listed.splitlines()
-                      if line.strip()):
+    # -z, and split on NUL rather than newline: git's default listing
+    # C-quotes any path with non-ASCII bytes (café.py comes back as the
+    # literal "caf\303\251.py") and cannot express one containing a
+    # newline. Either way the path read back is not the path git named,
+    # so the file goes unread and the duplicate it shares goes unreported
+    # — the tool would say only that it cannot read a file. Paths are
+    # exact under -z, so they are never stripped.
+    for rel in sorted(part for part in listed.split("\0") if part):
         if rel.startswith(EXCLUDED):
             continue
         try:

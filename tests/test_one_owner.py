@@ -26,14 +26,18 @@ from fixture_tree import FixtureTree  # noqa: E402
 
 
 def fake_git(listing, calls=None):
-    """A fake cli.runner("git") answering one `ls-files` listing, so no
-    case here shells out. `listing` is the newline-joined paths git
-    tracks; `calls` collects the argument lists it was asked for."""
+    """A fake cli.runner("git") answering one `ls-files -z` listing, so no
+    case here shells out. `listing` is the paths git tracks — a newline
+    string where that reads best, or a sequence when a path contains a
+    newline itself — and the fake emits git's NUL-terminated wire form
+    either way; `calls` collects the argument lists it was asked for."""
+    paths = listing.split("\n") if isinstance(listing, str) else listing
+    wire = "".join(f"{path}\0" for path in paths if path)
+
     def run(args):
         if calls is not None:
             calls.append(list(args))
-        return subprocess.CompletedProcess(args, 0, stdout=listing,
-                                           stderr="")
+        return subprocess.CompletedProcess(args, 0, stdout=wire, stderr="")
     return run
 
 
@@ -366,7 +370,7 @@ class TestSourceFiles(unittest.TestCase):
     a filesystem walk is WRONG here, and wrong in the one way that would
     discredit the tool on its first run."""
 
-    ARGS = ["ls-files", "--", "*.py"]
+    ARGS = ["ls-files", "-z", "--", "*.py"]
 
     def tree(self, tmp, **files):
         fixture = FixtureTree(tmp)
@@ -414,6 +418,30 @@ class TestSourceFiles(unittest.TestCase):
             files, problems = source_files(root, run=fake_git(listing))
         self.assertEqual(problems, [])
         self.assertEqual([path for path, _ in files], ["cli.py"])
+
+    def test_the_listing_is_nul_separated_so_no_path_is_mangled(self):
+        """git's default listing C-quotes any path with non-ASCII bytes —
+        `caf\u00e9.py` comes back as the literal `"caf\\303\\251.py"` — and
+        cannot express one containing a newline at all. Splitting that on
+        newlines turns a tracked file into a path that does not exist, so
+        the duplicate it shares is never reported and the tool says only
+        that it cannot read a file. `-z` is what makes the universe git's,
+        verbatim."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp, **{"caf\u00e9.py": "A = 'x'\n",
+                                     "plain.py": "A = 'x'\n"})
+            files, problems = source_files(
+                root, run=fake_git("caf\u00e9.py\nplain.py\n"))
+        self.assertEqual(problems, [])
+        self.assertEqual([path for path, _ in files],
+                         ["caf\u00e9.py", "plain.py"])
+
+    def test_a_path_containing_a_newline_stays_one_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp, **{"od\nd.py": "A = 'x'\n"})
+            files, problems = source_files(root, run=fake_git(["od\nd.py"]))
+        self.assertEqual(problems, [])
+        self.assertEqual([path for path, _ in files], ["od\nd.py"])
 
     def test_files_come_back_sorted_by_path_with_their_source(self):
         with tempfile.TemporaryDirectory() as tmp:
