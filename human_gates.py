@@ -57,8 +57,31 @@ def _parse_ts(iso):
     return datetime.fromisoformat(iso.replace("Z", "+00:00"))
 
 
+def _parses(value):
+    """Whether _parse_ts would accept this — the module's one answer to
+    "is this a timestamp", asked once at admission so nothing downstream
+    has to ask it again. The isinstance test is not decoration: `value`
+    is a field of a decoded API response, and a non-string one would
+    fail inside _parse_ts with an AttributeError from .replace rather
+    than a parse error, which is a worse thing to depend on."""
+    if not isinstance(value, str):
+        return False
+    try:
+        _parse_ts(value)
+    except ValueError:
+        return False
+    return True
+
+
 def waited_seconds(start, end):
-    """Whole seconds between two GitHub timestamps."""
+    """Whole seconds between two GitHub timestamps.
+
+    Both are ISO-8601 by precondition, established by label_events,
+    which admits no event carrying a timestamp _parse_ts cannot read.
+    So this raises only for a programming error at a future call site
+    that sources its timestamps somewhere else — do not add a handler
+    here, which would put a second owner on a policy the admission gate
+    already holds."""
     return int((_parse_ts(end) - _parse_ts(start)).total_seconds())
 
 
@@ -66,7 +89,11 @@ def label_events(timeline):
     """[(timestamp, 'labeled'|'unlabeled', label name)] from a GitHub
     issue timeline, in timeline (chronological) order. Anything that is
     not a well-formed label flip is not this module's business; an
-    unusable timeline is the fetcher's problem, never this walk's."""
+    unusable timeline is the fetcher's problem, never this walk's.
+
+    Well-formed means all three: a label flip, carrying a name, and
+    carrying a timestamp that reads as one. The third clause is what
+    lets every function downstream take ISO-8601 as given."""
     events = []
     for event in timeline:
         kind = event.get("event")
@@ -74,7 +101,7 @@ def label_events(timeline):
             continue
         name = (event.get("label") or {}).get("name")
         ts = event.get("created_at")
-        if name and ts:
+        if name and _parses(ts):
             events.append((ts, kind, name))
     return events
 
