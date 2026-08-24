@@ -92,8 +92,10 @@ it would newly require a waiver line from every PR that quotes an
 identifier without claiming one, which obliges assembler- and
 routine-generated bodies exactly as the `Implements: WO-####` trailer
 does. That is the boundary `defect.md` drew for this run, and crossing it
-here would cross it silently. Seeded for a run that can decide it, where
-the honest question is whether "quoted material" has earned a second
+here would cross it silently. Owed to Operate as a seed for a run that can
+decide it — this run stops at Ship, so the seed is debt recorded in
+`release.md`, not a line already in `docs/backlog.md`. The honest question
+there is whether "quoted material" has earned a second
 caller and belongs in the knowledge plane beside `WO_TOKEN` — CLAUDE.md's
 bar is multiple real callers AND observed divergence, and F2 is the
 divergence half arriving.
