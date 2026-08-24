@@ -269,12 +269,17 @@ class TestSameValue(unittest.TestCase):
                          [("'x'", ["gates.A", "knowledge_plane.B"])])
 
 
-# The miss-3 shape from defect.md's evidence table, still live at HEAD as
-# this run's acceptance fixture: cli.label_names (622e2bf, 2026-08-10,
-# #247) and the labels walk that became plane_drift.issue_lifecycle
-# (f38fbdd, 2026-08-10, #204). Two genuinely different walks — one drops
-# a nameless label at extraction, the other admits None and filters a
-# line later — over the same two keys.
+# The miss-3 shape from defect.md's evidence table, frozen as this pass's
+# acceptance fixture: cli.label_names (622e2bf, 2026-08-10, #247) and the
+# labels walk that became plane_drift.issue_lifecycle (f38fbdd,
+# 2026-08-10, #204). Two genuinely different walks — one drops a nameless
+# label at extraction, the other admits None and filters a line later —
+# over the same two keys.
+#
+# Closed in the tree by f79410e (#334): issue_lifecycle now reads through
+# the seam. These strings do NOT move with it. They are the historical
+# shape the pass must keep finding, and rebasing them onto folded code
+# would delete the evidence that it can.
 LABEL_NAMES = """def label_names(payload):
     labels = payload.get("labels") if isinstance(payload, dict) else payload
     if not isinstance(labels, list):
@@ -785,9 +790,10 @@ class TestHistoricalInstances(unittest.TestCase):
 
     # Miss 3 — cli.label_names (622e2bf, 2026-08-10, #247) and
     # sweeps.issue_lifecycle (f38fbdd, 2026-08-10, #204), created the same
-    # day. STILL OPEN at HEAD: ADR-0060 moved the copy into
-    # plane_drift.issue_lifecycle unchanged, which is why it is this run's
-    # acceptance fixture rather than its cleanup target.
+    # day. ADR-0060 moved the copy into plane_drift.issue_lifecycle
+    # without changing a byte, which is why it was the one-owner run's
+    # acceptance fixture rather than its cleanup target. Closed by f79410e
+    # (#334), the run this pass's own standing output prompted.
     MISS_3_CLI = ('# cli.py:349 at fbfa3c3 — created 622e2bf (#247)\n'
                   + LABEL_NAMES)
     MISS_3_SWEEPS = ('# sweeps.py:220 at fbfa3c3 — created f38fbdd (#204)\n'
