@@ -83,6 +83,20 @@ class TestIssueLifecycle(unittest.TestCase):
         self.assertEqual(plane_drift.issue_lifecycle(
             {"number": 1, "labels": []}), [])
 
+    def test_an_entry_that_is_not_an_object_at_all_is_no_labels(self):
+        """The one widening the fold accepts, asserted rather than left to
+        be discovered. The hand-rolled walk raised AttributeError here;
+        the seam treats a bare list as the labels array and anything else
+        as empty. `reconcile_drift` drops a non-dict entry with a `drift:`
+        problem before either walk runs (plane_drift.py:68-72), so no
+        caller can reach this — the change removes a crash and adds no
+        silence."""
+        self.assertEqual(plane_drift.issue_lifecycle(None), [])
+        self.assertEqual(plane_drift.issue_lifecycle("wo:merged"), [])
+        self.assertEqual(
+            plane_drift.issue_lifecycle([{"name": "wo:merged"}]),
+            ["wo:merged"])
+
 
 class TestReconcileDrift(unittest.TestCase):
     """ADR-0032's cross-plane check. The rows are authoritative in every
