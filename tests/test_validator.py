@@ -603,6 +603,30 @@ class TestRunLifecycle(unittest.TestCase):
                 "--add-label", "wo:merged",
                 "--remove-label", "wo:in-progress"]])
 
+    def test_a_fenced_citation_that_resolves_still_flips_the_label(self):
+        """The passing direction, pinned before the skip gate narrows.
+
+        Resolution reads the WHOLE body and keeps the work orders the PR
+        actually closes, so a token quoted inside a fenced block still
+        flips its issue when the Closes line backs it. The gate that
+        judges a body's tokens a claim is reached only AFTER resolution
+        fails, so nothing here may change when it narrows."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh(labels=["wo:needs-review", "size:M"])
+            body = ("Fixes the row the detector printed:\n\n"
+                    "```\n"
+                    "- [x] **WO-0004** (PRD-0001) the row it printed\n"
+                    "```\n\n"
+                    "Closes #109\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body), run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:merged",
+                "--remove-label", "wo:needs-review"]])
+
     def test_a_nameless_label_entry_is_dropped_not_compared(self):
         # gh can answer `issue view` with a label entry carrying no usable
         # name. The seam (cli.label_names) drops it, so the lifecycle

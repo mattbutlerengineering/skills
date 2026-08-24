@@ -1,6 +1,6 @@
 # Both lifecycle legs treat an uncited PR the same way
 
-- Status: accepted
+- Status: amended by ADR-0062
 - Date: 2026-08-22
 
 The work-order lifecycle has two label-writing legs, and until now they
