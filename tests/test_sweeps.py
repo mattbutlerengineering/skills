@@ -490,6 +490,26 @@ class TestFileIssues(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(keys, {"sentry:PROJ-7K"})
 
+    def test_an_open_issue_wins_over_a_closed_one_carrying_the_same_key(self):
+        """The state this fix CREATES. Once a released detector re-files,
+        the board carries the same singleton key twice — the old closed
+        intake and the new open one — and the open one must win, or the
+        detector re-files on every sweep while its issue sits open.
+
+        Order-independent by construction (a set union), and pinned in both
+        orders so a later rewrite to a dict keyed by intake-key, or a
+        `break` on the first match, cannot quietly let the closed issue
+        decide."""
+        closed = {"number": 173, "state": "CLOSED",
+                  "body": "intake-key: sweep:label-drift\n"}
+        opened = {"number": 400, "state": "OPEN",
+                  "body": "intake-key: sweep:label-drift\n"}
+        for order in ([closed, opened], [opened, closed]):
+            with self.subTest(first=order[0]["state"]):
+                keys, problems = sweeps.known_keys(run=gh(issues=order))
+                self.assertEqual(problems, [])
+                self.assertEqual(keys, {"sweep:label-drift"})
+
     def test_only_the_literal_closed_stops_suppression(self):
         """A listing quirk must not turn the sweep into a duplicate
         factory. If `state` stopped arriving, EVERY key would stop
