@@ -213,6 +213,16 @@ def _maintenance_breakdown(run_dir):
     return run_dir / name
 
 
+def breakdown_path(run_dir):
+    """Where this run's implement checkboxes live: breakdown.md, except
+    a re-entry: implement maintenance run keeps them inline in
+    defect.md (the breakdown-placement rule, ADR-0025)."""
+    run_dir = Path(run_dir)
+    if is_maintenance_run(run_dir):
+        return _maintenance_breakdown(run_dir)
+    return run_dir / "breakdown.md"
+
+
 def _stage_complete(stage, artifact, run_dir):
     if stage == "implement":
         return _all_boxes_checked(run_dir / "breakdown.md")

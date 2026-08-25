@@ -11,7 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from protocol import checkbox_progress, run_ref  # noqa: E402
+from protocol import breakdown_path, checkbox_progress, run_ref  # noqa: E402
+
+MAINTENANCE = ROOT / "tests" / "fixtures" / "maintenance-orientation"
 
 
 class TestCheckboxProgress(unittest.TestCase):
@@ -40,6 +42,31 @@ class TestCheckboxProgress(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = self.write(tmp, "prose only\n")
             self.assertEqual(checkbox_progress(path), (0, 0))
+
+
+class TestBreakdownPath(unittest.TestCase):
+    """The breakdown-placement rule, public (WO-0047 deviation): inline
+    in defect.md for a re-entry: implement maintenance run, breakdown.md
+    everywhere else."""
+
+    def maintenance_run(self, case):
+        fixes = MAINTENANCE / case / "docs" / "fixes"
+        runs = sorted(p for p in fixes.iterdir() if p.is_dir())
+        assert len(runs) == 1
+        return runs[0]
+
+    def test_feature_runs_keep_breakdown_md(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp)
+            self.assertEqual(breakdown_path(run), run / "breakdown.md")
+
+    def test_implement_re_entry_keeps_boxes_in_defect_md(self):
+        run = self.maintenance_run("defect-implement-unchecked")
+        self.assertEqual(breakdown_path(run), run / "defect.md")
+
+    def test_architect_re_entry_uses_breakdown_md(self):
+        run = self.maintenance_run("defect-architect-no-architecture")
+        self.assertEqual(breakdown_path(run), run / "breakdown.md")
 
 
 class TestRunRef(unittest.TestCase):
