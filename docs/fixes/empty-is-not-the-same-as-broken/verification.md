@@ -91,10 +91,11 @@ Detector E reports nothing at the tip — see the battery. **PASS.**
 
 ## C6 — the battery
 
-Dedicated worktree at the branch tip, `git status --porcelain` empty:
+Re-run after C7's fix; the numbers below are the tip's, not the pre-review
+ones. Dedicated worktree, `git status --porcelain` empty at measurement:
 
 ```
-Ran 1348 tests in 15.216s
+Ran 1350 tests in 15.250s
 
 OK
 lint: 0 problem(s) across 24 skills
@@ -102,7 +103,7 @@ gates: 0 problem(s)
 selftest: ok
 ```
 
-Four tests added against the base's 1344, none removed or edited. The free
+Six tests added against the base's 1344, none removed or edited. The free
 pre-pass is unchanged from the base — no new group, and none removed, which
 is expected since this run folds nothing:
 
@@ -115,6 +116,36 @@ is expected since this run folds nothing:
 
 **PASS.**
 
+## C7 — a truncated listing is named too
+
+Added by the Review stage, which found the third partial harvest still
+unnamed (`breakdown.md` Notes, 2026-08-25). A listing cut at its window is
+a *successful* read in `cli.gh_read`'s contract, so nothing upstream of the
+body treats it as a gap. Driven with real full windows — the convention
+`test_gate_digest` uses, no patched constants.
+
+**Before I5**, both listings full, the body was byte-identical to a healthy
+harvest:
+
+```
+Sources: gate rejections from 1 of 1 issue timelines; change requests from the PR listing.
+```
+
+**After**, one listing cut and then both:
+
+```
+Sources: gate rejections from 1 of 1 issue timelines; change requests from the PR listing. TRUNCATED: the PR listing came back full, so older entries were never read.
+```
+
+```
+Sources: gate rejections from 1 of 1 issue timelines; change requests from the PR listing. TRUNCATED: the issue listing, the PR listing came back full, so older entries were never read.
+```
+
+Both tests assert `gh_read`'s exact problem string *as well as* the body,
+with `assertEqual` on the whole problem list — so a fix that moved the
+truncation out of the problem list and into the body only would fail them,
+the same guard C2 carries. **PASS.**
+
 ## What was NOT verified
 
 - **The mine was never run against the live repo.** The brief forbids any
@@ -126,6 +157,12 @@ is expected since this run folds nothing:
   the module composes, not what GitHub renders — the line is plain text with
   no markdown constructs, so the risk is small, but it is untested and
   saying otherwise would be a lie.
+- **No listing was ever cut at the real window.** C7's full windows are
+  1000 fake entries the injected `gh` returns in one answer; the live tool
+  would reach that number across `--paginate`d pages against a repo with
+  more than a thousand open-or-closed issues. What is verified is that
+  `gh_read`'s `truncated` flag reaches the body, not that GitHub sets it at
+  the boundary anyone expects.
 - **The wording is not pinned character-for-character** in the run-level
   tests, deliberately: they assert the distinction and the counts, so
   rewording the line stays cheap while losing the distinction stays
