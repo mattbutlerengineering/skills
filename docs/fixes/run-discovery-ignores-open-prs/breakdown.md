@@ -25,7 +25,7 @@ Nothing mirrored, so no manifest.
 
 ## Milestone 1 — the rule has an owner and cannot rot
 
-- [ ] **I1 — the protocol states the rule.**
+- [x] **I1 — the protocol states the rule.**
   A `### Work already in flight` subsection immediately after the **Run
   discovery** paragraph in *Runs and run directories*: run discovery sees
   the working tree; finished work elsewhere sits on a branch behind an
