@@ -72,6 +72,7 @@ _REMOTE = re.compile(
 # the same number, so the two can no longer drift apart.
 LIST_WINDOW = 1000
 
+
 def repo_set(argv_paths, config_path=None):
     """(repo paths, problems): the checkouts the console observes. Argv
     wins; an absent config with no argv is the "no repos configured"
