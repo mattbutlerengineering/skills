@@ -195,8 +195,12 @@ def record(root, wo, run_id, model, tokens, cost, outcome, at):
     if problems:
         return [f"bg: refusing to record {wo}: {problem}"
                 for problem in problems]
-    if any(existing.get("wo") == wo and existing.get("run_id") == run_id
-           for existing in entries):
+    # Through the seam, never a second copy: cost_ledger.row_key owns
+    # ADR-0041's identity, and gate_digest's dedup already reads it this
+    # way. Subscripting is safe here because read() returns validated rows
+    # and the problem branch above already returned.
+    recorded = {cost_ledger.row_key(existing) for existing in entries}
+    if cost_ledger.row_key(row) in recorded:
         return [f"bg: refusing to record {wo}: run_id {run_id!r} is already"
                 " in the ledger — recording it twice would double-count the"
                 " run against the monthly cap"]

@@ -18,7 +18,7 @@ assumptions: ["One milestone, three items. The fold is one comparison, but the c
   worktree — the mutation that `defect.md` recorded as invisible to all 47
   budget_guard tests.
 
-- [ ] **I2 — fold the comparison.** Replace
+- [x] **I2 — fold the comparison.** Replace
   `existing.get("wo") == wo and existing.get("run_id") == run_id` with a set
   of `cost_ledger.row_key(existing)` membership-tested against
   `cost_ledger.row_key(row)`, per architecture D1.
