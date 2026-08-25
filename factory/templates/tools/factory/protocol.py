@@ -232,6 +232,53 @@ def next_stage(run_dir):
     return "complete"
 
 
+def _stage_skipped(stage, artifact, run_dir):
+    """Completion excused by rule rather than by artifact: the ux:
+    conditional, with no ux.md actually written."""
+    return (stage == "ux-design"
+            and not (run_dir / artifact).is_file()
+            and _ux_skipped(run_dir))
+
+
+def _maintenance_stage_skipped(stage, artifact, run_dir):
+    """Completion excused by rule rather than by artifact: re-entry:
+    implement drops the architect + decompose chain (ADR-0025), unless
+    the artifact was written anyway."""
+    return (stage in ("architect", "decompose")
+            and not (run_dir / artifact).is_file()
+            and not _re_entry_architect(run_dir))
+
+
+def stage_states(run_dir):
+    """Every stage of this run's own ladder, in order, with its state:
+    done | current | ahead | skipped. The full form of the next_stage
+    walk — the one "current" row IS next_stage (a complete run has no
+    current row), "skipped" marks completion excused by rule rather
+    than by artifact, and a stage after current whose artifact exists
+    anyway reads "done" so a gapped run shows its gap."""
+    run_dir = Path(run_dir)
+    if is_maintenance_run(run_dir):
+        rows = MAINTENANCE_STAGE_ARTIFACTS
+        complete = _maintenance_stage_complete
+        skipped = _maintenance_stage_skipped
+    else:
+        rows = STAGE_ARTIFACTS
+        complete = _stage_complete
+        skipped = _stage_skipped
+    current_seen = (run_dir / "retro.md").is_file()
+    states = []
+    for stage, artifact in rows:
+        if complete(stage, artifact, run_dir):
+            state = ("skipped" if skipped(stage, artifact, run_dir)
+                     else "done")
+        elif not current_seen:
+            state, current_seen = "current", True
+        else:
+            state = "ahead"
+        states.append((stage, state))
+    return states
+
+
 # The seed-backlog entry grammar (ADR-0029): docs/backlog.md is an
 # advisory bullet list, one seed per line, each carrying its origin
 # run-ref and optionally the run that claimed it. Only `- ` bullets are

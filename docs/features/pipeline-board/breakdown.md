@@ -14,7 +14,7 @@ decompose; the checkboxes are the state).
 
 ## Milestone A: Facts stated (board.py emits a correct model for this repo, fully tested)
 
-- [ ] **WO-0045** protocol.stage_states — the full-ladder accessor — size:S, blocked by: — (PRD-0004 §Success criteria)
+- [x] **WO-0045** protocol.stage_states — the full-ladder accessor — size:S, blocked by: — (PRD-0004 §Success criteria)
   - Accept: `stage_states(run_dir)` returns each run's own ordered ladder with states done|current|ahead|skipped, honoring the `ux:` conditional, `re-entry:` depth, and the Implement checkbox rule; a pinned test asserts `next_stage(run_dir)` equals the first non-done row across feature/maintenance/complete fixtures; unittest suite green.
 - [ ] **WO-0046** protocol.checkbox_progress + run_ref (lifted from dashboard) — size:S, blocked by: — (PRD-0004 §Success criteria)
   - Accept: `checkbox_progress(path)` returns (checked, total) with (0, 0) for a missing file, using the seam's own checkbox grammar; `run_ref(root, run_dir)` returns product / feature:<slug> / maintenance:<slug>; `dashboard._run_ref` is replaced by a call to it with dashboard tests unchanged and green; the one-owner pre-pass reports no new group for the changed files.
