@@ -52,7 +52,7 @@ Nothing mirrored, so no manifest.
   exact strings through the public checker, and the pre-existing
   `test_lint` cases pass unedited.
 
-- [ ] **I3 — `capture` recites it.**
+- [x] **I3 — `capture` recites it.**
   At the two moments capture starts a run: seed claim (step 2) and
   tracker-intake seeding (step 3), before `defect.md` is written.
   *Acceptance:* the capture problem string clears, the idea one does not —
@@ -87,6 +87,21 @@ written wrong, not the change; recorded rather than silently reworded.
 The other eleven failures observed at this step needed no edit at all:
 they were the clean tree failing through `recital_body`, and teaching that
 one helper cleared all of them.
+
+**2026-08-25 — the pin failed on a correct recital, and the pin was
+wrong.** `capture`'s new step names the section as *Work already in
+flight*, and lint still reported it missing: these documents are
+hard-wrapped near 72 columns, so the phrase landed across a line break and
+a raw substring test could not see it. The recitals beside it in the same
+checker pin single tokens (`` `defect.md` ``, a stage name) which never
+wrap, so the problem is specific to pinning a four-word phrase.
+
+Fixed in the checker rather than in the prose. Rewording the skill to keep
+the phrase on one line would have worked exactly once and left the next
+author a trap that fires on a correct edit; normalizing whitespace before
+the comparison pins the fact instead of the formatting.
+`test_a_recital_that_wraps_still_counts` carries the real wrap from
+`capture` so the case cannot regress into a cosmetic pin.
 
 **2026-08-25 — pre-existing over-length lines, flagged not fixed.**
 `lint.py:502` (80 columns) and `tests/test_lint.py:622/635/636/756`

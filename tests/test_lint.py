@@ -387,6 +387,21 @@ class TestSkillRecitals(CheckerTreeTest):
              f"{lint.IN_FLIGHT_HEADING!r} check, which is where a run "
              "that is already open in review gets caught"])
 
+    def test_a_recital_that_wraps_still_counts(self):
+        """Found by the pin failing on a correct recital. These documents
+        are hard-wrapped near 72 columns, so a four-word phrase lands
+        across a line break often — and a raw substring test would call
+        that a missing rule, which is pinning the formatting and calling
+        it the fact. The wrap here is the real one from capture."""
+        self.seed("capture",
+                  "1. Look over the work awaiting review — the protocol's"
+                  " *Work\n   already in flight* section.\n"
+                  "2. Record `re-entry: implement` or `re-entry: "
+                  "architect`.\n"
+                  "3. Write the artifact as `defect.md`.\n"
+                  "4. Hand off per the recorded re-entry.\n")
+        self.assertEqual(lint.check_skill_recitals(self.root), [])
+
     def test_a_mid_spine_stage_owes_no_recital(self):
         """The discriminating half. A stage that cannot start a run has
         nothing to check — it already has artifacts to orient from — so a

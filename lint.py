@@ -183,8 +183,14 @@ def _in_flight_problems(label, text):
     Pins the section name and nothing else. Whether an agent actually
     looked at the open review work is not a thing a linter can know, and a
     checker that implied otherwise would be manufacturing exactly the
-    false clean result that section exists to forbid."""
-    if IN_FLIGHT_HEADING.lower() in text.lower():
+    false clean result that section exists to forbid.
+
+    Whitespace is normalized before the comparison, unlike the artifact
+    and stage recitals beside it. Those pin single tokens; this pins four
+    words, and every one of these documents is hard-wrapped near 72
+    columns — so a raw substring test fails a correct recital that happens
+    to wrap, which is pinning the formatting and calling it the fact."""
+    if IN_FLIGHT_HEADING.lower() in " ".join(text.lower().split()):
         return []
     return [f"{label} never names the protocol's "
             f"{IN_FLIGHT_HEADING!r} check, which is where a run that is "
