@@ -21,7 +21,17 @@ the user's head at this stage, so this skill interviews — it does not draft.
    protocol's seed-backlog section — and record the seed as the origin in
    `idea.md`.
 
-3. **Interview.** One question at a time, each with your recommended answer
+3. **Check what is already in flight.** Whenever this run starts from a
+   backlog seed — and before `idea.md` exists — look over the work already
+   awaiting review and ask whether one of them does this: the protocol's
+   *Work already in flight* section. Run discovery sees the working tree,
+   and a run someone else has already built sits on a branch where no
+   directory listing reaches it. Say which of the three outcomes happened;
+   a check that could not run is reported as that, never as a clean one. A
+   greenfield product run with no review surface to read satisfies this by
+   saying so.
+
+4. **Interview.** One question at a time, each with your recommended answer
    when you have one. Keep going until every section of the template can be
    filled with something concrete. Cover at least:
    - What is the problem, stated from the sufferer's perspective?
@@ -50,10 +60,10 @@ the user's head at this stage, so this skill interviews — it does not draft.
    of existence. Where the skill is not installed, the interview alone is a
    complete result.
 
-4. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
+5. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `idea.md`, with protocol frontmatter.
 
-5. **Hand off.** State that the next stage is PRD and how to get there
+6. **Hand off.** State that the next stage is PRD and how to get there
    (the `prd` skill, or the router).
 
 ## Rules

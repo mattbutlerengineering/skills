@@ -59,7 +59,7 @@ Nothing mirrored, so no manifest.
   observed as one problem, not zero, which is what proves the pin
   discriminates rather than merely passing.
 
-- [ ] **I4 — `idea` recites it.**
+- [x] **I4 — `idea` recites it.**
   At its seed-claim moment (step 2).
   *Acceptance:* `python3 lint.py` reports `0 problem(s) across 24 skills`,
   the full battery is green, and `python3 one_owner.py` adds no group.
