@@ -70,14 +70,13 @@ _MARKER = re.compile(r"^#\s*one-owner:\s*"
                      r"(?P<counterpart>[A-Za-z_]\w*\.[A-Za-z_]\w*)\s*"
                      r"\((?P<adr>ADR-\d{4})\)\s*—(?P<reason>.*)$")
 
-# What one module states, at one place. `identity` is the grouping key
-# and `lineno` is the definition's own line — the join key a marker
-# above it is attached by.
-# `lineno` and `attach` are two different questions about one definition.
-# `lineno` is where a problem string points a reader — the `def` or the
-# assignment. `attach` is where a comment block written above the
-# definition ends, which for a decorated one is its first decorator. They
-# are equal for everything else.
+# What one module states, at one place. `identity` is the grouping key.
+# `lineno` and `attach` answer two different questions about one
+# definition: `lineno` is the definition's own line, where a problem
+# string points a reader; `attach` is where a comment block written above
+# the definition ends, and it is the join key a marker is attached by.
+# For a decorated definition `attach` is its first decorator's line; for
+# everything else the two are equal.
 FactSite = namedtuple("FactSite",
                       ("kind", "path", "lineno", "attach", "name",
                        "identity"))
@@ -215,13 +214,22 @@ def defined_names(path, source):
     that merely dropped below the fact floor — which is what a fold does
     to one side of a duplicate.
 
-    Reach is matched to what can BECOME a fact site, so the two answers
-    cannot disagree: module-level assignments from `tree.body`, because
-    that is the only place `same-value` looks; every function and class
-    from `ast.walk`, because `same-keys` walks too, so a nested function
-    can be a fact site and must not read as undefined. A class is
-    collected although no class is ever a fact site — a marker naming one
-    should hear "states no fact", not "does not exist".
+    Reach is a SUPERSET of `fact_sites`', never a subset — a name it
+    misses that `fact_sites` finds would be reported as deleted while the
+    pass is looking straight at it. Module-level assignments come from
+    `tree.body`, the only place `same-value` looks; every function and
+    class comes from `ast.walk`, because `same-keys` walks too, so a
+    nested definition can be a fact site and must not read as undefined.
+    Classes are collected although no class is ever a fact site — a
+    marker naming one should hear "states no fact", not "does not exist".
+
+    Being a superset is not the same as being complete, and the gap is
+    named rather than hidden: a module-level `NAME: int = 1`
+    (`ast.AnnAssign`) is collected by neither this function nor
+    `fact_sites`, so a marker naming one still gets "not defined in this
+    repo". Zero root modules bind a name that way today. Closing it means
+    teaching BOTH readers about the node — widening only this one would
+    make the pair more asymmetric, not less.
 
     Silent on source that will not parse: `fact_sites` reports that
     module, and one report of a broken file is enough.

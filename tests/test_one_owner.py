@@ -364,7 +364,6 @@ class TestSameKeys(unittest.TestCase):
         self.assertEqual([(s.kind, s.lineno, s.name) for s in found],
                          [("same-value", 1, "LABEL"), ("same-keys", 4, "f")])
 
-
     def test_a_decorated_definition_carries_both_of_its_lines(self):
         """`ast.FunctionDef.lineno` is the `def` line. A reader looking at
         the page sees the definition start at its first decorator, and a
@@ -384,6 +383,7 @@ class TestSameKeys(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual([(s.lineno, s.attach, s.name) for s in found],
                          [(1, 1, "f"), (1, 1, "LABEL")])
+
 
 class TestDefinedNames(unittest.TestCase):
     """What a module NAMES, which is a different question from what it
