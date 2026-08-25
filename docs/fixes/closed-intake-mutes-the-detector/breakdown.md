@@ -29,21 +29,21 @@ one, while a `sentry:` key comes back from both.
   - a key on an issue whose `state` is absent, `None`, or any string other
     than `"CLOSED"` → in the set.
 
-- [ ] **I2 — the untouched contracts still hold.** *(blocked by I1)*
+- [x] **I2 — the untouched contracts still hold.** *(blocked by I1)*
   *Acceptance:* a listing failure still returns `(None, problems)`; a full
   `LIST_WINDOW` listing still reports its existing problem string with
   byte-identical wording; `file_issues`' cap arithmetic and its
   `screen`-then-dedupe order are unchanged; every pre-existing case in
   `tests/test_sweeps.py` passes untouched.
 
-- [ ] **I3 — nothing fires on this repo today.** *(blocked by I1)*
+- [x] **I3 — nothing fires on this repo today.** *(blocked by I1)*
   *Acceptance:* with the fix in place, both detectors still report clean —
   `python3 label_sync.py` prints `label-sync: 0 problem(s)` and
   `sweeps.reconcile(Path("."))` returns `([], [])` — so merging files no
   issue immediately. Evidence is the read-only detector calls only; no
   stage runs a sweep in a filing mode.
 
-- [ ] **I4 — battery green.** *(blocked by I1, I2)*
+- [x] **I4 — battery green.** *(blocked by I1, I2)*
   *Acceptance:* `python3 -m unittest discover tests` OK;
   `python3 lint.py` reports `lint: 0 problem(s)`; `python3 gates.py`
   reports `gates: 0 problem(s)` and `python3 gates.py --selftest` reports
@@ -60,3 +60,10 @@ behaviour — including `test_a_closed_issue_with_the_same_key_is_not_refiled`,
 which drives a `sentry:` key on a CLOSED issue and still expects
 suppression. That case passing unchanged is the Sentry half of the rule,
 pinned by a test this run did not write.
+
+**2026-08-25 — I4, the battery moved to a worktree.** Another session is
+writing untracked files into this checkout, one of which is an ADR with no
+index row, so `gates.py` — which reads the live tree — fails for reasons
+unrelated to this branch. Every battery measurement was taken in a detached
+worktree at the branch tip instead. Recorded in `verification.md` rather
+than worked around silently.
