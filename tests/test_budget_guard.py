@@ -384,6 +384,41 @@ class TestRecord(unittest.TestCase):
             self.assertEqual([row["run_id"] for row in self.lines(tree)],
                              ["r-1", "r-2"])
 
+    def test_the_refusal_agrees_with_the_seam_about_identity(self):
+        """record's double-count guard and cost_ledger.row_key must be the
+        SAME fact, not two facts that agree today.
+
+        Every other case here writes the identity out by hand, so all of
+        them keep passing if the seam's identity moves and record's copy
+        does not — measured: mutating row_key to a three-field identity
+        fails one cost_ledger test and none of this module's. This case asks
+        the seam what it thinks of the candidate row and asserts record
+        reached the same verdict, so a divergence lands here.
+
+        The candidate differs from the recorded row in `model` alone: under
+        today's (wo, run_id) identity the seam calls it a duplicate, and
+        under any identity that grows to include model it does not.
+        """
+        first = ("WO-0007", "r-1", "claude-sonnet-5", 4200, 1.25,
+                 "completed", "2026-08-07")
+        candidate = ("WO-0007", "r-1", "claude-haiku-4-5", 100, 0.1,
+                     "completed", "2026-08-07")
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.assertEqual(budget_guard.record(tree.root, *first), [])
+            recorded, problems = cost_ledger.read(tree.root)
+            self.assertEqual(problems, [])
+            seam_calls_it_a_duplicate = (
+                cost_ledger.row_key(cost_ledger.entry(*candidate))
+                == cost_ledger.row_key(recorded[0]))
+            refused = bool(budget_guard.record(tree.root, *candidate))
+            self.assertEqual(
+                refused, seam_calls_it_a_duplicate,
+                "record and cost_ledger.row_key disagree about whether"
+                f" {candidate[:3]} is already in the ledger")
+            self.assertEqual(len(self.lines(tree)),
+                             1 if seam_calls_it_a_duplicate else 2)
+
     def test_an_unparseable_ledger_fails_closed(self):
         """Appending spend to a ledger that cannot be summed would
         undercount silently — the failure this path exists to end."""

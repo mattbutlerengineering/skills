@@ -9,7 +9,7 @@ assumptions: ["One milestone, three items. The fold is one comparison, but the c
 
 ## Milestone 1 — the copy is gone and the coupling is pinned
 
-- [ ] **I1 — pin the coupling before touching the code.** Add a
+- [x] **I1 — pin the coupling before touching the code.** Add a
   `tests/test_budget_guard.py` case that reaches `record`'s dedup through
   `cost_ledger.row_key` rather than through a hand-written `(wo, run_id)`
   pair, so a change to the seam's identity reaches this suite.
