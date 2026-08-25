@@ -141,3 +141,13 @@ local change. Diagnostic 1's is not: `markers` cannot see decorators without
 a shape that carries them, and the shape it reads from,
 `FactSite`, is pinned by `tests/test_one_owner.py:968` as architecture.md's
 Data model. Changing a pinned shape is a decision, so it gets written down.
+
+**2026-08-25 — the base moved, and the baseline above moved with it.** This
+branch was cut from the tip of the still-open `one-labels-walk` branch
+(6f51472) rather than from `main`, which would have stacked this PR on that
+one. Ship rebased it onto `origin/main` (622e7c0) so it stands alone. The
+eight findings above were measured at the old base and are left as the
+record of what capture actually saw; on `origin/main` the pass reports
+**nine**, the extra one being the `cli.label_names` / `plane_drift.issue_lifecycle`
+group that PR #335 closes. `verification.md`'s C5 re-derives byte-identity
+against the new base, not this one.

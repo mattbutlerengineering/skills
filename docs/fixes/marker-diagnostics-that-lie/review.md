@@ -9,8 +9,8 @@ assumptions: ["Scaled as the protocol's Run scale section asks for a scoped main
 
 ## What was examined
 
-`git diff ef8f1e2..HEAD` — `one_owner.py` and `tests/test_one_owner.py`,
-216 insertions and 20 deletions, plus the run artifacts. Three passes:
+`git diff 5d993dc..HEAD` — `one_owner.py` and `tests/test_one_owner.py`,
+227 insertions and 23 deletions, plus the run artifacts. Three passes:
 correctness, design, security.
 
 Not re-examined: anything Verify already settled. Its evidence is the
@@ -82,8 +82,8 @@ than just the two spots:
 problems: none
 ```
 
-Line length was checked the same way — the same ten over-79-column lines
-exist at ef8f1e2 and at HEAD, so this run added none and touched none.
+Line length was checked the same way — ten over-79-column lines at
+5d993dc, ten at HEAD, so this run added none and touched none.
 
 ## F4 — `ast.AnnAssign` is invisible to both readers. **Minor. Deferred.**
 
@@ -177,13 +177,13 @@ parsed in the same loop, from the same git-derived universe.
 ## State after the fixes
 
 ```
-Ran 1366 tests in 15.511s
+Ran 1355 tests in 15.551s
 
 OK
 lint: 0 problem(s) across 24 skills
 gates: 0 problem(s)
 selftest: ok
-one_owner output STILL IDENTICAL to ef8f1e2
+one_owner output IDENTICAL to 5d993dc (10 lines)
 ```
 
 No critical findings. F1–F3 fixed in this run; F4 and F5 deferred with the

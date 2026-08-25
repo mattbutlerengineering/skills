@@ -95,4 +95,11 @@ the artifact records what the command actually says.
 
 **2026-08-24 — I5, byte-identity was diffed, not read.** The eight standing
 findings are compared as files (`diff before.txt after.txt`) against the
-tool built at ef8f1e2, not eyeballed. Both exit 1.
+tool built at this run's last pre-code commit, not eyeballed. Both exit 1.
+
+**2026-08-25 — the branch was rebased at Ship.** It had been cut from the
+tip of the open `one-labels-walk` branch rather than from `main`, which
+would have stacked this PR on that one. Rebased onto `origin/main`
+(622e7c0); the seven commits replayed with no conflict, every measurement
+in `verification.md` was re-derived against the new base, and the standing
+findings went from eight to nine because PR #335's fold is not in it.

@@ -2,7 +2,7 @@
 stage: verify
 run: maintenance:marker-diagnostics-that-lie
 date: 2026-08-25
-assumptions: ["Every block below is pasted from a command actually run on this branch at 432c41e, not written from expectation. Where a command's output disagreed with what the breakdown predicted, the artifact records the output and the deviation is logged in breakdown.md's Notes — never the other way round."]
+assumptions: ["Every block below is pasted from a command actually run on this branch at 9666b4d, not written from expectation. Where a command's output disagreed with what the breakdown predicted, the artifact records the output and the deviation is logged in breakdown.md's Notes — never the other way round."]
 ---
 
 # Verification: two marker diagnostics that state what is actually true
@@ -13,17 +13,17 @@ acceptance criteria in `breakdown.md` not already covered by one of them.
 ## What changed
 
 ```
- one_owner.py            |  98 +++++++++++++++++++++++++++++-----
+ one_owner.py            | 112 +++++++++++++++++++++++++++++++++------
  tests/test_one_owner.py | 138 +++++++++++++++++++++++++++++++++++++++++++++---
- 2 files changed, 216 insertions(+), 20 deletions(-)
+ 2 files changed, 227 insertions(+), 23 deletions(-)
 ```
 
 Eleven test cases added, none deleted:
 
 ```
-$ git diff ef8f1e2..HEAD -- tests/test_one_owner.py | grep -c "^+    def test_"
+$ git diff 5d993dc..HEAD -- tests/test_one_owner.py | grep -c "^+    def test_"
 11
-$ git diff ef8f1e2..HEAD -- tests/test_one_owner.py | grep -c "^-    def test_"
+$ git diff 5d993dc..HEAD -- tests/test_one_owner.py | grep -c "^-    def test_"
 0
 ```
 
@@ -107,24 +107,45 @@ site (falls through to the group check, whose two strings are unchanged).
 ## C5 — the standing findings are byte-identical. **PASS**
 
 Not eyeballed. `python3 one_owner.py` was captured on this branch and again
-with `one_owner.py` and its suite checked out at ef8f1e2, and the two files
-diffed:
+in a detached worktree at 5d993dc — this run's last commit before any code
+changed — and the two files diffed:
 
 ```
-after exit=1
-before exit=1
-=== diff before/after ===
-IDENTICAL (       9 lines)
+=== BEFORE (5d993dc): one_owner.py ===
+exit=1
+=== AFTER (HEAD) ===
+exit=1
+=== diff ===
+IDENTICAL (      10 lines)
 ```
 
-The nine lines are the eight standing findings and the summary, exactly as
-quoted in `defect.md`'s baseline section.
+The ten lines are the nine standing findings and the summary:
+
+```
+one-owner: assembler.py:54 READY_LABEL, validator.py:79 READY_LABEL and work_queue.py:39 READY_LABEL state the same value — one fact, one owner
+one-owner: budget_guard.py:167 record and cost_ledger.py:126 row_key read the same payload keys (run_id, wo) — one fact, one owner
+one-owner: budget_guard.py:55 CONTINUE and cost_report.py:44 CONTINUE state the same value — one fact, one owner
+one-owner: charter_replay.py:49 ROOT and trigger_eval.py:42 ROOT state the same value — one fact, one owner
+one-owner: cli.py:376 label_names and plane_drift.py:31 issue_lifecycle read the same payload keys (labels, name) — one fact, one owner
+one-owner: dashboard.py:198 _pr_by_issue, gate_digest.py:187 run_daily and rejection_mining.py:192 run_mine read the same payload keys (body, number, state) — one fact, one owner
+one-owner: eval_schema.py:182 validate and trigger_eval.py:303 score_case read the same payload keys (expected, id, kind, query) — one fact, one owner
+one-owner: gate_digest.py:91 LIST_ARGS and rejection_mining.py:54 ISSUE_ARGS state the same value — one fact, one owner
+one-owner: label_sync.py:69 plan, label_sync.py:115 sync and sweeps.py:269 ensure_labels read the same payload keys (color, description, name) — one fact, one owner
+one-owner: 9 problem(s)
+```
+
+This is nine, not the eight `defect.md` recorded at capture. Nothing
+regressed: capture measured against a base that already contained PR #335's
+fold, and Ship rebased this branch onto `origin/main`, where that fold is
+not yet merged and its group is still reported. `defect.md` carries a dated
+note saying so. The claim this criterion makes — *this run changes no
+finding* — is tested against the base the PR will actually merge into.
 
 ## C6 — the battery is green. **PASS**
 
 ```
 $ python3 -m unittest discover tests 2>&1 | tail -3
-Ran 1366 tests in 15.354s
+Ran 1355 tests in 15.551s
 
 OK
 $ python3 lint.py | tail -1
@@ -135,16 +156,21 @@ $ python3 gates.py --selftest | tail -1
 selftest: ok
 ```
 
-The count is measured at both ends, not inferred from the diff. At ef8f1e2,
+The count is measured at both ends, not inferred from the diff. At 5d993dc,
 in a detached worktree:
 
 ```
-Ran 1355 tests in 16.100s
+Ran 1344 tests in 16.010s
 
 OK
 ```
 
-1355 → 1366 is the eleven new cases, none removed.
+1344 → 1355 is the eleven new cases, none removed:
+
+```
+$ echo "+$(git diff 5d993dc..HEAD -- tests/test_one_owner.py | grep -c '^+    def test_') -$(git diff 5d993dc..HEAD -- tests/test_one_owner.py | grep -c '^-    def test_')"
++11 -0
+```
 
 `gates.py --selftest` prints `selftest: ok`, not the `gates: 0 problem(s)`
 the breakdown's acceptance criterion predicted; the criterion was written
@@ -183,19 +209,19 @@ fact_sites already reports the broken module. A second report ... ok
 runs each, `one_owner.py` over this repo:
 
 ```
-=== before (ef8f1e2), 3 runs, user time ===
-python3 one_owner.py > /dev/null  0.76s user 0.16s system 15% cpu 6.055 total
-python3 one_owner.py > /dev/null  0.22s user 0.03s system 92% cpu 0.271 total
-python3 one_owner.py > /dev/null  0.22s user 0.03s system 94% cpu 0.255 total
-=== after (branch), 3 runs, user time ===
-python3 one_owner.py > /dev/null  0.27s user 0.02s system 96% cpu 0.310 total
-python3 one_owner.py > /dev/null  0.28s user 0.03s system 90% cpu 0.346 total
-python3 one_owner.py > /dev/null  0.28s user 0.03s system 94% cpu 0.326 total
+=== before (5d993dc), 3 runs ===
+python3 one_owner.py > /dev/null  0.22s user 0.02s system 96% cpu 0.249 total
+python3 one_owner.py > /dev/null  0.22s user 0.02s system 97% cpu 0.239 total
+python3 one_owner.py > /dev/null  0.22s user 0.02s system 97% cpu 0.242 total
+=== after (HEAD), 3 runs ===
+python3 one_owner.py > /dev/null  0.27s user 0.02s system 97% cpu 0.304 total
+python3 one_owner.py > /dev/null  0.27s user 0.02s system 97% cpu 0.297 total
+python3 one_owner.py > /dev/null  0.27s user 0.02s system 97% cpu 0.293 total
 ```
 
-Steady state 0.22s → 0.28s user. The first "before" run is a cold cache and
-is quoted rather than dropped — dropping the inconvenient sample is how a
-benchmark starts lying.
+0.22s → 0.27s user, 0.24s → 0.30s wall, tight across three runs each. That
+is the cost of the second `ast.parse` per module, on a pass that runs on
+demand and daily from the improvement routine — not on any gate.
 
 ## What was NOT verified
 
