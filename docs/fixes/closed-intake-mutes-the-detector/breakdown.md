@@ -16,7 +16,7 @@ dispatch. Issue #338 tracks the run as a whole.
 listing, returns a detector key for an open issue and omits it for a closed
 one, while a `sentry:` key comes back from both.
 
-- [ ] **I1 — `RE_REPORTED`, and `known_keys` filters on state.**
+- [x] **I1 — `RE_REPORTED`, and `known_keys` filters on state.**
   Add the namespace tuple with the comment that carries the rule; add
   `state` to the `--json` field list; collect a key unless it is
   detector-derived and its issue's state is the literal `"CLOSED"`.
@@ -52,3 +52,11 @@ one, while a `sentry:` key comes back from both.
 ## Notes
 
 *(dated deviations from the design go here)*
+
+**2026-08-25 — I1, `LIST_CALL` moved with the change.** `tests/test_sweeps.py:36`
+pins the dedupe listing's exact gh argv, so adding `state` to `--json`
+changed it. Three pre-existing cases failed on that pin alone and none on
+behaviour — including `test_a_closed_issue_with_the_same_key_is_not_refiled`,
+which drives a `sentry:` key on a CLOSED issue and still expects
+suppression. That case passing unchanged is the Sentry half of the rule,
+pinned by a test this run did not write.
