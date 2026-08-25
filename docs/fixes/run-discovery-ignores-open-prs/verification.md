@@ -107,10 +107,11 @@ plus this run's five artifacts. **PASS.**
 
 ## C6 — the battery
 
-Worktree at the branch tip, `git status --porcelain` empty:
+Re-run after C7's fix; these are the tip's numbers, not the pre-review
+ones. Worktree at the branch tip, `git status --porcelain` empty:
 
 ```
-Ran 1348 tests in 15.343s
+Ran 1349 tests in 21.709s
 
 OK
 lint: 0 problem(s) across 24 skills
@@ -118,7 +119,7 @@ gates: 0 problem(s)
 selftest: ok
 ```
 
-Four tests added against the base's 1344, none removed. The free
+Five tests added against the base's 1344, none removed. The free
 `one_owner` pre-pass is unchanged against `origin/main` — 9 groups before,
 9 after:
 
@@ -130,6 +131,36 @@ Four tests added against the base's 1344, none removed. The free
 ```
 
 **PASS.**
+
+## C7 — the protocol keeps the section its skills recite
+
+Added by the Review stage. The recital pin binds `capture` and `idea` to
+`IN_FLIGHT_HEADING` and binds `IN_FLIGHT_HEADING` to nothing, so deleting
+the protocol section left all three agreeing while both skills pointed at
+a heading that was gone — this run's own defect one level down.
+
+Verified by mutation, not by argument. With `check_protocol` reverted to
+its one-line form and `__pycache__` cleared (a same-length in-place edit
+can otherwise serve a stale `.pyc`):
+
+```
+- []
++ ["docs/pipeline-protocol.md no longer states 'Work already in flight', which "
++  'capture and idea both recite']
+
+FAILED (failures=1)
+```
+
+and with the check restored:
+
+```
+Ran 2 tests in 0.045s
+
+OK
+```
+
+A test that passes before and after a change proves nothing about the
+change; this one was watched failing for the right reason first. **PASS.**
 
 ## What was NOT verified
 
