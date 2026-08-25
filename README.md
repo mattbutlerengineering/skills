@@ -118,6 +118,11 @@ pure `.svg` whose motion GitHub plays right inside a README.
 theme-aware `.svg` system figure on light editorial paper that flips to
 the shared dark palette with the reader's color-scheme preference and
 embeds in READMEs, docs pages, and design docs as a plain image.
+`pipeline-board` turns that same editorial language on the pipeline
+itself — one self-contained `.svg` swimlane board placing every active
+run on its current stage, with placement stated by the shipped
+`board.py` tool rather than re-derived (ADR-0062), generated on demand
+and never committed.
 `factory-init` stamps a product repo
 with the factory scaffold — offline gates, dispatch workflows, and the cost
 ledger — so promoted work orders can run there unattended. `doctor` is the

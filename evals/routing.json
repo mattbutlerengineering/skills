@@ -1,316 +1,812 @@
 {
   "version": 1,
   "cases": [
-    {"id": "idea-direct-1", "kind": "direct", "expected": "idea",
-     "query": "I have a raw idea for a meal-planning app — help me flesh it out into a brief"},
-    {"id": "idea-direct-2", "kind": "direct", "expected": "idea",
-     "query": "What if we let users share their dashboards publicly? Just a hunch, nothing written down yet"},
-    {"id": "prd-direct-1", "kind": "direct", "expected": "prd",
-     "query": "Write a PRD for the CSV export feature"},
-    {"id": "prd-direct-2", "kind": "direct", "expected": "prd",
-     "query": "Turn this idea brief into a PRD with scope and success criteria"},
-    {"id": "ux-design-direct-1", "kind": "direct", "expected": "ux-design",
-     "query": "Design the UX flows for the onboarding screens"},
-    {"id": "ux-design-direct-2", "kind": "direct", "expected": "ux-design",
-     "query": "The PRD marks ux as required — design the flows and screens before we do any technical work"},
-    {"id": "architect-direct-1", "kind": "direct", "expected": "architect",
-     "query": "Draft the technical design for this feature — architecture, data model, and interfaces"},
-    {"id": "architect-direct-2", "kind": "direct", "expected": "architect",
-     "query": "What stack and data model should we use here? Put together the architecture doc"},
-    {"id": "decompose-direct-1", "kind": "direct", "expected": "decompose",
-     "query": "Break this technical design into ordered, implementable work items"},
-    {"id": "decompose-direct-2", "kind": "direct", "expected": "decompose",
-     "query": "Take the architecture and produce milestones and issues with their dependencies"},
-    {"id": "implement-direct-1", "kind": "direct", "expected": "implement",
-     "query": "The breakdown is ready — let's start building, working through the items test-first"},
-    {"id": "implement-direct-2", "kind": "direct", "expected": "implement",
-     "query": "Start coding the work items in the breakdown and check them off as their acceptance criteria pass"},
-    {"id": "verify-direct-1", "kind": "direct", "expected": "verify",
-     "query": "Implementation is finished — verify the work meets the PRD's success criteria and collect the evidence"},
-    {"id": "verify-direct-2", "kind": "direct", "expected": "verify",
-     "query": "Run the tests and put together verification evidence against the success criteria"},
-    {"id": "review-direct-1", "kind": "direct", "expected": "review",
-     "query": "Give this run's changes a quality pass for defects and security issues before we ship"},
-    {"id": "review-direct-2", "kind": "direct", "expected": "review",
-     "query": "Do a code review of the changes from this run and write up the findings"},
-    {"id": "ship-direct-1", "kind": "direct", "expected": "ship",
-     "query": "The review is done — ship it to production with pre-flight checks and a rollback plan"},
-    {"id": "ship-direct-2", "kind": "direct", "expected": "ship",
-     "query": "Let's release this feature — walk me through the release steps"},
-    {"id": "operate-direct-1", "kind": "direct", "expected": "operate",
-     "query": "The feature has been live for two weeks — capture user feedback and run the retrospective"},
-    {"id": "operate-direct-2", "kind": "direct", "expected": "operate",
-     "query": "Close the loop on this run: collect what users said and write the retro"},
-    {"id": "next-direct-1", "kind": "direct", "expected": "next",
-     "query": "What's next for the dark-mode run?"},
-    {"id": "next-direct-2", "kind": "direct", "expected": "next",
-     "query": "Where are we in the pipeline for this feature?"},
-    {"id": "next-maintenance-1", "kind": "direct", "expected": "next",
-     "query": "The login-timeout fix run is mid-flight — what's next?",
-     "notes": "maintenance runs are routed by next too, not only product/feature runs"},
-
-    {"id": "idea-situational-1", "kind": "situational", "expected": "idea",
-     "query": "Something feels off about our onboarding funnel — I think there's a product opportunity here but nothing concrete yet"},
-    {"id": "prd-situational-1", "kind": "situational", "expected": "prd",
-     "query": "The idea brief for the export feature is done — nail down the requirements and success criteria"},
-    {"id": "ux-design-situational-1", "kind": "situational", "expected": "ux-design",
-     "query": "The PRD is finished and it declares a user-facing surface — what flows and screens do we need?"},
-    {"id": "architect-situational-1", "kind": "situational", "expected": "architect",
-     "query": "Requirements are locked; we need to settle the data model and interfaces before anyone writes code"},
-    {"id": "decompose-situational-1", "kind": "situational", "expected": "decompose",
-     "query": "The architecture doc is approved — turn it into ordered work items we can pick up"},
-    {"id": "implement-situational-1", "kind": "situational", "expected": "implement",
-     "query": "breakdown.md is sitting there with unchecked items — time to write the code"},
-    {"id": "verify-situational-1", "kind": "situational", "expected": "verify",
-     "query": "All the work items are checked off — demonstrate the feature meets its success criteria"},
-    {"id": "review-situational-1", "kind": "situational", "expected": "review",
-     "query": "verification.md is in place — the change still needs a defect and security pass before release"},
-    {"id": "ship-situational-1", "kind": "situational", "expected": "ship",
-     "query": "Review found no blockers — get this into production"},
-    {"id": "operate-situational-1", "kind": "situational", "expected": "operate",
-     "query": "release.md is done and users have had the feature for a month — what did we learn?"},
-
-    {"id": "arch-vs-decomp-1", "kind": "near-miss", "expected": "decompose",
-     "query": "Turn the technical design into milestones",
-     "notes": "adjacency: architect vs decompose"},
-    {"id": "decomp-vs-impl-1", "kind": "near-miss", "expected": "implement",
-     "query": "Start working through the breakdown",
-     "notes": "adjacency: decompose vs implement"},
-    {"id": "verify-vs-review-1", "kind": "near-miss", "expected": "review",
-     "query": "Give the change a quality check before we ship",
-     "notes": "adjacency: verify vs review — quality pass is review's clause"},
-    {"id": "impl-vs-ship-1", "kind": "near-miss", "expected": "ship",
-     "query": "The code is done and tests pass — push this out to users",
-     "notes": "adjacency: implement vs ship"},
-    {"id": "idea-vs-prd-1", "kind": "near-miss", "expected": "prd",
-     "query": "I know exactly what I want to build — write up the requirements",
-     "notes": "adjacency: idea vs prd — no interviewing needed, wants requirements"},
-    {"id": "ux-vs-arch-1", "kind": "near-miss", "expected": "ux-design",
-     "query": "Design how the settings screen should work for users",
-     "notes": "adjacency: ux-design vs architect — screens, not systems"},
-    {"id": "ship-vs-operate-1", "kind": "near-miss", "expected": "operate",
-     "query": "The release went out yesterday — check how it's landing with users",
-     "notes": "adjacency: ship vs operate"},
-
-    {"id": "apr-1", "kind": "direct", "expected": "address-pr-review",
-     "query": "Address the review comments on my open PR and resolve the threads"},
-    {"id": "apr-2", "kind": "situational", "expected": "address-pr-review",
-     "query": "Reviewers left feedback on my pull request and it now has merge conflicts with main"},
-    {"id": "apr-3", "kind": "situational", "expected": "address-pr-review",
-     "query": "CI is green on my open PR but two review threads are still unresolved — get it ready to merge"},
-    {"id": "apr-vs-review-1", "kind": "near-miss", "expected": "address-pr-review",
-     "query": "The PR I put up got review comments — take care of them",
-     "notes": "adjacency: address-pr-review vs review — acting on external feedback, not producing findings"},
-    {"id": "apr-vs-watch-1", "kind": "near-miss", "expected": null,
-     "query": "Keep an eye on my PR and let me know when CI goes green",
-     "notes": "watch-only phrasing must not fire address-pr-review (it acts, never just watches)"},
-    {"id": "review-vs-apr-1", "kind": "near-miss", "expected": "review",
-     "query": "Look over this run's diff for defects before I put up the PR",
-     "notes": "adjacency: review vs address-pr-review — a quality pass on our own changes, no PR feedback in play"},
-
-    {"id": "autorun-1", "kind": "direct", "expected": "autorun",
-     "query": "Run the whole pipeline on this feature end to end — here's the brief with my answers, don't stop to interview me"},
-    {"id": "autorun-2", "kind": "situational", "expected": "autorun",
-     "query": "I'm heading out for the afternoon — take this feature description and drive it through every stage to ship, noting anything you had to assume"},
-    {"id": "autorun-3", "kind": "situational", "expected": "autorun",
-     "query": "I don't want to sit through the stage interviews. I've written down the users, scope, and success criteria — take it all the way through and log your assumptions"},
-    {"id": "autorun-vs-next-1", "kind": "near-miss", "expected": "next",
-     "query": "Pick up my run and move it along to the next stage",
-     "notes": "adjacency: next vs autorun — advancing one stage interactively is the router, not an unattended full run"},
-
-    {"id": "bridge-import-1", "kind": "situational", "expected": "decompose",
-     "query": "The architecture is settled — break the work down, and pull the open issues from our tracker into the breakdown as work items"},
-    {"id": "bridge-autorun-1", "kind": "situational", "expected": "autorun",
-     "query": "Here's my brief with the answers up front — drive the run all the way to ship without stopping to interview me, seeding the breakdown from our existing issue backlog"},
-    {"id": "bridge-vs-decompose-1", "kind": "near-miss", "expected": null,
-     "query": "Go through our issue tracker and close out anything stale",
-     "notes": "tracker housekeeping must not fire decompose — no breakdown in play; the bridge only mirrors work items (ADR-0026)"},
-
-    {"id": "mermaid-1", "kind": "direct", "expected": "mermaid",
-     "query": "Create a mermaid diagram of our deployment process"},
-    {"id": "mermaid-2", "kind": "situational", "expected": "mermaid",
-     "query": "This runbook's escalation steps are a wall of text — turn them into a diagram people can follow at a glance"},
-    {"id": "mermaid-3", "kind": "situational", "expected": "mermaid",
-     "query": "I need a sequence diagram of the auth handshake for the docs, and it has to stay readable in dark mode"},
-    {"id": "mermaid-vs-ux-1", "kind": "near-miss", "expected": "ux-design",
-     "query": "Diagram the onboarding flow — which screens users see and where each takes them",
-     "notes": "adjacency: mermaid vs ux-design — user-facing flows and screens are the ux-design stage, not a documentation diagram"},
-    {"id": "mermaid-vs-docs-1", "kind": "near-miss", "expected": null,
-     "query": "Write up the deployment process in the operations guide",
-     "notes": "prose documentation must not fire mermaid — nobody asked for a diagram"},
-
-    {"id": "iad-1", "kind": "direct", "expected": "interactive-architecture-diagram",
-     "query": "Create an interactive architecture diagram I can step through while presenting how our system works"},
-    {"id": "iad-2", "kind": "situational", "expected": "interactive-architecture-diagram",
-     "query": "I'm demoing the pipeline at Friday's all-hands — I want an animated diagram where each stage lights up as I talk through it"},
-    {"id": "iad-3", "kind": "situational", "expected": "interactive-architecture-diagram",
-     "query": "Make a self-contained HTML page showing requests flowing through our services, with clickable boxes that explain each component"},
-    {"id": "iad-vs-mermaid-1", "kind": "near-miss", "expected": "mermaid",
-     "query": "Draw an architecture diagram for the design doc — something I can paste into markdown",
-     "notes": "adjacency: interactive-architecture-diagram vs mermaid — a static markdown-embeddable diagram is mermaid; the interactive skill is for presentable step-through HTML demos"},
-
-    {"id": "ad-1", "kind": "direct", "expected": "animated-diagram",
-     "query": "Create an animated diagram of our ETL pipeline for the README — flowing dashed connectors that show which way the data moves"},
-    {"id": "ad-2", "kind": "situational", "expected": "animated-diagram",
-     "query": "Turn this mermaid flowchart into a version that moves — arrows streaming and a dot traveling the happy path"},
-    {"id": "ad-3", "kind": "situational", "expected": "animated-diagram",
-     "query": "The docs homepage needs an architecture picture that looks alive — requests visibly flowing from the client through the gateway to the database, looping forever"},
-    {"id": "ad-vs-iad-1", "kind": "near-miss", "expected": "interactive-architecture-diagram",
-     "query": "Build an animated diagram I can click through service by service while I narrate our architecture during the demo",
-     "notes": "adjacency: animated-diagram vs interactive-architecture-diagram — narrated click-through presenting is the interactive skill even when the ask says animated; ambient always-moving scenery is animated-diagram"},
-    {"id": "ad-vs-mermaid-1", "kind": "near-miss", "expected": "mermaid",
-     "query": "Sketch our queue topology as a diagram for the wiki",
-     "notes": "adjacency: animated-diagram vs mermaid — nobody asked for motion or design polish; a wiki-embeddable sketch is mermaid"},
-
-    {"id": "archd-1", "kind": "direct", "expected": "architecture-diagram",
-     "query": "Create a static architecture diagram of our system as an SVG file I can commit and embed in the README"},
-    {"id": "archd-2", "kind": "situational", "expected": "architecture-diagram",
-     "query": "The design doc needs a polished system-overview figure — services, database, queue — as an image that looks right in both light and dark mode"},
-    {"id": "archd-3", "kind": "situational", "expected": "architecture-diagram",
-     "query": "Draw our AWS topology as a clean, designed picture for the docs site — no animation, no clicking, just a well-made still figure"},
-    {"id": "archd-vs-ad-1", "kind": "near-miss", "expected": "animated-diagram",
-     "query": "Make an architecture SVG for the README where you can watch requests flowing through the services",
-     "notes": "adjacency: architecture-diagram vs animated-diagram — visible flow is motion, and motion is animated-diagram even when the ask says SVG for a README"},
-    {"id": "archd-vs-mermaid-1", "kind": "near-miss", "expected": "mermaid",
-     "query": "Add a quick architecture sketch to the RFC, just something I can paste in as text",
-     "notes": "adjacency: architecture-diagram vs mermaid — pasted-as-text markdown source is mermaid; the designed committed .svg figure is architecture-diagram"},
-
-    {"id": "capture-1", "kind": "direct", "expected": "capture",
-     "query": "Checkout has been throwing 500s since yesterday's deploy — write up the defect brief so we can run the fix as a maintenance run"},
-    {"id": "capture-2", "kind": "situational", "expected": "capture",
-     "query": "Users are reporting login times out after the last deploy — I want to fix it properly, with a regression test, not just patch and pray"},
-    {"id": "capture-3", "kind": "situational", "expected": "capture",
-     "query": "We're three major versions behind on our web framework and it's starting to bite — set the upgrade up as a tracked run with evidence and a target state"},
-    {"id": "capture-vs-idea-1", "kind": "near-miss", "expected": "idea",
-     "query": "It really bugs me that there's no way to export your data — we should do something about that",
-     "notes": "adjacency: capture vs idea — a missing capability is a new feature, not a defect"},
-    {"id": "capture-vs-implement-1", "kind": "near-miss", "expected": "implement",
-     "query": "The defect brief for the login fix is written and its work items are still unchecked — keep working through them",
-     "notes": "adjacency: capture vs implement — the brief exists; working its checkboxes is implement"},
-
-    {"id": "factory-init-1", "kind": "direct", "expected": "factory-init",
-     "query": "Run factory-init on the new billing repo so it can take factory work orders"},
-    {"id": "factory-init-2", "kind": "situational", "expected": "factory-init",
-     "query": "I just created a fresh product repo — stamp the factory tooling into it so make check and the gate detectors run there"},
-    {"id": "factory-init-3", "kind": "situational", "expected": "factory-init",
-     "query": "I edited the factory templates and now detector E is failing the build — regenerate the checksum manifest"},
-    {"id": "factory-init-vs-idea-1", "kind": "near-miss", "expected": "idea",
-     "query": "Set up a run for the new invoicing product we want to build",
-     "notes": "adjacency: factory-init vs idea — starting a run is the pipeline entry, not repo tooling setup"},
-
-    {"id": "doctor-1", "kind": "direct", "expected": "doctor",
-     "query": "Run doctor on this repo — I want to know whether the pipeline skills and the factory tooling are actually installed correctly here"},
-    {"id": "doctor-2", "kind": "situational", "expected": "doctor",
-     "query": "I installed the plugin and stamped the factory last week and I have no idea whether any of it is wired up right — check the install over and tell me what's broken"},
-    {"id": "doctor-3", "kind": "situational", "expected": "doctor",
-     "query": "make check just blew up on a repo I stamped yesterday and the error reads like the tool itself is broken — work out what's wrong with the setup"},
-    {"id": "doctor-vs-factory-init-1", "kind": "near-miss", "expected": "doctor",
-     "query": "Check whether the factory stamp in this repo is still intact — I don't want to re-stamp anything, just find out",
-     "notes": "adjacency: doctor vs factory-init — diagnosing an install read-only, never performing or repairing the write"},
-    {"id": "doctor-vs-next-1", "kind": "near-miss", "expected": "doctor",
-     "query": "Is this repo even set up to run the pipeline at all?",
-     "notes": "adjacency: doctor vs next — a question about the install, not about where a run stands"},
-    {"id": "factory-init-vs-doctor-1", "kind": "near-miss", "expected": "factory-init",
-     "query": "Someone hand-edited the stamped mirror under tools/factory and detector E is red — put it back the way the templates define it",
-     "notes": "adjacency: factory-init vs doctor — the remedy is a re-stamp, which is a write; doctor only names it"},
-
-    {"id": "work-queue-1", "kind": "direct", "expected": "work-queue",
-     "query": "Work the ready queue \u2014 take the next few work orders and run them in parallel instead of one at a time"},
-    {"id": "work-queue-2", "kind": "situational", "expected": "work-queue",
-     "query": "There are several work orders sitting at ready-for-agent and I'd rather not babysit them one by one \u2014 drain the backlog and open a PR for each"},
-    {"id": "work-queue-3", "kind": "situational", "expected": "work-queue",
-     "query": "Can we run three of the approved work orders at once, each in its own worktree, and stop at merge-ready PRs?"},
-    {"id": "work-queue-vs-autorun-1", "kind": "near-miss", "expected": "work-queue",
-     "query": "Run the ready work orders concurrently and open a PR for each one",
-     "notes": "adjacency: work-queue vs autorun \u2014 many work orders through one stage at once, not one run driven through every stage"},
-    {"id": "autorun-vs-work-queue-1", "kind": "near-miss", "expected": "autorun",
-     "query": "Take this one feature brief and drive it from idea all the way through to ship without stopping to interview me",
-     "notes": "adjacency: autorun vs work-queue \u2014 a single run advanced stage by stage, not a batch of already-approved work orders"},
-    {"id": "work-queue-vs-implement-1", "kind": "near-miss", "expected": "implement",
-     "query": "Implement WO-0007 \u2014 just that one work order, following its acceptance criteria",
-     "notes": "adjacency: implement vs work-queue \u2014 one named work order is the stage skill; a batch is the queue"},
-
-    {"id": "audit-1", "kind": "direct", "expected": "audit",
-     "query": "Audit this codebase and tell me what the highest-leverage things to fix are"},
-    {"id": "audit-2", "kind": "situational", "expected": "audit",
-     "query": "Nobody has looked at this repo end to end in months \u2014 go hunting for bugs, security holes and dead weight, and come back with what is actually worth doing"},
-    {"id": "audit-3", "kind": "situational", "expected": "audit",
-     "query": "We have shipped the obvious stuff. Read the code and tell me where this project should go next, with evidence from the repo rather than generic advice"},
-    {"id": "audit-vs-review-1", "kind": "near-miss", "expected": "audit",
-     "query": "Go through the whole codebase and find what is wrong with it",
-     "notes": "adjacency: audit vs review \u2014 an unscoped survey of the repo, not one run's implementation graded against its own plan"},
-    {"id": "audit-vs-doctor-1", "kind": "near-miss", "expected": "audit",
-     "query": "Check this repo over and tell me what is in bad shape",
-     "notes": "adjacency: audit vs doctor \u2014 the state of the code, not whether the pipeline install is wired up"},
-    {"id": "audit-vs-capture-1", "kind": "near-miss", "expected": "audit",
-     "query": "Something in here is rotting and I cannot name it \u2014 find the problems and tell me which ones deserve a run",
-     "notes": "adjacency: audit vs capture \u2014 no defect is named yet; capture takes down one the user already has"},
-    {"id": "capture-vs-audit-1", "kind": "near-miss", "expected": "capture",
-     "query": "Checkout is throwing a 500 for logged-out users since Tuesday \u2014 let us start a fix for it",
-     "notes": "adjacency: capture vs audit \u2014 a named, reproduced defect goes straight to a maintenance run; audit is for finding unknown ones"},
-    {"id": "review-vs-audit-1", "kind": "near-miss", "expected": "review",
-     "query": "The work orders for the dark-mode feature are all implemented \u2014 review the run before we ship it",
-     "notes": "adjacency: review vs audit \u2014 scoped to one run's changes against its plan, not an open-ended survey of the repo"},
-
-    {"id": "deepen-1", "kind": "direct", "expected": "deepen",
-     "query": "Review this codebase for architecture improvements \u2014 where are the modules too shallow and what should be consolidated?"},
-    {"id": "deepen-2", "kind": "situational", "expected": "deepen",
-     "query": "Everything in here is a thin wrapper around something else and I have to open six files to follow one request \u2014 what should the shape actually be?"},
-    {"id": "deepen-3", "kind": "situational", "expected": "deepen",
-     "query": "This code is miserable to test \u2014 the unit tests all pass and the bugs are in how the pieces are wired together. Find the refactors worth doing"},
-    {"id": "deepen-vs-architect-1", "kind": "near-miss", "expected": "deepen",
-     "query": "Take a look at the architecture and tell me what to improve",
-     "notes": "adjacency: deepen vs architect \u2014 judging the shape of code that already exists, not designing a run's approach from its PRD"},
-    {"id": "architect-vs-deepen-1", "kind": "near-miss", "expected": "architect",
-     "query": "The PRD is approved \u2014 settle the data model and the interfaces before anyone writes code for this feature",
-     "notes": "adjacency: architect vs deepen \u2014 designing a run's technical approach up front, not reviewing existing structure"},
-    {"id": "deepen-vs-audit-1", "kind": "near-miss", "expected": "deepen",
-     "query": "The coupling in this repo is the problem \u2014 find where the modules leak into each other and what to merge",
-     "notes": "adjacency: deepen vs audit \u2014 structural shape only; audit sweeps bugs, security, perf and debt across every category"},
-    {"id": "audit-vs-deepen-1", "kind": "near-miss", "expected": "audit",
-     "query": "Sweep the whole repo \u2014 bugs, security holes, missing tests, stale dependencies \u2014 and tell me what is worth doing",
-     "notes": "adjacency: audit vs deepen \u2014 every defect category, not the shape of the modules"},
-    {"id": "deepen-vs-diagram-1", "kind": "near-miss", "expected": "deepen",
-     "query": "Show me how the services here fit together and where the design is going wrong",
-     "notes": "adjacency: deepen vs interactive-architecture-diagram \u2014 the ask is a judgement about the structure; the diagram skill renders a system without judging it"},
-
-    {"id": "automate-1", "kind": "direct", "expected": "automate",
-     "query": "Recommend some Claude Code automations for this project \u2014 what hooks or subagents should I be running?"},
-    {"id": "automate-2", "kind": "situational", "expected": "automate",
-     "query": "I keep forgetting to regenerate the manifest after I touch a template and CI catches it every time. What should I put in place so I stop doing that by hand?"},
-    {"id": "automate-3", "kind": "situational", "expected": "automate",
-     "query": "Our contributor docs are full of rules nobody checks \u2014 what's worth automating here?"},
-    {"id": "automate-vs-doctor-1", "kind": "near-miss", "expected": "automate",
-     "query": "We've got a CLAUDE.md and a couple of skills installed and that's it — what else should we be running here?",
-     "notes": "adjacency: automate vs doctor \u2014 what automation the repo should ADD; doctor asks whether what is already installed is wired up correctly"},
-    {"id": "doctor-vs-automate-1", "kind": "near-miss", "expected": "doctor",
-     "query": "None of the skills seem to be loading and make check fails on a fresh stamp \u2014 is any of this actually installed right?",
-     "notes": "adjacency: doctor vs automate \u2014 diagnosing an existing install, not recommending new automation"},
-    {"id": "automate-vs-audit-1", "kind": "near-miss", "expected": "automate",
-     "query": "What should we be automating in this repo \u2014 where are we still doing things by hand?",
-     "notes": "adjacency: automate vs audit \u2014 the gap is in the tooling around the code; audit sweeps the code itself for defects"},
-    {"id": "audit-vs-automate-1", "kind": "near-miss", "expected": "audit",
-     "query": "Go through the repo and tell me what's broken or rotting \u2014 bugs, security, coverage, stale deps",
-     "notes": "adjacency: audit vs automate \u2014 defects in the code, not missing automation around it"},
-
-    {"id": "router-1", "kind": "router", "expected": "next",
-     "query": "Continue the pipeline"},
-    {"id": "router-2", "kind": "router", "expected": "next",
-     "query": "Resume the payments feature run where we left off"},
-    {"id": "router-3", "kind": "router", "expected": "next",
-     "query": "I want to start a new product run",
-     "notes": "start-a-run without naming a stage routes to next, not idea"},
-
-    {"id": "distractor-1", "kind": "distractor", "expected": null,
-     "query": "Why is this regex failing on multiline input?"},
-    {"id": "distractor-2", "kind": "distractor", "expected": null,
-     "query": "Review my coworker's PR in the analytics repo",
-     "notes": "external code review — review skill is scoped to the run's changes"},
-    {"id": "distractor-3", "kind": "distractor", "expected": null,
-     "query": "Write a blog post announcing our Series A"},
-    {"id": "distractor-4", "kind": "distractor", "expected": null,
-     "query": "What does this segfault stack trace mean?"},
-    {"id": "distractor-5", "kind": "distractor", "expected": null,
-     "query": "Rename the userId variable to accountId across the codebase"}
+    {
+      "id": "idea-direct-1",
+      "kind": "direct",
+      "expected": "idea",
+      "query": "I have a raw idea for a meal-planning app — help me flesh it out into a brief"
+    },
+    {
+      "id": "idea-direct-2",
+      "kind": "direct",
+      "expected": "idea",
+      "query": "What if we let users share their dashboards publicly? Just a hunch, nothing written down yet"
+    },
+    {
+      "id": "prd-direct-1",
+      "kind": "direct",
+      "expected": "prd",
+      "query": "Write a PRD for the CSV export feature"
+    },
+    {
+      "id": "prd-direct-2",
+      "kind": "direct",
+      "expected": "prd",
+      "query": "Turn this idea brief into a PRD with scope and success criteria"
+    },
+    {
+      "id": "ux-design-direct-1",
+      "kind": "direct",
+      "expected": "ux-design",
+      "query": "Design the UX flows for the onboarding screens"
+    },
+    {
+      "id": "ux-design-direct-2",
+      "kind": "direct",
+      "expected": "ux-design",
+      "query": "The PRD marks ux as required — design the flows and screens before we do any technical work"
+    },
+    {
+      "id": "architect-direct-1",
+      "kind": "direct",
+      "expected": "architect",
+      "query": "Draft the technical design for this feature — architecture, data model, and interfaces"
+    },
+    {
+      "id": "architect-direct-2",
+      "kind": "direct",
+      "expected": "architect",
+      "query": "What stack and data model should we use here? Put together the architecture doc"
+    },
+    {
+      "id": "decompose-direct-1",
+      "kind": "direct",
+      "expected": "decompose",
+      "query": "Break this technical design into ordered, implementable work items"
+    },
+    {
+      "id": "decompose-direct-2",
+      "kind": "direct",
+      "expected": "decompose",
+      "query": "Take the architecture and produce milestones and issues with their dependencies"
+    },
+    {
+      "id": "implement-direct-1",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "The breakdown is ready — let's start building, working through the items test-first"
+    },
+    {
+      "id": "implement-direct-2",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "Start coding the work items in the breakdown and check them off as their acceptance criteria pass"
+    },
+    {
+      "id": "verify-direct-1",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Implementation is finished — verify the work meets the PRD's success criteria and collect the evidence"
+    },
+    {
+      "id": "verify-direct-2",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Run the tests and put together verification evidence against the success criteria"
+    },
+    {
+      "id": "review-direct-1",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Give this run's changes a quality pass for defects and security issues before we ship"
+    },
+    {
+      "id": "review-direct-2",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Do a code review of the changes from this run and write up the findings"
+    },
+    {
+      "id": "ship-direct-1",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "The review is done — ship it to production with pre-flight checks and a rollback plan"
+    },
+    {
+      "id": "ship-direct-2",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "Let's release this feature — walk me through the release steps"
+    },
+    {
+      "id": "operate-direct-1",
+      "kind": "direct",
+      "expected": "operate",
+      "query": "The feature has been live for two weeks — capture user feedback and run the retrospective"
+    },
+    {
+      "id": "operate-direct-2",
+      "kind": "direct",
+      "expected": "operate",
+      "query": "Close the loop on this run: collect what users said and write the retro"
+    },
+    {
+      "id": "next-direct-1",
+      "kind": "direct",
+      "expected": "next",
+      "query": "What's next for the dark-mode run?"
+    },
+    {
+      "id": "next-direct-2",
+      "kind": "direct",
+      "expected": "next",
+      "query": "Where are we in the pipeline for this feature?"
+    },
+    {
+      "id": "next-maintenance-1",
+      "kind": "direct",
+      "expected": "next",
+      "query": "The login-timeout fix run is mid-flight — what's next?",
+      "notes": "maintenance runs are routed by next too, not only product/feature runs"
+    },
+    {
+      "id": "idea-situational-1",
+      "kind": "situational",
+      "expected": "idea",
+      "query": "Something feels off about our onboarding funnel — I think there's a product opportunity here but nothing concrete yet"
+    },
+    {
+      "id": "prd-situational-1",
+      "kind": "situational",
+      "expected": "prd",
+      "query": "The idea brief for the export feature is done — nail down the requirements and success criteria"
+    },
+    {
+      "id": "ux-design-situational-1",
+      "kind": "situational",
+      "expected": "ux-design",
+      "query": "The PRD is finished and it declares a user-facing surface — what flows and screens do we need?"
+    },
+    {
+      "id": "architect-situational-1",
+      "kind": "situational",
+      "expected": "architect",
+      "query": "Requirements are locked; we need to settle the data model and interfaces before anyone writes code"
+    },
+    {
+      "id": "decompose-situational-1",
+      "kind": "situational",
+      "expected": "decompose",
+      "query": "The architecture doc is approved — turn it into ordered work items we can pick up"
+    },
+    {
+      "id": "implement-situational-1",
+      "kind": "situational",
+      "expected": "implement",
+      "query": "breakdown.md is sitting there with unchecked items — time to write the code"
+    },
+    {
+      "id": "verify-situational-1",
+      "kind": "situational",
+      "expected": "verify",
+      "query": "All the work items are checked off — demonstrate the feature meets its success criteria"
+    },
+    {
+      "id": "review-situational-1",
+      "kind": "situational",
+      "expected": "review",
+      "query": "verification.md is in place — the change still needs a defect and security pass before release"
+    },
+    {
+      "id": "ship-situational-1",
+      "kind": "situational",
+      "expected": "ship",
+      "query": "Review found no blockers — get this into production"
+    },
+    {
+      "id": "operate-situational-1",
+      "kind": "situational",
+      "expected": "operate",
+      "query": "release.md is done and users have had the feature for a month — what did we learn?"
+    },
+    {
+      "id": "arch-vs-decomp-1",
+      "kind": "near-miss",
+      "expected": "decompose",
+      "query": "Turn the technical design into milestones",
+      "notes": "adjacency: architect vs decompose"
+    },
+    {
+      "id": "decomp-vs-impl-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "Start working through the breakdown",
+      "notes": "adjacency: decompose vs implement"
+    },
+    {
+      "id": "verify-vs-review-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Give the change a quality check before we ship",
+      "notes": "adjacency: verify vs review — quality pass is review's clause"
+    },
+    {
+      "id": "impl-vs-ship-1",
+      "kind": "near-miss",
+      "expected": "ship",
+      "query": "The code is done and tests pass — push this out to users",
+      "notes": "adjacency: implement vs ship"
+    },
+    {
+      "id": "idea-vs-prd-1",
+      "kind": "near-miss",
+      "expected": "prd",
+      "query": "I know exactly what I want to build — write up the requirements",
+      "notes": "adjacency: idea vs prd — no interviewing needed, wants requirements"
+    },
+    {
+      "id": "ux-vs-arch-1",
+      "kind": "near-miss",
+      "expected": "ux-design",
+      "query": "Design how the settings screen should work for users",
+      "notes": "adjacency: ux-design vs architect — screens, not systems"
+    },
+    {
+      "id": "ship-vs-operate-1",
+      "kind": "near-miss",
+      "expected": "operate",
+      "query": "The release went out yesterday — check how it's landing with users",
+      "notes": "adjacency: ship vs operate"
+    },
+    {
+      "id": "apr-1",
+      "kind": "direct",
+      "expected": "address-pr-review",
+      "query": "Address the review comments on my open PR and resolve the threads"
+    },
+    {
+      "id": "apr-2",
+      "kind": "situational",
+      "expected": "address-pr-review",
+      "query": "Reviewers left feedback on my pull request and it now has merge conflicts with main"
+    },
+    {
+      "id": "apr-3",
+      "kind": "situational",
+      "expected": "address-pr-review",
+      "query": "CI is green on my open PR but two review threads are still unresolved — get it ready to merge"
+    },
+    {
+      "id": "apr-vs-review-1",
+      "kind": "near-miss",
+      "expected": "address-pr-review",
+      "query": "The PR I put up got review comments — take care of them",
+      "notes": "adjacency: address-pr-review vs review — acting on external feedback, not producing findings"
+    },
+    {
+      "id": "apr-vs-watch-1",
+      "kind": "near-miss",
+      "expected": null,
+      "query": "Keep an eye on my PR and let me know when CI goes green",
+      "notes": "watch-only phrasing must not fire address-pr-review (it acts, never just watches)"
+    },
+    {
+      "id": "review-vs-apr-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Look over this run's diff for defects before I put up the PR",
+      "notes": "adjacency: review vs address-pr-review — a quality pass on our own changes, no PR feedback in play"
+    },
+    {
+      "id": "autorun-1",
+      "kind": "direct",
+      "expected": "autorun",
+      "query": "Run the whole pipeline on this feature end to end — here's the brief with my answers, don't stop to interview me"
+    },
+    {
+      "id": "autorun-2",
+      "kind": "situational",
+      "expected": "autorun",
+      "query": "I'm heading out for the afternoon — take this feature description and drive it through every stage to ship, noting anything you had to assume"
+    },
+    {
+      "id": "autorun-3",
+      "kind": "situational",
+      "expected": "autorun",
+      "query": "I don't want to sit through the stage interviews. I've written down the users, scope, and success criteria — take it all the way through and log your assumptions"
+    },
+    {
+      "id": "autorun-vs-next-1",
+      "kind": "near-miss",
+      "expected": "next",
+      "query": "Pick up my run and move it along to the next stage",
+      "notes": "adjacency: next vs autorun — advancing one stage interactively is the router, not an unattended full run"
+    },
+    {
+      "id": "bridge-import-1",
+      "kind": "situational",
+      "expected": "decompose",
+      "query": "The architecture is settled — break the work down, and pull the open issues from our tracker into the breakdown as work items"
+    },
+    {
+      "id": "bridge-autorun-1",
+      "kind": "situational",
+      "expected": "autorun",
+      "query": "Here's my brief with the answers up front — drive the run all the way to ship without stopping to interview me, seeding the breakdown from our existing issue backlog"
+    },
+    {
+      "id": "bridge-vs-decompose-1",
+      "kind": "near-miss",
+      "expected": null,
+      "query": "Go through our issue tracker and close out anything stale",
+      "notes": "tracker housekeeping must not fire decompose — no breakdown in play; the bridge only mirrors work items (ADR-0026)"
+    },
+    {
+      "id": "mermaid-1",
+      "kind": "direct",
+      "expected": "mermaid",
+      "query": "Create a mermaid diagram of our deployment process"
+    },
+    {
+      "id": "mermaid-2",
+      "kind": "situational",
+      "expected": "mermaid",
+      "query": "This runbook's escalation steps are a wall of text — turn them into a diagram people can follow at a glance"
+    },
+    {
+      "id": "mermaid-3",
+      "kind": "situational",
+      "expected": "mermaid",
+      "query": "I need a sequence diagram of the auth handshake for the docs, and it has to stay readable in dark mode"
+    },
+    {
+      "id": "mermaid-vs-ux-1",
+      "kind": "near-miss",
+      "expected": "ux-design",
+      "query": "Diagram the onboarding flow — which screens users see and where each takes them",
+      "notes": "adjacency: mermaid vs ux-design — user-facing flows and screens are the ux-design stage, not a documentation diagram"
+    },
+    {
+      "id": "mermaid-vs-docs-1",
+      "kind": "near-miss",
+      "expected": null,
+      "query": "Write up the deployment process in the operations guide",
+      "notes": "prose documentation must not fire mermaid — nobody asked for a diagram"
+    },
+    {
+      "id": "iad-1",
+      "kind": "direct",
+      "expected": "interactive-architecture-diagram",
+      "query": "Create an interactive architecture diagram I can step through while presenting how our system works"
+    },
+    {
+      "id": "iad-2",
+      "kind": "situational",
+      "expected": "interactive-architecture-diagram",
+      "query": "I'm demoing the pipeline at Friday's all-hands — I want an animated diagram where each stage lights up as I talk through it"
+    },
+    {
+      "id": "iad-3",
+      "kind": "situational",
+      "expected": "interactive-architecture-diagram",
+      "query": "Make a self-contained HTML page showing requests flowing through our services, with clickable boxes that explain each component"
+    },
+    {
+      "id": "iad-vs-mermaid-1",
+      "kind": "near-miss",
+      "expected": "mermaid",
+      "query": "Draw an architecture diagram for the design doc — something I can paste into markdown",
+      "notes": "adjacency: interactive-architecture-diagram vs mermaid — a static markdown-embeddable diagram is mermaid; the interactive skill is for presentable step-through HTML demos"
+    },
+    {
+      "id": "ad-1",
+      "kind": "direct",
+      "expected": "animated-diagram",
+      "query": "Create an animated diagram of our ETL pipeline for the README — flowing dashed connectors that show which way the data moves"
+    },
+    {
+      "id": "ad-2",
+      "kind": "situational",
+      "expected": "animated-diagram",
+      "query": "Turn this mermaid flowchart into a version that moves — arrows streaming and a dot traveling the happy path"
+    },
+    {
+      "id": "ad-3",
+      "kind": "situational",
+      "expected": "animated-diagram",
+      "query": "The docs homepage needs an architecture picture that looks alive — requests visibly flowing from the client through the gateway to the database, looping forever"
+    },
+    {
+      "id": "ad-vs-iad-1",
+      "kind": "near-miss",
+      "expected": "interactive-architecture-diagram",
+      "query": "Build an animated diagram I can click through service by service while I narrate our architecture during the demo",
+      "notes": "adjacency: animated-diagram vs interactive-architecture-diagram — narrated click-through presenting is the interactive skill even when the ask says animated; ambient always-moving scenery is animated-diagram"
+    },
+    {
+      "id": "ad-vs-mermaid-1",
+      "kind": "near-miss",
+      "expected": "mermaid",
+      "query": "Sketch our queue topology as a diagram for the wiki",
+      "notes": "adjacency: animated-diagram vs mermaid — nobody asked for motion or design polish; a wiki-embeddable sketch is mermaid"
+    },
+    {
+      "id": "archd-1",
+      "kind": "direct",
+      "expected": "architecture-diagram",
+      "query": "Create a static architecture diagram of our system as an SVG file I can commit and embed in the README"
+    },
+    {
+      "id": "archd-2",
+      "kind": "situational",
+      "expected": "architecture-diagram",
+      "query": "The design doc needs a polished system-overview figure — services, database, queue — as an image that looks right in both light and dark mode"
+    },
+    {
+      "id": "archd-3",
+      "kind": "situational",
+      "expected": "architecture-diagram",
+      "query": "Draw our AWS topology as a clean, designed picture for the docs site — no animation, no clicking, just a well-made still figure"
+    },
+    {
+      "id": "archd-vs-ad-1",
+      "kind": "near-miss",
+      "expected": "animated-diagram",
+      "query": "Make an architecture SVG for the README where you can watch requests flowing through the services",
+      "notes": "adjacency: architecture-diagram vs animated-diagram — visible flow is motion, and motion is animated-diagram even when the ask says SVG for a README"
+    },
+    {
+      "id": "archd-vs-mermaid-1",
+      "kind": "near-miss",
+      "expected": "mermaid",
+      "query": "Add a quick architecture sketch to the RFC, just something I can paste in as text",
+      "notes": "adjacency: architecture-diagram vs mermaid — pasted-as-text markdown source is mermaid; the designed committed .svg figure is architecture-diagram"
+    },
+    {
+      "id": "capture-1",
+      "kind": "direct",
+      "expected": "capture",
+      "query": "Checkout has been throwing 500s since yesterday's deploy — write up the defect brief so we can run the fix as a maintenance run"
+    },
+    {
+      "id": "capture-2",
+      "kind": "situational",
+      "expected": "capture",
+      "query": "Users are reporting login times out after the last deploy — I want to fix it properly, with a regression test, not just patch and pray"
+    },
+    {
+      "id": "capture-3",
+      "kind": "situational",
+      "expected": "capture",
+      "query": "We're three major versions behind on our web framework and it's starting to bite — set the upgrade up as a tracked run with evidence and a target state"
+    },
+    {
+      "id": "capture-vs-idea-1",
+      "kind": "near-miss",
+      "expected": "idea",
+      "query": "It really bugs me that there's no way to export your data — we should do something about that",
+      "notes": "adjacency: capture vs idea — a missing capability is a new feature, not a defect"
+    },
+    {
+      "id": "capture-vs-implement-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "The defect brief for the login fix is written and its work items are still unchecked — keep working through them",
+      "notes": "adjacency: capture vs implement — the brief exists; working its checkboxes is implement"
+    },
+    {
+      "id": "factory-init-1",
+      "kind": "direct",
+      "expected": "factory-init",
+      "query": "Run factory-init on the new billing repo so it can take factory work orders"
+    },
+    {
+      "id": "factory-init-2",
+      "kind": "situational",
+      "expected": "factory-init",
+      "query": "I just created a fresh product repo — stamp the factory tooling into it so make check and the gate detectors run there"
+    },
+    {
+      "id": "factory-init-3",
+      "kind": "situational",
+      "expected": "factory-init",
+      "query": "I edited the factory templates and now detector E is failing the build — regenerate the checksum manifest"
+    },
+    {
+      "id": "factory-init-vs-idea-1",
+      "kind": "near-miss",
+      "expected": "idea",
+      "query": "Set up a run for the new invoicing product we want to build",
+      "notes": "adjacency: factory-init vs idea — starting a run is the pipeline entry, not repo tooling setup"
+    },
+    {
+      "id": "doctor-1",
+      "kind": "direct",
+      "expected": "doctor",
+      "query": "Run doctor on this repo — I want to know whether the pipeline skills and the factory tooling are actually installed correctly here"
+    },
+    {
+      "id": "doctor-2",
+      "kind": "situational",
+      "expected": "doctor",
+      "query": "I installed the plugin and stamped the factory last week and I have no idea whether any of it is wired up right — check the install over and tell me what's broken"
+    },
+    {
+      "id": "doctor-3",
+      "kind": "situational",
+      "expected": "doctor",
+      "query": "make check just blew up on a repo I stamped yesterday and the error reads like the tool itself is broken — work out what's wrong with the setup"
+    },
+    {
+      "id": "doctor-vs-factory-init-1",
+      "kind": "near-miss",
+      "expected": "doctor",
+      "query": "Check whether the factory stamp in this repo is still intact — I don't want to re-stamp anything, just find out",
+      "notes": "adjacency: doctor vs factory-init — diagnosing an install read-only, never performing or repairing the write"
+    },
+    {
+      "id": "doctor-vs-next-1",
+      "kind": "near-miss",
+      "expected": "doctor",
+      "query": "Is this repo even set up to run the pipeline at all?",
+      "notes": "adjacency: doctor vs next — a question about the install, not about where a run stands"
+    },
+    {
+      "id": "factory-init-vs-doctor-1",
+      "kind": "near-miss",
+      "expected": "factory-init",
+      "query": "Someone hand-edited the stamped mirror under tools/factory and detector E is red — put it back the way the templates define it",
+      "notes": "adjacency: factory-init vs doctor — the remedy is a re-stamp, which is a write; doctor only names it"
+    },
+    {
+      "id": "work-queue-1",
+      "kind": "direct",
+      "expected": "work-queue",
+      "query": "Work the ready queue — take the next few work orders and run them in parallel instead of one at a time"
+    },
+    {
+      "id": "work-queue-2",
+      "kind": "situational",
+      "expected": "work-queue",
+      "query": "There are several work orders sitting at ready-for-agent and I'd rather not babysit them one by one — drain the backlog and open a PR for each"
+    },
+    {
+      "id": "work-queue-3",
+      "kind": "situational",
+      "expected": "work-queue",
+      "query": "Can we run three of the approved work orders at once, each in its own worktree, and stop at merge-ready PRs?"
+    },
+    {
+      "id": "work-queue-vs-autorun-1",
+      "kind": "near-miss",
+      "expected": "work-queue",
+      "query": "Run the ready work orders concurrently and open a PR for each one",
+      "notes": "adjacency: work-queue vs autorun — many work orders through one stage at once, not one run driven through every stage"
+    },
+    {
+      "id": "autorun-vs-work-queue-1",
+      "kind": "near-miss",
+      "expected": "autorun",
+      "query": "Take this one feature brief and drive it from idea all the way through to ship without stopping to interview me",
+      "notes": "adjacency: autorun vs work-queue — a single run advanced stage by stage, not a batch of already-approved work orders"
+    },
+    {
+      "id": "work-queue-vs-implement-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "Implement WO-0007 — just that one work order, following its acceptance criteria",
+      "notes": "adjacency: implement vs work-queue — one named work order is the stage skill; a batch is the queue"
+    },
+    {
+      "id": "audit-1",
+      "kind": "direct",
+      "expected": "audit",
+      "query": "Audit this codebase and tell me what the highest-leverage things to fix are"
+    },
+    {
+      "id": "audit-2",
+      "kind": "situational",
+      "expected": "audit",
+      "query": "Nobody has looked at this repo end to end in months — go hunting for bugs, security holes and dead weight, and come back with what is actually worth doing"
+    },
+    {
+      "id": "audit-3",
+      "kind": "situational",
+      "expected": "audit",
+      "query": "We have shipped the obvious stuff. Read the code and tell me where this project should go next, with evidence from the repo rather than generic advice"
+    },
+    {
+      "id": "audit-vs-review-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Go through the whole codebase and find what is wrong with it",
+      "notes": "adjacency: audit vs review — an unscoped survey of the repo, not one run's implementation graded against its own plan"
+    },
+    {
+      "id": "audit-vs-doctor-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Check this repo over and tell me what is in bad shape",
+      "notes": "adjacency: audit vs doctor — the state of the code, not whether the pipeline install is wired up"
+    },
+    {
+      "id": "audit-vs-capture-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Something in here is rotting and I cannot name it — find the problems and tell me which ones deserve a run",
+      "notes": "adjacency: audit vs capture — no defect is named yet; capture takes down one the user already has"
+    },
+    {
+      "id": "capture-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "capture",
+      "query": "Checkout is throwing a 500 for logged-out users since Tuesday — let us start a fix for it",
+      "notes": "adjacency: capture vs audit — a named, reproduced defect goes straight to a maintenance run; audit is for finding unknown ones"
+    },
+    {
+      "id": "review-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "The work orders for the dark-mode feature are all implemented — review the run before we ship it",
+      "notes": "adjacency: review vs audit — scoped to one run's changes against its plan, not an open-ended survey of the repo"
+    },
+    {
+      "id": "deepen-1",
+      "kind": "direct",
+      "expected": "deepen",
+      "query": "Review this codebase for architecture improvements — where are the modules too shallow and what should be consolidated?"
+    },
+    {
+      "id": "deepen-2",
+      "kind": "situational",
+      "expected": "deepen",
+      "query": "Everything in here is a thin wrapper around something else and I have to open six files to follow one request — what should the shape actually be?"
+    },
+    {
+      "id": "deepen-3",
+      "kind": "situational",
+      "expected": "deepen",
+      "query": "This code is miserable to test — the unit tests all pass and the bugs are in how the pieces are wired together. Find the refactors worth doing"
+    },
+    {
+      "id": "deepen-vs-architect-1",
+      "kind": "near-miss",
+      "expected": "deepen",
+      "query": "Take a look at the architecture and tell me what to improve",
+      "notes": "adjacency: deepen vs architect — judging the shape of code that already exists, not designing a run's approach from its PRD"
+    },
+    {
+      "id": "architect-vs-deepen-1",
+      "kind": "near-miss",
+      "expected": "architect",
+      "query": "The PRD is approved — settle the data model and the interfaces before anyone writes code for this feature",
+      "notes": "adjacency: architect vs deepen — designing a run's technical approach up front, not reviewing existing structure"
+    },
+    {
+      "id": "deepen-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "deepen",
+      "query": "The coupling in this repo is the problem — find where the modules leak into each other and what to merge",
+      "notes": "adjacency: deepen vs audit — structural shape only; audit sweeps bugs, security, perf and debt across every category"
+    },
+    {
+      "id": "audit-vs-deepen-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Sweep the whole repo — bugs, security holes, missing tests, stale dependencies — and tell me what is worth doing",
+      "notes": "adjacency: audit vs deepen — every defect category, not the shape of the modules"
+    },
+    {
+      "id": "deepen-vs-diagram-1",
+      "kind": "near-miss",
+      "expected": "deepen",
+      "query": "Show me how the services here fit together and where the design is going wrong",
+      "notes": "adjacency: deepen vs interactive-architecture-diagram — the ask is a judgement about the structure; the diagram skill renders a system without judging it"
+    },
+    {
+      "id": "automate-1",
+      "kind": "direct",
+      "expected": "automate",
+      "query": "Recommend some Claude Code automations for this project — what hooks or subagents should I be running?"
+    },
+    {
+      "id": "automate-2",
+      "kind": "situational",
+      "expected": "automate",
+      "query": "I keep forgetting to regenerate the manifest after I touch a template and CI catches it every time. What should I put in place so I stop doing that by hand?"
+    },
+    {
+      "id": "automate-3",
+      "kind": "situational",
+      "expected": "automate",
+      "query": "Our contributor docs are full of rules nobody checks — what's worth automating here?"
+    },
+    {
+      "id": "automate-vs-doctor-1",
+      "kind": "near-miss",
+      "expected": "automate",
+      "query": "We've got a CLAUDE.md and a couple of skills installed and that's it — what else should we be running here?",
+      "notes": "adjacency: automate vs doctor — what automation the repo should ADD; doctor asks whether what is already installed is wired up correctly"
+    },
+    {
+      "id": "doctor-vs-automate-1",
+      "kind": "near-miss",
+      "expected": "doctor",
+      "query": "None of the skills seem to be loading and make check fails on a fresh stamp — is any of this actually installed right?",
+      "notes": "adjacency: doctor vs automate — diagnosing an existing install, not recommending new automation"
+    },
+    {
+      "id": "automate-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "automate",
+      "query": "What should we be automating in this repo — where are we still doing things by hand?",
+      "notes": "adjacency: automate vs audit — the gap is in the tooling around the code; audit sweeps the code itself for defects"
+    },
+    {
+      "id": "audit-vs-automate-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Go through the repo and tell me what's broken or rotting — bugs, security, coverage, stale deps",
+      "notes": "adjacency: audit vs automate — defects in the code, not missing automation around it"
+    },
+    {
+      "id": "router-1",
+      "kind": "router",
+      "expected": "next",
+      "query": "Continue the pipeline"
+    },
+    {
+      "id": "router-2",
+      "kind": "router",
+      "expected": "next",
+      "query": "Resume the payments feature run where we left off"
+    },
+    {
+      "id": "router-3",
+      "kind": "router",
+      "expected": "next",
+      "query": "I want to start a new product run",
+      "notes": "start-a-run without naming a stage routes to next, not idea"
+    },
+    {
+      "id": "distractor-1",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Why is this regex failing on multiline input?"
+    },
+    {
+      "id": "distractor-2",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Review my coworker's PR in the analytics repo",
+      "notes": "external code review — review skill is scoped to the run's changes"
+    },
+    {
+      "id": "distractor-3",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Write a blog post announcing our Series A"
+    },
+    {
+      "id": "distractor-4",
+      "kind": "distractor",
+      "expected": null,
+      "query": "What does this segfault stack trace mean?"
+    },
+    {
+      "id": "distractor-5",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Rename the userId variable to accountId across the codebase"
+    },
+    {
+      "id": "pb-1",
+      "kind": "direct",
+      "expected": "pipeline-board",
+      "query": "Generate the pipeline board so I can see which run is on which stage"
+    },
+    {
+      "id": "pb-2",
+      "kind": "situational",
+      "expected": "pipeline-board",
+      "query": "I've got several features and fixes in flight and I can't tell where each one stands — draw me a picture of which task is on which step"
+    },
+    {
+      "id": "pb-3",
+      "kind": "situational",
+      "expected": "pipeline-board",
+      "query": "Show me all the active runs in this repo placed on their current pipeline stages, at a glance, without me running commands"
+    }
   ]
 }
