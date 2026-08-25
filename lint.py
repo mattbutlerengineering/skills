@@ -177,6 +177,18 @@ RUN_STARTING = (STAGES[0], *MAINTENANCE_STAGES)
 IN_FLIGHT_HEADING = "Work already in flight"
 
 
+def _states(text, phrase):
+    """Does `text` state `phrase`, ignoring how it happens to be wrapped?
+
+    Every document this module reads is hard-wrapped near 72 columns, so a
+    multi-word phrase lands across a line break routinely — and a raw
+    substring test then fails a correct statement, which is pinning the
+    formatting and calling it the fact. Its two callers ask the same
+    question of a skill and of the protocol doc, and asking it twice in
+    two spellings is the drift this repo keeps writing ADRs about."""
+    return phrase.lower() in " ".join(text.lower().split())
+
+
 def _in_flight_problems(label, text):
     """A skill that starts a run recites the protocol's in-flight guard.
 
@@ -189,8 +201,8 @@ def _in_flight_problems(label, text):
     and stage recitals beside it. Those pin single tokens; this pins four
     words, and every one of these documents is hard-wrapped near 72
     columns — so a raw substring test fails a correct recital that happens
-    to wrap, which is pinning the formatting and calling it the fact."""
-    if IN_FLIGHT_HEADING.lower() in " ".join(text.lower().split()):
+    to wrap. `_states` owns that comparison for both callers."""
+    if _states(text, IN_FLIGHT_HEADING):
         return []
     return [f"{label} never names the protocol's "
             f"{IN_FLIGHT_HEADING!r} check, which is where a run that is "
@@ -419,8 +431,7 @@ def check_protocol(root):
     path = root / "docs" / "pipeline-protocol.md"
     if not path.is_file():
         return ["missing docs/pipeline-protocol.md"]
-    text = " ".join(path.read_text(encoding="utf-8").lower().split())
-    if IN_FLIGHT_HEADING.lower() in text:
+    if _states(path.read_text(encoding="utf-8"), IN_FLIGHT_HEADING):
         return []
     return [f"docs/pipeline-protocol.md no longer states "
             f"{IN_FLIGHT_HEADING!r}, which capture and idea both recite"]
