@@ -154,14 +154,33 @@ def _ux_skipped(run_dir):
     return (read_frontmatter(prd) or {}).get("ux") == "not-applicable"
 
 
+def checkbox_progress(path):
+    """(checked, total) counts of the file's checkboxes under this
+    seam's own grammar; a missing file counts (0, 0)."""
+    path = Path(path)
+    if not path.is_file():
+        return (0, 0)
+    boxes = _CHECKBOX.findall(path.read_text(encoding="utf-8"))
+    return (sum(1 for box in boxes if box in "xX"), len(boxes))
+
+
 def _all_boxes_checked(path):
     """Every checkbox in the file is checked. Zero checkboxes counts as
     incomplete — no checkboxes is no evidence of implementation, and the
     breakdown (wherever the run keeps it) always emits them."""
-    if not path.is_file():
-        return False
-    boxes = _CHECKBOX.findall(path.read_text(encoding="utf-8"))
-    return bool(boxes) and all(box in "xX" for box in boxes)
+    checked, total = checkbox_progress(path)
+    return total > 0 and checked == total
+
+
+def run_ref(root, run_dir):
+    """The protocol run-ref for a run directory: docs/ is the product
+    run; docs/features/<slug> and docs/fixes/<slug> carry their scale
+    in the parent name."""
+    rel = Path(run_dir).relative_to(Path(root))
+    if rel == Path("docs"):
+        return "product"
+    scale = "feature" if rel.parent.name == "features" else "maintenance"
+    return f"{scale}:{rel.name}"
 
 
 def is_maintenance_run(run_dir):

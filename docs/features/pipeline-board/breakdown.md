@@ -16,7 +16,7 @@ decompose; the checkboxes are the state).
 
 - [x] **WO-0045** protocol.stage_states — the full-ladder accessor — size:S, blocked by: — (PRD-0004 §Success criteria)
   - Accept: `stage_states(run_dir)` returns each run's own ordered ladder with states done|current|ahead|skipped, honoring the `ux:` conditional, `re-entry:` depth, and the Implement checkbox rule; a pinned test asserts `next_stage(run_dir)` equals the first non-done row across feature/maintenance/complete fixtures; unittest suite green.
-- [ ] **WO-0046** protocol.checkbox_progress + run_ref (lifted from dashboard) — size:S, blocked by: — (PRD-0004 §Success criteria)
+- [x] **WO-0046** protocol.checkbox_progress + run_ref (lifted from dashboard) — size:S, blocked by: — (PRD-0004 §Success criteria)
   - Accept: `checkbox_progress(path)` returns (checked, total) with (0, 0) for a missing file, using the seam's own checkbox grammar; `run_ref(root, run_dir)` returns product / feature:<slug> / maintenance:<slug>; `dashboard._run_ref` is replaced by a call to it with dashboard tests unchanged and green; the one-owner pre-pass reports no new group for the changed files.
 - [ ] **WO-0047** board.py — the board-model CLI — size:M, blocked by: WO-0045, WO-0046 (PRD-0004 §Success criteria)
   - Accept: `python3 board.py` on this repo prints the architecture's JSON contract — active runs only, each in `runs` or `attention` and never both or neither, sorted furthest-along-first with slug tie-break, `progress` non-null only at implement, `generated` stamped; no `docs/` tree → exit 1 with a `board:`-prefixed problem string; fixture-tree unit tests cover empty (exit 0, zero runs), mixed, and unorientable cases; `python3 lint.py` and `python3 gates.py` stay green.
