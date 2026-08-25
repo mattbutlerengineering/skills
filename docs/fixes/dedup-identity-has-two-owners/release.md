@@ -140,6 +140,36 @@ cells into fenced blocks — then PATCHed through
 reporting what looks like a warning. `validator.yml` lists `edited` among its
 `pull_request` trigger types precisely so a corrected body is re-checked.
 
+### And the correction did not clear the red check
+
+Editing the body was necessary and not sufficient. `needs-review-label` runs
+on `pull_request` only for `opened` and `reopened`
+(`.github/workflows/validator.yml:141-146`) — the `edited` trigger that
+re-evaluates `check` and `review` does not reach it — so the failure from the
+first body stood against a body that no longer contained the token.
+
+The workflow's own alternative is `workflow_dispatch` with a `pr` input,
+whose first step synthesizes the event payload. It is broken:
+
+```
+gh: Resource not accessible by integration (HTTP 403)
+...
+V: no pull_request in the CI event payload
+validator: 1 problem(s)
+```
+
+The job grants `contents: read` and `issues: write` and no
+`pull-requests: read`, so `gh api repos/<owner>/<repo>/pulls/341` is refused,
+no payload file is written, and the flip step reports an empty payload. Run
+32880637975.
+
+With the documented re-check path unavailable, the PR was **closed and
+reopened** — the only mechanism left that re-fires the job with a real
+payload. Nothing else about the PR changed, and no label was flipped in
+either direction (the body cites no work order, so `--uncited skip` makes the
+leg a no-op). Seeded to `docs/backlog.md`: the fix is one line of permission
+on two jobs.
+
 **Two facts worth carrying forward**, neither a complaint about #333:
 
 - #333 (*a quoted work-order token is not a claim*) is exactly this defect,
