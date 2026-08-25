@@ -27,7 +27,7 @@ assumptions: ["One milestone, three items. The fold is one comparison, but the c
   group, and `tests/test_budget_guard.py` passes unchanged — including both
   cases pinning the refusal string byte-for-byte.
 
-- [ ] **I3 — mirror and manifest.** Run
+- [x] **I3 — mirror and manifest.** Run
   `python3 factory_init.py update-manifest` and commit
   `factory/templates/tools/factory/budget_guard.py` and
   `factory/manifest.json` with the change.
