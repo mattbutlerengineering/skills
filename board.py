@@ -15,15 +15,8 @@ from pathlib import Path
 
 import cli
 from knowledge_plane import run_dirs
-from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
-                      breakdown_path, checkbox_progress, run_ref,
-                      stage_states)
-
-# Any stage artifact marks a run as begun — the protocol's "at least
-# one artifact" half of active, derived from the tables so a new stage
-# row is picked up here without a second list.
-_ARTIFACTS = sorted({artifact for _, artifact
-                     in STAGE_ARTIFACTS + MAINTENANCE_STAGE_ARTIFACTS})
+from protocol import (RUN_ARTIFACTS, breakdown_path, checkbox_progress,
+                      run_ref, stage_states)
 
 
 def _reason(err):
@@ -75,7 +68,7 @@ def gather(root, clock=None):
     for run_dir in run_dirs(root):
         try:
             if not any((run_dir / artifact).is_file()
-                       for artifact in _ARTIFACTS):
+                       for artifact in RUN_ARTIFACTS):
                 continue
             if (run_dir / "retro.md").is_file():
                 continue

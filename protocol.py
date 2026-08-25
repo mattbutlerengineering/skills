@@ -63,6 +63,13 @@ MAINTENANCE_STAGE_ARTIFACTS = [
     ("operate", "retro.md"),
 ]
 
+# Every artifact filename that marks a run dir as *a run at all* — the
+# protocol's active-run rule ("at least one artifact") over both
+# orientation tables. "code" never appears: implement's artifact is the
+# breakdown's checkboxes, already covered by decompose's row.
+RUN_ARTIFACTS = sorted({artifact for _, artifact
+                        in STAGE_ARTIFACTS + MAINTENANCE_STAGE_ARTIFACTS})
+
 _FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 # Bullet-and-whitespace shape aligned with knowledge_plane.ROW (the
 # dispatch-plane row grammar) so completion counting and dispatch agree

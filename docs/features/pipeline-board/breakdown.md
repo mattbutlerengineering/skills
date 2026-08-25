@@ -54,3 +54,11 @@ None.
   required three routing-eval cases (pb-1..pb-3 appended to
   evals/routing.json, definitions only, per eval honesty) — another
   registration surface the breakdown hadn't named.
+- 2026-08-25 (verify route-back, order 0047): the one-owner pre-pass
+  surfaced a tenth group — board.py restated dashboard.py's derivation
+  of the active-run artifact roster, the exact second-owner class this
+  run's architecture set out to avoid. Lifted into the seam as
+  `protocol.RUN_ARTIFACTS` (pinned in tests/test_protocol_accessors.py);
+  both callers now import it and the pre-pass is back to its standing
+  nine groups. protocol.py is mirrored, so the manifest was regenerated
+  with the change.

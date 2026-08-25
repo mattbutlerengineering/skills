@@ -11,7 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from protocol import breakdown_path, checkbox_progress, run_ref  # noqa: E402
+from protocol import (RUN_ARTIFACTS, MAINTENANCE_STAGE_ARTIFACTS,  # noqa: E402
+                      STAGE_ARTIFACTS, breakdown_path, checkbox_progress,
+                      run_ref)
 
 MAINTENANCE = ROOT / "tests" / "fixtures" / "maintenance-orientation"
 
@@ -83,6 +85,16 @@ class TestRunRef(unittest.TestCase):
         root = Path("/repo")
         self.assertEqual(run_ref(root, root / "docs" / "fixes" / "y"),
                          "maintenance:y")
+
+
+class TestRunArtifacts(unittest.TestCase):
+    def test_covers_every_artifact_from_both_tables(self):
+        expected = {artifact for _, artifact
+                    in STAGE_ARTIFACTS + MAINTENANCE_STAGE_ARTIFACTS}
+        self.assertEqual(set(RUN_ARTIFACTS), expected)
+
+    def test_sorted_and_deduplicated(self):
+        self.assertEqual(RUN_ARTIFACTS, sorted(set(RUN_ARTIFACTS)))
 
 
 if __name__ == "__main__":
