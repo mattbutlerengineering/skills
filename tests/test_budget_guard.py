@@ -392,32 +392,50 @@ class TestRecord(unittest.TestCase):
         them keep passing if the seam's identity moves and record's copy
         does not — measured: mutating row_key to a three-field identity
         fails one cost_ledger test and none of this module's. This case asks
-        the seam what it thinks of the candidate row and asserts record
-        reached the same verdict, so a divergence lands here.
+        the seam what it thinks of each candidate and asserts record reached
+        the same verdict, so a divergence lands here.
 
-        The candidate differs from the recorded row in `model` alone: under
-        today's (wo, run_id) identity the seam calls it a duplicate, and
-        under any identity that grows to include model it does not.
+        Two candidates, because one direction is not enough. Each differs
+        from the recorded row in exactly one field:
+
+          - a new MODEL, which today's (wo, run_id) identity ignores. A
+            WIDER identity (one that grew to include model) calls it
+            distinct while a stale inline copy still refuses it.
+          - a new RUN_ID, which today's identity honours. A NARROWER
+            identity (one that shrank to wo alone) calls it a duplicate
+            while a stale inline copy still accepts it.
+
+        A single candidate catches only the direction it happens to move
+        in.
         """
         first = ("WO-0007", "r-1", "claude-sonnet-5", 4200, 1.25,
                  "completed", "2026-08-07")
-        candidate = ("WO-0007", "r-1", "claude-haiku-4-5", 100, 0.1,
-                     "completed", "2026-08-07")
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            self.assertEqual(budget_guard.record(tree.root, *first), [])
-            recorded, problems = cost_ledger.read(tree.root)
-            self.assertEqual(problems, [])
-            seam_calls_it_a_duplicate = (
-                cost_ledger.row_key(cost_ledger.entry(*candidate))
-                == cost_ledger.row_key(recorded[0]))
-            refused = bool(budget_guard.record(tree.root, *candidate))
-            self.assertEqual(
-                refused, seam_calls_it_a_duplicate,
-                "record and cost_ledger.row_key disagree about whether"
-                f" {candidate[:3]} is already in the ledger")
-            self.assertEqual(len(self.lines(tree)),
-                             1 if seam_calls_it_a_duplicate else 2)
+        candidates = {
+            "a new model": ("WO-0007", "r-1", "claude-haiku-4-5", 100, 0.1,
+                            "completed", "2026-08-07"),
+            "a new run_id": ("WO-0007", "r-2", "claude-sonnet-5", 4200, 1.25,
+                             "completed", "2026-08-07"),
+        }
+        for differs_by, candidate in candidates.items():
+            with self.subTest(differs_by=differs_by):
+                with tempfile.TemporaryDirectory() as tmp:
+                    tree = FixtureTree(tmp)
+                    self.assertEqual(
+                        budget_guard.record(tree.root, *first), [])
+                    recorded, problems = cost_ledger.read(tree.root)
+                    self.assertEqual(problems, [])
+                    seam_calls_it_a_duplicate = (
+                        cost_ledger.row_key(cost_ledger.entry(*candidate))
+                        == cost_ledger.row_key(recorded[0]))
+                    refused = bool(
+                        budget_guard.record(tree.root, *candidate))
+                    self.assertEqual(
+                        refused, seam_calls_it_a_duplicate,
+                        "record and cost_ledger.row_key disagree about"
+                        f" whether {candidate[:3]} is already in the ledger")
+                    self.assertEqual(
+                        len(self.lines(tree)),
+                        1 if seam_calls_it_a_duplicate else 2)
 
     def test_an_unparseable_ledger_fails_closed(self):
         """Appending spend to a ledger that cannot be summed would
