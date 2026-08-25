@@ -114,6 +114,43 @@ does not orphan anything.
    branch before merging it — `factory/manifest.json` is the shared line and
    four other open PRs touch it.
 
+## The hiccup: the first PR body failed the lifecycle leg
+
+Recorded because a clean-looking release log that omits the retry is a lie
+to the next release.
+
+`check` and `review` passed on the first push; `needs-review-label` failed:
+
+```
+python3 validator.py lifecycle --label wo:needs-review --uncited skip
+V: none of the work orders this PR cites (WO-00NN) is mirrored to an issue it closes (#340) — a PR implements the work order whose breakdown row it closes
+validator: 1 problem(s)
+```
+
+The body quoted two assertion messages containing the work-order id this
+module's test fixtures have always used. The lifecycle leg read that as a
+citation, and a maintenance PR carrying a `No work order:` waiver mirrors it
+to no issue it closes.
+
+Nothing was wrong with the change; the PR body was. Fixed by rewriting the
+body — the digits elided as `WO-00NN`, and the evidence moved out of table
+cells into fenced blocks — then PATCHed through
+`gh api repos/<owner>/<repo>/pulls/341 -X PATCH -F body=@<file>`, because
+`gh pr edit` fails on this repo (Projects-classic GraphQL deprecation) while
+reporting what looks like a warning. `validator.yml` lists `edited` among its
+`pull_request` trigger types precisely so a corrected body is re-checked.
+
+**Two facts worth carrying forward**, neither a complaint about #333:
+
+- #333 (*a quoted work-order token is not a claim*) is exactly this defect,
+  and it is unmerged — so the elision was required today whatever the body's
+  shape.
+- #333 exempts fenced blocks and blockquotes but **deliberately not inline
+  code**, because backticked ids are how this repo writes genuine claims. The
+  original body carried its evidence in table cells — inline code — so it
+  would have failed after that merge too. Fences are the sanctioned form for
+  quoted evidence in a PR body, and that is now what this PR uses.
+
 ## Not executed, and why
 
 `autorun-brief.md` records the release authorization as **none** —
