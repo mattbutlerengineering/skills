@@ -28,7 +28,7 @@
     "templates/tools/factory/cost_ledger.py": "f4c5fffec5a2fcdcb796515920ba3ee72f3e1fa556fc4b603333468f27aab6ce",
     "templates/tools/factory/cost_report.py": "b5541ade4c49f9af1fdbf0e25e9cd14232b86e1104a0f540df6c98d322c0ab00",
     "templates/tools/factory/factory_config.py": "a040880859269d993076a250e4ad61ea52a7595e696f8e2d9ad98e90842a260d",
-    "templates/tools/factory/gate_digest.py": "4356864dcc965d2b184fb51a866a8e8e2739aca71f359550408c446fa961fdde",
+    "templates/tools/factory/gate_digest.py": "8ed0b2f5da5cec57afb0cf86a8e81e3b0241fbd0ed318581fc9cbe76a6e97656",
     "templates/tools/factory/gates.py": "e348d724d3ffd27011eb2453dba888202b5aad9b4a108cb424c41492737145e9",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/human_gates.py": "2ee4360b9840858a523253875997a1a426f1332f94b18292767921f167a9de70",

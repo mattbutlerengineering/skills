@@ -45,7 +45,7 @@ assumptions:
 
 ## M3 — the payload stays in lockstep
 
-- [ ] **I5** mirror `gate_digest.py` and regenerate the manifest — size:S, blocked by: I4
+- [x] **I5** mirror `gate_digest.py` and regenerate the manifest — size:S, blocked by: I4
       (CLAUDE.md §Factory templates are checksum-pinned)
       *Acceptance:* `python3 factory_init.py update-manifest` run and
       committed; `python3 gates.py` reports `gates: 0 problem(s)` (detector
@@ -74,8 +74,8 @@ change.
 **2026-08-25 — two pre-existing tests changed their assertion.**
 `test_a_failing_timeline_still_posts_the_digest` and
 `test_an_unparseable_timeline_still_posts_the_digest` each asserted
-`- #123 WO-0018 rejection mining` on a run whose timeline could NOT be
-read — the exact line `defect.md` measured as indistinguishable from a
+the unmarked item line — number, title, no
+suffix — on a run whose timeline could NOT be read — the exact line `defect.md` measured as indistinguishable from a
 readable-but-eventless history. They pinned the defect as intended
 behaviour. Both now assert the marked line; both keep their
 problem-string assertions byte-for-byte, which is the half that must not
