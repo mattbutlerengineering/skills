@@ -39,7 +39,7 @@ problem for the decorated module in `defect.md`'s reproduction.
 **Demonstrable at the boundary:** `_rent`'s message for `defect.md`'s
 `other.g` names the real problem.
 
-- [ ] **I3 — `defined_names(path, source)`.**
+- [x] **I3 — `defined_names(path, source)`.**
   Module-level `ast.Assign` targets from `tree.body`; every `FunctionDef`,
   `AsyncFunctionDef` and `ClassDef` from `ast.walk`. Returns a set of
   `<module>.<name>`; empty set for source that will not parse.
@@ -48,7 +48,7 @@ problem for the decorated module in `defect.md`'s reproduction.
   still yields its function name; unparseable source yields an empty set
   and raises nothing.
 
-- [ ] **I4 — `_rent` splits the counterpart branch three ways.** *(blocked by I3)*
+- [x] **I4 — `_rent` splits the counterpart branch three ways.** *(blocked by I3)*
   New `defined` parameter before `adr_ids`; `check` passes the union of
   `defined_names` over every file it read.
   *Acceptance:* a counterpart that exists but states no fact yields the new
@@ -80,3 +80,9 @@ and `keys(...)` at nineteen call sites would have said nothing.
 shows a conditional on a non-empty `decorator_list`; `min`'s own `default=`
 expresses the same thing in one expression, so the empty case is not a
 branch a reader has to check.
+
+**2026-08-24 — I4, `_rent`'s old local is renamed.** The existing
+`defined` local (built from fact sites) becomes `stated`, and `defined`
+is now the new parameter. Renaming rather than inventing a third word:
+the two sets answer "states a fact" and "exists", and the branch reads as
+those two questions in that order.

@@ -205,6 +205,40 @@ def fact_sites(path, source):
     return sorted(found, key=lambda site: (site.lineno, site.name)), []
 
 
+def defined_names(path, source):
+    """Every `<module>.<name>` one module binds, whether or not it states
+    a fact.
+
+    A DIFFERENT question from `fact_sites`', not a second copy of it:
+    that one asks what a module states, this one asks what it names. Only
+    `_rent` needs it, to tell a counterpart that was deleted from one
+    that merely dropped below the fact floor — which is what a fold does
+    to one side of a duplicate.
+
+    Reach is matched to what can BECOME a fact site, so the two answers
+    cannot disagree: module-level assignments from `tree.body`, because
+    that is the only place `same-value` looks; every function and class
+    from `ast.walk`, because `same-keys` walks too, so a nested function
+    can be a fact site and must not read as undefined. A class is
+    collected although no class is ever a fact site — a marker naming one
+    should hear "states no fact", not "does not exist".
+
+    Silent on source that will not parse: `fact_sites` reports that
+    module, and one report of a broken file is enough.
+    """
+    try:
+        tree = ast.parse(source, filename=path)
+    except SyntaxError:
+        return set()
+    found = {_ident(path, target.id)
+             for node in tree.body if isinstance(node, ast.Assign)
+             for target in node.targets if isinstance(target, ast.Name)}
+    found |= {_ident(path, node.name) for node in ast.walk(tree)
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                   ast.ClassDef))}
+    return found
+
+
 def source_files(root, run=git_runner):
     """([(repo-relative posix path, source text), ...], problems), sorted
     by path — every module this repo owns, and nothing else.
@@ -386,9 +420,14 @@ def _coverage(found_groups, marks):
     return problems
 
 
-def _rent(found_groups, marks, sites, adr_ids):
+def _rent(found_groups, marks, sites, defined, adr_ids):
     """OVER-COVERAGE. Every marker must match a duplicate this pass
     actually finds, and must cite a record that exists.
+
+    `sites` says which names STATE a fact; `defined` says which names
+    EXIST. The counterpart branch needs both, because "gone" and "still
+    there, stating nothing" are different findings with different
+    remedies, and a fold turns the first into the second.
 
     A carve-out list nothing re-checks is the condition this tool exists
     to fix, so a marker whose counterpart was deleted, renamed or folded
@@ -399,7 +438,7 @@ def _rent(found_groups, marks, sites, adr_ids):
     detector module from a tool is the coupling ADR-0058 removed; folding
     that grammar into a seam is its own decision, not a ride-along.
     """
-    defined = {_ident(site.path, site.name) for site in sites}
+    stated = {_ident(site.path, site.name) for site in sites}
     group_of = {(site.path, site.name): group
                 for group in found_groups for site in group.sites}
     problems = []
@@ -408,6 +447,12 @@ def _rent(found_groups, marks, sites, adr_ids):
             problems.append(f"one-owner: {marker.path}:{marker.lineno} names"
                             f" {marker.counterpart}, which is not defined in"
                             " this repo")
+        elif marker.counterpart not in stated:
+            problems.append(f"one-owner: {marker.path}:{marker.lineno} names"
+                            f" {marker.counterpart}, which is defined but"
+                            " states no fact this pass reads — name the"
+                            " definition that duplicates, or remove the"
+                            " marker")
         else:
             group = group_of.get((marker.path, marker.owner))
             peers = {_ident(site.path, site.name)
@@ -438,7 +483,7 @@ def check(root, run=git_runner):
     nothing — every failure is a problem string.
     """
     files, problems = source_files(root, run)
-    sites, marks = [], []
+    sites, marks, defined = [], [], set()
     for path, source in files:
         found, trouble = fact_sites(path, source)
         sites += found
@@ -446,9 +491,10 @@ def check(root, run=git_runner):
         marked, marker_trouble = markers(path, source)
         marks += marked
         problems += marker_trouble
+        defined |= defined_names(path, source)
     found_groups = groups(sites)
     problems += _coverage(found_groups, marks)
-    problems += _rent(found_groups, marks, sites, _adr_ids(root))
+    problems += _rent(found_groups, marks, sites, defined, _adr_ids(root))
     return sorted(problems)
 
 
