@@ -255,10 +255,10 @@ def run_resolve(root, env, agents_dir=None):
 
 
 def pr_for_issue(issue_number, run=gh_runner):
-    """Find(the newest open PR whose body Closes the issue, whether
-    this run got to look, problems). The
-    join is the Closes link — the same CLOSES_TOKEN grammar the mirror
-    and detector B read (ADR-0032) — never a branch-name convention:
+    """Find(the newest open PR whose body Closes the issue, whether this
+    run got to look, problems). The join is the Closes link — the same
+    CLOSES_TOKEN grammar the mirror and detector B read (ADR-0032) —
+    never a branch-name convention:
     the PR the dispatched agent delivered is exactly the one that cites
     its order, and an agent that delivered no such PR is a problem, not
     a silent miss. gh answers newest-first, so the first match is the

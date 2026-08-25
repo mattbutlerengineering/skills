@@ -469,9 +469,13 @@ class TestPrForIssue(unittest.TestCase):
 
 
 class TestFindPrVerb(unittest.TestCase):
-    """`find-pr <issue>` writes pr= to $GITHUB_OUTPUT for the workflow's
-    validator-dispatch step — empty when no PR matched, so the step's
-    guard can skip instead of dispatching the validator at nothing."""
+    """`find-pr <issue>` writes two outputs to $GITHUB_OUTPUT, and the
+    workflow branches on both. `pr` drives the validator-dispatch step —
+    empty when no PR matched, so the guard skips instead of dispatching
+    the validator at nothing. `looked` drives the failure step: it is
+    false when this run could not observe the agent's delivery at all,
+    and ADR-0063 suppresses the terminal wo:failed flip on exactly that
+    value. Both must be written even when the verb exits nonzero."""
 
     LISTING = TestPrForIssue.LISTING
 
