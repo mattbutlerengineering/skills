@@ -58,7 +58,7 @@ problem for the decorated module in `defect.md`'s reproduction.
 
 ## M3 — the tool's own output is unchanged
 
-- [ ] **I5 — the standing findings are byte-identical.** *(blocked by I2, I4)*
+- [x] **I5 — the standing findings are byte-identical.** *(blocked by I2, I4)*
   *Acceptance:* `python3 one_owner.py` prints exactly the eight problems and
   the `one-owner: 8 problem(s)` summary quoted in `defect.md`, and exits 1;
   `python3 -m unittest discover tests` green; `python3 lint.py` reports
@@ -86,3 +86,13 @@ branch a reader has to check.
 is now the new parameter. Renaming rather than inventing a third word:
 the two sets answer "states a fact" and "exists", and the branch reads as
 those two questions in that order.
+
+**2026-08-24 — I5, the selftest's summary line.** The acceptance criterion
+said `gates.py --selftest` reports `gates: 0 problem(s)`; it reports
+`selftest: ok`. The criterion was written from CLAUDE.md's phrasing without
+running the second command. Corrected here rather than in the criterion, so
+the artifact records what the command actually says.
+
+**2026-08-24 — I5, byte-identity was diffed, not read.** The eight standing
+findings are compared as files (`diff before.txt after.txt`) against the
+tool built at ef8f1e2, not eyeballed. Both exit 1.
