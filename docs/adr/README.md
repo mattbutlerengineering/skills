@@ -82,3 +82,4 @@ the canonical vocabulary.
 | [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | accepted |
 | [0060](0060-one-cross-plane-drift-rule.md) | One cross-plane drift rule; the caller declares what absence means | accepted |
 | [0061](0061-a-carve-out-lives-at-the-definition-site.md) | A carve-out lives at the definition site and must pay rent | provisional |
+| [0063](0063-a-terminal-verdict-requires-having-looked.md) | A terminal verdict requires having looked | provisional |
