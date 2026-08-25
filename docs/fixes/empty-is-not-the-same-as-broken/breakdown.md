@@ -9,19 +9,19 @@ assumptions: ["One milestone, four items. The distinction (I1) lands before the 
 
 ## Milestone 1 — the body distinguishes a failed stream from an empty one
 
-- [ ] **I1 — `_change_requests` stops answering `[]` for a failed listing.**
+- [x] **I1 — `_change_requests` stops answering `[]` for a failed listing.**
   Return `None` on failure, `[]` on a successful empty read; `problems` is
   untouched.
   *Acceptance:* a test drives `run_mine` with `failing=["pr", "list"]` and
   asserts `_change_requests` returned `None` while the healthy-empty run
   returned `[]`, with the same problem string as today in the failing case.
 
-- [ ] **I2 — `compose_queue` renders a `Sources:` line.**
+- [x] **I2 — `compose_queue` renders a `Sources:` line.**
   New `sources=None` argument; `None` renders today's body byte-for-byte.
   *Acceptance:* the existing body tests pass unedited, and a new test pins
   both worded forms — complete, and partial with a named unreadable stream.
 
-- [ ] **I3 — `run_mine` words the two gaps.**
+- [x] **I3 — `run_mine` words the two gaps.**
   Compute the timeline gap from `set(mirrored) - set(events_by_issue)` and
   the change-request gap from I1's `None`, word both, pass them down.
   *Acceptance:* the regression from `defect.md` inverts — a healthy-empty

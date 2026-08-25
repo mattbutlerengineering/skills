@@ -200,6 +200,28 @@ class TestComposeQueue(unittest.TestCase):
         body = rejection_mining.compose_queue({}, {}, "2026-08-14")
         self.assertIn("No corrections mined.", body)
 
+    def test_a_caller_with_nothing_to_say_gets_todays_body(self):
+        """`sources` defaults to None and renders no line, so every
+        existing caller and every existing pin keeps its body
+        byte-for-byte. The compatibility seam, asserted rather than
+        assumed."""
+        self.assertEqual(
+            rejection_mining.compose_queue({}, {}, "2026-08-14"),
+            rejection_mining.compose_queue({}, {}, "2026-08-14",
+                                           sources=None))
+
+    def test_the_sources_line_is_rendered_when_given(self):
+        """compose_queue owns the body's structure; run_mine owns the
+        wording, the same split the CLI's reason line already uses. So
+        this asserts placement, not prose: the line lands above the
+        corrections, because a partial harvest changes how everything
+        below it reads."""
+        body = rejection_mining.compose_queue(
+            {"WO-0101": [("merge", "2026-08-11T09:00:00Z")]}, {},
+            "2026-08-14", sources="gate rejections from 1 of 1")
+        self.assertIn("Sources: gate rejections from 1 of 1", body)
+        self.assertLess(body.index("Sources:"), body.index("WO-0101"))
+
 
 class TestRunMine(unittest.TestCase):
     def test_first_run_creates_and_pins_the_queue_issue(self):
@@ -273,6 +295,55 @@ class TestRunMine(unittest.TestCase):
                              ["rm: gh pr list failed: boom"])
             self.assertIn(["issue", "create"],
                           [c[:2] for c in run.calls])
+
+    def _posted_body(self, run):
+        posted = [c for c in run.calls if c[:2] in (["issue", "create"],
+                                                    ["issue", "edit"])]
+        self.assertTrue(posted, "nothing was posted")
+        call = posted[-1]
+        return call[call.index("--body") + 1]
+
+    def test_a_failed_listing_and_an_empty_one_read_differently(self):
+        """The regression from defect.md, inverted.
+
+        Before this run both bodies were byte-identical: `_change_requests`
+        answered `[]` for a failed listing and `[]` for a healthy empty one,
+        so the artifact a human reads could not tell a harvest that found
+        nothing from one that could not look. The failure reached the CLI's
+        problem list and the workflow log, and stopped there.
+        """
+        issues = [issue(7, "WO-0101: first")]
+        with tempfile.TemporaryDirectory() as tmp:
+            healthy = gh(issues=issues, timelines={7: REJECTED_STAY}, prs=[])
+            rejection_mining.run_mine(tree(tmp).root, run=healthy,
+                                      clock=clock)
+            read = self._posted_body(healthy)
+        with tempfile.TemporaryDirectory() as tmp:
+            broken = gh(issues=issues, timelines={7: REJECTED_STAY},
+                        prs=[], failing=("pr", "list"))
+            rejection_mining.run_mine(tree(tmp).root, run=broken,
+                                      clock=clock)
+            unread = self._posted_body(broken)
+        self.assertNotEqual(read, unread)
+        self.assertIn("change requests from the PR listing", read)
+        self.assertIn("NOT READ", unread)
+        self.assertIn("PR listing", unread)
+
+    def test_an_unreadable_timeline_is_counted_not_hidden(self):
+        """The stream the seed did not name. A timeline fetch that fails
+        thins the harvest, and `_timelines` is explicit that this must be a
+        problem rather than a silently thinner result — true of the problem
+        list, and not of the body it feeds until now."""
+        issues = [issue(7, "WO-0101: first"), issue(8, "WO-0102: second")]
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=issues, timelines={7: REJECTED_STAY}, prs=[],
+                     failing=("api",))
+            _, problems = rejection_mining.run_mine(tree(tmp).root, run=run,
+                                                    clock=clock)
+            body = self._posted_body(run)
+        self.assertTrue(problems, "a failed timeline must stay a problem")
+        self.assertIn("0 of 2 issue timelines", body)
+        self.assertIn("unreadable", body)
 
 
 class TestWorkflowPermissions(unittest.TestCase):
