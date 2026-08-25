@@ -65,6 +65,14 @@ queue body from whatever code is on `main`.
    first real evidence that the body's `No work order:` waiver plus
    `Closes #342` satisfies it. It does, on the first attempt: no body
    rewrite and no close/reopen was needed, unlike the previous run.
+
+   Read this line for what it is, because `gh pr checks 343` will not show
+   it. That job runs only on `opened`/`reopened`, so the two artifact
+   commits pushed after it report `SKIPPED` and the tool displays the
+   latest run per workflow. The `SUCCESS` above is from the `opened` event,
+   against the body that is still the body — nothing has edited it since.
+   A reader who checks today and sees `SKIPPED` is seeing a job that did
+   not re-run, not one that failed.
 4. `gh pr view 343` → `OPEN MERGEABLE CLEAN`.
 5. **Stopped here.** No merge, no tag, no publish.
 
