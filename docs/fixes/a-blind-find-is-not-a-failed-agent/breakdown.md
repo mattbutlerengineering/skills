@@ -37,7 +37,7 @@ assumptions:
 
 ## M3 — the payload stays in lockstep
 
-- [ ] **I4** mirror and regenerate the manifest — size:S, blocked by: I3
+- [x] **I4** mirror and regenerate the manifest — size:S, blocked by: I3
       (CLAUDE.md §Factory templates are checksum-pinned)
       *Acceptance:* `python3 -B factory_init.py update-manifest` run and
       committed; `python3 gates.py` green and `tests/test_factory_init.py`
