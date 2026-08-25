@@ -3,7 +3,7 @@ stage: review
 run: maintenance:a-blind-find-is-not-a-failed-agent
 date: 2026-08-25
 assumptions:
-  - "No live operator — this run is driven from autorun-brief.md, so every severity call and every fix/defer decision below is mine, taken against CLAUDE.md, CONTEXT.md, the cited ADRs and the run's own artifacts. A severity the operator disagrees with is a line to correct, not a design change"
+  - "No live operator and no brief file — this run was driven by a standing autorun instruction, not an interview, so no autorun-brief.md exists for it. Every severity call and every fix/defer decision below is therefore mine, taken against CLAUDE.md, CONTEXT.md, the cited ADRs and the run's own artifacts. A severity the operator disagrees with is a line to correct, not a design change"
   - "Depth is scaled to the blast radius defect.md records: one factory verb, one workflow condition, nothing user-facing. The verb and the condition got a full-depth pass; the ADR and the run's own documents got a lighter one"
   - "Verify's battery is the floor and was re-run here only because this review changed two files (see Finding 4). What I re-derived beyond it was chosen from verification.md's own Not verified list"
   - "Nothing was pushed and no PR was opened during review. Ship is the next stage"
