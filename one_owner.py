@@ -73,8 +73,14 @@ _MARKER = re.compile(r"^#\s*one-owner:\s*"
 # What one module states, at one place. `identity` is the grouping key
 # and `lineno` is the definition's own line — the join key a marker
 # above it is attached by.
+# `lineno` and `attach` are two different questions about one definition.
+# `lineno` is where a problem string points a reader — the `def` or the
+# assignment. `attach` is where a comment block written above the
+# definition ends, which for a decorated one is its first decorator. They
+# are equal for everything else.
 FactSite = namedtuple("FactSite",
-                      ("kind", "path", "lineno", "name", "identity"))
+                      ("kind", "path", "lineno", "attach", "name",
+                       "identity"))
 
 # One recorded deliberate second owner, read at the definition it
 # excuses. `lineno` is the marker comment's own line, `owner` the name
@@ -179,16 +185,23 @@ def fact_sites(path, source):
         identity = _stated_value(node.value)
         if identity is None:
             continue
-        found += [FactSite("same-value", path, node.lineno, target.id,
-                           identity)
+        # An ast.Assign has no decorator_list, so there is no second line
+        # to carry and attach is the assignment's own.
+        found += [FactSite("same-value", path, node.lineno, node.lineno,
+                           target.id, identity)
                   for target in node.targets if isinstance(target, ast.Name)]
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         keys = _read_keys(node)
         if len(keys) > 1:
-            found.append(FactSite("same-keys", path, node.lineno, node.name,
-                                  ", ".join(sorted(keys))))
+            # min, not decorator_list[0]: the list is source-ordered, but
+            # min says the earliest decorator wins without the reader
+            # having to know that.
+            attach = min((d.lineno for d in node.decorator_list),
+                         default=node.lineno)
+            found.append(FactSite("same-keys", path, node.lineno, attach,
+                                  node.name, ", ".join(sorted(keys))))
     return sorted(found, key=lambda site: (site.lineno, site.name)), []
 
 
@@ -268,11 +281,17 @@ def markers(path, source):
     owners it records, read at the definitions they excuse.
 
     Comments are absent from the AST, so this is a line scan joined to
-    fact_sites by the DEFINITION's lineno — the one place the two readers
+    fact_sites by the DEFINITION's lines — the one place the two readers
     of a file meet. A marker attaches only from inside the contiguous
     comment block immediately above a fact site; a blank line ends the
     block, because a marker one line away is near a definition rather
     than above it.
+
+    "Above" means above the whole definition, decorators included. The
+    join walks up from both `site.lineno` and `site.attach`, so a marker
+    written above a decorated function attaches, and so does one written
+    between its decorator and its `def` — the only placement that worked
+    before `attach` existed.
 
     In every failure below the marker silences nothing: a marker that
     cannot be read is not a permission.
@@ -281,10 +300,15 @@ def markers(path, source):
     comments = _standalone_comments(source)
     owner_of = {}
     for site in sites:
-        lineno = site.lineno - 1
-        while lineno in comments:
-            owner_of[lineno] = site
-            lineno -= 1
+        # Both lines, because both placements are above the definition to
+        # a reader: the block above its first decorator, and the block
+        # between that decorator and the `def`. For everything else the
+        # two starts are equal and the second walk repeats the first.
+        for start in (site.lineno, site.attach):
+            lineno = start - 1
+            while lineno in comments:
+                owner_of[lineno] = site
+                lineno -= 1
     found, problems = [], []
     for lineno in sorted(comments):
         text = comments[lineno]

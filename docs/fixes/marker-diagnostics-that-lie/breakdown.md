@@ -15,7 +15,7 @@ dispatch. Issue #336 tracks the run as a whole.
 **Demonstrable at the boundary:** `markers` returns the marker and no
 problem for the decorated module in `defect.md`'s reproduction.
 
-- [ ] **I1 — `FactSite` carries the attach line.**
+- [x] **I1 — `FactSite` carries the attach line.**
   Add `attach` between `lineno` and `name`. `fact_sites` fills it from
   `min(d.lineno for d in node.decorator_list)` when that list is non-empty,
   else `node.lineno`; the `same-value` construction passes `node.lineno`
@@ -25,7 +25,7 @@ problem for the decorated module in `defect.md`'s reproduction.
   function's site has `attach` at the `@` line and `lineno` at the `def`
   line; every other existing test passes untouched.
 
-- [ ] **I2 — `markers` walks up from both lines.** *(blocked by I1)*
+- [x] **I2 — `markers` walks up from both lines.** *(blocked by I1)*
   Walk from `site.lineno - 1` and from `site.attach - 1`.
   *Acceptance:* the decorated module from `defect.md` yields one marker and
   zero problems; a marker placed *between* the decorator and the `def`
@@ -68,3 +68,15 @@ problem for the decorated module in `defect.md`'s reproduction.
 ## Notes
 
 *(dated deviations from the design go here)*
+
+**2026-08-24 — I1, the test helper takes a default.** `architecture.md`
+says the `site(...)` helper "gains the parameter"; implemented as
+`attach=None` falling back to `lineno` rather than a required positional.
+Every site those helpers build by hand is undecorated, so the default IS
+the invariant, and threading a duplicate line number through `value(...)`
+and `keys(...)` at nineteen call sites would have said nothing.
+
+**2026-08-24 — I1, `min(..., default=node.lineno)`.** `architecture.md`
+shows a conditional on a non-empty `decorator_list`; `min`'s own `default=`
+expresses the same thing in one expression, so the empty case is not a
+branch a reader has to check.
