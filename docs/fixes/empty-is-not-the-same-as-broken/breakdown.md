@@ -37,3 +37,33 @@ assumptions: ["One milestone, four items. The distinction (I1) lands before the 
 ## Notes
 
 *(deviations logged here, dated, as they happen)*
+
+**2026-08-25 — I5 added during Review: a truncated listing is a third
+partial harvest.** The Review stage's first pass found that I1–I3 fixed
+two of the three ways this harvest goes short and left the quietest one
+in place. `cli.gh_read` treats a full window as a SUCCESS — "a full
+window leaves the value usable and flips `truncated`" — so a listing cut
+at its window returns a usable, short value, `_change_requests` maps it
+like any other, and the new `Sources:` line asserted a clean read of a
+listing it had only seen the top of. Measured before the fix, with both
+listings full:
+
+    Sources: gate rejections from 1 of 1 issue timelines; change requests
+    from the PR listing.
+
+Identical to a healthy harvest. This is the defect the run exists to
+remove, reproduced inside the run's own fix, so it is repaired here
+rather than seeded: I5 below, test-first like the rest. The design's D1
+holds — `None` still answers only "was it read", and truncation rides
+the caller-owned `truncated` list the way `problems` already does,
+because a full window is read, usable, and short: two facts, two
+channels.
+
+- [x] **I5 — a truncated listing is named in the body.**
+  Both listings, since both feed counts the line prints; the issue
+  listing also shortens `mirrored`, so truncation there understates the
+  printed denominator and the clause is the only correction available.
+  *Acceptance:* two tests build a real full window (the convention
+  `test_gate_digest` already uses — no patched constants) and assert both
+  the unchanged `gh_read` problem string and a body naming the cut
+  listing.

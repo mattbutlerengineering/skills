@@ -345,6 +345,47 @@ class TestRunMine(unittest.TestCase):
         self.assertIn("0 of 2 issue timelines", body)
         self.assertIn("unreadable", body)
 
+    def test_a_full_pr_window_is_named_in_the_body(self):
+        """The third way a harvest goes partial, and the one this run's own
+        fix was blind to. gh_read leaves a full-window value USABLE and
+        flips `truncated`: the listing succeeded, the harvest is short, and
+        `requests` is a list like any other. So the body's own new line
+        asserted a clean read of a listing it had only seen the top of —
+        the defect this run exists to remove, one state over."""
+        issues = [issue(7, "WO-0101: first")]
+        prs = [pr(1000 + n, body="Closes #7")
+               for n in range(rejection_mining.LIST_WINDOW)]
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=issues, timelines={7: REJECTED_STAY}, prs=prs)
+            _, problems = rejection_mining.run_mine(tree(tmp).root, run=run,
+                                                    clock=clock)
+            body = self._posted_body(run)
+        self.assertEqual(problems, [
+            "rm: gh pr list returned a full"
+            f" {rejection_mining.LIST_WINDOW}-entry window — older entries"
+            " are invisible; raise the window or narrow the query"])
+        self.assertIn("TRUNCATED: the PR listing", body)
+
+    def test_a_full_issue_window_is_named_in_the_body(self):
+        """The same blindness on the other listing, where it also corrupts
+        the count beside it: a truncated issue listing shortens `mirrored`,
+        so "N of M issue timelines" understates M as confidently as it
+        states N. The line cannot know the true M — naming the truncation
+        is the honest most it can do."""
+        issues = [issue(7, "WO-0101: first")] + [
+            issue(10_000 + n, f"noise {n}", state="CLOSED")
+            for n in range(rejection_mining.LIST_WINDOW - 1)]
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=issues, timelines={7: REJECTED_STAY}, prs=[])
+            _, problems = rejection_mining.run_mine(tree(tmp).root, run=run,
+                                                    clock=clock)
+            body = self._posted_body(run)
+        self.assertEqual(problems, [
+            "rm: gh issue list returned a full"
+            f" {rejection_mining.LIST_WINDOW}-entry window — older entries"
+            " are invisible; raise the window or narrow the query"])
+        self.assertIn("TRUNCATED: the issue listing", body)
+
 
 class TestWorkflowPermissions(unittest.TestCase):
     """The harvest reads two correction streams off two different gh

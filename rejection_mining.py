@@ -161,7 +161,7 @@ def _timelines(mirrored, run, problems):
     return events
 
 
-def _change_requests(mirror, run, problems):
+def _change_requests(mirror, run, problems, truncated):
     """change_requests over a live pr listing, or None when the listing
     failed; a failed listing is a problem plus a MISSING stream, never a
     lost harvest — the gate rejections still post.
@@ -172,10 +172,18 @@ def _change_requests(mirror, run, problems):
     the failure reached `problems` and the workflow log, and the queue issue
     a human reads said the same sentence either way. The sentinel is
     gh_read's own — this module already branches on `read.value is None`
-    three times — rather than a second shape of maybe."""
+    three times — rather than a second shape of maybe.
+
+    `truncated` collects the names of listings that came back at their full
+    window, appended the way `problems` already is rather than returned as
+    a second value: None answers "was it read", which truncation does not
+    contradict — a full window is read, usable, and short. Two facts, two
+    channels, so neither has to encode the other."""
     read = gh_read(list(PR_ARGS), "gh pr list", label="rm", run=run,
                    window=LIST_WINDOW)
     problems.extend(read.problems)
+    if read.truncated:
+        truncated.append("the PR listing")
     if read.value is None:
         return None
     return change_requests(read.value, mirror)
@@ -210,7 +218,7 @@ def _post_queue(existing, body, run, problems):
         problems.append(f"rm: gh issue pin failed: {gh_detail(err)}")
 
 
-def _sources(mirrored, events_by_issue, requests):
+def _sources(mirrored, events_by_issue, requests, truncated=()):
     """What this harvest could read, worded for the queue body.
 
     Both streams, because both are blind the same way: a timeline fetch that
@@ -218,15 +226,27 @@ def _sources(mirrored, events_by_issue, requests):
     requests, and neither leaves a mark on the artifact anyone reads. The
     counts come from the caller's own facts — the issues asked for versus
     the ones answered, and _change_requests' None — so nothing here re-reads
-    the problem list. Those strings stay the CLI's."""
+    the problem list. Those strings stay the CLI's.
+
+    A truncated listing is the third partial harvest and the quietest: the
+    read succeeded, so every count below is stated at full confidence over
+    the top of a window. Worse on the issue listing, where it shortens
+    `mirrored` and so understates the DENOMINATOR the line prints — this
+    cannot recover the true number, and saying which listing was cut is the
+    honest most it can do."""
     unread = len(mirrored) - len(events_by_issue)
     gap = f" ({unread} unreadable)" if unread else ""
     rejections = (f"gate rejections from {len(events_by_issue)} of"
                   f" {len(mirrored)} issue timelines{gap}")
     if requests is None:
-        return (f"{rejections}; change requests NOT READ — the PR"
+        line = (f"{rejections}; change requests NOT READ — the PR"
                 " listing failed.")
-    return f"{rejections}; change requests from the PR listing."
+    else:
+        line = f"{rejections}; change requests from the PR listing."
+    if truncated:
+        line += (f" TRUNCATED: {', '.join(truncated)} came back full, so"
+                 " older entries were never read.")
+    return line
 
 
 def run_mine(root, run=gh_runner, clock=None):
@@ -242,6 +262,7 @@ def run_mine(root, run=gh_runner, clock=None):
     if read.value is None:
         return {}, read.problems
     listing, problems = read.value, list(read.problems)
+    truncated = ["the issue listing"] if read.truncated else []
 
     mirrored = sorted(entry["number"] for entry in listing
                       if entry.get("number") in mirror)
@@ -252,14 +273,14 @@ def run_mine(root, run=gh_runner, clock=None):
             rejections_by_wo.setdefault(mirror[number],
                                         []).append(rejection)
     requests_by_wo = {}
-    requests = _change_requests(mirror, run, problems)
+    requests = _change_requests(mirror, run, problems, truncated)
     for wo, number, excerpt in requests or ():
         requests_by_wo.setdefault(wo, []).append((number, excerpt))
 
     body = compose_queue(rejections_by_wo, requests_by_wo,
                          now.date().isoformat(),
                          sources=_sources(mirrored, events_by_issue,
-                                          requests))
+                                          requests, truncated))
     open_issues = [entry for entry in listing
                    if (entry.get("state") or "").upper() == "OPEN"]
     existing = next((entry["number"] for entry in
