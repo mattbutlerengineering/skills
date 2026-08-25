@@ -16,7 +16,7 @@ change is 48 lines in `validator.py` and one deleted line.
 ## What was examined
 
 - **`validator._unquoted` and the skip gate** — line by line, against
-  `architecture.md`'s contract and ADR-0062's decision.
+  `architecture.md`'s contract and ADR-0064's decision.
 - **Every other statement of the rule in the repo** — `grep` for
   `uncited`, `cites no work order`, `No work order:` across `*.py`,
   `*.md`, `*.yml`. Four hits outside this run's own artifacts: two
@@ -33,7 +33,7 @@ change is 48 lines in `validator.py` and one deleted line.
 `validator.py`'s module docstring said *"A PR that NAMES a work order
 which resolves to none stays a problem on both"*, and `run_lifecycle`'s
 said *"a body that names a work order but resolves to none … stays loud
-in both legs"*. After ADR-0062 both are **false as written**: a body that
+in both legs"*. After ADR-0064 both are **false as written**: a body that
 names one only inside a fence resolves to none and is now a silent no-op.
 
 Failure scenario, concrete: a maintainer debugging a housekeeping PR that
@@ -74,7 +74,7 @@ $ sed -n '318,320p' gates.py
         problems.append("B: PR body cites no work-order id")
 ```
 
-So after ADR-0062 the repo holds two answers. They are not symmetric,
+So after ADR-0064 the repo holds two answers. They are not symmetric,
 which is why this is a deferral and not a fix:
 
 - **B is lenient where the validator is strict.** A quoted token
@@ -127,7 +127,7 @@ it does not read as covered.
   `splitlines()`, linear in the body, no backtracking surface. Nothing is
   interpolated into a shell or a `gh` argument.
 - **A body that hides its citation in a fence to dodge a flip.** Possible,
-  and it is the consequence ADR-0057 already accepted and ADR-0062
+  and it is the consequence ADR-0057 already accepted and ADR-0064
   restates: the missed flip is cross-plane drift, reported by `sweeps.py
   reconcile`, not gated at merge.
 - **`defect.md`'s token count.** Corrected in `verification.md` D1 (two
@@ -146,7 +146,7 @@ $ python3 one_owner.py | grep -c "_unquoted\|FENCES"
 
 - **`plans/014-dispatch-lifecycle-labels.md`.** Describes the gate as
   built in that plan. Plans are the historical record of what was
-  designed then, like ADRs; ADR-0062 is where the change is recorded.
+  designed then, like ADRs; ADR-0064 is where the change is recorded.
 - **`validator.py:181`, 80 columns.** Pre-existing, outside this run's
   scope, logged in `breakdown.md`'s Notes.
 

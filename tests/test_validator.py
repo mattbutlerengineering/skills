@@ -750,7 +750,7 @@ class TestRunLifecycle(unittest.TestCase):
             self.assertEqual(run.calls, [])
 
     def test_a_token_only_inside_a_fence_is_not_a_claim(self):
-        """ADR-0062. The body pastes the detector output it is fixing;
+        """ADR-0064. The body pastes the detector output it is fixing;
         every work-order token in it is evidence, not an assertion, so
         the body claims no work order and the skip applies."""
         with tempfile.TemporaryDirectory() as tmp:

@@ -34,7 +34,7 @@ problem strings; the CLI prints them and exits nonzero.
         Both legs pass --uncited skip (ADR-0057), so a PR citing no work
         order is a silent no-op on each — human housekeeping PRs are
         normal traffic, not errors. "Citing" means naming one OUTSIDE
-        quoted material (ADR-0062): a token in a fenced block or a
+        quoted material (ADR-0064): a token in a fenced block or a
         blockquote is something the PR is discussing. A PR that NAMES a
         work order in its own prose and resolves none stays a problem on
         both.
@@ -352,7 +352,7 @@ def _flip(number, label, lifecycle, run):
 # What "quoted" means to the skip gate below: a fenced region, and a
 # blockquote line. NOT inline code — backticks around an id are how this
 # repo writes identifiers in ordinary prose, genuine claims included, so
-# treating them as quotation would silence real work-order PRs (ADR-0062).
+# treating them as quotation would silence real work-order PRs (ADR-0064).
 FENCES = ("```", "~~~")
 
 
@@ -401,7 +401,7 @@ def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     uncited="skip" makes a PR that cites no work order at all a silent
     no-op instead of a problem: human housekeeping PRs are normal
     traffic. "Cites" is read off `_unquoted(body)` rather than the raw
-    body (ADR-0062) — a token inside a fenced block or a blockquote is
+    body (ADR-0064) — a token inside a fenced block or a blockquote is
     material the PR quotes, not a work order it claims. ONLY that case
     is relaxed — a body that names a work order in its own prose but
     resolves to none (no Closes line, ambiguous, unmirrored) is a

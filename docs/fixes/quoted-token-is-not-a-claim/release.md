@@ -94,14 +94,14 @@ Concrete, and it is one command plus one regeneration:
 ```
 git revert --no-commit <squash-merge-sha>
 python3 factory_init.py update-manifest
-git commit -m "revert: restore the raw-body skip gate (ADR-0062)"
+git commit -m "revert: restore the raw-body skip gate (ADR-0064)"
 ```
 
 The revert restores `not WO_TOKEN.findall(body)` and deletes `_unquoted`,
 `FENCES` and the five tests. `factory_init.py update-manifest` is required
 in the same commit because `validator.py` is a `factory_init.MIRRORS`
 entry — without it, detector E goes red on `main` and stamped repos keep
-running the reverted-away code. ADR-0062 would then need its own status
+running the reverted-away code. ADR-0064 would then need its own status
 line moved rather than deleting the file (`docs/adr/README.md`'s rule).
 
 The blast radius of a revert is small and known: PR bodies would again
@@ -137,10 +137,39 @@ than appended to `docs/backlog.md`:
 
 - **Merge or reject PR #333** (ADR-0036 clause 2 — and clause 3, for the
   ADR).
-- **Confirm or pivot ADR-0062**, filed `provisional` because an autorun
+- **Confirm or pivot ADR-0064**, filed `provisional` because an autorun
   decided it and it narrows a gate an accepted ADR wrote deliberately.
 - **ADR-0057's own status** carries an unrelated inconsistency this run
   noticed and did not touch: its final Consequence says "Status is
   provisional" while its status line said `accepted` (now `amended by
-  ADR-0062`). Flagged, not fixed — rewriting an ADR's body is exactly
+  ADR-0064`). Flagged, not fixed — rewriting an ADR's body is exactly
   what `docs/adr/README.md` forbids.
+
+## Amendment, 2026-08-25: the ADR was renumbered 0062 → 0064
+
+Filed as 0062, which was free when this run wrote it. It is no longer:
+PR #351 (`feature/pipeline-board`) also adds a `docs/adr/0062-*.md`,
+`docs/adr/0062-a-skill-that-states-repo-facts-runs-a-shipped-tool.md`,
+and PR #349 has since taken 0063. Two open PRs each adding a different
+ADR numbered 0062 is not a merge conflict git would catch — the
+filenames differ, so both would land and the repo would hold two
+ADR-0062s.
+
+Resolved here rather than at merge time, and resolved on **this** PR
+because this is the one whose author can amend it. #351 keeps 0062
+untouched. Seventeen references moved across eight files, plus the
+mirrored `factory/templates/tools/factory/validator.py` twin and the
+manifest, regenerated through `factory_init.py update-manifest`.
+
+**What this amendment does not rewrite.** `verification.md` quotes a
+diffstat naming `docs/adr/0062-a-quoted-token-is-not-a-claim.md`. That
+is recorded evidence of what the run produced on the day it ran, and it
+stays as it was — re-running the command today would print `0064-`. The
+same applies to `docs/fixes/one-fact-one-owner/review.md`, which uses
+`docs/adr/0062-....md` as a hypothetical illustration of an untracked
+ADR and never referred to this decision at all.
+
+Battery after the renumber: 1350 tests OK, `lint: 0 problem(s) across 24
+skills`, `gates: 0 problem(s)`, `selftest: ok`. Detector C is the check
+that matters here — a missed reference would dangle, and it reports
+none.

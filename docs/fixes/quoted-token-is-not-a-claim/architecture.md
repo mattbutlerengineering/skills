@@ -121,6 +121,6 @@ another conflict to the open queue.
 **One, and it is owed.** ADR-0057 wrote this gate and justified it in
 prose: "the relaxation is gated on `not WO_TOKEN.findall(body)`". Changing
 that expression changes a decision an accepted ADR recorded, so it is
-amended by **ADR-0062**, filed `provisional`, with ADR-0057's status line
+amended by **ADR-0064**, filed `provisional`, with ADR-0057's status line
 and its index row updated together (detector D reads them byte-for-byte).
 ADR-0057's body is not rewritten.
