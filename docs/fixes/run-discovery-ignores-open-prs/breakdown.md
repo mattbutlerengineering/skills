@@ -103,6 +103,25 @@ the comparison pins the fact instead of the formatting.
 `test_a_recital_that_wraps_still_counts` carries the real wrap from
 `capture` so the case cannot regress into a cosmetic pin.
 
+**2026-08-25 — I5 added during Review: the pin held the skills to the
+constant and the constant to nothing.** `check_skill_recitals` makes
+`capture` and `idea` name `IN_FLIGHT_HEADING`, and nothing made the
+protocol keep the section they name. Delete `### Work already in flight`
+and all three still agree — lint green, both skills pointing readers at a
+heading that is gone. The same shape as the defect this run exists to fix:
+a rule with no owner for half of its own coupling.
+
+Closed in `check_protocol`, which is the doc's checker, rather than in the
+recital pin, which is the skills'. Mutation-verified rather than argued —
+with the old one-line `check_protocol` restored, the new case fails
+`- []` against the expected problem string, and passes again once the
+check is back.
+
+- [x] **I5 — the protocol keeps the section its skills recite.**
+  *Acceptance:* `check_protocol` reports a problem naming the heading when
+  the section is removed from an otherwise clean tree, and the case is
+  proven to discriminate by mutating the checker back.
+
 **2026-08-25 — pre-existing over-length lines, flagged not fixed.**
 `lint.py:502` (80 columns) and `tests/test_lint.py:622/635/636/756`
 (82/82/80/81) exceed the repo's 79-column convention and are untouched by

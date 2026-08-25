@@ -408,8 +408,22 @@ def check_readme_skills(root):
 
 
 def check_protocol(root):
+    """The doc exists, and still says the thing two skills send readers to.
+
+    The second half closes a loop the recital pin leaves open: that pin
+    holds `capture` and `idea` to IN_FLIGHT_HEADING, and IN_FLIGHT_HEADING
+    to nothing. Delete the section and all three still agree — with both
+    skills pointing at a heading that is gone. Checked here rather than in
+    the recital pin because it is a fact about the doc, and the doc's
+    checker is this one."""
     path = root / "docs" / "pipeline-protocol.md"
-    return [] if path.is_file() else ["missing docs/pipeline-protocol.md"]
+    if not path.is_file():
+        return ["missing docs/pipeline-protocol.md"]
+    text = " ".join(path.read_text(encoding="utf-8").lower().split())
+    if IN_FLIGHT_HEADING.lower() in text:
+        return []
+    return [f"docs/pipeline-protocol.md no longer states "
+            f"{IN_FLIGHT_HEADING!r}, which capture and idea both recite"]
 
 
 # A row of either orientation table in the protocol doc:

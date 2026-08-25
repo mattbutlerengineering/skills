@@ -118,7 +118,8 @@ def make_clean_tree(root):
     # doc's stage order and artifacts to protocol.py's walk tables, so the
     # smallest tree every checker passes on genuinely has to carry them.
     (root / "docs" / "pipeline-protocol.md").write_text(
-        "spec\n\n## Artifacts are the state\n\n"
+        f"spec\n\n### {lint.IN_FLIGHT_HEADING}\n\n"
+        "## Artifacts are the state\n\n"
         + protocol_table(protocol.STAGE_ARTIFACTS)
         + "\n### Maintenance-run orientation\n\n"
         + protocol_table(protocol.MAINTENANCE_STAGE_ARTIFACTS),
@@ -796,6 +797,22 @@ class TestProtocol(CheckerTreeTest):
         (self.root / "docs" / "pipeline-protocol.md").unlink()
         self.assertEqual(lint.check_protocol(self.root),
                          ["missing docs/pipeline-protocol.md"])
+
+    def test_a_deleted_in_flight_section_strands_two_recitals(self):
+        """The other half of the recital pin. That pin holds capture and
+        idea to IN_FLIGHT_HEADING and holds IN_FLIGHT_HEADING to nothing,
+        so deleting the section leaves all three agreeing while both
+        skills point at a heading that is gone — green, and wrong."""
+        path = self.root / "docs" / "pipeline-protocol.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                f"### {lint.IN_FLIGHT_HEADING}\n\n", ""),
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_protocol(self.root),
+            [f"docs/pipeline-protocol.md no longer states "
+             f"{lint.IN_FLIGHT_HEADING!r}, which capture and idea both "
+             "recite"])
 
 
 class TestEvals(CheckerTreeTest):
