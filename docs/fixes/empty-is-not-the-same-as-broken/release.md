@@ -90,5 +90,8 @@ finding in `review.md` was found by the author, including the major one
 that sent the run back to Implement, which is exactly the situation that
 clause exists for.
 
-PR #343 is open, green, and `MERGEABLE CLEAN`. It is the ninth agent-authored
-PR waiting on that clause.
+PR #343 is open, green, and `MERGEABLE CLEAN`. Counted rather than
+estimated: `gh pr list --state open` returns **12**, all agent-authored and
+all waiting on that clause — #320, #322, #324, #326, #328, #330, #333,
+#335, #337, #339, #341, and this one. The queue is the constraint on this
+pipeline, not the work.
