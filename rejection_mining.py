@@ -218,7 +218,7 @@ def _post_queue(existing, body, run, problems):
         problems.append(f"rm: gh issue pin failed: {gh_detail(err)}")
 
 
-def _sources(mirrored, events_by_issue, requests, truncated=()):
+def _sources(mirrored, events_by_issue, requests, truncated):
     """What this harvest could read, worded for the queue body.
 
     Both streams, because both are blind the same way: a timeline fetch that
