@@ -134,6 +134,11 @@ class TestComposeDigest(unittest.TestCase):
         self.assertNotEqual(readable, unreadable)
 
     def test_an_aged_item_never_wears_the_mark(self):
+        """Precedence, not a guard: a known age wins over an unread
+        history. _queues cannot currently produce this combination (no
+        timeline means no arrival means no age), so this pins which fact
+        the renderer prefers if a later change ever derives an age some
+        other way — it does not stand in for a reachable bug."""
         body = gate_digest.compose_digest(
             [("PRD gate", "wo:draft", [item(7, "t", 1800, aged=False)])],
             "2026-07-22", False)
@@ -145,9 +150,14 @@ class TestComposeDigest(unittest.TestCase):
         complete = gate_digest.compose_digest(queues, "2026-07-22", False)
         partial = gate_digest.compose_digest(queues, "2026-07-22", True)
         self.assertNotEqual(complete, partial)
-        self.assertNotIn("- (empty)", partial.split("\n\n")[-1])
         self.assertIn(gate_digest.TRUNCATED_NOTE, partial)
         self.assertNotIn(gate_digest.TRUNCATED_NOTE, complete)
+        # under the sections it qualifies, above the standing footer —
+        # a caveat printed after the provenance line reads as a footnote
+        # about the tool rather than about the queue above it
+        paragraphs = partial.strip().split("\n\n")
+        self.assertEqual(paragraphs[-2], gate_digest.TRUNCATED_NOTE)
+        self.assertIn("Updated daily by the gate digest", paragraphs[-1])
 
     def test_the_coverage_fact_has_no_default(self):
         """A default would let a caller omit the fact silently, which is
