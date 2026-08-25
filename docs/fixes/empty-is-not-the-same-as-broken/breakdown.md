@@ -29,7 +29,7 @@ assumptions: ["One milestone, four items. The distinction (I1) lands before the 
   difference names the stream that failed. A run with an unreadable timeline
   says how many of how many.
 
-- [ ] **I4 — mirror and manifest.**
+- [x] **I4 — mirror and manifest.**
   `python3 factory_init.py update-manifest`, committed with the change.
   *Acceptance:* `python3 gates.py` reports no `E:` problem and
   `tests/test_factory_init.py` passes.

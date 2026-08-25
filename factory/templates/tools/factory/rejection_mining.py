@@ -95,15 +95,28 @@ def change_requests(listing, mirror):
     return mined
 
 
-def compose_queue(rejections_by_wo, requests_by_wo, day):
+def compose_queue(rejections_by_wo, requests_by_wo, day, sources=None):
     """The queue issue's body: marker first, then one section per work
     order with corrections, most corrections first (recurrence is the
-    rule-writing signal), each with its quoted evidence line."""
+    rule-writing signal), each with its quoted evidence line.
+
+    `sources` is the already-worded statement of what this harvest could
+    read, rendered ABOVE the corrections because a partial harvest changes
+    how everything below it reads. Wording belongs to run_mine, which knows
+    what happened; structure belongs here, which owns the body — the same
+    split the CLI's reason line already uses.
+
+    It is rendered on EVERY body, not only a broken one. A warning that
+    appears only on failure is indistinguishable from a body written before
+    the warning existed, which is this defect one level up. `None` renders
+    nothing, for callers that have nothing to say."""
     orders = sorted(
         set(rejections_by_wo) | set(requests_by_wo),
         key=lambda wo: (-(len(rejections_by_wo.get(wo, ())) +
                           len(requests_by_wo.get(wo, ()))), wo))
     lines = [MARKER, f"{QUEUE_TITLE} — {day}", ""]
+    if sources is not None:
+        lines += [f"Sources: {sources}", ""]
     if not orders:
         lines.append("No corrections mined.")
     for wo in orders:
@@ -149,14 +162,22 @@ def _timelines(mirrored, run, problems):
 
 
 def _change_requests(mirror, run, problems):
-    """change_requests over a live pr listing; a failed listing is a
-    problem plus an empty stream, never a lost harvest — the gate
-    rejections still post."""
+    """change_requests over a live pr listing, or None when the listing
+    failed; a failed listing is a problem plus a MISSING stream, never a
+    lost harvest — the gate rejections still post.
+
+    None rather than [], because [] is the answer when the listing was read
+    and no PR carried a change request. Conflating those two is what let a
+    broken stream read as a healthy empty one for the harvest's whole life:
+    the failure reached `problems` and the workflow log, and the queue issue
+    a human reads said the same sentence either way. The sentinel is
+    gh_read's own — this module already branches on `read.value is None`
+    three times — rather than a second shape of maybe."""
     read = gh_read(list(PR_ARGS), "gh pr list", label="rm", run=run,
                    window=LIST_WINDOW)
     problems.extend(read.problems)
     if read.value is None:
-        return []
+        return None
     return change_requests(read.value, mirror)
 
 
@@ -189,6 +210,25 @@ def _post_queue(existing, body, run, problems):
         problems.append(f"rm: gh issue pin failed: {gh_detail(err)}")
 
 
+def _sources(mirrored, events_by_issue, requests):
+    """What this harvest could read, worded for the queue body.
+
+    Both streams, because both are blind the same way: a timeline fetch that
+    fails thins the rejections and a failed pr listing empties the change
+    requests, and neither leaves a mark on the artifact anyone reads. The
+    counts come from the caller's own facts — the issues asked for versus
+    the ones answered, and _change_requests' None — so nothing here re-reads
+    the problem list. Those strings stay the CLI's."""
+    unread = len(mirrored) - len(events_by_issue)
+    gap = f" ({unread} unreadable)" if unread else ""
+    rejections = (f"gate rejections from {len(events_by_issue)} of"
+                  f" {len(mirrored)} issue timelines{gap}")
+    if requests is None:
+        return (f"{rejections}; change requests NOT READ — the PR"
+                " listing failed.")
+    return f"{rejections}; change requests from the PR listing."
+
+
 def run_mine(root, run=gh_runner, clock=None):
     """(outputs, problems) for the mine command: harvest both correction
     streams for the mirrored work orders and create-or-update the
@@ -212,11 +252,14 @@ def run_mine(root, run=gh_runner, clock=None):
             rejections_by_wo.setdefault(mirror[number],
                                         []).append(rejection)
     requests_by_wo = {}
-    for wo, number, excerpt in _change_requests(mirror, run, problems):
+    requests = _change_requests(mirror, run, problems)
+    for wo, number, excerpt in requests or ():
         requests_by_wo.setdefault(wo, []).append((number, excerpt))
 
     body = compose_queue(rejections_by_wo, requests_by_wo,
-                         now.date().isoformat())
+                         now.date().isoformat(),
+                         sources=_sources(mirrored, events_by_issue,
+                                          requests))
     open_issues = [entry for entry in listing
                    if (entry.get("state") or "").upper() == "OPEN"]
     existing = next((entry["number"] for entry in
