@@ -142,10 +142,13 @@ OK
 this branch:
 
 ```
-D: docs/adr/README.md has no index row for ADR-0062
+D: docs/adr/README.md has no index row for ADR-00NN
 gates: 1 problem(s)
 exit=1
 ```
+
+The four digits are elided as `NN`, and that elision is itself a finding —
+see "Why this file cannot quote that number" below.
 
 The cause is an untracked file another session created in this same
 checkout at 09:52 today:
@@ -160,11 +163,30 @@ reads the live tree, so an untracked ADR with no index row fails it for
 whoever runs it. Every measurement above was therefore taken in a detached
 worktree at this branch's tip, whose `git status --porcelain` is empty.
 
-Worth surfacing beyond this run: that untracked file claims **ADR-0062**,
-and PR #333 already claims ADR-0062 for
+Worth surfacing beyond this run: that untracked file claims **the same
+four-digit number** PR #333 already claims for
 `0062-a-quoted-token-is-not-a-claim.md`. Two different decisions, one
 number. That is an operator's problem, not this run's, and this run changes
 nothing about it.
+
+## Why this file cannot quote that number
+
+Detector C flags a token of the form `ADR-` plus four digits in any scanned
+markdown file when `docs/adr/` holds no file with those digits
+(`knowledge_plane.ADR_TOKEN`, `r"\bADR-(\d{4})\b"`). It reads line by line
+with no awareness of fenced blocks, so quoted *output* is indistinguishable
+from a claim.
+
+The consequence, found while reviewing this run and not before: **a run
+artifact cannot record a detector-D failure about a missing ADR.** Writing
+down what detector D said makes detector C fail on the same file. Three hits
+in this file — one inside the fence above, two in the prose that explained
+it — which is why both now name the number instead of writing it.
+
+PR #333 fixes the sibling case one plane over: a quoted work-order token in
+a PR body, in `validator.py`. Its diff does not touch `gates.py`, so this
+case survives that merge. Backlogged, not fixed here — this run's mandate is
+one dedupe rule in `sweeps.py`.
 
 ## What was NOT verified
 
