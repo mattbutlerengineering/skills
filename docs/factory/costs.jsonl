@@ -44,3 +44,4 @@
 {"wo": "WO-0047", "run_id": "session-2026-08-25-wo-0047", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-25"}
 {"wo": "WO-0048", "run_id": "session-2026-08-25-wo-0048", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-25"}
 {"wo": "WO-0049", "run_id": "session-2026-08-25-wo-0049", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-25"}
+{"wo": "WO-0050", "run_id": "session-2026-08-25-wo-0050", "model": "claude-fable-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-08-25"}

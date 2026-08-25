@@ -27,7 +27,7 @@ decompose; the checkboxes are the state).
   - Accept: `skills/pipeline-board/SKILL.md` (frontmatter passes lint's skill checks; render contract states verbatim-JSON consumption and stop-on-tool-failure per ADR-0062), `assets/boilerplate.svg` (theme-aware scaffold demonstrating header, lane grid, capture-span, skip/ahead glyphs, attention strip, legend — tokens pointing at architecture-diagram's design-system.md), and `references/board-grammar.md` (lane geometry, glyph roster, JSON key reference, and the written aesthetic checklist derived from ux.md's conventions for Verify to apply item by item).
 - [x] **WO-0049** registration — size:S, blocked by: WO-0048 (PRD-0004 §Success criteria)
   - Accept: `protocol.UTILITY_SKILLS` includes pipeline-board; README and LEDGER rows exist and `python3 lint.py` reports 0 problems; `.claude-plugin/plugin.json` description names the skill and its version is bumped so the vendored cache re-copies.
-- [ ] **WO-0050** end-to-end render on this repo — size:S, blocked by: WO-0049 (PRD-0004 §Success criteria)
+- [x] **WO-0050** end-to-end render on this repo — size:S, blocked by: WO-0049 (PRD-0004 §Success criteria)
   - Accept: invoking the skill in this repo yields one `.svg` at a temporary path, generated from live `board.py` output; for every run shown, its lane placement equals `next_stage` at generation time (spot-checked run by run); the file renders in light and dark (prefers-color-scheme inspected in the CSS); it contains zero external references (no http/https URLs beyond xmlns); the empty-board and attention cases are demonstrated once each from fixture trees.
 
 ## Design gaps found
