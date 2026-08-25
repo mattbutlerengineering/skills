@@ -170,6 +170,27 @@ def _capture_problems(label, text):
         if claim not in ("implement", "architect")]
 
 
+# The protocol subsection the run-STARTING skills must recite. Derived,
+# never a second list: a run starts at the head of the spine or at the
+# maintenance entry, and those are protocol.py's to name.
+RUN_STARTING = (STAGES[0], *MAINTENANCE_STAGES)
+IN_FLIGHT_HEADING = "Work already in flight"
+
+
+def _in_flight_problems(label, text):
+    """A skill that starts a run recites the protocol's in-flight guard.
+
+    Pins the section name and nothing else. Whether an agent actually
+    looked at the open review work is not a thing a linter can know, and a
+    checker that implied otherwise would be manufacturing exactly the
+    false clean result that section exists to forbid."""
+    if IN_FLIGHT_HEADING.lower() in text.lower():
+        return []
+    return [f"{label} never names the protocol's "
+            f"{IN_FLIGHT_HEADING!r} check, which is where a run that is "
+            "already open in review gets caught"]
+
+
 def check_skill_recitals(root):
     """Stage-skill prose recites the protocol — soft-gate predecessor,
     own artifact, hand-off successor. Vended skills can't import
@@ -201,6 +222,8 @@ def check_skill_recitals(root):
         if f"`{artifact[slug]}`" not in text:
             problems.append(f"{label} never names its artifact "
                             f"{artifact[slug]!r}")
+        if slug in RUN_STARTING:
+            problems += _in_flight_problems(label, text)
         successor = spine[i + 1] if i + 1 < len(spine) else None
         skip_target = spine[i + 2] if successor == "ux-design" else None
         problems += _hand_off_problems(label, slug, text, successor,
@@ -214,6 +237,8 @@ def check_skill_recitals(root):
         if f"`{artifact[slug]}`" not in text:
             problems.append(f"{label} never names its artifact "
                             f"{artifact[slug]!r}")
+        if slug in RUN_STARTING:
+            problems += _in_flight_problems(label, text)
         problems += _capture_problems(label, text)
     return problems
 

@@ -40,7 +40,7 @@ Nothing mirrored, so no manifest.
   criterion, that no existing orientation behaviour changes, has no better
   evidence than the orientation suites not moving.
 
-- [ ] **I2 — the recital pin, written RED.**
+- [x] **I2 — the recital pin, written RED.**
   A helper in `lint.py` beside `_capture_problems`, called from
   `check_skill_recitals` for `capture` (maintenance loop) and `idea`
   (spine loop) — not a new top-level checker, which would be a second
@@ -67,3 +67,30 @@ Nothing mirrored, so no manifest.
 ## Notes
 
 *(deviations logged here, dated, as they happen)*
+
+**2026-08-25 — I2's acceptance said "the pre-existing `test_lint` cases
+pass unedited". One did not, and had to be edited.** A new checker changes
+what "clean" means, so `make_clean_tree`'s bodies stop being clean:
+`recital_body` gained the recital (for `capture` and, derived through
+`lint.RUN_STARTING`, for `idea`), and
+`test_capture_must_record_both_re_entry_options` — which seeds its own
+capture body rather than using `recital_body` — gained the line so it
+still isolates the re-entry assertion it exists to make. The phrasing
+comes from `lint.IN_FLIGHT_HEADING` through a helper rather than a pasted
+copy, so a reworded heading moves the fixture instead of stranding it.
+
+That is the established pattern in this suite, not an exception invented
+here — `make_clean_tree` carries the same comment about `check_router`
+("a bare mention dump is no longer a clean router"). The criterion was
+written wrong, not the change; recorded rather than silently reworded.
+
+The other eleven failures observed at this step needed no edit at all:
+they were the clean tree failing through `recital_body`, and teaching that
+one helper cleared all of them.
+
+**2026-08-25 — pre-existing over-length lines, flagged not fixed.**
+`lint.py:502` (80 columns) and `tests/test_lint.py:622/635/636/756`
+(82/82/80/81) exceed the repo's 79-column convention and are untouched by
+this run — verified against `origin/main`, where the same four sit at
+566/579/580/700 and lint.py's at 477. Adjacent smells get logged, not
+fixed.
