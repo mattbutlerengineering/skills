@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import dashboard
 
@@ -995,11 +996,9 @@ class TestRespondPost(unittest.TestCase):
             body = json.dumps({"i": 0,
                                "hash": dashboard.backlog_hash(self.TEXT),
                                "order": [5, 3, 4]})
-            path.chmod(0o444)
-            try:
+            with mock.patch.object(Path, "write_text",
+                                    side_effect=OSError("Permission denied")):
                 status, payload = self.post(tmp, body)
-            finally:
-                path.chmod(0o644)
             self.assertEqual(status, 500)
             self.assertEqual(len(payload["problems"]), 1)
             self.assertTrue(payload["problems"][0].startswith(
