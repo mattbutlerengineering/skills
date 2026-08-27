@@ -155,13 +155,15 @@ precisely why three verbatim copies of one helper went unnoticed.
   measurement.
 - ~~**Behaviour on Linux.**~~ **Closed.** The branch was pushed and the
   validator ran it on Linux, taking the `/proc` path this machine never
-  exercises (run `33099721069`, `check` job):
+  exercises. The run cited here is `33101089817` — the first Linux run
+  (`33099721069`, 1346 tests) predated the third copy and so proved the
+  `/proc` branch for only two of them:
 
   ```
   lint: 0 problem(s) across 24 skills
   gates: 0 problem(s)
   selftest: ok
-  Ran 1346 tests in 12.918s
+  Ran 1347 tests in 12.952s
   ```
 
   The `review`, `needs-review-label` and `merged-label` jobs are
