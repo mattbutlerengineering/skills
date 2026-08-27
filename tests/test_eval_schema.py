@@ -529,5 +529,59 @@ class TestNonObjectPayloads(unittest.TestCase):
 
 
 
+class TestLoadCaseSetGuardsItsValidators(unittest.TestCase):
+    """The loader — not each validator — is what guarantees a validator
+    receives an object.
+
+    `load_case_set` is the shared entry point (the routing loader and
+    charter_replay's `load_cases` are both thin callers), and it ends by
+    reaching for `data.get("cases")`. A validator that does not itself
+    reject a non-object therefore hands the loader a string or a list to
+    call `.get` on. charter_replay's validator is exactly that: on a
+    bare-string file it returns no problems at all, so the set reads as
+    valid and the crash lands in the loader.
+    """
+
+    def load(self, text, validate):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "cases.json"
+            path.write_text(text, encoding="utf-8")
+            return eval_schema.load_case_set(path, LABEL, validate)
+
+    def test_a_permissive_validator_cannot_make_the_loader_raise(self):
+        # Stands in for any validator that does not guard shape itself.
+        for text in ("null", "5", "true", '"version"', "[]"):
+            with self.subTest(text=text):
+                cases, problems = self.load(text, lambda data: [])
+                self.assertEqual(cases, [])
+                self.assertEqual(problems,
+                                 [f"{LABEL} is not a JSON object"])
+
+    def test_the_validator_is_not_called_for_a_non_object(self):
+        # The guard runs first, so a validator may assume an object.
+        seen = []
+
+        def validate(data):
+            seen.append(data)
+            return []
+
+        cases, problems = self.load('"version"', validate)
+        self.assertEqual(seen, [], "validator was handed a non-object")
+        self.assertEqual(problems, [f"{LABEL} is not a JSON object"])
+
+    def test_a_valid_object_still_reaches_the_validator(self):
+        seen = []
+
+        def validate(data):
+            seen.append(data)
+            return []
+
+        cases, problems = self.load('{"cases": [{"id": "a"}]}', validate)
+        self.assertEqual(problems, [])
+        self.assertEqual(cases, [{"id": "a"}])
+        self.assertEqual(seen, [{"cases": [{"id": "a"}]}])
+
+
+
 if __name__ == "__main__":
     unittest.main()

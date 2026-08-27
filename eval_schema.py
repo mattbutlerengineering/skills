@@ -139,6 +139,13 @@ def load_case_set(path, label, validate):
     set is unusable: cases is [] so callers cannot half-run an invalid
     set, and problems carries the diagnostics. The routing loader below
     and the charter replay's are thin callers.
+
+    The object guard runs *before* validate, so a validator may assume it
+    was handed a dict — the guarantee has to live here because this
+    function is also the one that ends by reaching for data["cases"]. A
+    validator that checks shape itself is then merely redundant, while
+    one that does not (charter_replay's returns no problems at all for a
+    bare-string file) would otherwise leave the crash to land here.
     """
     if not path.is_file():
         return [], [f"missing {label}"]
@@ -146,6 +153,9 @@ def load_case_set(path, label, validate):
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as err:
         return [], [f"{label} is not valid JSON: {err}"]
+    not_object = object_problems(data, label)
+    if not_object:
+        return [], not_object
     problems = validate(data)
     return ([], problems) if problems else (data.get("cases", []), [])
 
