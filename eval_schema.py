@@ -82,6 +82,22 @@ def results_path(results_dir, kind, date, slug=None, harness=None):
     return path
 
 
+def object_problems(data, label):
+    """[] when data is a JSON object, else the one problem naming its shape.
+
+    Every validator opens with this. A file's top level is legally an
+    array, string, number, boolean or null, and json.loads hands any of
+    them through untouched, so dict-ness is the one thing a validator
+    cannot assume. It is reported alone, never alongside derived
+    complaints: on a str, `"version" not in data` degrades into a
+    substring test, and the coverage arithmetic downstream then describes
+    the bug instead of the file.
+    """
+    if isinstance(data, dict):
+        return []
+    return [f"{label} is not a JSON object"]
+
+
 def entries(data, key, label):
     """(list-of-dict entries, shape problems) for the collection data[key].
 
@@ -152,6 +168,8 @@ def fixture_refs(data):
     owns that complaint), and malformed shapes yield nothing rather than
     raising, mirroring entries.
     """
+    if not isinstance(data, dict):
+        return []
     evals = data.get("evals")
     if not isinstance(evals, list):
         return []
@@ -166,6 +184,9 @@ def validate_output(data, slug, label):
     stay with the caller. label prefixes every problem, mirroring
     validate().
     """
+    not_object = object_problems(data, label)
+    if not_object:
+        return not_object
     evals, shape = entries(data, "evals", label)
     return (
         shape
@@ -186,6 +207,9 @@ def validate(data, skills, label):
     the runner whatever --eval-set was given), so both callers print the
     same diagnostics for the same defect.
     """
+    shape = object_problems(data, label)
+    if shape:
+        return shape
     if "version" not in data:
         return [f"{label} missing 'version' field"]
     cases, shape = entries(data, "cases", label)
