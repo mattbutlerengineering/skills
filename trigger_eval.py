@@ -417,11 +417,18 @@ def print_report(output):
     for r in output["results"]:
         status = "PASS" if r["pass"] else "FAIL"
         fired = ", ".join(f"{k}x{v}" for k, v in sorted(r["fired"].items()))
+        # A case scored on fewer runs than were launched says so on its
+        # own line: the surviving runs are not the whole measurement.
+        lost = f" errors={r['errors']}" if r.get("errors") else ""
         print(f"  [{status}] {r['id']}: expected={r['expected'] or 'none'} "
-              f"fired=[{fired}]", file=sys.stderr)
+              f"fired=[{fired}]{lost}", file=sys.stderr)
     summary = output["summary"]
     print(f"trigger eval: {summary['passed']}/{summary['total']} passed",
           file=sys.stderr)
+    if summary.get("errors"):
+        print(f"warning: {summary['errors']} run(s) failed and were not "
+              f"scored — this eval measured less than it launched",
+              file=sys.stderr)
     print("confusion (expected -> fired):", file=sys.stderr)
     for expected, row in sorted(output["confusion"].items()):
         cells = ", ".join(f"{k}: {v}" for k, v in sorted(row.items()))

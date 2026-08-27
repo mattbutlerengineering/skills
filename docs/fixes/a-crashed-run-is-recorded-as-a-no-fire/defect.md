@@ -187,3 +187,16 @@ regeneration. Verified against `factory_init.MIRRORS` directly.
   cells. The code is pre-existing but the reachability is mine, so the
   guard belongs to this run rather than to a deferred finding: a case
   whose every run errored now contributes no row at all.
+
+- 2026-08-27 (deviation — a sixth work item, found by the review pass):
+  scoring on observations only removed an accidental safety net. Before
+  this run, a *partial* crash — say 2 of 3 runs raising — bucketed as
+  `fired={"none": 2}` and dragged `correct_rate` to 0.33, below the
+  default 0.5 threshold, so the case failed and `main` exited 1. After
+  the fix that case scores `1/1 = 1.0` and passes. The all-crash case is
+  handled correctly (zero observations, no pass), but the partial case
+  regressed in visibility, and neither `print_report` nor `main`
+  mentioned errors at all. `print_report` now names the loss, per case
+  and in a summary warning line, covered by
+  `TestPrintReportNamesLostRuns`. The exit-code half is deferred to a
+  human — see `review.md` finding 1.
