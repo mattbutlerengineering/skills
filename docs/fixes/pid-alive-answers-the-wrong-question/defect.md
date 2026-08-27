@@ -102,10 +102,27 @@ Review and Ship scale down accordingly.
   is the condition under which it is expected to pass, so it is not
   evidence either way, and it is recorded so nobody re-runs it expecting
   a different answer.
-- **PID reuse — open, untested.** The predicate asks about a *number*,
-  not about a process, so a recycled PID would also read as a survivor.
-  This fits the load-correlation the zombie theory could not, but it has
-  not been tested and is explicitly not claimed here.
+- **PID reuse — refuted.** The predicate does ask about a *number*, not
+  about a process, so a recycled PID would read as a survivor; the fix in
+  this run does not change that, because `process_state` is equally
+  number-addressed. But the arithmetic rules it out as the cause here.
+  Reuse requires the allocator to wrap the whole PID space and land back
+  on the grandchild's number *inside the assertion window* — and that
+  window is at most 4 s (up to 2 s for the pid file, then a 2 s poll),
+  measured from the moment the number was allocated.
+
+  Measured on this machine (`kern.maxproc: 4000`, darwin wrapping at
+  99999, so a wrap is 99899 numbers):
+
+  | condition | pid/s | pids advanced in 4 s | needed for reuse |
+  |---|---:|---:|---:|
+  | idle | 0.7 | 3 | 99899 |
+  | under the suite's own load | 28.9 | 116 | 99899 |
+
+  A full suite run consumes 471 pids in 16.3 s. Reuse is short by ~three
+  orders of magnitude; even at ten times the busiest rate observed it
+  stays ~86x short. Load cannot close that gap, so this is refuted rather
+  than untested.
 
 ## Work items
 
