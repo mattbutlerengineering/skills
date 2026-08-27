@@ -135,6 +135,13 @@ regeneration — verified against `factory_init.MIRRORS` directly.
   one problem identifying it as such, not derived coverage complaints.
   - Accept: `validate("version", ...)` returns exactly one problem, and
     it names the file's shape; the previous 26-problem cascade is gone.
+- [x] **The loader guarantees it, not each validator** — added mid-run
+  (see Notes). `load_case_set` guards before calling `validate`, so a
+  validator may assume an object.
+  - Accept: a permissive validator cannot make the loader raise on any
+    non-object file; the validator is provably not invoked for one; a
+    valid object still reaches it. `charter_replay.load_cases` returns
+    the problem rather than raising, with `charter_replay.py` unmodified.
 - [x] **Battery green** — the repo's full verification set.
   - Accept: `python3 -m unittest discover tests` OK, `python3 lint.py` 0
     problems, `python3 gates.py` 0 problems and `--selftest` ok, quoted
@@ -142,6 +149,27 @@ regeneration — verified against `factory_init.MIRRORS` directly.
 
 ## Notes
 
+- 2026-08-27 (deviation): **the same defect exists in a second module,
+  and the fix moved because of it.** Review found
+  `charter_replay.validate` opening with the identical
+  `if "version" not in data:`, under a docstring that also promises
+  validators "never raise". Its string case is worse than the routing
+  one: it returns *no problems at all*, so a bare-string file reads as a
+  valid case set and the crash lands downstream in
+  `load_case_set`'s `data.get("cases")`.
+
+  The brief scoped `charter_replay.py` out, and it stayed out. Rather
+  than widen the run, the guard was placed in `load_case_set` — the
+  shared loading seam both case-set loaders pass through, and the very
+  function that reaches for `data["cases"]`. That fixes the charter path
+  without editing the second module, and makes "a validator receives an
+  object" a guarantee of the loader instead of a rule each validator has
+  to remember. The scope boundary held; the fix got better.
+
+  Worth noting how it was found: an AST scan for the same pattern
+  reported only the two functions already fixed, because
+  charter_replay's validator delegates to `eval_schema.entries` rather
+  than calling `.get` itself. Reading found it; the scan did not.
 - 2026-08-27: `results_path` validates its `harness` argument only when
   `kind == "trigger"`; for `charter` and `output` an unknown harness is
   silently ignored. Logged, not fixed — it is a separate defect with no
