@@ -84,6 +84,26 @@ on Windows. This is not a new constraint: the files already require
 `/bin/sh`, `os.kill` and process groups, so both suites were POSIX-only
 before this change. Recorded so a reader does not raise it as one.
 
+### 5. The review missed a third copy — major, fixed
+
+The first pass of this review checked the diff and asked whether the two
+changed files were correct. It did not ask whether they were *all* the
+files, so it inherited the brief's footprint instead of testing it.
+
+**Failure scenario, and it is not hypothetical:** the run would have
+shipped claiming `pid_alive` was fixed while
+`tests/test_cli.py:384` still carried the naive predicate, backing two
+grace-loop tests. The same flake class this run exists to explain would
+have kept firing from the unfixed copy, and the next reader would have
+had a `defect.md` asserting the defect was gone.
+
+The check that should have run at review time — and now has — is a scan
+for duplicated helper bodies across `tests/`, not a reading of the diff.
+A diff review structurally cannot find a copy the diff does not touch.
+
+Fixed: the third copy is pinned and corrected the same way (see
+`verification.md` §3), and `defect.md` Notes records the deviation.
+
 ## Verified, not assumed
 
 The reaping suites were re-run after the change rather than reasoned
@@ -95,5 +115,11 @@ about whether the original assertions still hold.
 
 - The Linux `/proc` branch was read but not executed; only the `ps`
   branch ran on this machine. See `verification.md`.
-- Nothing outside this run's diff. The five journal flakes are a
-  standing open question, not part of this change.
+- Nothing outside this run's diff, **which is what finding 5 above
+  turned out to cost.** The scan that found the third copy covered
+  `tests/` only; the same duplication question has not been asked of the
+  rest of the tree, and `one_owner.py` cannot ask it of `tests/`.
+- The five journal flakes remain a standing open question, not part of
+  this change. Three candidates have now been closed — zombie-blindness
+  and PID reuse refuted with measurements, the load hypothesis
+  unreproduced at load average 32 — and none of them is the cause.

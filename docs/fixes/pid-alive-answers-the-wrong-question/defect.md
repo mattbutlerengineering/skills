@@ -82,8 +82,10 @@ The cost is diagnostic, not functional. The improvement-routine journal
 (#181) records a `"grandchild survived"` failure on 2026-08-08, 08-13,
 08-18, 08-19 and 08-25 — five runs — each time logged as a fresh "one-off
 environment flake, not chased". They are not five flakes: they are one
-assertion, reached through two verbatim copies of the same helper, which
-is why the test *name* differs each time and the pattern stayed hidden.
+assertion, reached through **three** verbatim copies of the same helper,
+which is why the test *name* differs each time and the pattern stayed
+hidden. The third copy was found only after the first two were fixed —
+see Notes.
 Review and Ship scale down accordingly.
 
 ## Ruled out
@@ -137,6 +139,11 @@ Review and Ship scale down accordingly.
   - Accept: the new test fails first and passes after; the offline half
     of `tests.test_charter_replay` is green. The live replay is never run
     (it costs real model spend).
+- [x] **Pin and fix the CLI-seam copy** — the same, in
+  `tests/test_cli.py`, whose `assert_grandchild_reaped` asserts
+  `"grandchild survived harness_run"` and backs two more tests.
+  - Accept: the new test fails first and passes after;
+    `tests.test_cli` is green.
 - [x] **Battery green** — the repo's full verification set.
   - Accept: `python3 -m unittest discover tests` OK, `python3 lint.py`
     0 problems, `python3 gates.py` 0 problems and `--selftest` ok, with
@@ -144,8 +151,23 @@ Review and Ship scale down accordingly.
 
 ## Notes
 
-- 2026-08-27: the two `pid_alive` definitions are verbatim duplicates, as
-  are the two `assert_grandchild_reaped` helpers that consume them. That
+- 2026-08-27 (deviation): **the footprint was wrong — there are three
+  copies, not two.** The brief and the first two work items named
+  `tests/test_cli_process_reaping.py` and `tests/test_charter_replay.py`
+  and asserted that was the whole of it. `tests/test_cli.py:384` carries
+  a third verbatim `pid_alive`, its own `assert_grandchild_reaped` grace
+  loop, and two further tests
+  (`test_a_timeout_flips_timed_out_and_reaps_the_group`,
+  `test_a_dead_leaders_grandchild_is_still_reaped`). It was missed
+  because the search that scoped this run keyed on the assertion message
+  `"grandchild survived run_single_query"`, and this copy's message ends
+  `harness_run` instead. Found by an AST scan for verbatim-duplicated
+  helper bodies across `tests/`, which is also what makes the count
+  trustworthy now. A work item was added and the copy fixed the same
+  way; the run did not route back to Architect because the fix is
+  identical and the design is unchanged.
+- 2026-08-27: the three `pid_alive` definitions are verbatim duplicates, as
+  are the three `assert_grandchild_reaped` helpers that consume them. That
   is a second-owner smell and it is why one defect presented under many
   test names. It is **logged, not fixed** — de-duplicating test helpers is
   a design change outside a `re-entry: implement` run, and `one_owner.py`

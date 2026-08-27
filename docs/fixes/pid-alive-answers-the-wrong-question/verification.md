@@ -79,13 +79,54 @@ is never executed by this run or by CI. Only `tests/test_charter_replay.py`
 ran, which drives fake `claude` executables placed on `PATH` and makes
 no API call.
 
-## 3. The battery is green
+## 3. The CLI-seam copy is pinned and fixed
+
+**Criterion:** the new test fails against the naive predicate for the
+right reason, passes after the fix, and `tests.test_cli` is green.
+
+This copy was not in the original scope — see `defect.md` Notes for why
+the run missed it. It was found by an AST scan for verbatim-duplicated
+helper bodies across `tests/`, which reported `pid_alive` in three
+files, not two.
+
+RED, against `tests/test_cli.py:384` as it stood:
+
+```
+AssertionError: True is not false : a terminated process must read as dead
+
+Ran 1 test in 0.003s
+
+FAILED (failures=1)
+```
+
+The precondition `os.kill(pid, 0)` inside the test passed on the way to
+that failure, so the pid still had a process-table entry — the predicate
+was wrong about a zombie, not merely about a vanished pid.
+
+GREEN, after applying the same `process_state` predicate:
+
+```
+Ran 1 test in 0.008s
+
+OK
+```
+
+and the whole suite this copy belongs to, including the two grace-loop
+tests that consume it (`test_a_timeout_flips_timed_out_and_reaps_the_group`,
+`test_a_dead_leaders_grandchild_is_still_reaped`):
+
+```
+Ran 58 tests in 4.038s
+
+OK
+```
+
+## 4. The battery is green
 
 **Criterion:** full suite OK, lint 0, gates 0, selftest ok, quoted.
 
 ```
-tests exit=0
-Ran 1346 tests in 16.271s
+Ran 1347 tests in 15.980s
 
 OK
 --- lint ---
@@ -93,14 +134,13 @@ lint: 0 problem(s) across 24 skills
 --- gates ---
 gates: 0 problem(s)
 selftest: ok
---- one-owner (pre-pass, not a gate) ---
-one-owner: 9 problem(s)
 ```
 
-1346 is 1344 on `main` plus this run's two regression tests. one-owner
-is 9, the standing baseline — unchanged, and it would not have moved
-either way: the pass excludes `tests/**`, which is precisely why the
-duplicated helper went unnoticed.
+1347 is 1344 on `main` plus this run's three regression tests — one per
+copy. (An earlier battery in this run read 1346, before the third copy
+was found.) one-owner is 9, the standing baseline — unchanged, and it
+would not have moved either way: the pass excludes `tests/**`, which is
+precisely why three verbatim copies of one helper went unnoticed.
 
 ## Not verified, and why
 

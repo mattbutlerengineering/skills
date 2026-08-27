@@ -71,7 +71,7 @@ to `main`, and the change ships no user-facing surface.
 ## Rollback
 
 ```sh
-git revert 33910b4 10e684d      # newest first
+git revert 0d7dedf 33910b4 10e684d      # newest first
 python3 -m unittest discover tests
 ```
 
@@ -87,6 +87,15 @@ defect — acceptable, since the suite was green with it for months.
   assert a failure that was never seen, the naive predicate was restored
   in that file alone, the test run to a genuine FAILED, and the fix put
   back. Both states are quoted in `verification.md`.
+- **The run shipped an incomplete fix and had to reopen Implement.**
+  After Ship was written, an AST scan for duplicated helper bodies found
+  a third `pid_alive` in `tests/test_cli.py` that the brief, the
+  implementation and the review had all missed — the scoping search keyed
+  on an assertion message this copy does not use. The run went back to
+  Implement rather than shipping the claim, fixed it test-first, and
+  recorded the deviation in `defect.md` and finding 5 in `review.md`.
+  This is the second time in this run that the honest move was to reopen
+  a stage rather than paper over the order.
 - A 6x suite-timing discrepancy was noticed mid-run (16 s here versus
   ~103 s in two other worktrees earlier today) and chased rather than
   waved through. The first measurement attempt returned nothing — the
