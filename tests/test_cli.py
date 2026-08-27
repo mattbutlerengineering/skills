@@ -381,12 +381,37 @@ echo "{\\"guard\\": \\"${CLAUDECODE:-absent}\\"}"
 """
 
 
+_PROC_STAT = Path("/proc/self/stat").is_file()
+
+
+def process_state(pid):
+    """The scheduler state letter for `pid`, or None when no process
+    table entry exists at all. Linux publishes it in /proc; everywhere
+    else `ps` reports it."""
+    if _PROC_STAT:
+        try:
+            data = Path(f"/proc/{pid}/stat").read_bytes()
+        except OSError:
+            return None
+        # comm sits in parentheses and may itself contain spaces and
+        # parentheses, so state is the first field after the final ")".
+        return data.rsplit(b")", 1)[1].split()[0].decode()
+    listing = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)],
+                             capture_output=True, text=True)
+    return listing.stdout.strip() or None
+
+
 def pid_alive(pid):
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
+    """True only while `pid` is still running.
+
+    `os.kill(pid, 0)` asks whether a process-table entry exists, and a
+    zombie — terminated, not yet collected — still has one. The grace
+    loop in assert_grandchild_reaped polls this predicate to decide
+    whether a killed grandchild is gone, so counting a zombie as alive
+    reports a grandchild that is already dead as a survivor.
+    """
+    state = process_state(pid)
+    return state is not None and not state.startswith("Z")
 
 
 class FakeProcess:
@@ -624,6 +649,48 @@ class TestReadExecution(unittest.TestCase):
             self.assertEqual(cli.read_execution(path), (
                 None, f"execution file {path} usage input_tokens -1 is"
                 " not a non-negative integer"))
+
+
+class TestPidAlivePredicate(unittest.TestCase):
+    """pid_alive underpins assert_grandchild_reaped's grace loop, so a
+    zombie counted as alive reports an already-dead grandchild as a
+    survivor. This suite's copy is the third (test_cli_process_reaping
+    and test_charter_replay carry the other two)."""
+
+    def zombie(self):
+        """A pid that has exited and has NOT been collected.
+
+        The pipe is the synchronisation: the child's write end closes
+        only when it exits, so the parent's read returning EOF proves
+        termination without `wait()`ing — which would collect it and
+        destroy the very state under test.
+        """
+        read_fd, write_fd = os.pipe()
+        pid = os.fork()
+        if pid == 0:                      # child
+            os.close(read_fd)
+            os._exit(0)
+        os.close(write_fd)
+        self.assertEqual(os.read(read_fd, 1), b"", "child did not exit")
+        os.close(read_fd)
+        self.addCleanup(self._collect, pid)
+        return pid
+
+    def _collect(self, pid):
+        try:
+            os.waitpid(pid, 0)
+        except ChildProcessError:
+            pass
+
+    def test_an_uncollected_dead_process_is_not_alive(self):
+        pid = self.zombie()
+        # Precondition: the table entry survives, so the naive predicate
+        # has something to be wrong about. Without this the test could
+        # pass for the uninteresting reason that the pid is fully gone.
+        os.kill(pid, 0)
+        self.assertFalse(pid_alive(pid),
+                         "a terminated process must read as dead")
+
 
 
 if __name__ == "__main__":
