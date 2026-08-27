@@ -113,11 +113,20 @@ duplicated helper went unnoticed.
   The fix is uid-independent by construction — it reads a state field
   rather than exercising a permission — but that reasoning is not a
   measurement.
-- **Behaviour on Linux.** `process_state` takes the `/proc` branch there
-  and the `ps` branch here; only the `ps` branch was executed. CI runs
-  Linux and will exercise the other half on first push. Both branches
-  are covered by the same assertion, so a divergence fails loudly rather
-  than silently.
+- ~~**Behaviour on Linux.**~~ **Closed.** The branch was pushed and the
+  validator ran it on Linux, taking the `/proc` path this machine never
+  exercises (run `33099721069`, `check` job):
+
+  ```
+  lint: 0 problem(s) across 24 skills
+  gates: 0 problem(s)
+  selftest: ok
+  Ran 1346 tests in 12.918s
+  ```
+
+  The `review`, `needs-review-label` and `merged-label` jobs are
+  `skipped`, which is correct and not a failure: all three are gated on
+  `pull_request` actions, and this was a branch push with no PR.
 ## The suite-timing anomaly, chased and closed
 
 This battery ran in 16.3 s where the same suite took ~103 s in two other
