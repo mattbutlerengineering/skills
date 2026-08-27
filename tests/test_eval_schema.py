@@ -373,6 +373,52 @@ class TestResultsPath(unittest.TestCase):
                                      harness="opencode")
 
 
+class TestWriteSnapshot(unittest.TestCase):
+    """The snapshot writer: the second half of the results-recording fact
+    whose first half (the naming grammar) ADR-0024 already moved here.
+    trigger_eval and charter_replay are thin callers; what is asserted
+    here is the on-disk shape they both produce."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.results = self.tmp / "evals" / "results"
+        self.output = {"date": "2026-07-02", "summary": {"passed": 1}}
+
+    def test_it_creates_the_directory_and_returns_the_path(self):
+        path = eval_schema.write_snapshot(self.output, self.results,
+                                          "charter")
+        self.assertTrue(self.results.is_dir())
+        self.assertEqual(path, self.results / "charter-2026-07-02.json")
+
+    def test_the_bytes_on_disk_are_indented_json_with_a_final_newline(self):
+        path = eval_schema.write_snapshot(self.output, self.results,
+                                          "charter")
+        self.assertEqual(path.read_text(encoding="utf-8"),
+                         json.dumps(self.output, indent=2) + "\n")
+
+    def test_a_harness_marks_the_trigger_name(self):
+        path = eval_schema.write_snapshot(self.output, self.results,
+                                          "trigger", harness="omp")
+        self.assertEqual(path.name, "trigger-omp-2026-07-02.json")
+
+    def test_repeated_writes_suffix_instead_of_overwriting(self):
+        first = eval_schema.write_snapshot(self.output, self.results,
+                                           "charter")
+        second = eval_schema.write_snapshot(self.output, self.results,
+                                            "charter")
+        self.assertNotEqual(first, second)
+        self.assertTrue(first.is_file() and second.is_file())
+
+    def test_a_directory_shaped_kind_is_refused(self):
+        # results_path("output", ...) names a DIRECTORY. Writing a file
+        # at that path would corrupt the results tree silently, so the
+        # one kind this writer cannot serve is refused rather than
+        # written — this is a reachable misuse, not defensive padding.
+        with self.assertRaises(ValueError):
+            eval_schema.write_snapshot(self.output, self.results, "output")
+
+
 class TestResultsGrammarRoundTrip(unittest.TestCase):
     """The '-N starts at 2' collision rule is encoded twice inside this
     module — the _SUFFIX regex (validator side) and the results_path

@@ -383,12 +383,9 @@ def run_eval(cases, descriptions, workers, runs_per_query, timeout,
 
 
 def record(output, results_dir):
-    """Write a dated results file; eval_schema owns the naming grammar."""
-    results_dir.mkdir(parents=True, exist_ok=True)
-    path = eval_schema.results_path(results_dir, "trigger", output["date"],
-                                    harness=output.get("harness"))
-    path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
-    return path
+    """Write a dated results file; eval_schema owns the recording."""
+    return eval_schema.write_snapshot(output, results_dir, "trigger",
+                                      harness=output.get("harness"))
 
 
 def print_report(output):
