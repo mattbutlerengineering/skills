@@ -140,6 +140,21 @@ selftest: ok
 one-owner: 9 problem(s)
 ```
 
+Confirmed on Linux by the validator (run `33104790843`, `check` job) —
+this machine is macOS, and the repo's CI is the only place the change is
+exercised on the other platform:
+
+```
+lint: 0 problem(s) across 24 skills
+gates: 0 problem(s)
+selftest: ok
+Ran 1352 tests in 14.313s
+```
+
+The `review`, `needs-review-label` and `merged-label` jobs are `skipped`,
+which is correct: all three are gated on `pull_request` actions and this
+was a branch push with no PR.
+
 1352 is 1344 on `main` plus this run's eight regression tests. one-owner
 is 9, the standing baseline — unchanged. `eval_schema.py` is not in
 `factory_init.MIRRORS`, so no manifest regeneration was needed;
