@@ -106,6 +106,35 @@ def _resolve_file(root, name):
     return matches[0] if matches else None
 
 
+def _read_or_note(path, what):
+    """The file's text, or a parenthesised note naming why it could not
+    be read.
+
+    _python_structure below states this rule for the codegraph half of
+    the pack: a file that cannot be read "degrades to (message, None)
+    rather than raising ... one unparseable file a row names must not
+    crash the assembler CLI (the repo's problem-string/degrade
+    convention, not a traceback)". CONTEXT.md and the cited ADRs are
+    read by the same function, into the same prompt, on the same
+    best-effort terms, so they degrade the same way. This module is
+    mirrored into the factory payload, which means those two are files
+    in whatever product repo adopted the factory — not this one, where
+    they all happen to be ASCII.
+
+    OSError and ValueError are the two that matter: a file the process
+    may not read, and one that is not UTF-8. An `is_file()` guard
+    answers neither; it is a different question asked a moment earlier,
+    and the mode or the bytes can still refuse after it has said yes.
+
+    A note rather than a silent drop: a reader who cannot see a cited
+    ADR's text should be told it was cited and why the body is missing.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, ValueError) as err:
+        return f"({what} could not be read: {err.__class__.__name__})"
+
+
 def _python_structure(path):
     """(docstring headline, [top-level def/class names]) for a .py file,
     read via ast so nothing executes. A file that cannot be read or parsed
@@ -172,7 +201,7 @@ def orientation_pack(root, wo, row):
     root = Path(root)
     block = wo_block(root, wo) or row
     context_path = root / "CONTEXT.md"
-    context = (context_path.read_text(encoding="utf-8")
+    context = (_read_or_note(context_path, "CONTEXT.md")
                if context_path.is_file() else "(no CONTEXT.md at repo root)")
     parts = [f"## Orientation pack: {wo}\n", "### CONTEXT.md\n", context]
     for number in cited_adrs(block):
@@ -180,7 +209,7 @@ def orientation_pack(root, wo, row):
         if path is None:
             continue
         parts.append(f"### ADR-{number}: {path.stem}\n")
-        parts.append(path.read_text(encoding="utf-8"))
+        parts.append(_read_or_note(path, f"ADR-{number}"))
     parts.append("### Codegraph summary\n")
     parts.append(codegraph_summary(root, block))
     return "\n".join(parts)
