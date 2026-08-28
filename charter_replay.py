@@ -299,9 +299,50 @@ def check_expectation(expectation, transcript):
     return None
 
 
+def replay_problem(transcript):
+    """None when the transcript is evidence, else one problem string.
+
+    Two shapes are not evidence, and both arrive here as ordinary
+    transcripts. One the runner marked with an error — a missing CLI, a
+    timeout, a case absent from a recorded set. One it could not mark:
+    cli.harness_run never reads the child's exit status, so a claude that
+    dies before writing an event is indistinguishable from a model that
+    sat there, and returns a transcript with no error field at all
+    (tests/test_charter_replay.py pins that shape).
+
+    Partial work does not rescue an errored replay. A timeout keeps what
+    ran before the clock on purpose, and that is evidence of what ran,
+    never evidence that the case passed.
+    """
+    error = transcript.get("error")
+    if error:
+        return f"replay: the run errored ({error})"
+    if (not transcript.get("tool_calls")
+            and not (transcript.get("text") or "").strip()):
+        return "replay: the run produced no tool calls and no text"
+    return None
+
+
 def score_case(case, transcript):
-    """Score one replayed case. Pure: case + transcript in, verdict out."""
+    """Score one replayed case. Pure: case + transcript in, verdict out.
+
+    A pass asserts two things, not one: no expectation failed, and the
+    replay produced something to judge. Without the second, a case whose
+    expectations are all forbid — the shape _case_problems explicitly
+    invites, since it requires a forbid and never a require — passes
+    against a run that never happened, because a forbidden pattern cannot
+    fire in an empty haystack. That verdict is counted in the summary, is
+    the process exit code, and is what --record writes into the
+    append-only results dir as charter evidence.
+
+    The evidence problem joins `failures`, which already drives all
+    three. `failed` keeps meaning expectation ids, because that is what
+    names which trap tripped and what the degradation tests read.
+    """
     failures, failed = [], []
+    unusable = replay_problem(transcript)
+    if unusable:
+        failures.append(unusable)
     for expectation in case["expectations"]:
         problem = check_expectation(expectation, transcript)
         if problem:
@@ -373,8 +414,8 @@ def claude_runner(root, model, timeout):
     the CLI's grandchildren. Default permissions on purpose — a
     forbidden tool call is recorded and scored, not executed. A timeout
     returns the partial transcript marked with the error rather than a
-    fabricated one: an incomplete replay fails its required
-    expectations, which is the honest verdict.
+    fabricated one, and score_case fails any case whose replay carries an
+    error or produced nothing, which is the honest verdict.
     """
     adapter = HARNESSES["claude"]
 
