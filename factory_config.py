@@ -21,6 +21,7 @@ config:-prefixed problem strings; a field the config does not cover is a
 problem, never a silent default.
 """
 import json
+import math
 from pathlib import Path
 
 # The routing-band vocabulary (ADR-0034): the exact key set factory.json's
@@ -91,10 +92,18 @@ def resolve_model(band, config):
 
 
 def _positive_number(value):
-    """True for a positive int/float that is not a bool — True is an int
-    in Python, and a bool where a dollar amount belongs is a typo."""
+    """True for a finite positive int/float that is not a bool — True is
+    an int in Python, and a bool where a dollar amount belongs is a typo.
+
+    Finite because an infinite amount is not a ceiling: `total >= inf` is
+    false at every spend, so an infinite monthly_cap_usd would leave
+    ADR-0034's breaker returning CONTINUE forever, and json.loads accepts
+    a bare Infinity literal straight from factory.json. cost_report.decide
+    already refuses a non-finite SPEND with that reasoning; the comparison
+    has two sides. NaN needs no clause — `nan > 0` is already false."""
     return (not isinstance(value, bool)
-            and isinstance(value, (int, float)) and value > 0)
+            and isinstance(value, (int, float))
+            and math.isfinite(value) and value > 0)
 
 
 def resolve_budget(size, config):
