@@ -228,9 +228,19 @@ def _spend(entries):
     work order with no rows has no spend (None downstream), never $0 —
     an absent ledger reads as no entries, and a malformed line already
     arrived as read()'s ledger:-prefixed problem, never a silently
-    smaller sum."""
+    smaller sum.
+
+    Which rows count is cost_ledger.dispatched's rule, not a second copy
+    of it: a gate-latency observation (ADR-0041) is a $0 wait record
+    rather than a run, so a work order with only gate rows would
+    otherwise land here with a key worth 0.0 — the measured $0.00 the
+    page renders instead of the em dash it keeps for an unmeasured one,
+    and the by_wo padding cost_report.aggregate names as the reason the
+    rule exists. _metrics reads the same list from the same
+    cost_ledger.read call and keeps that rule through aggregate; this is
+    the console's other reader of it."""
     spend = {}
-    for entry in entries:
+    for entry in cost_ledger.dispatched(entries):
         spend[entry["wo"]] = spend.get(entry["wo"], 0.0) + entry["cost"]
     return spend
 
