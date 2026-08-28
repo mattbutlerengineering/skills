@@ -170,17 +170,20 @@ class TestUpdateManifest(unittest.TestCase):
                     f"{name} does not land in templates/{rel} as its"
                     " transform of the root file")
 
-    def test_codeowners_lands_verbatim_and_the_makefile_in_product_form(self):
-        """The two twins that used to be hand-authored: CODEOWNERS is a
-        byte-for-byte mirror, the Makefile is generated in product form
-        (header swapped, plugin lint dropped, commands respelled)."""
+    def test_both_hand_authored_twins_land_in_product_form(self):
+        """The two twins that used to be hand-authored, each generated
+        now: CODEOWNERS with its header swapped and its owner blanked to
+        the placeholder, the Makefile with its header swapped, the
+        plugin-only lint line dropped and its commands respelled."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = make_factory_repo(tmp)
             self.assertEqual(factory_init.update_manifest(tree.root), [])
             templates = tree.root / "factory" / "templates"
             self.assertEqual(
-                (templates / ".github" / "CODEOWNERS").read_bytes(),
-                (tree.root / ".github" / "CODEOWNERS").read_bytes())
+                (templates / ".github" / "CODEOWNERS").read_text(
+                    encoding="utf-8"),
+                factory_init.PRODUCT_CODEOWNERS_HEADER
+                + f"* {factory_init.OWNER_PLACEHOLDER}\n")
             self.assertEqual(
                 (templates / "Makefile").read_text(encoding="utf-8"),
                 factory_init.PRODUCT_MAKEFILE_HEADER + "\n"
@@ -335,6 +338,141 @@ class TestProductMakefile(unittest.TestCase):
     def test_identity_returns_its_input_unchanged(self):
         text = "* @owner\n"
         self.assertEqual(factory_init.identity(text), text)
+
+
+class TestProductCodeowners(unittest.TestCase):
+    """CODEOWNERS' MIRRORS transform.
+
+    The root file names THIS repo's code owner. The stamped twin must
+    name nobody: GitHub ignores a CODEOWNERS entry pointing at someone
+    who is not a collaborator, and says nothing when it does, so an
+    inherited handle leaves the merge gate inert in silence — which is
+    the one control still standing on the merge path once ADR-0036 made
+    the independent review the load-bearing part.
+
+    Six surfaces already promise the stamp ships a placeholder: the
+    seeded blueprint ADR, gates.PRISTINE_PREFIXES' comment,
+    factory_init's own module docstring and FACTORY_OWNED comment,
+    docs/setup.md's verify checklist, and doctor's step 8. This is the
+    transform that makes them true.
+    """
+
+    ROOT_TEXT = ("# Human gates: a root header sentence.\n"
+                 "# A second header line.\n"
+                 "* @real-owner\n"
+                 "docs/adr/ @real-owner\n")
+
+    def test_swaps_the_header_and_replaces_every_owner(self):
+        placeholder = factory_init.OWNER_PLACEHOLDER
+        self.assertEqual(
+            factory_init.product_codeowners(self.ROOT_TEXT),
+            factory_init.PRODUCT_CODEOWNERS_HEADER
+            + f"* {placeholder}\n"
+            + f"docs/adr/ {placeholder}\n")
+
+    def test_a_root_file_with_no_header_still_gets_one(self):
+        """Total over its root file's shape, not over the shape it
+        happens to have today. ADR-0050 names the Makefile transform's
+        dependence on an opening comment block as the fragile part; this
+        one drops comment lines and prepends, so a root file with no
+        header, or with the header moved, still lands complete."""
+        self.assertEqual(
+            factory_init.product_codeowners("* @owner\n"),
+            factory_init.PRODUCT_CODEOWNERS_HEADER
+            + f"* {factory_init.OWNER_PLACEHOLDER}\n")
+
+    def test_a_comment_below_the_rules_survives(self):
+        """Only the LEADING comment block is the root's header. A comment
+        further down annotates a rule, and a transform that swallowed it
+        would lose the payload something the root said — silently, which
+        is the failure class this transform exists to end."""
+        out = factory_init.product_codeowners(
+            "# header\n"
+            "* @owner\n"
+            "# the security-sensitive paths follow\n"
+            "infra/ @owner\n")
+        self.assertIn("# the security-sensitive paths follow", out)
+        self.assertNotIn("# header", out)
+
+    def test_it_rewrites_owner_tokens_not_every_at_sign(self):
+        """An owner may be an email address; only a whitespace-delimited
+        token that STARTS with @ is a handle. Rewriting inside
+        user@example.com would corrupt the rule rather than blank it."""
+        self.assertIn(
+            "docs/ user@example.com",
+            factory_init.product_codeowners("docs/ user@example.com\n"))
+
+    def test_the_placeholder_cannot_be_a_real_github_handle(self):
+        """A placeholder shaped like a plausible handle can be
+        registered by a stranger, and then the gate is not inert but
+        live and pointed at them. Angle brackets are not legal in a
+        GitHub login, so this token can never resolve to an account."""
+        self.assertRegex(factory_init.OWNER_PLACEHOLDER, r"[<>]")
+
+    def test_the_header_tells_the_reader_to_substitute_it(self):
+        """The placeholder is only half the fix — a stamped repo also
+        has to be told what to do about it, in the file itself, because
+        that is the surface someone edits."""
+        header = factory_init.PRODUCT_CODEOWNERS_HEADER
+        self.assertIn(factory_init.OWNER_PLACEHOLDER, header)
+        self.assertIn("substitute", header.lower())
+        for line in header.splitlines():
+            with self.subTest(line=line):
+                self.assertTrue(line.startswith("#"),
+                                "a CODEOWNERS header line must be a comment")
+
+    def test_the_header_cites_no_adr_by_bare_token(self):
+        """The stamped repo numbers the three-human-gates decision 0005,
+        not 0033. tests/TestSeededADRs states the rule for the ADR seed
+        — cite an upstream decision by name, never by bare token — and
+        the root header's `(ADR-0033)` is exactly that trap, one file
+        over. Detector C does not scan .github/, so nothing else would
+        catch it."""
+        self.assertNotRegex(factory_init.PRODUCT_CODEOWNERS_HEADER,
+                            r"ADR-\d{4}")
+
+
+class TestTheShippedPayloadNamesNoOwner(unittest.TestCase):
+    """The bytes actually in factory/templates/.github/CODEOWNERS.
+
+    TestProductCodeowners pins the transform; this pins that the payload
+    was regenerated through it. Nothing else reads these bytes: a stamp
+    installs them at .github/CODEOWNERS in the target, and detector E
+    deliberately never compares that file (gates.PRISTINE_PREFIXES
+    excludes it, because it is meant to be edited downstream).
+    """
+
+    ROOT = REPO_ROOT / ".github" / "CODEOWNERS"
+    PAYLOAD = (REPO_ROOT / "factory" / "templates" / ".github"
+               / "CODEOWNERS")
+    HANDLE = re.compile(r"(?:^|\s)(@\S+)", re.MULTILINE)
+
+    def handles(self, path):
+        return set(self.HANDLE.findall(path.read_text(encoding="utf-8")))
+
+    def test_the_root_still_names_a_real_handle(self):
+        """Non-vacuity. If the root file ever stops naming a handle, the
+        pin below passes because it compared against nothing."""
+        self.assertTrue(self.handles(self.ROOT),
+                        ".github/CODEOWNERS names no owner")
+
+    def test_no_root_handle_survives_into_the_payload(self):
+        payload = self.PAYLOAD.read_text(encoding="utf-8")
+        for handle in sorted(self.handles(self.ROOT)):
+            with self.subTest(handle=handle):
+                self.assertNotIn(
+                    handle, payload,
+                    "the payload CODEOWNERS names this repo's code owner —"
+                    " a stamp would install it as the target's")
+
+    def test_every_payload_rule_names_the_placeholder(self):
+        rules = [line for line
+                 in self.PAYLOAD.read_text(encoding="utf-8").splitlines()
+                 if line.strip() and not line.lstrip().startswith("#")]
+        self.assertTrue(rules, "the payload CODEOWNERS has no rule lines")
+        for line in rules:
+            with self.subTest(rule=line):
+                self.assertIn(factory_init.OWNER_PLACEHOLDER, line)
 
 
 class TestInstallPath(unittest.TestCase):

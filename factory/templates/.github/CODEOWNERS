@@ -1,8 +1,15 @@
-# Human gates (ADR-0033): required code-owner review makes the merged PR
-# the approval record. The explicit doc paths are the gate-1/gate-2
-# surfaces; the fallback keeps every merge owner-reviewed until classes
-# graduate to auto-merge on data.
-* @mattbutlerengineering
-docs/adr/ @mattbutlerengineering
-docs/features/ @mattbutlerengineering
-docs/design/ @mattbutlerengineering
+# Code owners — stamped by factory-init. SUBSTITUTE THE PLACEHOLDER:
+# replace every `@<owner>` below with a GitHub handle or team that is a
+# collaborator on THIS repo.
+#
+# Until you do, the merge gate is inert. Required code-owner review is what
+# makes the merged PR the approval record (the three-human-gates decision,
+# in docs/adr/). GitHub ignores a CODEOWNERS entry naming someone who is
+# not a collaborator here, and it does not tell you that it did.
+#
+# The explicit doc paths are the first two gates' surfaces; the fallback
+# keeps every merge owner-reviewed.
+* @<owner>
+docs/adr/ @<owner>
+docs/features/ @<owner>
+docs/design/ @<owner>
