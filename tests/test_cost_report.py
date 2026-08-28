@@ -49,6 +49,29 @@ def fixed_clock(iso_date):
     return lambda: dt
 
 
+def step_block(text, name):
+    """The lines of one named workflow step, from its `- name:` line up to
+    the next line indented at or left of it. Enough to say WHICH step an
+    `if:` belongs to without a YAML parser (stdlib only, like every script
+    here); the block-end rule is workflow_parse.run_steps' own, so a
+    comment introducing the next step ends this one rather than being
+    read as part of it. An assertIn over the whole file cannot make that
+    distinction, which is how a step with no gate at all went unnoticed
+    in a class devoted to gates."""
+    out, indent = [], None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if indent is None:
+            if stripped == f"- name: {name}":
+                indent = len(line) - len(line.lstrip())
+                out.append(line)
+            continue
+        if stripped and len(line) - len(line.lstrip()) <= indent:
+            break
+        out.append(line)
+    return "\n".join(out)
+
+
 class FixtureTree(FactoryTree):
     def ledger(self, entries):
         text = "".join(json.dumps(e) + "\n" for e in entries)
@@ -490,6 +513,67 @@ class TestFailClosedPause(unittest.TestCase):
         # only a clean under-cap verdict may resume.
         text = self.WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("if: steps.report.outputs.pause == 'false'", text)
+
+
+class TestEveryConsumerOfTheReportStatesItsGate(unittest.TestCase):
+    """The other half of WO-0033's rule, on the step that carries the
+    report itself. TestFailClosedPause states it for the pause step: the
+    report step exits nonzero on exactly the fail-closed verdicts, so a
+    step gated on implicit success() is skipped at the moment it matters
+    most. The step that POSTS the weekly issue reads the same outputs and
+    had no `if:` at all, so the week a ledger line goes malformed is the
+    week no report is filed — while cost_report.guard has gone to the
+    trouble of composing one ("Both aggregates are always the best-effort
+    rollup of what WAS readable, even on a failing path, so a human
+    reading the report still sees something").
+
+    A gate stated by omission is the failure mode, so the pin is over
+    every consumer rather than over one more named step."""
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "cost-report.yml"
+    CONSUMER = "steps.report.outputs."
+
+    def workflow(self):
+        return self.WORKFLOW.read_text(encoding="utf-8")
+
+    def consuming_steps(self):
+        text = self.workflow()
+        names = [line.strip()[len("- name: "):]
+                 for line in text.splitlines()
+                 if line.strip().startswith("- name: ")]
+        blocks = [(name, step_block(text, name)) for name in names]
+        return [(name, block) for name, block in blocks
+                if self.CONSUMER in block]
+
+    def test_every_step_reading_the_report_outputs_states_its_gate(self):
+        for name, block in self.consuming_steps():
+            with self.subTest(step=name):
+                self.assertIn("if:", block)
+
+    def test_the_posting_step_survives_a_failing_report_step(self):
+        block = step_block(self.workflow(),
+                           "Post the weekly cost report issue")
+        self.assertIn("always()", block)
+
+    def test_the_posting_step_needs_a_report_to_have_been_composed(self):
+        # always() alone would post an empty issue when the report step
+        # died before write_outputs (an import error, a crash) — gh would
+        # then fail on an empty --title, turning a diagnosable Python
+        # traceback into a confusing gh error. The outputs' own presence
+        # is the evidence that a report exists to post.
+        block = step_block(self.workflow(),
+                           "Post the weekly cost report issue")
+        self.assertIn("steps.report.outputs.title != ''", block)
+
+    def test_the_three_consumers_are_the_ones_this_pin_covers(self):
+        # Names the coverage rather than leaving it implied: a fourth
+        # consuming step added later joins the gate pin above
+        # automatically, and this list going stale says so.
+        self.assertEqual(
+            [name for name, _ in self.consuming_steps()],
+            ["Post the weekly cost report issue",
+             "Pause dispatch on a cap breach",
+             "Resume dispatch when under the cap"])
 
 
 class TestWorkflowOutputLockstep(unittest.TestCase):
