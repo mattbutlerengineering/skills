@@ -40,6 +40,35 @@ RUN_ID = "pinned01"
 MODEL = "claude-sonnet-5"
 
 
+def recording_problems(lines):
+    """Why this recording must not be committed, as `record:`-prefixed
+    problem strings (the repo's checker convention; the caller prints
+    and exits nonzero).
+
+    An empty stream is the one outcome that is never evidence. The
+    detector is handed the lines as they arrive and answers None when
+    nothing fired — which is exactly what it answers when nothing
+    arrived at all, so a CLI that dies on the first breath looks from
+    here like a model that thought about it and declined. Committing
+    that as a `fired: null` transcript, stamped with a real cli_version,
+    fabricates eval evidence (CLAUDE.md), and this script sends the
+    CLI's stderr to /dev/null, so there is nothing on screen to correct
+    the impression.
+
+    Only the empty case. A short stream may be a genuine early
+    decision — the recorder stops as soon as the detector decides — and
+    a length threshold would refuse real recordings to catch a crash
+    that a human re-recording is going to notice anyway.
+
+    Kept identical in both recorders on purpose: they share no import,
+    so tests/test_fixture_recorders.py holds the two copies together.
+    """
+    if not lines:
+        return ["record: the CLI produced no output — a recording that"
+                " never ran is not a no-fire (stderr goes to /dev/null"
+                " here; re-run the command by hand to see why)"]
+    return []
+
 def record(name, query):
     descriptions = load_descriptions(ROOT)
     name_to_slug = {f"{slug}-skill-{RUN_ID}": slug for slug in descriptions}
@@ -66,6 +95,12 @@ def record(name, query):
             process.wait()
         process.stdout.close()
         shutil.rmtree(project_dir, ignore_errors=True)
+
+    problems = recording_problems(lines)
+    if problems:
+        for problem in problems:
+            print(problem, file=sys.stderr)
+        raise SystemExit(1)
 
     (HERE / f"{name}.jsonl").write_text("\n".join(lines) + "\n",
                                         encoding="utf-8")
