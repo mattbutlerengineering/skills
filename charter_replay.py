@@ -307,6 +307,19 @@ def score_case(case, transcript):
         if problem:
             failures.append(problem)
             failed.append(expectation["id"])
+    error = transcript.get("error")
+    if error:
+        # A replay that did not finish cannot certify a charter, and the
+        # expectations cannot say so on its behalf: claude_runner's
+        # reasoning ("an incomplete replay fails its required
+        # expectations") holds only if the case has a require AND the
+        # partial run had not already satisfied it. Neither is
+        # guaranteed — _case_problems demands a forbid and never a
+        # require, and a run that times out late did a lot before the
+        # clock ran out. So the verdict is taken here, where the
+        # incompleteness is actually known. Not in `failed`: that lists
+        # expectation ids, and an unfinished run is not an expectation.
+        failures.append(f"replay did not complete: {error}")
     return {
         "id": case["id"],
         "role": case["role"],
@@ -314,7 +327,7 @@ def score_case(case, transcript):
         "failed": failed,
         "failures": failures,
         "tool_calls": len(transcript.get("tool_calls", [])),
-        "error": transcript.get("error"),
+        "error": error,
     }
 
 
@@ -425,8 +438,6 @@ def print_report(output):
               f" {result['tool_calls']} tool call(s)", file=sys.stderr)
         for failure in result["failures"]:
             print(f"      {failure}", file=sys.stderr)
-        if result["error"]:
-            print(f"      error: {result['error']}", file=sys.stderr)
     summary = output["summary"]
     print(f"charter replay ({output['source']}):"
           f" {summary['passed']}/{summary['total']} passed", file=sys.stderr)
