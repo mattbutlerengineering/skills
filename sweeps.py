@@ -101,6 +101,15 @@ SENTRY_FIELDS = ("shortId", "title", "culprit", "level", "count",
 # is not (#305). What stays here is sweeps-only — the intake key's
 # character class and the two field widths this tool quotes at.
 UNSAFE_KEY = re.compile(r"[^A-Za-z0-9_.:-]")
+# The key filter REPLACES what it refuses; it must never delete it.
+# Deleting closes gaps, and the gap it closes may be the one that kept
+# sanitize's redaction from firing a moment earlier: `WO-[0042]`,
+# `WO-00 42` and a zero-width-separated `WO-0042` are each one deletion
+# away from the work order id ADR-0032 says an intake may never name.
+# `_` is the one safe filler — it is inside the class above, and it is
+# not in the WO grammar, so substituting it can never build a token
+# either (a `-` filler could: `WO 0042`).
+KEY_FILL = "_"
 
 TITLE_LIMIT = 100
 KEY_LIMIT = 64
@@ -154,8 +163,9 @@ def sentry_intakes(payload):
         if not isinstance(entry, dict):
             problems.append(f"sweeps: sentry[{index}] is not an object")
             continue
-        short_id = UNSAFE_KEY.sub("", sanitize(entry.get("shortId"),
-                                               KEY_LIMIT))
+        short_id = UNSAFE_KEY.sub(KEY_FILL,
+                                  sanitize(entry.get("shortId"),
+                                           KEY_LIMIT))
         title = sanitize(entry.get("title"), TITLE_LIMIT)
         if not short_id or not title:
             problems.append(
