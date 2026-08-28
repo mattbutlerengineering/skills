@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """factory: the one front door over the root tools' CLI legs
-(issue #237). Fourteen root modules carry a CLI and every one is invoked
-by filename; this is the index that did not exist and a dispatcher over
-the mains that already do.
+(issue #237). Every root module that carries a CLI is invoked by
+filename; this is the index that did not exist and a dispatcher over the
+mains that already do. How many there are is VERBS' to say and
+`factory.py help` prints them — a number written here would be a second
+owner, and the one that used to be here drifted three behind.
 
 A ROUTER, NOT A SEAM: every verb delegates to a module's main() and the
 router owns no knowledge of its own. The verb IS the module's name

@@ -8,12 +8,76 @@ tools never had (`factory.py help`) names every verb.
 import importlib
 import inspect
 import io
+import re
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
 import factory
+
+
+# A count of the things the verb table owns, written into prose beside
+# it: "Fourteen root modules", "17 verbs". Number words up to twenty and
+# bare digits, hyphen or space, singular noun included so "one module"
+# does not slip through as the exception. The table is the owner; the
+# sentence next to it is a second one, and the second one drifted three
+# modules behind before this pin existed.
+_NUMBER = (r"\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven"
+           r"|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen"
+           r"|nineteen|twenty")
+COUNT_CLAIM = re.compile(
+    rf"\b(?:{_NUMBER})[ -](?:root[ -])?(?:module|tool|verb)s?\b", re.I)
+
+
+def count_claims(text):
+    """Every hand-typed count of the router's own tools in TEXT."""
+    return COUNT_CLAIM.findall(text or "")
+
+
+class TestTheRouterCountsNothingByHand(unittest.TestCase):
+    """The file's whole discipline is that it restates nothing the table
+    owns — the verb from the module name, the index line from the
+    module's docstring at print time, the table from a filesystem scan,
+    the calling convention from each main's signature (ADR-0054). The one
+    hand-typed fact was the number of CLI-bearing modules in the opening
+    sentence, and it was the one that drifted: it said fourteen against a
+    table of seventeen, and nothing here read the prose."""
+
+    # The sentence as it stood, kept verbatim so the pin below cannot
+    # pass by failing to look.
+    DRIFTED = ("Fourteen root modules carry a CLI and every one is"
+               " invoked by filename")
+
+    def test_the_router_states_no_count_its_table_owns(self):
+        self.assertEqual(count_claims(factory.__doc__), [])
+
+    def test_the_pin_catches_the_sentence_that_drifted(self):
+        """Non-vacuity: a checker that matches nothing would pass the
+        test above over any docstring at all."""
+        self.assertTrue(count_claims(self.DRIFTED), self.DRIFTED)
+
+    def test_the_pin_catches_a_digit_form_too(self):
+        self.assertTrue(count_claims("routes 17 verbs"))
+
+    def test_the_pin_leaves_ordinary_prose_alone(self):
+        """It must not fire on the file's real sentences — otherwise the
+        cheapest way to pass it is to stop explaining the router."""
+        for line in ("every verb delegates to a module's main()",
+                     "one vocabulary, not two",
+                     "args pass through verbatim"):
+            with self.subTest(line=line):
+                self.assertEqual(count_claims(line), [])
+
+    def test_the_number_is_still_one_help_away(self):
+        """Removing the count costs the reader nothing: the index prints
+        one line per verb, so the number is derivable on demand."""
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            factory.main(["help"])
+        listed = [line for line in buffer.getvalue().splitlines()
+                  if line.startswith("  ") and line.strip()]
+        self.assertEqual(len(listed), len(factory.VERBS))
 
 
 class TestVerbTableIsDerived(unittest.TestCase):
@@ -47,8 +111,8 @@ class TestVerbTableIsDerived(unittest.TestCase):
         fact, so it is derived here too — a main that grows or loses its
         argv parameter fails this test until its row follows. The
         derivation lives in the test, not in the router: factory.py runs
-        on every push and must import one module per invocation, not
-        fourteen.
+        on every push and must import the one module the verb names, not
+        every module that has a verb.
 
         `bare` means the main has NO argv slot, not merely that it can be
         called with no arguments. A main whose argv slot carries a
