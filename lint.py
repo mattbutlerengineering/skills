@@ -20,6 +20,30 @@ from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
                       TEMPLATED_STAGES)
 
 
+def object_problems(data, label):
+    """[] when `data` is a JSON object, else the one problem naming its
+    shape.
+
+    Both manifest readers open with this. A JSON document's top level is
+    legally an array, string, number, boolean or null, and json.loads
+    hands every one of them back untouched — so dict-ness is the one
+    thing a reader that then calls `.get` cannot assume.
+    check_pi_package already applies the idiom one level down, to `pi`;
+    only the top level was taken on trust, in both readers, because the
+    second was written to match the first.
+
+    Reported alone, never beside derived complaints: on a string
+    `data.get("keywords")` cannot even be asked, and a reader that
+    guessed past the shape would describe its own confusion instead of
+    the file. Both readers are early entries in CHECKERS and lint.main
+    does not catch, so the alternative to a problem string here is not a
+    thinner report — it is no report at all.
+    """
+    if isinstance(data, dict):
+        return []
+    return [f"{label} is not a JSON object"]
+
+
 def check_manifest(root):
     path = root / ".claude-plugin" / "plugin.json"
     if not path.is_file():
@@ -28,6 +52,9 @@ def check_manifest(root):
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as err:
         return [f"plugin.json is not valid JSON: {err}"]
+    shape = object_problems(data, "plugin.json")
+    if shape:
+        return shape
     return [f"plugin.json missing field: {field}"
             for field in ("name", "description", "version")
             if not data.get(field)]
@@ -45,6 +72,9 @@ def check_pi_package(root):
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as err:
         return [f"package.json is not valid JSON: {err}"]
+    shape = object_problems(data, "package.json")
+    if shape:
+        return shape
     problems = []
     if data.get("private") is not True:
         problems.append("package.json must set private: true")
