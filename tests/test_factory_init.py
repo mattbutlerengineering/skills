@@ -288,9 +288,13 @@ class TestProductForm(unittest.TestCase):
     TestLockstep (tests/test_gates.py) asserts both Makefiles'
     command sets against it — never a test-private copy."""
 
-    def test_each_factory_tool_moves_under_tools_factory(self):
+    def test_the_named_factory_tools_move_under_tools_factory(self):
+        """The tools a Makefile target actually invokes today. The rule
+        itself — every root file MIRRORS moves — is asserted over MIRRORS
+        in TestTheRespellingHasOneOwner; this stays as the readable
+        statement of what the respelling looks like."""
         for tool in ("gates.py", "validator.py", "assembler.py",
-                     "cost_report.py", "gate_digest.py",
+                     "budget_guard.py", "cost_report.py", "gate_digest.py",
                      "rejection_mining.py"):
             with self.subTest(tool=tool):
                 self.assertEqual(
@@ -305,6 +309,87 @@ class TestProductForm(unittest.TestCase):
     def test_a_path_agnostic_command_is_untouched(self):
         command = "npx --yes playwright@1.62.1 test"
         self.assertEqual(factory_init.product_form(command), command)
+
+
+class TestTheRespellingHasOneOwner(unittest.TestCase):
+    """MIRRORS says where a root file lives in a stamped repo, and
+    product_form is the only thing that rewrites a command to match. The
+    two must not be able to disagree — a command product_form does not
+    respell names a root-level file the stamped repo does not have, and
+    the target fails in someone else's repo.
+
+    MIRRORS' own comment states the invariant as a claim about the root
+    Makefile ("no target invokes it"). These are its enforcement.
+    TestLockstep cannot be: it asserts the payload Makefile against
+    `product_form(...)` of the same commands, so the expectation is
+    computed by the function under test.
+    """
+
+    ROOT_MAKEFILE = REPO_ROOT / "Makefile"
+    PAYLOAD_MAKEFILE = REPO_ROOT / "factory" / "templates" / "Makefile"
+
+    # The one root command deliberately absent from the payload: the
+    # plugin's structural lint has no product-repo counterpart, so
+    # product_makefile drops the line rather than respelling it.
+    DROPPED = ("lint.py",)
+
+    @staticmethod
+    def payload_tools():
+        """(root name, payload path) for every root file MIRRORS moves —
+        derived here the same way product_form derives it, so the test
+        states the rule rather than re-typing its output."""
+        return [(name, rel) for name, rel, _ in factory_init.MIRRORS
+                if "/" not in name and rel != name]
+
+    @staticmethod
+    def recipe_commands(text):
+        """Every tab-indented recipe line in a Makefile, target-agnostic."""
+        return [line.strip() for line in text.splitlines()
+                if line.startswith("\t")]
+
+    def test_every_root_tool_mirrors_moves_is_respelled(self):
+        tools = self.payload_tools()
+        self.assertIn(("work_queue.py", "tools/factory/work_queue.py"),
+                      tools, "the derivation must cover the whole payload,"
+                             " not the subset a hand-typed list happened"
+                             " to carry")
+        for name, rel in tools:
+            with self.subTest(tool=name):
+                self.assertEqual(
+                    factory_init.product_form(f"python3 {name} --flag"),
+                    f"python3 {rel} --flag")
+
+    def test_a_file_mirrors_does_not_move_is_left_alone(self):
+        """The Makefile mirrors to its own name, and the workflows carry a
+        path in theirs — neither is a command to respell."""
+        for command in ("make -f Makefile check",
+                        "python3 .github/workflows/validator.yml"):
+            with self.subTest(command=command):
+                self.assertEqual(factory_init.product_form(command), command)
+
+    def test_every_root_makefile_command_is_respelled_or_dropped(self):
+        """The claim MIRRORS' comment makes, asserted against the real
+        root Makefile: a target naming a tool product_form does not know
+        would be copied into the payload verbatim."""
+        text = self.ROOT_MAKEFILE.read_text(encoding="utf-8")
+        for command in self.recipe_commands(text):
+            for name in re.findall(r"python3 (\S+\.py)", command):
+                if name in self.DROPPED or "/" in name:
+                    continue
+                with self.subTest(command=command):
+                    self.assertNotIn(
+                        f"python3 {name}", factory_init.product_form(command),
+                        f"{name} is invoked by the root Makefile but"
+                        " product_form leaves it at the root; the stamped"
+                        " repo has it under tools/factory/")
+
+    def test_the_payload_makefile_names_no_root_level_tool(self):
+        """The same claim from the other end, over the generated file that
+        actually ships."""
+        text = self.PAYLOAD_MAKEFILE.read_text(encoding="utf-8")
+        bare = [command for command in self.recipe_commands(text)
+                if re.search(r"python3 [^/\s]+\.py", command)]
+        self.assertEqual(bare, [])
 
 
 class TestProductMakefile(unittest.TestCase):

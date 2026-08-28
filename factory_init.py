@@ -48,23 +48,25 @@ def identity(text):
     return text
 
 
-# The command spellings that differ between this repo and a stamped
-# product repo: its factory tools live under tools/factory/, and its
-# stamped test run is quiet.
-_PRODUCT_TOOLS = ("gates.py", "validator.py", "assembler.py",
-                  "budget_guard.py", "cost_report.py", "gate_digest.py",
-                  "rejection_mining.py")
-
-
 def product_form(command):
     """A root command as its product-repo twin spells it. The one
     production statement of the root<->payload command respelling:
     product_makefile generates the payload Makefile through it, and
     TestLockstep (tests/test_gates.py) asserts both Makefiles'
-    command sets against it — never a test-private copy."""
-    for tool in _PRODUCT_TOOLS:
-        command = command.replace(f"python3 {tool}",
-                                  f"python3 tools/factory/{tool}")
+    command sets against it — never a test-private copy.
+
+    Which files move is MIRRORS' fact, read here rather than restated: a
+    hand-kept list of tools is a second copy of it, and the copy that
+    falls behind emits a command naming a root-level file the stamped
+    repo does not have. `"/" not in name` skips the workflows and
+    CODEOWNERS, whose root spelling already carries their path; `rel !=
+    name` skips the Makefile, whose payload home IS its root home. The
+    replacement uses MIRRORS' own destination, so a tool mirrored
+    somewhere other than tools/factory/ would follow it there. The
+    remaining respelling is the stamped test run, which is quiet."""
+    for name, rel, _ in MIRRORS:
+        if "/" not in name and rel != name:
+            command = command.replace(f"python3 {name}", f"python3 {rel}")
     return command.replace("unittest discover tests",
                            "unittest discover -q tests")
 
@@ -123,8 +125,10 @@ def product_makefile(text):
 # vocabulary and the stay partition (ADR-0056), and it ships for that same
 # reason and not optionally: gate_digest.py and rejection_mining.py both
 # ship and both import it as a bare sibling, so a stamped repo without it
-# is a broken stamp. It is absent from _PRODUCT_TOOLS on purpose — that
-# tuple respells Makefile commands, and no target invokes it. validator.yml is
+# is a broken stamp. No Makefile target invokes it,
+# so product_form never has occasion to respell it — but it would, since
+# that respelling is derived from this table rather than from a second
+# list that could fall behind it. validator.yml is
 # path-agnostic (it runs `make` targets), which is what lets it be mirrored
 # byte-for-byte instead of forked per repo. .github/CODEOWNERS is the
 # human-gate surface (ADR-0033), identical in both repos, so it mirrors
