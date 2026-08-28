@@ -69,10 +69,20 @@ def load(root):
         homes = " or ".join(
             p.relative_to(root).as_posix() for p, _ in candidates)
         return None, [f"config: missing factory.json ({homes})"]
+    rel = path.relative_to(root).as_posix()
+    # Decode and parse are guarded separately because they fail
+    # separately: a file saved in another encoding raises
+    # UnicodeDecodeError before json.loads is ever reached, and that is
+    # not a JSONDecodeError. Same split, same phrasing as
+    # cost_ledger.load — a config this module cannot read is a problem
+    # string like any other, never a traceback out of detector F.
     try:
-        return json.loads(path.read_text(encoding="utf-8")), []
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as err:
+        return None, [f"config: cannot read {rel}: {err}"]
+    try:
+        return json.loads(text), []
     except json.JSONDecodeError as err:
-        rel = path.relative_to(root).as_posix()
         return None, [f"config: {rel} is not valid JSON: {err}"]
 
 

@@ -41,8 +41,13 @@ def load_labels(root):
             p.relative_to(root).as_posix() for p, _ in candidates)
         return [], [f"L: missing labels.json ({homes})"]
     rel = path.relative_to(root).as_posix()
+    # Decode before parse, guarded separately: see factory_config.load.
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as err:
+        return [], [f"L: cannot read {rel}: {err}"]
+    try:
+        data = json.loads(text)
     except json.JSONDecodeError as err:
         return [], [f"L: {rel} is not valid JSON: {err}"]
     if not isinstance(data, list) or not data:

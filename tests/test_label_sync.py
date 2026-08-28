@@ -111,6 +111,17 @@ class TestLoadLabels(unittest.TestCase):
             self.assertEqual(labels, [])
             self.assertEqual(problems, [expected])
 
+    def test_a_taxonomy_that_is_not_utf8_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / ".github" / "labels.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'[{"name": "caf\xe9"}]')
+            labels, problems = label_sync.load_labels(Path(tmp))
+            self.assertEqual(labels, [])
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "L: cannot read .github/labels.json:"), problems)
+
     def test_non_array_and_empty_array_are_flagged(self):
         for payload in ("{}", "[]"):
             with tempfile.TemporaryDirectory() as tmp:
