@@ -525,6 +525,32 @@ class TestReadmeSkills(CheckerTreeTest):
         self.assertEqual(lint.check_readme_skills(self.root),
                          ["README.md never names skill 'rogue'"])
 
+    def test_a_slug_nested_in_a_longer_one_is_still_required(self):
+        """`architect` sits inside `architecture-diagram` and inside
+        `interactive-architecture-diagram`. A substring test calls the
+        README complete once either longer name is there, so the shorter
+        skill is the one the checker cannot report — and the docstring
+        above records that a diagram skill shipping undocumented is
+        exactly what this checker exists to stop."""
+        path = self.root / "README.md"
+        path.write_text(path.read_text(encoding="utf-8")
+                        .replace("- `architect`\n", ""), encoding="utf-8")
+        self.assertEqual(lint.check_readme_skills(self.root),
+                         ["README.md never names skill 'architect'"])
+
+    def test_every_registered_skill_can_be_reported_missing(self):
+        """Closure: no slug is unreportable. One dropped name at a time,
+        the whole taxonomy, so a blind spot cannot hide behind the three
+        slugs the other tests happen to pick."""
+        original = (self.root / "README.md").read_text(encoding="utf-8")
+        path = self.root / "README.md"
+        for slug in ALL_SKILLS:
+            with self.subTest(slug=slug):
+                path.write_text(original.replace(f"- `{slug}`\n", ""),
+                                encoding="utf-8")
+                self.assertEqual(lint.check_readme_skills(self.root),
+                                 [f"README.md never names skill {slug!r}"])
+
     def test_missing_readme_is_one_problem_not_one_per_skill(self):
         (self.root / "README.md").unlink()
         self.assertEqual(lint.check_readme_skills(self.root),
@@ -823,6 +849,61 @@ class TestLedger(CheckerTreeTest):
                     if slug != "operate"), encoding="utf-8")
         self.assertEqual(lint.check_ledger(self.root),
                          ["LEDGER.md has no row for skill 'operate'"])
+
+    def test_a_slug_nested_in_a_longer_one_still_needs_its_own_row(self):
+        """`architect` is a substring of two other registered slugs, so a
+        substring test can never find its row missing. `review` (inside
+        `address-pr-review`) and `architecture-diagram` (inside
+        `interactive-architecture-diagram`) are held up the same way."""
+        (self.root / "LEDGER.md").write_text(
+            "".join(f"| {slug} |\n" for slug in ALL_SKILLS
+                    if slug != "architect"), encoding="utf-8")
+        self.assertEqual(lint.check_ledger(self.root),
+                         ["LEDGER.md has no row for skill 'architect'"])
+
+    def test_prose_under_the_table_is_not_a_row(self):
+        """The problem string says row, and the real LEDGER.md carries
+        several paragraphs of reading notes below the table that name
+        skills by slug. A row deleted while the reading still mentions the
+        skill must not pass the check that claims to look for the row."""
+        (self.root / "LEDGER.md").write_text(
+            "".join(f"| {slug} |\n" for slug in ALL_SKILLS
+                    if slug != "operate")
+            + "\nReading: operate mostly under-triggers.\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_ledger(self.root),
+                         ["LEDGER.md has no row for skill 'operate'"])
+
+    def test_every_registered_skill_can_be_reported_missing(self):
+        """Closure over the taxonomy: drop each slug's row in turn and
+        the checker names that slug, so no blind spot can hide behind
+        whichever three slugs the tests above happen to pick. Says
+        nothing about the other direction — a stale row for a skill that
+        no longer exists has no checker at all, here or anywhere."""
+        for slug in ALL_SKILLS:
+            with self.subTest(slug=slug):
+                (self.root / "LEDGER.md").write_text(
+                    "".join(f"| {other} |\n" for other in ALL_SKILLS
+                            if other != slug), encoding="utf-8")
+                self.assertEqual(lint.check_ledger(self.root),
+                                 [f"LEDGER.md has no row for skill {slug!r}"])
+
+    def test_a_row_and_a_mention_agree_about_what_a_slug_is(self):
+        """extra_skills accepts any directory name, so the two halves of
+        the fix have to accept the same names. A slug opening with a
+        digit is a row for check_ledger exactly as it is a mention for
+        check_readme_skills — otherwise a present row reads as missing."""
+        rogue = self.root / "skills" / "3d-diagram"
+        rogue.mkdir()
+        (rogue / "SKILL.md").write_text(
+            "---\nname: 3d-diagram\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        for path, line in ((self.root / "LEDGER.md", "| 3d-diagram |\n"),
+                           (self.root / "README.md", "- `3d-diagram`\n")):
+            path.write_text(path.read_text(encoding="utf-8") + line,
+                            encoding="utf-8")
+        self.assertEqual(lint.check_ledger(self.root), [])
+        self.assertEqual(lint.check_readme_skills(self.root), [])
 
     def test_discovered_skill_needs_a_row_too(self):
         extra = self.root / "skills" / "extra"
