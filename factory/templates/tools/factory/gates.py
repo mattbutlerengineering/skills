@@ -738,7 +738,7 @@ def check_scaffold_sync(root):
         return ["E: missing factory/manifest.json"]
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [f"E: factory/manifest.json is not valid JSON: {err}"]
     files = manifest.get("files")
     if not isinstance(files, dict) or not files:
@@ -876,7 +876,7 @@ def check_config_shape(root):
         rel = path.relative_to(root)
         try:
             config = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as err:
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
             problems.append(f"F: {rel} is not valid JSON: {err}")
             continue
         # key-set completeness is this gate's whole-shape concern; the

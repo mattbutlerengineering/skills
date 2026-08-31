@@ -548,6 +548,19 @@ class TestReadEvent(unittest.TestCase):
             self.assertTrue(error.startswith(
                 f"cannot read GITHUB_EVENT_PATH {path}:"), error)
 
+    def test_bytes_that_are_not_utf8_are_an_error(self):
+        """The docstring promises an *unreadable* payload comes back as
+        an error string. A file whose bytes are not UTF-8 is unreadable
+        as text — and under RFC 8259 §8.1 not valid JSON either — so it
+        lands in the same error as the malformed case above."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_bytes('{"action": "caf\u00e9"}'.encode("latin-1"))
+            event, error = cli.read_event({"GITHUB_EVENT_PATH": str(path)})
+            self.assertIsNone(event)
+            self.assertTrue(error.startswith(
+                f"cannot read GITHUB_EVENT_PATH {path}:"), error)
+
     def test_a_non_object_payload_is_an_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "event.json"

@@ -111,6 +111,21 @@ class TestLoadLabels(unittest.TestCase):
             self.assertEqual(labels, [])
             self.assertEqual(problems, [expected])
 
+    def test_bytes_that_are_not_utf8_are_flagged_not_raised(self):
+        """RFC 8259 §8.1 makes JSON a UTF-8 interchange format, so bytes
+        that will not decode are not valid JSON and belong in the same
+        problem the malformed case above produces. labels.json is
+        hand-edited in a stamped repo, same as factory.json."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", "").write_bytes(
+                '[{"name": "caf\u00e9"}]'.encode("latin-1"))
+            labels, problems = label_sync.load_labels(tree.root)
+            self.assertEqual(labels, [])
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "L: .github/labels.json is not valid JSON:"), problems)
+
     def test_non_array_and_empty_array_are_flagged(self):
         for payload in ("{}", "[]"):
             with tempfile.TemporaryDirectory() as tmp:

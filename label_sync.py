@@ -43,7 +43,7 @@ def load_labels(root):
     rel = path.relative_to(root).as_posix()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [], [f"L: {rel} is not valid JSON: {err}"]
     if not isinstance(data, list) or not data:
         return [], [f"L: {rel} must be a non-empty JSON array"

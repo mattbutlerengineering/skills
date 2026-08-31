@@ -88,6 +88,21 @@ class TestLoad(unittest.TestCase):
             self.assertTrue(problems[0].startswith(
                 "config: .github/factory.json is not valid JSON:"), problems)
 
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """RFC 8259 §8.1: JSON exchanged between systems is UTF-8, so a
+        file whose bytes are not UTF-8 is not valid JSON — the existing
+        message is right, only the guard was too narrow. `.github/` is
+        the stamped home a downstream owner hand-edits, which is where
+        a latin-1 save actually comes from."""
+        with tempfile.TemporaryDirectory() as tmp:
+            FixtureTree(tmp).write(".github/factory.json", "").write_bytes(
+                '{"routing": {"mechanical": "caf\u00e9"}}'.encode("latin-1"))
+            config, problems = factory_config.load(tmp)
+            self.assertIsNone(config)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "config: .github/factory.json is not valid JSON:"), problems)
+
 
 class TestConfigProblems(unittest.TestCase):
     """The whole-config field grammar, owned here (twin of

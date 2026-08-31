@@ -630,6 +630,28 @@ class TestScaffoldSync(unittest.TestCase):
             self.assertEqual(gates.check_scaffold_sync(Path(tmp)),
                              ["E: missing factory/manifest.json"])
 
+    def test_a_manifest_that_is_not_json_is_a_problem(self):
+        """Neither the malformed nor the undecodable manifest had a test
+        before this run: E returned early on one and raised on the
+        other, and nothing pinned either."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/manifest.json", "{nope")
+            problems = gates.check_scaffold_sync(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "E: factory/manifest.json is not valid JSON:"), problems)
+
+    def test_a_manifest_whose_bytes_are_not_utf8_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/manifest.json", "").write_bytes(
+                '{"files": {"a": "caf\u00e9"}}'.encode("latin-1"))
+            problems = gates.check_scaffold_sync(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "E: factory/manifest.json is not valid JSON:"), problems)
+
 
 class TestManifestFiles(unittest.TestCase):
     """The one statement of the manifest's walk-hash-key grammar: what
@@ -818,6 +840,23 @@ class TestConfigShape(unittest.TestCase):
                 " implementation, architecture_review",
                 f"F: {rel} wip_cap must be a positive integer",
                 f"F: {rel} monthly_cap_usd must be a positive number"])
+
+    def test_bytes_that_are_not_utf8_are_one_problem_not_a_crash(self):
+        """RFC 8259 §8.1 makes JSON a UTF-8 interchange format, so bytes
+        that will not decode are exactly as invalid as `not json` and
+        belong in the same problem. Detector F reads the same stamped
+        `.github/factory.json` a downstream owner hand-edits, so it must
+        report what factory_config.load reports rather than abort the
+        whole gate run and take the other eight detectors with it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", "").write_bytes(
+                '{"routing": {"mechanical": "caf\u00e9"}}'.encode("latin-1"))
+            problems = gates.check_config_shape(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "F: factory/templates/factory.json is not valid JSON:"),
+                problems)
 
 
 class TestPrTraceability(unittest.TestCase):

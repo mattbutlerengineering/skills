@@ -71,7 +71,7 @@ def load(root):
         return None, [f"config: missing factory.json ({homes})"]
     try:
         return json.loads(path.read_text(encoding="utf-8")), []
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         rel = path.relative_to(root).as_posix()
         return None, [f"config: {rel} is not valid JSON: {err}"]
 
