@@ -585,6 +585,30 @@ def respond_post(target, body, repos_fn):
     return 204, None
 
 
+def content_length(declared):
+    """(byte count, problems) for a Content-Length header value.
+
+    RFC 9110 §8.6 makes it a non-negative integer, so anything else is a
+    bad request, not a crash: `int()` on it raised straight out of
+    do_POST and the client got no HTTP response at all — the connection
+    just closed. Absent is 0; a bodyless POST is well formed.
+
+    `isascii()` is not decoration. `str.isdigit()` is TRUE for '\u00b2',
+    which `int()` refuses, and U+00B2 is latin-1 byte 0xB2 — precisely
+    what http.client decodes a header into. isdigit() alone would leave
+    the crash reachable through an ordinary request.
+
+    A negative value never reaches the read for a second reason:
+    `rfile.read(-1)` reads to EOF, which wedges the handler thread.
+    """
+    if declared is None:
+        return 0, []
+    if not (declared.isascii() and declared.isdigit()):
+        return None, [f"dashboard: Content-Length {declared!r} is not a"
+                      " non-negative integer"]
+    return int(declared), []
+
+
 class _Handler(BaseHTTPRequestHandler):
     """Thin shim over respond(): JSON in, JSON out, no logic. serve()
     subclasses it with the injected repos_fn/gather_fn; per-request
@@ -607,10 +631,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        length = int(self.headers.get("Content-Length") or 0)
-        body = self.rfile.read(length).decode("utf-8", "replace")
-        status, payload = respond_post(self.path, body,
-                                       type(self).repos_fn)
+        length, problems = content_length(
+            self.headers.get("Content-Length"))
+        if problems:
+            status, payload = 400, {"problems": problems}
+        else:
+            body = self.rfile.read(length).decode("utf-8", "replace")
+            status, payload = respond_post(self.path, body,
+                                           type(self).repos_fn)
         body_bytes = (b"" if payload is None
                       else json.dumps(payload).encode("utf-8"))
         self.send_response(status)

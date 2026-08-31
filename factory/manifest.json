@@ -22,7 +22,7 @@
     "templates/docs/design/TEMPLATE.md": "e1f91e3f34bb0f742ca40e2390e5dfbeaaca585eddb69437b9a71b56708500a0",
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/assembler.py": "8d6c5d394526f300c2050e7902b08e2749268a0e3e8f4feeea9ebed65cfb8a3d",
+    "templates/tools/factory/assembler.py": "041e5b2e4f0460e77262fcdc075fb990f53e35cbd9a2b86b9485412dd2247629",
     "templates/tools/factory/budget_guard.py": "cb91b94a4963f47e4e005234d3334ba4cba73db39ea2e911e08b4470b8eaa450",
     "templates/tools/factory/cli.py": "daa27406dd2e50d63a0672603d40c4e721f47d17b886feccc6987fe4ab66ee41",
     "templates/tools/factory/cost_ledger.py": "f4c5fffec5a2fcdcb796515920ba3ee72f3e1fa556fc4b603333468f27aab6ce",
@@ -37,7 +37,7 @@
     "templates/tools/factory/orientation_pack.py": "b67c338ba8f4ae762d891b1c329976c6daa8c46d95f377e4c1f3bfd22a85168c",
     "templates/tools/factory/protocol.py": "cc865e3e08baebde289a5377caad7a77d147b10354feb5160b31eedd3c75637b",
     "templates/tools/factory/rejection_mining.py": "1826ad427b85ebabb6f9a7e9dbaac412911aa0bdb79803771cc037592a96e003",
-    "templates/tools/factory/validator.py": "3bd75570102630cdd8ad72574135df122ab4741452c9d088dba996107c445759",
+    "templates/tools/factory/validator.py": "238dc07843f92c72ab09170b90c544ad5e04306dfd1db6e1a308c711ddbf4fac",
     "templates/tools/factory/work_queue.py": "14ba47b3c55c873cadf41e22360d2c76fce756b48074af89ffb4fa6222093df2"
   }
 }
