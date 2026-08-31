@@ -658,10 +658,14 @@ class TestManifestFiles(unittest.TestCase):
 
 
 class TestLabelWiring(unittest.TestCase):
-    """Detector J. The tools and the Makefile name 15 labels between them
-    and `.github/labels.json` is explicitly the stamped repo's to curate
-    (docs/setup.md), so pruning one is a sanctioned edit that used to pass
-    every offline gate and fail only when CI flipped the label."""
+    """Detector J. The tools and the Makefile between them name labels
+    the taxonomy must carry, and `.github/labels.json` is explicitly the
+    stamped repo's to curate (docs/setup.md), so pruning one is a
+    sanctioned edit that used to pass every offline gate and fail only
+    when CI flipped the label. Curated also means unpinned — detector E
+    checksums the payload copy, nothing checksums the installed one — so
+    J is the only offline reader of that file, and what it declines to
+    say about it nobody says."""
 
     REPO = Path(__file__).resolve().parents[1]
     MAKEFILE = ("wo-merged:\n\tpython3 validator.py lifecycle"
@@ -727,14 +731,52 @@ class TestLabelWiring(unittest.TestCase):
             tree.write("Makefile", self.MAKEFILE)
             self.assertEqual(gates.check_label_wiring(tree.root), [])
 
-    def test_an_unusable_taxonomy_is_silent_not_a_traceback(self):
+    def test_an_unreadable_taxonomy_is_reported_not_a_traceback(self):
+        """Two properties, and they used to be asserted as one.
+
+        "Not a traceback" is the requirement — a detector that raises on
+        a malformed file takes the whole gate down with it. "Silent" is
+        not, and bundling them meant a stamped repo could carry a
+        taxonomy nothing can read and be told `gates: 0 problem(s)`.
+        The loader already names every one of these; J forwards what it
+        says instead of computing it and dropping it."""
+        try:
+            json.loads("{not json")
+        except json.JSONDecodeError as err:
+            corrupt = f"L: .github/labels.json is not valid JSON: {err}"
+        unusable = {
+            "{not json": corrupt,
+            "[]": "L: .github/labels.json must be a non-empty JSON array"
+                  " of label entries",
+            "{}": "L: .github/labels.json must be a non-empty JSON array"
+                  " of label entries",
+            '[{"name": "wo:merged"}]':
+                "L: .github/labels.json[0] entry lacks color, description",
+        }
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
             tree.write("Makefile", self.MAKEFILE)
-            for text in ("[]", "{not json", '[{"name": "wo:merged"}]'):
-                tree.write(".github/labels.json", text)
-                self.assertEqual(gates.check_label_wiring(tree.root), [],
-                                 f"unusable taxonomy {text!r}")
+            for payload, expected in unusable.items():
+                tree.write(".github/labels.json", payload)
+                self.assertEqual(gates.check_label_wiring(tree.root),
+                                 [expected], f"unusable taxonomy {payload!r}")
+
+    def test_a_wiring_complete_taxonomy_can_still_be_malformed(self):
+        """The case with no wiring finding at all to lean on.
+
+        Every label the tools name is present, so J's own check is
+        genuinely satisfied — and the file still says one label twice,
+        which GitHub will resolve by taking the last one. Before this,
+        nothing offline had any objection to it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            entries = json.loads(self.taxonomy(named))
+            tree.write(".github/labels.json",
+                       json.dumps(entries + [dict(entries[0])]))
+            self.assertEqual(
+                gates.check_label_wiring(tree.root),
+                [f"L: .github/labels.json[{len(entries)}] duplicate label"
+                 f" name {entries[0]['name']}"])
 
     def test_one_malformed_entry_does_not_switch_the_detector_off(self):
         # bailing on any load problem would let a single bad entry silence
@@ -745,10 +787,15 @@ class TestLabelWiring(unittest.TestCase):
                 [name for name in named if name != "wo:merged"]))
             tree.write(".github/labels.json",
                        json.dumps(entries + [{"name": "wo:half-declared"}]))
+            found = gates.check_label_wiring(tree.root)
             self.assertIn("J: Makefile:2 names wo:merged but the taxonomy has"
                           " no such label (add it to .github/labels.json, or"
-                          " the flip fails when CI runs it)",
-                          gates.check_label_wiring(tree.root))
+                          " the flip fails when CI runs it)", found)
+            # and the bad entry itself is named, not merely survived: an
+            # operator told only "add wo:merged" would go looking for a
+            # label that is already there
+            self.assertIn(f"L: .github/labels.json[{len(entries)}] entry"
+                          " lacks color, description", found)
 
     def test_the_extraction_actually_finds_the_shipped_labels(self):
         """A detector whose extraction silently stops matching is
