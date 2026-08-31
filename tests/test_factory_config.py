@@ -88,6 +88,48 @@ class TestLoad(unittest.TestCase):
             self.assertTrue(problems[0].startswith(
                 "config: .github/factory.json is not valid JSON:"), problems)
 
+    def test_a_config_that_is_not_an_object_is_a_problem(self):
+        """A JSON document's top level is legally an array, string,
+        number, boolean or null. json.loads returns each untouched, and
+        the seam's contract is (value, problems) — so a non-object must
+        arrive as a problem, never as a `config` the accessors then
+        subscript. Same fail-closed direction as the invalid-JSON case
+        above, one step later in the same read."""
+        for text in ("null", "[]", '"factory"', "5", "true"):
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as tmp:
+                FixtureTree(tmp).write(".github/factory.json", text)
+                self.assertEqual(factory_config.load(tmp), (None, [
+                    "config: .github/factory.json is not a JSON object"]))
+
+    def test_a_non_object_config_never_reaches_an_accessor(self):
+        """The contract the guard exists for: every accessor may assume
+        `load` handed it an object. Before the guard, `null` came back as
+        (None, []) — no problem at all — and the first accessor to touch
+        it raised AttributeError inside a gate."""
+        with tempfile.TemporaryDirectory() as tmp:
+            FixtureTree(tmp).write(".github/factory.json", "null")
+            config, problems = factory_config.load(tmp)
+            self.assertIsNone(config)
+            self.assertTrue(problems)
+
+
+class TestObjectProblems(unittest.TestCase):
+    """The object rule, owned beside the field grammar and shared by both
+    readers: `load` reports it as `config: <path> ...` and detector F as
+    `F: <path> ...`, so the runtime and the gate cannot disagree about
+    what a config even is. Unlocated suffixes, the same caller-prefixes-
+    its-own-label split as cost_ledger.line_problems."""
+
+    def test_an_object_is_clean(self):
+        self.assertEqual(factory_config.object_problems({}), [])
+        self.assertEqual(factory_config.object_problems(CONFIG), [])
+
+    def test_every_other_json_top_level_is_one_problem(self):
+        for value in (None, [], ["a"], "factory", 5, 0.5, True, False):
+            with self.subTest(value=value):
+                self.assertEqual(factory_config.object_problems(value),
+                                 ["is not a JSON object"])
+
 
 class TestConfigProblems(unittest.TestCase):
     """The whole-config field grammar, owned here (twin of

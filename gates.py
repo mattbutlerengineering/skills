@@ -879,6 +879,13 @@ def check_config_shape(root):
         except json.JSONDecodeError as err:
             problems.append(f"F: {rel} is not valid JSON: {err}")
             continue
+        # a config that is not an object has no fields to check, and the
+        # key-set checks below subscript it — the seam owns the rule so
+        # the gate and the runtime reader cannot disagree about it
+        shape = factory_config.object_problems(config)
+        if shape:
+            problems += [f"F: {rel} {problem}" for problem in shape]
+            continue
         # key-set completeness is this gate's whole-shape concern; the
         # field-VALUE grammar is factory_config.config_problems — one
         # home shared with the runtime accessors, so the gate can never
