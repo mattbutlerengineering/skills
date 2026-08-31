@@ -163,6 +163,19 @@ class TestManifest(CheckerTreeTest):
         self.assertEqual(lint.check_manifest(self.root),
                          ["plugin.json missing field: description"])
 
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """RFC 8259 §8.1 makes JSON a UTF-8 interchange format, so bytes
+        that will not decode are not valid JSON — the existing message is
+        right, only the guard was too narrow. UnicodeDecodeError subclasses
+        ValueError, not JSONDecodeError, so it escaped as a traceback and
+        CI reported a crash instead of `lint: N problem(s)`."""
+        path = self.root / ".claude-plugin" / "plugin.json"
+        path.write_bytes('{"name": "caf\u00e9"}'.encode("latin-1"))
+        problems = lint.check_manifest(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "plugin.json is not valid JSON:"), problems)
+
 
 class TestPiPackage(CheckerTreeTest):
     """The Pi (oh-my-pi) discovery manifest, guarded like the Claude one so
@@ -179,6 +192,16 @@ class TestPiPackage(CheckerTreeTest):
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "package.json is not valid JSON:"))
+
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """Guarded like check_manifest — ADR-0027 keeps the two packaging
+        manifests in step, and that has to include how they fail."""
+        (self.root / "package.json").write_bytes(
+            '{"private": true, "name": "caf\u00e9"}'.encode("latin-1"))
+        problems = lint.check_pi_package(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "package.json is not valid JSON:"), problems)
 
     def test_not_private(self):
         (self.root / "package.json").write_text(json.dumps(
@@ -780,6 +803,17 @@ class TestOutputEvals(CheckerTreeTest):
         }), encoding="utf-8")
         problems = lint.check_output_evals(self.root)
         self.assertIn("evals/output/idea.json evals is not a list", problems)
+
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """This checker walks a directory, so one undecodable file must
+        not take the whole walk down with it — the same reason the null
+        case above is diagnosed rather than crashed."""
+        (self.root / "evals" / "output" / "idea.json").write_bytes(
+            '{"skill_name": "caf\u00e9"}'.encode("latin-1"))
+        problems = lint.check_output_evals(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "evals/output/idea.json is not valid JSON:"), problems)
 
 
 class TestBacklog(CheckerTreeTest):

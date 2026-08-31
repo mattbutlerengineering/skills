@@ -26,7 +26,7 @@ def check_manifest(root):
         return ["missing .claude-plugin/plugin.json"]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [f"plugin.json is not valid JSON: {err}"]
     return [f"plugin.json missing field: {field}"
             for field in ("name", "description", "version")
@@ -43,7 +43,7 @@ def check_pi_package(root):
         return ["missing package.json"]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [f"package.json is not valid JSON: {err}"]
     problems = []
     if data.get("private") is not True:
@@ -480,7 +480,7 @@ def check_output_evals(root):
         label = f"evals/output/{path.name}"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as err:
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
             return [f"{label} is not valid JSON: {err}"]
         return (
             ([f"{label} stem is not a skill slug"]

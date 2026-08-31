@@ -167,6 +167,18 @@ class TestLoad(unittest.TestCase):
         self.assertEqual(problems,
                          ["evals/routing.json missing 'version' field"])
 
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """load_case_set carries the same (values, problems) contract as
+        every checker here, so an undecodable set is a diagnostic. RFC
+        8259 §8.1 makes JSON a UTF-8 interchange format; bytes that will
+        not decode are not a valid set."""
+        self.path.write_bytes('{"cases": ["caf\u00e9"]}'.encode("latin-1"))
+        cases, problems = eval_schema.load(self.path, SKILLS, LABEL)
+        self.assertEqual(cases, [])
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "evals/routing.json is not valid JSON: "), problems)
+
 
 def valid_output_record(**overrides):
     record = {"id": 1, "prompt": "p", "run_fixture": "evals/fixtures/f",

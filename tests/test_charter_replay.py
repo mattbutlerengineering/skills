@@ -16,6 +16,8 @@ while the compliant ones pass. What that does NOT prove — that a degraded
 charter actually makes a model behave this way — needs a live replay; see
 the fixtures' README for the boundary.
 """
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -638,6 +640,23 @@ class TestReplayIsNeverAutomatic(unittest.TestCase):
         # — it must never hold ambient write authority.
         text = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("permissions:\n  contents: read", text)
+
+
+class TestTranscriptsFileIsUnreadable(unittest.TestCase):
+    """--transcripts names a path on the command line, so its failure modes
+    are user input. The handler already means to report rather than raise —
+    its message is `cannot read` — but UnicodeDecodeError subclasses
+    ValueError, not OSError, so the encoding case fell straight through it."""
+
+    def test_bytes_that_are_not_utf8_are_reported_not_raised(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "transcripts.json"
+            path.write_bytes('{"caf\u00e9": 1}'.encode("latin-1"))
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code = charter_replay.main(["--transcripts", str(path)])
+            self.assertEqual(code, 1)
+            self.assertIn(f"cannot read {path}", err.getvalue())
 
 
 if __name__ == "__main__":

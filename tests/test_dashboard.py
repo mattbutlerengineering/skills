@@ -82,6 +82,20 @@ class TestRepoSet(unittest.TestCase):
             self.assertTrue(problems[0].startswith(
                 f"dashboard: {config} is not valid JSON:"))
 
+    def test_bytes_that_are_not_utf8_are_a_problem_string(self):
+        """repo_set's own docstring says only an unreadable or misshapen
+        config is a problem. A non-UTF-8 config is unreadable, so it
+        belongs in the `cannot read` arm — but UnicodeDecodeError
+        subclasses ValueError, so that OSError arm never saw it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config.json"
+            config.write_bytes('{"repos": ["caf\u00e9"]}'.encode("latin-1"))
+            paths, problems = dashboard.repo_set([], config)
+            self.assertEqual(paths, [])
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"dashboard: cannot read {config}:"), problems)
+
 
 class TestGather(unittest.TestCase):
     def test_active_runs_carry_ref_dir_and_orientation_stage(self):
