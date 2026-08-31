@@ -9,8 +9,8 @@
     "templates/.github/workflows/design.yml": "1d717103b2e18cc5a2c291ad5cc8cc91e8c091c2e19657e194c2645eeef107ce",
     "templates/.github/workflows/gate-digest.yml": "5abc8a86c8bcebc0ab41e217f13b32843dcb91eb0d90390ca3a5f6b892539552",
     "templates/.github/workflows/toolsmith-mine.yml": "d1629e967ad32f449dbeef3f941b0e0bc70ab57d2667bf0cfb2090d1b50e7590",
-    "templates/.github/workflows/validator.yml": "0c20e49f475195252e3b119c62b6c0036bd34cedef653b75c74366b7f08b2998",
-    "templates/Makefile": "854f4fe97e37171e7e23297664d1f245271b96f8511cc9e224d83ab433174eb2",
+    "templates/.github/workflows/validator.yml": "09b3879e6fa937bb5ae834f674a1f3288172e8bab3b8803386f52d966990dfdb",
+    "templates/Makefile": "63c045193a7d1b7ff050b7292160fcd7c6845296bbab0f93a28b34b40a2527b7",
     "templates/docs/adr/0001-decisions-are-recorded-here.md": "2dda45634398a0a29d04f073fadaf51ecbdf7c1ccbb3795583355396382c02e5",
     "templates/docs/adr/0002-artifacts-are-the-state.md": "78b63944832b8421bbc1d635b53bfcab739748b65d74bfb2d0ac822981d41bf9",
     "templates/docs/adr/0003-soft-gating.md": "5c47715cc5da80c411efb48498c132d773b7bea9d26acd17262d0df17af43705",
@@ -37,7 +37,7 @@
     "templates/tools/factory/orientation_pack.py": "b67c338ba8f4ae762d891b1c329976c6daa8c46d95f377e4c1f3bfd22a85168c",
     "templates/tools/factory/protocol.py": "cc865e3e08baebde289a5377caad7a77d147b10354feb5160b31eedd3c75637b",
     "templates/tools/factory/rejection_mining.py": "1826ad427b85ebabb6f9a7e9dbaac412911aa0bdb79803771cc037592a96e003",
-    "templates/tools/factory/validator.py": "3bd75570102630cdd8ad72574135df122ab4741452c9d088dba996107c445759",
+    "templates/tools/factory/validator.py": "f1040b5d11b3d54e5ed91a09a97c0f0963174d355fd29ba4afc4ed6424fa4468",
     "templates/tools/factory/work_queue.py": "14ba47b3c55c873cadf41e22360d2c76fce756b48074af89ffb4fa6222093df2"
   }
 }

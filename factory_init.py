@@ -78,13 +78,15 @@ PRODUCT_MAKEFILE_HEADER = (
     "#\n"
     "# `make check` is the canonical local gate and exactly what CI runs:"
     " the\n"
-    "# stamped .github/workflows/validator.yml names no commands of its"
+    "# stamped .github/workflows/validator.yml names no repo tool of its"
     " own, it\n"
-    "# calls these targets. Same targets as the factory repo's own root"
-    " Makefile\n"
-    "# (its tools sit at the root, these under tools/factory/, and the"
+    "# calls these targets (the gh and git plumbing around them stays in"
+    " the\n"
+    "# workflow). Same targets as the factory repo's own root Makefile"
+    " — its\n"
+    "# tools sit at the root, these under tools/factory/, and the"
     " plugin's\n"
-    "# structural lint has no product-repo counterpart).\n")
+    "# structural lint has no product-repo counterpart.\n")
 
 
 def product_makefile(text):
@@ -290,8 +292,9 @@ def is_factory_owned(dest):
 def missing_make_targets(target):
     """Targets the stamped workflows call that the repo's Makefile lacks.
 
-    update overwrites the workflows, and they name no commands of their own
-    — every step goes through make. So a factory change that adds a target
+    update overwrites the workflows, and they name no repo tool of their
+    own — every tool invocation goes through make. So a factory change
+    that adds a target
     (wo-failed, ADR-0045) leaves a repo whose refreshed assembler.yml calls
     a target its Makefile has never heard of. Nothing else reports that
     until the workflow runs in anger.

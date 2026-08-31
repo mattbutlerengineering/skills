@@ -3,13 +3,25 @@
 assembler workflow's claim step (PRD-0001; ADR-0032 lifecycle labels,
 ADR-0033 gate 3).
 
-The workflows name no commands of their own — they run `make` targets, and
-the ones that need judgment land here. The PR-shaped legs read the
-pull_request event payload (GITHUB_EVENT_PATH); the claim leg is handed its
-issue number outright. All mutate GitHub through the gh CLI, which is
-injected so tests never touch the network (same shape as label_sync.py).
+The workflows name no repo tool of their own — every tool invocation goes
+through a `make` target, because the Makefile is the seam that knows where
+a repo keeps its tools (root here, tools/factory/ there) — and the ones
+that need judgment land here. The shell plumbing AROUND those targets is
+not a tool and does not move between repos: gh, git, and the review job's
+exit-code capture stay in the workflow. The PR-shaped legs read the
+pull_request event payload (GITHUB_EVENT_PATH), and pr-event below writes
+the one a dispatched run stands in for; the claim leg is handed its issue
+number outright. All reach GitHub through the gh CLI, which is injected so
+tests never touch the network (same shape as label_sync.py).
 Conventions match gates.py/label_sync.py: functions return V:-prefixed
 problem strings; the CLI prints them and exits nonzero.
+
+  python3 validator.py pr-event --pr <N> --out <path>
+        The dispatch shim (WO-0030). GitHub suppresses the pull_request
+        event for a PR the factory's own token opened, so the validator is
+        dispatched against a PR NUMBER — and the legs below still need an
+        event to read. Write the payload cli.read_event will hand them.
+        One owner for a shape three workflow steps used to build by hand.
 
   python3 validator.py review --findings <file> [--status <rc>]
         Post the check run's output on the PR as review findings, from an
@@ -59,6 +71,7 @@ Planner-applied by design: it means an unmet dependency, and that graph
 lives in the issue tracker, not in CI. No workflow flips it — its absence
 from this file is a decision, not a hole.
 """
+import json
 import os
 import sys
 import tempfile
@@ -444,6 +457,46 @@ def run_claim(root, label, issue, env, run=gh_runner):
     return []
 
 
+# The action a dispatch stands in for. GitHub suppresses the real
+# pull_request event for a PR the factory's own token opened (WO-0030), so
+# the synthetic one says "opened". Nothing reads the word back out of this
+# file — no consumer of cli.read_event touches `action`, and the workflow's
+# own `github.event.action` conditions are evaluated by GitHub against the
+# REAL event (a workflow_dispatch, where it is empty), never against this.
+# It is here so read_event's callers are handed a webhook-shaped object,
+# and "opened" is the shape a first look at a PR has.
+DISPATCH_ACTION = "opened"
+
+
+def write_pr_event(number, path, env, run=gh_runner):
+    """Write the pull_request event a dispatched run stands in for.
+
+    The counterpart of cli.read_event (ADR-0042): that reader's consumers
+    — detector B's body read, both lifecycle legs' PR resolution — are
+    handed exactly this object, so its shape is stated once here instead
+    of once per workflow step that needs it.
+
+    Nothing is written unless the whole PR was read. Half an event is
+    worse than none: read_event parses it happily, and every consumer
+    then sees a PR whose body is simply absent — a detector that skips
+    and a label flip that no-ops, both silently.
+    """
+    slug = env.get("GITHUB_REPOSITORY")
+    if not slug:
+        return ["V: GITHUB_REPOSITORY is unset —"
+                " nothing names the PR to read"]
+    result = gh_read(["api", f"repos/{slug}/pulls/{number}"],
+                     f"gh api pull #{number}", "V", run=run, expect=dict)
+    if result.value is None:
+        return result.problems
+    payload = {"action": DISPATCH_ACTION, "pull_request": result.value}
+    try:
+        Path(path).write_text(json.dumps(payload), encoding="utf-8")
+    except OSError as err:
+        return [f"V: cannot write the event payload to {path}: {err}"]
+    return []
+
+
 def parse(argv):
     """(command, options) for a well-formed invocation, else (None, None)."""
     if not argv:
@@ -454,6 +507,9 @@ def parse(argv):
             return None, None
         options[rest[0][2:]] = rest[1]
         rest = rest[2:]
+    if (command == "pr-event" and set(options) == {"pr", "out"}
+            and options["pr"].isdigit()):
+        return command, options
     if command == "review" and set(options) <= {"findings", "status"}:
         status = options.get("status", "0")
         if not status.isdigit():
@@ -480,7 +536,10 @@ def main(argv, env=None, run=gh_runner):
     env = os.environ if env is None else env
     root = repo_root()
     command, options = parse(argv)
-    if command == "review":
+    if command == "pr-event":
+        problems = write_pr_event(options["pr"], options["out"], env=env,
+                                  run=run)
+    elif command == "review":
         problems = run_review(root, options["findings"], options["status"],
                               env=env, run=run)
     elif command == "lifecycle" and "verdict" in options:
