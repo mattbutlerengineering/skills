@@ -273,6 +273,48 @@ unchanged.
 
 **Result: PASS.**
 
+## 9. The doctor checklist describes J's new half
+
+`skills/doctor/SKILL.md` step 4 is where a human operator is told what
+each detector's problem strings mean, and its detector-J paragraph
+described only the wiring half — "Adding labels stays free — J looks in
+one direction only". After this change J can also emit `L:`-prefixed
+lines, which that paragraph would leave an operator unable to place.
+It now says so, and says that an `L:` line under `gates: N problem(s)`
+is J speaking rather than the networked sweep running offline.
+
+The claim doctor makes is exactly the one §1 demonstrates:
+
+```
+$ python3 tools/factory/gates.py     # in the stamped repo, corrupt taxonomy
+L: .github/labels.json is not valid JSON: Expecting property name enclosed in double quotes: line 1 column 3 (char 2)
+gates: 1 problem(s)
+```
+
+Battery after the doctor edit:
+
+```
+$ python3 lint.py
+lint: 0 problem(s) across 24 skills
+$ python3 gates.py
+gates: 0 problem(s)
+$ python3 -m unittest discover tests
+Ran 1350 tests in 15.963s
+
+OK
+```
+
+**NOT PINNED, deliberately.** `tests/test_factory_init.py` pins doctor's
+Makefile-target list and its workflow list, both ways, because both are
+enumerations of a set the payload owns and both can be derived. This
+paragraph is prose about what a detector means; the only mechanical pin
+available would be "the J paragraph mentions the string `L:`", which
+passes on any sentence containing those two characters and would read as
+coverage without being any. Recorded here instead, and named in
+`review.md` as a deferred minor.
+
+**Result: PASS.**
+
 ## Not verified
 
 - **Nothing was run against live GitHub.** No test in this repo touches

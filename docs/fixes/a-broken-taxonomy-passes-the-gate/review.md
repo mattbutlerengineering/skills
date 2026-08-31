@@ -109,6 +109,28 @@ not-a-traceback half is preserved — the replacement drives the same four
 payloads through the same public checker and would still fail on a
 raise.
 
+## Minor, found and fixed after the first push
+
+**The doctor checklist described only J's old half.**
+`skills/doctor/SKILL.md` step 4 explains what E, F and J report, so an
+operator can place a problem string without re-deriving it. Its J
+paragraph ended "Adding labels stays free — J looks in one direction
+only", which stays true of the wiring check and says nothing about the
+`L:` lines J now forwards. Scenario: an operator runs doctor against a
+stamped repo with a corrupt taxonomy, sees an `L:` line under
+`gates: 1 problem(s)`, and reads it as the networked label-sync sweep
+having somehow run inside the offline gate — the one reading the
+paragraph exists to prevent. Fixed in the same PR rather than a
+follow-up, because a checklist that describes a detector's behaviour is
+part of that behaviour's change.
+
+**Deferred: no mechanical pin for that paragraph.** Doctor's target list
+and workflow list are pinned both ways because both are derivable
+enumerations. This is prose about meaning, and the only cheap pin —
+"the paragraph mentions `L:`" — would pass on any sentence containing
+those characters. Deferring rather than adding coverage-shaped noise;
+recorded in `verification.md` §9.
+
 ## Verdict
 
 No critical findings. Two minors accepted with reasons, one minor
