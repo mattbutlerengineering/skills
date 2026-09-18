@@ -8,6 +8,7 @@ manifest walk cannot emit a malformed key), so those tests patch the
 checksum gate or INSTALL_MAP to reach the branch — stamp itself is still
 driven through its public interface.
 """
+import ast
 import collections
 import hashlib
 import json
@@ -280,6 +281,90 @@ class TestPayloadToolsImport(unittest.TestCase):
                     done.returncode, 0,
                     f"factory/templates/{rel.as_posix()} does not import"
                     f" inside the payload:\n{done.stderr}")
+
+    def dynamic_imports(self):
+        """{module name} gates.py reaches through importlib, derived from
+        its source rather than listed here.
+
+        Two shapes exist and both are followed: a literal
+        `import_module("label_sync")`, and a loop variable bound from a
+        module-level table's `.items()`, whose keys are the module names
+        (LABEL_DECLARERS). A third shape is returned as unfollowed and
+        fails the test loudly rather than being silently skipped — a
+        derivation that quietly covers nothing is the same silence this
+        test exists to close.
+        """
+        tree = ast.parse((self.REPO / "gates.py").read_text(encoding="utf-8"))
+        tables = {t.id: node.value for node in tree.body
+                  if isinstance(node, ast.Assign)
+                  and isinstance(node.value, ast.Dict)
+                  for t in node.targets if isinstance(t, ast.Name)}
+
+        def table_keys(name):
+            """The module names a `for <name>, _ in TABLE.items()` binds,
+            or None when nothing in the tree binds it that way."""
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.For)
+                        and isinstance(node.target, ast.Tuple)
+                        and any(isinstance(e, ast.Name) and e.id == name
+                                for e in node.target.elts)):
+                    continue
+                for call in ast.walk(node.iter):
+                    if (isinstance(call, ast.Call)
+                            and isinstance(call.func, ast.Attribute)
+                            and call.func.attr == "items"
+                            and isinstance(call.func.value, ast.Name)
+                            and call.func.value.id in tables):
+                        return {k.value
+                                for k in tables[call.func.value.id].keys
+                                if isinstance(k, ast.Constant)}
+            return None
+
+        names, unfollowed = set(), []
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "import_module" and node.args):
+                continue
+            arg = node.args[0]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                names.add(arg.value)
+                continue
+            keys = table_keys(arg.id) if isinstance(arg, ast.Name) else None
+            if keys is None:
+                unfollowed.append(f"gates.py:{node.lineno}"
+                                  f" import_module({ast.unparse(arg)})")
+            else:
+                names |= keys
+        return names, unfollowed
+
+    def test_every_lazily_imported_module_ships(self):
+        """A static `import x` at module scope fails loudly and the test
+        above catches it. `importlib.import_module` inside a function
+        does not: gates.py wraps both call sites in `except ImportError`
+        on purpose, so a partial stamp cannot crash the gate before any
+        detector runs.
+
+        The cost of that deliberate silence is that a module dropping out
+        of MIRRORS would switch detector J off in every stamped repo and
+        report nothing — the exact failure J's own docstring says it
+        exists to close, one level up. Nothing else pins it: the import
+        never runs at module scope, so the payload-import test above
+        cannot see it."""
+        names, unfollowed = self.dynamic_imports()
+        self.assertEqual(unfollowed, [], "gates.py reaches importlib in a"
+                         " shape this test cannot follow — teach it the"
+                         " new shape rather than letting the check pass"
+                         " on a set it never derived")
+        self.assertTrue(names, "derived no lazily imported modules — the"
+                        " derivation is broken, not gates.py clean")
+        shipped = {Path(rel).stem for _, rel, _ in factory_init.MIRRORS
+                   if rel.endswith(".py")}
+        self.assertEqual(sorted(names - shipped), [],
+                         "gates.py lazily imports a module MIRRORS does"
+                         " not carry: in a stamped repo the import fails,"
+                         " `except ImportError` swallows it, and the"
+                         " detector goes silent instead of red")
 
 
 class TestProductForm(unittest.TestCase):
