@@ -14,6 +14,7 @@ half of the same partition is covered too. The mirror map is the
 knowledge plane's (ADR-0039), covered in tests/test_knowledge_plane.py.
 """
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -345,3 +346,85 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWorkflowOutputLockstep(unittest.TestCase):
+    """The $GITHUB_OUTPUT seam, gate-digest side: run_daily's output keys
+    and gate-digest.yml's steps.digest.outputs.<name> references are a
+    split contract with no other bridge. Same idiom as
+    test_assembler.TestWorkflowOutputLockstep and its cost_report twin —
+    this was the fourth site of the three and the only one unpinned.
+
+    What a rename costs here: `changed` gates the commit step. An
+    unresolvable ref expands to the empty string, `'' == 'true'` is
+    false, and the gate-latency rows run_daily appended to
+    docs/factory/costs.jsonl are computed every day and discarded with
+    the runner — silently, with the workflow green and the digest still
+    posting.
+
+    Root and payload YAML are byte-identical (detector E + TestLockstep),
+    so pinning the root copy pins both.
+    """
+
+    WORKFLOW = (Path(__file__).resolve().parents[1] / ".github"
+                / "workflows" / "gate-digest.yml")
+    REFS = re.compile(r"steps\.digest\.outputs\.(\w+)")
+
+    def yaml_refs(self):
+        refs = set(self.REFS.findall(
+            self.WORKFLOW.read_text(encoding="utf-8")))
+        self.assertTrue(refs, "gate-digest.yml references no digest outputs")
+        return refs
+
+    def emitted_keys(self):
+        """The keys EVERY run_daily path writes — the intersection, not
+        the union its two siblings take.
+
+        The workflow reads its ref unconditionally, on whichever path the
+        run took, so a key only some paths emit would still expand to ''
+        on the others. All three paths are exercised through the public
+        interface rather than a hand-kept list: an unreachable tracker,
+        a run with no new rows, and a run that captures one."""
+        per_path = []
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(failing=["issue", "list"])
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertTrue(problems, "the unreachable-tracker path did"
+                                      " not fail — fixture is wrong")
+            per_path.append(set(outputs))
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=[issue(123, "WO-0018 rejection mining",
+                                   labels=["wo:draft", "size:S"])],
+                     timelines={123: [labeled("2026-07-20T09:00:00Z",
+                                              "wo:draft")]})
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs.get("changed"), "false",
+                             "the no-new-rows path did not report"
+                             " changed=false — fixture or key is wrong")
+            per_path.append(set(outputs))
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=[issue(131, "WO-0010 sweeps", state="CLOSED",
+                                   labels=["wo:merged"])],
+                     timelines={131: [
+                         labeled("2026-07-01T09:00:00Z", "wo:needs-review"),
+                         unlabeled("2026-07-01T10:00:00Z", "wo:needs-review"),
+                         labeled("2026-07-01T10:00:00Z", "wo:merged")]})
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs.get("changed"), "true",
+                             "the captured-row path did not report"
+                             " changed=true — fixture or key is wrong")
+            per_path.append(set(outputs))
+        self.assertEqual(len(per_path), 3)
+        return set.intersection(*per_path)
+
+    def test_every_yaml_output_ref_is_emitted_on_every_path(self):
+        self.assertLessEqual(self.yaml_refs(), self.emitted_keys())
+
+    def test_the_workflow_consumes_the_commit_gate_key(self):
+        # the key whose silent loss discards every captured latency row
+        self.assertIn("changed", self.yaml_refs())
