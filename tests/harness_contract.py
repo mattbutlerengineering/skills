@@ -86,6 +86,51 @@ class RunEvalContract:
         self.assertFalse(result["pass"])
         self.assertEqual(output["confusion"]["prd"], {"idea": 3})
 
+
+    def test_a_crashed_run_is_an_error_not_a_no_fire(self):
+        """A run that failed is not evidence that the router declined.
+
+        PATH is pointed at an empty directory so the harness binary
+        cannot be found and every worker raises inside run_single_query
+        — the same path a genuinely broken harness takes. The distractor
+        case is the one that matters: bucketed as "none" it scores a
+        perfect pass on runs that never happened.
+        """
+        empty = Path(tempfile.mkdtemp(prefix="no-binaries-"))
+        self.addCleanup(shutil.rmtree, empty, True)
+        os.environ["PATH"] = str(empty)
+        cases = [case("d", None, "fire:none", kind="distractor"),
+                 case("a", "idea", "fire:idea")]
+        output, err = self.run_quiet(
+            cases, {"idea": "d"}, workers=1, runs_per_query=2,
+            timeout=10, threshold=0.5, model=None, isolate=False)
+        self.assertIn("warning:", err, "a failed run must still warn")
+
+        by_id = {r["id"]: r for r in output["results"]}
+        for case_id in ("d", "a"):
+            with self.subTest(case=case_id):
+                result = by_id[case_id]
+                self.assertEqual(result["errors"], 2)
+                # No phantom observation: a crash is not a "none" fire.
+                self.assertEqual(result["fired"], {})
+                self.assertEqual(result["runs"], 0)
+                self.assertFalse(result["pass"],
+                                 "no pass on zero observations")
+
+        self.assertEqual(output["summary"]["errors"], 4)
+        # confusion is a record of what was observed; nothing was.
+        self.assertEqual(output["confusion"], {})
+
+    def test_errors_are_zero_on_a_clean_run(self):
+        # Criterion 3: nothing changes when nothing fails.
+        cases = [case("a", "idea", "fire:idea")]
+        output, _ = self.run_quiet(
+            cases, {"idea": "d"}, workers=1, runs_per_query=2,
+            timeout=10, threshold=0.5, model=None, isolate=False)
+        self.assertEqual(output["results"][0]["errors"], 0)
+        self.assertEqual(output["summary"]["errors"], 0)
+        self.assertEqual(output["results"][0]["runs"], 2)
+
     def test_case_order_is_preserved_in_results(self):
         cases = [case(f"c{n}", "idea", "fire:idea") for n in range(5)]
         output, _ = self.run_quiet(
