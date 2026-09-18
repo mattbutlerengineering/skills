@@ -1,9 +1,9 @@
 """work_queue.py — the work-queue skill's batch planner.
 
 Same discipline as test_label_sync/test_gate_digest: the gh CLI is
-injected (a recording runner, never the network), the planning core is
-pure and exercised directly, and tests assert the exact problem and
-deferral strings a caller will print.
+injected through the shared fake (tests/fake_gh.py, never the network),
+the planning core is pure and exercised directly, and tests assert the
+exact problem and deferral strings a caller will print.
 """
 import json
 import subprocess
@@ -16,6 +16,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
+from fake_gh import FakeGh  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -35,28 +36,27 @@ def found(*rows):
     return {r["wo"]: r for r in rows}
 
 
-class RecordingRunner:
-    """Injected gh runner: records calls, answers `issue list` with a
-    canned listing, never touches the network."""
+def listing(*numbers):
+    """A gh whose ready listing answers with these issue numbers.
 
-    def __init__(self, listing):
-        self.listing, self.calls = listing, []
-
-    def __call__(self, args):
-        self.calls.append(list(args))
-        if args[:2] == ["issue", "list"]:
-            return json.dumps(self.listing)
-        return ""
+    work_queue makes exactly one gh call (`work_queue.LIST_ARGS`, an
+    `issue list`), so keying the answer on that prefix says everything
+    this suite needs gh to say.
+    """
+    return FakeGh(answers={("issue", "list"):
+                           json.dumps([{"number": n} for n in numbers])})
 
 
-class FailingRunner(RecordingRunner):
-    def __init__(self, error):
-        super().__init__([])
-        self.error = error
+def unreachable():
+    """A gh whose ready listing fails.
 
-    def __call__(self, args):
-        self.calls.append(list(args))
-        raise self.error
+    The error is stated rather than inherited: a `CalledProcessError`
+    with no stderr is a different `cli.detail` path from the shared
+    fake's default, and this suite's problem-string assertions are
+    about that path.
+    """
+    return FakeGh(failing=["issue"],
+                  error=subprocess.CalledProcessError(1, "gh"))
 
 
 class TestEligible(unittest.TestCase):
@@ -182,7 +182,7 @@ class TestPlanBatch(unittest.TestCase):
 
 class TestReadyIssueNumbers(unittest.TestCase):
     def test_it_asks_for_open_ready_labelled_issues(self):
-        runner = RecordingRunner([{"number": 7}, {"number": 8}])
+        runner = listing(7, 8)
         numbers, problems = work_queue.ready_issue_numbers(runner)
         self.assertEqual(numbers, {7, 8})
         self.assertEqual(problems, [])
@@ -191,7 +191,7 @@ class TestReadyIssueNumbers(unittest.TestCase):
 
     def test_an_unreachable_tracker_is_a_problem_not_an_empty_queue(self):
         numbers, problems = work_queue.ready_issue_numbers(
-            FailingRunner(subprocess.CalledProcessError(1, "gh")))
+            unreachable())
         self.assertIsNone(numbers)
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith("wq: gh issue list failed:"))
@@ -200,7 +200,7 @@ class TestReadyIssueNumbers(unittest.TestCase):
         """Same rule as sweeps.live_issues: past the window an issue is
         simply absent, and absence is what the ready check reads as a
         finding. A truncated listing is no listing."""
-        runner = RecordingRunner([{"number": n} for n in range(100)])
+        runner = listing(*range(100))
         numbers, problems = work_queue.ready_issue_numbers(runner)
         self.assertIsNone(numbers)
         self.assertEqual(len(problems), 1)
@@ -259,7 +259,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
     def planned(self, argv, run=None, root=None):
         """(code, stdout) of one `plan` run, gh injected, optionally
         rooted at a fixture tree."""
-        run = run or RecordingRunner([])
+        run = run or listing()
         if root is None:
             return cli_contract.capture(work_queue.main, argv, run=run)
         with mock.patch.object(work_queue, "repo_root", lambda: root):
@@ -290,7 +290,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
                 " (PRD-0001 §S) (tracker: #999)\n")
             code, out = self.planned(
                 ["plan"],
-                run=RecordingRunner([{"number": n} for n in range(100)]),
+                run=listing(*range(100)),
                 root=tree.root)
         self.assertEqual(code, 1)
         self.assertIn("full 100-entry window", out)
@@ -309,7 +309,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
                 " (PRD-0001 §S) (tracker: #999)\n")
             code, out = self.planned(
                 ["plan"],
-                run=RecordingRunner([{"number": n} for n in range(100)]),
+                run=listing(*range(100)),
                 root=tree.root)
         self.assertEqual(code, 1)
         self.assertNotIn("ready to run in parallel", out)
@@ -343,7 +343,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             code, out = self.planned(
                 ["plan", "--json"],
-                run=FailingRunner(subprocess.CalledProcessError(1, "gh")),
+                run=unreachable(),
                 root=self.config_tree(tmp).root)
         lines = out.splitlines()
         self.assertEqual(code, 1)
@@ -361,7 +361,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             _, out = self.planned(
                 ["plan", "--json"],
-                run=FailingRunner(subprocess.CalledProcessError(1, "gh")),
+                run=unreachable(),
                 root=self.config_tree(tmp).root)
         _, seam = cli_contract.capture(cli.report, "wq", ["one problem"])
         self.assertEqual(out.splitlines()[-1], seam.splitlines()[-1])
@@ -370,7 +370,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             code, out = self.planned(
                 ["plan"],
-                run=FailingRunner(subprocess.CalledProcessError(1, "gh")),
+                run=unreachable(),
                 root=self.config_tree(tmp).root)
         lines = out.splitlines()
         self.assertEqual(code, 1)
