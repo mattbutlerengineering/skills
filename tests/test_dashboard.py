@@ -12,7 +12,10 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import cost_ledger
+import cost_report
 import dashboard
 
 # discover puts tests/ on sys.path; selective package-style runs need it
@@ -447,6 +450,75 @@ LEDGER = (
     '{"wo": "WO-0103", "run_id": "gate-merge-2", "model": "none",'
     ' "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:200s",'
     ' "at": "2026-08-04"}\n')
+
+
+class TestSpendCountsOnlyDispatchedRows(unittest.TestCase):
+    """cost_ledger.dispatched is the one row-selection rule for what
+    counts as spend, because a gate-latency observation (ADR-0041) is a
+    $0 wait record, not a run. _metrics keeps it through
+    cost_report.aggregate; _spend, reading the same list from the same
+    cost_ledger.read call, must keep it too — or the console prints a
+    measured $0.00 where the page has an em dash ready."""
+
+    GATE_ONLY = [
+        {"wo": "WO-0102", "run_id": "gate-prd-1", "model": "none",
+         "tokens": 0, "cost": 0.0, "outcome": "gate_wait:prd:100s",
+         "at": "2026-08-02"},
+    ]
+    RAN = [
+        {"wo": "WO-0101", "run_id": "r1", "model": "m", "tokens": 10,
+         "cost": 2.0, "outcome": "completed", "at": "2026-08-10"},
+        {"wo": "WO-0101", "run_id": "gate-merge-1", "model": "none",
+         "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:300s",
+         "at": "2026-08-11"},
+    ]
+
+    def test_the_fixture_holds_both_row_kinds(self):
+        """Non-vacuity: these tests mean nothing over rows that are all
+        one kind."""
+        rows = self.GATE_ONLY + self.RAN
+        self.assertTrue([r for r in rows if cost_ledger.gate_wait(r)])
+        self.assertTrue(cost_ledger.dispatched(rows))
+
+    def test_a_gate_only_work_order_has_no_spend(self):
+        self.assertEqual(dashboard._spend(self.GATE_ONLY), {})
+
+    def test_a_gate_row_does_not_perturb_a_work_order_that_ran(self):
+        self.assertEqual(dashboard._spend(self.RAN), {"WO-0101": 2.0})
+
+    def test_the_two_ledger_readers_agree_on_the_work_order_set(self):
+        """The console shows _spend's numbers in the output table and
+        aggregate's by_wo count in cost_per_wo. A work order in one and
+        not the other makes the two disagree on the same page."""
+        rows = self.GATE_ONLY + self.RAN
+        self.assertEqual(set(dashboard._spend(rows)),
+                         set(cost_report.aggregate(rows)["by_wo"]))
+
+    def test_the_rule_is_cost_ledgers_not_a_second_copy(self):
+        """A future change to what counts as a spend row must reach the
+        console without a second edit here."""
+        rows = self.GATE_ONLY + self.RAN
+        with mock.patch.object(dashboard.cost_ledger, "dispatched",
+                               return_value=[]) as filtered:
+            self.assertEqual(dashboard._spend(rows), {})
+        filtered.assert_called_once_with(rows)
+
+    def test_the_console_renders_no_spend_for_a_gate_only_row(self):
+        """End to end: the row reaches the output table with spend None,
+        which dashboard.html renders as an em dash rather than $0.00."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/costs.jsonl",
+                       "".join(json.dumps(row) + "\n"
+                               for row in self.GATE_ONLY + self.RAN))
+            tree.write(".github/factory.json",
+                       '{"monthly_cap_usd": 300.0}')
+            state = dashboard.gather(tmp, run=queue_gh(),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        spend = {row["wo"]: row["spend"] for row in state["output"]}
+        self.assertIsNone(spend["WO-0102"])
+        self.assertEqual(spend["WO-0101"], 2.0)
 
 
 class TestMetrics(unittest.TestCase):
