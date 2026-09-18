@@ -82,6 +82,22 @@ def results_path(results_dir, kind, date, slug=None, harness=None):
     return path
 
 
+def object_problems(data, label):
+    """[] when data is a JSON object, else the one problem naming its shape.
+
+    Every validator opens with this. A file's top level is legally an
+    array, string, number, boolean or null, and json.loads hands any of
+    them through untouched, so dict-ness is the one thing a validator
+    cannot assume. It is reported alone, never alongside derived
+    complaints: on a str, `"version" not in data` degrades into a
+    substring test, and the coverage arithmetic downstream then describes
+    the bug instead of the file.
+    """
+    if isinstance(data, dict):
+        return []
+    return [f"{label} is not a JSON object"]
+
+
 def entries(data, key, label):
     """(list-of-dict entries, shape problems) for the collection data[key].
 
@@ -123,6 +139,13 @@ def load_case_set(path, label, validate):
     set is unusable: cases is [] so callers cannot half-run an invalid
     set, and problems carries the diagnostics. The routing loader below
     and the charter replay's are thin callers.
+
+    The object guard runs *before* validate, so a validator may assume it
+    was handed a dict — the guarantee has to live here because this
+    function is also the one that ends by reaching for data["cases"]. A
+    validator that checks shape itself is then merely redundant, while
+    one that does not (charter_replay's returns no problems at all for a
+    bare-string file) would otherwise leave the crash to land here.
     """
     if not path.is_file():
         return [], [f"missing {label}"]
@@ -130,6 +153,9 @@ def load_case_set(path, label, validate):
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as err:
         return [], [f"{label} is not valid JSON: {err}"]
+    not_object = object_problems(data, label)
+    if not_object:
+        return [], not_object
     problems = validate(data)
     return ([], problems) if problems else (data.get("cases", []), [])
 
@@ -152,6 +178,8 @@ def fixture_refs(data):
     owns that complaint), and malformed shapes yield nothing rather than
     raising, mirroring entries.
     """
+    if not isinstance(data, dict):
+        return []
     evals = data.get("evals")
     if not isinstance(evals, list):
         return []
@@ -166,6 +194,9 @@ def validate_output(data, slug, label):
     stay with the caller. label prefixes every problem, mirroring
     validate().
     """
+    not_object = object_problems(data, label)
+    if not_object:
+        return not_object
     evals, shape = entries(data, "evals", label)
     return (
         shape
@@ -186,6 +217,9 @@ def validate(data, skills, label):
     the runner whatever --eval-set was given), so both callers print the
     same diagnostics for the same defect.
     """
+    shape = object_problems(data, label)
+    if shape:
+        return shape
     if "version" not in data:
         return [f"{label} missing 'version' field"]
     cases, shape = entries(data, "cases", label)
