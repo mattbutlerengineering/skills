@@ -165,6 +165,27 @@ class TestManifest(CheckerTreeTest):
                          ["plugin.json missing field: description"])
 
 
+    def test_a_manifest_that_is_not_an_object_names_its_shape(self):
+        # A JSON top level is legally any of these; none of them has .get
+        path = self.root / ".claude-plugin" / "plugin.json"
+        for shape in ("null", "42", '"text"', '["a"]', "true"):
+            with self.subTest(shape=shape):
+                path.write_text(shape, encoding="utf-8")
+                self.assertEqual(lint.check_manifest(self.root),
+                                 ["plugin.json is not a JSON object"])
+
+    def test_a_non_object_manifest_does_not_stop_the_gate(self):
+        # check_manifest is CHECKERS[0]: a raise here hides every other
+        # finding in the repo behind a traceback
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "null", encoding="utf-8")
+        problems = []
+        for checker in lint.CHECKERS:
+            with self.subTest(checker=checker.__name__):
+                problems += checker(self.root)
+        self.assertEqual(problems, ["plugin.json is not a JSON object"])
+
+
 class TestPiPackage(CheckerTreeTest):
     """The Pi (oh-my-pi) discovery manifest, guarded like the Claude one so
     the dual-target packaging can't silently drift (ADR-0027)."""
@@ -180,6 +201,15 @@ class TestPiPackage(CheckerTreeTest):
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "package.json is not valid JSON:"))
+
+
+    def test_a_package_that_is_not_an_object_names_its_shape(self):
+        path = self.root / "package.json"
+        for shape in ("null", "42", '"text"', '["a"]', "true"):
+            with self.subTest(shape=shape):
+                path.write_text(shape, encoding="utf-8")
+                self.assertEqual(lint.check_pi_package(self.root),
+                                 ["package.json is not a JSON object"])
 
     def test_not_private(self):
         (self.root / "package.json").write_text(json.dumps(
