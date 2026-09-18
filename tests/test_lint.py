@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -808,9 +809,9 @@ class TestBacklog(CheckerTreeTest):
     def test_unreadable_backlog_yields_one_problem_string(self):
         path = self.root / "docs" / "backlog.md"
         path.write_text("- a seed (from: product)\n", encoding="utf-8")
-        path.chmod(0)
-        self.addCleanup(path.chmod, 0o644)
-        problems = lint.check_backlog(self.root)
+        with mock.patch.object(Path, "read_text",
+                                side_effect=OSError("Permission denied")):
+            problems = lint.check_backlog(self.root)
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "backlog: docs/backlog.md is unreadable:"))

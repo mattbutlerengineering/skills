@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 import cost_ledger
 import cost_report
@@ -298,12 +299,10 @@ class TestLoad(unittest.TestCase):
 
     def test_an_unreadable_ledger_is_the_callers_problem_string(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = self.ledger(tmp, "")
-            path.chmod(0)
-            try:
+            self.ledger(tmp, "")
+            with mock.patch.object(Path, "read_text",
+                                    side_effect=OSError("Permission denied")):
                 rows, problems = cost_ledger.load(tmp, "G")
-            finally:
-                path.chmod(0o644)
             self.assertIsNone(rows)
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
