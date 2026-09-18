@@ -71,6 +71,19 @@ def extra_skills(root):
                   and p.name not in ALL_SKILLS)
 
 
+def names_slug(text, slug):
+    """True when TEXT names SLUG, as a whole slug and not as part of one.
+
+    Slug characters are lowercase letters, digits and hyphens, so the
+    boundary is "not one of those on either side" — `architecture-diagram`
+    inside `interactive-architecture-diagram` is not a mention of the
+    shorter name. Three of the registered slugs are contained in a longer
+    one, and a plain `in` test reports none of them missing.
+    """
+    return re.search(rf"(?<![a-z0-9-]){re.escape(slug)}(?![a-z0-9-])",
+                     text) is not None
+
+
 def check_skills(root):
     """Frontmatter contract per skill: protocol.skill_frontmatter_problems
     owns the rules and the strings (ADR-0052); this checker keeps the
@@ -366,14 +379,20 @@ def check_readme_skills(root):
     where a reader learns what the plugin ships, and it is prose — so a
     skill can be added, registered, tested, and released without the
     README ever hearing about it. That is not hypothetical: it is how
-    interactive-architecture-diagram shipped undocumented. Same bar and
-    same shape as check_ledger, for the same reason."""
+    interactive-architecture-diagram shipped undocumented.
+
+    Same bar as check_ledger, different shape, because the two files are
+    different shapes: the ledger is a table with a row per skill and this
+    is prose, so naming the skill anywhere is the whole requirement. What
+    both share is that the name has to be the whole slug — see
+    names_slug."""
     path = root / "README.md"
     if not path.is_file():
         return ["missing README.md"]
     text = path.read_text(encoding="utf-8")
     return [f"README.md never names skill {slug!r}"
-            for slug in ALL_SKILLS + extra_skills(root) if slug not in text]
+            for slug in ALL_SKILLS + extra_skills(root)
+            if not names_slug(text, slug)]
 
 
 def check_protocol(root):
@@ -497,13 +516,51 @@ def check_output_evals(root):
             for p in problems_for(path)]
 
 
+# The first cell of a LEDGER.md table row, which is the skill slug. The
+# header (`| Skill |`) and the separator (`|---|`) are not rows: a slug is
+# lowercase and a row's first cell holds nothing else. The leading
+# character class matches names_slug's — extra_skills accepts any
+# directory name, so a slug that opens with a digit has to read as a row
+# here exactly as it reads as a mention there.
+LEDGER_ROW = re.compile(r"^\|\s*([a-z0-9][a-z0-9-]*)\s*\|", re.M)
+
+
+def ledger_rows(text):
+    """Every skill slug LEDGER.md has a table row for.
+
+    A set of exact slugs, not a search over the file. Both halves of that
+    matter, and each closes a way the old `slug not in text` was blind.
+
+    Exact, because three of the registered slugs are contained in a longer
+    one — `architect` in `architecture-diagram` and in
+    `interactive-architecture-diagram`, `review` in `address-pr-review`,
+    `architecture-diagram` in the interactive form. A substring test can
+    never find their rows missing, and one of those is the shorter sibling
+    of the very skill whose undocumented release is why the README's
+    checker exists.
+
+    Rows, because the problem string says row and the file is a table
+    followed by paragraphs of reading notes that name skills by slug. A
+    row deleted while the reading still mentions the skill passed the
+    check that claimed to look for the row.
+    """
+    return set(LEDGER_ROW.findall(text))
+
+
 def check_ledger(root):
+    """Every skill in the taxonomy has a maturity row in LEDGER.md.
+
+    ledger_rows owns what counts as a row; this checker owns which slugs
+    must have one. check_ledger_links reads the same file for a different
+    fact (the eval-evidence links) and keeps reading the whole text —
+    those links live in the row cells and in the reading below alike.
+    """
     path = root / "LEDGER.md"
     if not path.is_file():
         return ["missing LEDGER.md"]
-    text = path.read_text(encoding="utf-8")
+    rows = ledger_rows(path.read_text(encoding="utf-8"))
     return [f"LEDGER.md has no row for skill {slug!r}"
-            for slug in ALL_SKILLS + extra_skills(root) if slug not in text]
+            for slug in ALL_SKILLS + extra_skills(root) if slug not in rows]
 
 
 def check_backlog(root):
