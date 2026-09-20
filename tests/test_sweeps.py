@@ -34,8 +34,8 @@ LABEL_NAMES = {label["name"] for label in TAXONOMY}
 
 # --state all, not open: an intake a maintainer triaged and CLOSED must not be
 # re-filed next Monday (that is the churn the sweep exists to remove, inverted).
-LIST_CALL = ["issue", "list", "--state", "all", "--json", "number,body",
-             "--limit", str(sweeps.LIST_WINDOW)]
+LIST_CALL = ["issue", "list", "--state", "all", "--json",
+             "number,state,body", "--limit", str(sweeps.LIST_WINDOW)]
 
 # A Sentry issues payload entry, shaped like the real API response.
 SENTRY_ENTRY = {
@@ -515,6 +515,73 @@ class TestFileIssues(unittest.TestCase):
             # Loud, but not fatal: the new signal is still filed. A signal
             # nobody files is an outage nobody notices.
             self.assertEqual(filed, ["sentry:PROJ-7K"])
+
+    def test_a_closed_detector_intake_stops_suppressing_its_detector(self):
+        """The defect. `sweep:label-drift` is a SINGLETON key, so deduping
+        it across every state lets the detector fire exactly once in the
+        repository's lifetime. Nothing outside this repo re-reports it, so
+        a closed issue is not an answer — it is an issue someone closed."""
+        keys, problems = sweeps.known_keys(run=gh(issues=[
+            {"number": 173, "state": "CLOSED",
+             "body": "intake-key: sweep:label-drift\n"}]))
+        self.assertEqual(problems, [])
+        self.assertEqual(keys, set())
+
+    def test_an_open_detector_intake_still_suppresses(self):
+        """Re-filing while the issue is open would put two identical
+        intakes on the board every sweep run — the churn dedupe exists to
+        remove."""
+        keys, problems = sweeps.known_keys(run=gh(issues=[
+            {"number": 173, "state": "OPEN",
+             "body": "intake-key: sweep:label-drift\n"}]))
+        self.assertEqual(problems, [])
+        self.assertEqual(keys, {"sweep:label-drift"})
+
+    def test_a_closed_sentry_intake_still_suppresses(self):
+        """Unchanged, and the reason the old rule existed: closing
+        `[sentry] PROJ-7K` is a maintainer's answer, and Sentry still calls
+        the error unresolved next week."""
+        keys, problems = sweeps.known_keys(run=gh(issues=[
+            {"number": 12, "state": "CLOSED",
+             "body": "intake-key: sentry:PROJ-7K\n"}]))
+        self.assertEqual(problems, [])
+        self.assertEqual(keys, {"sentry:PROJ-7K"})
+
+    def test_an_open_issue_wins_over_a_closed_one_carrying_the_same_key(self):
+        """The state this fix CREATES. Once a released detector re-files,
+        the board carries the same singleton key twice — the old closed
+        intake and the new open one — and the open one must win, or the
+        detector re-files on every sweep while its issue sits open.
+
+        Order-independent by construction (a set union), and pinned in both
+        orders so a later rewrite to a dict keyed by intake-key, or a
+        `break` on the first match, cannot quietly let the closed issue
+        decide."""
+        closed = {"number": 173, "state": "CLOSED",
+                  "body": "intake-key: sweep:label-drift\n"}
+        opened = {"number": 400, "state": "OPEN",
+                  "body": "intake-key: sweep:label-drift\n"}
+        for order in ([closed, opened], [opened, closed]):
+            with self.subTest(first=order[0]["state"]):
+                keys, problems = sweeps.known_keys(run=gh(issues=order))
+                self.assertEqual(problems, [])
+                self.assertEqual(keys, {"sweep:label-drift"})
+
+    def test_only_the_literal_closed_stops_suppression(self):
+        """A listing quirk must not turn the sweep into a duplicate
+        factory. If `state` stopped arriving, EVERY key would stop
+        suppressing at once and every open intake would be duplicated on
+        every run — so anything that is not the word CLOSED keeps today's
+        behaviour."""
+        for state in ({}, {"state": None}, {"state": "closed"},
+                      {"state": "MERGED"}, {"state": 7}):
+            with self.subTest(state=state):
+                issue = dict({"number": 173,
+                              "body": "intake-key: sweep:label-drift\n"},
+                             **state)
+                keys, problems = sweeps.known_keys(run=gh(issues=[issue]))
+                self.assertEqual(problems, [])
+                self.assertEqual(keys, {"sweep:label-drift"})
 
     def test_an_unparseable_dedupe_listing_means_do_not_file(self):
         # Filing blind would duplicate everything — nonsense stdout joins
