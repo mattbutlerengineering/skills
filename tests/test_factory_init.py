@@ -271,9 +271,10 @@ class TestPayloadToolsImport(unittest.TestCase):
         for rel in modules:
             with self.subTest(module=rel.as_posix()):
                 directory = self.REPO / "factory" / "templates" / rel.parent
-                # -B: importing inside the payload would otherwise drop
-                # __pycache__/*.pyc into the mirrored tree, and the next
-                # update-manifest would checksum them in as payload.
+                # -B keeps the import from littering __pycache__/ into
+                # the mirrored tree. It is hygiene, not load-bearing:
+                # gates.manifest_files excludes bytecode caches, so a
+                # forgotten -B no longer pins them in as payload.
                 done = subprocess.run(
                     [sys.executable, "-B", "-c", f"import {rel.stem}"],
                     cwd=directory, capture_output=True, text=True)

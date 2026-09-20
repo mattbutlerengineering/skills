@@ -656,6 +656,20 @@ class TestManifestFiles(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(gates.manifest_files(Path(tmp)), {})
 
+    def test_bytecode_caches_are_not_payload(self):
+        """Importing a payload tool from inside the mirrored tree drops a
+        __pycache__/ there, and .gitignore keeps it untracked. Hashing it
+        pins a key into factory/manifest.json that git never carries, so
+        detector E passes for whoever generated the manifest and fails in
+        every other checkout — a gate that goes red on a clean tree."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/tools/factory/gates.py", "G = 1\n")
+            tree.write("factory/templates/tools/factory/__pycache__/"
+                       "gates.cpython-313.pyc", "\x00")
+            self.assertEqual(sorted(gates.manifest_files(tree.root)),
+                             ["templates/tools/factory/gates.py"])
+
 
 class TestLabelWiring(unittest.TestCase):
     """Detector J. The tools and the Makefile name 15 labels between them
