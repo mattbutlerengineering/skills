@@ -988,7 +988,15 @@ class TestSweepsWorkflow(unittest.TestCase):
 
     def commands(self):
         """{job: [python3 command, ...]} in step order. Enough to assert step
-        ORDER without a YAML parser (stdlib only, like every script here)."""
+        ORDER without a YAML parser (stdlib only, like every script here).
+
+        Fails rather than returning {}. Callers loop over this and assert
+        inside the loop, so an empty result runs no assertion and reports
+        OK -- and because the parse matches the file's SHAPE and not its
+        meaning, emptying it takes an edit that changes nothing: a trailing
+        comment on `jobs:` is enough. The guard lives here, not at each
+        call site, so the next test to loop over this is covered too.
+        """
         jobs, job, in_jobs = {}, None, False
         for line in self.TEXT.splitlines():
             if line.rstrip() == "jobs:":
@@ -1000,6 +1008,9 @@ class TestSweepsWorkflow(unittest.TestCase):
                 jobs[job] = []
             elif job is not None and "python3 " in line:
                 jobs[job].append(line.split("python3 ", 1)[1].strip())
+        self.assertTrue(jobs, "parsed no jobs out of sweeps.yml -- every"
+                        " assertion that loops over commands() would be"
+                        " skipped, not satisfied")
         return jobs
 
     def curl_argv(self):
@@ -1019,9 +1030,7 @@ class TestSweepsWorkflow(unittest.TestCase):
         # taxonomy exists files NOTHING — including the label-drift sweep's
         # own report that the taxonomy is missing. Every job that runs a
         # sweep must ensure the labels first.
-        jobs = self.commands()
-        self.assertTrue(jobs)
-        for job, commands in jobs.items():
+        for job, commands in self.commands().items():
             sweeping = [index for index, command in enumerate(commands)
                         if command.startswith("sweeps.py")
                         and not command.startswith("sweeps.py ensure-labels")]
@@ -1034,6 +1043,32 @@ class TestSweepsWorkflow(unittest.TestCase):
     def test_every_sweep_job_ensures_the_labels(self):
         for job, commands in self.commands().items():
             self.assertIn("sweeps.py ensure-labels", commands, job)
+
+    def test_a_workflow_it_cannot_parse_is_a_failure_not_a_pass(self):
+        # The parse is hand-rolled -- stdlib only, like every script here
+        # -- so it tracks the file's SHAPE, not its meaning, and a shape it
+        # does not recognise yields {} rather than an error. Two tests here
+        # assert only inside `for ... in self.commands()`, so an empty parse
+        # runs no assertion and reports OK. A trailing comment on `jobs:` is
+        # valid YAML, changes nothing about the workflow, and is enough.
+        self.TEXT = self.TEXT.replace(
+            "\njobs:\n", "\njobs:  # the sweeps\n", 1)
+        with self.assertRaises(self.failureException):
+            self.commands()
+
+    def test_an_unparsed_workflow_with_no_ensure_labels_still_goes_red(self):
+        # The two failures compounded, which is the whole defect: the parse
+        # drifts AND the workflow loses the step the test forbids losing.
+        # Before the guard this exact combination was green -- the assertion
+        # that would have caught the missing step was never reached, because
+        # there was nothing to iterate. `gh issue create --label X` aborts on
+        # a label that does not exist, so the sweeps this silently permits
+        # file NOTHING, including the report that the taxonomy is missing.
+        self.TEXT = (self.TEXT
+                     .replace("\njobs:\n", "\njobs:  # the sweeps\n", 1)
+                     .replace("sweeps.py ensure-labels", "sweeps.py noop"))
+        with self.assertRaises(self.failureException):
+            self.test_every_sweep_job_ensures_the_labels()
 
     def test_the_sentry_token_never_reaches_curls_argv(self):
         # argv is world-readable to every process on the runner; the token
