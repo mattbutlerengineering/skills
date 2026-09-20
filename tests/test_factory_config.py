@@ -89,6 +89,21 @@ class TestLoad(unittest.TestCase):
                 "config: .github/factory.json is not valid JSON:"), problems)
 
 
+    def test_a_config_that_is_not_utf8_is_a_problem(self):
+        # Valid JSON, invalid UTF-8 — what an editor saving latin-1
+        # produces. The decode fails a step before json.loads, so the
+        # JSONDecodeError catch never sees it.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / ".github" / "factory.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'{"routing": {"mechanical": "caf\xe9"}}')
+            config, problems = factory_config.load(tmp)
+            self.assertIsNone(config)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "config: cannot read .github/factory.json:"), problems)
+
+
 class TestConfigProblems(unittest.TestCase):
     """The whole-config field grammar, owned here (twin of
     cost_ledger.line_problems): detector F prefixes these and layers its
