@@ -98,6 +98,8 @@ def check_plugin_skills(root):
         data = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return []
+    if not isinstance(data, dict):
+        return []
     named = set(SLUG_TOKEN.findall(data.get("description") or ""))
     return [f"plugin.json's description never names utility skill {slug!r}"
             for slug in UTILITY_SKILLS if slug not in named]
