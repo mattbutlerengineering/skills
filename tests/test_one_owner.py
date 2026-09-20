@@ -15,8 +15,8 @@ import unittest.mock
 from pathlib import Path
 
 import one_owner
-from one_owner import (FactSite, Group, Marker, check, fact_sites, groups,
-                       markers, source_files)
+from one_owner import (FactSite, Group, Marker, check, defined_names,
+                       fact_sites, groups, markers, source_files)
 
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling helper import
@@ -78,8 +78,12 @@ def runner_git(*counterparts):
         "git_runner = runner('git')\n"
 
 
-def site(kind, path, lineno, name, identity):
-    return FactSite(kind, path, lineno, name, identity)
+def site(kind, path, lineno, name, identity, attach=None):
+    """`attach` defaults to `lineno`: every site these helpers build is
+    undecorated, and the two lines differ only for a decorated
+    definition."""
+    return FactSite(kind, path, lineno,
+                    lineno if attach is None else attach, name, identity)
 
 
 def value(path, lineno, name, identity):
@@ -368,6 +372,69 @@ class TestSameKeys(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual([(s.kind, s.lineno, s.name) for s in found],
                          [("same-value", 1, "LABEL"), ("same-keys", 4, "f")])
+
+    def test_a_decorated_definition_carries_both_of_its_lines(self):
+        """`ast.FunctionDef.lineno` is the `def` line. A reader looking at
+        the page sees the definition start at its first decorator, and a
+        comment block above it ends there — so the site carries both."""
+        found, problems = sites_of(a=(
+            "@wrap\n"
+            "@also\n"
+            'def f(p):\n    return p["labels"], p["name"]\n'))
+        self.assertEqual(problems, [])
+        self.assertEqual([(s.lineno, s.attach, s.name) for s in found],
+                         [(3, 1, "f")])
+
+    def test_an_undecorated_definition_attaches_at_its_own_line(self):
+        found, problems = sites_of(
+            a='def f(p):\n    return p["labels"], p["name"]\n',
+            b="LABEL = 'wo:ready-for-agent'\n")
+        self.assertEqual(problems, [])
+        self.assertEqual([(s.lineno, s.attach, s.name) for s in found],
+                         [(1, 1, "f"), (1, 1, "LABEL")])
+
+
+class TestDefinedNames(unittest.TestCase):
+    """What a module NAMES, which is a different question from what it
+    STATES. `_rent` needs both to tell a counterpart that was deleted from
+    one that merely dropped below the fact floor."""
+
+    def test_every_shape_a_counterpart_can_name_is_collected(self):
+        found = defined_names("a.py", (
+            "CONST = 'x'\n"
+            "\n"
+            "\n"
+            "class Thing:\n"
+            "    pass\n"
+            "\n"
+            "\n"
+            "def outer(p):\n"
+            "    local = 1\n"
+            "\n"
+            "    def inner(q):\n"
+            "        return q\n"
+            "    return local, inner\n"))
+        self.assertEqual(found, {"a.CONST", "a.Thing", "a.outer", "a.inner"})
+
+    def test_a_name_bound_inside_a_function_is_not_a_module_name(self):
+        """`local` above is absent, and deliberately: `<module>.<name>` is
+        how a marker addresses a counterpart, and a function-local binding
+        is not addressable that way. It matches `same-value`, which reads
+        `tree.body` and nothing deeper."""
+        self.assertNotIn("a.local", defined_names(
+            "a.py", "def outer():\n    local = 1\n    return local\n"))
+
+    def test_a_function_below_the_fact_floor_is_still_a_name(self):
+        """The whole point. One key is not a shape, so this states no
+        fact — but it is right there in the file."""
+        source = 'def g(p):\n    return p["labels"]\n'
+        self.assertEqual(fact_sites("a.py", source), ([], []))
+        self.assertEqual(defined_names("a.py", source), {"a.g"})
+
+    def test_unparseable_source_names_nothing_and_raises_nothing(self):
+        """fact_sites already reports the broken module. A second report
+        from the function least able to explain it is noise."""
+        self.assertEqual(defined_names("a.py", "def (:\n"), set())
 
 
 class TestSourceFiles(unittest.TestCase):
@@ -678,6 +745,37 @@ class TestMarkers(unittest.TestCase):
                     ["one-owner: a.py:1 marks git_runner deliberate with no"
                      " reason — a bare marker waives nothing"])
 
+    def test_a_marker_above_a_decorated_definition_attaches_to_it(self):
+        """ADR-0061 asks for the carve-out at the definition it excuses.
+        A decorator does not move the definition, so it must not move
+        where the author is allowed to write the marker."""
+        found, problems = markers("a.py", (
+            f"{MARK}\n@contextlib.contextmanager\n"
+            'def f(p):\n    return p["labels"], p["name"]\n'))
+        self.assertEqual(problems, [])
+        self.assertEqual([(m.lineno, m.owner) for m in found], [(1, "f")])
+
+    def test_a_marker_between_the_decorator_and_the_def_still_attaches(self):
+        """The placement that works today, and the only one that worked
+        before the attach line existed. Widening where a marker may sit
+        must not narrow it anywhere."""
+        found, problems = markers("a.py", (
+            f"@contextlib.contextmanager\n{MARK}\n"
+            'def f(p):\n    return p["labels"], p["name"]\n'))
+        self.assertEqual(problems, [])
+        self.assertEqual([(m.lineno, m.owner) for m in found], [(2, "f")])
+
+    def test_a_blank_line_still_ends_the_block_above_a_decorator(self):
+        """Locality survives the widening: the block above a decorated
+        definition ends at a blank line exactly as any other does."""
+        found, problems = markers("a.py", (
+            f"{MARK}\n\n@contextlib.contextmanager\n"
+            'def f(p):\n    return p["labels"], p["name"]\n'))
+        self.assertEqual(found, [])
+        self.assertEqual(problems,
+                         ["one-owner: a.py:1 is a one-owner marker above no"
+                          " definition"])
+
     def test_a_hash_inside_a_string_or_docstring_is_not_a_comment(self):
         """one_owner.py's own self-reference hazard, at its interface: the
         tool is in its own universe and its grammar is a comment pattern,
@@ -752,6 +850,29 @@ class TestCoverage(unittest.TestCase):
             check_tree(budget_guard=runner_git("nowhere.gone")),
             ["one-owner: budget_guard.py:1 names nowhere.gone, which is not"
              " defined in this repo"])
+
+    def test_a_counterpart_that_exists_but_states_no_fact_says_so(self):
+        """A FOLD does this to one side of a duplicate: the counterpart
+        simplifies below the two-key floor and stops being a fact site.
+        Reporting it as deleted sends the maintainer looking for a
+        deletion that never happened."""
+        self.assertEqual(
+            check_tree(budget_guard=runner_git("dashboard.helper"),
+                       dashboard='def helper(p):\n    return p["labels"]\n'),
+            ["one-owner: budget_guard.py:1 names dashboard.helper, which is"
+             " defined but states no fact this pass reads — name the"
+             " definition that duplicates, or remove the marker"])
+
+    def test_a_counterpart_that_is_a_class_states_no_fact_either(self):
+        """No class is ever a fact site, which is exactly why the name
+        census collects them: the author gets told the counterpart is
+        there and states nothing, not that it is gone."""
+        self.assertEqual(
+            check_tree(budget_guard=runner_git("dashboard.Thing"),
+                       dashboard="class Thing:\n    pass\n"),
+            ["one-owner: budget_guard.py:1 names dashboard.Thing, which is"
+             " defined but states no fact this pass reads — name the"
+             " definition that duplicates, or remove the marker"])
 
     def test_a_citation_must_resolve_to_a_file_in_docs_adr(self):
         self.assertEqual(
@@ -998,8 +1119,13 @@ class TestDataModel(unittest.TestCase):
     fields, because the fields are what every other interface passes."""
 
     def test_the_three_shapes_carry_the_declared_fields(self):
-        self.assertEqual(FactSite._fields,
-                         ("kind", "path", "lineno", "name", "identity"))
+        """`attach` was added by the marker-diagnostics-that-lie run, whose
+        architecture.md supersedes this line of the one-fact-one-owner
+        table: `lineno` is what a problem string points a reader at,
+        `attach` is where a comment block above the definition ends. They
+        differ only for a decorated definition."""
+        self.assertEqual(FactSite._fields, ("kind", "path", "lineno",
+                                            "attach", "name", "identity"))
         self.assertEqual(Marker._fields, ("path", "lineno", "owner",
                                           "counterpart", "adr", "reason"))
         self.assertEqual(Group._fields, ("identity", "sites"))
