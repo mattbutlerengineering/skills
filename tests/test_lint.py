@@ -27,15 +27,24 @@ SPINE = [stage for stage, _ in STAGE_ARTIFACTS]
 SPINE_ARTIFACT = dict(STAGE_ARTIFACTS)
 
 
+def _in_flight_line():
+    """The recital a run-starting skill owes the protocol's in-flight
+    guard. Taken from lint's own constant so the clean tree tracks a
+    reworded heading instead of pinning a stale copy of it."""
+    return (f"Before claiming a seed, run the protocol's "
+            f"{lint.IN_FLIGHT_HEADING!r} check.")
+
+
 def recital_body(slug):
     """The smallest body whose recitals state the protocol facts
     check_skill_recitals pins — one canonical phrasing per convention,
     derived from the protocol tables so the clean tree tracks them."""
     if slug == "capture":
         return ("## Process\n\n"
-                "1. Record `re-entry: implement` or `re-entry: architect`.\n"
-                "2. Write the artifact as `defect.md`.\n"
-                "3. Hand off per the recorded re-entry.\n")
+                f"1. {_in_flight_line()}\n"
+                "2. Record `re-entry: implement` or `re-entry: architect`.\n"
+                "3. Write the artifact as `defect.md`.\n"
+                "4. Hand off per the recorded re-entry.\n")
     if slug not in SPINE:
         return "body\n"
     i = SPINE.index(slug)
@@ -52,6 +61,8 @@ def recital_body(slug):
         if SPINE[i + 1] == "ux-design":
             hand += f" When skipped, next is {SPINE[i + 2]}."
         lines.append(f"3. **Hand off.** {hand}")
+    if slug in lint.RUN_STARTING:
+        lines.append(f"4. {_in_flight_line()}")
     return "## Process\n\n" + "\n".join(lines) + "\n"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -113,7 +124,8 @@ def make_clean_tree(root):
     # doc's stage order and artifacts to protocol.py's walk tables, so the
     # smallest tree every checker passes on genuinely has to carry them.
     (root / "docs" / "pipeline-protocol.md").write_text(
-        "spec\n\n## Artifacts are the state\n\n"
+        f"spec\n\n### {lint.IN_FLIGHT_HEADING}\n\n"
+        "## Artifacts are the state\n\n"
         + protocol_table(protocol.STAGE_ARTIFACTS)
         + "\n### Maintenance-run orientation\n\n"
         + protocol_table(protocol.MAINTENANCE_STAGE_ARTIFACTS),
@@ -372,12 +384,72 @@ class TestSkillRecitals(CheckerTreeTest):
 
     def test_capture_must_record_both_re_entry_options(self):
         self.seed("capture",
-                  "1. Record `re-entry: implement`.\n"
-                  "2. Write the artifact as `defect.md`.\n")
+                  f"1. {_in_flight_line()}\n"
+                  "2. Record `re-entry: implement`.\n"
+                  "3. Write the artifact as `defect.md`.\n")
         self.assertEqual(
             lint.check_skill_recitals(self.root),
             ["skills/capture/SKILL.md never records re-entry option "
              "'re-entry: architect'"])
+
+    def test_a_run_starting_skill_must_name_the_in_flight_check(self):
+        """The moment a run starts is the only moment this rule can be
+        honoured, so the two skills that start one owe it a recital. The
+        pin proves the words are present and nothing more — whether the
+        agent looked is not knowable here, and a checker that implied
+        otherwise would manufacture the false clean result the protocol
+        section exists to forbid."""
+        self.seed("capture",
+                  "1. Record `re-entry: implement` or `re-entry: "
+                  "architect`.\n"
+                  "2. Write the artifact as `defect.md`.\n"
+                  "3. Hand off per the recorded re-entry.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            [f"skills/capture/SKILL.md never names the protocol's "
+             f"{lint.IN_FLIGHT_HEADING!r} check, which is where a run "
+             "that is already open in review gets caught"])
+
+    def test_the_spine_entry_carries_the_same_obligation(self):
+        """`idea` claims backlog seeds too, and it is a spine stage rather
+        than the maintenance entry — two different loops in the checker.
+        Asserted separately because one loop passing says nothing about
+        the other."""
+        self.seed("idea",
+                  "1. Write the artifact as `idea.md`.\n"
+                  "2. **Hand off.** Next stage is prd.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            [f"skills/idea/SKILL.md never names the protocol's "
+             f"{lint.IN_FLIGHT_HEADING!r} check, which is where a run "
+             "that is already open in review gets caught"])
+
+    def test_a_recital_that_wraps_still_counts(self):
+        """Found by the pin failing on a correct recital. These documents
+        are hard-wrapped near 72 columns, so a four-word phrase lands
+        across a line break often — and a raw substring test would call
+        that a missing rule, which is pinning the formatting and calling
+        it the fact. The wrap here is the real one from capture."""
+        self.seed("capture",
+                  "1. Look over the work awaiting review — the protocol's"
+                  " *Work\n   already in flight* section.\n"
+                  "2. Record `re-entry: implement` or `re-entry: "
+                  "architect`.\n"
+                  "3. Write the artifact as `defect.md`.\n"
+                  "4. Hand off per the recorded re-entry.\n")
+        self.assertEqual(lint.check_skill_recitals(self.root), [])
+
+    def test_a_mid_spine_stage_owes_no_recital(self):
+        """The discriminating half. A stage that cannot start a run has
+        nothing to check — it already has artifacts to orient from — so a
+        pin that fired on every skill would be pinning the wrong fact and
+        would pass this suite just as happily."""
+        self.seed("prd",
+                  "1. **Soft gate.** Predecessor artifact: `idea.md`.\n"
+                  "2. Write the artifact as `prd.md`.\n"
+                  "3. **Hand off.** Next stage is ux design. When skipped, "
+                  "next is architect.\n")
+        self.assertEqual(lint.check_skill_recitals(self.root), [])
 
     def test_ux_skip_target_must_be_named(self):
         self.seed("prd",
@@ -857,6 +929,22 @@ class TestProtocol(CheckerTreeTest):
         (self.root / "docs" / "pipeline-protocol.md").unlink()
         self.assertEqual(lint.check_protocol(self.root),
                          ["missing docs/pipeline-protocol.md"])
+
+    def test_a_deleted_in_flight_section_strands_two_recitals(self):
+        """The other half of the recital pin. That pin holds capture and
+        idea to IN_FLIGHT_HEADING and holds IN_FLIGHT_HEADING to nothing,
+        so deleting the section leaves all three agreeing while both
+        skills point at a heading that is gone — green, and wrong."""
+        path = self.root / "docs" / "pipeline-protocol.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                f"### {lint.IN_FLIGHT_HEADING}\n\n", ""),
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_protocol(self.root),
+            [f"docs/pipeline-protocol.md no longer states "
+             f"{lint.IN_FLIGHT_HEADING!r}, which capture and idea both "
+             "recite"])
 
 
 class TestEvals(CheckerTreeTest):

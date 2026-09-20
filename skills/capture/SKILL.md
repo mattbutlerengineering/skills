@@ -28,7 +28,18 @@ interviews — it does not draft.
    not through `idea`: it is still a defect, and a maintenance run is
    what keeps Verify mandatory.
 
-3. **Seed from tracker intake (optional).** A defect may arrive as a
+3. **Check what is already in flight.** Run discovery sees the working
+   tree; a fix another agent has already finished sits on a branch,
+   waiting for a human, where no enumeration of run directories can find
+   it. Before writing `defect.md`, look over the work already awaiting
+   review and ask whether one of them does this — the protocol's *Work
+   already in flight* section. Say which of its three outcomes happened:
+   nothing matched, the check could not run, or something already does
+   this and the run stops here instead of building it twice. Reporting a
+   check that could not run as a clean result is the one failure this
+   step must never produce.
+
+4. **Seed from tracker intake (optional).** A defect may arrive as a
    tracker issue carrying the project's intake marker (the protocol's
    tracker-mirror section names the convention; packaging names the
    concrete label). Two entry paths, both user-initiated: the user names
@@ -44,7 +55,7 @@ interviews — it does not draft.
    before then un-marks the issue instead. An intake-marked feature
    request seeds nothing — route it to `idea` and leave the issue open.
 
-4. **Interview.** One question at a time, each with your recommended
+5. **Interview.** One question at a time, each with your recommended
    answer when you have one. For a defect brief, cover at least:
    - What exactly is broken — observed behavior vs expected?
    - Reproduction evidence: steps, a failing test, logs, a user report?
@@ -58,7 +69,7 @@ interviews — it does not draft.
    of degradation (build times, incident count, versions behind), and the
    target state that would end the run.
 
-5. **Decide re-entry depth.** A scoped fix with no design decisions
+6. **Decide re-entry depth.** A scoped fix with no design decisions
    re-enters at Implement; anything design-touching re-enters at
    Architect. Record the decision in frontmatter as
    `re-entry: implement` or `re-entry: architect`. With
@@ -67,10 +78,10 @@ interviews — it does not draft.
    `re-entry: architect`, leave work items out; the `architecture.md` +
    `breakdown.md` chain owns them.
 
-6. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
+7. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `defect.md`, with protocol frontmatter.
 
-7. **Hand off.** State the next stage per the recorded re-entry — the
+8. **Hand off.** State the next stage per the recorded re-entry — the
    `implement` skill or the `architect` skill (or the router).
 
 ## Rules
