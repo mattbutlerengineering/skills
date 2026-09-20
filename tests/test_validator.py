@@ -603,6 +603,30 @@ class TestRunLifecycle(unittest.TestCase):
                 "--add-label", "wo:merged",
                 "--remove-label", "wo:in-progress"]])
 
+    def test_a_fenced_citation_that_resolves_still_flips_the_label(self):
+        """The passing direction, pinned before the skip gate narrows.
+
+        Resolution reads the WHOLE body and keeps the work orders the PR
+        actually closes, so a token quoted inside a fenced block still
+        flips its issue when the Closes line backs it. The gate that
+        judges a body's tokens a claim is reached only AFTER resolution
+        fails, so nothing here may change when it narrows."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh(labels=["wo:needs-review", "size:M"])
+            body = ("Fixes the row the detector printed:\n\n"
+                    "```\n"
+                    "- [x] **WO-0004** (PRD-0001) the row it printed\n"
+                    "```\n\n"
+                    "Closes #109\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body), run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:merged",
+                "--remove-label", "wo:needs-review"]])
+
     def test_a_nameless_label_entry_is_dropped_not_compared(self):
         # gh can answer `issue view` with a label entry carrying no usable
         # name. The seam (cli.label_names) drops it, so the lifecycle
@@ -718,6 +742,83 @@ class TestRunLifecycle(unittest.TestCase):
             problems = validator.run_lifecycle(
                 tree.root, "wo:merged",
                 env=self.env(tmp, body="Implements WO-0004."), run=run,
+                uncited="skip")
+            self.assertEqual(problems, [
+                "V: PR body has no Closes #N link, so the work order it"
+                " implements cannot be told from the ones it only"
+                " mentions"])
+            self.assertEqual(run.calls, [])
+
+    def test_a_token_only_inside_a_fence_is_not_a_claim(self):
+        """ADR-0064. The body pastes the detector output it is fixing;
+        every work-order token in it is evidence, not an assertion, so
+        the body claims no work order and the skip applies."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            body = ("The detector printed this:\n\n"
+                    "```\n"
+                    "A: docs/features/demo/breakdown.md:7 work-order row"
+                    " WO-0004 cites no PRD id\n"
+                    "```\n\n"
+                    "No work order: tightens a detector.\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body),
+                run=run, uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_a_token_only_inside_a_blockquote_is_not_a_claim_either(self):
+        # PR #330's shape: the body quoted a breakdown row it was
+        # discussing, in a blockquote rather than a fence.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            body = ("Quoting the row under discussion:\n\n"
+                    "> - [x] **WO-0004** (PRD-0001) the row it printed\n\n"
+                    "No work order: docs only.\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body),
+                run=run, uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_a_tilde_fence_quotes_as_a_backtick_fence_does(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            body = ("~~~\nsee WO-0004\n~~~\n\nNo work order: chore.\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body),
+                run=run, uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_an_unterminated_fence_swallows_the_rest_of_the_body(self):
+        """The conservative direction, asserted rather than assumed: an
+        author who opens a fence and never closes it gets a skip, which
+        is a no-op, rather than a flip of an issue nobody named."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            body = "```\nsee WO-0004\n\nand then prose about WO-0004\n"
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body),
+                run=run, uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_inline_code_is_typography_not_quotation(self):
+        """The boundary that must not move. Backticks around an id are how
+        this repo writes identifiers in ordinary prose, genuine claims
+        included, so an inline-code citation is still a citation and a
+        body carrying one with no Closes line is still malformed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged",
+                env=self.env(tmp, body="Implements `WO-0004`."), run=run,
                 uncited="skip")
             self.assertEqual(problems, [
                 "V: PR body has no Closes #N link, so the work order it"
