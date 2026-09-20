@@ -11,7 +11,7 @@ Seed inbox — advisory only, never orientation state; grammar and read moments 
 - Reconcile skills' one-question-at-a-time interview rule with harnesses that batch questions natively (from: feature:seed-backlog)
 - Tighten backlog grammar to reject a mis-ordered `(claimed:)` marker absorbed into seed text (from: feature:seed-backlog)
 - Repo-wide lint read_text error policy (decode/OS errors) instead of per-checker handling (from: feature:seed-backlog)
-- The CODEOWNERS template hardcodes `* @mattbutlerengineering` and factory-init stamps it byte-for-byte, so in a repo where that handle is not a collaborator GitHub ignores the entry and the ADR-0033 code-owner gate goes inert — factory-init needs an owner-handle substitution (from: feature:software-factory)
+- The CODEOWNERS template hardcodes `* @mattbutlerengineering` and factory-init stamps it byte-for-byte, so in a repo where that handle is not a collaborator GitHub ignores the entry and the ADR-0033 code-owner gate goes inert — factory-init needs an owner-handle substitution (from: feature:software-factory) (claimed: maintenance:the-placeholder-that-is-a-real-handle)
 - Console backlog drag is finicky in a real browser — add click-to-move controls and verify one reorder lands from the page (from: feature:process-dashboard) (claimed: maintenance:console-drag-ergonomics)
 - Metrics trend history — persist per-month cost/WO and gate-wait so the console headline can say improving, not just current (from: feature:process-dashboard)
 - Issue sweeps should refuse to close a mirror whose breakdown row is unchecked — the #123 class at its source (from: feature:process-dashboard)
