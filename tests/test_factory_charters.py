@@ -287,5 +287,59 @@ class TestChartersIndex(unittest.TestCase):
                       CHARTERS_INDEX.read_text(encoding="utf-8"))
 
 
+class TestTheVocabularyIsTheWholeDomain(unittest.TestCase):
+    """The inverse direction, which nothing in this repo asserted.
+
+    Every other check here iterates ROLES and asks whether the files
+    honour it. None asks whether the files hold anything ROLES does not
+    name — `charter_files()` is itself built from ROLES, so even the
+    scan for a hard-coded model id has a ROLES-shaped domain. A stub at
+    `factory/agents/factory-<x>.md` for an `x` outside the vocabulary is
+    therefore dispatchable (the subagent registry keys on frontmatter
+    `name:`, not on ROLES) and checked by nothing: not for a `route:`
+    the factory config defines, not for an absent `model:`, not for a
+    charter to pair with, not for a row in the index.
+
+    That is the failure factory_roles exists to end — "adding a tenth
+    role touched all of them, and nothing failed when they disagreed."
+    The seam made the nine agree; it took a tenth to notice nothing
+    fails on one.
+    """
+
+    AGENTS_DIR = REPO_ROOT / "factory" / "agents"
+    CHARTERS_DIR = REPO_ROOT / "factory" / "charters"
+    # Both path shapes the index spells a role in, so a row surviving a
+    # role's removal is caught in whichever column still names it.
+    INDEX_ROLES = re.compile(
+        r"factory/agents/factory-([\w-]+)\.md"
+        r"|factory/charters/([\w-]+)/CHARTER\.md")
+
+    def test_every_agent_stub_on_disk_is_a_chartered_role(self):
+        for path in sorted(self.AGENTS_DIR.glob("*.md")):
+            with self.subTest(stub=path.name):
+                self.assertTrue(path.name.startswith("factory-"),
+                                f"{path.name} is not a factory-<role> stub")
+                self.assertIn(path.stem[len("factory-"):], ROLES,
+                              f"{path.name} is dispatchable but names no"
+                              " role in factory_roles.ROLES")
+
+    def test_every_charter_directory_on_disk_is_a_chartered_role(self):
+        for path in sorted(p for p in self.CHARTERS_DIR.iterdir()
+                           if p.is_dir()):
+            with self.subTest(charter=path.name):
+                self.assertIn(path.name, ROLES,
+                              f"factory/charters/{path.name}/ names no role"
+                              " in factory_roles.ROLES")
+
+    def test_the_index_names_no_role_the_vocabulary_dropped(self):
+        text = CHARTERS_INDEX.read_text(encoding="utf-8")
+        for stub_role, charter_role in self.INDEX_ROLES.findall(text):
+            role = stub_role or charter_role
+            with self.subTest(role=role):
+                self.assertIn(role, ROLES,
+                              f"CHARTERS.md still lists {role!r}, which"
+                              " factory_roles.ROLES does not name")
+
+
 if __name__ == "__main__":
     unittest.main()
