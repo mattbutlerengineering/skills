@@ -71,8 +71,13 @@ def make_clean_tree(root):
     """Seed the smallest tree on which every checker reports zero problems."""
     plugin_dir = root / ".claude-plugin"
     plugin_dir.mkdir(parents=True)
+    # check_plugin_skills holds the description to naming every utility
+    # skill, so the smallest clean tree carries them all.
     (plugin_dir / "plugin.json").write_text(json.dumps(
-        {"name": "t", "description": "t", "version": "0"}), encoding="utf-8")
+        {"name": "t", "version": "0",
+         "description": "t — utility skills ("
+                        + ", ".join(protocol.UTILITY_SKILLS) + ")"}),
+        encoding="utf-8")
 
     (root / "package.json").write_text(json.dumps(
         {"name": "t", "version": "0", "private": True,
@@ -586,6 +591,76 @@ class TestReadmeSkills(CheckerTreeTest):
         (self.root / "README.md").unlink()
         self.assertEqual(lint.check_readme_skills(self.root),
                          ["missing README.md"])
+
+
+class TestPluginSkills(CheckerTreeTest):
+    """The plugin description enumerates the utility skills, and it is the
+    string a user reads first when deciding whether to install. Nothing
+    held it to the taxonomy: check_manifest asserts only that the field is
+    non-empty, so three skills went unnamed on the install surface while
+    README.md and LEDGER.md were held to the full list. Same bar and same
+    shape as check_readme_skills, for the same reason."""
+
+    def rewrite_description(self, description):
+        path = self.root / ".claude-plugin" / "plugin.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["description"] = description
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_unnamed_utility_skill_is_reported(self):
+        named = [slug for slug in protocol.UTILITY_SKILLS if slug != "deepen"]
+        self.rewrite_description("utility skills (" + ", ".join(named) + ")")
+        self.assertEqual(
+            lint.check_plugin_skills(self.root),
+            ["plugin.json's description never names utility skill 'deepen'"])
+
+    def test_every_missing_skill_gets_its_own_problem(self):
+        self.rewrite_description("no skills here")
+        self.assertEqual(
+            lint.check_plugin_skills(self.root),
+            [f"plugin.json's description never names utility skill {slug!r}"
+             for slug in protocol.UTILITY_SKILLS])
+
+    def test_a_complete_description_is_clean(self):
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+
+    def test_only_utility_skills_are_required(self):
+        """Stage skills are named in the description as title-case prose
+        ("Idea", "UX Design"), never by slug, so holding the string to the
+        whole taxonomy would demand a restyling nobody asked for. The
+        parenthetical list is the part that claims to be exhaustive."""
+        self.rewrite_description(
+            "utility skills (" + ", ".join(protocol.UTILITY_SKILLS) + ")")
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+
+    def test_a_longer_slug_does_not_satisfy_the_shorter_one(self):
+        """`architecture-diagram` is a substring of
+        `interactive-architecture-diagram`. A plain `in` test calls the
+        list complete after the shorter name is dropped — silently
+        blessing exactly the drift this checker exists to catch."""
+        kept = [slug for slug in protocol.UTILITY_SKILLS
+                if slug != "architecture-diagram"]
+        self.rewrite_description("utility skills (" + ", ".join(kept) + ")")
+        self.assertEqual(
+            lint.check_plugin_skills(self.root),
+            ["plugin.json's description never names utility skill"
+             " 'architecture-diagram'"])
+
+    def test_a_missing_manifest_is_left_to_check_manifest(self):
+        """One broken file, one problem string. check_manifest already
+        reports a missing or unparseable manifest, so reporting it here
+        too would double it — and lint aggregates every checker, so the
+        run still fails."""
+        (self.root / ".claude-plugin" / "plugin.json").unlink()
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+        self.assertEqual(lint.check_manifest(self.root),
+                         ["missing .claude-plugin/plugin.json"])
+
+    def test_an_unparseable_manifest_is_left_to_check_manifest(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "{not json", encoding="utf-8")
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+        self.assertEqual(len(lint.check_manifest(self.root)), 1)
 
 
 class TestProtocolTables(CheckerTreeTest):
