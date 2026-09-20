@@ -57,8 +57,39 @@ def _parse_ts(iso):
     return datetime.fromisoformat(iso.replace("Z", "+00:00"))
 
 
+def _is_timestamp(value):
+    """The module's one answer to "is this a timestamp", asked once at
+    admission so nothing downstream has to ask it again.
+
+    Two clauses, and the second is the one that is easy to miss: the
+    value must parse, AND it must carry a UTC offset. "2026-08-01"
+    parses cleanly to a naive datetime, and subtracting a naive datetime
+    from an aware one raises TypeError — the same crash this guard
+    exists to prevent, one step further along. Parseability alone is not
+    the precondition waited_seconds needs.
+
+    The isinstance test is not decoration either: `value` is a field of
+    a decoded API response, and a non-string one would fail inside
+    _parse_ts with an AttributeError from .replace rather than a parse
+    error, which is a worse thing to depend on."""
+    if not isinstance(value, str):
+        return False
+    try:
+        return _parse_ts(value).tzinfo is not None
+    except ValueError:
+        return False
+
+
 def waited_seconds(start, end):
-    """Whole seconds between two GitHub timestamps."""
+    """Whole seconds between two GitHub timestamps.
+
+    Both are offset-aware ISO-8601 by precondition, established by
+    label_events, which admits no event whose timestamp fails either
+    clause of _is_timestamp.
+    So this raises only for a programming error at a future call site
+    that sources its timestamps somewhere else — do not add a handler
+    here, which would put a second owner on a policy the admission gate
+    already holds."""
     return int((_parse_ts(end) - _parse_ts(start)).total_seconds())
 
 
@@ -66,7 +97,11 @@ def label_events(timeline):
     """[(timestamp, 'labeled'|'unlabeled', label name)] from a GitHub
     issue timeline, in timeline (chronological) order. Anything that is
     not a well-formed label flip is not this module's business; an
-    unusable timeline is the fetcher's problem, never this walk's."""
+    unusable timeline is the fetcher's problem, never this walk's.
+
+    Well-formed means all three: a label flip, carrying a name, and
+    carrying a timestamp that reads as one. The third clause is what
+    lets every function downstream take ISO-8601 as given."""
     events = []
     for event in timeline:
         kind = event.get("event")
@@ -74,7 +109,7 @@ def label_events(timeline):
             continue
         name = (event.get("label") or {}).get("name")
         ts = event.get("created_at")
-        if name and ts:
+        if name and _is_timestamp(ts):
             events.append((ts, kind, name))
     return events
 
