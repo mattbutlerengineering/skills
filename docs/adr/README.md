@@ -82,4 +82,5 @@ the canonical vocabulary.
 | [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | accepted |
 | [0060](0060-one-cross-plane-drift-rule.md) | One cross-plane drift rule; the caller declares what absence means | accepted |
 | [0061](0061-a-carve-out-lives-at-the-definition-site.md) | A carve-out lives at the definition site and must pay rent | provisional |
+| [0062](0062-a-skill-that-states-repo-facts-runs-a-shipped-tool.md) | A skill that states repo facts runs a shipped tool | accepted |
 | [0064](0064-a-quoted-token-is-not-a-claim.md) | A quoted work-order token is not a claim | provisional |

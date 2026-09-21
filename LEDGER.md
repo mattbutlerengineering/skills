@@ -30,6 +30,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | doctor | draft | — | — |
 | interactive-architecture-diagram | draft | — | — |
 | animated-diagram | draft | — | — |
+| pipeline-board | draft | — | — |
 | architecture-diagram | draft | — | — |
 | work-queue | draft | — | — |
 | audit | draft | — | — |
