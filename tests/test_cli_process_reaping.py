@@ -15,6 +15,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -108,13 +109,33 @@ class TestProcessTreeReaping(unittest.TestCase):
         import shutil
         shutil.rmtree(self.dir, ignore_errors=True)
 
-    def assert_grandchild_reaped(self):
-        deadline = time.time() + 2
-        while time.time() < deadline and not self.pid_file.is_file():
-            time.sleep(0.05)
-        self.assertTrue(self.pid_file.is_file(),
-                        "fake claude never started")
-        pid = int(self.pid_file.read_text())
+    def watch_for_grandchild(self, budget):
+        """Starts polling for the grandchild's PID file NOW, in a
+        background thread — running WHILE run_single_query's own timeout
+        is still live, not only after it returns. Issue #446: a poll that
+        only starts after the call returns can never see a fake the
+        harness already killed before it got to write the file under
+        load (spawn latency exceeding the timeout beats the write), so
+        the search has to be looking during the window the file could
+        still appear in, not just after the group kill's grace period."""
+        found = {}
+
+        def watch():
+            deadline = time.time() + budget
+            while time.time() < deadline and not self.pid_file.is_file():
+                time.sleep(0.02)
+            if self.pid_file.is_file():
+                found["pid"] = int(self.pid_file.read_text())
+
+        thread = threading.Thread(target=watch, daemon=True)
+        thread.start()
+        return thread, found
+
+    def assert_grandchild_reaped(self, watcher):
+        thread, found = watcher
+        thread.join(timeout=2)
+        self.assertIn("pid", found, "fake claude never started")
+        pid = found["pid"]
         # brief grace for the kill to land
         deadline = time.time() + 2
         while time.time() < deadline and pid_alive(pid):
@@ -124,10 +145,15 @@ class TestProcessTreeReaping(unittest.TestCase):
 
     def test_grandchild_is_dead_after_timeout_return(self):
         self.install_fake(FAKE_CLAUDE)
-        fired = run_single_query("q", {"idea": "d"}, timeout=2,
+        # Warm the spawn path once, and give the fake more real room to
+        # fork+write its PID file before the harness's own timeout can
+        # kill the group out from under it (issue #446).
+        subprocess.run([sys.executable, "-c", "pass"], check=True)  # warm
+        watcher = self.watch_for_grandchild(budget=8)
+        fired = run_single_query("q", {"idea": "d"}, timeout=4,
                                  model=None, isolate=False)
         self.assertIsNone(fired)
-        self.assert_grandchild_reaped()
+        self.assert_grandchild_reaped(watcher)
 
     def test_grandchild_of_an_exited_leader_is_still_reaped(self):
         # Deterministic by control flow, not timing: the fake writes
@@ -135,10 +161,11 @@ class TestProcessTreeReaping(unittest.TestCase):
         # the reader can only leave its loop by observing the exit — the
         # cleanup therefore always runs against a dead leader.
         self.install_fake(FAKE_EXITING_CLAUDE)
+        watcher = self.watch_for_grandchild(budget=6)
         fired = run_single_query("q", {"idea": "d"}, timeout=2,
                                  model=None, isolate=False)
         self.assertIsNone(fired)
-        self.assert_grandchild_reaped()
+        self.assert_grandchild_reaped(watcher)
 
     def test_a_fully_exited_group_is_tolerated(self):
         # No grandchild: the reader's poll reaps the leader, leaving the

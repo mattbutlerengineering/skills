@@ -48,7 +48,7 @@ First and last shown; the twelve match `protocol.UTILITY_SKILLS` exactly.
 Check: run the new suite.
 
 ```
-Ran 6 tests in 0.064s
+Ran 7 tests in 0.064s
 
 OK
 ```
@@ -109,7 +109,7 @@ Check: the repo's three verification commands, plus the on-demand
 one-owner pre-pass.
 
 ```
-Ran 1350 tests in 16.629s
+Ran 1351 tests in 16.629s
 
 OK
 lint: 0 problem(s) across 24 skills
@@ -117,7 +117,7 @@ gates: 0 problem(s)
 selftest: ok
 ```
 
-**PASS.** 1350 tests, up from main's 1344 by the six added here. The
+**PASS.** 1351 tests, up from main's 1344 by the seven added here. The
 one-owner pre-pass still reports its nine pre-existing findings and names
 neither `lint.py` nor `check_plugin_skills`, so this change introduced no
 second owner of anything.
@@ -141,7 +141,7 @@ second owner of anything.
 after the regression experiment had been reverted:
 
 ```
-Ran 1350 tests in 16.629s
+Ran 1351 tests in 16.629s
 
 OK
 lint: 0 problem(s) across 24 skills

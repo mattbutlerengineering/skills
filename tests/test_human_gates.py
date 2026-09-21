@@ -17,7 +17,7 @@ import unittest
 
 from human_gates import (GATES, completed_stays, gate_labels,
                          gate_passages, gate_rejections, label_events,
-                         waited_seconds, waiting_since)
+                         refused_timestamps, waited_seconds, waiting_since)
 
 
 def labeled(ts, name):
@@ -140,6 +140,55 @@ class TestLabelEvents(unittest.TestCase):
         ])
         self.assertEqual(gate_passages(events),
                          [("prd", 86400, "2026-08-02T00:00:00Z")])
+
+
+class TestRefusedTimestamps(unittest.TestCase):
+    """#491: label_events' third clause drops a malformed timestamp
+    silently — no crash (#326), but no count either. refused_timestamps
+    answers the count a gd:/dashboard: problem string needs, over the
+    same raw timeline, without label_events itself growing a problems
+    channel."""
+
+    def test_a_malformed_timestamp_is_refused(self):
+        timeline = [
+            labeled("2026-08-01T00:00:00Z", "wo:draft"),
+            unlabeled("yesterday", "wo:draft"),
+        ]
+        self.assertEqual(refused_timestamps(timeline), 1)
+
+    def test_a_well_formed_timeline_refuses_nothing(self):
+        timeline = [
+            labeled("2026-08-01T00:00:00Z", "wo:draft"),
+            unlabeled("2026-08-02T00:00:00Z", "wo:draft"),
+        ]
+        self.assertEqual(refused_timestamps(timeline), 0)
+
+    def test_a_naive_timestamp_is_refused_by_the_same_second_clause(self):
+        # "2026-08-01" parses but carries no UTC offset — label_events
+        # drops it on _is_timestamp's second clause, so it counts here
+        # too, not just the unparseable case.
+        timeline = [labeled("2026-08-01", "wo:draft")]
+        self.assertEqual(refused_timestamps(timeline), 1)
+
+    def test_a_nameless_flip_is_not_a_refused_timestamp(self):
+        # Dropped by the first clause (no name), not the third — a
+        # different reason, so it must not inflate this count.
+        timeline = [{"event": "labeled", "label": {}}]
+        self.assertEqual(refused_timestamps(timeline), 0)
+
+    def test_a_non_flip_event_is_not_a_refused_timestamp(self):
+        timeline = [{"event": "commented",
+                     "created_at": "not-a-timestamp"}]
+        self.assertEqual(refused_timestamps(timeline), 0)
+
+    def test_the_refused_count_never_shows_up_in_label_events(self):
+        timeline = [
+            labeled("2026-08-01T00:00:00Z", "wo:draft"),
+            unlabeled("yesterday", "wo:draft"),
+        ]
+        self.assertEqual(label_events(timeline),
+                         [("2026-08-01T00:00:00Z", "labeled", "wo:draft")])
+        self.assertEqual(refused_timestamps(timeline), 1)
 
 
 class TestGatePassages(unittest.TestCase):

@@ -286,6 +286,46 @@ class TestChartersIndex(unittest.TestCase):
         self.assertIn("ADR-0033",
                       CHARTERS_INDEX.read_text(encoding="utf-8"))
 
+    # Only as far as this repo's roster has ever run — a tenth role needs
+    # a new word, and this test failing to find one is the signal.
+    _NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                     6: "six", 7: "seven", 8: "eight", 9: "nine",
+                     10: "ten"}
+
+    def test_prose_role_count_and_pipeline_chain_track_the_roster(self):
+        """CHARTERS.md states the roster twice more, in prose that no
+        table-row test above reaches: the opening sentence's count
+        ("The nine chartered roles...") and the read-the-table-off arrow
+        chain ("PM -> Architect -> ... with Support feeding the front of
+        the line and the Toolsmith maintaining the line itself"). A
+        tenth role would leave the word "nine" behind and could go
+        unnamed in the chain; both are pinned here, not against a
+        hand-typed number or list, but against len(ROLES) and ROLES
+        itself, so this test does not go stale the way the prose would."""
+        flat = " ".join(CHARTERS_INDEX.read_text(encoding="utf-8").split())
+        number_word = self._NUMBER_WORDS.get(len(ROLES))
+        self.assertIsNotNone(
+            number_word,
+            f"no word known for {len(ROLES)} roles — extend _NUMBER_WORDS")
+        self.assertIn(number_word, flat.lower(),
+                      f"CHARTERS.md's role-count prose does not say"
+                      f" {number_word!r} for {len(ROLES)} roles")
+        # The chain sentence only — the table above it already names
+        # every role in its own column, so checking the whole document
+        # would pass even if the chain itself dropped one.
+        anchor = "maintaining the line itself"
+        self.assertIn(anchor, flat,
+                      "the pipeline arrow-chain sentence is missing or"
+                      " reworded — update this test's anchor with it")
+        start = flat.index("Read the table left to right")
+        end = flat.index(anchor) + len(anchor)
+        chain = flat[start:end].lower()
+        for role in ROLES:
+            with self.subTest(role=role):
+                self.assertIn(role, chain,
+                              f"CHARTERS.md's pipeline chain never names"
+                              f" role {role!r}")
+
 
 class TestTheVocabularyIsTheWholeDomain(unittest.TestCase):
     """The inverse direction, which nothing in this repo asserted.

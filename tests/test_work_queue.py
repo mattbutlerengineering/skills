@@ -240,6 +240,20 @@ class TestReadyIssueNumbers(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("full 100-entry window", problems[0])
 
+    def test_the_full_window_message_names_a_reachable_remedy(self):
+        """gh_read's default note reads like a runtime option ("raise the
+        window or narrow the query"); neither is reachable here —
+        LIST_WINDOW is a module constant, and in a stamped repo this tool
+        is a mirrored payload copy. The message must say the remedy is a
+        code edit, not imply a flag (ADR-0066, issue #449)."""
+        runner = listing(*range(100))
+        _, problems = work_queue.ready_issue_numbers(runner)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("LIST_WINDOW", problems[0])
+        self.assertIn("not a runtime option", problems[0])
+        self.assertNotIn("raise the window or narrow the query",
+                         problems[0])
+
 
 class TestRowsAndSpend(unittest.TestCase):
     def test_rows_reads_the_row_grammar_off_a_real_breakdown(self):
@@ -370,7 +384,9 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         self.assertEqual(
             out.splitlines(),
             ["wq: gh issue list returned a full 100-entry window — older"
-             " entries are invisible; raise the window or narrow the query",
+             " ready orders are invisible; LIST_WINDOW is a code constant"
+             " in work_queue.py, not a runtime option, so the fix is"
+             " raising it there (or narrowing LIST_ARGS) and redeploying",
              "wq: 1 problem(s)"])
 
     def test_a_config_failure_ends_with_the_same_summary_line(self):
