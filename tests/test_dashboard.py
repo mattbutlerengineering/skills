@@ -293,6 +293,22 @@ class TestQueues(unittest.TestCase):
             "dashboard: gh api timeline for #7 failed: boom",
             "dashboard: gh api timeline for #8 failed: boom"])
 
+    def test_a_malformed_timestamp_is_refused_not_swallowed(self):
+        """#491: a labeled event whose created_at does not read as a
+        timestamp is silently dropped by label_events (#326), with no
+        signal that anything was refused. The fetch itself succeeded, so
+        read.problems says nothing — the refusal needs its own line."""
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            gh = queue_gh(timelines={
+                7: [labeled("not-a-timestamp", "wo:draft")]})
+            state = dashboard.gather(tmp, run=gh, git=git_remote(),
+                                     clock=clock)
+        self.assertEqual(state["problems"], [
+            "dashboard: timeline for #7 refused 1 malformed timestamp(s)"])
+        self.assertEqual([q["waited_s"] for q in state["queues"]],
+                         [None, None])
+
     def test_a_missing_remote_skips_the_dispatch_plane_with_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
             factory_repo(tmp)

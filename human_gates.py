@@ -7,8 +7,9 @@ queues live on the work orders' mirrored issues as `wo:` lifecycle
 labels (ADR-0032, ADR-0035): `wo:draft` waits at the PRD gate,
 `wo:prd-approved` at the blueprint gate, `wo:needs-review` at the merge
 gate. This module owns that vocabulary and the walk over it — the
-label-event stream, the completed-stay partition, and the current
-stay's start.
+label-event stream, the completed-stay partition, the current stay's
+start, and (refused_timestamps) how many events that stream silently
+dropped.
 
 Its callers are thin: gate_digest.py keeps the confirmed stays as
 latency rows, rejection_mining.py harvests the rest, dashboard.py ages
@@ -93,6 +94,31 @@ def waited_seconds(start, end):
     return int((_parse_ts(end) - _parse_ts(start)).total_seconds())
 
 
+def _admit(timeline):
+    """The one walk over a raw GitHub timeline: every event classed as a
+    label flip carrying a name, split into admitted (timestamp reads as
+    one) and refused (it does not). label_events keeps the admitted
+    list; refused_timestamps counts the refused half. One loop reading
+    the payload's `event`/`label`/`created_at` keys, so the two
+    questions cannot drift apart — the second clause of "well-formed" is
+    still asked exactly once, by `_is_timestamp`."""
+    admitted = []
+    refused = 0
+    for event in timeline:
+        kind = event.get("event")
+        if kind not in ("labeled", "unlabeled"):
+            continue
+        name = (event.get("label") or {}).get("name")
+        if not name:
+            continue
+        ts = event.get("created_at")
+        if _is_timestamp(ts):
+            admitted.append((ts, kind, name))
+        else:
+            refused += 1
+    return admitted, refused
+
+
 def label_events(timeline):
     """[(timestamp, 'labeled'|'unlabeled', label name)] from a GitHub
     issue timeline, in timeline (chronological) order. Anything that is
@@ -101,17 +127,26 @@ def label_events(timeline):
 
     Well-formed means all three: a label flip, carrying a name, and
     carrying a timestamp that reads as one. The third clause is what
-    lets every function downstream take ISO-8601 as given."""
-    events = []
-    for event in timeline:
-        kind = event.get("event")
-        if kind not in ("labeled", "unlabeled"):
-            continue
-        name = (event.get("label") or {}).get("name")
-        ts = event.get("created_at")
-        if name and _is_timestamp(ts):
-            events.append((ts, kind, name))
-    return events
+    lets every function downstream take ISO-8601 as given.
+
+    Silent on purpose: this module stays pure (ADR-0056) and returns no
+    problems for any of the three clauses. A caller that wants to know
+    how many events the third clause refused — the shape a `gd:`/
+    `dashboard:` problem string needs — calls refused_timestamps on the
+    same raw timeline."""
+    return _admit(timeline)[0]
+
+
+def refused_timestamps(timeline):
+    """How many otherwise-well-formed label flips (a label flip, name
+    present) label_events silently dropped from this raw timeline
+    because the third clause failed: created_at did not read as a
+    timestamp. Exists so gate_digest and dashboard — which already carry
+    a problems list past label_events' call — can report what vanished
+    without label_events itself growing a problems channel; a nameless
+    or non-flip event is not this count's business, same as it is not
+    label_events'."""
+    return _admit(timeline)[1]
 
 
 def completed_stays(events, gate):
