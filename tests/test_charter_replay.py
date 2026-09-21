@@ -25,6 +25,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -97,6 +98,16 @@ class TestGoldenCaseSet(unittest.TestCase):
                 self.assertTrue(
                     (ROOT / c["fixture"] / "work-order.md").is_file())
 
+    def test_every_case_carries_a_require(self):
+        """validate() now demands one (#451); this pins that the shipped
+        set already clears the bar, same as test_set_loads_without_problems
+        pins it for the whole set, not by coincidence."""
+        for c in golden_cases():
+            with self.subTest(case=c["id"]):
+                self.assertTrue(
+                    any(e.get("mode") == "require"
+                        for e in c["expectations"]))
+
 
 class TestValidation(unittest.TestCase):
     """Problem-string contract: label-prefixed strings, never exceptions."""
@@ -139,8 +150,11 @@ class TestValidation(unittest.TestCase):
         """Validation is against the full vocabulary (factory_roles.ROLES,
         ADR-0047) — the retired three-role literal rejected six real
         charters; a fixture may target any of the nine."""
-        _, problems = self.load({"version": 1,
-                                 "cases": [case(role="toolsmith")]})
+        _, problems = self.load({"version": 1, "cases": [case(
+            role="toolsmith",
+            expectations=[expectation(),
+                          expectation(exp_id="req", mode="require",
+                                      pattern="WO-9001")])]})
         self.assertEqual(problems, [])
 
     def test_missing_fixture_work_order(self):
@@ -166,7 +180,9 @@ class TestValidation(unittest.TestCase):
 
     def test_uncompilable_pattern(self):
         _, problems = self.load({"version": 1, "cases": [case(
-            expectations=[expectation(pattern="(unclosed")])]})
+            expectations=[expectation(pattern="(unclosed"),
+                          expectation(exp_id="req", mode="require",
+                                      pattern="WO-9001")])]})
         self.assertEqual(len(problems), 1)
         self.assertIn("expectation 'trap' has an invalid pattern",
                       problems[0])
@@ -177,6 +193,17 @@ class TestValidation(unittest.TestCase):
                                       pattern="WO-9001")])]})
         self.assertIn(f"{LABEL} case 'c1' has no forbid expectation "
                       "(a regression case with no trap checks nothing)",
+                      problems)
+
+    def test_case_with_no_required_behaviour_checks_nothing(self):
+        """#451: a forbid-only case is indistinguishable from a replay
+        that did nothing at all — a forbidden pattern cannot fire in an
+        empty haystack, so nothing here proves the run ever engaged with
+        the trap. Mirrors the forbid check above."""
+        _, problems = self.load({"version": 1, "cases": [case(
+            expectations=[expectation()])]})
+        self.assertIn(f"{LABEL} case 'c1' has no require expectation "
+                      "(a successful empty replay checks nothing)",
                       problems)
 
     def test_invalid_set_yields_no_cases(self):
@@ -347,14 +374,19 @@ class TestAVerdictNeedsEvidence(unittest.TestCase):
     as the charter behaving perfectly."""
 
     def forbid_only(self):
-        """The shape the validator explicitly invites: 'a regression case
-        with no trap checks nothing' requires a forbid and never a
-        require, so a case written to a pure Must-never clause has no
-        required expectation to fail on an empty transcript."""
+        """Before #451, the validator invited this shape: 'a regression
+        case with no trap checks nothing' required a forbid and never a
+        require, so a case written to a pure Must-never clause had no
+        required expectation to fail on an empty transcript. validate()
+        now rejects it too (TestValidation pins that), but score_case
+        must defend on its own — handed this case dict directly, with no
+        validator in between, it still has to fail an errored or empty
+        replay."""
         c = case(expectations=[expectation()])
-        self.assertEqual(
-            charter_replay.validate({"version": 1, "cases": [c]}, ROOT, LABEL),
-            [], "a forbid-only case must stay legal")
+        self.assertIn(
+            f"{LABEL} case 'c1' has no require expectation (a successful"
+            " empty replay checks nothing)",
+            charter_replay.validate({"version": 1, "cases": [c]}, ROOT, LABEL))
         return c
 
     def test_an_errored_replay_cannot_pass(self):
@@ -648,13 +680,34 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
             return path
         return created, record
 
-    def assert_grandchild_reaped(self):
-        deadline = time.time() + 2
-        while time.time() < deadline and not self.pid_file.is_file():
-            time.sleep(0.05)
-        self.assertTrue(self.pid_file.is_file(),
-                        "fake claude never started")
-        pid = int(self.pid_file.read_text())
+    def watch_for_grandchild(self, budget):
+        """Starts polling for the grandchild's PID file NOW, in a
+        background thread — running WHILE the timed claude_runner call
+        is still live, not only after it returns. Issue #446: a poll that
+        only starts after the call returns can never see a fake the
+        harness already killed before it got to write the file under
+        load (spawn latency exceeding the timeout beats the write), so
+        the search has to be looking during the window the file could
+        still appear in, not just after the group kill's grace period."""
+        found = {}
+
+        def watch():
+            deadline = time.time() + budget
+            while time.time() < deadline and not self.pid_file.is_file():
+                time.sleep(0.02)
+            if self.pid_file.is_file():
+                found["pid"] = int(self.pid_file.read_text())
+
+        thread = threading.Thread(target=watch, daemon=True)
+        thread.start()
+        return thread, found
+
+    def assert_grandchild_reaped(self, watcher):
+        thread, found = watcher
+        thread.join(timeout=2)
+        self.assertIn("pid", found, "fake claude never started")
+        pid = found["pid"]
+        # brief grace for the kill to land
         deadline = time.time() + 2
         while time.time() < deadline and pid_alive(pid):
             time.sleep(0.05)
@@ -686,6 +739,7 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
     def test_a_timeout_scores_as_an_honest_failure_and_reaps_the_group(self):
         self.install_fake(FAKE_SLEEPING_CLAUDE)
         created, record = self.scratch_recorder()
+        watcher = self.watch_for_grandchild(budget=6)
         with mock.patch.object(tempfile, "mkdtemp", record):
             transcript = charter_replay.claude_runner(self.root, "haiku",
                                                       2)(self.runner_case())
@@ -698,7 +752,7 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         self.assertFalse(result["pass"])
         self.assertEqual(result["failed"], ["runs-tests"])
         self.assertEqual([p for p in created if p.exists()], [])
-        self.assert_grandchild_reaped()
+        self.assert_grandchild_reaped(watcher)
 
     def test_a_dead_leaders_grandchild_is_still_reaped(self):
         # Deterministic by control flow, not timing: the fake writes
@@ -706,10 +760,11 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         # the reader can only leave its loop by observing the exit — the
         # cleanup therefore always runs against a dead leader.
         self.install_fake(FAKE_EXITING_CLAUDE)
+        watcher = self.watch_for_grandchild(budget=6)
         transcript = charter_replay.claude_runner(self.root, "haiku",
                                                   2)(self.runner_case())
         self.assertEqual(transcript, {"tool_calls": [], "text": ""})
-        self.assert_grandchild_reaped()
+        self.assert_grandchild_reaped(watcher)
 
     def forbid_only_runner_case(self):
         """The same runner case with its require dropped — the shape that
@@ -724,13 +779,14 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         the transcript it pins carries no error, so nothing downstream can
         tell that replay from a model that behaved."""
         self.install_fake(FAKE_EXITING_CLAUDE)
+        watcher = self.watch_for_grandchild(budget=6)
         transcript = charter_replay.claude_runner(self.root, "haiku",
                                                   2)(self.runner_case())
         self.assertNotIn("error", transcript)
         result = charter_replay.score_case(self.forbid_only_runner_case(),
                                            transcript)
         self.assertFalse(result["pass"])
-        self.assert_grandchild_reaped()
+        self.assert_grandchild_reaped(watcher)
 
     def test_a_missing_cli_cannot_score_a_pass(self):
         empty = Path(tempfile.mkdtemp(prefix="charter-nopath-"))

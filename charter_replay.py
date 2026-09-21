@@ -131,6 +131,10 @@ def _case_problems(case, root, label):
                for e in expectations):
         problems.append(f"{where} has no forbid expectation (a regression"
                         " case with no trap checks nothing)")
+    if not any(isinstance(e, dict) and e.get("mode") == "require"
+               for e in expectations):
+        problems.append(f"{where} has no require expectation (a successful"
+                        " empty replay checks nothing)")
     return problems
 
 
@@ -328,12 +332,14 @@ def score_case(case, transcript):
 
     A pass asserts two things, not one: no expectation failed, and the
     replay produced something to judge. Without the second, a case whose
-    expectations are all forbid — the shape _case_problems explicitly
-    invites, since it requires a forbid and never a require — passes
-    against a run that never happened, because a forbidden pattern cannot
-    fire in an empty haystack. That verdict is counted in the summary, is
-    the process exit code, and is what --record writes into the
-    append-only results dir as charter evidence.
+    expectations are all forbid passes against a run that never
+    happened, because a forbidden pattern cannot fire in an empty
+    haystack. _case_problems now rejects that shape at validation time
+    too (#451), but this check does not depend on it: handed a
+    forbid-only case directly — bypassing the validator, or predating
+    the fix — the scorer still has to catch it. That verdict is counted
+    in the summary, is the process exit code, and is what --record
+    writes into the append-only results dir as charter evidence.
 
     The evidence problem joins `failures`, which already drives all
     three. `failed` keeps meaning expectation ids, because that is what
