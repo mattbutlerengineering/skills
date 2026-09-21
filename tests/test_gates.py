@@ -1208,9 +1208,7 @@ class TestEvidenceHonesty(unittest.TestCase):
             "### Budget guard holds\n\n"
             "- Verdict: PASS\n\n"
             "## Appendix: branch log\n\n"
-            "```\n"
-            "git log --oneline -3\n"
-            "```\n"),
+            + gates.EVIDENCE_APPENDIX_FENCE),
             [(3, self.claim("Dispatch fires", "PASS")),
              (7, self.claim("Budget guard holds", "PASS"))])
 
@@ -1282,17 +1280,11 @@ class TestEvidenceHonesty(unittest.TestCase):
         template-shaped artifact with ZERO command output passed silently.
         A disclosure is what the author WRITES, never the slot label."""
         self.assertEqual(gates.evidence_problems(
-            "## Summary\n\n"
-            "6/6 criteria pass. Verdict: ship it.\n\n"
-            "## Criteria & evidence\n\n"
-            "### Test suite\n\n"
+            gates.EVIDENCE_FABRICATED_HEAD + "### Test suite\n\n"
             "- Check: ran the full suite; everything passed comfortably.\n\n"
             "### Dispatch\n\n"
             "- Check: watched the workflow run to completion.\n\n"
-            "## Failures\n\n"
-            "None.\n\n"
-            "## Not verified\n\n"
-            "Nothing; everything was checked.\n"),
+            + gates.EVIDENCE_FABRICATED_TAIL),
             [(1, self.BACKSTOP)])
 
     def test_renaming_the_lying_section_does_not_excuse_it(self):
@@ -1317,13 +1309,7 @@ class TestEvidenceHonesty(unittest.TestCase):
         single throwaway leaf (a fence holding one dot) laundered a roll-up
         making every real claim."""
         self.assertEqual(gates.evidence_problems(
-            "### Grammar parses\n\n"
-            "- Evidence:\n"
-            "  ```\n"
-            "  .\n"
-            "  ```\n"
-            "- Result: PASS\n\n"
-            "## Results\n\n"
+            gates.EVIDENCE_HONEST_LEAF + "## Results\n\n"
             "- Result: all 6 PRD criteria PASS\n"
             "- Verdict: ship it\n"),
             [(11, self.claim("Results", "all 6 PRD criteria PASS"))])
@@ -1475,12 +1461,7 @@ class TestEvidenceHonesty(unittest.TestCase):
         """BYPASS 4c. An unclosed fence absorbed the tail of the artifact in
         silence. It must be a problem, not a swallow."""
         self.assertEqual(gates.evidence_problems(
-            "### Suite is green\n\n"
-            "- Evidence:\n"
-            "  ```\n"
-            "  Ran 212 tests\n\n"
-            "  OK\n"
-            "- Result: PASS\n"),
+            gates.EVIDENCE_SUITE_GREEN_OPEN + "- Result: PASS\n"),
             [(4, "unclosed code fence — every criterion after it is"
                  " unread")])
 

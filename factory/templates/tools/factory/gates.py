@@ -1327,6 +1327,26 @@ def _pr_event_fixture(root, payload):
     return {"GITHUB_EVENT_PATH": str(event)}
 
 
+# Fragments H's own test suite (tests/test_gates.py TestEvidenceHonesty)
+# shares with these two file-tree fixtures — each one a literal ALSO used
+# directly as `gates.evidence_problems(...)` input by a unit-level
+# regression test for the exact bypass it demonstrates, per issue #440's
+# review round 2: H's fixtures were consolidated at the file-tree level
+# but these body fragments still had a second, hand-typed copy in the
+# pytest suite. Named for the bypass each one is the evidence body of;
+# each fixture below is built by concatenating the fragment with content
+# specific to that scenario, never a full second copy of it.
+EVIDENCE_FABRICATED_HEAD = ("## Summary\n\n6/6 criteria pass. Verdict: ship"
+                           " it.\n\n## Criteria & evidence\n\n")
+EVIDENCE_FABRICATED_TAIL = ("## Failures\n\nNone.\n\n## Not verified\n\n"
+                           "Nothing; everything was checked.\n")
+EVIDENCE_HONEST_LEAF = ("### Grammar parses\n\n- Evidence:\n  ```\n  .\n"
+                       "  ```\n- Result: PASS\n\n")
+EVIDENCE_APPENDIX_FENCE = "```\ngit log --oneline -3\n```\n"
+EVIDENCE_SUITE_GREEN_OPEN = ("### Suite is green\n\n- Evidence:\n  ```\n"
+                            "  Ran 212 tests\n\n  OK\n")
+
+
 def _evidence_honesty_defect_fixture(root):
     """Four artifacts H must catch: a bare unevidenced claim, a
     template-shaped roll-up with zero real output, a gamed artifact
@@ -1345,11 +1365,9 @@ def _evidence_honesty_defect_fixture(root):
     fabricated.mkdir(parents=True)
     (fabricated / "verification.md").write_text(
         "---\nstage: verify\n---\n# Verification\n\n"
-        "## Summary\n\n6/6 criteria pass. Verdict: ship it.\n\n"
-        "## Criteria & evidence\n\n### Test suite\n\n"
+        + EVIDENCE_FABRICATED_HEAD + "### Test suite\n\n"
         "- Check: ran the full suite; everything passed.\n\n"
-        "## Failures\n\nNone.\n\n"
-        "## Not verified\n\nNothing; everything was checked.\n",
+        + EVIDENCE_FABRICATED_TAIL,
         encoding="utf-8")
     # The gaming shapes H exists to stop: a lying roll-up RENAMED to dodge
     # the (now deleted) roll-up excuse, one throwaway evidenced leaf trying
@@ -1361,15 +1379,14 @@ def _evidence_honesty_defect_fixture(root):
     gamed.mkdir(parents=True)
     (gamed / "verification.md").write_text(
         "---\nstage: verify\n---\n# Verification\n\n"
-        "### Grammar parses\n\n- Evidence:\n  ```\n  .\n  ```\n"
-        "- Result: PASS\n\n"
-        "## Results\n\n- Result: all 6 criteria PASS\n\n"
+        + EVIDENCE_HONEST_LEAF
+        + "## Results\n\n- Result: all 6 criteria PASS\n\n"
         "### Budget guard holds\n\n- Verdict: PASS\n\n"
         "### Router picks the model\n\n- Result: PASS\n"
         "Note: not tested on Windows.\n\n"
         "### Retry path\n\n- Result: PASS\n"
         "- (the retry path itself was not run)\n\n"
-        "## Appendix\n\n```\ngit log --oneline -3\n```\n",
+        "## Appendix\n\n" + EVIDENCE_APPENDIX_FENCE,
         encoding="utf-8")
     # An unclosed fence must be reported, never silently absorb the tail.
     unclosed = root / "docs" / "features" / "unclosed"
@@ -1388,8 +1405,8 @@ def _evidence_honesty_clean_fixture(root):
     evidenced.mkdir(parents=True)
     (evidenced / "verification.md").write_text(
         "---\nstage: verify\n---\n# Verification\n\n"
-        "### Suite is green\n\n- Evidence:\n  ```\n  Ran 212 tests\n"
-        "\n  OK\n  ```\n- Result: PASS\n", encoding="utf-8")
+        + EVIDENCE_SUITE_GREEN_OPEN + "  ```\n- Result: PASS\n",
+        encoding="utf-8")
     disclosed = root / "docs" / "features" / "disclosed"
     disclosed.mkdir(parents=True)
     (disclosed / "verification.md").write_text(
