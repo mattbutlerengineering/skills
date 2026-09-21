@@ -2,10 +2,12 @@
 #
 # Mirrored VERBATIM into the template payload by `factory_init.py
 # update-manifest`, so a stamped product repo runs this same file — which is
-# why it names no commands of its own. Every step goes through a `make`
-# target, and the Makefile knows where that repo keeps its tools (root here,
-# tools/factory/ there). Editing this file means re-running update-manifest;
-# detector E fails the build otherwise.
+# why it names no repo tool of its own. Every tool invocation goes through a
+# `make` target, and the Makefile knows where that repo keeps its tools (root
+# here, tools/factory/ there); what is left is plumbing that does not move
+# between repos — gh, git, and the review job's exit-code capture. Editing
+# this file means re-running update-manifest; detector E fails the build
+# otherwise.
 name: validator
 
 on:
@@ -54,9 +56,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ inputs.pr }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" \
-            | python3 -c 'import json, sys; print(json.dumps({"action": "opened", "pull_request": json.load(sys.stdin)}))' \
-            > "${RUNNER_TEMP}/pr-event.json"
+          make pr-event PR="$PR" EVENT="${RUNNER_TEMP}/pr-event.json"
           echo "GITHUB_EVENT_PATH=${RUNNER_TEMP}/pr-event.json" >> "$GITHUB_ENV"
       - name: Detectors and tests
         run: make check
@@ -112,9 +112,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ inputs.pr }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" \
-            | python3 -c 'import json, sys; print(json.dumps({"action": "opened", "pull_request": json.load(sys.stdin)}))' \
-            > "${RUNNER_TEMP}/pr-event.json"
+          make pr-event PR="$PR" EVENT="${RUNNER_TEMP}/pr-event.json"
           echo "GITHUB_EVENT_PATH=${RUNNER_TEMP}/pr-event.json" >> "$GITHUB_ENV"
       - name: Collect findings
         run: |
@@ -161,9 +159,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ inputs.pr }}
         run: |
-          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" \
-            | python3 -c 'import json, sys; print(json.dumps({"action": "opened", "pull_request": json.load(sys.stdin)}))' \
-            > "${RUNNER_TEMP}/pr-event.json"
+          make pr-event PR="$PR" EVENT="${RUNNER_TEMP}/pr-event.json"
           echo "GITHUB_EVENT_PATH=${RUNNER_TEMP}/pr-event.json" >> "$GITHUB_ENV"
       - name: Flip the work order to wo:needs-review
         env:

@@ -496,10 +496,27 @@ class TestValidatorDispatchLockstep(unittest.TestCase):
         # The make steps read the PR through GITHUB_EVENT_PATH
         # (cli.read_event); the dispatch path must hand them the same
         # pull_request shape a webhook delivers, or detector B and the
-        # label flip silently skip.
+        # label flip silently skip. The shape is validator.py's, where a
+        # test can read it back through that parser
+        # (test_validator.TestPrEvent); what this pins is that the
+        # workflow still asks for it and still says where it lands.
         text = self.VALIDATOR.read_text(encoding="utf-8")
         self.assertIn("GITHUB_EVENT_PATH=", text)
-        self.assertIn('"action": "opened"', text)
+        self.assertIn("make pr-event", text)
+
+    def test_every_dispatch_shim_goes_through_the_one_target(self):
+        """One owner for the synthetic event, counted rather than
+        grepped. This used to be an assertIn for the payload literal
+        over the whole file — which passes while two of the three copies
+        are wrong, because one right copy anywhere satisfies it. The
+        counts are compared to each other, never to a hand-typed number:
+        a fourth job that needs the event is normal, a fourth job that
+        builds its own is the defect."""
+        text = self.VALIDATOR.read_text(encoding="utf-8")
+        shims = text.count("name: Synthesize the PR event payload")
+        self.assertGreaterEqual(shims, 2)
+        self.assertEqual(text.count("make pr-event"), shims)
+        self.assertNotIn("python3 -c", text)
 
     def test_review_and_label_jobs_admit_the_dispatch_path(self):
         text = self.VALIDATOR.read_text(encoding="utf-8")

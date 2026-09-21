@@ -1,17 +1,20 @@
 # The factory's canonical command set (PRD-0001; ADR-0033 gate 3).
 #
 # `make check` is the local gate and *exactly* what CI runs:
-# .github/workflows/validator.yml names no commands of its own, it calls
-# these targets — so local and CI cannot drift apart. The same workflow is
-# mirrored into the template payload, and factory/templates/Makefile is
-# GENERATED from this file by factory_init.py's product_makefile transform
-# (tools under tools/factory/, no plugin lint) — edit here, then run
-# `python3 factory_init.py update-manifest`, never edit the twin;
+# .github/workflows/validator.yml names no repo tool of its own, it calls
+# these targets — so local and CI cannot drift apart. What stays in the
+# workflow is the plumbing around them (gh, git, and the review job's
+# exit-code capture): not tools, and not path-dependent, so they have
+# nothing to gain from moving here. The same workflow is mirrored into
+# the template payload, and factory/templates/Makefile is GENERATED from
+# this file by factory_init.py's product_makefile transform (tools under
+# tools/factory/, no plugin lint) — edit here, then run `python3
+# factory_init.py update-manifest`, never edit the twin;
 # tests/test_gates.py::TestLockstep pins the command sets.
 
 .PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
 .PHONY: wo-record assembler find-pr cost-report gate-digest toolsmith-mine
-.PHONY: web-quality
+.PHONY: web-quality pr-event
 
 # Set by the validator workflow's review job; defaults keep `make review`
 # runnable by hand.
@@ -21,6 +24,14 @@ STATUS ?= 0
 # Set by the assembler workflow's claim step (the issue the label event
 # fired on); an empty ISSUE makes validator.py print usage and exit 2.
 ISSUE ?=
+
+# Set by the validator workflow's dispatch shim: the PR the run was
+# dispatched against, and where to leave the event payload it stands in
+# for. An empty or non-numeric PR makes validator.py print usage and
+# exit 2, so a mis-wired step fails the job instead of writing half a
+# payload for the next one to read.
+PR ?=
+EVENT ?= pr-event.json
 
 # Plain `=`, not `?=`: the pin must not be overridable from the environment,
 # or a repo's CI could change behavior when a new playwright ships. Bump
@@ -35,6 +46,12 @@ check:
 
 review:
 	python3 validator.py review --findings $(FINDINGS) --status $(STATUS)
+
+# The dispatch shim (WO-0030): the synthetic pull_request event the
+# PR-shaped legs read, for a run dispatched against a PR number because
+# GitHub sent no event of its own.
+pr-event:
+	python3 validator.py pr-event --pr $(PR) --out $(EVENT)
 
 wo-merged:
 	python3 validator.py lifecycle --label wo:merged --uncited skip
