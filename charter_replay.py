@@ -452,11 +452,8 @@ def recorded_runner(transcripts):
 
 
 def record(output, results_dir):
-    """Write a dated snapshot; eval_schema owns the append-only naming."""
-    results_dir.mkdir(parents=True, exist_ok=True)
-    path = eval_schema.results_path(results_dir, "charter", output["date"])
-    path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
-    return path
+    """Write a dated snapshot; eval_schema owns the recording."""
+    return eval_schema.write_snapshot(output, results_dir, "charter")
 
 
 def print_report(output):
