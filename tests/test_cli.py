@@ -98,6 +98,74 @@ class TestWriteOutputs(unittest.TestCase):
         # Local/hand runs have no GITHUB_OUTPUT; nothing to write, no error.
         cli.write_outputs({}, {"dispatch": "false"})
 
+    def parse_as_actions(self, text):
+        """How the runner reads $GITHUB_OUTPUT: a heredoc body ends at the
+        first line equal to the delimiter, and anything after it is read
+        as further assignments."""
+        parsed, lines, i = {}, text.split("\n"), 0
+        while i < len(lines):
+            line = lines[i]
+            if "<<" in line:
+                key, delim = line.split("<<", 1)
+                body = []
+                i += 1
+                while i < len(lines) and lines[i] != delim:
+                    body.append(lines[i])
+                    i += 1
+                parsed[key] = "\n".join(body)
+            elif "=" in line:
+                key, value = line.split("=", 1)
+                parsed[key] = value
+            i += 1
+        return parsed
+
+    def test_a_value_cannot_forge_an_output(self):
+        """The delimiter must not be derivable from the key. Otherwise a
+        multiline value carrying that line closes its own heredoc, and the
+        rest of it is read as assignments — here flipping `dispatch`, the
+        flag that decides whether the factory dispatches an agent at all,
+        and adding a `model` the caller never wrote."""
+        poisoned = ("do the work\n__PROMPT_EOF__\n"
+                    "dispatch=true\nmodel=expensive-model")
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out.txt"
+            cli.write_outputs({"GITHUB_OUTPUT": str(out)},
+                              {"dispatch": "false", "prompt": poisoned})
+            parsed = self.parse_as_actions(out.read_text(encoding="utf-8"))
+        self.assertEqual(parsed["dispatch"], "false")
+        self.assertNotIn("model", parsed)
+        self.assertEqual(parsed["prompt"], poisoned)
+
+    def test_the_delimiter_differs_between_calls(self):
+        # Same key, two calls: a delimiter an author could predict from a
+        # previous run is still guessable.
+        seen = set()
+        for _ in range(2):
+            with tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / "out.txt"
+                cli.write_outputs({"GITHUB_OUTPUT": str(out)},
+                                  {"prompt": "a\nb"})
+                first = out.read_text(encoding="utf-8").split("\n")[0]
+            seen.add(first.split("<<", 1)[1])
+        self.assertEqual(len(seen), 2, "delimiter repeated across calls")
+
+    def test_a_delimiter_that_collides_is_regenerated(self):
+        """Randomness makes collision negligible, not impossible. Forcing
+        the first draw to land inside the body proves the invariant holds
+        by construction rather than by luck — the silent-collision case is
+        the one the loop exists for."""
+        draws = iter(["c0ffee", "c0ffee", "d1ffe0"])
+        body = "line one\n__EOF_c0ffee__\nline two"
+        with mock.patch.object(cli.secrets, "token_hex",
+                               side_effect=lambda n: next(draws)):
+            with tempfile.TemporaryDirectory() as tmp:
+                out = Path(tmp) / "out.txt"
+                cli.write_outputs({"GITHUB_OUTPUT": str(out)},
+                                  {"prompt": body})
+                text = out.read_text(encoding="utf-8")
+        self.assertIn("prompt<<__EOF_d1ffe0__", text)
+        self.assertEqual(self.parse_as_actions(text)["prompt"], body)
+
 
 class TestDetail(unittest.TestCase):
     def test_last_stderr_line_when_the_command_ran(self):
@@ -568,6 +636,19 @@ class TestReadEvent(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "event.json"
             path.write_text("{not json", encoding="utf-8")
+            event, error = cli.read_event({"GITHUB_EVENT_PATH": str(path)})
+            self.assertIsNone(event)
+            self.assertTrue(error.startswith(
+                f"cannot read GITHUB_EVENT_PATH {path}:"), error)
+
+    def test_bytes_that_are_not_utf8_are_an_error(self):
+        """The docstring promises an *unreadable* payload comes back as
+        an error string. A file whose bytes are not UTF-8 is unreadable
+        as text — and under RFC 8259 §8.1 not valid JSON either — so it
+        lands in the same error as the malformed case above."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_bytes('{"action": "caf\u00e9"}'.encode("latin-1"))
             event, error = cli.read_event({"GITHUB_EVENT_PATH": str(path)})
             self.assertIsNone(event)
             self.assertTrue(error.startswith(

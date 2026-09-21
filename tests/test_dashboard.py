@@ -6,6 +6,7 @@ mixins. The gather half is pure disk — protocol orientation over the
 knowledge plane's run walk — so these tests exercise it through the
 public state dict and the exact problem strings.
 """
+import io
 import json
 import os
 import sys
@@ -84,6 +85,20 @@ class TestRepoSet(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
                 f"dashboard: {config} is not valid JSON:"))
+
+    def test_bytes_that_are_not_utf8_are_a_problem_string(self):
+        """repo_set's own docstring says only an unreadable or misshapen
+        config is a problem. A non-UTF-8 config is unreadable, so it
+        belongs in the `cannot read` arm — but UnicodeDecodeError
+        subclasses ValueError, so that OSError arm never saw it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config.json"
+            config.write_bytes('{"repos": ["caf\u00e9"]}'.encode("latin-1"))
+            paths, problems = dashboard.repo_set([], config)
+            self.assertEqual(paths, [])
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"dashboard: cannot read {config}:"), problems)
 
 
 class TestGather(unittest.TestCase):
@@ -1290,6 +1305,138 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         code, out = self.run_cli(["serve", "--port", "x"])
         self.assertEqual(code, 1)
         self.assertIn("dashboard: --port 'x' is not a number", out)
+
+
+class _FakeConn:
+    """One HTTP conversation over BytesIO instead of a socket.
+
+    BaseHTTPRequestHandler only needs makefile/sendall, and a real socket
+    would need a port and a thread. The request line and headers are
+    parsed by http.server itself, so the Content-Length under test
+    arrives exactly as it would off the wire — latin-1 decoded included.
+    """
+
+    def __init__(self, raw):
+        self._rfile = io.BytesIO(raw)
+        self.out = io.BytesIO()
+
+    def makefile(self, _mode, _bufsize=-1):
+        return self._rfile
+
+    def sendall(self, data):
+        self.out.write(data)
+
+    def close(self):
+        pass
+
+
+class _FakeServer:
+    server_name = "testserver"
+    server_port = 0
+
+
+def post_raw(raw, repos_fn=lambda: ([], [])):
+    """(status line, parsed JSON body or None) for one raw POST."""
+    handler = type("H", (dashboard._Handler,), {
+        "repos_fn": staticmethod(repos_fn),
+        "gather_fn": staticmethod(dashboard.gather)})
+    conn = _FakeConn(raw)
+    handler(conn, ("127.0.0.1", 5555), _FakeServer())
+    out = conn.out.getvalue()
+    if not out:
+        return None, None
+    head, _, body = out.partition(b"\r\n\r\n")
+    status = head.split(b"\r\n")[0].decode("latin-1")
+    try:
+        return status, json.loads(body.decode("utf-8"))
+    except ValueError:
+        return status, None
+
+
+def post_with_length(declared, path=b"/api/repos", body=b"{}"):
+    header = (b"Content-Length: " + declared + b"\r\n"
+              if declared is not None else b"")
+    return post_raw(b"POST " + path + b" HTTP/1.1\r\nHost: x\r\n"
+                    + header + b"\r\n" + body)
+
+
+class TestContentLength(unittest.TestCase):
+    """The one piece of logic in a handler documented as having none.
+
+    `int(self.headers.get("Content-Length") or 0)` had no guard and no
+    test: a malformed value raised out of do_POST, and the client got no
+    HTTP response at all — the connection simply closed.
+    """
+
+    def test_absent_is_an_empty_body_not_a_problem(self):
+        self.assertEqual(dashboard.content_length(None), (0, []))
+
+    def test_a_plain_count_parses(self):
+        self.assertEqual(dashboard.content_length("42"), (42, []))
+
+    def test_a_non_numeric_value_is_a_problem_string(self):
+        length, problems = dashboard.content_length("abc")
+        self.assertIsNone(length)
+        self.assertEqual(problems, [
+            "dashboard: Content-Length 'abc' is not a non-negative"
+            " integer"])
+
+    def test_a_negative_value_is_a_problem_string(self):
+        """rfile.read(-1) reads to EOF, which wedges the handler thread on
+        a real socket — so a negative length must never reach the read."""
+        length, problems = dashboard.content_length("-1")
+        self.assertIsNone(length)
+        self.assertEqual(problems, [
+            "dashboard: Content-Length '-1' is not a non-negative"
+            " integer"])
+
+    def test_a_digit_that_int_refuses_is_a_problem_string(self):
+        """str.isdigit() is true for '\u00b2' while int() refuses it, so
+        isdigit() alone is not a guard. U+00B2 is latin-1 byte 0xB2 and
+        http.client decodes headers as latin-1, so it is reachable
+        through an ordinary request rather than being a contrivance."""
+        length, problems = dashboard.content_length("\u00b2")
+        self.assertIsNone(length)
+        self.assertEqual(problems, [
+            "dashboard: Content-Length '\u00b2' is not a non-negative"
+            " integer"])
+
+
+class TestPostContentLengthOverHttp(unittest.TestCase):
+    """The same values driven through a real request cycle, because the
+    defect was that the exception escaped the handler, not that the
+    arithmetic was wrong."""
+
+    def test_a_valid_length_is_read_and_routed(self):
+        status, payload = post_with_length(b"2")
+        self.assertEqual(status, "HTTP/1.0 404 Not Found")
+        self.assertEqual(payload, {"problems": ["dashboard: no such path"]})
+
+    def test_an_absent_header_is_read_as_an_empty_body(self):
+        status, payload = post_with_length(None, body=b"")
+        self.assertEqual(status, "HTTP/1.0 404 Not Found")
+        self.assertEqual(payload, {"problems": ["dashboard: no such path"]})
+
+    def test_a_non_numeric_length_answers_400_instead_of_dropping(self):
+        status, payload = post_with_length(b"abc")
+        self.assertEqual(status, "HTTP/1.0 400 Bad Request")
+        self.assertEqual(payload, {"problems": [
+            "dashboard: Content-Length 'abc' is not a non-negative"
+            " integer"]})
+
+    def test_a_digit_that_int_refuses_answers_400(self):
+        status, payload = post_with_length("\u00b2".encode("latin-1"))
+        self.assertEqual(status, "HTTP/1.0 400 Bad Request")
+        self.assertEqual(payload, {"problems": [
+            "dashboard: Content-Length '\u00b2' is not a non-negative"
+            " integer"]})
+
+    def test_a_negative_length_answers_400_before_the_read(self):
+        status, payload = post_with_length(b"-1")
+        self.assertEqual(status, "HTTP/1.0 400 Bad Request")
+        self.assertEqual(payload, {"problems": [
+            "dashboard: Content-Length '-1' is not a non-negative"
+            " integer"]})
 
 
 if __name__ == "__main__":

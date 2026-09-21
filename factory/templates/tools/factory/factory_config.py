@@ -21,6 +21,7 @@ config:-prefixed problem strings; a field the config does not cover is a
 problem, never a silent default.
 """
 import json
+import math
 from pathlib import Path
 
 # The routing-band vocabulary (ADR-0034): the exact key set factory.json's
@@ -81,9 +82,33 @@ def load(root):
     except (OSError, UnicodeDecodeError) as err:
         return None, [f"config: cannot read {rel}: {err}"]
     try:
-        return json.loads(text), []
+        config = json.loads(text)
     except json.JSONDecodeError as err:
         return None, [f"config: {rel} is not valid JSON: {err}"]
+    shape = object_problems(config)
+    if shape:
+        return None, [f"config: {rel} {problem}" for problem in shape]
+    return config, []
+
+
+def object_problems(config):
+    """Unlocated shape problem when a parsed factory config is not a JSON
+    object, else [].
+
+    A JSON document's top level is legally an array, string, number,
+    boolean or null, and json.loads returns each of them untouched — but
+    every accessor below subscripts the value, and so does every key-set
+    check in detector F. This is the one rule that says a config must be
+    an object, living where the rest of "what a valid config is" already
+    lives, so the runtime reader and the CI gate cannot disagree about
+    it.
+
+    Callers prefix their own label and location, the same split as
+    cost_ledger.line_problems: `load` reports it as
+    `config: <path> is not a JSON object`, detector F as
+    `F: <path> is not a JSON object`.
+    """
+    return [] if isinstance(config, dict) else ["is not a JSON object"]
 
 
 def resolve_model(band, config):
@@ -101,10 +126,18 @@ def resolve_model(band, config):
 
 
 def _positive_number(value):
-    """True for a positive int/float that is not a bool — True is an int
-    in Python, and a bool where a dollar amount belongs is a typo."""
+    """True for a finite positive int/float that is not a bool — True is
+    an int in Python, and a bool where a dollar amount belongs is a typo.
+
+    Finite because an infinite amount is not a ceiling: `total >= inf` is
+    false at every spend, so an infinite monthly_cap_usd would leave
+    ADR-0034's breaker returning CONTINUE forever, and json.loads accepts
+    a bare Infinity literal straight from factory.json. cost_report.decide
+    already refuses a non-finite SPEND with that reasoning; the comparison
+    has two sides. NaN needs no clause — `nan > 0` is already false."""
     return (not isinstance(value, bool)
-            and isinstance(value, (int, float)) and value > 0)
+            and isinstance(value, (int, float))
+            and math.isfinite(value) and value > 0)
 
 
 def resolve_budget(size, config):

@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cli
 import validator
 
 # discover puts tests/ on sys.path; selective package-style runs need it
@@ -1189,6 +1190,14 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         self.assertEqual(
             self.run_cli(["review", "--status", "red"])[0], 2)
 
+    def test_a_digit_that_int_refuses_is_a_usage_error_not_a_traceback(self):
+        """str.isdigit() is true for '\u00b2' and int() refuses it, so the
+        guard above let a ValueError out of parse(). U+00B2 is latin-1
+        byte 0xB2 — ordinary bad input, not a contrivance. STATUS comes
+        from `make review STATUS=$FINDINGS_RC`, a shell variable."""
+        self.assertEqual(
+            self.run_cli(["review", "--status", "\u00b2"])[0], 2)
+
     def test_review_outside_an_event_exits_nonzero_with_the_problem(self):
         code, out = self.run_cli(["review", "--findings", "findings.txt"])
         self.assertEqual(code, 1)
@@ -1237,6 +1246,107 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                                   "--uncited", "skip"])
         self.assertEqual(code, 1)
         self.assertIn("V: no pull_request in the CI event payload", out)
+
+
+class TestPrEvent(unittest.TestCase):
+    """The dispatch shim (WO-0030). GitHub suppresses the pull_request
+    event for a PR the factory's own token opened, so the validator is
+    dispatched against a PR NUMBER — and the PR-shaped legs still need
+    an event to read. Three workflow steps used to build that payload by
+    hand, in three copies the one test over them could not tell apart
+    (an assertIn over the whole file passes while two of three are
+    wrong). The shape lives here now, and every test below reads it back
+    through cli.read_event — the parser its consumers actually use —
+    rather than through a second copy of the same literal."""
+
+    PR = json.dumps({"number": 7, "body": "Closes #108",
+                     "user": {"login": "someone"}})
+
+    def write(self, tmp, answers=None, failing=None, env=None, number="7"):
+        """(path, problems, gh) for one shim invocation."""
+        path = Path(tmp) / "pr-event.json"
+        run = FakeGh(answers={("api",): self.PR} if answers is None
+                     else answers, failing=failing)
+        problems = validator.write_pr_event(
+            number, str(path),
+            env={"GITHUB_REPOSITORY": "owner/repo"} if env is None else env,
+            run=run)
+        return path, problems, run
+
+    def test_the_payload_is_what_read_event_hands_its_consumers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, problems, _ = self.write(tmp)
+            self.assertEqual(problems, [])
+            event, error = cli.read_event({"GITHUB_EVENT_PATH": str(path)})
+            self.assertIsNone(error)
+            self.assertEqual(event["action"], "opened")
+            self.assertEqual(event["pull_request"]["body"], "Closes #108")
+
+    def test_the_pr_is_read_from_the_repository_the_environment_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, _, run = self.write(tmp, number="42")
+            self.assertEqual(run.calls,
+                             [["api", "repos/owner/repo/pulls/42"]])
+
+    def test_an_unset_repository_is_refused_before_gh_is_called(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, problems, run = self.write(tmp, env={})
+            self.assertEqual(problems, [
+                "V: GITHUB_REPOSITORY is unset — nothing names the PR to read"])
+            self.assertEqual(run.calls, [])
+            self.assertFalse(path.exists())
+
+    def test_a_failed_gh_leaves_no_event_behind(self):
+        # Half an event is worse than none: read_event would parse it
+        # and every consumer would see a PR with no body.
+        with tempfile.TemporaryDirectory() as tmp:
+            path, problems, _ = self.write(tmp, failing=["api"])
+            self.assertEqual(
+                problems, ["V: gh api pull #7 failed: boom"])
+            self.assertFalse(path.exists())
+
+    def test_a_response_that_is_not_a_pr_object_leaves_no_event_behind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, problems, _ = self.write(tmp, answers={("api",): "[]"})
+            self.assertEqual(problems, [
+                "V: gh api pull #7 returned list where dict was expected"])
+            self.assertFalse(path.exists())
+
+    def test_an_unwritable_destination_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "no-such-dir" / "pr-event.json"
+            run = FakeGh(answers={("api",): self.PR})
+            problems = validator.write_pr_event(
+                "7", str(path), env={"GITHUB_REPOSITORY": "owner/repo"},
+                run=run)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"V: cannot write the event payload to {path}: "), problems)
+
+    def test_the_cli_writes_the_event_for_a_dispatched_pr(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "pr-event.json"
+            run = FakeGh(answers={("api",): self.PR})
+            code = validator.main(
+                ["pr-event", "--pr", "7", "--out", str(path)],
+                env={"GITHUB_REPOSITORY": "owner/repo"}, run=run)
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
+                             {"action": "opened",
+                              "pull_request": json.loads(self.PR)})
+
+    def test_a_non_numeric_pr_is_usage_not_a_gh_call(self):
+        run = FakeGh()
+        self.assertEqual(
+            validator.main(["pr-event", "--pr", "x", "--out", "e.json"],
+                           env={}, run=run), 2)
+        self.assertEqual(run.calls, [])
+
+    def test_both_options_are_required(self):
+        for argv in (["pr-event", "--pr", "7"], ["pr-event", "--out", "e"],
+                     ["pr-event"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(validator.parse(argv), (None, None))
 
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ def check_manifest(root):
         return ["missing .claude-plugin/plugin.json"]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [f"plugin.json is not valid JSON: {err}"]
     shape = object_problems(data, "plugin.json")
     if shape:
@@ -58,12 +58,6 @@ def check_manifest(root):
     return [f"plugin.json missing field: {field}"
             for field in ("name", "description", "version")
             if not data.get(field)]
-
-
-# A skill slug as it appears in prose: lowercase, hyphens included, so
-# "interactive-architecture-diagram" is one token and never also counts
-# as "architecture-diagram".
-SLUG_TOKEN = re.compile(r"[a-z][a-z0-9-]*")
 
 
 def check_plugin_skills(root):
@@ -82,10 +76,13 @@ def check_plugin_skills(root):
     for. The parenthetical utility list is the part that claims to be
     exhaustive, so it is the part held to the taxonomy.
 
-    Whole slugs, never substrings: `architecture-diagram` occurs inside
-    `interactive-architecture-diagram`, so a plain `in` test would call
-    the list complete after the shorter name was dropped from it — a
-    blind spot for one of the very skills this checker exists to catch.
+    Whole slugs, never substrings — the same rule check_readme_skills
+    holds README.md to, and the same function: `architecture-diagram`
+    occurs inside `interactive-architecture-diagram`, so a plain `in`
+    test would call the list complete after the shorter name was dropped
+    from it — a blind spot for one of the very skills this checker
+    exists to catch. names_slug is the one owner of that rule; this
+    checker no longer retypes it.
 
     A missing or unparseable manifest returns nothing: check_manifest
     already reports both, and this checker reporting them too would give
@@ -100,9 +97,9 @@ def check_plugin_skills(root):
         return []
     if not isinstance(data, dict):
         return []
-    named = set(SLUG_TOKEN.findall(data.get("description") or ""))
+    text = data.get("description") or ""
     return [f"plugin.json's description never names utility skill {slug!r}"
-            for slug in UTILITY_SKILLS if slug not in named]
+            for slug in UTILITY_SKILLS if not names_slug(text, slug)]
 
 
 def check_pi_package(root):
@@ -115,7 +112,7 @@ def check_pi_package(root):
         return ["missing package.json"]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [f"package.json is not valid JSON: {err}"]
     shape = object_problems(data, "package.json")
     if shape:
@@ -630,7 +627,7 @@ def check_output_evals(root):
         label = f"evals/output/{path.name}"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as err:
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
             return [f"{label} is not valid JSON: {err}"]
         return (
             ([f"{label} stem is not a skill slug"]

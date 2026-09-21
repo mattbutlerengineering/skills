@@ -287,6 +287,20 @@ class TestCostLedger(unittest.TestCase):
                 "G: docs/features/demo/breakdown.md:2 merged work order"
                 " WO-0002 has no line in docs/factory/costs.jsonl"])
 
+    def test_a_row_no_other_accessor_can_parse_is_not_a_merged_order(self):
+        """G reaches row_done through a raw WO_TOKEN.search rather than
+        through a sibling accessor, so it is the one place the checked-row
+        grammar and the row grammar can disagree in production. A line
+        whose box has no trailing space is no row to work_queue, the
+        reconcile sweep or the dashboard; it must be no merged work order
+        here either, or G reports a WO id nothing else can see."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                row="- [x] WO-0001 one (PRD-0001)\n"
+                    "- [x]a WO-0002 no space after the box (PRD-0001)\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
     def test_pre_ledger_annotated_row_is_exempt_from_recording(self):
         """ADR-0043: a work order merged before the ledger was born carries
         (pre-ledger) on its breakdown row, and G's merged-row-must-be-
@@ -630,6 +644,28 @@ class TestScaffoldSync(unittest.TestCase):
             self.assertEqual(gates.check_scaffold_sync(Path(tmp)),
                              ["E: missing factory/manifest.json"])
 
+    def test_a_manifest_that_is_not_json_is_a_problem(self):
+        """Neither the malformed nor the undecodable manifest had a test
+        before this run: E returned early on one and raised on the
+        other, and nothing pinned either."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/manifest.json", "{nope")
+            problems = gates.check_scaffold_sync(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "E: factory/manifest.json is not valid JSON:"), problems)
+
+    def test_a_manifest_whose_bytes_are_not_utf8_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/manifest.json", "").write_bytes(
+                '{"files": {"a": "caf\u00e9"}}'.encode("latin-1"))
+            problems = gates.check_scaffold_sync(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "E: factory/manifest.json is not valid JSON:"), problems)
+
 
 class TestManifestFiles(unittest.TestCase):
     """The one statement of the manifest's walk-hash-key grammar: what
@@ -672,10 +708,14 @@ class TestManifestFiles(unittest.TestCase):
 
 
 class TestLabelWiring(unittest.TestCase):
-    """Detector J. The tools and the Makefile name 15 labels between them
-    and `.github/labels.json` is explicitly the stamped repo's to curate
-    (docs/setup.md), so pruning one is a sanctioned edit that used to pass
-    every offline gate and fail only when CI flipped the label."""
+    """Detector J. The tools and the Makefile between them name labels
+    the taxonomy must carry, and `.github/labels.json` is explicitly the
+    stamped repo's to curate (docs/setup.md), so pruning one is a
+    sanctioned edit that used to pass every offline gate and fail only
+    when CI flipped the label. Curated also means unpinned — detector E
+    checksums the payload copy, nothing checksums the installed one — so
+    J is the only offline reader of that file, and what it declines to
+    say about it nobody says."""
 
     REPO = Path(__file__).resolve().parents[1]
     MAKEFILE = ("wo-merged:\n\tpython3 validator.py lifecycle"
@@ -741,14 +781,52 @@ class TestLabelWiring(unittest.TestCase):
             tree.write("Makefile", self.MAKEFILE)
             self.assertEqual(gates.check_label_wiring(tree.root), [])
 
-    def test_an_unusable_taxonomy_is_silent_not_a_traceback(self):
+    def test_an_unreadable_taxonomy_is_reported_not_a_traceback(self):
+        """Two properties, and they used to be asserted as one.
+
+        "Not a traceback" is the requirement — a detector that raises on
+        a malformed file takes the whole gate down with it. "Silent" is
+        not, and bundling them meant a stamped repo could carry a
+        taxonomy nothing can read and be told `gates: 0 problem(s)`.
+        The loader already names every one of these; J forwards what it
+        says instead of computing it and dropping it."""
+        try:
+            json.loads("{not json")
+        except json.JSONDecodeError as err:
+            corrupt = f"L: .github/labels.json is not valid JSON: {err}"
+        unusable = {
+            "{not json": corrupt,
+            "[]": "L: .github/labels.json must be a non-empty JSON array"
+                  " of label entries",
+            "{}": "L: .github/labels.json must be a non-empty JSON array"
+                  " of label entries",
+            '[{"name": "wo:merged"}]':
+                "L: .github/labels.json[0] entry lacks color, description",
+        }
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
             tree.write("Makefile", self.MAKEFILE)
-            for text in ("[]", "{not json", '[{"name": "wo:merged"}]'):
-                tree.write(".github/labels.json", text)
-                self.assertEqual(gates.check_label_wiring(tree.root), [],
-                                 f"unusable taxonomy {text!r}")
+            for payload, expected in unusable.items():
+                tree.write(".github/labels.json", payload)
+                self.assertEqual(gates.check_label_wiring(tree.root),
+                                 [expected], f"unusable taxonomy {payload!r}")
+
+    def test_a_wiring_complete_taxonomy_can_still_be_malformed(self):
+        """The case with no wiring finding at all to lean on.
+
+        Every label the tools name is present, so J's own check is
+        genuinely satisfied — and the file still says one label twice,
+        which GitHub will resolve by taking the last one. Before this,
+        nothing offline had any objection to it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            entries = json.loads(self.taxonomy(named))
+            tree.write(".github/labels.json",
+                       json.dumps(entries + [dict(entries[0])]))
+            self.assertEqual(
+                gates.check_label_wiring(tree.root),
+                [f"L: .github/labels.json[{len(entries)}] duplicate label"
+                 f" name {entries[0]['name']}"])
 
     def test_one_malformed_entry_does_not_switch_the_detector_off(self):
         # bailing on any load problem would let a single bad entry silence
@@ -759,10 +837,15 @@ class TestLabelWiring(unittest.TestCase):
                 [name for name in named if name != "wo:merged"]))
             tree.write(".github/labels.json",
                        json.dumps(entries + [{"name": "wo:half-declared"}]))
+            found = gates.check_label_wiring(tree.root)
             self.assertIn("J: Makefile:2 names wo:merged but the taxonomy has"
                           " no such label (add it to .github/labels.json, or"
-                          " the flip fails when CI runs it)",
-                          gates.check_label_wiring(tree.root))
+                          " the flip fails when CI runs it)", found)
+            # and the bad entry itself is named, not merely survived: an
+            # operator told only "add wo:merged" would go looking for a
+            # label that is already there
+            self.assertIn(f"L: .github/labels.json[{len(entries)}] entry"
+                          " lacks color, description", found)
 
     def test_the_extraction_actually_finds_the_shipped_labels(self):
         """A detector whose extraction silently stops matching is
@@ -793,6 +876,23 @@ class TestLabelWiring(unittest.TestCase):
     def test_the_shipped_taxonomy_wires_the_shipped_tools(self):
         """The live pin, and the one that would have caught the gap."""
         self.assertEqual(gates.check_label_wiring(self.REPO), [])
+
+    def test_bytes_that_are_not_utf8_are_one_problem_not_a_crash(self):
+        """RFC 8259 §8.1 makes JSON a UTF-8 interchange format, so bytes
+        that will not decode are exactly as invalid as `not json` and
+        belong in the same problem. Detector F reads the same stamped
+        `.github/factory.json` a downstream owner hand-edits, so it must
+        report what factory_config.load reports rather than abort the
+        whole gate run and take the other eight detectors with it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", "").write_bytes(
+                '{"routing": {"mechanical": "caf\u00e9"}}'.encode("latin-1"))
+            problems = gates.check_config_shape(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "F: factory/templates/factory.json is not valid JSON:"),
+                problems)
 
 
 class TestConfigShape(unittest.TestCase):
@@ -832,6 +932,38 @@ class TestConfigShape(unittest.TestCase):
                 " implementation, architecture_review",
                 f"F: {rel} wip_cap must be a positive integer",
                 f"F: {rel} monthly_cap_usd must be a positive number"])
+
+    def test_a_config_that_is_not_an_object_is_one_problem(self):
+        """F parses the file itself rather than going through
+        factory_config.load, so it needs the same object rule the seam
+        applies — and it needs it BEFORE its key-set checks, which
+        subscript the parsed value. A non-object used to kill the whole
+        gate with an AttributeError: `python3 gates.py` is a CI command,
+        and in a stamped repo `.github/factory.json` is the repo's own
+        curated file, so the gate that exists to police the config's
+        shape was the thing a malformed config took down."""
+        for text in ("null", "[]", '"factory"', "5", "true"):
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                tree.write("factory/templates/factory.json", text)
+                self.assertEqual(gates.check_config_shape(tree.root), [
+                    "F: factory/templates/factory.json is not a JSON"
+                    " object"])
+
+    def test_a_non_object_home_does_not_mask_the_other_home(self):
+        """F checks every candidate home, not the first hit. A broken
+        payload copy must not stop the installed copy being reported —
+        the skip is per-file, the same shape as the invalid-JSON
+        continue beside it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", "null")
+            tree.write(".github/factory.json", json.dumps(
+                dict(CONFIG, wip_cap=0)))
+            self.assertEqual(gates.check_config_shape(tree.root), [
+                "F: factory/templates/factory.json is not a JSON object",
+                "F: .github/factory.json wip_cap must be a positive"
+                " integer"])
 
 
 class TestPrTraceability(unittest.TestCase):

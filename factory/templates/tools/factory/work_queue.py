@@ -140,6 +140,17 @@ def plan_batch(found, ready_issues, config, spent_usd):
     ordered, problems = priced(candidates, config)
     cap, cap_problems = factory_config.resolve_cap(config)
     problems += cap_problems
+    if cap is None:
+        # Fail closed, the rule priced already applies one function up: a
+        # cap that does not resolve is an UNKNOWN ceiling, not an absent
+        # one, and skipping the comparison plans a batch against it. Same
+        # answer the sibling tools give the same config — cost_report
+        # PAUSEs, budget_guard hard-stops. resolve_cap reports None only
+        # with a problem, so the cause is already in `problems`; this
+        # line is the decision, the way the wip_cap refusal below is.
+        return [], sorted(deferred), problems + [
+            "wq: no monthly cap could be resolved — refusing to plan a"
+            " batch it cannot price"]
     wip = config.get("wip_cap")
     if not isinstance(wip, int) or isinstance(wip, bool) or wip < 1:
         return [], sorted(deferred), problems + [
@@ -150,7 +161,7 @@ def plan_batch(found, ready_issues, config, spent_usd):
         if len(batch) >= wip:
             deferred.append(f"{row['wo']}: over the wip_cap of {wip}"
                             " this round")
-        elif cap is not None and spent_usd + projected + row["budget"] > cap:
+        elif spent_usd + projected + row["budget"] > cap:
             deferred.append(
                 f"{row['wo']}: would put the month over its ${cap:.2f} cap"
                 f" (${spent_usd:.2f} spent, ${projected:.2f} already"

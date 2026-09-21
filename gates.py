@@ -24,10 +24,12 @@ ai-tooling suite where the rule is the same idea):
   F CONFIG-SHAPE   — factory config parses and every field is a valid
                      token (budgets, routing, caps)
   J LABEL-WIRING   — every label the tools and the Makefile's lifecycle
-                     targets name exists in the label taxonomy; the
-                     taxonomy is the repo's to curate, and pruning a
-                     label the machinery reads would otherwise fail only
-                     when CI flips it, at dispatch or merge time
+                     targets name exists in the label taxonomy, and the
+                     taxonomy file itself is readable; the taxonomy is
+                     the repo's to curate (so nothing checksums it), and
+                     a pruned label or an unparseable file would
+                     otherwise surface only when CI flips a label, at
+                     dispatch or merge time
   G COST-LEDGER    — docs/factory/costs.jsonl lines carry the ADR-0034
                      fields and every merged (checked) work-order row has
                      one; an absent ledger is silent (no runs recorded yet)
@@ -745,7 +747,7 @@ def check_scaffold_sync(root):
         return ["E: missing factory/manifest.json"]
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [f"E: factory/manifest.json is not valid JSON: {err}"]
     files = manifest.get("files")
     if not isinstance(files, dict) or not files:
@@ -834,8 +836,13 @@ def check_label_wiring(root):
     expected: wo:blocked is human-applied by design (ADR-0045) and the
     approval labels are the gates' to set, so "unused" is never a finding.
 
-    Silent when there is no taxonomy to check — an unstamped repo has
-    nothing to be wrong about.
+    Silent when there is no taxonomy FILE to check — an unstamped repo
+    has nothing to be wrong about. A file that exists and cannot be read
+    is the opposite case, and it is reported: J is the only reader of
+    the installed .github/labels.json that runs BEFORE the dispatch
+    plane, and the stamped repo curates that file, so nothing checksums
+    it either (detector E pins the payload copy, not this one). What J
+    declines to say about it, nobody says until a label flip fails.
     """
     # Lazily, for the same reason the declarers are: label_sync.py is a
     # stamped sibling, and importing it at module scope would make a
@@ -844,23 +851,33 @@ def check_label_wiring(root):
         label_sync = importlib.import_module("label_sync")
     except ImportError:
         return []
-    # Per-entry shape problems are label_sync's to report, and J checks
-    # against whatever parsed rather than bailing on them: bailing would
-    # let one malformed entry switch this detector off silently, which is
-    # the failure mode it exists to close. Nothing parsed at all means
-    # either no taxonomy (unstamped) or a wholly unusable one — neither is
-    # a wiring finding. Resolution of WHERE the taxonomy lives stays
-    # label_sync's, so the gate and the sync tool cannot read different
-    # files.
-    taxonomy, _ = label_sync.load_labels(root)
-    if not taxonomy:
+    # Resolution of WHERE the taxonomy lives stays label_sync's, so the
+    # gate and the sync tool cannot read different files — including
+    # when the gate only wants to know whether there is one.
+    if label_sync.taxonomy_path(root) is None:
         return []
+    # The loader's problems travel with their own L: prefix, forwarded as
+    # they arrive: a broken taxonomy is that detector's finding, not
+    # ours, and sweeps.py forwards them the same way from the same seam.
+    # (Forwarding the strings is not wiring detector L into CHECKERS —
+    # load_labels reads a file, and L's network half stays out of the
+    # offline gate.)
+    taxonomy, problems = label_sync.load_labels(root)
+    # Nothing parsed at all is not a wiring finding: reporting every
+    # declared label as missing from a file that failed to parse buries
+    # the one line that says why. J checks the wiring against whatever
+    # DID parse rather than bailing on the problems, because bailing
+    # would let one malformed entry switch this detector off silently,
+    # which is the failure mode it exists to close.
+    if not taxonomy:
+        return problems
     known = {label["name"] for label in taxonomy}
-    return [f"J: {site} names {label} but the taxonomy has no such label"
-            " (add it to .github/labels.json, or the flip fails when CI"
-            " runs it)"
-            for label, sites in sorted(declared_labels(root).items())
-            if label not in known for site in sites]
+    return problems + [
+        f"J: {site} names {label} but the taxonomy has no such label"
+        " (add it to .github/labels.json, or the flip fails when CI"
+        " runs it)"
+        for label, sites in sorted(declared_labels(root).items())
+        if label not in known for site in sites]
 
 
 def check_config_shape(root):
@@ -883,8 +900,15 @@ def check_config_shape(root):
         rel = path.relative_to(root)
         try:
             config = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as err:
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
             problems.append(f"F: {rel} is not valid JSON: {err}")
+            continue
+        # a config that is not an object has no fields to check, and the
+        # key-set checks below subscript it — the seam owns the rule so
+        # the gate and the runtime reader cannot disagree about it
+        shape = factory_config.object_problems(config)
+        if shape:
+            problems += [f"F: {rel} {problem}" for problem in shape]
             continue
         # key-set completeness is this gate's whole-shape concern; the
         # field-VALUE grammar is factory_config.config_problems — one
@@ -1270,7 +1294,16 @@ def selftest():
             encoding="utf-8")
         expect("J", check_label_wiring(root), "Makefile:2 names wo:merged",
                "human_gates.py names wo:merged", "no such label")
+        # A taxonomy nobody can read is the same finding one step
+        # earlier, and it is the case with no wiring evidence to fall
+        # back on — the loader's line is the only thing that gets said.
+        labels.write_text("{ not json", encoding="utf-8")
+        expect("J unreadable", check_label_wiring(root),
+               ".github/labels.json is not valid JSON")
         labels.write_text(taxonomy(wired), encoding="utf-8")
+        # the restore the later fixtures depend on, now asserted rather
+        # than assumed
+        expect_clean("J restored", check_label_wiring(root))
 
         (factory / "factory.json").write_text(json.dumps(
             {"budgets_usd": {"S": 5, "M": 15},

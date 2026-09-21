@@ -88,6 +88,48 @@ class TestLoad(unittest.TestCase):
             self.assertTrue(problems[0].startswith(
                 "config: .github/factory.json is not valid JSON:"), problems)
 
+    def test_a_config_that_is_not_an_object_is_a_problem(self):
+        """A JSON document's top level is legally an array, string,
+        number, boolean or null. json.loads returns each untouched, and
+        the seam's contract is (value, problems) — so a non-object must
+        arrive as a problem, never as a `config` the accessors then
+        subscript. Same fail-closed direction as the invalid-JSON case
+        above, one step later in the same read."""
+        for text in ("null", "[]", '"factory"', "5", "true"):
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as tmp:
+                FixtureTree(tmp).write(".github/factory.json", text)
+                self.assertEqual(factory_config.load(tmp), (None, [
+                    "config: .github/factory.json is not a JSON object"]))
+
+    def test_a_non_object_config_never_reaches_an_accessor(self):
+        """The contract the guard exists for: every accessor may assume
+        `load` handed it an object. Before the guard, `null` came back as
+        (None, []) — no problem at all — and the first accessor to touch
+        it raised AttributeError inside a gate."""
+        with tempfile.TemporaryDirectory() as tmp:
+            FixtureTree(tmp).write(".github/factory.json", "null")
+            config, problems = factory_config.load(tmp)
+            self.assertIsNone(config)
+            self.assertTrue(problems)
+
+
+class TestObjectProblems(unittest.TestCase):
+    """The object rule, owned beside the field grammar and shared by both
+    readers: `load` reports it as `config: <path> ...` and detector F as
+    `F: <path> ...`, so the runtime and the gate cannot disagree about
+    what a config even is. Unlocated suffixes, the same caller-prefixes-
+    its-own-label split as cost_ledger.line_problems."""
+
+    def test_an_object_is_clean(self):
+        self.assertEqual(factory_config.object_problems({}), [])
+        self.assertEqual(factory_config.object_problems(CONFIG), [])
+
+    def test_every_other_json_top_level_is_one_problem(self):
+        for value in (None, [], ["a"], "factory", 5, 0.5, True, False):
+            with self.subTest(value=value):
+                self.assertEqual(factory_config.object_problems(value),
+                                 ["is not a JSON object"])
+
 
     def test_a_config_that_is_not_utf8_is_a_problem(self):
         # Valid JSON, invalid UTF-8 — what an editor saving latin-1
@@ -102,6 +144,46 @@ class TestLoad(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
                 "config: cannot read .github/factory.json:"), problems)
+
+
+class TestInfiniteAmountsAreRefused(unittest.TestCase):
+    """An infinite cap cannot be crossed, so it is not a cap: `total >=
+    inf` is false at every spend and the ADR-0034 breaker returns
+    CONTINUE forever. json.loads accepts a bare Infinity literal, so
+    this arrives straight from factory.json. cost_report.decide already
+    refuses a non-finite SPEND for exactly this reason; the comparison
+    has two sides."""
+
+    def test_an_infinite_cap_does_not_resolve(self):
+        cap, problems = factory_config.resolve_cap(
+            {"monthly_cap_usd": float("inf")})
+        self.assertIsNone(cap)
+        self.assertEqual(problems, [
+            "config: factory.json names no positive monthly_cap_usd"])
+
+    def test_an_infinite_budget_does_not_resolve(self):
+        budget, problems = factory_config.resolve_budget(
+            "L", {"budgets_usd": {"S": 1, "M": 2, "L": float("inf")}})
+        self.assertIsNone(budget)
+        self.assertEqual(len(problems), 1)
+
+    def test_config_problems_reports_infinite_amounts(self):
+        # config_problems is what detector F prints, so an infinite
+        # amount must not pass CI either.
+        problems = factory_config.config_problems({
+            "monthly_cap_usd": float("inf"),
+            "budgets_usd": {"S": 1, "M": 2, "L": float("inf")},
+            "routing": {band: "m" for band in factory_config.BANDS},
+            "wip_cap": 2,
+        })
+        self.assertTrue(problems, "an infinite amount passed detector F")
+
+    def test_finite_positives_are_unaffected(self):
+        self.assertEqual(
+            factory_config.resolve_cap({"monthly_cap_usd": 100}), (100, []))
+        self.assertEqual(
+            factory_config.resolve_budget(
+                "M", {"budgets_usd": {"S": 1, "M": 2.5, "L": 9}}), (2.5, []))
 
 
 class TestConfigProblems(unittest.TestCase):

@@ -33,6 +33,7 @@ strings; the CLI prints them and exits nonzero.
 """
 import os
 import sys
+from collections import namedtuple
 from datetime import datetime, timezone
 
 import cost_ledger
@@ -49,6 +50,22 @@ from cli import gh_runner
 DIGEST_MARKER = "<!-- factory-gate-digest -->"
 DIGEST_TITLE = "Factory gate queue"
 
+# One waiting item. `aged` is False only when the issue's timeline could
+# not be read — a fact the renderer READS rather than infers from a
+# `waited` of None, because the other cause of a missing age (a history
+# read fine that held no arrival at this gate) is not a failure and must
+# not wear a failure's mark. Same reason cli.GhResult names `truncated`
+# instead of leaving it to be deduced from a problem on a usable value.
+Item = namedtuple("Item", ("number", "title", "waited", "aged"))
+
+# What a full window costs the READER. cli.gh_read's problem string
+# already states the mechanism — the window, its size, raise-or-narrow —
+# to the workflow log; this is the same fact told to the person the
+# digest is actually for, in terms of what they are looking at.
+TRUNCATED_NOTE = ("Coverage: the issue listing came back at its full"
+                  " window, so issues outside it are not represented"
+                  " here — an empty section may mean unseen, not none.")
+
 
 def _format_wait(seconds):
     days, rest = divmod(seconds, 86400)
@@ -60,24 +77,40 @@ def _format_wait(seconds):
     return "<1h"
 
 
-def compose_digest(queues, as_of):
+def compose_digest(queues, as_of, listing_truncated):
     """The digest issue body: marker first (how the next run finds it),
     then one section per gate listing every waiting item and how long it
     has waited. Deterministic text, same discipline as
     cost_report.compose_report. queues is [(heading, queue label,
-    [(issue number, title, waited seconds or None)])] — the mirrored
-    issue's title already leads with its WO token, so the line never
-    repeats it."""
+    [Item])] — the mirrored issue's title already leads with its WO
+    token, so the line never repeats it.
+
+    This body is the tool's whole product, so it states its own coverage
+    rather than leaving that to the workflow log nobody opens. The two
+    ways coverage can be short render in two places and neither repeats
+    the other: a truncated listing is a property of the whole digest and
+    gets one sentence under the sections it qualifies; an unreadable
+    timeline is a property of one item and gets marked on that item's
+    line, because a footer counting unreadable timelines cannot say
+    which line to distrust.
+
+    `listing_truncated` is required on purpose. A default would let a
+    caller omit the fact silently, which is the defect this parameter
+    exists to prevent."""
     lines = [DIGEST_MARKER, f"# {DIGEST_TITLE} — {as_of}"]
     for heading, queue_label, items in queues:
         lines += ["", f"## {heading} ({queue_label})"]
         if not items:
             lines.append("- (empty)")
-        for number, title, waited in items:
-            item = f"- #{number} {title}"
-            if waited is not None:
-                item += f" — waiting {_format_wait(waited)}"
-            lines.append(item)
+        for entry in items:
+            line = f"- #{entry.number} {entry.title}"
+            if entry.waited is not None:
+                line += f" — waiting {_format_wait(entry.waited)}"
+            elif not entry.aged:
+                line += " — age unknown (timeline unreadable)"
+            lines.append(line)
+    if listing_truncated:
+        lines += ["", TRUNCATED_NOTE]
     lines += ["", "Updated daily by the gate digest (WO-0017); a passage"
               " lands a gate-latency row in "
               f"{cost_ledger.COST_LEDGER} (ADR-0041)."]
@@ -135,7 +168,9 @@ def _queues(mirror, open_issues, events_by_issue, now):
     """[(heading, queue label, items)] for compose_digest: the open
     mirrored issues currently carrying each gate's queue label, oldest
     issue first, aged from the current stay's labeled event when the
-    timeline yielded one."""
+    timeline yielded one — and carrying whether the timeline could be
+    read at all, which is the difference between an unknown age and an
+    unreadable one."""
     queues = []
     for _, queue_label, _, heading in GATES:
         items = []
@@ -144,11 +179,16 @@ def _queues(mirror, open_issues, events_by_issue, now):
             if number not in mirror or \
                     queue_label not in label_names(entry):
                 continue
-            since = waiting_since(events_by_issue.get(number, []),
-                                  queue_label)
+            # absent means _timelines could not read this issue's
+            # history; present-and-empty means it read one that held no
+            # arrival at this gate. The old .get(number, []) default
+            # collapsed the two, and the digest inherited the collapse.
+            events = events_by_issue.get(number)
+            since = waiting_since(events or [], queue_label)
             waited = (waited_seconds(since, now.isoformat())
                       if since else None)
-            items.append((number, entry.get("title") or "", waited))
+            items.append(Item(number, entry.get("title") or "", waited,
+                              events is not None))
         queues.append((heading, queue_label, items))
     return queues
 
@@ -207,7 +247,8 @@ def run_daily(root, run=gh_runner, clock=None):
     open_issues = [entry for entry in listing
                    if (entry.get("state") or "").upper() == "OPEN"]
     queues = _queues(mirror, open_issues, events_by_issue, now)
-    body = compose_digest(queues, now.date().isoformat())
+    body = compose_digest(queues, now.date().isoformat(),
+                          read.truncated)
     digest = next((entry["number"] for entry in
                    sorted(open_issues, key=lambda e: e["number"])
                    if (entry.get("body") or "").startswith(DIGEST_MARKER)),
