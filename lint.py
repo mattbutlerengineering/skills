@@ -510,6 +510,93 @@ def check_readme_skills(root):
             if not names_slug(text, slug)]
 
 
+# The README's `## Stages` heading through the next `## ` heading (or end
+# of file): the table of stage skills, plus the prose immediately below it
+# that introduces each utility skill one by one, by slug (ADR-0023 —
+# utility skills have no table row of their own, so that paragraph is
+# their only mention). Together they are the one part of README.md whose
+# entire job is enumerating what the plugin currently ships — the same
+# role LEDGER.md's table plays for check_ledger_no_orphans, just split
+# across a table and the paragraph the same lead-in sentence introduces.
+STAGES_HEADING = "## Stages"
+STAGES_SECTION = re.compile(
+    rf"^{re.escape(STAGES_HEADING)}\n(.*?)(?=^## |\Z)", re.M | re.S)
+
+# A slug-shaped backtick token — same character class names_slug and
+# extra_skills use. A filename (`idea.md`) or a doc path
+# (`docs/pipeline-protocol.md`) has a dot or a slash in it and never
+# matches, so those are filtered out for free.
+SLUG_TOKEN = re.compile(r"`([a-z0-9][a-z0-9-]*)`")
+
+
+def readme_stage_mentions(text):
+    """Every slug-shaped backtick token inside README.md's `## Stages`
+    section, or None when that section can't be found.
+
+    Scoped on purpose, not a whole-document scan: elsewhere in the same
+    README, `` `claude` `` names the CLI tool under the on-demand-commands
+    section, not a skill — a slug-shaped backtick token is not reliably a
+    skill claim anywhere in the document (confirmed against the current,
+    correct file; see
+    docs/fixes/nothing-notices-a-dropped-readme-mention/defect.md).
+    Inside the Stages section there is no such exception today: the
+    table's first cell is always a skill slug, and the paragraph right
+    below it exists to introduce utility skills one by one, by slug,
+    because they have no row of their own — every token found there is a
+    skill mention by that section's own, single purpose.
+    """
+    match = STAGES_SECTION.search(text)
+    if not match:
+        return None
+    return set(SLUG_TOKEN.findall(match.group(1)))
+
+
+def check_readme_no_orphans(root):
+    """The reverse of check_readme_skills (issue #502 — the README half
+    of #455 that check_ledger_no_orphans left open): a skill named in
+    README.md's `## Stages` section that the current taxonomy no longer
+    registers.
+
+    check_ledger_no_orphans reverses check_ledger by reading the exact
+    same structural element both ways (a table row). check_readme_skills
+    has no equivalent to reverse: its forward direction accepts a mention
+    anywhere in the whole document, prose included, and there is no "set
+    of things README.md claims are skills" to read back out of free text
+    in general — only within `## Stages` does every slug-shaped backtick
+    token happen to be one, because naming the plugin's skills is that
+    section's entire job (see readme_stage_mentions).
+
+    Only that section is scanned. A skill named elsewhere in the document
+    is not this checker's concern, the same way check_ledger_no_orphans
+    does not scan LEDGER.md's reading notes below its table: that prose
+    can discuss a retired skill historically without a live claim being
+    made about it. Unlike check_ledger_no_orphans, which never leaves its
+    row boundary, this checker does read prose — a known, bounded cost: a
+    future edit that adds an unrelated slug-shaped backtick term inside
+    `## Stages` (one that does not name a skill) would read as a false
+    orphan here. That risk is accepted in exchange for catching a retired
+    *utility* skill's stale prose mention, which is the case issue #502
+    was actually raised about and a table-only reading would silently
+    miss — utility skills have no table row to lose.
+
+    A missing or renamed `## Stages` heading is its own problem, not a
+    silent []: check_readme_skills's forward direction never depended on
+    that heading, so nothing else would notice it disappearing.
+    """
+    path = root / "README.md"
+    if not path.is_file():
+        return []  # absence already reported by check_readme_skills
+    mentions = readme_stage_mentions(path.read_text(encoding="utf-8"))
+    if mentions is None:
+        return [f"README.md has no {STAGES_HEADING!r} section — it is "
+                "where check_readme_no_orphans reads which skills are "
+                "currently claimed"]
+    known = set(ALL_SKILLS) | set(extra_skills(root))
+    return [f"README.md's {STAGES_HEADING!r} section names {slug!r}, "
+            "which the taxonomy no longer registers"
+            for slug in sorted(mentions - known)]
+
+
 def check_protocol(root):
     """The doc exists, and still says the thing two skills send readers to.
 
@@ -731,7 +818,8 @@ def check_ledger_links(root):
 CHECKERS = (check_manifest, check_plugin_skills,
             check_pi_package, check_skills,
             check_skill_recitals, check_skill_assets, check_templates,
-            check_router, check_readme_skills, check_protocol,
+            check_router, check_readme_skills, check_readme_no_orphans,
+            check_protocol,
             check_protocol_tables, check_backlog, check_evals,
             check_output_evals, check_ledger, check_ledger_links)
 
