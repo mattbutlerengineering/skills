@@ -93,7 +93,7 @@ def repo_set(argv_paths, config_path=None):
         return [], []
     try:
         config = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as err:
+    except (OSError, UnicodeDecodeError) as err:
         return [], [f"dashboard: cannot read {path}: {err}"]
     except json.JSONDecodeError as err:
         return [], [f"dashboard: {path} is not valid JSON: {err}"]
