@@ -268,12 +268,36 @@ ARCH_PLAIN_PATH = re.compile(r"^[\w.@/-]+$")
 
 
 def _scannable_files(root):
+    """Every real markdown doc detectors C, D and I check cross-links
+    against: docs/, root-level *.md, .github/, skills/, and factory/ minus
+    its two deliberately-foreign subtrees — factory/templates/ (a seed
+    tree checked against its OWN numbering by
+    tests/test_factory_init.py::TestSeededADRs, not this repo's) and
+    factory/evals/fixtures/ (regression fixtures whose WO-/PRD- tokens are
+    intentionally fake). tests/ carries no *.md files and is not walked."""
+    seen = set()
+    files = []
+
+    def add(paths):
+        for path in paths:
+            if path.is_file() and path not in seen:
+                seen.add(path)
+                files.append(path)
+
     docs = root / "docs"
-    files = sorted(docs.rglob("*.md")) if docs.is_dir() else []
-    context = root / "CONTEXT.md"
-    if context.is_file():
-        files.append(context)
-    return files
+    if docs.is_dir():
+        add(sorted(docs.rglob("*.md")))
+    add(sorted(root.glob("*.md")))
+    for name in ("github", "skills"):
+        d = root / f".{name}" if name == "github" else root / name
+        if d.is_dir():
+            add(sorted(d.rglob("*.md")))
+    factory = root / "factory"
+    if factory.is_dir():
+        foreign = (factory / "templates", factory / "evals" / "fixtures")
+        add(sorted(p for p in factory.rglob("*.md")
+                   if not any(f in p.parents for f in foreign)))
+    return sorted(files)
 
 
 def check_wo_citation(root):
