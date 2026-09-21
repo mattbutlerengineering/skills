@@ -2,6 +2,8 @@
 the dispatch-plane row grammar, the run walk, and repo_root — asserted
 at the seam's own interface instead of once per caller suite.
 """
+import ast
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -131,6 +133,43 @@ class TestRowDone(unittest.TestCase):
             hasattr(gates, "MERGED_ROW"),
             "gates.MERGED_ROW is back: the checked-row grammar has one"
             " owner, knowledge_plane.row_done (ADR-0058)")
+
+    def test_the_documented_call_sites_are_the_real_ones(self):
+        """row_done's docstring names its call sites, and a hand-typed
+        enumeration goes stale silently: the list said five and named
+        the reconcile sweep and the dashboard twice, months after
+        ADR-0060 folded both into plane_drift.reconcile_drift, which
+        asks once. Nothing failed. So the list is derived here from the
+        source and compared to the prose, in both directions."""
+        root = Path(__file__).resolve().parents[1]
+        actual = set()
+        for path in sorted(root.glob("*.py")):
+            if path.name == "knowledge_plane.py":
+                continue
+            for node in ast.walk(ast.parse(
+                    path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = (func.id if isinstance(func, ast.Name)
+                        else func.attr if isinstance(func, ast.Attribute)
+                        else None)
+                if name == "row_done":
+                    actual.add(path.name)
+        # normalised first: the docstring rewraps whenever the prose
+        # around it changes, and a listing that only matches at one line
+        # width is a test that fails for the wrong reason
+        flat = " ".join(knowledge_plane.row_done.__doc__.split())
+        listing = re.search(r"Call sites\s*\(.*?\):(.*?)—", flat)
+        self.assertIsNotNone(
+            listing,
+            "row_done's docstring no longer carries a delimited"
+            " `Call sites (...): <modules> —` listing for this test to"
+            " check")
+        documented = set(re.findall(r"[a-z_]+\.py", listing.group(1)))
+        self.assertEqual(documented, actual)
+        self.assertTrue(actual, "no call sites found — the derivation"
+                                " itself is broken")
 
 
 class TestRunDirs(unittest.TestCase):
