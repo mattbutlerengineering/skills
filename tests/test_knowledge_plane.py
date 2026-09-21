@@ -96,6 +96,31 @@ class TestRowDone(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertFalse(row_done(line))
 
+    def test_a_box_with_no_space_after_it_is_not_a_row_at_all(self):
+        # The whole point of the accessor family: ROW requires whitespace
+        # after the closing bracket, so a line without it is not a row —
+        # and row_done must say so too, or one module answers "is this a
+        # row" twice and differently.
+        for line in ("- [x]a WO-0002 no space after the box",
+                     "- [x]**WO-0003** bold straight after the box"):
+            with self.subTest(line=line):
+                self.assertIsNone(row_work_order(line))
+                self.assertFalse(row_done(line))
+
+    def test_row_done_never_disagrees_with_the_row_grammar(self):
+        # The property, not the cases: nothing row_done calls a checked
+        # row may fail ROW.match. Shapes drawn from this class's own
+        # checked/malformed fixtures plus the two above.
+        for line in ("- [x] WO-0002 done", "- [X] WO-0002 done",
+                     "-\t[x] WO-0002 done", "+ [x] WO-0002 done",
+                     "* [x] WO-0002 done", "  - [x] WO-0002 indented",
+                     "- [ ] WO-0002 open", "-[x] WO-0002 t",
+                     "text - [x] WO-0002 t", "## WO-0002 heading", "",
+                     "- [x]a WO-0002 no space", "- [x]**WO-0003** bold"):
+            with self.subTest(line=line):
+                if row_done(line):
+                    self.assertIsNotNone(ROW.match(line))
+
     def test_the_checked_row_grammar_has_one_owner(self):
         # ADR-0058 amends ADR-0039's roster from three owners to two.
         # gates.MERGED_ROW was a fourth, added nineteen days after that
