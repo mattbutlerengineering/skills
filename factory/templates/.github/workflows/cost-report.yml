@@ -54,7 +54,21 @@ jobs:
       - name: Recompute spend and decide against the monthly cap
         id: report
         run: make cost-report
+      # always(): same reason the pause step below carries it — the report
+      # step exits nonzero on exactly the fail-closed verdicts, and those
+      # are the weeks whose report a human most needs. cost_report.guard
+      # composes one for them on purpose ("Both aggregates are always the
+      # best-effort rollup of what WAS readable, even on a failing path,
+      # so a human reading the report still sees something"); an implicit
+      # success() gate threw that report away and left a red run as the
+      # only trace. The title guard is what always() costs: outputs are
+      # written before the failing exit, so a present title IS the
+      # evidence a report was composed, and a crash before write_outputs
+      # skips this step instead of asking gh to create an empty issue.
       - name: Post the weekly cost report issue
+        if: >-
+          always()
+          && steps.report.outputs.title != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPORT_TITLE: ${{ steps.report.outputs.title }}

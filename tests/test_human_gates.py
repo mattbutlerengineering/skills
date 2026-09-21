@@ -94,6 +94,53 @@ class TestLabelEvents(unittest.TestCase):
     def test_an_empty_timeline_yields_no_events(self):
         self.assertEqual(label_events([]), [])
 
+    def test_a_timestamp_that_is_not_one_is_not_a_well_formed_flip(self):
+        # A truthy created_at is not enough: waited_seconds parses it as
+        # ISO-8601, so a string that cannot parse is exactly as unusable
+        # as a missing one. The drop rule covers all three.
+        timeline = [
+            labeled("2026-08-01T00:00:00Z", "wo:draft"),
+            unlabeled("yesterday", "wo:draft"),
+        ]
+        self.assertEqual(label_events(timeline), [
+            ("2026-08-01T00:00:00Z", "labeled", "wo:draft"),
+        ])
+
+    def test_a_malformed_timestamp_does_not_reach_the_parse(self):
+        # The crash the drop rule prevents, at the caller that hit it:
+        # only a completed, CONFIRMED stay reaches waited_seconds, so
+        # this timeline needs all three flips to reproduce it.
+        events = label_events([
+            labeled("2026-08-01T00:00:00Z", "wo:draft"),
+            labeled("2026-08-02T00:00:00Z", "wo:prd-approved"),
+            unlabeled("yesterday", "wo:draft"),
+        ])
+        self.assertEqual(gate_passages(events), [])
+
+    def test_a_naive_timestamp_is_not_one_either(self):
+        # "2026-08-01" parses, to a datetime with no tzinfo. Subtracting
+        # it from an aware one raises TypeError, so parseability alone
+        # is not the precondition waited_seconds actually needs — the
+        # gate has to admit only aware timestamps.
+        events = label_events([
+            labeled("2026-08-01", "wo:draft"),
+            labeled("2026-08-02T00:00:00Z", "wo:prd-approved"),
+            unlabeled("2026-08-02T00:00:00Z", "wo:draft"),
+        ])
+        self.assertNotIn("2026-08-01", [ts for ts, _, _ in events])
+        self.assertEqual(gate_passages(events), [])
+
+    def test_a_well_formed_timeline_is_unchanged_by_the_third_clause(self):
+        # The same three flips with a parseable closing timestamp still
+        # pass the gate — the guard rejects malformed input, not input.
+        events = label_events([
+            labeled("2026-08-01T00:00:00Z", "wo:draft"),
+            labeled("2026-08-02T00:00:00Z", "wo:prd-approved"),
+            unlabeled("2026-08-02T00:00:00Z", "wo:draft"),
+        ])
+        self.assertEqual(gate_passages(events),
+                         [("prd", 86400, "2026-08-02T00:00:00Z")])
+
 
 class TestGatePassages(unittest.TestCase):
     def test_a_confirmed_flip_is_a_passage(self):

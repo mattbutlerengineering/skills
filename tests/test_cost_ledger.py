@@ -13,9 +13,11 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 import cost_ledger
 import cost_report
+import human_gates
 import work_queue
 
 
@@ -174,6 +176,55 @@ class TestGateEntry(unittest.TestCase):
         self.assertEqual(cost_ledger.gate_wait(record), ("prd", 86400))
 
 
+class TestGateEntryCannotOutwriteItsReader(unittest.TestCase):
+    """gate_entry composes the outcome field; gate_wait parses it with
+    GATE_OUTCOME. A row the writer emits and the reader refuses is not
+    merely a lost observation: dispatched() selects spend by exclusion,
+    so an unreadable gate row is counted as a dispatched run against
+    ADR-0034's monthly cap."""
+
+    PASSED_AT = "2026-08-27T00:00:00Z"
+
+    def test_a_gate_name_the_reader_cannot_read_is_refused(self):
+        with self.assertRaises(ValueError):
+            cost_ledger.gate_entry("WO-0001", "code-review", 120,
+                                   self.PASSED_AT)
+
+    def test_a_negative_wait_is_refused(self):
+        with self.assertRaises(ValueError):
+            cost_ledger.gate_entry("WO-0001", "merge", -30, self.PASSED_AT)
+
+    def test_the_writer_and_the_reader_never_disagree(self):
+        # The property that makes the two statements of the grammar one:
+        # for ANY input, either the writer refuses or the reader parses
+        # what it produced. A silent unreadable row is the failure.
+        cases = ["merge", "prd", "code-review", "UX", "ux2", "", "a:b",
+                 "merge s", "méfiance"]
+        waits = [0, 1, 7260, -30, 12.7]
+        for gate in cases:
+            for wait in waits:
+                with self.subTest(gate=gate, wait=wait):
+                    try:
+                        row = cost_ledger.gate_entry("WO-0001", gate, wait,
+                                                     self.PASSED_AT)
+                    except ValueError:
+                        continue
+                    self.assertIsNotNone(
+                        cost_ledger.gate_wait(row),
+                        f"wrote an unreadable row: {row['outcome']!r}")
+                    self.assertEqual(cost_ledger.dispatched([row]), [])
+
+    def test_every_shipped_gate_name_is_writable(self):
+        # The guard turns "someone added a gate the ledger cannot record"
+        # from a silent spend miscount into a red test here.
+        for gate in human_gates.GATES:
+            with self.subTest(gate=gate.name):
+                row = cost_ledger.gate_entry("WO-0001", gate.name, 60,
+                                             self.PASSED_AT)
+                self.assertEqual(cost_ledger.gate_wait(row),
+                                 (gate.name, 60))
+
+
 class TestRowKey(unittest.TestCase):
     def test_the_identity_is_wo_plus_run_id(self):
         record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
@@ -298,12 +349,10 @@ class TestLoad(unittest.TestCase):
 
     def test_an_unreadable_ledger_is_the_callers_problem_string(self):
         with tempfile.TemporaryDirectory() as tmp:
-            path = self.ledger(tmp, "")
-            path.chmod(0)
-            try:
+            self.ledger(tmp, "")
+            with mock.patch.object(Path, "read_text",
+                                    side_effect=OSError("Permission denied")):
                 rows, problems = cost_ledger.load(tmp, "G")
-            finally:
-                path.chmod(0o644)
             self.assertIsNone(rows)
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(

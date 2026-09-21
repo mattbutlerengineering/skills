@@ -10,7 +10,10 @@ Two tools ask it and do different things with the answer — `sweeps.py
 reconcile` files an intake issue, `dashboard.py` renders a section — so
 the rule is a module and each tool is a caller. It is PURE: the listing
 arrives as data, so neither caller's runner reaches this file, and no
-test here needs one.
+test here needs one. Purity here is about runners and I/O, not about the
+import graph — `cli.label_names` is a pure function and reading a gh
+payload's label names through the seam that owns it (ADR-0037) runs no
+subprocess and needs no fixture.
 
 The callers differ in exactly one respect, and it is a real difference
 rather than one copy being weaker: whether a row whose mirror is *absent
@@ -25,19 +28,30 @@ Conventions match the modules that call it: `drift:`-prefixed problem
 strings for malformed input, and drift findings that are plain lines for
 the caller to render or file.
 """
+from cli import label_names
 from knowledge_plane import row_done, row_tracker_issue
 
 
 def issue_lifecycle(issue):
-    """The `wo:` labels one issue-listing entry carries, sorted. Anything
-    that is not a `{"name": ...}` object is ignored rather than guessed
-    at — the shape is gh's, and a changed shape becomes a drift report's
-    silence, not a traceback in a scheduled run."""
-    labels = issue.get("labels")
-    names = [entry.get("name") for entry in labels
-             if isinstance(entry, dict)] if isinstance(labels, list) else []
-    return sorted(name for name in names
-                  if isinstance(name, str) and name.startswith("wo:"))
+    """The `wo:` labels one issue-listing entry carries, sorted.
+
+    Two facts, and only the second is this module's. WHICH names a gh
+    label-carrying payload holds is `cli.label_names` (ADR-0037: the cli
+    seam owns the harness-IO conventions), including the strictness its
+    docstring calls "the strictest all of them tolerate" — an entry that
+    is not an object, or whose name is not a non-empty string,
+    contributes nothing. WHICH of those names are lifecycle labels is
+    the question here, and it is the whole of what is left.
+
+    Duplicates are deliberately kept: `reconcile_drift` reports an issue
+    carrying more than one lifecycle label at once, and deduplicating
+    here would silence that line.
+
+    A changed gh shape still becomes a drift report's silence rather
+    than a traceback in a scheduled run — that promise now belongs to
+    the seam, which keeps it for every caller instead of one."""
+    return sorted(name for name in label_names(issue)
+                  if name.startswith("wo:"))
 
 
 def _describe(labels):

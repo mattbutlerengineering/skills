@@ -48,23 +48,25 @@ def identity(text):
     return text
 
 
-# The command spellings that differ between this repo and a stamped
-# product repo: its factory tools live under tools/factory/, and its
-# stamped test run is quiet.
-_PRODUCT_TOOLS = ("gates.py", "validator.py", "assembler.py",
-                  "budget_guard.py", "cost_report.py", "gate_digest.py",
-                  "rejection_mining.py")
-
-
 def product_form(command):
     """A root command as its product-repo twin spells it. The one
     production statement of the root<->payload command respelling:
     product_makefile generates the payload Makefile through it, and
     TestLockstep (tests/test_gates.py) asserts both Makefiles'
-    command sets against it — never a test-private copy."""
-    for tool in _PRODUCT_TOOLS:
-        command = command.replace(f"python3 {tool}",
-                                  f"python3 tools/factory/{tool}")
+    command sets against it — never a test-private copy.
+
+    Which files move is MIRRORS' fact, read here rather than restated: a
+    hand-kept list of tools is a second copy of it, and the copy that
+    falls behind emits a command naming a root-level file the stamped
+    repo does not have. `"/" not in name` skips the workflows and
+    CODEOWNERS, whose root spelling already carries their path; `rel !=
+    name` skips the Makefile, whose payload home IS its root home. The
+    replacement uses MIRRORS' own destination, so a tool mirrored
+    somewhere other than tools/factory/ would follow it there. The
+    remaining respelling is the stamped test run, which is quiet."""
+    for name, rel, _ in MIRRORS:
+        if "/" not in name and rel != name:
+            command = command.replace(f"python3 {name}", f"python3 {rel}")
     return command.replace("unittest discover tests",
                            "unittest discover -q tests")
 
@@ -78,13 +80,15 @@ PRODUCT_MAKEFILE_HEADER = (
     "#\n"
     "# `make check` is the canonical local gate and exactly what CI runs:"
     " the\n"
-    "# stamped .github/workflows/validator.yml names no commands of its"
+    "# stamped .github/workflows/validator.yml names no repo tool of its"
     " own, it\n"
-    "# calls these targets. Same targets as the factory repo's own root"
-    " Makefile\n"
-    "# (its tools sit at the root, these under tools/factory/, and the"
+    "# calls these targets (the gh and git plumbing around them stays in"
+    " the\n"
+    "# workflow). Same targets as the factory repo's own root Makefile"
+    " — its\n"
+    "# tools sit at the root, these under tools/factory/, and the"
     " plugin's\n"
-    "# structural lint has no product-repo counterpart).\n")
+    "# structural lint has no product-repo counterpart.\n")
 
 
 def product_makefile(text):
@@ -99,14 +103,83 @@ def product_makefile(text):
     return PRODUCT_MAKEFILE_HEADER + "\n" + product_form(body)
 
 
+# The stamped repo's code owner, as the payload spells it before anyone
+# has substituted a real one. Deliberately not a legal GitHub login —
+# angle brackets cannot appear in one — so the token can never resolve to
+# an account someone registered, and GitHub reports it as a CODEOWNERS
+# syntax error rather than ignoring one more unknown name in silence.
+OWNER_PLACEHOLDER = "@<owner>"
+
+
+# The product-repo CODEOWNERS header, authored here for the same reason
+# PRODUCT_MAKEFILE_HEADER is: the root file's comment is true about this
+# repo, and the stamped twin has to say something else. It names the
+# three-human-gates decision instead of citing a number — the seed files
+# that decision under its own numbering, and a bare token would point a
+# stamped repo at an ADR it does not have.
+PRODUCT_CODEOWNERS_HEADER = (
+    "# Code owners — stamped by factory-init. SUBSTITUTE THE"
+    " PLACEHOLDER:\n"
+    f"# replace every `{OWNER_PLACEHOLDER}` below with a GitHub handle or"
+    " team that is a\n"
+    "# collaborator on THIS repo.\n"
+    "#\n"
+    "# Until you do, the merge gate is inert. Required code-owner"
+    " review is what\n"
+    "# makes the merged PR the approval record (the three-human-gates"
+    " decision,\n"
+    "# in docs/adr/). GitHub ignores a CODEOWNERS entry naming someone"
+    " who is\n"
+    "# not a collaborator here, and it does not tell you that it did.\n"
+    "#\n"
+    "# The explicit doc paths are the first two gates' surfaces; the"
+    " fallback\n"
+    "# keeps every merge owner-reviewed.\n")
+
+
+# A CODEOWNERS owner: a whitespace-delimited token that STARTS with @.
+# An email address is also a legal owner, and its local part must survive.
+_OWNER_TOKEN = re.compile(r"(^|\s)@\S+", re.MULTILINE)
+
+
+def product_codeowners(text):
+    """CODEOWNERS' MIRRORS transform: the root file as its product-repo
+    twin. Swap the root header comment for the product one, and rewrite
+    every owner to OWNER_PLACEHOLDER.
+
+    The root names THIS repo's owner. A stamped repo that inherits it has
+    a merge gate GitHub silently ignores — the failure the seeded
+    blueprint, docs/setup.md and doctor's step 8 all warn about, and the
+    reason detector E leaves this file out of the pristine set. They all
+    say the stamp ships a placeholder; this is what makes that true.
+
+    Only the LEADING comment block is dropped — the root's header, the
+    one part that is prose about this repo. A comment further down
+    annotates a rule, and dropping it would lose the payload something
+    the root said, silently. The block is found by walking comment lines
+    from the top rather than partitioning on the first blank line the way
+    product_makefile does, so a root file with no header, or one whose
+    header stops using a blank line, still lands complete — ADR-0050
+    names that dependence as the fragile part.
+    """
+    lines = text.splitlines()
+    start = 0
+    while start < len(lines) and lines[start].lstrip().startswith("#"):
+        start += 1
+    rules = _OWNER_TOKEN.sub(rf"\1{OWNER_PLACEHOLDER}",
+                             "\n".join(lines[start:]))
+    return PRODUCT_CODEOWNERS_HEADER + rules.strip("\n") + "\n"
+
+
 # Root files mirrored into the payload as (repo-root path, path under
 # factory/templates/, transform) triples, so a stamped product repo runs
 # the same tools and the same CI as this one — one source of truth, never
 # a hand-maintained second copy. The transform is identity for every
-# byte-for-byte mirror; the Makefile is the one twin that genuinely
-# differs per repo, and product_makefile above is the whole translation —
-# a new make target is a root-Makefile edit plus update-manifest, never a
-# hand-sync. gates.py imports its sibling protocol; label_sync.py is the
+# byte-for-byte mirror; the Makefile and .github/CODEOWNERS are the two
+# twins that genuinely differ per repo, and product_makefile and
+# product_codeowners above are the whole translation — a new make target
+# is a root-Makefile edit plus update-manifest, never a hand-sync.
+# gates.py imports its sibling protocol; label_sync.py is the
 # sweeps-only network detector L; validator.py is the validator workflow's
 # brain; budget_guard.py/handoff.py are the ADR-0034 dollar-budget stop and
 # its hard-stop handoff, run ad hoc by a dispatched agent, not by a workflow
@@ -123,12 +196,16 @@ def product_makefile(text):
 # vocabulary and the stay partition (ADR-0056), and it ships for that same
 # reason and not optionally: gate_digest.py and rejection_mining.py both
 # ship and both import it as a bare sibling, so a stamped repo without it
-# is a broken stamp. It is absent from _PRODUCT_TOOLS on purpose — that
-# tuple respells Makefile commands, and no target invokes it. validator.yml is
+# is a broken stamp. No Makefile target invokes it,
+# so product_form never has occasion to respell it — but it would, since
+# that respelling is derived from this table rather than from a second
+# list that could fall behind it. validator.yml is
 # path-agnostic (it runs `make` targets), which is what lets it be mirrored
 # byte-for-byte instead of forked per repo. .github/CODEOWNERS is the
-# human-gate surface (ADR-0033), identical in both repos, so it mirrors
-# verbatim like the workflows.
+# human-gate surface (ADR-0033) and the one other twin that genuinely
+# differs per repo: the root file names this repo's code owner, so it
+# mirrors through product_codeowners, which swaps the header and blanks
+# the owner to a placeholder the stamped repo substitutes.
 MIRRORS = (
     ("gates.py", "tools/factory/gates.py", identity),
     ("protocol.py", "tools/factory/protocol.py", identity),
@@ -159,7 +236,8 @@ MIRRORS = (
      ".github/workflows/gate-digest.yml", identity),
     (".github/workflows/toolsmith-mine.yml",
      ".github/workflows/toolsmith-mine.yml", identity),
-    (".github/CODEOWNERS", ".github/CODEOWNERS", identity),
+    (".github/CODEOWNERS",
+     ".github/CODEOWNERS", product_codeowners),
     ("Makefile", "Makefile", product_makefile),
 )
 
@@ -290,8 +368,9 @@ def is_factory_owned(dest):
 def missing_make_targets(target):
     """Targets the stamped workflows call that the repo's Makefile lacks.
 
-    update overwrites the workflows, and they name no commands of their own
-    — every step goes through make. So a factory change that adds a target
+    update overwrites the workflows, and they name no repo tool of their
+    own — every tool invocation goes through make. So a factory change
+    that adds a target
     (wo-failed, ADR-0045) leaves a repo whose refreshed assembler.yml calls
     a target its Makefile has never heard of. Nothing else reports that
     until the workflow runs in anger.

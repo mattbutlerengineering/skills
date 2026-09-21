@@ -1,9 +1,9 @@
 """work_queue.py — the work-queue skill's batch planner.
 
 Same discipline as test_label_sync/test_gate_digest: the gh CLI is
-injected (a recording runner, never the network), the planning core is
-pure and exercised directly, and tests assert the exact problem and
-deferral strings a caller will print.
+injected through the shared fake (tests/fake_gh.py, never the network),
+the planning core is pure and exercised directly, and tests assert the
+exact problem and deferral strings a caller will print.
 """
 import json
 import subprocess
@@ -16,6 +16,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
+from fake_gh import FakeGh  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -35,28 +36,27 @@ def found(*rows):
     return {r["wo"]: r for r in rows}
 
 
-class RecordingRunner:
-    """Injected gh runner: records calls, answers `issue list` with a
-    canned listing, never touches the network."""
+def listing(*numbers):
+    """A gh whose ready listing answers with these issue numbers.
 
-    def __init__(self, listing):
-        self.listing, self.calls = listing, []
-
-    def __call__(self, args):
-        self.calls.append(list(args))
-        if args[:2] == ["issue", "list"]:
-            return json.dumps(self.listing)
-        return ""
+    work_queue makes exactly one gh call (`work_queue.LIST_ARGS`, an
+    `issue list`), so keying the answer on that prefix says everything
+    this suite needs gh to say.
+    """
+    return FakeGh(answers={("issue", "list"):
+                           json.dumps([{"number": n} for n in numbers])})
 
 
-class FailingRunner(RecordingRunner):
-    def __init__(self, error):
-        super().__init__([])
-        self.error = error
+def unreachable():
+    """A gh whose ready listing fails.
 
-    def __call__(self, args):
-        self.calls.append(list(args))
-        raise self.error
+    The error is stated rather than inherited: a `CalledProcessError`
+    with no stderr is a different `cli.detail` path from the shared
+    fake's default, and this suite's problem-string assertions are
+    about that path.
+    """
+    return FakeGh(failing=["issue"],
+                  error=subprocess.CalledProcessError(1, "gh"))
 
 
 class TestEligible(unittest.TestCase):
@@ -162,6 +162,40 @@ class TestPlanBatch(unittest.TestCase):
         self.assertEqual([r["wo"] for r in batch], ["WO-0001"])
         self.assertIn("$15.00 already planned", deferred[0])
 
+    def test_an_unresolvable_cap_refuses_to_plan(self):
+        # fail closed, the same rule an unpriceable size gets: an
+        # unresolvable cap is an unknown ceiling, not an absent one
+        capless = {k: v for k, v in CONFIG.items() if k != "monthly_cap_usd"}
+        batch, _, problems = work_queue.plan_batch(
+            found(row("WO-0001", issue=1)), {1}, capless, spent_usd=0)
+        self.assertEqual(batch, [])
+        self.assertEqual(problems, [
+            "config: factory.json names no positive monthly_cap_usd",
+            "wq: no monthly cap could be resolved — refusing to plan a"
+            " batch it cannot price"])
+
+    def test_an_unresolvable_cap_is_not_an_unlimited_one(self):
+        # the hazard the refusal closes: with the comparison skipped,
+        # a month that has already spent a fortune plans a full batch
+        capless = {k: v for k, v in CONFIG.items() if k != "monthly_cap_usd"}
+        rows = found(*[row(f"WO-000{n}", size="L", issue=n)
+                       for n in range(1, 4)])
+        batch, _, _ = work_queue.plan_batch(rows, {1, 2, 3}, capless,
+                                            spent_usd=999999.0)
+        self.assertEqual(batch, [])
+
+    def test_the_refusal_still_reports_the_near_misses(self):
+        # refusing to plan is not refusing to explain — the wip_cap
+        # refusal hands back eligible's deferrals too
+        capless = {k: v for k, v in CONFIG.items() if k != "monthly_cap_usd"}
+        rows = found(row("WO-0001", issue=1),
+                     row("WO-0002", issue=None))
+        _, deferred, _ = work_queue.plan_batch(rows, {1}, capless,
+                                               spent_usd=0)
+        self.assertEqual(deferred, [
+            "WO-0002: its row carries no (tracker: #N) mirror, so no"
+            " issue can carry the ready label"])
+
     def test_a_missing_wip_cap_refuses_to_guess(self):
         batch, _, problems = work_queue.plan_batch(
             found(row("WO-0001", issue=1)), {1},
@@ -182,7 +216,7 @@ class TestPlanBatch(unittest.TestCase):
 
 class TestReadyIssueNumbers(unittest.TestCase):
     def test_it_asks_for_open_ready_labelled_issues(self):
-        runner = RecordingRunner([{"number": 7}, {"number": 8}])
+        runner = listing(7, 8)
         numbers, problems = work_queue.ready_issue_numbers(runner)
         self.assertEqual(numbers, {7, 8})
         self.assertEqual(problems, [])
@@ -191,7 +225,7 @@ class TestReadyIssueNumbers(unittest.TestCase):
 
     def test_an_unreachable_tracker_is_a_problem_not_an_empty_queue(self):
         numbers, problems = work_queue.ready_issue_numbers(
-            FailingRunner(subprocess.CalledProcessError(1, "gh")))
+            unreachable())
         self.assertIsNone(numbers)
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith("wq: gh issue list failed:"))
@@ -200,7 +234,7 @@ class TestReadyIssueNumbers(unittest.TestCase):
         """Same rule as sweeps.live_issues: past the window an issue is
         simply absent, and absence is what the ready check reads as a
         finding. A truncated listing is no listing."""
-        runner = RecordingRunner([{"number": n} for n in range(100)])
+        runner = listing(*range(100))
         numbers, problems = work_queue.ready_issue_numbers(runner)
         self.assertIsNone(numbers)
         self.assertEqual(len(problems), 1)
@@ -259,7 +293,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
     def planned(self, argv, run=None, root=None):
         """(code, stdout) of one `plan` run, gh injected, optionally
         rooted at a fixture tree."""
-        run = run or RecordingRunner([])
+        run = run or listing()
         if root is None:
             return cli_contract.capture(work_queue.main, argv, run=run)
         with mock.patch.object(work_queue, "repo_root", lambda: root):
@@ -277,6 +311,26 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
             tree.write("docs/features/demo/breakdown.md", breakdown)
         return tree
 
+    def test_a_config_naming_no_cap_plans_nothing(self):
+        """The refusal at the surface a consumer reads. The skill runs
+        what `plan` prints; an unresolvable cap must not put a work
+        order on that list."""
+        capless = {k: v for k, v in CONFIG.items() if k != "monthly_cap_usd"}
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/factory.json", json.dumps(capless))
+            tree.write(
+                "docs/features/demo/breakdown.md",
+                "- [ ] **WO-0001** ready and priced — size:S, blocked by: —"
+                " (PRD-0001 §S) (tracker: #7)\n")
+            code, out = self.planned(
+                ["plan"], run=listing(7),
+                root=tree.root)
+        self.assertEqual(code, 1)
+        self.assertNotIn("WO-0001  size:S", out)
+        self.assertIn("refusing to plan a batch it cannot price", out)
+        self.assertEqual(out.splitlines()[-1], "wq: 2 problem(s)")
+
     def test_an_untrusted_listing_defers_no_row_for_a_reason_it_cannot_know(
             self):
         """The hazard the refusal closes. Past the 100-entry window an
@@ -290,7 +344,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
                 " (PRD-0001 §S) (tracker: #999)\n")
             code, out = self.planned(
                 ["plan"],
-                run=RecordingRunner([{"number": n} for n in range(100)]),
+                run=listing(*range(100)),
                 root=tree.root)
         self.assertEqual(code, 1)
         self.assertIn("full 100-entry window", out)
@@ -309,7 +363,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
                 " (PRD-0001 §S) (tracker: #999)\n")
             code, out = self.planned(
                 ["plan"],
-                run=RecordingRunner([{"number": n} for n in range(100)]),
+                run=listing(*range(100)),
                 root=tree.root)
         self.assertEqual(code, 1)
         self.assertNotIn("ready to run in parallel", out)
@@ -343,7 +397,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             code, out = self.planned(
                 ["plan", "--json"],
-                run=FailingRunner(subprocess.CalledProcessError(1, "gh")),
+                run=unreachable(),
                 root=self.config_tree(tmp).root)
         lines = out.splitlines()
         self.assertEqual(code, 1)
@@ -361,7 +415,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             _, out = self.planned(
                 ["plan", "--json"],
-                run=FailingRunner(subprocess.CalledProcessError(1, "gh")),
+                run=unreachable(),
                 root=self.config_tree(tmp).root)
         _, seam = cli_contract.capture(cli.report, "wq", ["one problem"])
         self.assertEqual(out.splitlines()[-1], seam.splitlines()[-1])
@@ -370,7 +424,7 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             code, out = self.planned(
                 ["plan"],
-                run=FailingRunner(subprocess.CalledProcessError(1, "gh")),
+                run=unreachable(),
                 root=self.config_tree(tmp).root)
         lines = out.splitlines()
         self.assertEqual(code, 1)

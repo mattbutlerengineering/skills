@@ -300,8 +300,16 @@ def run_single_query(query, descriptions, timeout, model, isolate,
         shutil.rmtree(project_dir, ignore_errors=True)
 
 
-def score_case(case, fired_counts, runs, threshold):
-    """Score one case from its Counter of fired slugs ('none' for None)."""
+def score_case(case, fired_counts, runs, threshold, errors=0):
+    """Score one case from its Counter of fired slugs ('none' for None).
+
+    runs counts observations actually made; errors counts runs that
+    failed before producing one. A failed run is not an observation, so
+    it is absent from fired_counts and cannot be mistaken for the router
+    declining to fire — which for a distractor case would otherwise score
+    as correct. A case whose runs all failed has nothing to score and
+    does not pass.
+    """
     expected = case["expected"] or "none"
     correct_rate = fired_counts.get(expected, 0) / runs if runs else 0.0
     return {
@@ -311,6 +319,7 @@ def score_case(case, fired_counts, runs, threshold):
         "query": case["query"],
         "fired": dict(fired_counts),
         "runs": runs,
+        "errors": errors,
         "correct_rate": round(correct_rate, 3),
         "pass": correct_rate >= threshold,
     }
@@ -329,6 +338,10 @@ def summarize(results):
 
     confusion = {}
     for r in results:
+        # A case whose every run errored contributes no row: it holds no
+        # observations, and an empty row prints as a bare heading.
+        if not r["fired"]:
+            continue
         expected = r["expected"] or "none"
         row = confusion.setdefault(expected, {})
         for fired, count in r["fired"].items():
@@ -339,6 +352,8 @@ def summarize(results):
             "total": len(results),
             "passed": sum(1 for r in results if r["pass"]),
             "failed": sum(1 for r in results if not r["pass"]),
+            # .get keeps records written before this field readable.
+            "errors": sum(r.get("errors", 0) for r in results),
             "by_kind": bucket(results, lambda r: r["kind"]),
             "by_skill": bucket(results, lambda r: r["expected"] or "none"),
         },
@@ -357,17 +372,24 @@ def run_eval(cases, descriptions, workers, runs_per_query, timeout,
             for _ in range(runs_per_query)
         }
         fired_by_case = {}
+        errors_by_case = {}
         done = 0
         for future in as_completed(future_to_case):
             case_id = future_to_case[future]
+            counts = fired_by_case.setdefault(case_id, Counter())
+            errors_by_case.setdefault(case_id, 0)
             try:
                 fired = future.result()
             except Exception as err:
+                # Not an observation: a crashed run says nothing about
+                # what the router would have done, and bucketing it as
+                # "none" would both score it and enter it into the
+                # confusion matrix as a fire that never happened.
                 print(f"warning: run for {case_id!r} failed: {err}",
                       file=sys.stderr)
-                fired = None
-            counts = fired_by_case.setdefault(case_id, Counter())
-            counts[fired or "none"] += 1
+                errors_by_case[case_id] += 1
+            else:
+                counts[fired or "none"] += 1
             done += 1
             print(f"progress: {done}/{len(future_to_case)} runs",
                   file=sys.stderr, end="\r")
@@ -376,30 +398,34 @@ def run_eval(cases, descriptions, workers, runs_per_query, timeout,
     results = [
         score_case(case, fired_by_case.get(case["id"], Counter()),
                    sum(fired_by_case.get(case["id"], Counter()).values()),
-                   threshold)
+                   threshold, errors_by_case.get(case["id"], 0))
         for case in cases
     ]
     return {"results": results, **summarize(results)}
 
 
 def record(output, results_dir):
-    """Write a dated results file; eval_schema owns the naming grammar."""
-    results_dir.mkdir(parents=True, exist_ok=True)
-    path = eval_schema.results_path(results_dir, "trigger", output["date"],
-                                    harness=output.get("harness"))
-    path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
-    return path
+    """Write a dated results file; eval_schema owns the recording."""
+    return eval_schema.write_snapshot(output, results_dir, "trigger",
+                                      harness=output.get("harness"))
 
 
 def print_report(output):
     for r in output["results"]:
         status = "PASS" if r["pass"] else "FAIL"
         fired = ", ".join(f"{k}x{v}" for k, v in sorted(r["fired"].items()))
+        # A case scored on fewer runs than were launched says so on its
+        # own line: the surviving runs are not the whole measurement.
+        lost = f" errors={r['errors']}" if r.get("errors") else ""
         print(f"  [{status}] {r['id']}: expected={r['expected'] or 'none'} "
-              f"fired=[{fired}]", file=sys.stderr)
+              f"fired=[{fired}]{lost}", file=sys.stderr)
     summary = output["summary"]
     print(f"trigger eval: {summary['passed']}/{summary['total']} passed",
           file=sys.stderr)
+    if summary.get("errors"):
+        print(f"warning: {summary['errors']} run(s) failed and were not "
+              f"scored — this eval measured less than it launched",
+              file=sys.stderr)
     print("confusion (expected -> fired):", file=sys.stderr)
     for expected, row in sorted(output["confusion"].items()):
         cells = ", ".join(f"{k}: {v}" for k, v in sorted(row.items()))

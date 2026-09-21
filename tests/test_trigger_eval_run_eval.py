@@ -1,19 +1,16 @@
 """run_eval fan-out seam, claude harness: the shared contract lives in
 harness_contract.RunEvalContract; this twin supplies the fake `claude`
-executable and the claude-only seam tests (invocation flags, missing-CLI
-bucketing, registry-vocabulary consistency).
+executable and the claude-only seam tests (invocation flags,
+registry-vocabulary consistency). Crashed-run accounting is harness-
+independent and lives in the contract.
 
 The fake lists the isolated project's .claude/commands/ dir (run_single_query
 sets it as cwd) and echoes back the command stem matching the slug named in
 the query, driving the real detection state machine.
 """
-import os
 import shutil
 import sys
-import tempfile
 import unittest
-from contextlib import redirect_stderr
-from io import StringIO
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,7 +23,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import eval_schema  # noqa: E402
 import trigger_eval  # noqa: E402
 from harness_contract import RunEvalContract, case  # noqa: E402
-from trigger_eval import _claude_invocation, run_eval  # noqa: E402
+from trigger_eval import _claude_invocation  # noqa: E402
 
 # Query protocol: "fire:<slug>" -> emit that slug's command stem;
 # "fire:none" -> emit nothing tool-related.
@@ -96,36 +93,6 @@ class TestClaudeInvocation(unittest.TestCase):
         self.addCleanup(shutil.rmtree, project_dir, ignore_errors=True)
         index = cmd.index("--model")
         self.assertEqual(cmd[index + 1], "claude-haiku-4-5")
-
-
-class TestWorkerExceptionBucketsAsNone(unittest.TestCase):
-    """Workers can't find any `claude` executable: every run raises
-    FileNotFoundError; run_eval must warn and count the run as 'none',
-    never crash."""
-
-    def setUp(self):
-        # Replace (not prepend) PATH with a fresh empty temp dir so a real
-        # `claude` on the developer's PATH can never be invoked.
-        self.dir = Path(tempfile.mkdtemp(prefix="run-eval-nopath-"))
-        self.old_path = os.environ["PATH"]
-        os.environ["PATH"] = str(self.dir)
-        self.addCleanup(self._cleanup)
-
-    def _cleanup(self):
-        os.environ["PATH"] = self.old_path
-        shutil.rmtree(self.dir, ignore_errors=True)
-
-    def test_missing_cli_counts_none_and_warns(self):
-        cases = [case("a", "idea", "fire:idea")]
-        with redirect_stderr(StringIO()) as err:
-            output = run_eval(cases, {"idea": "d"}, workers=1,
-                              runs_per_query=2, timeout=5, threshold=0.5,
-                              model=None, isolate=False)
-        result = output["results"][0]
-        self.assertEqual(result["fired"], {"none": 2})
-        self.assertEqual(result["runs"], 2)
-        self.assertFalse(result["pass"])
-        self.assertIn("warning: run for 'a' failed", err.getvalue())
 
 
 if __name__ == "__main__":

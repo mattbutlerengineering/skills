@@ -66,9 +66,22 @@ def gate_entry(wo, gate, waited_seconds, passed_at):
     (ADR-0041): the work order waited `waited_seconds` at `gate` and
     passed it at `passed_at` (ISO timestamp, which keys the run_id so a
     re-observed passage dedups instead of double-recording, and whose date
-    part is the row's `at` — gate rows need no clock)."""
-    return entry(wo, f"gate-{gate}-{passed_at}", "none", 0, 0.0,
-                 f"gate_wait:{gate}:{int(waited_seconds)}s",
+    part is the row's `at` — gate rows need no clock).
+
+    The composed outcome is checked against GATE_OUTCOME, the reader's
+    own pattern, so the writer cannot state the grammar more loosely
+    than the reader reads it. That is not belt-and-braces: dispatched()
+    selects spend rows by exclusion, so a row gate_wait cannot parse is
+    silently counted as a dispatched run against ADR-0034's monthly cap.
+    Refusing loudly at the write boundary is the only outcome that keeps
+    the ledger honest, and the three shipped gate names all pass."""
+    outcome = f"gate_wait:{gate}:{int(waited_seconds)}s"
+    if not GATE_OUTCOME.fullmatch(outcome):
+        raise ValueError(
+            f"{outcome!r} is not a gate row gate_wait can read: the gate "
+            "name must be lowercase letters and the wait a whole "
+            "non-negative number of seconds")
+    return entry(wo, f"gate-{gate}-{passed_at}", "none", 0, 0.0, outcome,
                  at=passed_at[:10])
 
 

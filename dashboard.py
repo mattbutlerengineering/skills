@@ -93,7 +93,7 @@ def repo_set(argv_paths, config_path=None):
         return [], []
     try:
         config = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as err:
+    except (OSError, UnicodeDecodeError) as err:
         return [], [f"dashboard: cannot read {path}: {err}"]
     except json.JSONDecodeError as err:
         return [], [f"dashboard: {path} is not valid JSON: {err}"]
@@ -228,9 +228,19 @@ def _spend(entries):
     work order with no rows has no spend (None downstream), never $0 —
     an absent ledger reads as no entries, and a malformed line already
     arrived as read()'s ledger:-prefixed problem, never a silently
-    smaller sum."""
+    smaller sum.
+
+    Which rows count is cost_ledger.dispatched's rule, not a second copy
+    of it: a gate-latency observation (ADR-0041) is a $0 wait record
+    rather than a run, so a work order with only gate rows would
+    otherwise land here with a key worth 0.0 — the measured $0.00 the
+    page renders instead of the em dash it keeps for an unmeasured one,
+    and the by_wo padding cost_report.aggregate names as the reason the
+    rule exists. _metrics reads the same list from the same
+    cost_ledger.read call and keeps that rule through aggregate; this is
+    the console's other reader of it."""
     spend = {}
-    for entry in entries:
+    for entry in cost_ledger.dispatched(entries):
         spend[entry["wo"]] = spend.get(entry["wo"], 0.0) + entry["cost"]
     return spend
 
@@ -585,6 +595,30 @@ def respond_post(target, body, repos_fn):
     return 204, None
 
 
+def content_length(declared):
+    """(byte count, problems) for a Content-Length header value.
+
+    RFC 9110 §8.6 makes it a non-negative integer, so anything else is a
+    bad request, not a crash: `int()` on it raised straight out of
+    do_POST and the client got no HTTP response at all — the connection
+    just closed. Absent is 0; a bodyless POST is well formed.
+
+    `isascii()` is not decoration. `str.isdigit()` is TRUE for '\u00b2',
+    which `int()` refuses, and U+00B2 is latin-1 byte 0xB2 — precisely
+    what http.client decodes a header into. isdigit() alone would leave
+    the crash reachable through an ordinary request.
+
+    A negative value never reaches the read for a second reason:
+    `rfile.read(-1)` reads to EOF, which wedges the handler thread.
+    """
+    if declared is None:
+        return 0, []
+    if not (declared.isascii() and declared.isdigit()):
+        return None, [f"dashboard: Content-Length {declared!r} is not a"
+                      " non-negative integer"]
+    return int(declared), []
+
+
 class _Handler(BaseHTTPRequestHandler):
     """Thin shim over respond(): JSON in, JSON out, no logic. serve()
     subclasses it with the injected repos_fn/gather_fn; per-request
@@ -607,10 +641,14 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        length = int(self.headers.get("Content-Length") or 0)
-        body = self.rfile.read(length).decode("utf-8", "replace")
-        status, payload = respond_post(self.path, body,
-                                       type(self).repos_fn)
+        length, problems = content_length(
+            self.headers.get("Content-Length"))
+        if problems:
+            status, payload = 400, {"problems": problems}
+        else:
+            body = self.rfile.read(length).decode("utf-8", "replace")
+            status, payload = respond_post(self.path, body,
+                                           type(self).repos_fn)
         body_bytes = (b"" if payload is None
                       else json.dumps(payload).encode("utf-8"))
         self.send_response(status)

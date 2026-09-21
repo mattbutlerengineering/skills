@@ -70,11 +70,16 @@ _MARKER = re.compile(r"^#\s*one-owner:\s*"
                      r"(?P<counterpart>[A-Za-z_]\w*\.[A-Za-z_]\w*)\s*"
                      r"\((?P<adr>ADR-\d{4})\)\s*—(?P<reason>.*)$")
 
-# What one module states, at one place. `identity` is the grouping key
-# and `lineno` is the definition's own line — the join key a marker
-# above it is attached by.
+# What one module states, at one place. `identity` is the grouping key.
+# `lineno` and `attach` answer two different questions about one
+# definition: `lineno` is the definition's own line, where a problem
+# string points a reader; `attach` is where a comment block written above
+# the definition ends, and it is the join key a marker is attached by.
+# For a decorated definition `attach` is its first decorator's line; for
+# everything else the two are equal.
 FactSite = namedtuple("FactSite",
-                      ("kind", "path", "lineno", "name", "identity"))
+                      ("kind", "path", "lineno", "attach", "name",
+                       "identity"))
 
 # One recorded deliberate second owner, read at the definition it
 # excuses. `lineno` is the marker comment's own line, `owner` the name
@@ -179,17 +184,67 @@ def fact_sites(path, source):
         identity = _stated_value(node.value)
         if identity is None:
             continue
-        found += [FactSite("same-value", path, node.lineno, target.id,
-                           identity)
+        # An ast.Assign has no decorator_list, so there is no second line
+        # to carry and attach is the assignment's own.
+        found += [FactSite("same-value", path, node.lineno, node.lineno,
+                           target.id, identity)
                   for target in node.targets if isinstance(target, ast.Name)]
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         keys = _read_keys(node)
         if len(keys) > 1:
-            found.append(FactSite("same-keys", path, node.lineno, node.name,
-                                  ", ".join(sorted(keys))))
+            # min, not decorator_list[0]: the list is source-ordered, but
+            # min says the earliest decorator wins without the reader
+            # having to know that.
+            attach = min((d.lineno for d in node.decorator_list),
+                         default=node.lineno)
+            found.append(FactSite("same-keys", path, node.lineno, attach,
+                                  node.name, ", ".join(sorted(keys))))
     return sorted(found, key=lambda site: (site.lineno, site.name)), []
+
+
+def defined_names(path, source):
+    """Every `<module>.<name>` one module binds, whether or not it states
+    a fact.
+
+    A DIFFERENT question from `fact_sites`', not a second copy of it:
+    that one asks what a module states, this one asks what it names. Only
+    `_rent` needs it, to tell a counterpart that was deleted from one
+    that merely dropped below the fact floor — which is what a fold does
+    to one side of a duplicate.
+
+    Reach is a SUPERSET of `fact_sites`', never a subset — a name it
+    misses that `fact_sites` finds would be reported as deleted while the
+    pass is looking straight at it. Module-level assignments come from
+    `tree.body`, the only place `same-value` looks; every function and
+    class comes from `ast.walk`, because `same-keys` walks too, so a
+    nested definition can be a fact site and must not read as undefined.
+    Classes are collected although no class is ever a fact site — a
+    marker naming one should hear "states no fact", not "does not exist".
+
+    Being a superset is not the same as being complete, and the gap is
+    named rather than hidden: a module-level `NAME: int = 1`
+    (`ast.AnnAssign`) is collected by neither this function nor
+    `fact_sites`, so a marker naming one still gets "not defined in this
+    repo". Zero root modules bind a name that way today. Closing it means
+    teaching BOTH readers about the node — widening only this one would
+    make the pair more asymmetric, not less.
+
+    Silent on source that will not parse: `fact_sites` reports that
+    module, and one report of a broken file is enough.
+    """
+    try:
+        tree = ast.parse(source, filename=path)
+    except SyntaxError:
+        return set()
+    found = {_ident(path, target.id)
+             for node in tree.body if isinstance(node, ast.Assign)
+             for target in node.targets if isinstance(target, ast.Name)}
+    found |= {_ident(path, node.name) for node in ast.walk(tree)
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                   ast.ClassDef))}
+    return found
 
 
 def source_files(root, run=git_runner):
@@ -211,12 +266,18 @@ def source_files(root, run=git_runner):
     rest of the run is unaffected.
     """
     try:
-        listed = run(["-C", str(root), "ls-files", "--", "*.py"]).stdout
+        listed = run(["-C", str(root), "ls-files", "-z", "--", "*.py"]).stdout
     except CLI_FAILURES as err:
         return [], [f"one-owner: git ls-files failed: {detail(err)}"]
     files, problems = [], []
-    for rel in sorted(line.strip() for line in listed.splitlines()
-                      if line.strip()):
+    # -z, and split on NUL rather than newline: git's default listing
+    # C-quotes any path with non-ASCII bytes (café.py comes back as the
+    # literal "caf\303\251.py") and cannot express one containing a
+    # newline. Either way the path read back is not the path git named,
+    # so the file goes unread and the duplicate it shares goes unreported
+    # — the tool would say only that it cannot read a file. Paths are
+    # exact under -z, so they are never stripped.
+    for rel in sorted(part for part in listed.split("\0") if part):
         if rel.startswith(EXCLUDED):
             continue
         try:
@@ -268,11 +329,17 @@ def markers(path, source):
     owners it records, read at the definitions they excuse.
 
     Comments are absent from the AST, so this is a line scan joined to
-    fact_sites by the DEFINITION's lineno — the one place the two readers
+    fact_sites by the DEFINITION's lines — the one place the two readers
     of a file meet. A marker attaches only from inside the contiguous
     comment block immediately above a fact site; a blank line ends the
     block, because a marker one line away is near a definition rather
     than above it.
+
+    "Above" means above the whole definition, decorators included. The
+    join walks up from both `site.lineno` and `site.attach`, so a marker
+    written above a decorated function attaches, and so does one written
+    between its decorator and its `def` — the only placement that worked
+    before `attach` existed.
 
     In every failure below the marker silences nothing: a marker that
     cannot be read is not a permission.
@@ -281,10 +348,15 @@ def markers(path, source):
     comments = _standalone_comments(source)
     owner_of = {}
     for site in sites:
-        lineno = site.lineno - 1
-        while lineno in comments:
-            owner_of[lineno] = site
-            lineno -= 1
+        # Both lines, because both placements are above the definition to
+        # a reader: the block above its first decorator, and the block
+        # between that decorator and the `def`. For everything else the
+        # two starts are equal and the second walk repeats the first.
+        for start in (site.lineno, site.attach):
+            lineno = start - 1
+            while lineno in comments:
+                owner_of[lineno] = site
+                lineno -= 1
     found, problems = [], []
     for lineno in sorted(comments):
         text = comments[lineno]
@@ -362,9 +434,14 @@ def _coverage(found_groups, marks):
     return problems
 
 
-def _rent(found_groups, marks, sites, adr_ids):
+def _rent(found_groups, marks, sites, defined, adr_ids):
     """OVER-COVERAGE. Every marker must match a duplicate this pass
     actually finds, and must cite a record that exists.
+
+    `sites` says which names STATE a fact; `defined` says which names
+    EXIST. The counterpart branch needs both, because "gone" and "still
+    there, stating nothing" are different findings with different
+    remedies, and a fold turns the first into the second.
 
     A carve-out list nothing re-checks is the condition this tool exists
     to fix, so a marker whose counterpart was deleted, renamed or folded
@@ -375,7 +452,7 @@ def _rent(found_groups, marks, sites, adr_ids):
     detector module from a tool is the coupling ADR-0058 removed; folding
     that grammar into a seam is its own decision, not a ride-along.
     """
-    defined = {_ident(site.path, site.name) for site in sites}
+    stated = {_ident(site.path, site.name) for site in sites}
     group_of = {(site.path, site.name): group
                 for group in found_groups for site in group.sites}
     problems = []
@@ -384,6 +461,12 @@ def _rent(found_groups, marks, sites, adr_ids):
             problems.append(f"one-owner: {marker.path}:{marker.lineno} names"
                             f" {marker.counterpart}, which is not defined in"
                             " this repo")
+        elif marker.counterpart not in stated:
+            problems.append(f"one-owner: {marker.path}:{marker.lineno} names"
+                            f" {marker.counterpart}, which is defined but"
+                            " states no fact this pass reads — name the"
+                            " definition that duplicates, or remove the"
+                            " marker")
         else:
             group = group_of.get((marker.path, marker.owner))
             peers = {_ident(site.path, site.name)
@@ -414,7 +497,7 @@ def check(root, run=git_runner):
     nothing — every failure is a problem string.
     """
     files, problems = source_files(root, run)
-    sites, marks = [], []
+    sites, marks, defined = [], [], set()
     for path, source in files:
         found, trouble = fact_sites(path, source)
         sites += found
@@ -422,9 +505,10 @@ def check(root, run=git_runner):
         marked, marker_trouble = markers(path, source)
         marks += marked
         problems += marker_trouble
+        defined |= defined_names(path, source)
     found_groups = groups(sites)
     problems += _coverage(found_groups, marks)
-    problems += _rent(found_groups, marks, sites, _adr_ids(root))
+    problems += _rent(found_groups, marks, sites, defined, _adr_ids(root))
     return sorted(problems)
 
 

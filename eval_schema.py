@@ -82,6 +82,52 @@ def results_path(results_dir, kind, date, slug=None, harness=None):
     return path
 
 
+def object_problems(data, label):
+    """[] when data is a JSON object, else the one problem naming its shape.
+
+    Every validator opens with this. A file's top level is legally an
+    array, string, number, boolean or null, and json.loads hands any of
+    them through untouched, so dict-ness is the one thing a validator
+    cannot assume. It is reported alone, never alongside derived
+    complaints: on a str, `"version" not in data` degrades into a
+    substring test, and the coverage arithmetic downstream then describes
+    the bug instead of the file.
+    """
+    if isinstance(data, dict):
+        return []
+    return [f"{label} is not a JSON object"]
+
+
+
+# The results kinds that are a single file. "output" names a grading
+# DIRECTORY instead, so it has no snapshot to write.
+SNAPSHOT_KINDS = ("trigger", "charter")
+
+
+def write_snapshot(output, results_dir, kind, harness=None):
+    """Write one dated results snapshot and return its path.
+
+    ADR-0024 moved the naming grammar here because the runner's record
+    step held the only copy of it. This is the rest of that step: the
+    two eval runners had each grown an identical copy of the same four
+    decisions — create the directory, take the name from results_path,
+    serialise as indented JSON with a trailing newline, hand back the
+    path. `evals/results/` is append-only and never reconciled, so a
+    serialisation change reaching one writer and not the other would
+    leave two formats in the tree with no way back.
+
+    A directory-shaped kind is refused rather than written: laying a
+    file across the grading directory's path corrupts the tree quietly,
+    and results_path is happy to name it.
+    """
+    if kind not in SNAPSHOT_KINDS:
+        raise ValueError(f"{kind!r} results are not a single snapshot file")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    path = results_path(results_dir, kind, output["date"], harness=harness)
+    path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 def entries(data, key, label):
     """(list-of-dict entries, shape problems) for the collection data[key].
 
@@ -123,13 +169,23 @@ def load_case_set(path, label, validate):
     set is unusable: cases is [] so callers cannot half-run an invalid
     set, and problems carries the diagnostics. The routing loader below
     and the charter replay's are thin callers.
+
+    The object guard runs *before* validate, so a validator may assume it
+    was handed a dict — the guarantee has to live here because this
+    function is also the one that ends by reaching for data["cases"]. A
+    validator that checks shape itself is then merely redundant, while
+    one that does not (charter_replay's returns no problems at all for a
+    bare-string file) would otherwise leave the crash to land here.
     """
     if not path.is_file():
         return [], [f"missing {label}"]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [], [f"{label} is not valid JSON: {err}"]
+    not_object = object_problems(data, label)
+    if not_object:
+        return [], not_object
     problems = validate(data)
     return ([], problems) if problems else (data.get("cases", []), [])
 
@@ -152,6 +208,8 @@ def fixture_refs(data):
     owns that complaint), and malformed shapes yield nothing rather than
     raising, mirroring entries.
     """
+    if not isinstance(data, dict):
+        return []
     evals = data.get("evals")
     if not isinstance(evals, list):
         return []
@@ -166,6 +224,9 @@ def validate_output(data, slug, label):
     stay with the caller. label prefixes every problem, mirroring
     validate().
     """
+    not_object = object_problems(data, label)
+    if not_object:
+        return not_object
     evals, shape = entries(data, "evals", label)
     return (
         shape
@@ -186,6 +247,9 @@ def validate(data, skills, label):
     the runner whatever --eval-set was given), so both callers print the
     same diagnostics for the same defect.
     """
+    shape = object_problems(data, label)
+    if shape:
+        return shape
     if "version" not in data:
         return [f"{label} missing 'version' field"]
     cases, shape = entries(data, "cases", label)

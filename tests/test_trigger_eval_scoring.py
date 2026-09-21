@@ -14,13 +14,16 @@ import shutil
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
+from io import StringIO
 from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from trigger_eval import _match_slug, record, score_case, summarize  # noqa: E402
+from trigger_eval import (_match_slug, print_report, record,  # noqa: E402
+                          score_case, summarize)
 
 
 def case(case_id="c1", kind="direct", expected="prd", query="q"):
@@ -144,6 +147,33 @@ class TestRecord(unittest.TestCase):
         output = {**self.output, "harness": "claude"}
         path = record(output, self.results)
         self.assertEqual(path, self.results / "trigger-2026-07-02.json")
+
+
+class TestPrintReportNamesLostRuns(unittest.TestCase):
+    """A run that never happened has to be visible to the human reading
+    the report, not only to whoever parses the JSON. Without this the
+    surviving runs are reported as if they were the whole measurement."""
+
+    def report(self, results):
+        output = {"results": results, **summarize(results)}
+        with redirect_stderr(StringIO()) as err:
+            print_report(output)
+        return err.getvalue()
+
+    def test_the_error_count_is_reported(self):
+        results = [score_case(case(), Counter({"prd": 1}), 1, 0.5, errors=2)]
+        text = self.report(results)
+        self.assertIn("2 run(s) failed", text)
+
+    def test_a_clean_report_says_nothing_about_errors(self):
+        results = [score_case(case(), Counter({"prd": 3}), 3, 0.5)]
+        self.assertNotIn("failed", self.report(results))
+
+    def test_a_passing_case_that_lost_runs_is_marked(self):
+        # The case passes on the one run that survived; the report must
+        # not present that as a clean pass over three runs.
+        results = [score_case(case(), Counter({"prd": 1}), 1, 0.5, errors=2)]
+        self.assertIn("errors=2", self.report(results))
 
 
 if __name__ == "__main__":

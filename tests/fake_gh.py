@@ -1,13 +1,20 @@
 """The one fake gh at cli.gh_runner's seam.
 
 cli.gh_runner promises "tests inject a fake runner so they never touch
-the network"; this is that fake, shared by every suite at the seam
-(test_validator, test_sweeps, test_label_sync, test_gate_digest). A
-suite declares WHAT gh says — canned stdout keyed by argv prefix —
+the network"; this is that fake, and every suite at the seam injects it.
+A suite declares WHAT gh says — canned stdout keyed by argv prefix —
 never HOW a fake behaves.
 
-The four suites' private fakes had diverged on three behaviors; these
-are the declared choices:
+Which suites those are is not written down here. It was, as a list of
+four, and it was wrong twice over — seven suites imported it, and
+test_work_queue kept two private runners the settlement below never
+reached, one of them recording and raising without computing. The list
+is derived instead, by tests/test_fake_gh.py, which reads every module
+under tests/ for a `__call__(self, args)` and fails when there is more
+than one.
+
+Four suites' private fakes had diverged on three behaviors; these are
+the declared choices:
 
 - Record, then compute, then raise. Every call lands in `calls` first,
   its canned answer is computed, and only then does a failing prefix

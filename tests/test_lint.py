@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -26,15 +27,24 @@ SPINE = [stage for stage, _ in STAGE_ARTIFACTS]
 SPINE_ARTIFACT = dict(STAGE_ARTIFACTS)
 
 
+def _in_flight_line():
+    """The recital a run-starting skill owes the protocol's in-flight
+    guard. Taken from lint's own constant so the clean tree tracks a
+    reworded heading instead of pinning a stale copy of it."""
+    return (f"Before claiming a seed, run the protocol's "
+            f"{lint.IN_FLIGHT_HEADING!r} check.")
+
+
 def recital_body(slug):
     """The smallest body whose recitals state the protocol facts
     check_skill_recitals pins — one canonical phrasing per convention,
     derived from the protocol tables so the clean tree tracks them."""
     if slug == "capture":
         return ("## Process\n\n"
-                "1. Record `re-entry: implement` or `re-entry: architect`.\n"
-                "2. Write the artifact as `defect.md`.\n"
-                "3. Hand off per the recorded re-entry.\n")
+                f"1. {_in_flight_line()}\n"
+                "2. Record `re-entry: implement` or `re-entry: architect`.\n"
+                "3. Write the artifact as `defect.md`.\n"
+                "4. Hand off per the recorded re-entry.\n")
     if slug not in SPINE:
         return "body\n"
     i = SPINE.index(slug)
@@ -51,6 +61,8 @@ def recital_body(slug):
         if SPINE[i + 1] == "ux-design":
             hand += f" When skipped, next is {SPINE[i + 2]}."
         lines.append(f"3. **Hand off.** {hand}")
+    if slug in lint.RUN_STARTING:
+        lines.append(f"4. {_in_flight_line()}")
     return "## Process\n\n" + "\n".join(lines) + "\n"
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -70,8 +82,13 @@ def make_clean_tree(root):
     """Seed the smallest tree on which every checker reports zero problems."""
     plugin_dir = root / ".claude-plugin"
     plugin_dir.mkdir(parents=True)
+    # check_plugin_skills holds the description to naming every utility
+    # skill, so the smallest clean tree carries them all.
     (plugin_dir / "plugin.json").write_text(json.dumps(
-        {"name": "t", "description": "t", "version": "0"}), encoding="utf-8")
+        {"name": "t", "version": "0",
+         "description": "t — utility skills ("
+                        + ", ".join(protocol.UTILITY_SKILLS) + ")"}),
+        encoding="utf-8")
 
     (root / "package.json").write_text(json.dumps(
         {"name": "t", "version": "0", "private": True,
@@ -107,7 +124,8 @@ def make_clean_tree(root):
     # doc's stage order and artifacts to protocol.py's walk tables, so the
     # smallest tree every checker passes on genuinely has to carry them.
     (root / "docs" / "pipeline-protocol.md").write_text(
-        "spec\n\n## Artifacts are the state\n\n"
+        f"spec\n\n### {lint.IN_FLIGHT_HEADING}\n\n"
+        "## Artifacts are the state\n\n"
         + protocol_table(protocol.STAGE_ARTIFACTS)
         + "\n### Maintenance-run orientation\n\n"
         + protocol_table(protocol.MAINTENANCE_STAGE_ARTIFACTS),
@@ -147,6 +165,19 @@ class CheckerTreeTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.root)
         make_clean_tree(self.root)
 
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """RFC 8259 §8.1 makes JSON a UTF-8 interchange format, so bytes
+        that will not decode are not valid JSON — the existing message is
+        right, only the guard was too narrow. UnicodeDecodeError subclasses
+        ValueError, not JSONDecodeError, so it escaped as a traceback and
+        CI reported a crash instead of `lint: N problem(s)`."""
+        path = self.root / ".claude-plugin" / "plugin.json"
+        path.write_bytes('{"name": "caf\u00e9"}'.encode("latin-1"))
+        problems = lint.check_manifest(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "plugin.json is not valid JSON:"), problems)
+
 
 class TestCleanTree(CheckerTreeTest):
     def test_every_checker_reports_zero_problems(self):
@@ -164,6 +195,27 @@ class TestManifest(CheckerTreeTest):
                          ["plugin.json missing field: description"])
 
 
+    def test_a_manifest_that_is_not_an_object_names_its_shape(self):
+        # A JSON top level is legally any of these; none of them has .get
+        path = self.root / ".claude-plugin" / "plugin.json"
+        for shape in ("null", "42", '"text"', '["a"]', "true"):
+            with self.subTest(shape=shape):
+                path.write_text(shape, encoding="utf-8")
+                self.assertEqual(lint.check_manifest(self.root),
+                                 ["plugin.json is not a JSON object"])
+
+    def test_a_non_object_manifest_does_not_stop_the_gate(self):
+        # check_manifest is CHECKERS[0]: a raise here hides every other
+        # finding in the repo behind a traceback
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "null", encoding="utf-8")
+        problems = []
+        for checker in lint.CHECKERS:
+            with self.subTest(checker=checker.__name__):
+                problems += checker(self.root)
+        self.assertEqual(problems, ["plugin.json is not a JSON object"])
+
+
 class TestPiPackage(CheckerTreeTest):
     """The Pi (oh-my-pi) discovery manifest, guarded like the Claude one so
     the dual-target packaging can't silently drift (ADR-0027)."""
@@ -179,6 +231,25 @@ class TestPiPackage(CheckerTreeTest):
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "package.json is not valid JSON:"))
+
+
+    def test_a_package_that_is_not_an_object_names_its_shape(self):
+        path = self.root / "package.json"
+        for shape in ("null", "42", '"text"', '["a"]', "true"):
+            with self.subTest(shape=shape):
+                path.write_text(shape, encoding="utf-8")
+                self.assertEqual(lint.check_pi_package(self.root),
+                                 ["package.json is not a JSON object"])
+
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """Guarded like check_manifest — ADR-0027 keeps the two packaging
+        manifests in step, and that has to include how they fail."""
+        (self.root / "package.json").write_bytes(
+            '{"private": true, "name": "caf\u00e9"}'.encode("latin-1"))
+        problems = lint.check_pi_package(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "package.json is not valid JSON:"), problems)
 
     def test_not_private(self):
         (self.root / "package.json").write_text(json.dumps(
@@ -336,12 +407,72 @@ class TestSkillRecitals(CheckerTreeTest):
 
     def test_capture_must_record_both_re_entry_options(self):
         self.seed("capture",
-                  "1. Record `re-entry: implement`.\n"
-                  "2. Write the artifact as `defect.md`.\n")
+                  f"1. {_in_flight_line()}\n"
+                  "2. Record `re-entry: implement`.\n"
+                  "3. Write the artifact as `defect.md`.\n")
         self.assertEqual(
             lint.check_skill_recitals(self.root),
             ["skills/capture/SKILL.md never records re-entry option "
              "'re-entry: architect'"])
+
+    def test_a_run_starting_skill_must_name_the_in_flight_check(self):
+        """The moment a run starts is the only moment this rule can be
+        honoured, so the two skills that start one owe it a recital. The
+        pin proves the words are present and nothing more — whether the
+        agent looked is not knowable here, and a checker that implied
+        otherwise would manufacture the false clean result the protocol
+        section exists to forbid."""
+        self.seed("capture",
+                  "1. Record `re-entry: implement` or `re-entry: "
+                  "architect`.\n"
+                  "2. Write the artifact as `defect.md`.\n"
+                  "3. Hand off per the recorded re-entry.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            [f"skills/capture/SKILL.md never names the protocol's "
+             f"{lint.IN_FLIGHT_HEADING!r} check, which is where a run "
+             "that is already open in review gets caught"])
+
+    def test_the_spine_entry_carries_the_same_obligation(self):
+        """`idea` claims backlog seeds too, and it is a spine stage rather
+        than the maintenance entry — two different loops in the checker.
+        Asserted separately because one loop passing says nothing about
+        the other."""
+        self.seed("idea",
+                  "1. Write the artifact as `idea.md`.\n"
+                  "2. **Hand off.** Next stage is prd.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            [f"skills/idea/SKILL.md never names the protocol's "
+             f"{lint.IN_FLIGHT_HEADING!r} check, which is where a run "
+             "that is already open in review gets caught"])
+
+    def test_a_recital_that_wraps_still_counts(self):
+        """Found by the pin failing on a correct recital. These documents
+        are hard-wrapped near 72 columns, so a four-word phrase lands
+        across a line break often — and a raw substring test would call
+        that a missing rule, which is pinning the formatting and calling
+        it the fact. The wrap here is the real one from capture."""
+        self.seed("capture",
+                  "1. Look over the work awaiting review — the protocol's"
+                  " *Work\n   already in flight* section.\n"
+                  "2. Record `re-entry: implement` or `re-entry: "
+                  "architect`.\n"
+                  "3. Write the artifact as `defect.md`.\n"
+                  "4. Hand off per the recorded re-entry.\n")
+        self.assertEqual(lint.check_skill_recitals(self.root), [])
+
+    def test_a_mid_spine_stage_owes_no_recital(self):
+        """The discriminating half. A stage that cannot start a run has
+        nothing to check — it already has artifacts to orient from — so a
+        pin that fired on every skill would be pinning the wrong fact and
+        would pass this suite just as happily."""
+        self.seed("prd",
+                  "1. **Soft gate.** Predecessor artifact: `idea.md`.\n"
+                  "2. Write the artifact as `prd.md`.\n"
+                  "3. **Hand off.** Next stage is ux design. When skipped, "
+                  "next is architect.\n")
+        self.assertEqual(lint.check_skill_recitals(self.root), [])
 
     def test_ux_skip_target_must_be_named(self):
         self.seed("prd",
@@ -525,10 +656,106 @@ class TestReadmeSkills(CheckerTreeTest):
         self.assertEqual(lint.check_readme_skills(self.root),
                          ["README.md never names skill 'rogue'"])
 
+    def test_a_slug_nested_in_a_longer_one_is_still_required(self):
+        """`architect` sits inside `architecture-diagram` and inside
+        `interactive-architecture-diagram`. A substring test calls the
+        README complete once either longer name is there, so the shorter
+        skill is the one the checker cannot report — and the docstring
+        above records that a diagram skill shipping undocumented is
+        exactly what this checker exists to stop."""
+        path = self.root / "README.md"
+        path.write_text(path.read_text(encoding="utf-8")
+                        .replace("- `architect`\n", ""), encoding="utf-8")
+        self.assertEqual(lint.check_readme_skills(self.root),
+                         ["README.md never names skill 'architect'"])
+
+    def test_every_registered_skill_can_be_reported_missing(self):
+        """Closure: no slug is unreportable. One dropped name at a time,
+        the whole taxonomy, so a blind spot cannot hide behind the three
+        slugs the other tests happen to pick."""
+        original = (self.root / "README.md").read_text(encoding="utf-8")
+        path = self.root / "README.md"
+        for slug in ALL_SKILLS:
+            with self.subTest(slug=slug):
+                path.write_text(original.replace(f"- `{slug}`\n", ""),
+                                encoding="utf-8")
+                self.assertEqual(lint.check_readme_skills(self.root),
+                                 [f"README.md never names skill {slug!r}"])
+
     def test_missing_readme_is_one_problem_not_one_per_skill(self):
         (self.root / "README.md").unlink()
         self.assertEqual(lint.check_readme_skills(self.root),
                          ["missing README.md"])
+
+
+class TestPluginSkills(CheckerTreeTest):
+    """The plugin description enumerates the utility skills, and it is the
+    string a user reads first when deciding whether to install. Nothing
+    held it to the taxonomy: check_manifest asserts only that the field is
+    non-empty, so three skills went unnamed on the install surface while
+    README.md and LEDGER.md were held to the full list. Same bar and same
+    shape as check_readme_skills, for the same reason."""
+
+    def rewrite_description(self, description):
+        path = self.root / ".claude-plugin" / "plugin.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["description"] = description
+        path.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_unnamed_utility_skill_is_reported(self):
+        named = [slug for slug in protocol.UTILITY_SKILLS if slug != "deepen"]
+        self.rewrite_description("utility skills (" + ", ".join(named) + ")")
+        self.assertEqual(
+            lint.check_plugin_skills(self.root),
+            ["plugin.json's description never names utility skill 'deepen'"])
+
+    def test_every_missing_skill_gets_its_own_problem(self):
+        self.rewrite_description("no skills here")
+        self.assertEqual(
+            lint.check_plugin_skills(self.root),
+            [f"plugin.json's description never names utility skill {slug!r}"
+             for slug in protocol.UTILITY_SKILLS])
+
+    def test_a_complete_description_is_clean(self):
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+
+    def test_only_utility_skills_are_required(self):
+        """Stage skills are named in the description as title-case prose
+        ("Idea", "UX Design"), never by slug, so holding the string to the
+        whole taxonomy would demand a restyling nobody asked for. The
+        parenthetical list is the part that claims to be exhaustive."""
+        self.rewrite_description(
+            "utility skills (" + ", ".join(protocol.UTILITY_SKILLS) + ")")
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+
+    def test_a_longer_slug_does_not_satisfy_the_shorter_one(self):
+        """`architecture-diagram` is a substring of
+        `interactive-architecture-diagram`. A plain `in` test calls the
+        list complete after the shorter name is dropped — silently
+        blessing exactly the drift this checker exists to catch."""
+        kept = [slug for slug in protocol.UTILITY_SKILLS
+                if slug != "architecture-diagram"]
+        self.rewrite_description("utility skills (" + ", ".join(kept) + ")")
+        self.assertEqual(
+            lint.check_plugin_skills(self.root),
+            ["plugin.json's description never names utility skill"
+             " 'architecture-diagram'"])
+
+    def test_a_missing_manifest_is_left_to_check_manifest(self):
+        """One broken file, one problem string. check_manifest already
+        reports a missing or unparseable manifest, so reporting it here
+        too would double it — and lint aggregates every checker, so the
+        run still fails."""
+        (self.root / ".claude-plugin" / "plugin.json").unlink()
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+        self.assertEqual(lint.check_manifest(self.root),
+                         ["missing .claude-plugin/plugin.json"])
+
+    def test_an_unparseable_manifest_is_left_to_check_manifest(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "{not json", encoding="utf-8")
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+        self.assertEqual(len(lint.check_manifest(self.root)), 1)
 
 
 class TestProtocolTables(CheckerTreeTest):
@@ -726,6 +953,22 @@ class TestProtocol(CheckerTreeTest):
         self.assertEqual(lint.check_protocol(self.root),
                          ["missing docs/pipeline-protocol.md"])
 
+    def test_a_deleted_in_flight_section_strands_two_recitals(self):
+        """The other half of the recital pin. That pin holds capture and
+        idea to IN_FLIGHT_HEADING and holds IN_FLIGHT_HEADING to nothing,
+        so deleting the section leaves all three agreeing while both
+        skills point at a heading that is gone — green, and wrong."""
+        path = self.root / "docs" / "pipeline-protocol.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                f"### {lint.IN_FLIGHT_HEADING}\n\n", ""),
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_protocol(self.root),
+            [f"docs/pipeline-protocol.md no longer states "
+             f"{lint.IN_FLIGHT_HEADING!r}, which capture and idea both "
+             "recite"])
+
 
 class TestEvals(CheckerTreeTest):
     def test_invalid_expected_and_thin_coverage(self):
@@ -781,6 +1024,17 @@ class TestOutputEvals(CheckerTreeTest):
         problems = lint.check_output_evals(self.root)
         self.assertIn("evals/output/idea.json evals is not a list", problems)
 
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """This checker walks a directory, so one undecodable file must
+        not take the whole walk down with it — the same reason the null
+        case above is diagnosed rather than crashed."""
+        (self.root / "evals" / "output" / "idea.json").write_bytes(
+            '{"skill_name": "caf\u00e9"}'.encode("latin-1"))
+        problems = lint.check_output_evals(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "evals/output/idea.json is not valid JSON:"), problems)
+
 
 class TestBacklog(CheckerTreeTest):
     """The seed backlog is strictly opt-in (ADR-0029): the clean tree has
@@ -808,9 +1062,9 @@ class TestBacklog(CheckerTreeTest):
     def test_unreadable_backlog_yields_one_problem_string(self):
         path = self.root / "docs" / "backlog.md"
         path.write_text("- a seed (from: product)\n", encoding="utf-8")
-        path.chmod(0)
-        self.addCleanup(path.chmod, 0o644)
-        problems = lint.check_backlog(self.root)
+        with mock.patch.object(Path, "read_text",
+                                side_effect=OSError("Permission denied")):
+            problems = lint.check_backlog(self.root)
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "backlog: docs/backlog.md is unreadable:"))
@@ -823,6 +1077,61 @@ class TestLedger(CheckerTreeTest):
                     if slug != "operate"), encoding="utf-8")
         self.assertEqual(lint.check_ledger(self.root),
                          ["LEDGER.md has no row for skill 'operate'"])
+
+    def test_a_slug_nested_in_a_longer_one_still_needs_its_own_row(self):
+        """`architect` is a substring of two other registered slugs, so a
+        substring test can never find its row missing. `review` (inside
+        `address-pr-review`) and `architecture-diagram` (inside
+        `interactive-architecture-diagram`) are held up the same way."""
+        (self.root / "LEDGER.md").write_text(
+            "".join(f"| {slug} |\n" for slug in ALL_SKILLS
+                    if slug != "architect"), encoding="utf-8")
+        self.assertEqual(lint.check_ledger(self.root),
+                         ["LEDGER.md has no row for skill 'architect'"])
+
+    def test_prose_under_the_table_is_not_a_row(self):
+        """The problem string says row, and the real LEDGER.md carries
+        several paragraphs of reading notes below the table that name
+        skills by slug. A row deleted while the reading still mentions the
+        skill must not pass the check that claims to look for the row."""
+        (self.root / "LEDGER.md").write_text(
+            "".join(f"| {slug} |\n" for slug in ALL_SKILLS
+                    if slug != "operate")
+            + "\nReading: operate mostly under-triggers.\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_ledger(self.root),
+                         ["LEDGER.md has no row for skill 'operate'"])
+
+    def test_every_registered_skill_can_be_reported_missing(self):
+        """Closure over the taxonomy: drop each slug's row in turn and
+        the checker names that slug, so no blind spot can hide behind
+        whichever three slugs the tests above happen to pick. Says
+        nothing about the other direction — a stale row for a skill that
+        no longer exists has no checker at all, here or anywhere."""
+        for slug in ALL_SKILLS:
+            with self.subTest(slug=slug):
+                (self.root / "LEDGER.md").write_text(
+                    "".join(f"| {other} |\n" for other in ALL_SKILLS
+                            if other != slug), encoding="utf-8")
+                self.assertEqual(lint.check_ledger(self.root),
+                                 [f"LEDGER.md has no row for skill {slug!r}"])
+
+    def test_a_row_and_a_mention_agree_about_what_a_slug_is(self):
+        """extra_skills accepts any directory name, so the two halves of
+        the fix have to accept the same names. A slug opening with a
+        digit is a row for check_ledger exactly as it is a mention for
+        check_readme_skills — otherwise a present row reads as missing."""
+        rogue = self.root / "skills" / "3d-diagram"
+        rogue.mkdir()
+        (rogue / "SKILL.md").write_text(
+            "---\nname: 3d-diagram\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        for path, line in ((self.root / "LEDGER.md", "| 3d-diagram |\n"),
+                           (self.root / "README.md", "- `3d-diagram`\n")):
+            path.write_text(path.read_text(encoding="utf-8") + line,
+                            encoding="utf-8")
+        self.assertEqual(lint.check_ledger(self.root), [])
+        self.assertEqual(lint.check_readme_skills(self.root), [])
 
     def test_discovered_skill_needs_a_row_too(self):
         extra = self.root / "skills" / "extra"

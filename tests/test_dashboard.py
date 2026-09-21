@@ -6,13 +6,17 @@ mixins. The gather half is pure disk — protocol orientation over the
 knowledge plane's run walk — so these tests exercise it through the
 public state dict and the exact problem strings.
 """
+import io
 import json
 import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import cost_ledger
+import cost_report
 import dashboard
 
 # discover puts tests/ on sys.path; selective package-style runs need it
@@ -81,6 +85,20 @@ class TestRepoSet(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
                 f"dashboard: {config} is not valid JSON:"))
+
+    def test_bytes_that_are_not_utf8_are_a_problem_string(self):
+        """repo_set's own docstring says only an unreadable or misshapen
+        config is a problem. A non-UTF-8 config is unreadable, so it
+        belongs in the `cannot read` arm — but UnicodeDecodeError
+        subclasses ValueError, so that OSError arm never saw it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp) / "config.json"
+            config.write_bytes('{"repos": ["caf\u00e9"]}'.encode("latin-1"))
+            paths, problems = dashboard.repo_set([], config)
+            self.assertEqual(paths, [])
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"dashboard: cannot read {config}:"), problems)
 
 
 class TestGather(unittest.TestCase):
@@ -447,6 +465,75 @@ LEDGER = (
     '{"wo": "WO-0103", "run_id": "gate-merge-2", "model": "none",'
     ' "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:200s",'
     ' "at": "2026-08-04"}\n')
+
+
+class TestSpendCountsOnlyDispatchedRows(unittest.TestCase):
+    """cost_ledger.dispatched is the one row-selection rule for what
+    counts as spend, because a gate-latency observation (ADR-0041) is a
+    $0 wait record, not a run. _metrics keeps it through
+    cost_report.aggregate; _spend, reading the same list from the same
+    cost_ledger.read call, must keep it too — or the console prints a
+    measured $0.00 where the page has an em dash ready."""
+
+    GATE_ONLY = [
+        {"wo": "WO-0102", "run_id": "gate-prd-1", "model": "none",
+         "tokens": 0, "cost": 0.0, "outcome": "gate_wait:prd:100s",
+         "at": "2026-08-02"},
+    ]
+    RAN = [
+        {"wo": "WO-0101", "run_id": "r1", "model": "m", "tokens": 10,
+         "cost": 2.0, "outcome": "completed", "at": "2026-08-10"},
+        {"wo": "WO-0101", "run_id": "gate-merge-1", "model": "none",
+         "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:300s",
+         "at": "2026-08-11"},
+    ]
+
+    def test_the_fixture_holds_both_row_kinds(self):
+        """Non-vacuity: these tests mean nothing over rows that are all
+        one kind."""
+        rows = self.GATE_ONLY + self.RAN
+        self.assertTrue([r for r in rows if cost_ledger.gate_wait(r)])
+        self.assertTrue(cost_ledger.dispatched(rows))
+
+    def test_a_gate_only_work_order_has_no_spend(self):
+        self.assertEqual(dashboard._spend(self.GATE_ONLY), {})
+
+    def test_a_gate_row_does_not_perturb_a_work_order_that_ran(self):
+        self.assertEqual(dashboard._spend(self.RAN), {"WO-0101": 2.0})
+
+    def test_the_two_ledger_readers_agree_on_the_work_order_set(self):
+        """The console shows _spend's numbers in the output table and
+        aggregate's by_wo count in cost_per_wo. A work order in one and
+        not the other makes the two disagree on the same page."""
+        rows = self.GATE_ONLY + self.RAN
+        self.assertEqual(set(dashboard._spend(rows)),
+                         set(cost_report.aggregate(rows)["by_wo"]))
+
+    def test_the_rule_is_cost_ledgers_not_a_second_copy(self):
+        """A future change to what counts as a spend row must reach the
+        console without a second edit here."""
+        rows = self.GATE_ONLY + self.RAN
+        with mock.patch.object(dashboard.cost_ledger, "dispatched",
+                               return_value=[]) as filtered:
+            self.assertEqual(dashboard._spend(rows), {})
+        filtered.assert_called_once_with(rows)
+
+    def test_the_console_renders_no_spend_for_a_gate_only_row(self):
+        """End to end: the row reaches the output table with spend None,
+        which dashboard.html renders as an em dash rather than $0.00."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/costs.jsonl",
+                       "".join(json.dumps(row) + "\n"
+                               for row in self.GATE_ONLY + self.RAN))
+            tree.write(".github/factory.json",
+                       '{"monthly_cap_usd": 300.0}')
+            state = dashboard.gather(tmp, run=queue_gh(),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        spend = {row["wo"]: row["spend"] for row in state["output"]}
+        self.assertIsNone(spend["WO-0102"])
+        self.assertEqual(spend["WO-0101"], 2.0)
 
 
 class TestMetrics(unittest.TestCase):
@@ -995,11 +1082,9 @@ class TestRespondPost(unittest.TestCase):
             body = json.dumps({"i": 0,
                                "hash": dashboard.backlog_hash(self.TEXT),
                                "order": [5, 3, 4]})
-            path.chmod(0o444)
-            try:
+            with mock.patch.object(Path, "write_text",
+                                    side_effect=OSError("Permission denied")):
                 status, payload = self.post(tmp, body)
-            finally:
-                path.chmod(0o644)
             self.assertEqual(status, 500)
             self.assertEqual(len(payload["problems"]), 1)
             self.assertTrue(payload["problems"][0].startswith(
@@ -1220,6 +1305,138 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         code, out = self.run_cli(["serve", "--port", "x"])
         self.assertEqual(code, 1)
         self.assertIn("dashboard: --port 'x' is not a number", out)
+
+
+class _FakeConn:
+    """One HTTP conversation over BytesIO instead of a socket.
+
+    BaseHTTPRequestHandler only needs makefile/sendall, and a real socket
+    would need a port and a thread. The request line and headers are
+    parsed by http.server itself, so the Content-Length under test
+    arrives exactly as it would off the wire — latin-1 decoded included.
+    """
+
+    def __init__(self, raw):
+        self._rfile = io.BytesIO(raw)
+        self.out = io.BytesIO()
+
+    def makefile(self, _mode, _bufsize=-1):
+        return self._rfile
+
+    def sendall(self, data):
+        self.out.write(data)
+
+    def close(self):
+        pass
+
+
+class _FakeServer:
+    server_name = "testserver"
+    server_port = 0
+
+
+def post_raw(raw, repos_fn=lambda: ([], [])):
+    """(status line, parsed JSON body or None) for one raw POST."""
+    handler = type("H", (dashboard._Handler,), {
+        "repos_fn": staticmethod(repos_fn),
+        "gather_fn": staticmethod(dashboard.gather)})
+    conn = _FakeConn(raw)
+    handler(conn, ("127.0.0.1", 5555), _FakeServer())
+    out = conn.out.getvalue()
+    if not out:
+        return None, None
+    head, _, body = out.partition(b"\r\n\r\n")
+    status = head.split(b"\r\n")[0].decode("latin-1")
+    try:
+        return status, json.loads(body.decode("utf-8"))
+    except ValueError:
+        return status, None
+
+
+def post_with_length(declared, path=b"/api/repos", body=b"{}"):
+    header = (b"Content-Length: " + declared + b"\r\n"
+              if declared is not None else b"")
+    return post_raw(b"POST " + path + b" HTTP/1.1\r\nHost: x\r\n"
+                    + header + b"\r\n" + body)
+
+
+class TestContentLength(unittest.TestCase):
+    """The one piece of logic in a handler documented as having none.
+
+    `int(self.headers.get("Content-Length") or 0)` had no guard and no
+    test: a malformed value raised out of do_POST, and the client got no
+    HTTP response at all — the connection simply closed.
+    """
+
+    def test_absent_is_an_empty_body_not_a_problem(self):
+        self.assertEqual(dashboard.content_length(None), (0, []))
+
+    def test_a_plain_count_parses(self):
+        self.assertEqual(dashboard.content_length("42"), (42, []))
+
+    def test_a_non_numeric_value_is_a_problem_string(self):
+        length, problems = dashboard.content_length("abc")
+        self.assertIsNone(length)
+        self.assertEqual(problems, [
+            "dashboard: Content-Length 'abc' is not a non-negative"
+            " integer"])
+
+    def test_a_negative_value_is_a_problem_string(self):
+        """rfile.read(-1) reads to EOF, which wedges the handler thread on
+        a real socket — so a negative length must never reach the read."""
+        length, problems = dashboard.content_length("-1")
+        self.assertIsNone(length)
+        self.assertEqual(problems, [
+            "dashboard: Content-Length '-1' is not a non-negative"
+            " integer"])
+
+    def test_a_digit_that_int_refuses_is_a_problem_string(self):
+        """str.isdigit() is true for '\u00b2' while int() refuses it, so
+        isdigit() alone is not a guard. U+00B2 is latin-1 byte 0xB2 and
+        http.client decodes headers as latin-1, so it is reachable
+        through an ordinary request rather than being a contrivance."""
+        length, problems = dashboard.content_length("\u00b2")
+        self.assertIsNone(length)
+        self.assertEqual(problems, [
+            "dashboard: Content-Length '\u00b2' is not a non-negative"
+            " integer"])
+
+
+class TestPostContentLengthOverHttp(unittest.TestCase):
+    """The same values driven through a real request cycle, because the
+    defect was that the exception escaped the handler, not that the
+    arithmetic was wrong."""
+
+    def test_a_valid_length_is_read_and_routed(self):
+        status, payload = post_with_length(b"2")
+        self.assertEqual(status, "HTTP/1.0 404 Not Found")
+        self.assertEqual(payload, {"problems": ["dashboard: no such path"]})
+
+    def test_an_absent_header_is_read_as_an_empty_body(self):
+        status, payload = post_with_length(None, body=b"")
+        self.assertEqual(status, "HTTP/1.0 404 Not Found")
+        self.assertEqual(payload, {"problems": ["dashboard: no such path"]})
+
+    def test_a_non_numeric_length_answers_400_instead_of_dropping(self):
+        status, payload = post_with_length(b"abc")
+        self.assertEqual(status, "HTTP/1.0 400 Bad Request")
+        self.assertEqual(payload, {"problems": [
+            "dashboard: Content-Length 'abc' is not a non-negative"
+            " integer"]})
+
+    def test_a_digit_that_int_refuses_answers_400(self):
+        status, payload = post_with_length("\u00b2".encode("latin-1"))
+        self.assertEqual(status, "HTTP/1.0 400 Bad Request")
+        self.assertEqual(payload, {"problems": [
+            "dashboard: Content-Length '\u00b2' is not a non-negative"
+            " integer"]})
+
+    def test_a_negative_length_answers_400_before_the_read(self):
+        status, payload = post_with_length(b"-1")
+        self.assertEqual(status, "HTTP/1.0 400 Bad Request")
+        self.assertEqual(payload, {"problems": [
+            "dashboard: Content-Length '-1' is not a non-negative"
+            " integer"]})
 
 
 if __name__ == "__main__":

@@ -111,6 +111,17 @@ class TestLoadLabels(unittest.TestCase):
             self.assertEqual(labels, [])
             self.assertEqual(problems, [expected])
 
+    def test_a_taxonomy_that_is_not_utf8_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / ".github" / "labels.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'[{"name": "caf\xe9"}]')
+            labels, problems = label_sync.load_labels(Path(tmp))
+            self.assertEqual(labels, [])
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "L: cannot read .github/labels.json:"), problems)
+
     def test_non_array_and_empty_array_are_flagged(self):
         for payload in ("{}", "[]"):
             with tempfile.TemporaryDirectory() as tmp:
@@ -152,6 +163,65 @@ class TestLoadLabels(unittest.TestCase):
                 "L: .github/labels.json[2] duplicate label name size:S"])
             self.assertEqual([label["name"] for label in labels],
                              ["size:S", "size:M"])
+
+
+class TestTaxonomyPath(unittest.TestCase):
+    """Where the taxonomy lives, asked once.
+
+    load_labels resolved this inline and was the only thing that knew
+    the answer, so detector J — which needs to tell an absent taxonomy
+    (nothing to be wrong about) from an unreadable one (very much
+    something to be wrong about) — had no way to ask without walking
+    the candidates itself. A second walk is a second answer waiting to
+    happen, which is the thing J's own docstring says it will not do.
+    """
+
+    ENTRY = [{"name": "wo:draft", "color": "ededed", "description": "d"}]
+
+    def test_it_resolves_the_installed_copy_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", json.dumps(self.ENTRY))
+            tree.write("factory/templates/.github/labels.json",
+                       json.dumps(self.ENTRY))
+            self.assertEqual(label_sync.taxonomy_path(tree.root),
+                             tree.root / ".github" / "labels.json")
+
+    def test_it_falls_back_to_the_template_copy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/.github/labels.json",
+                       json.dumps(self.ENTRY))
+            self.assertEqual(
+                label_sync.taxonomy_path(tree.root),
+                tree.root / "factory" / "templates" / ".github"
+                / "labels.json")
+
+    def test_it_is_none_when_no_candidate_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(label_sync.taxonomy_path(Path(tmp)))
+
+    def test_load_labels_reports_against_the_path_it_resolves(self):
+        """The two must never name different files. Asserted through
+        the problem string, which is the only place load_labels says
+        out loud which file it read."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", "{nope")
+            tree.write("factory/templates/.github/labels.json",
+                       json.dumps(self.ENTRY))
+            resolved = label_sync.taxonomy_path(tree.root)
+            _, problems = label_sync.load_labels(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(
+                problems[0].startswith(
+                    f"L: {resolved.relative_to(tree.root).as_posix()} "),
+                problems)
+
+    def test_the_shipped_repo_resolves_its_payload_copy(self):
+        self.assertEqual(
+            label_sync.taxonomy_path(REPO_ROOT),
+            REPO_ROOT / "factory" / "templates" / ".github" / "labels.json")
 
 
 class TestPlan(unittest.TestCase):

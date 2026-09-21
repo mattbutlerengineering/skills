@@ -21,6 +21,83 @@ def rows(*lines):
     return [("docs/features/demo/breakdown.md", list(lines))]
 
 
+class TestIssueLifecycle(unittest.TestCase):
+    """`issue_lifecycle` at its own interface, which it has never had.
+
+    Its only coverage today is through `reconcile_drift`, which reaches it
+    with well-formed entries — so the strictness it applies to a malformed
+    one has never been asserted anywhere. Pinned here BEFORE the walk is
+    replaced, so what survives the replacement is a measurement rather
+    than a claim."""
+
+    def test_wo_labels_come_back_sorted(self):
+        self.assertEqual(
+            plane_drift.issue_lifecycle(
+                issue(1, labels=("wo:merged", "wo:in-progress"))),
+            ["wo:in-progress", "wo:merged"])
+
+    def test_a_label_outside_the_lifecycle_prefix_is_dropped(self):
+        self.assertEqual(
+            plane_drift.issue_lifecycle(
+                issue(1, labels=("size:M", "wo:merged", "bug"))),
+            ["wo:merged"])
+
+    def test_a_duplicate_lifecycle_label_survives(self):
+        # reconcile_drift counts these to report an issue carrying more
+        # than one lifecycle label at once, so deduplicating here would
+        # silence that line.
+        self.assertEqual(
+            plane_drift.issue_lifecycle(
+                issue(1, labels=("wo:merged", "wo:merged"))),
+            ["wo:merged", "wo:merged"])
+
+    def test_the_prefix_test_is_case_sensitive(self):
+        self.assertEqual(
+            plane_drift.issue_lifecycle(issue(1, labels=("WO:MERGED",))), [])
+
+    def test_an_entry_that_is_not_an_object_contributes_nothing(self):
+        self.assertEqual(plane_drift.issue_lifecycle(
+            {"number": 1, "labels": ["wo:merged", None, [], 7]}), [])
+
+    def test_an_entry_with_no_usable_name_contributes_nothing(self):
+        self.assertEqual(plane_drift.issue_lifecycle(
+            {"number": 1, "labels": [{}, {"name": None}, {"name": 7},
+                                     {"name": ""}, {"colour": "ededed"}]}),
+            [])
+
+    def test_a_usable_name_survives_beside_unusable_ones(self):
+        self.assertEqual(plane_drift.issue_lifecycle(
+            {"number": 1, "labels": [{}, {"name": "wo:merged"}, None]}),
+            ["wo:merged"])
+
+    def test_a_labels_key_that_is_not_a_list_is_no_labels(self):
+        for labels in (None, "wo:merged", 3, {"name": "wo:merged"}):
+            with self.subTest(labels=labels):
+                self.assertEqual(plane_drift.issue_lifecycle(
+                    {"number": 1, "labels": labels}), [])
+
+    def test_an_absent_labels_key_is_no_labels(self):
+        self.assertEqual(plane_drift.issue_lifecycle({"number": 1}), [])
+
+    def test_an_empty_labels_array_is_no_labels(self):
+        self.assertEqual(plane_drift.issue_lifecycle(
+            {"number": 1, "labels": []}), [])
+
+    def test_an_entry_that_is_not_an_object_at_all_is_no_labels(self):
+        """The one widening the fold accepts, asserted rather than left to
+        be discovered. The hand-rolled walk raised AttributeError here;
+        the seam treats a bare list as the labels array and anything else
+        as empty. `reconcile_drift` drops a non-dict entry with a `drift:`
+        problem before either walk runs (plane_drift.py:68-72), so no
+        caller can reach this — the change removes a crash and adds no
+        silence."""
+        self.assertEqual(plane_drift.issue_lifecycle(None), [])
+        self.assertEqual(plane_drift.issue_lifecycle("wo:merged"), [])
+        self.assertEqual(
+            plane_drift.issue_lifecycle([{"name": "wo:merged"}]),
+            ["wo:merged"])
+
+
 class TestReconcileDrift(unittest.TestCase):
     """ADR-0032's cross-plane check. The rows are authoritative in every
     comparison; a drift line says what the DISPATCH plane must be brought

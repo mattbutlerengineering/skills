@@ -3,13 +3,25 @@
 assembler workflow's claim step (PRD-0001; ADR-0032 lifecycle labels,
 ADR-0033 gate 3).
 
-The workflows name no commands of their own — they run `make` targets, and
-the ones that need judgment land here. The PR-shaped legs read the
-pull_request event payload (GITHUB_EVENT_PATH); the claim leg is handed its
-issue number outright. All mutate GitHub through the gh CLI, which is
-injected so tests never touch the network (same shape as label_sync.py).
+The workflows name no repo tool of their own — every tool invocation goes
+through a `make` target, because the Makefile is the seam that knows where
+a repo keeps its tools (root here, tools/factory/ there) — and the ones
+that need judgment land here. The shell plumbing AROUND those targets is
+not a tool and does not move between repos: gh, git, and the review job's
+exit-code capture stay in the workflow. The PR-shaped legs read the
+pull_request event payload (GITHUB_EVENT_PATH), and pr-event below writes
+the one a dispatched run stands in for; the claim leg is handed its issue
+number outright. All reach GitHub through the gh CLI, which is injected so
+tests never touch the network (same shape as label_sync.py).
 Conventions match gates.py/label_sync.py: functions return V:-prefixed
 problem strings; the CLI prints them and exits nonzero.
+
+  python3 validator.py pr-event --pr <N> --out <path>
+        The dispatch shim (WO-0030). GitHub suppresses the pull_request
+        event for a PR the factory's own token opened, so the validator is
+        dispatched against a PR NUMBER — and the legs below still need an
+        event to read. Write the payload cli.read_event will hand them.
+        One owner for a shape three workflow steps used to build by hand.
 
   python3 validator.py review --findings <file> [--status <rc>]
         Post the check run's output on the PR as review findings, from an
@@ -33,8 +45,11 @@ problem strings; the CLI prints them and exits nonzero.
 
         Both legs pass --uncited skip (ADR-0057), so a PR citing no work
         order is a silent no-op on each — human housekeeping PRs are
-        normal traffic, not errors. A PR that NAMES a work order which
-        resolves to none stays a problem on both.
+        normal traffic, not errors. "Citing" means naming one OUTSIDE
+        quoted material (ADR-0064): a token in a fenced block or a
+        blockquote is something the PR is discussing. A PR that NAMES a
+        work order in its own prose and resolves none stays a problem on
+        both.
 
   python3 validator.py lifecycle --label wo:in-progress --issue <N>
         The dispatch claim: flip a KNOWN issue (no PR to resolve) and
@@ -59,6 +74,7 @@ Planner-applied by design: it means an unmet dependency, and that graph
 lives in the issue tracker, not in CI. No workflow flips it — its absence
 from this file is a decision, not a hole.
 """
+import json
 import os
 import sys
 import tempfile
@@ -346,13 +362,62 @@ def _flip(number, label, lifecycle, run):
     return remove, []
 
 
+# What "quoted" means to the skip gate below: a fenced region, and a
+# blockquote line. NOT inline code — backticks around an id are how this
+# repo writes identifiers in ordinary prose, genuine claims included, so
+# treating them as quotation would silence real work-order PRs (ADR-0064).
+FENCES = ("```", "~~~")
+
+
+def _unquoted(body):
+    """The body with quoted material removed, for the one question the
+    skip gate asks: does the author CLAIM a work order here?
+
+    A PR that tightens a detector quotes the detector's output, and a PR
+    that discusses a breakdown row quotes the row. Every work-order token
+    in that material is evidence, and reading it as an assertion is what
+    made this repo redact live ids to WO-00xx inside the very fences whose
+    purpose is to show what the tool printed.
+
+    Only the gate reads this. Resolution (`cited_work_order`) still reads
+    the whole body, so a quoted token that DOES resolve to an issue the PR
+    closes still flips its label — the gate is reached only after
+    resolution has failed.
+
+    Line numbers are not preserved: nothing downstream reads any. An
+    unterminated fence swallows the rest of the body, which biases the
+    gate toward skipping, and a skip is a no-op rather than a mutation of
+    an issue nobody named."""
+    kept = []
+    fence = None
+    for line in body.splitlines():
+        stripped = line.lstrip()
+        mark = next((f for f in FENCES if stripped.startswith(f)), None)
+        if fence is not None:
+            # Inside a fence, only its OWN marker closes it: a ~~~ line
+            # within a backtick block is content, not a delimiter.
+            if mark == fence:
+                fence = None
+            continue
+        if mark is not None:
+            fence = mark
+            continue
+        if stripped.startswith(">"):
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
 def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     """The merged-label job: flip the cited work order's lifecycle label.
 
     uncited="skip" makes a PR that cites no work order at all a silent
     no-op instead of a problem: human housekeeping PRs are normal
-    traffic. ONLY that case is relaxed — a body that names a work order
-    but resolves to none (no Closes line, ambiguous, unmirrored) is a
+    traffic. "Cites" is read off `_unquoted(body)` rather than the raw
+    body (ADR-0064) — a token inside a fenced block or a blockquote is
+    material the PR quotes, not a work order it claims. ONLY that case
+    is relaxed — a body that names a work order in its own prose but
+    resolves to none (no Closes line, ambiguous, unmirrored) is a
     malformed WO PR and stays loud in both legs, as does everything
     after resolution. That is what the strictness protects: the skip
     cannot mutate the wrong issue, because it fires only when nothing
@@ -379,11 +444,12 @@ def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     body = pr.get("body") or ""
     wo, problems = cited_work_order(root, body)
     if problems:
-        # The skip is exactly the no-citation case. A malformed WO PR
-        # must not be silently unlabelled — the lost label is the very
-        # queue-entry event this leg exists to record, and the job only
-        # fires on opened/reopened, so nothing would ever retry it.
-        if uncited == "skip" and not WO_TOKEN.findall(body):
+        # The skip is exactly the case where the body claims no work
+        # order of its own. A malformed WO PR must not be silently
+        # unlabelled — the lost label is the very queue-entry event this
+        # leg exists to record, and the job only fires on
+        # opened/reopened, so nothing would ever retry it.
+        if uncited == "skip" and not WO_TOKEN.findall(_unquoted(body)):
             return []
         return problems
     number, problems = tracker_issue(root, wo)
@@ -444,6 +510,46 @@ def run_claim(root, label, issue, env, run=gh_runner):
     return []
 
 
+# The action a dispatch stands in for. GitHub suppresses the real
+# pull_request event for a PR the factory's own token opened (WO-0030), so
+# the synthetic one says "opened". Nothing reads the word back out of this
+# file — no consumer of cli.read_event touches `action`, and the workflow's
+# own `github.event.action` conditions are evaluated by GitHub against the
+# REAL event (a workflow_dispatch, where it is empty), never against this.
+# It is here so read_event's callers are handed a webhook-shaped object,
+# and "opened" is the shape a first look at a PR has.
+DISPATCH_ACTION = "opened"
+
+
+def write_pr_event(number, path, env, run=gh_runner):
+    """Write the pull_request event a dispatched run stands in for.
+
+    The counterpart of cli.read_event (ADR-0042): that reader's consumers
+    — detector B's body read, both lifecycle legs' PR resolution — are
+    handed exactly this object, so its shape is stated once here instead
+    of once per workflow step that needs it.
+
+    Nothing is written unless the whole PR was read. Half an event is
+    worse than none: read_event parses it happily, and every consumer
+    then sees a PR whose body is simply absent — a detector that skips
+    and a label flip that no-ops, both silently.
+    """
+    slug = env.get("GITHUB_REPOSITORY")
+    if not slug:
+        return ["V: GITHUB_REPOSITORY is unset —"
+                " nothing names the PR to read"]
+    result = gh_read(["api", f"repos/{slug}/pulls/{number}"],
+                     f"gh api pull #{number}", "V", run=run, expect=dict)
+    if result.value is None:
+        return result.problems
+    payload = {"action": DISPATCH_ACTION, "pull_request": result.value}
+    try:
+        Path(path).write_text(json.dumps(payload), encoding="utf-8")
+    except OSError as err:
+        return [f"V: cannot write the event payload to {path}: {err}"]
+    return []
+
+
 def parse(argv):
     """(command, options) for a well-formed invocation, else (None, None)."""
     if not argv:
@@ -454,9 +560,13 @@ def parse(argv):
             return None, None
         options[rest[0][2:]] = rest[1]
         rest = rest[2:]
+    if (command == "pr-event" and set(options) == {"pr", "out"}
+            and options["pr"].isdigit()):
+        return command, options
     if command == "review" and set(options) <= {"findings", "status"}:
         status = options.get("status", "0")
-        if not status.isdigit():
+        # isascii(): str.isdigit() is true for '\u00b2', which int() refuses.
+        if not (status.isascii() and status.isdigit()):
             return None, None
         return command, {"findings": options.get("findings", "findings.txt"),
                          "status": int(status)}
@@ -480,7 +590,10 @@ def main(argv, env=None, run=gh_runner):
     env = os.environ if env is None else env
     root = repo_root()
     command, options = parse(argv)
-    if command == "review":
+    if command == "pr-event":
+        problems = write_pr_event(options["pr"], options["out"], env=env,
+                                  run=run)
+    elif command == "review":
         problems = run_review(root, options["findings"], options["status"],
                               env=env, run=run)
     elif command == "lifecycle" and "verdict" in options:

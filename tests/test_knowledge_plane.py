@@ -2,6 +2,8 @@
 the dispatch-plane row grammar, the run walk, and repo_root — asserted
 at the seam's own interface instead of once per caller suite.
 """
+import ast
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -96,6 +98,31 @@ class TestRowDone(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertFalse(row_done(line))
 
+    def test_a_box_with_no_space_after_it_is_not_a_row_at_all(self):
+        # The whole point of the accessor family: ROW requires whitespace
+        # after the closing bracket, so a line without it is not a row —
+        # and row_done must say so too, or one module answers "is this a
+        # row" twice and differently.
+        for line in ("- [x]a WO-0002 no space after the box",
+                     "- [x]**WO-0003** bold straight after the box"):
+            with self.subTest(line=line):
+                self.assertIsNone(row_work_order(line))
+                self.assertFalse(row_done(line))
+
+    def test_row_done_never_disagrees_with_the_row_grammar(self):
+        # The property, not the cases: nothing row_done calls a checked
+        # row may fail ROW.match. Shapes drawn from this class's own
+        # checked/malformed fixtures plus the two above.
+        for line in ("- [x] WO-0002 done", "- [X] WO-0002 done",
+                     "-\t[x] WO-0002 done", "+ [x] WO-0002 done",
+                     "* [x] WO-0002 done", "  - [x] WO-0002 indented",
+                     "- [ ] WO-0002 open", "-[x] WO-0002 t",
+                     "text - [x] WO-0002 t", "## WO-0002 heading", "",
+                     "- [x]a WO-0002 no space", "- [x]**WO-0003** bold"):
+            with self.subTest(line=line):
+                if row_done(line):
+                    self.assertIsNotNone(ROW.match(line))
+
     def test_the_checked_row_grammar_has_one_owner(self):
         # ADR-0058 amends ADR-0039's roster from three owners to two.
         # gates.MERGED_ROW was a fourth, added nineteen days after that
@@ -106,6 +133,43 @@ class TestRowDone(unittest.TestCase):
             hasattr(gates, "MERGED_ROW"),
             "gates.MERGED_ROW is back: the checked-row grammar has one"
             " owner, knowledge_plane.row_done (ADR-0058)")
+
+    def test_the_documented_call_sites_are_the_real_ones(self):
+        """row_done's docstring names its call sites, and a hand-typed
+        enumeration goes stale silently: the list said five and named
+        the reconcile sweep and the dashboard twice, months after
+        ADR-0060 folded both into plane_drift.reconcile_drift, which
+        asks once. Nothing failed. So the list is derived here from the
+        source and compared to the prose, in both directions."""
+        root = Path(__file__).resolve().parents[1]
+        actual = set()
+        for path in sorted(root.glob("*.py")):
+            if path.name == "knowledge_plane.py":
+                continue
+            for node in ast.walk(ast.parse(
+                    path.read_text(encoding="utf-8"))):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                name = (func.id if isinstance(func, ast.Name)
+                        else func.attr if isinstance(func, ast.Attribute)
+                        else None)
+                if name == "row_done":
+                    actual.add(path.name)
+        # normalised first: the docstring rewraps whenever the prose
+        # around it changes, and a listing that only matches at one line
+        # width is a test that fails for the wrong reason
+        flat = " ".join(knowledge_plane.row_done.__doc__.split())
+        listing = re.search(r"Call sites\s*\(.*?\):(.*?)—", flat)
+        self.assertIsNotNone(
+            listing,
+            "row_done's docstring no longer carries a delimited"
+            " `Call sites (...): <modules> —` listing for this test to"
+            " check")
+        documented = set(re.findall(r"[a-z_]+\.py", listing.group(1)))
+        self.assertEqual(documented, actual)
+        self.assertTrue(actual, "no call sites found — the derivation"
+                                " itself is broken")
 
 
 class TestRunDirs(unittest.TestCase):

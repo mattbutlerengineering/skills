@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import cli
 import validator
 
 # discover puts tests/ on sys.path; selective package-style runs need it
@@ -603,6 +604,30 @@ class TestRunLifecycle(unittest.TestCase):
                 "--add-label", "wo:merged",
                 "--remove-label", "wo:in-progress"]])
 
+    def test_a_fenced_citation_that_resolves_still_flips_the_label(self):
+        """The passing direction, pinned before the skip gate narrows.
+
+        Resolution reads the WHOLE body and keeps the work orders the PR
+        actually closes, so a token quoted inside a fenced block still
+        flips its issue when the Closes line backs it. The gate that
+        judges a body's tokens a claim is reached only AFTER resolution
+        fails, so nothing here may change when it narrows."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh(labels=["wo:needs-review", "size:M"])
+            body = ("Fixes the row the detector printed:\n\n"
+                    "```\n"
+                    "- [x] **WO-0004** (PRD-0001) the row it printed\n"
+                    "```\n\n"
+                    "Closes #109\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body), run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [[
+                "issue", "edit", "109",
+                "--add-label", "wo:merged",
+                "--remove-label", "wo:needs-review"]])
+
     def test_a_nameless_label_entry_is_dropped_not_compared(self):
         # gh can answer `issue view` with a label entry carrying no usable
         # name. The seam (cli.label_names) drops it, so the lifecycle
@@ -718,6 +743,83 @@ class TestRunLifecycle(unittest.TestCase):
             problems = validator.run_lifecycle(
                 tree.root, "wo:merged",
                 env=self.env(tmp, body="Implements WO-0004."), run=run,
+                uncited="skip")
+            self.assertEqual(problems, [
+                "V: PR body has no Closes #N link, so the work order it"
+                " implements cannot be told from the ones it only"
+                " mentions"])
+            self.assertEqual(run.calls, [])
+
+    def test_a_token_only_inside_a_fence_is_not_a_claim(self):
+        """ADR-0064. The body pastes the detector output it is fixing;
+        every work-order token in it is evidence, not an assertion, so
+        the body claims no work order and the skip applies."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            body = ("The detector printed this:\n\n"
+                    "```\n"
+                    "A: docs/features/demo/breakdown.md:7 work-order row"
+                    " WO-0004 cites no PRD id\n"
+                    "```\n\n"
+                    "No work order: tightens a detector.\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body),
+                run=run, uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_a_token_only_inside_a_blockquote_is_not_a_claim_either(self):
+        # PR #330's shape: the body quoted a breakdown row it was
+        # discussing, in a blockquote rather than a fence.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            body = ("Quoting the row under discussion:\n\n"
+                    "> - [x] **WO-0004** (PRD-0001) the row it printed\n\n"
+                    "No work order: docs only.\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body),
+                run=run, uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_a_tilde_fence_quotes_as_a_backtick_fence_does(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            body = ("~~~\nsee WO-0004\n~~~\n\nNo work order: chore.\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body),
+                run=run, uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_an_unterminated_fence_swallows_the_rest_of_the_body(self):
+        """The conservative direction, asserted rather than assumed: an
+        author who opens a fence and never closes it gets a skip, which
+        is a no-op, rather than a flip of an issue nobody named."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            body = "```\nsee WO-0004\n\nand then prose about WO-0004\n"
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body),
+                run=run, uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
+    def test_inline_code_is_typography_not_quotation(self):
+        """The boundary that must not move. Backticks around an id are how
+        this repo writes identifiers in ordinary prose, genuine claims
+        included, so an inline-code citation is still a citation and a
+        body carrying one with no Closes line is still malformed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged",
+                env=self.env(tmp, body="Implements `WO-0004`."), run=run,
                 uncited="skip")
             self.assertEqual(problems, [
                 "V: PR body has no Closes #N link, so the work order it"
@@ -1088,6 +1190,14 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         self.assertEqual(
             self.run_cli(["review", "--status", "red"])[0], 2)
 
+    def test_a_digit_that_int_refuses_is_a_usage_error_not_a_traceback(self):
+        """str.isdigit() is true for '\u00b2' and int() refuses it, so the
+        guard above let a ValueError out of parse(). U+00B2 is latin-1
+        byte 0xB2 — ordinary bad input, not a contrivance. STATUS comes
+        from `make review STATUS=$FINDINGS_RC`, a shell variable."""
+        self.assertEqual(
+            self.run_cli(["review", "--status", "\u00b2"])[0], 2)
+
     def test_review_outside_an_event_exits_nonzero_with_the_problem(self):
         code, out = self.run_cli(["review", "--findings", "findings.txt"])
         self.assertEqual(code, 1)
@@ -1136,6 +1246,107 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                                   "--uncited", "skip"])
         self.assertEqual(code, 1)
         self.assertIn("V: no pull_request in the CI event payload", out)
+
+
+class TestPrEvent(unittest.TestCase):
+    """The dispatch shim (WO-0030). GitHub suppresses the pull_request
+    event for a PR the factory's own token opened, so the validator is
+    dispatched against a PR NUMBER — and the PR-shaped legs still need
+    an event to read. Three workflow steps used to build that payload by
+    hand, in three copies the one test over them could not tell apart
+    (an assertIn over the whole file passes while two of three are
+    wrong). The shape lives here now, and every test below reads it back
+    through cli.read_event — the parser its consumers actually use —
+    rather than through a second copy of the same literal."""
+
+    PR = json.dumps({"number": 7, "body": "Closes #108",
+                     "user": {"login": "someone"}})
+
+    def write(self, tmp, answers=None, failing=None, env=None, number="7"):
+        """(path, problems, gh) for one shim invocation."""
+        path = Path(tmp) / "pr-event.json"
+        run = FakeGh(answers={("api",): self.PR} if answers is None
+                     else answers, failing=failing)
+        problems = validator.write_pr_event(
+            number, str(path),
+            env={"GITHUB_REPOSITORY": "owner/repo"} if env is None else env,
+            run=run)
+        return path, problems, run
+
+    def test_the_payload_is_what_read_event_hands_its_consumers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, problems, _ = self.write(tmp)
+            self.assertEqual(problems, [])
+            event, error = cli.read_event({"GITHUB_EVENT_PATH": str(path)})
+            self.assertIsNone(error)
+            self.assertEqual(event["action"], "opened")
+            self.assertEqual(event["pull_request"]["body"], "Closes #108")
+
+    def test_the_pr_is_read_from_the_repository_the_environment_names(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _, _, run = self.write(tmp, number="42")
+            self.assertEqual(run.calls,
+                             [["api", "repos/owner/repo/pulls/42"]])
+
+    def test_an_unset_repository_is_refused_before_gh_is_called(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, problems, run = self.write(tmp, env={})
+            self.assertEqual(problems, [
+                "V: GITHUB_REPOSITORY is unset — nothing names the PR to read"])
+            self.assertEqual(run.calls, [])
+            self.assertFalse(path.exists())
+
+    def test_a_failed_gh_leaves_no_event_behind(self):
+        # Half an event is worse than none: read_event would parse it
+        # and every consumer would see a PR with no body.
+        with tempfile.TemporaryDirectory() as tmp:
+            path, problems, _ = self.write(tmp, failing=["api"])
+            self.assertEqual(
+                problems, ["V: gh api pull #7 failed: boom"])
+            self.assertFalse(path.exists())
+
+    def test_a_response_that_is_not_a_pr_object_leaves_no_event_behind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path, problems, _ = self.write(tmp, answers={("api",): "[]"})
+            self.assertEqual(problems, [
+                "V: gh api pull #7 returned list where dict was expected"])
+            self.assertFalse(path.exists())
+
+    def test_an_unwritable_destination_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "no-such-dir" / "pr-event.json"
+            run = FakeGh(answers={("api",): self.PR})
+            problems = validator.write_pr_event(
+                "7", str(path), env={"GITHUB_REPOSITORY": "owner/repo"},
+                run=run)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"V: cannot write the event payload to {path}: "), problems)
+
+    def test_the_cli_writes_the_event_for_a_dispatched_pr(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "pr-event.json"
+            run = FakeGh(answers={("api",): self.PR})
+            code = validator.main(
+                ["pr-event", "--pr", "7", "--out", str(path)],
+                env={"GITHUB_REPOSITORY": "owner/repo"}, run=run)
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")),
+                             {"action": "opened",
+                              "pull_request": json.loads(self.PR)})
+
+    def test_a_non_numeric_pr_is_usage_not_a_gh_call(self):
+        run = FakeGh()
+        self.assertEqual(
+            validator.main(["pr-event", "--pr", "x", "--out", "e.json"],
+                           env={}, run=run), 2)
+        self.assertEqual(run.calls, [])
+
+    def test_both_options_are_required(self):
+        for argv in (["pr-event", "--pr", "7"], ["pr-event", "--out", "e"],
+                     ["pr-event"]):
+            with self.subTest(argv=argv):
+                self.assertEqual(validator.parse(argv), (None, None))
 
 
 if __name__ == "__main__":

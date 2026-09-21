@@ -277,7 +277,9 @@ def main(argv, env=None, run=gh_runner):
         write_outputs(env, outputs)
         if outputs.get("reason"):
             print(outputs["reason"])
-    elif len(argv) == 2 and argv[0] == "find-pr" and argv[1].isdigit():
+    # isascii(): str.isdigit() is true for '\u00b2', which int() refuses.
+    elif (len(argv) == 2 and argv[0] == "find-pr"
+          and argv[1].isascii() and argv[1].isdigit()):
         number, problems = pr_for_issue(int(argv[1]), run=run)
         write_outputs(env, {"pr": "" if number is None else str(number)})
         if number is not None:

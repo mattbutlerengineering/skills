@@ -26,6 +26,40 @@ complete. If the user named a feature or fix, use (or create) its directory.
 If exactly one run is active, use it. Otherwise, list the candidates and ask
 which one.
 
+### Work already in flight
+
+Run discovery sees the working tree. Work that another agent has already
+finished does not live in the working tree — it lives on a branch, waiting
+for a human, as a pull request, merge request, or patch in review. No
+enumeration of run directories can see it.
+
+So the moment a run **starts** is where that is checked: `capture` claiming
+a seed or seeding from tracker intake, `idea` claiming a seed. Before
+writing the first artifact, look over the work already waiting for review
+and ask whether one of them already does this. Three outcomes, and each
+must be visible:
+
+- **Nothing matches** — proceed, and say the check ran.
+- **The check could not run** — no review surface, no credentials, no
+  network. Proceed, and say *that* instead. A check whose failure looks
+  the same as a clean result is worse than no check, because it is a clean
+  result nobody can doubt.
+- **Something already does this work** — stop and surface it. The pipeline
+  does not decide which of two agents' attempts wins; it declines to build
+  the second one unattended.
+
+This is a **guard, not a door**. It can only ever stop a run from starting,
+so the one-way bound above is untouched: nothing here polls, nothing here
+seeds a run, and orientation inside an active run still reads run artifacts
+alone. The concrete command that lists work awaiting review is packaging's,
+like the tracker CLI — the shape of the check is what lives here.
+
+A related rule, deliberately not the same one: a skill that starts *many*
+work orders at once also prefers finishing open review work before opening
+more, to keep branches from stacking conflicts. That one is about order and
+this one is about duplication; they agree about what to look at and not
+about why.
+
 ## Artifacts are the state
 
 There is no manifest or state file. Orientation is derived entirely from

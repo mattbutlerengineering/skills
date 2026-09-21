@@ -17,7 +17,31 @@ import eval_schema
 import protocol
 from cli import report
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
-                      TEMPLATED_STAGES)
+                      TEMPLATED_STAGES, UTILITY_SKILLS)
+
+
+def object_problems(data, label):
+    """[] when `data` is a JSON object, else the one problem naming its
+    shape.
+
+    Both manifest readers open with this. A JSON document's top level is
+    legally an array, string, number, boolean or null, and json.loads
+    hands every one of them back untouched — so dict-ness is the one
+    thing a reader that then calls `.get` cannot assume.
+    check_pi_package already applies the idiom one level down, to `pi`;
+    only the top level was taken on trust, in both readers, because the
+    second was written to match the first.
+
+    Reported alone, never beside derived complaints: on a string
+    `data.get("keywords")` cannot even be asked, and a reader that
+    guessed past the shape would describe its own confusion instead of
+    the file. Both readers are early entries in CHECKERS and lint.main
+    does not catch, so the alternative to a problem string here is not a
+    thinner report — it is no report at all.
+    """
+    if isinstance(data, dict):
+        return []
+    return [f"{label} is not a JSON object"]
 
 
 def check_manifest(root):
@@ -26,11 +50,56 @@ def check_manifest(root):
         return ["missing .claude-plugin/plugin.json"]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [f"plugin.json is not valid JSON: {err}"]
+    shape = object_problems(data, "plugin.json")
+    if shape:
+        return shape
     return [f"plugin.json missing field: {field}"
             for field in ("name", "description", "version")
             if not data.get(field)]
+
+
+def check_plugin_skills(root):
+    """Every utility skill in the taxonomy is named in plugin.json's
+    description. That string is what a reader sees first when deciding
+    whether to install, and check_manifest asserts only that the field is
+    non-empty — so a skill can be added, registered, tested and released
+    without the install surface ever hearing about it. That is the same
+    gap check_readme_skills closes for README.md, on the surface that had
+    no checker: three diagram skills went unnamed here while the README
+    and the ledger were held to the full list.
+
+    Utility skills only. The description names stages as title-case prose
+    ("Idea", "UX Design") rather than by slug, so holding the whole
+    taxonomy to a substring test would demand a restyling nobody asked
+    for. The parenthetical utility list is the part that claims to be
+    exhaustive, so it is the part held to the taxonomy.
+
+    Whole slugs, never substrings — the same rule check_readme_skills
+    holds README.md to, and the same function: `architecture-diagram`
+    occurs inside `interactive-architecture-diagram`, so a plain `in`
+    test would call the list complete after the shorter name was dropped
+    from it — a blind spot for one of the very skills this checker
+    exists to catch. names_slug is the one owner of that rule; this
+    checker no longer retypes it.
+
+    A missing or unparseable manifest returns nothing: check_manifest
+    already reports both, and this checker reporting them too would give
+    one broken file two problem strings.
+    """
+    path = root / ".claude-plugin" / "plugin.json"
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, dict):
+        return []
+    text = data.get("description") or ""
+    return [f"plugin.json's description never names utility skill {slug!r}"
+            for slug in UTILITY_SKILLS if not names_slug(text, slug)]
 
 
 def check_pi_package(root):
@@ -43,8 +112,11 @@ def check_pi_package(root):
         return ["missing package.json"]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [f"package.json is not valid JSON: {err}"]
+    shape = object_problems(data, "package.json")
+    if shape:
+        return shape
     problems = []
     if data.get("private") is not True:
         problems.append("package.json must set private: true")
@@ -69,6 +141,19 @@ def extra_skills(root):
     return sorted(p.name for p in skills_dir.iterdir()
                   if p.is_dir() and not p.name.startswith(".")
                   and p.name not in ALL_SKILLS)
+
+
+def names_slug(text, slug):
+    """True when TEXT names SLUG, as a whole slug and not as part of one.
+
+    Slug characters are lowercase letters, digits and hyphens, so the
+    boundary is "not one of those on either side" — `architecture-diagram`
+    inside `interactive-architecture-diagram` is not a mention of the
+    shorter name. Three of the registered slugs are contained in a longer
+    one, and a plain `in` test reports none of them missing.
+    """
+    return re.search(rf"(?<![a-z0-9-]){re.escape(slug)}(?![a-z0-9-])",
+                     text) is not None
 
 
 def check_skills(root):
@@ -170,6 +255,45 @@ def _capture_problems(label, text):
         if claim not in ("implement", "architect")]
 
 
+# The protocol subsection the run-STARTING skills must recite. Derived,
+# never a second list: a run starts at the head of the spine or at the
+# maintenance entry, and those are protocol.py's to name.
+RUN_STARTING = (STAGES[0], *MAINTENANCE_STAGES)
+IN_FLIGHT_HEADING = "Work already in flight"
+
+
+def _states(text, phrase):
+    """Does `text` state `phrase`, ignoring how it happens to be wrapped?
+
+    Every document this module reads is hard-wrapped near 72 columns, so a
+    multi-word phrase lands across a line break routinely — and a raw
+    substring test then fails a correct statement, which is pinning the
+    formatting and calling it the fact. Its two callers ask the same
+    question of a skill and of the protocol doc, and asking it twice in
+    two spellings is the drift this repo keeps writing ADRs about."""
+    return phrase.lower() in " ".join(text.lower().split())
+
+
+def _in_flight_problems(label, text):
+    """A skill that starts a run recites the protocol's in-flight guard.
+
+    Pins the section name and nothing else. Whether an agent actually
+    looked at the open review work is not a thing a linter can know, and a
+    checker that implied otherwise would be manufacturing exactly the
+    false clean result that section exists to forbid.
+
+    Whitespace is normalized before the comparison, unlike the artifact
+    and stage recitals beside it. Those pin single tokens; this pins four
+    words, and every one of these documents is hard-wrapped near 72
+    columns — so a raw substring test fails a correct recital that happens
+    to wrap. `_states` owns that comparison for both callers."""
+    if _states(text, IN_FLIGHT_HEADING):
+        return []
+    return [f"{label} never names the protocol's "
+            f"{IN_FLIGHT_HEADING!r} check, which is where a run that is "
+            "already open in review gets caught"]
+
+
 def check_skill_recitals(root):
     """Stage-skill prose recites the protocol — soft-gate predecessor,
     own artifact, hand-off successor. Vended skills can't import
@@ -201,6 +325,8 @@ def check_skill_recitals(root):
         if f"`{artifact[slug]}`" not in text:
             problems.append(f"{label} never names its artifact "
                             f"{artifact[slug]!r}")
+        if slug in RUN_STARTING:
+            problems += _in_flight_problems(label, text)
         successor = spine[i + 1] if i + 1 < len(spine) else None
         skip_target = spine[i + 2] if successor == "ux-design" else None
         problems += _hand_off_problems(label, slug, text, successor,
@@ -214,6 +340,8 @@ def check_skill_recitals(root):
         if f"`{artifact[slug]}`" not in text:
             problems.append(f"{label} never names its artifact "
                             f"{artifact[slug]!r}")
+        if slug in RUN_STARTING:
+            problems += _in_flight_problems(label, text)
         problems += _capture_problems(label, text)
     return problems
 
@@ -366,19 +494,38 @@ def check_readme_skills(root):
     where a reader learns what the plugin ships, and it is prose — so a
     skill can be added, registered, tested, and released without the
     README ever hearing about it. That is not hypothetical: it is how
-    interactive-architecture-diagram shipped undocumented. Same bar and
-    same shape as check_ledger, for the same reason."""
+    interactive-architecture-diagram shipped undocumented.
+
+    Same bar as check_ledger, different shape, because the two files are
+    different shapes: the ledger is a table with a row per skill and this
+    is prose, so naming the skill anywhere is the whole requirement. What
+    both share is that the name has to be the whole slug — see
+    names_slug."""
     path = root / "README.md"
     if not path.is_file():
         return ["missing README.md"]
     text = path.read_text(encoding="utf-8")
     return [f"README.md never names skill {slug!r}"
-            for slug in ALL_SKILLS + extra_skills(root) if slug not in text]
+            for slug in ALL_SKILLS + extra_skills(root)
+            if not names_slug(text, slug)]
 
 
 def check_protocol(root):
+    """The doc exists, and still says the thing two skills send readers to.
+
+    The second half closes a loop the recital pin leaves open: that pin
+    holds `capture` and `idea` to IN_FLIGHT_HEADING, and IN_FLIGHT_HEADING
+    to nothing. Delete the section and all three still agree — with both
+    skills pointing at a heading that is gone. Checked here rather than in
+    the recital pin because it is a fact about the doc, and the doc's
+    checker is this one."""
     path = root / "docs" / "pipeline-protocol.md"
-    return [] if path.is_file() else ["missing docs/pipeline-protocol.md"]
+    if not path.is_file():
+        return ["missing docs/pipeline-protocol.md"]
+    if _states(path.read_text(encoding="utf-8"), IN_FLIGHT_HEADING):
+        return []
+    return [f"docs/pipeline-protocol.md no longer states "
+            f"{IN_FLIGHT_HEADING!r}, which capture and idea both recite"]
 
 
 # A row of either orientation table in the protocol doc:
@@ -480,7 +627,7 @@ def check_output_evals(root):
         label = f"evals/output/{path.name}"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as err:
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
             return [f"{label} is not valid JSON: {err}"]
         return (
             ([f"{label} stem is not a skill slug"]
@@ -497,13 +644,51 @@ def check_output_evals(root):
             for p in problems_for(path)]
 
 
+# The first cell of a LEDGER.md table row, which is the skill slug. The
+# header (`| Skill |`) and the separator (`|---|`) are not rows: a slug is
+# lowercase and a row's first cell holds nothing else. The leading
+# character class matches names_slug's — extra_skills accepts any
+# directory name, so a slug that opens with a digit has to read as a row
+# here exactly as it reads as a mention there.
+LEDGER_ROW = re.compile(r"^\|\s*([a-z0-9][a-z0-9-]*)\s*\|", re.M)
+
+
+def ledger_rows(text):
+    """Every skill slug LEDGER.md has a table row for.
+
+    A set of exact slugs, not a search over the file. Both halves of that
+    matter, and each closes a way the old `slug not in text` was blind.
+
+    Exact, because three of the registered slugs are contained in a longer
+    one — `architect` in `architecture-diagram` and in
+    `interactive-architecture-diagram`, `review` in `address-pr-review`,
+    `architecture-diagram` in the interactive form. A substring test can
+    never find their rows missing, and one of those is the shorter sibling
+    of the very skill whose undocumented release is why the README's
+    checker exists.
+
+    Rows, because the problem string says row and the file is a table
+    followed by paragraphs of reading notes that name skills by slug. A
+    row deleted while the reading still mentions the skill passed the
+    check that claimed to look for the row.
+    """
+    return set(LEDGER_ROW.findall(text))
+
+
 def check_ledger(root):
+    """Every skill in the taxonomy has a maturity row in LEDGER.md.
+
+    ledger_rows owns what counts as a row; this checker owns which slugs
+    must have one. check_ledger_links reads the same file for a different
+    fact (the eval-evidence links) and keeps reading the whole text —
+    those links live in the row cells and in the reading below alike.
+    """
     path = root / "LEDGER.md"
     if not path.is_file():
         return ["missing LEDGER.md"]
-    text = path.read_text(encoding="utf-8")
+    rows = ledger_rows(path.read_text(encoding="utf-8"))
     return [f"LEDGER.md has no row for skill {slug!r}"
-            for slug in ALL_SKILLS + extra_skills(root) if slug not in text]
+            for slug in ALL_SKILLS + extra_skills(root) if slug not in rows]
 
 
 def check_backlog(root):
@@ -543,7 +728,8 @@ def check_ledger_links(root):
     )
 
 
-CHECKERS = (check_manifest, check_pi_package, check_skills,
+CHECKERS = (check_manifest, check_plugin_skills,
+            check_pi_package, check_skills,
             check_skill_recitals, check_skill_assets, check_templates,
             check_router, check_readme_skills, check_protocol,
             check_protocol_tables, check_backlog, check_evals,

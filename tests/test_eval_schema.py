@@ -167,6 +167,18 @@ class TestLoad(unittest.TestCase):
         self.assertEqual(problems,
                          ["evals/routing.json missing 'version' field"])
 
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """load_case_set carries the same (values, problems) contract as
+        every checker here, so an undecodable set is a diagnostic. RFC
+        8259 §8.1 makes JSON a UTF-8 interchange format; bytes that will
+        not decode are not a valid set."""
+        self.path.write_bytes('{"cases": ["caf\u00e9"]}'.encode("latin-1"))
+        cases, problems = eval_schema.load(self.path, SKILLS, LABEL)
+        self.assertEqual(cases, [])
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "evals/routing.json is not valid JSON: "), problems)
+
 
 def valid_output_record(**overrides):
     record = {"id": 1, "prompt": "p", "run_fixture": "evals/fixtures/f",
@@ -373,6 +385,52 @@ class TestResultsPath(unittest.TestCase):
                                      harness="opencode")
 
 
+class TestWriteSnapshot(unittest.TestCase):
+    """The snapshot writer: the second half of the results-recording fact
+    whose first half (the naming grammar) ADR-0024 already moved here.
+    trigger_eval and charter_replay are thin callers; what is asserted
+    here is the on-disk shape they both produce."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.results = self.tmp / "evals" / "results"
+        self.output = {"date": "2026-07-02", "summary": {"passed": 1}}
+
+    def test_it_creates_the_directory_and_returns_the_path(self):
+        path = eval_schema.write_snapshot(self.output, self.results,
+                                          "charter")
+        self.assertTrue(self.results.is_dir())
+        self.assertEqual(path, self.results / "charter-2026-07-02.json")
+
+    def test_the_bytes_on_disk_are_indented_json_with_a_final_newline(self):
+        path = eval_schema.write_snapshot(self.output, self.results,
+                                          "charter")
+        self.assertEqual(path.read_text(encoding="utf-8"),
+                         json.dumps(self.output, indent=2) + "\n")
+
+    def test_a_harness_marks_the_trigger_name(self):
+        path = eval_schema.write_snapshot(self.output, self.results,
+                                          "trigger", harness="omp")
+        self.assertEqual(path.name, "trigger-omp-2026-07-02.json")
+
+    def test_repeated_writes_suffix_instead_of_overwriting(self):
+        first = eval_schema.write_snapshot(self.output, self.results,
+                                           "charter")
+        second = eval_schema.write_snapshot(self.output, self.results,
+                                            "charter")
+        self.assertNotEqual(first, second)
+        self.assertTrue(first.is_file() and second.is_file())
+
+    def test_a_directory_shaped_kind_is_refused(self):
+        # results_path("output", ...) names a DIRECTORY. Writing a file
+        # at that path would corrupt the results tree silently, so the
+        # one kind this writer cannot serve is refused rather than
+        # written — this is a reachable misuse, not defensive padding.
+        with self.assertRaises(ValueError):
+            eval_schema.write_snapshot(self.output, self.results, "output")
+
+
 class TestResultsGrammarRoundTrip(unittest.TestCase):
     """The '-N starts at 2' collision rule is encoded twice inside this
     module — the _SUFFIX regex (validator side) and the results_path
@@ -471,6 +529,116 @@ class TestRunnerRefusesMalformedSet(unittest.TestCase):
         self.assertEqual(proc.returncode, 1)
         self.assertIn("missing", proc.stderr)
         self.assertNotIn("Traceback", proc.stderr)
+
+
+# Everything json.loads can return at a file's top level that is not an
+# object. A file may legally hold any of these, so every validator has to
+# survive them.
+NON_OBJECTS = (None, 0, 5, True, False, "", "version", [], ["version"],
+               [{"id": "x"}])
+
+
+class TestNonObjectPayloads(unittest.TestCase):
+    """A file that parses to a non-object is a defect to report, not an
+    exception to raise — `entries`' docstring states the contract for the
+    whole module: "Validators return problem strings; they never raise."
+    """
+
+    def test_validate_reports_one_problem_and_does_not_raise(self):
+        for payload in NON_OBJECTS:
+            with self.subTest(payload=payload):
+                self.assertEqual(
+                    eval_schema.validate(payload, SKILLS, LABEL),
+                    [f"{LABEL} is not a JSON object"])
+
+    def test_validate_output_reports_one_problem_and_does_not_raise(self):
+        for payload in NON_OBJECTS:
+            with self.subTest(payload=payload):
+                self.assertEqual(
+                    eval_schema.validate_output(payload, "idea", LABEL),
+                    [f"{LABEL} is not a JSON object"])
+
+    def test_fixture_refs_yields_nothing_and_does_not_raise(self):
+        # Its docstring already promises this: "malformed shapes yield
+        # nothing rather than raising, mirroring entries".
+        for payload in NON_OBJECTS:
+            with self.subTest(payload=payload):
+                self.assertEqual(eval_schema.fixture_refs(payload), [])
+
+    def test_a_string_file_does_not_masquerade_as_a_coverage_failure(self):
+        # The regression that motivated this: `"version" not in data` is a
+        # substring test on a str, so the version gate passed and the run
+        # continued into 26 derived coverage problems about a file whose
+        # only real defect is its shape.
+        problems = eval_schema.validate("version", SKILLS, LABEL)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertNotIn("covers skill", problems[0])
+
+    def test_load_refuses_a_non_object_file_without_raising(self):
+        for text in ("null", "5", "true", '"version"', "[]"):
+            with self.subTest(text=text):
+                with tempfile.TemporaryDirectory() as tmp:
+                    path = Path(tmp) / "routing.json"
+                    path.write_text(text, encoding="utf-8")
+                    cases, problems = eval_schema.load(path, SKILLS, LABEL)
+                    self.assertEqual(cases, [])
+                    self.assertEqual(problems,
+                                     [f"{LABEL} is not a JSON object"])
+
+
+
+class TestLoadCaseSetGuardsItsValidators(unittest.TestCase):
+    """The loader — not each validator — is what guarantees a validator
+    receives an object.
+
+    `load_case_set` is the shared entry point (the routing loader and
+    charter_replay's `load_cases` are both thin callers), and it ends by
+    reaching for `data.get("cases")`. A validator that does not itself
+    reject a non-object therefore hands the loader a string or a list to
+    call `.get` on. charter_replay's validator is exactly that: on a
+    bare-string file it returns no problems at all, so the set reads as
+    valid and the crash lands in the loader.
+    """
+
+    def load(self, text, validate):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "cases.json"
+            path.write_text(text, encoding="utf-8")
+            return eval_schema.load_case_set(path, LABEL, validate)
+
+    def test_a_permissive_validator_cannot_make_the_loader_raise(self):
+        # Stands in for any validator that does not guard shape itself.
+        for text in ("null", "5", "true", '"version"', "[]"):
+            with self.subTest(text=text):
+                cases, problems = self.load(text, lambda data: [])
+                self.assertEqual(cases, [])
+                self.assertEqual(problems,
+                                 [f"{LABEL} is not a JSON object"])
+
+    def test_the_validator_is_not_called_for_a_non_object(self):
+        # The guard runs first, so a validator may assume an object.
+        seen = []
+
+        def validate(data):
+            seen.append(data)
+            return []
+
+        cases, problems = self.load('"version"', validate)
+        self.assertEqual(seen, [], "validator was handed a non-object")
+        self.assertEqual(problems, [f"{LABEL} is not a JSON object"])
+
+    def test_a_valid_object_still_reaches_the_validator(self):
+        seen = []
+
+        def validate(data):
+            seen.append(data)
+            return []
+
+        cases, problems = self.load('{"cases": [{"id": "a"}]}', validate)
+        self.assertEqual(problems, [])
+        self.assertEqual(cases, [{"id": "a"}])
+        self.assertEqual(seen, [{"cases": [{"id": "a"}]}])
+
 
 
 if __name__ == "__main__":

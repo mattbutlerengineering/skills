@@ -14,6 +14,7 @@ half of the same partition is covered too. The mirror map is the
 knowledge plane's (ADR-0039), covered in tests/test_knowledge_plane.py.
 """
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -70,6 +71,13 @@ def gh(issues=(), timelines=None,
     }, **kwargs)
 
 
+def item(number, title, waited, aged=True):
+    """A queue item as _queues emits it. `aged` defaults True because an
+    unreadable history is the exceptional case, and a fixture that has to
+    opt IN to the failure reads the way the digest does."""
+    return gate_digest.Item(number, title, waited, aged)
+
+
 def tree(tmp):
     fixture = FixtureTree(tmp)
     fixture.write("docs/features/demo/breakdown.md", BREAKDOWN)
@@ -88,12 +96,12 @@ class TestComposeDigest(unittest.TestCase):
     def test_the_body_leads_with_the_marker_and_lists_every_gate(self):
         queues = [
             ("PRD gate", "wo:draft",
-             [(123, "WO-0018 rejection mining", 266400)]),
+             [item(123, "WO-0018 rejection mining", 266400)]),
             ("Blueprint gate", "wo:prd-approved", []),
             ("Merge gate", "wo:needs-review",
-             [(131, "WO-0010 sweeps", 1800)]),
+             [item(131, "WO-0010 sweeps", 1800)]),
         ]
-        body = gate_digest.compose_digest(queues, "2026-07-22")
+        body = gate_digest.compose_digest(queues, "2026-07-22", False)
         self.assertEqual(body.splitlines()[0], gate_digest.DIGEST_MARKER)
         self.assertIn("# Factory gate queue — 2026-07-22", body)
         self.assertIn("## PRD gate (wo:draft)", body)
@@ -104,9 +112,59 @@ class TestComposeDigest(unittest.TestCase):
         self.assertIn("- #131 WO-0010 sweeps — waiting <1h", body)
 
     def test_an_item_with_no_known_age_is_still_listed(self):
-        queues = [("PRD gate", "wo:draft", [(7, "WO-0001 a title", None)])]
-        body = gate_digest.compose_digest(queues, "2026-07-22")
+        queues = [("PRD gate", "wo:draft",
+                   [item(7, "WO-0001 a title", None)])]
+        body = gate_digest.compose_digest(queues, "2026-07-22", False)
         self.assertIn("- #7 WO-0001 a title\n", body)
+
+    def test_an_unaged_item_says_why_when_its_history_was_unreadable(self):
+        """The two states the defect brief measured as one line. `aged`
+        is read, never inferred from `waited` — an item whose history was
+        read and simply held no arrival is not a failure and must not
+        wear a failure's mark."""
+        readable = gate_digest.compose_digest(
+            [("PRD gate", "wo:draft", [item(7, "WO-0001 a title", None)])],
+            "2026-07-22", False)
+        unreadable = gate_digest.compose_digest(
+            [("PRD gate", "wo:draft",
+              [item(7, "WO-0001 a title", None, aged=False)])],
+            "2026-07-22", False)
+        self.assertIn("- #7 WO-0001 a title\n", readable)
+        self.assertIn("- #7 WO-0001 a title — age unknown"
+                      " (timeline unreadable)\n", unreadable)
+        self.assertNotEqual(readable, unreadable)
+
+    def test_an_aged_item_never_wears_the_mark(self):
+        """Precedence, not a guard: a known age wins over an unread
+        history. _queues cannot currently produce this combination (no
+        timeline means no arrival means no age), so this pins which fact
+        the renderer prefers if a later change ever derives an age some
+        other way — it does not stand in for a reachable bug."""
+        body = gate_digest.compose_digest(
+            [("PRD gate", "wo:draft", [item(7, "t", 1800, aged=False)])],
+            "2026-07-22", False)
+        self.assertIn("- #7 t — waiting <1h\n", body)
+        self.assertNotIn("unreadable", body)
+
+    def test_a_truncated_listing_is_stated_in_the_footer(self):
+        queues = [("PRD gate", "wo:draft", [])]
+        complete = gate_digest.compose_digest(queues, "2026-07-22", False)
+        partial = gate_digest.compose_digest(queues, "2026-07-22", True)
+        self.assertNotEqual(complete, partial)
+        self.assertIn(gate_digest.TRUNCATED_NOTE, partial)
+        self.assertNotIn(gate_digest.TRUNCATED_NOTE, complete)
+        # under the sections it qualifies, above the standing footer —
+        # a caveat printed after the provenance line reads as a footnote
+        # about the tool rather than about the queue above it
+        paragraphs = partial.strip().split("\n\n")
+        self.assertEqual(paragraphs[-2], gate_digest.TRUNCATED_NOTE)
+        self.assertIn("Updated daily by the gate digest", paragraphs[-1])
+
+    def test_the_coverage_fact_has_no_default(self):
+        """A default would let a caller omit the fact silently, which is
+        the defect this contract exists to prevent."""
+        with self.assertRaises(TypeError):
+            gate_digest.compose_digest([], "2026-07-22")
 
 
 class TestRunDaily(unittest.TestCase):
@@ -302,7 +360,8 @@ class TestRunDaily(unittest.TestCase):
                 " JSON: Expecting value: line 1 column 1 (char 0)"])
             (create,) = run.called("issue", "create")
             body = create[create.index("--body") + 1]
-            self.assertIn("- #123 WO-0018 rejection mining\n", body)
+            self.assertIn("- #123 WO-0018 rejection mining — age"
+                          " unknown (timeline unreadable)\n", body)
 
     def test_a_failing_timeline_still_posts_the_digest(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -316,7 +375,49 @@ class TestRunDaily(unittest.TestCase):
                                         " failed: boom"])
             (create,) = run.called("issue", "create")
             body = create[create.index("--body") + 1]
-            self.assertIn("- #123 WO-0018 rejection mining\n", body)
+            self.assertIn("- #123 WO-0018 rejection mining — age"
+                          " unknown (timeline unreadable)\n", body)
+
+    def _body(self, run, tmp):
+        gate_digest.run_daily(tree(tmp).root, run=run, clock=clock)
+        (create,) = run.called("issue", "create")
+        return create[create.index("--body") + 1]
+
+    def test_an_unreadable_timeline_is_marked_in_the_posted_body(self):
+        """The defect brief's second reproduction, as a regression: the
+        two causes of a missing age rendered the same line."""
+        waiting = [issue(123, "WO-0018 rejection mining",
+                         labels=["wo:prd-approved"])]
+        with tempfile.TemporaryDirectory() as tmp:
+            readable = self._body(gh(issues=waiting, timelines={123: []}),
+                                  tmp)
+            broken = gh(issues=waiting)
+            broken.answers[("api",)] = "not json"
+            unreadable = self._body(broken, tmp)
+        self.assertIn("- #123 WO-0018 rejection mining\n", readable)
+        self.assertIn("- #123 WO-0018 rejection mining — age unknown"
+                      " (timeline unreadable)\n", unreadable)
+        self.assertNotEqual(readable, unreadable)
+
+    def test_a_full_window_says_so_in_the_posted_body(self):
+        """The defect brief's first reproduction, as a regression: the
+        truncated digest was byte-identical to the complete one."""
+        waiting = issue(123, "WO-0018 rejection mining",
+                        labels=["wo:prd-approved"])
+        seen = {123: [labeled("2026-07-20T09:00:00Z", "wo:prd-approved")]}
+        with tempfile.TemporaryDirectory() as tmp:
+            complete = self._body(gh(issues=[waiting], timelines=seen), tmp)
+            partial = self._body(gh(
+                issues=[waiting] + [
+                    issue(10_000 + n, f"noise {n}", state="CLOSED")
+                    for n in range(gate_digest.LIST_WINDOW - 1)],
+                timelines=seen), tmp)
+        self.assertNotEqual(complete, partial)
+        self.assertNotIn(gate_digest.TRUNCATED_NOTE, complete)
+        self.assertIn(gate_digest.TRUNCATED_NOTE, partial)
+        # the queue itself still renders — truncation reports, never aborts
+        self.assertIn("- #123 WO-0018 rejection mining — waiting 2d 0h",
+                      partial)
 
 
 class TestMain(cli_contract.ReportContract, unittest.TestCase):
@@ -345,3 +446,85 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWorkflowOutputLockstep(unittest.TestCase):
+    """The $GITHUB_OUTPUT seam, gate-digest side: run_daily's output keys
+    and gate-digest.yml's steps.digest.outputs.<name> references are a
+    split contract with no other bridge. Same idiom as
+    test_assembler.TestWorkflowOutputLockstep and its cost_report twin —
+    this was the fourth site of the three and the only one unpinned.
+
+    What a rename costs here: `changed` gates the commit step. An
+    unresolvable ref expands to the empty string, `'' == 'true'` is
+    false, and the gate-latency rows run_daily appended to
+    docs/factory/costs.jsonl are computed every day and discarded with
+    the runner — silently, with the workflow green and the digest still
+    posting.
+
+    Root and payload YAML are byte-identical (detector E + TestLockstep),
+    so pinning the root copy pins both.
+    """
+
+    WORKFLOW = (Path(__file__).resolve().parents[1] / ".github"
+                / "workflows" / "gate-digest.yml")
+    REFS = re.compile(r"steps\.digest\.outputs\.(\w+)")
+
+    def yaml_refs(self):
+        refs = set(self.REFS.findall(
+            self.WORKFLOW.read_text(encoding="utf-8")))
+        self.assertTrue(refs, "gate-digest.yml references no digest outputs")
+        return refs
+
+    def emitted_keys(self):
+        """The keys EVERY run_daily path writes — the intersection, not
+        the union its two siblings take.
+
+        The workflow reads its ref unconditionally, on whichever path the
+        run took, so a key only some paths emit would still expand to ''
+        on the others. All three paths are exercised through the public
+        interface rather than a hand-kept list: an unreachable tracker,
+        a run with no new rows, and a run that captures one."""
+        per_path = []
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(failing=["issue", "list"])
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertTrue(problems, "the unreachable-tracker path did"
+                                      " not fail — fixture is wrong")
+            per_path.append(set(outputs))
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=[issue(123, "WO-0018 rejection mining",
+                                   labels=["wo:draft", "size:S"])],
+                     timelines={123: [labeled("2026-07-20T09:00:00Z",
+                                              "wo:draft")]})
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs.get("changed"), "false",
+                             "the no-new-rows path did not report"
+                             " changed=false — fixture or key is wrong")
+            per_path.append(set(outputs))
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=[issue(131, "WO-0010 sweeps", state="CLOSED",
+                                   labels=["wo:merged"])],
+                     timelines={131: [
+                         labeled("2026-07-01T09:00:00Z", "wo:needs-review"),
+                         unlabeled("2026-07-01T10:00:00Z", "wo:needs-review"),
+                         labeled("2026-07-01T10:00:00Z", "wo:merged")]})
+            outputs, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs.get("changed"), "true",
+                             "the captured-row path did not report"
+                             " changed=true — fixture or key is wrong")
+            per_path.append(set(outputs))
+        self.assertEqual(len(per_path), 3)
+        return set.intersection(*per_path)
+
+    def test_every_yaml_output_ref_is_emitted_on_every_path(self):
+        self.assertLessEqual(self.yaml_refs(), self.emitted_keys())
+
+    def test_the_workflow_consumes_the_commit_gate_key(self):
+        # the key whose silent loss discards every captured latency row
+        self.assertIn("changed", self.yaml_refs())

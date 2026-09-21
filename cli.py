@@ -38,6 +38,7 @@ import contextlib
 import json
 import math
 import os
+import secrets
 import select
 import signal
 import subprocess
@@ -205,6 +206,25 @@ def harness_run(cmd, cwd, timeout, env=None, spawn=None):
         process.stdout.close()
 
 
+def _heredoc_delimiter(text):
+    """A delimiter `text` does not contain, randomised per call.
+
+    A delimiter derivable from the output key lets a value close its own
+    heredoc, after which the runner reads the rest of that value as
+    further assignments — so a value could set any output, including the
+    `dispatch` flag that decides whether an agent runs at all. GitHub's
+    multiline-output documentation calls for a random delimiter for this
+    reason. The loop is not defensive padding for an impossible state: it
+    is what makes "the body cannot contain the delimiter" true rather
+    than merely overwhelmingly likely, and a silent collision is exactly
+    the bug this exists to prevent.
+    """
+    while True:
+        delim = f"__EOF_{secrets.token_hex(16)}__"
+        if delim not in text:
+            return delim
+
+
 def write_outputs(env, outputs):
     """Append outputs to $GITHUB_OUTPUT for the workflow's downstream steps.
     Multiline values (e.g. the assembler's prompt) use GitHub's heredoc
@@ -216,7 +236,7 @@ def write_outputs(env, outputs):
     for key, value in outputs.items():
         text = str(value)
         if "\n" in text:
-            delim = f"__{key.upper()}_EOF__"
+            delim = _heredoc_delimiter(text)
             chunks.append(f"{key}<<{delim}\n{text}\n{delim}")
         else:
             chunks.append(f"{key}={text}")
@@ -235,7 +255,7 @@ def read_event(env):
         return None, None
     try:
         event = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as err:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as err:
         return None, f"cannot read GITHUB_EVENT_PATH {path}: {err}"
     if not isinstance(event, dict):
         return None, f"GITHUB_EVENT_PATH {path} is not a JSON object"

@@ -8,6 +8,7 @@ manifest walk cannot emit a malformed key), so those tests patch the
 checksum gate or INSTALL_MAP to reach the branch — stamp itself is still
 driven through its public interface.
 """
+import ast
 import collections
 import hashlib
 import json
@@ -170,17 +171,20 @@ class TestUpdateManifest(unittest.TestCase):
                     f"{name} does not land in templates/{rel} as its"
                     " transform of the root file")
 
-    def test_codeowners_lands_verbatim_and_the_makefile_in_product_form(self):
-        """The two twins that used to be hand-authored: CODEOWNERS is a
-        byte-for-byte mirror, the Makefile is generated in product form
-        (header swapped, plugin lint dropped, commands respelled)."""
+    def test_both_hand_authored_twins_land_in_product_form(self):
+        """The two twins that used to be hand-authored, each generated
+        now: CODEOWNERS with its header swapped and its owner blanked to
+        the placeholder, the Makefile with its header swapped, the
+        plugin-only lint line dropped and its commands respelled."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = make_factory_repo(tmp)
             self.assertEqual(factory_init.update_manifest(tree.root), [])
             templates = tree.root / "factory" / "templates"
             self.assertEqual(
-                (templates / ".github" / "CODEOWNERS").read_bytes(),
-                (tree.root / ".github" / "CODEOWNERS").read_bytes())
+                (templates / ".github" / "CODEOWNERS").read_text(
+                    encoding="utf-8"),
+                factory_init.PRODUCT_CODEOWNERS_HEADER
+                + f"* {factory_init.OWNER_PLACEHOLDER}\n")
             self.assertEqual(
                 (templates / "Makefile").read_text(encoding="utf-8"),
                 factory_init.PRODUCT_MAKEFILE_HEADER + "\n"
@@ -270,9 +274,10 @@ class TestPayloadToolsImport(unittest.TestCase):
         for rel in modules:
             with self.subTest(module=rel.as_posix()):
                 directory = self.REPO / "factory" / "templates" / rel.parent
-                # -B: importing inside the payload would otherwise drop
-                # __pycache__/*.pyc into the mirrored tree, and the next
-                # update-manifest would checksum them in as payload.
+                # -B keeps the import from littering __pycache__/ into
+                # the mirrored tree. It is hygiene, not load-bearing:
+                # gates.manifest_files excludes bytecode caches, so a
+                # forgotten -B no longer pins them in as payload.
                 done = subprocess.run(
                     [sys.executable, "-B", "-c", f"import {rel.stem}"],
                     cwd=directory, capture_output=True, text=True)
@@ -281,6 +286,90 @@ class TestPayloadToolsImport(unittest.TestCase):
                     f"factory/templates/{rel.as_posix()} does not import"
                     f" inside the payload:\n{done.stderr}")
 
+    def dynamic_imports(self):
+        """{module name} gates.py reaches through importlib, derived from
+        its source rather than listed here.
+
+        Two shapes exist and both are followed: a literal
+        `import_module("label_sync")`, and a loop variable bound from a
+        module-level table's `.items()`, whose keys are the module names
+        (LABEL_DECLARERS). A third shape is returned as unfollowed and
+        fails the test loudly rather than being silently skipped — a
+        derivation that quietly covers nothing is the same silence this
+        test exists to close.
+        """
+        tree = ast.parse((self.REPO / "gates.py").read_text(encoding="utf-8"))
+        tables = {t.id: node.value for node in tree.body
+                  if isinstance(node, ast.Assign)
+                  and isinstance(node.value, ast.Dict)
+                  for t in node.targets if isinstance(t, ast.Name)}
+
+        def table_keys(name):
+            """The module names a `for <name>, _ in TABLE.items()` binds,
+            or None when nothing in the tree binds it that way."""
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.For)
+                        and isinstance(node.target, ast.Tuple)
+                        and any(isinstance(e, ast.Name) and e.id == name
+                                for e in node.target.elts)):
+                    continue
+                for call in ast.walk(node.iter):
+                    if (isinstance(call, ast.Call)
+                            and isinstance(call.func, ast.Attribute)
+                            and call.func.attr == "items"
+                            and isinstance(call.func.value, ast.Name)
+                            and call.func.value.id in tables):
+                        return {k.value
+                                for k in tables[call.func.value.id].keys
+                                if isinstance(k, ast.Constant)}
+            return None
+
+        names, unfollowed = set(), []
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "import_module" and node.args):
+                continue
+            arg = node.args[0]
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                names.add(arg.value)
+                continue
+            keys = table_keys(arg.id) if isinstance(arg, ast.Name) else None
+            if keys is None:
+                unfollowed.append(f"gates.py:{node.lineno}"
+                                  f" import_module({ast.unparse(arg)})")
+            else:
+                names |= keys
+        return names, unfollowed
+
+    def test_every_lazily_imported_module_ships(self):
+        """A static `import x` at module scope fails loudly and the test
+        above catches it. `importlib.import_module` inside a function
+        does not: gates.py wraps both call sites in `except ImportError`
+        on purpose, so a partial stamp cannot crash the gate before any
+        detector runs.
+
+        The cost of that deliberate silence is that a module dropping out
+        of MIRRORS would switch detector J off in every stamped repo and
+        report nothing — the exact failure J's own docstring says it
+        exists to close, one level up. Nothing else pins it: the import
+        never runs at module scope, so the payload-import test above
+        cannot see it."""
+        names, unfollowed = self.dynamic_imports()
+        self.assertEqual(unfollowed, [], "gates.py reaches importlib in a"
+                         " shape this test cannot follow — teach it the"
+                         " new shape rather than letting the check pass"
+                         " on a set it never derived")
+        self.assertTrue(names, "derived no lazily imported modules — the"
+                        " derivation is broken, not gates.py clean")
+        shipped = {Path(rel).stem for _, rel, _ in factory_init.MIRRORS
+                   if rel.endswith(".py")}
+        self.assertEqual(sorted(names - shipped), [],
+                         "gates.py lazily imports a module MIRRORS does"
+                         " not carry: in a stamped repo the import fails,"
+                         " `except ImportError` swallows it, and the"
+                         " detector goes silent instead of red")
+
 
 class TestProductForm(unittest.TestCase):
     """The per-command root->product respelling. Public on purpose:
@@ -288,9 +377,13 @@ class TestProductForm(unittest.TestCase):
     TestLockstep (tests/test_gates.py) asserts both Makefiles'
     command sets against it — never a test-private copy."""
 
-    def test_each_factory_tool_moves_under_tools_factory(self):
+    def test_the_named_factory_tools_move_under_tools_factory(self):
+        """The tools a Makefile target actually invokes today. The rule
+        itself — every root file MIRRORS moves — is asserted over MIRRORS
+        in TestTheRespellingHasOneOwner; this stays as the readable
+        statement of what the respelling looks like."""
         for tool in ("gates.py", "validator.py", "assembler.py",
-                     "cost_report.py", "gate_digest.py",
+                     "budget_guard.py", "cost_report.py", "gate_digest.py",
                      "rejection_mining.py"):
             with self.subTest(tool=tool):
                 self.assertEqual(
@@ -305,6 +398,87 @@ class TestProductForm(unittest.TestCase):
     def test_a_path_agnostic_command_is_untouched(self):
         command = "npx --yes playwright@1.62.1 test"
         self.assertEqual(factory_init.product_form(command), command)
+
+
+class TestTheRespellingHasOneOwner(unittest.TestCase):
+    """MIRRORS says where a root file lives in a stamped repo, and
+    product_form is the only thing that rewrites a command to match. The
+    two must not be able to disagree — a command product_form does not
+    respell names a root-level file the stamped repo does not have, and
+    the target fails in someone else's repo.
+
+    MIRRORS' own comment states the invariant as a claim about the root
+    Makefile ("no target invokes it"). These are its enforcement.
+    TestLockstep cannot be: it asserts the payload Makefile against
+    `product_form(...)` of the same commands, so the expectation is
+    computed by the function under test.
+    """
+
+    ROOT_MAKEFILE = REPO_ROOT / "Makefile"
+    PAYLOAD_MAKEFILE = REPO_ROOT / "factory" / "templates" / "Makefile"
+
+    # The one root command deliberately absent from the payload: the
+    # plugin's structural lint has no product-repo counterpart, so
+    # product_makefile drops the line rather than respelling it.
+    DROPPED = ("lint.py",)
+
+    @staticmethod
+    def payload_tools():
+        """(root name, payload path) for every root file MIRRORS moves —
+        derived here the same way product_form derives it, so the test
+        states the rule rather than re-typing its output."""
+        return [(name, rel) for name, rel, _ in factory_init.MIRRORS
+                if "/" not in name and rel != name]
+
+    @staticmethod
+    def recipe_commands(text):
+        """Every tab-indented recipe line in a Makefile, target-agnostic."""
+        return [line.strip() for line in text.splitlines()
+                if line.startswith("\t")]
+
+    def test_every_root_tool_mirrors_moves_is_respelled(self):
+        tools = self.payload_tools()
+        self.assertIn(("work_queue.py", "tools/factory/work_queue.py"),
+                      tools, "the derivation must cover the whole payload,"
+                             " not the subset a hand-typed list happened"
+                             " to carry")
+        for name, rel in tools:
+            with self.subTest(tool=name):
+                self.assertEqual(
+                    factory_init.product_form(f"python3 {name} --flag"),
+                    f"python3 {rel} --flag")
+
+    def test_a_file_mirrors_does_not_move_is_left_alone(self):
+        """The Makefile mirrors to its own name, and the workflows carry a
+        path in theirs — neither is a command to respell."""
+        for command in ("make -f Makefile check",
+                        "python3 .github/workflows/validator.yml"):
+            with self.subTest(command=command):
+                self.assertEqual(factory_init.product_form(command), command)
+
+    def test_every_root_makefile_command_is_respelled_or_dropped(self):
+        """The claim MIRRORS' comment makes, asserted against the real
+        root Makefile: a target naming a tool product_form does not know
+        would be copied into the payload verbatim."""
+        text = self.ROOT_MAKEFILE.read_text(encoding="utf-8")
+        for command in self.recipe_commands(text):
+            for name in re.findall(r"python3 (\S+\.py)", command):
+                if name in self.DROPPED or "/" in name:
+                    continue
+                with self.subTest(command=command):
+                    self.assertNotIn(
+                        f"python3 {name}", factory_init.product_form(command),
+                        f"{name} is invoked by the root Makefile but"
+                        " product_form leaves it at the root; the stamped"
+                        " repo has it under tools/factory/")
+
+    def test_the_payload_makefile_names_no_root_level_tool(self):
+        """The same claim from the other end, over the generated file that
+        actually ships."""
+        text = self.PAYLOAD_MAKEFILE.read_text(encoding="utf-8")
+        bare = [command for command in self.recipe_commands(text)
+                if re.search(r"python3 [^/\s]+\.py", command)]
+        self.assertEqual(bare, [])
 
 
 class TestProductMakefile(unittest.TestCase):
@@ -335,6 +509,141 @@ class TestProductMakefile(unittest.TestCase):
     def test_identity_returns_its_input_unchanged(self):
         text = "* @owner\n"
         self.assertEqual(factory_init.identity(text), text)
+
+
+class TestProductCodeowners(unittest.TestCase):
+    """CODEOWNERS' MIRRORS transform.
+
+    The root file names THIS repo's code owner. The stamped twin must
+    name nobody: GitHub ignores a CODEOWNERS entry pointing at someone
+    who is not a collaborator, and says nothing when it does, so an
+    inherited handle leaves the merge gate inert in silence — which is
+    the one control still standing on the merge path once ADR-0036 made
+    the independent review the load-bearing part.
+
+    Six surfaces already promise the stamp ships a placeholder: the
+    seeded blueprint ADR, gates.PRISTINE_PREFIXES' comment,
+    factory_init's own module docstring and FACTORY_OWNED comment,
+    docs/setup.md's verify checklist, and doctor's step 8. This is the
+    transform that makes them true.
+    """
+
+    ROOT_TEXT = ("# Human gates: a root header sentence.\n"
+                 "# A second header line.\n"
+                 "* @real-owner\n"
+                 "docs/adr/ @real-owner\n")
+
+    def test_swaps_the_header_and_replaces_every_owner(self):
+        placeholder = factory_init.OWNER_PLACEHOLDER
+        self.assertEqual(
+            factory_init.product_codeowners(self.ROOT_TEXT),
+            factory_init.PRODUCT_CODEOWNERS_HEADER
+            + f"* {placeholder}\n"
+            + f"docs/adr/ {placeholder}\n")
+
+    def test_a_root_file_with_no_header_still_gets_one(self):
+        """Total over its root file's shape, not over the shape it
+        happens to have today. ADR-0050 names the Makefile transform's
+        dependence on an opening comment block as the fragile part; this
+        one drops comment lines and prepends, so a root file with no
+        header, or with the header moved, still lands complete."""
+        self.assertEqual(
+            factory_init.product_codeowners("* @owner\n"),
+            factory_init.PRODUCT_CODEOWNERS_HEADER
+            + f"* {factory_init.OWNER_PLACEHOLDER}\n")
+
+    def test_a_comment_below_the_rules_survives(self):
+        """Only the LEADING comment block is the root's header. A comment
+        further down annotates a rule, and a transform that swallowed it
+        would lose the payload something the root said — silently, which
+        is the failure class this transform exists to end."""
+        out = factory_init.product_codeowners(
+            "# header\n"
+            "* @owner\n"
+            "# the security-sensitive paths follow\n"
+            "infra/ @owner\n")
+        self.assertIn("# the security-sensitive paths follow", out)
+        self.assertNotIn("# header", out)
+
+    def test_it_rewrites_owner_tokens_not_every_at_sign(self):
+        """An owner may be an email address; only a whitespace-delimited
+        token that STARTS with @ is a handle. Rewriting inside
+        user@example.com would corrupt the rule rather than blank it."""
+        self.assertIn(
+            "docs/ user@example.com",
+            factory_init.product_codeowners("docs/ user@example.com\n"))
+
+    def test_the_placeholder_cannot_be_a_real_github_handle(self):
+        """A placeholder shaped like a plausible handle can be
+        registered by a stranger, and then the gate is not inert but
+        live and pointed at them. Angle brackets are not legal in a
+        GitHub login, so this token can never resolve to an account."""
+        self.assertRegex(factory_init.OWNER_PLACEHOLDER, r"[<>]")
+
+    def test_the_header_tells_the_reader_to_substitute_it(self):
+        """The placeholder is only half the fix — a stamped repo also
+        has to be told what to do about it, in the file itself, because
+        that is the surface someone edits."""
+        header = factory_init.PRODUCT_CODEOWNERS_HEADER
+        self.assertIn(factory_init.OWNER_PLACEHOLDER, header)
+        self.assertIn("substitute", header.lower())
+        for line in header.splitlines():
+            with self.subTest(line=line):
+                self.assertTrue(line.startswith("#"),
+                                "a CODEOWNERS header line must be a comment")
+
+    def test_the_header_cites_no_adr_by_bare_token(self):
+        """The stamped repo numbers the three-human-gates decision 0005,
+        not 0033. tests/TestSeededADRs states the rule for the ADR seed
+        — cite an upstream decision by name, never by bare token — and
+        the root header's `(ADR-0033)` is exactly that trap, one file
+        over. Detector C does not scan .github/, so nothing else would
+        catch it."""
+        self.assertNotRegex(factory_init.PRODUCT_CODEOWNERS_HEADER,
+                            r"ADR-\d{4}")
+
+
+class TestTheShippedPayloadNamesNoOwner(unittest.TestCase):
+    """The bytes actually in factory/templates/.github/CODEOWNERS.
+
+    TestProductCodeowners pins the transform; this pins that the payload
+    was regenerated through it. Nothing else reads these bytes: a stamp
+    installs them at .github/CODEOWNERS in the target, and detector E
+    deliberately never compares that file (gates.PRISTINE_PREFIXES
+    excludes it, because it is meant to be edited downstream).
+    """
+
+    ROOT = REPO_ROOT / ".github" / "CODEOWNERS"
+    PAYLOAD = (REPO_ROOT / "factory" / "templates" / ".github"
+               / "CODEOWNERS")
+    HANDLE = re.compile(r"(?:^|\s)(@\S+)", re.MULTILINE)
+
+    def handles(self, path):
+        return set(self.HANDLE.findall(path.read_text(encoding="utf-8")))
+
+    def test_the_root_still_names_a_real_handle(self):
+        """Non-vacuity. If the root file ever stops naming a handle, the
+        pin below passes because it compared against nothing."""
+        self.assertTrue(self.handles(self.ROOT),
+                        ".github/CODEOWNERS names no owner")
+
+    def test_no_root_handle_survives_into_the_payload(self):
+        payload = self.PAYLOAD.read_text(encoding="utf-8")
+        for handle in sorted(self.handles(self.ROOT)):
+            with self.subTest(handle=handle):
+                self.assertNotIn(
+                    handle, payload,
+                    "the payload CODEOWNERS names this repo's code owner —"
+                    " a stamp would install it as the target's")
+
+    def test_every_payload_rule_names_the_placeholder(self):
+        rules = [line for line
+                 in self.PAYLOAD.read_text(encoding="utf-8").splitlines()
+                 if line.strip() and not line.lstrip().startswith("#")]
+        self.assertTrue(rules, "the payload CODEOWNERS has no rule lines")
+        for line in rules:
+            with self.subTest(rule=line):
+                self.assertIn(factory_init.OWNER_PLACEHOLDER, line)
 
 
 class TestInstallPath(unittest.TestCase):

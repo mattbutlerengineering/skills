@@ -286,6 +286,100 @@ class TestChartersIndex(unittest.TestCase):
         self.assertIn("ADR-0033",
                       CHARTERS_INDEX.read_text(encoding="utf-8"))
 
+    # Only as far as this repo's roster has ever run — a tenth role needs
+    # a new word, and this test failing to find one is the signal.
+    _NUMBER_WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five",
+                     6: "six", 7: "seven", 8: "eight", 9: "nine",
+                     10: "ten"}
+
+    def test_prose_role_count_and_pipeline_chain_track_the_roster(self):
+        """CHARTERS.md states the roster twice more, in prose that no
+        table-row test above reaches: the opening sentence's count
+        ("The nine chartered roles...") and the read-the-table-off arrow
+        chain ("PM -> Architect -> ... with Support feeding the front of
+        the line and the Toolsmith maintaining the line itself"). A
+        tenth role would leave the word "nine" behind and could go
+        unnamed in the chain; both are pinned here, not against a
+        hand-typed number or list, but against len(ROLES) and ROLES
+        itself, so this test does not go stale the way the prose would."""
+        flat = " ".join(CHARTERS_INDEX.read_text(encoding="utf-8").split())
+        number_word = self._NUMBER_WORDS.get(len(ROLES))
+        self.assertIsNotNone(
+            number_word,
+            f"no word known for {len(ROLES)} roles — extend _NUMBER_WORDS")
+        self.assertIn(number_word, flat.lower(),
+                      f"CHARTERS.md's role-count prose does not say"
+                      f" {number_word!r} for {len(ROLES)} roles")
+        # The chain sentence only — the table above it already names
+        # every role in its own column, so checking the whole document
+        # would pass even if the chain itself dropped one.
+        anchor = "maintaining the line itself"
+        self.assertIn(anchor, flat,
+                      "the pipeline arrow-chain sentence is missing or"
+                      " reworded — update this test's anchor with it")
+        start = flat.index("Read the table left to right")
+        end = flat.index(anchor) + len(anchor)
+        chain = flat[start:end].lower()
+        for role in ROLES:
+            with self.subTest(role=role):
+                self.assertIn(role, chain,
+                              f"CHARTERS.md's pipeline chain never names"
+                              f" role {role!r}")
+
+
+class TestTheVocabularyIsTheWholeDomain(unittest.TestCase):
+    """The inverse direction, which nothing in this repo asserted.
+
+    Every other check here iterates ROLES and asks whether the files
+    honour it. None asks whether the files hold anything ROLES does not
+    name — `charter_files()` is itself built from ROLES, so even the
+    scan for a hard-coded model id has a ROLES-shaped domain. A stub at
+    `factory/agents/factory-<x>.md` for an `x` outside the vocabulary is
+    therefore dispatchable (the subagent registry keys on frontmatter
+    `name:`, not on ROLES) and checked by nothing: not for a `route:`
+    the factory config defines, not for an absent `model:`, not for a
+    charter to pair with, not for a row in the index.
+
+    That is the failure factory_roles exists to end — "adding a tenth
+    role touched all of them, and nothing failed when they disagreed."
+    The seam made the nine agree; it took a tenth to notice nothing
+    fails on one.
+    """
+
+    AGENTS_DIR = REPO_ROOT / "factory" / "agents"
+    CHARTERS_DIR = REPO_ROOT / "factory" / "charters"
+    # Both path shapes the index spells a role in, so a row surviving a
+    # role's removal is caught in whichever column still names it.
+    INDEX_ROLES = re.compile(
+        r"factory/agents/factory-([\w-]+)\.md"
+        r"|factory/charters/([\w-]+)/CHARTER\.md")
+
+    def test_every_agent_stub_on_disk_is_a_chartered_role(self):
+        for path in sorted(self.AGENTS_DIR.glob("*.md")):
+            with self.subTest(stub=path.name):
+                self.assertTrue(path.name.startswith("factory-"),
+                                f"{path.name} is not a factory-<role> stub")
+                self.assertIn(path.stem[len("factory-"):], ROLES,
+                              f"{path.name} is dispatchable but names no"
+                              " role in factory_roles.ROLES")
+
+    def test_every_charter_directory_on_disk_is_a_chartered_role(self):
+        for path in sorted(p for p in self.CHARTERS_DIR.iterdir()
+                           if p.is_dir()):
+            with self.subTest(charter=path.name):
+                self.assertIn(path.name, ROLES,
+                              f"factory/charters/{path.name}/ names no role"
+                              " in factory_roles.ROLES")
+
+    def test_the_index_names_no_role_the_vocabulary_dropped(self):
+        text = CHARTERS_INDEX.read_text(encoding="utf-8")
+        for stub_role, charter_role in self.INDEX_ROLES.findall(text):
+            role = stub_role or charter_role
+            with self.subTest(role=role):
+                self.assertIn(role, ROLES,
+                              f"CHARTERS.md still lists {role!r}, which"
+                              " factory_roles.ROLES does not name")
+
 
 if __name__ == "__main__":
     unittest.main()
