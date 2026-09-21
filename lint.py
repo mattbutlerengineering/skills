@@ -778,6 +778,33 @@ def check_ledger(root):
             for slug in ALL_SKILLS + extra_skills(root) if slug not in rows]
 
 
+def check_ledger_no_orphans(root):
+    """The reverse of check_ledger (issue #455): a row naming a skill the
+    taxonomy no longer registers.
+
+    Issue #455 framed the reverse direction as needing a source of truth
+    for "was a skill" — a historical registry the taxonomy does not keep.
+    It does not: `ALL_SKILLS + extra_skills(root)` is already the trusted
+    "is a skill, right now" set check_ledger holds LEDGER.md to in the
+    forward direction, and a row naming something outside it is exactly as
+    wrong whether that name was renamed, dropped, or never a skill at all
+    — the checker does not need to know which. Same set, same row
+    extraction (ledger_rows), read the other way.
+
+    Row-scoped like check_ledger, for the same reason: the reading notes
+    below the table name skills by slug too, and a retired skill can stay
+    in that prose (an explicit "dropped" note, say) without a live row
+    claiming a maturity that no longer exists.
+    """
+    path = root / "LEDGER.md"
+    if not path.is_file():
+        return []  # absence already reported by check_ledger
+    known = set(ALL_SKILLS) | set(extra_skills(root))
+    rows = ledger_rows(path.read_text(encoding="utf-8"))
+    return [f"LEDGER.md has a row for skill {slug!r}, which the taxonomy "
+            "no longer registers" for slug in sorted(rows - known)]
+
+
 def check_backlog(root):
     """The seed backlog is strictly opt-in (ADR-0029): an absent
     docs/backlog.md is no problem. protocol.check_backlog owns the entry
@@ -821,7 +848,8 @@ CHECKERS = (check_manifest, check_plugin_skills,
             check_router, check_readme_skills, check_readme_no_orphans,
             check_protocol,
             check_protocol_tables, check_backlog, check_evals,
-            check_output_evals, check_ledger, check_ledger_links)
+            check_output_evals, check_ledger, check_ledger_no_orphans,
+            check_ledger_links)
 
 
 def main():
