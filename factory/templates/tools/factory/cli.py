@@ -235,7 +235,7 @@ def read_event(env):
         return None, None
     try:
         event = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as err:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as err:
         return None, f"cannot read GITHUB_EVENT_PATH {path}: {err}"
     if not isinstance(event, dict):
         return None, f"GITHUB_EVENT_PATH {path} is not a JSON object"
