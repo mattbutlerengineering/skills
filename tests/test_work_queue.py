@@ -162,6 +162,40 @@ class TestPlanBatch(unittest.TestCase):
         self.assertEqual([r["wo"] for r in batch], ["WO-0001"])
         self.assertIn("$15.00 already planned", deferred[0])
 
+    def test_an_unresolvable_cap_refuses_to_plan(self):
+        # fail closed, the same rule an unpriceable size gets: an
+        # unresolvable cap is an unknown ceiling, not an absent one
+        capless = {k: v for k, v in CONFIG.items() if k != "monthly_cap_usd"}
+        batch, _, problems = work_queue.plan_batch(
+            found(row("WO-0001", issue=1)), {1}, capless, spent_usd=0)
+        self.assertEqual(batch, [])
+        self.assertEqual(problems, [
+            "config: factory.json names no positive monthly_cap_usd",
+            "wq: no monthly cap could be resolved — refusing to plan a"
+            " batch it cannot price"])
+
+    def test_an_unresolvable_cap_is_not_an_unlimited_one(self):
+        # the hazard the refusal closes: with the comparison skipped,
+        # a month that has already spent a fortune plans a full batch
+        capless = {k: v for k, v in CONFIG.items() if k != "monthly_cap_usd"}
+        rows = found(*[row(f"WO-000{n}", size="L", issue=n)
+                       for n in range(1, 4)])
+        batch, _, _ = work_queue.plan_batch(rows, {1, 2, 3}, capless,
+                                            spent_usd=999999.0)
+        self.assertEqual(batch, [])
+
+    def test_the_refusal_still_reports_the_near_misses(self):
+        # refusing to plan is not refusing to explain — the wip_cap
+        # refusal hands back eligible's deferrals too
+        capless = {k: v for k, v in CONFIG.items() if k != "monthly_cap_usd"}
+        rows = found(row("WO-0001", issue=1),
+                     row("WO-0002", issue=None))
+        _, deferred, _ = work_queue.plan_batch(rows, {1}, capless,
+                                               spent_usd=0)
+        self.assertEqual(deferred, [
+            "WO-0002: its row carries no (tracker: #N) mirror, so no"
+            " issue can carry the ready label"])
+
     def test_a_missing_wip_cap_refuses_to_guess(self):
         batch, _, problems = work_queue.plan_batch(
             found(row("WO-0001", issue=1)), {1},
@@ -276,6 +310,26 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         if breakdown:
             tree.write("docs/features/demo/breakdown.md", breakdown)
         return tree
+
+    def test_a_config_naming_no_cap_plans_nothing(self):
+        """The refusal at the surface a consumer reads. The skill runs
+        what `plan` prints; an unresolvable cap must not put a work
+        order on that list."""
+        capless = {k: v for k, v in CONFIG.items() if k != "monthly_cap_usd"}
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/factory.json", json.dumps(capless))
+            tree.write(
+                "docs/features/demo/breakdown.md",
+                "- [ ] **WO-0001** ready and priced — size:S, blocked by: —"
+                " (PRD-0001 §S) (tracker: #7)\n")
+            code, out = self.planned(
+                ["plan"], run=listing(7),
+                root=tree.root)
+        self.assertEqual(code, 1)
+        self.assertNotIn("WO-0001  size:S", out)
+        self.assertIn("refusing to plan a batch it cannot price", out)
+        self.assertEqual(out.splitlines()[-1], "wq: 2 problem(s)")
 
     def test_an_untrusted_listing_defers_no_row_for_a_reason_it_cannot_know(
             self):
