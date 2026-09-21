@@ -8,6 +8,7 @@ and ledger coverage. Exit 0 = clean, 1 = problems (printed one per line).
 Every checker takes the repo root as a parameter; the CLI entry passes
 the real repo, the test suite passes fixture trees.
 """
+import inspect
 import json
 import re
 import sys
@@ -447,8 +448,7 @@ def check_router(root):
     What is checkable is the list itself: its membership and its order are
     derivable from protocol's walk tables. The CONDITIONALS the router also
     carries — the UX field, the re-entry field, the Implement checkbox rule
-    — are English and stay unpinned; see the note in tests/test_lint
-    so that limit is recorded rather than assumed covered.
+    — are English; check_router_conditionals pins those (issue #444).
     """
     router = protocol.skill_path(root, "next")
     if not router.is_file():
@@ -486,6 +486,60 @@ def check_router(root):
         problems.append("router's hand-off list is out of pipeline order:"
                         f" expected {' → '.join(expected)}, got"
                         f" {' → '.join(listed)}")
+    return problems
+
+
+# The router's two frontmatter conditionals (issue #444): the field it
+# names, the file that field lives in, and the protocol.py function that
+# actually reads it. A rename on either side — the prose or the code —
+# must go red; deriving these from protocol.py's own source text (below)
+# means neither side is hand-typed against the other, without turning the
+# router's prose into generated output (that fork was raised and declined
+# — a five-line human-facing paragraph is not a good codegen target).
+ROUTER_CONDITIONALS = (("ux", "prd.md", protocol._ux_skipped),
+                      ("re-entry", "defect.md", protocol._re_entry_architect))
+
+
+def check_router_conditionals(root):
+    """check_router pins the hand-off list; this pins the sentence beside
+    it (step 3) that names the router's three conditionals — the `ux:`
+    field, the `re-entry:` field, and the Implement checkbox rule. Those
+    are English, restating protocol._stage_complete /
+    _maintenance_stage_complete, and nothing checked that the restatement
+    still says what the code does.
+
+    Cross-checked against the field name each function's OWN source text
+    reads (`inspect.getsource`), not a second hand-typed copy of "ux" and
+    "re-entry" — so a field rename in protocol.py, with the router prose
+    left alone, is caught here rather than only showing up as a run
+    silently routing wrong.
+
+    Deliberately NOT covered: docs/pipeline-protocol.md's "Complete when"
+    column carries the same restatement and is equally unpinned
+    (check_protocol_tables's docstring says so) — a sibling gap, not
+    fixed here; issue #444 scoped this to the router.
+    """
+    router = protocol.skill_path(root, "next")
+    if not router.is_file():
+        return []  # absence already reported by check_skills
+    text = router.read_text(encoding="utf-8")
+    problems = []
+    for field, filename, func in ROUTER_CONDITIONALS:
+        if f"`{field}:`" not in text:
+            problems.append(f"router names no {field!r} conditional"
+                            f" (`{field}:` field)")
+        elif filename not in text:
+            problems.append(f"router names the {field!r} conditional but"
+                            f" not the file it lives in ({filename})")
+        source = inspect.getsource(func)
+        if f'"{field}"' not in source:
+            problems.append(f"protocol.{func.__name__} no longer reads"
+                            f" {field!r} — the router prose is stale")
+        if f'"{filename}"' not in source:
+            problems.append(f"protocol.{func.__name__} no longer reads"
+                            f" {filename} — the router prose is stale")
+    if "Implement checkbox" not in text:
+        problems.append("router names no Implement checkbox rule")
     return problems
 
 
@@ -845,7 +899,8 @@ def check_ledger_links(root):
 CHECKERS = (check_manifest, check_plugin_skills,
             check_pi_package, check_skills,
             check_skill_recitals, check_skill_assets, check_templates,
-            check_router, check_readme_skills, check_readme_no_orphans,
+            check_router, check_router_conditionals,
+            check_readme_skills, check_readme_no_orphans,
             check_protocol,
             check_protocol_tables, check_backlog, check_evals,
             check_output_evals, check_ledger, check_ledger_no_orphans,

@@ -107,8 +107,13 @@ def make_clean_tree(root):
     # The router needs its hand-off list, not just the slugs: check_router
     # pins that list's membership and pipeline order, so a bare mention
     # dump is no longer a clean router.
+    # check_router_conditionals holds the same file to naming its two
+    # frontmatter conditionals and the Implement checkbox rule.
     (root / "skills" / "next" / "SKILL.md").write_text(
         "---\nname: next\ndescription: d\n---\n\n"
+        "Honor the `ux:` field in `prd.md` frontmatter, the `re-entry:`"
+        " field in `defect.md` frontmatter, and the Implement checkbox"
+        " rule.\n\n"
         + "\n".join(f"   - {stage} → the `{stage}` skill"
                     for stage in lint.routed_order()) + "\n",
         encoding="utf-8")
@@ -1033,6 +1038,77 @@ class TestRouter(CheckerTreeTest):
             [s for s, _ in protocol.MAINTENANCE_STAGE_ARTIFACTS
              if s not in [p for p, _ in protocol.STAGE_ARTIFACTS]]
             + [s for s, _ in protocol.STAGE_ARTIFACTS])
+
+
+class TestRouterConditionals(CheckerTreeTest):
+    """Issue #444: the router's conditionals (ux:, re-entry:, the
+    Implement checkbox rule) are English restating protocol.py, and
+    nothing checked the restatement still says what the code does.
+    """
+
+    def write(self, body):
+        (self.root / "skills" / "next" / "SKILL.md").write_text(
+            "---\nname: next\ndescription: d\n---\n\n" + body + "\n",
+            encoding="utf-8")
+
+    def clean_body(self):
+        return ("Honor the `ux:` field in `prd.md` frontmatter, the"
+                " `re-entry:` field in `defect.md` frontmatter, and the"
+                " Implement checkbox rule.\n\n"
+                + "\n".join(f"   - {s} → the `{s}` skill"
+                            for s in lint.routed_order()))
+
+    def test_a_conforming_router_is_clean(self):
+        self.write(self.clean_body())
+        self.assertEqual(lint.check_router_conditionals(self.root), [])
+
+    def test_the_shipped_router_satisfies_all_of_it(self):
+        """Against the real file, not a fixture."""
+        self.assertEqual(lint.check_router_conditionals(ROOT), [])
+
+    def test_a_dropped_conditional_is_flagged(self):
+        body = self.clean_body().replace(
+            "Honor the `ux:` field in `prd.md` frontmatter, the"
+            " `re-entry:` field in `defect.md` frontmatter, and the"
+            " Implement checkbox rule.",
+            "Honor the `re-entry:` field in `defect.md` frontmatter.")
+        self.write(body)
+        self.assertEqual(lint.check_router_conditionals(self.root),
+                         ["router names no 'ux' conditional (`ux:` field)",
+                          "router names no Implement checkbox rule"])
+
+    def test_a_conditional_missing_its_file_is_flagged(self):
+        body = self.clean_body().replace("`prd.md` frontmatter", "the run")
+        self.write(body)
+        self.assertEqual(lint.check_router_conditionals(self.root), [
+            "router names the 'ux' conditional but not the file it"
+            " lives in (prd.md)"])
+
+    def test_a_code_side_field_rename_is_flagged_not_missed(self):
+        """The point of deriving from the code's own source rather than a
+        second hand-typed 'ux'/'re-entry' pair: if protocol.py stopped
+        reading the field the router still claims it reads, this must
+        say so rather than staying quiet because the prose still matches
+        what a human typed here yesterday."""
+        self.write(self.clean_body())
+
+        def renamed(run_dir):
+            prd = run_dir / "prd.md"
+            if not prd.is_file():
+                return False
+            return (protocol.read_frontmatter(prd) or {}).get(
+                "ux-mode") == "not-applicable"
+
+        renamed.__name__ = "_ux_skipped"
+        original = lint.ROUTER_CONDITIONALS
+        lint.ROUTER_CONDITIONALS = (("ux", "prd.md", renamed),) \
+            + original[1:]
+        try:
+            self.assertEqual(lint.check_router_conditionals(self.root), [
+                "protocol._ux_skipped no longer reads 'ux' — the router"
+                " prose is stale"])
+        finally:
+            lint.ROUTER_CONDITIONALS = original
 
 
 class TestProtocol(CheckerTreeTest):
