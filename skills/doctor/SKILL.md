@@ -86,15 +86,17 @@ plugin-only, which is a legitimate install.
    gate for a reason that reads like a broken tool. Fix: create `tests/`
    with at least one test module.
 
-6. **The Makefile carries its full target set.** `check`, `review`, the four
-   lifecycle targets (`wo-merged`, `wo-in-progress`, `wo-needs-review`,
-   `wo-failed`), `wo-record`, `assembler`, `find-pr`, `cost-report`,
-   `gate-digest`, `toolsmith-mine`, `web-quality`. A missing lifecycle target is a hole
-   in the work-order
-   state machine that nothing else reports: without `wo-failed`, for
-   instance, a dispatched run that dies leaves its order on
-   `wo:in-progress` forever; without `wo-record`, every finished run is
-   free as far as the monthly circuit breaker can tell (issue #222).
+6. **The Makefile carries its full target set.** `check`, `review`,
+   `pr-event`, the four lifecycle targets (`wo-merged`, `wo-in-progress`,
+   `wo-needs-review`, `wo-failed`), `wo-record`, `assembler`, `find-pr`,
+   `cost-report`, `gate-digest`, `toolsmith-mine`, `web-quality`. A missing
+   lifecycle target is a hole in the work-order state machine that nothing
+   else reports: without `wo-failed`, for instance, a dispatched run that
+   dies leaves its order on `wo:in-progress` forever; without `wo-record`,
+   every finished run is free as far as the monthly circuit breaker can
+   tell (issue #222). A missing `pr-event` is narrower and just as quiet:
+   a validator dispatched against a PR number writes no event, so every
+   PR-shaped leg reads nothing and skips.
 
 7. **The six workflows are present and call the factory through `make`.**
    `validator.yml`, `assembler.yml`, `design.yml`, `cost-report.yml`,
