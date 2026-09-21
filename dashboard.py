@@ -48,7 +48,8 @@ from cli import report, runner
 import cost_ledger
 import cost_report
 import factory_config
-from human_gates import GATES, label_events, waiting_since
+from human_gates import (GATES, label_events, refused_timestamps,
+                         waiting_since)
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              mirror_map, row_size, row_title,
                              row_tracker_issue, row_work_order, run_dirs)
@@ -147,7 +148,11 @@ def _age_seconds(since, now):
 def _timeline(slug, number, run, problems):
     """One issue's label events, [] on a failed or unparseable fetch —
     the item still lists, just without an age (the gate_digest rule:
-    a failed fetch is a problem, never a lost queue item)."""
+    a failed fetch is a problem, never a lost queue item).
+
+    A fetch that succeeds can still carry an event label_events refuses
+    for a malformed timestamp — reported here, since a successful read
+    leaves read.problems silent about it (#491)."""
     path = f"repos/{slug}/issues/{number}/timeline"
     read = gh_read(["api", path, "--paginate", "--slurp"],
                    f"gh api timeline for #{number}", label="dashboard",
@@ -155,7 +160,12 @@ def _timeline(slug, number, run, problems):
     problems.extend(read.problems)
     if read.value is None:
         return []
-    return label_events([event for page in read.value for event in page])
+    raw = [event for page in read.value for event in page]
+    refused = refused_timestamps(raw)
+    if refused:
+        problems.append(f"dashboard: timeline for #{number} refused"
+                        f" {refused} malformed timestamp(s)")
+    return label_events(raw)
 
 
 def _listing(slug, run, problems):

@@ -40,8 +40,8 @@ import cost_ledger
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, label_names, report, write_outputs
-from human_gates import (GATES, gate_passages, label_events, waited_seconds,
-                         waiting_since)
+from human_gates import (GATES, gate_passages, label_events,
+                         refused_timestamps, waited_seconds, waiting_since)
 from knowledge_plane import mirror_map, repo_root
 from cli import gh_runner
 
@@ -129,7 +129,12 @@ def _timelines(mirrored, run, problems):
     """{issue number: label events} for every mirrored issue gh can
     answer for; a failed fetch is a problem, never a lost queue item
     (the digest still lists the issue, just without an age, and the next
-    daily run re-scans — dedup makes the catch-up safe)."""
+    daily run re-scans — dedup makes the catch-up safe).
+
+    A fetch that succeeds can still carry an event label_events refuses
+    for a malformed timestamp — a different failure, reported here
+    rather than swallowed with the fetch's own problems (#491): the
+    read succeeded, so read.problems says nothing about it."""
     events = {}
     for number in mirrored:
         path = f"repos/{{owner}}/{{repo}}/issues/{number}/timeline"
@@ -139,8 +144,12 @@ def _timelines(mirrored, run, problems):
         problems.extend(read.problems)
         if read.value is None:
             continue
-        events[number] = label_events(
-            [event for page in read.value for event in page])
+        raw = [event for page in read.value for event in page]
+        refused = refused_timestamps(raw)
+        if refused:
+            problems.append(f"gd: timeline for #{number} refused"
+                            f" {refused} malformed timestamp(s)")
+        events[number] = label_events(raw)
     return events
 
 

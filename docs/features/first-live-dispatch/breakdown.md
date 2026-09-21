@@ -17,18 +17,18 @@ PRD citation — v1's breakdown records the same dodge).
 
 ## Milestone A: Armed (both secrets exist; the factory is dispatch-capable with the breaker live)
 
-- [ ] **WO-0036** mint CLAUDE_CODE_OAUTH_TOKEN and set it as an Actions secret — size:S, blocked by: — (PRD-0003 §Success criteria)
+- [x] **WO-0036** mint CLAUDE_CODE_OAUTH_TOKEN and set it as an Actions secret — size:S, blocked by: — (PRD-0003 §Success criteria)
   - Accept: `gh secret list` shows CLAUDE_CODE_OAUTH_TOKEN; the token comes from `claude setup-token` run in the operator's own terminal (Max-subscription OAuth — the plan issues no API key) and never touches the repo, shell history, or chat.
-- [ ] **WO-0037** mint FACTORY_PAUSE_TOKEN and set it as an Actions secret — size:S, blocked by: — (PRD-0003 §Success criteria)
+- [x] **WO-0037** mint FACTORY_PAUSE_TOKEN and set it as an Actions secret — size:S, blocked by: — (PRD-0003 §Success criteria)
   - Accept: `gh secret list` shows FACTORY_PAUSE_TOKEN; the PAT is fine-grained, scoped to this repo alone, Variables read/write only.
 - [x] **WO-0044** the assembler accepts either credential — size:S, blocked by: — (PRD-0003 §Success criteria)
   - Accept: assembler.yml's job env carries both ANTHROPIC_API_KEY and CLAUDE_CODE_OAUTH_TOKEN; every credential-gated step `if:` reads `(env.ANTHROPIC_API_KEY != '' || env.CLAUDE_CODE_OAUTH_TOKEN != '')`; the action receives `claude_code_oauth_token`; the template mirror and manifest are regenerated in the same commit; the battery stays green.
 
 ## Milestone B: Traversal (one real order through all three gates to a merged PR with real spend recorded)
 
-- [ ] **WO-0038** author the payload's mirror issue at the gate line — size:S, blocked by: WO-0036, WO-0037 (PRD-0003 §Success criteria)
+- [x] **WO-0038** author the payload's mirror issue at the gate line — size:S, blocked by: WO-0036, WO-0037 (PRD-0003 §Success criteria)
   - Accept: the payload row below is on main BEFORE its mirror issue exists (ADR-0032 one-way); the issue is labeled `type:chore` + `wo:draft` and its number is appended to the payload row as its tracker ref.
-- [ ] **WO-0039** gates.py J-roster agreement — the dispatched payload — size:S, blocked by: WO-0038 (PRD-0003 §Success criteria)
+- [ ] **WO-0039** gates.py J-roster agreement — the dispatched payload — size:S, blocked by: WO-0038 (PRD-0003 §Success criteria) (tracker: #430)
   - Accept: gates.py's detector-roster docstring, the DETECTORS `"J"` entry, and the unclaimed-letters comment all agree detector J is claimed and implemented (K stays unclaimed); the battery stays green. Delivered by the dispatched agent as a PR closing the mirror issue — never by hand.
 - [ ] **WO-0040** gate walk and supervised dispatch — size:S, blocked by: WO-0038, WO-0044 (PRD-0003 §Success criteria)
   - Accept: Matt applies `wo:prd-approved`, `wo:blueprint-approved`, then `wo:ready-for-agent` on the mirror issue, each after reading what the gate approves; the assembler run concludes `success`; the agent's PR closes the issue via the Closes grammar; the spend row lands on main workflow-committed with real nonzero tokens; the validator hand-off fires and the order flips to `wo:needs-review` untouched by hands.
@@ -88,3 +88,92 @@ success criterion is covered by an Accept line above.
   zero; if the dispatched run's recorded cost is $0.00, the breaker
   row's 0.01-cap breach cannot fire honestly and that criterion
   routes back to arbitration rather than around the honesty rule.
+- 2026-09-12 (autorun resume, Implement): the mint row's evidence
+  (WO-0036, PRD-0003 §Success criteria), quoted at check time — `gh secret list -R mattbutlerengineering/skills` →
+  `CLAUDE_CODE_OAUTH_TOKEN	2026-09-13T06:35:06Z`. Set by the operator in
+  their own terminal. Recorded honestly: during this step a token value
+  was pasted into the orchestrating chat session BEFORE the secret was
+  set, so the acceptance's "never touches … chat" clause is met only if
+  the value persisted is a subsequent fresh mint. Which one it is lies
+  with the operator; the box is checked or held on their answer, logged
+  in the next note. The orchestrator never used, echoed, or persisted
+  the pasted value.
+- 2026-09-12: the operator confirmed the persisted value is a fresh mint
+  made AFTER the paste, with the pasted token rotated out. Both acceptance
+  clauses met; the mint row (WO-0036, PRD-0003 §Success criteria) is
+  checked. The pause-token row (WO-0037, PRD-0003 §Success criteria)
+  stays open — `gh secret list` shows exactly one secret.
+- 2026-09-12: checking the mint row (WO-0036, PRD-0003 §Success criteria)
+  tripped detector G — a checked row is a merged order and must have a
+  ledger line. Reconciled the way the assembler row (WO-0044, PRD-0003
+  §Success criteria) already was on 2026-08-17: one `docs/factory/costs.jsonl`
+  row with `tokens: 0`, `cost: 0.0`, `outcome: owner-session:unmetered`,
+  appended through `cost_ledger.entry`/`append`. Not a fabricated spend
+  row — the honest record that no metered run happened; `model` is
+  `none` (the gate-wait rows' value) because no model touched this order
+  at all. The 2026-08-17 note's "no fabricated spend row" stands: zero is
+  the true figure.
+- 2026-09-15 (autorun resume, Implement): the pause-token row's evidence
+  (WO-0037, PRD-0003 §Success criteria), quoted at check time —
+  `gh secret list -R mattbutlerengineering/skills` →
+  `CLAUDE_CODE_OAUTH_TOKEN	2026-09-13T06:35:06Z` /
+  `FACTORY_PAUSE_TOKEN	2026-09-16T03:16:54Z`. Set by the operator in
+  their own terminal; the value never reached this session. The
+  acceptance's scope clause (fine-grained, this repo only, Variables
+  read/write only) is NOT verifiable from a secret listing — it rests on
+  the operator's attestation of the token they generated, and per
+  architecture.md a mis-scoped PAT "surfaces only when the pause step
+  runs", i.e. at the breaker row (WO-0042, PRD-0003 §Success criteria).
+  Ledger: one `owner-session:unmetered` row, `model: none`, `cost: 0.0`,
+  the same honest zero as the mint row. **Milestone A complete.**
+- 2026-09-15 (autorun resume, Implement): the operator authorized the
+  run's first tracker write through the orchestrator's ask ("create the
+  mirror issue", no local commit). The authoring row (WO-0038, PRD-0003
+  §Success criteria) is done: issue #430 exists, labeled `type:chore` +
+  `wo:draft` + `size:S`, body in the #285 grammar, and the payload row
+  (WO-0039, PRD-0003 §Success criteria) carries `(tracker: #430)`.
+  ADR-0032 order held — the payload row was on origin/main (breakdown
+  line 31 at 622e7c0) before the issue existed. The tracker ref lives on
+  this branch, uncommitted: the assembler resolves the issue to its row
+  by that ref on the checked-out ref, so the gate walk (WO-0040, PRD-0003
+  §Success criteria) cannot resolve until this breakdown reaches main.
+  Nothing dispatched — `wo:ready-for-agent` is the operator's to apply.
+  Ledger: one `owner-session:unmetered` row, `model: none`, `cost: 0.0`
+  (the issue was authored in the owner's session; no metered run).
+- 2026-09-15 (autorun resume, hazard check after the authoring row —
+  WO-0038, PRD-0003 §Success criteria): creating the mirror issue opened
+  exactly one cross-plane drift line, proven read-only against the live
+  231-issue listing by calling `plane_drift.reconcile_drift` directly —
+  NOT `sweeps.py reconcile`, which files an intake issue and was outside
+  the one tracker write authorized. Against origin/main: `#430 carries
+  wo:draft but no breakdown row mirrors it — the dispatch plane is ahead
+  of the knowledge plane`. Against this branch: 0 drift lines, total.
+  The window closes when this breakdown reaches main and not before.
+  ADR-0032's issue-after-row order is not the deviation — the 2026-08-15
+  precedent did the same and closed the window in two minutes (issue
+  #285 created 05:22:39Z; its `(tracker: #285)` ref committed 05:24:49Z
+  in 2a2cac3). The deviation is that this run's ref is uncommitted by the
+  operator's choice, so the window stays open for as long as the branch
+  does.
+- 2026-09-15: that drift will page nobody, which is why it is written
+  here. `sweeps.yml` reconcile runs Mondays 06:17 UTC (next 2026-09-21)
+  and would file one `sweep:reconcile` intake, but `sweeps.known_keys`
+  dedupes against every state and CLOSED #295 already carries
+  `intake-key: sweep:reconcile` — verified live, the key comes back with
+  no problems, so the filing is muted. That is exactly the defect open
+  issue #338 names: a closed intake mutes its detector forever. The
+  dashboard renders the line; nothing else will mention it.
+- 2026-09-15 (verification honesty): the battery is green, but the test
+  suite is not deterministic on this machine. Six consecutive runs at
+  622e7c0 produced five clean and one `FAILED (failures=2)`. Both
+  failures are load-sensitive cli tests
+  (`test_the_default_env_strips_the_nesting_guard` and
+  `test_grandchild_is_dead_after_timeout_return`), and the failing run
+  took 36.4s against a 17-18s baseline. Neither touches this run's
+  surface — no row here changes `cli.py` — so the green battery still
+  stands as this run's evidence, but "Ran 1344 tests OK" is a sample,
+  not a guarantee. Filed locally as bead wo-hdl rather than fixed in
+  place: there is no breakdown row for cli test hardening, and ADR-0032
+  wants the row first. It bears on the sibling run, whose branch
+  modifies `cli.py` and the flaky test's own file while leaving that
+  test byte-identical.
