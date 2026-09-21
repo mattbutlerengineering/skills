@@ -114,11 +114,12 @@ plugin-only, which is a legitimate install.
    or the reverse. Steps that legitimately do other work — `gh issue
    create`, checkout, Python setup — are not drift; do not report them.
 
-8. **CODEOWNERS is substituted.** The template ships a placeholder owner on
-   every path. If it still names the template's owner and that handle is not
-   a collaborator here, GitHub silently ignores the entry and the code-owner
-   gate — the human approval record — goes inert. Fix: replace the handle
-   with this repo's actual owner or team.
+8. **CODEOWNERS is substituted.** The template ships every path owned by the
+   placeholder `@<owner>`. If the stamped repo's `.github/CODEOWNERS` still
+   contains `@<owner>`, GitHub silently ignores those entries — the
+   collaborator they name does not exist — and the code-owner gate, the
+   human approval record, goes inert. Fix: replace every `@<owner>` with a
+   real GitHub handle or team that is a collaborator on this repo.
 
 ### Tier 2 — networked (opt-in, never unasked)
 

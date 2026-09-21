@@ -582,9 +582,16 @@ class TestHarnessRun(unittest.TestCase):
             self.assertEqual(list(events), [])
 
     def test_the_default_env_strips_the_nesting_guard(self):
+        # Flakes under machine load (issue #446): a cold first spawn in
+        # the test process competes with everything else the suite has
+        # running. Warm the spawn path once before the timed call and
+        # give the read loop a much wider margin than the fake's actual
+        # near-instant echo needs — neither changes the happy path,
+        # which returns the moment EOF is hit.
+        subprocess.run([sys.executable, "-c", "pass"], check=True)  # warm
         cmd = [self.script(FAKE_ENV_PROBE)]
         with mock.patch.dict(os.environ, {"CLAUDECODE": "1"}):
-            with cli.harness_run(cmd, cwd=self.dir, timeout=10) as events:
+            with cli.harness_run(cmd, cwd=self.dir, timeout=20) as events:
                 self.assertEqual(list(events), [{"guard": "absent"}])
 
     def test_a_spawn_that_never_starts_raises_into_the_callers_catch(self):
