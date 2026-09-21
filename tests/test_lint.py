@@ -1143,6 +1143,52 @@ class TestLedger(CheckerTreeTest):
                          ["LEDGER.md has no row for skill 'extra'"])
 
 
+class TestLedgerNoOrphans(CheckerTreeTest):
+    """The reverse direction (issue #455): a LEDGER.md row naming a skill
+    the current taxonomy no longer registers. ALL_SKILLS + extra_skills is
+    already the trusted "what is a skill" source check_ledger holds
+    LEDGER.md to in the forward direction; no historical registry is
+    needed to hold it to the same set in reverse."""
+
+    def test_orphaned_row_is_reported(self):
+        ledger = self.root / "LEDGER.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8") + "| retired-skill |\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_ledger_no_orphans(self.root),
+            ["LEDGER.md has a row for skill 'retired-skill', which the "
+             "taxonomy no longer registers"])
+
+    def test_every_current_skill_stays_clean(self):
+        # A row for every registered skill, and nothing else: the exact
+        # shape make_clean_tree writes. No false positives.
+        self.assertEqual(lint.check_ledger_no_orphans(self.root), [])
+
+    def test_a_row_nested_in_a_longer_registered_slug_is_not_an_orphan(self):
+        """'review' is a substring of 'address-pr-review', both registered.
+        The orphan check reads exact row slugs (ledger_rows), not
+        substrings, so neither's row is mistaken for the other's."""
+        self.assertEqual(lint.check_ledger_no_orphans(self.root), [])
+        self.assertIn("review", lint.ledger_rows(
+            (self.root / "LEDGER.md").read_text(encoding="utf-8")))
+
+    def test_prose_mentioning_a_dropped_skill_is_not_a_row(self):
+        """Mirrors check_ledger's own row-only scope: a mention in the
+        reading notes below the table is not a row, so it is not
+        reported. Same boundary, same file, same reason (#371)."""
+        ledger = self.root / "LEDGER.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8")
+            + "\nReading: retired-skill was dropped last quarter.\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_ledger_no_orphans(self.root), [])
+
+    def test_missing_ledger_yields_no_problem_here(self):
+        (self.root / "LEDGER.md").unlink()
+        self.assertEqual(lint.check_ledger_no_orphans(self.root), [])
+
+
 class TestLedgerLinks(CheckerTreeTest):
     def test_unresolved_eval_link(self):
         ledger = self.root / "LEDGER.md"
