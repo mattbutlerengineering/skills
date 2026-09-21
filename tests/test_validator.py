@@ -1190,6 +1190,14 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         self.assertEqual(
             self.run_cli(["review", "--status", "red"])[0], 2)
 
+    def test_a_digit_that_int_refuses_is_a_usage_error_not_a_traceback(self):
+        """str.isdigit() is true for '\u00b2' and int() refuses it, so the
+        guard above let a ValueError out of parse(). U+00B2 is latin-1
+        byte 0xB2 — ordinary bad input, not a contrivance. STATUS comes
+        from `make review STATUS=$FINDINGS_RC`, a shell variable."""
+        self.assertEqual(
+            self.run_cli(["review", "--status", "\u00b2"])[0], 2)
+
     def test_review_outside_an_event_exits_nonzero_with_the_problem(self):
         code, out = self.run_cli(["review", "--findings", "findings.txt"])
         self.assertEqual(code, 1)
