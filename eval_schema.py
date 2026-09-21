@@ -98,6 +98,36 @@ def object_problems(data, label):
     return [f"{label} is not a JSON object"]
 
 
+
+# The results kinds that are a single file. "output" names a grading
+# DIRECTORY instead, so it has no snapshot to write.
+SNAPSHOT_KINDS = ("trigger", "charter")
+
+
+def write_snapshot(output, results_dir, kind, harness=None):
+    """Write one dated results snapshot and return its path.
+
+    ADR-0024 moved the naming grammar here because the runner's record
+    step held the only copy of it. This is the rest of that step: the
+    two eval runners had each grown an identical copy of the same four
+    decisions — create the directory, take the name from results_path,
+    serialise as indented JSON with a trailing newline, hand back the
+    path. `evals/results/` is append-only and never reconciled, so a
+    serialisation change reaching one writer and not the other would
+    leave two formats in the tree with no way back.
+
+    A directory-shaped kind is refused rather than written: laying a
+    file across the grading directory's path corrupts the tree quietly,
+    and results_path is happy to name it.
+    """
+    if kind not in SNAPSHOT_KINDS:
+        raise ValueError(f"{kind!r} results are not a single snapshot file")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    path = results_path(results_dir, kind, output["date"], harness=harness)
+    path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
 def entries(data, key, label):
     """(list-of-dict entries, shape problems) for the collection data[key].
 
