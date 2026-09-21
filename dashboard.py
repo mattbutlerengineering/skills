@@ -54,8 +54,7 @@ from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              mirror_map, row_size, row_title,
                              row_tracker_issue, row_work_order, run_dirs)
 import plane_drift
-from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
-                      next_stage, parse_backlog)
+from protocol import (RUN_ARTIFACTS, next_stage, parse_backlog, run_ref)
 
 CONFIG_PATH = Path.home() / ".process-dashboard.json"
 
@@ -73,13 +72,6 @@ _REMOTE = re.compile(
 # the window — the limit it sends gh and the truncation it reports are
 # the same number, so the two can no longer drift apart.
 LIST_WINDOW = 1000
-
-# Every artifact filename that marks a run dir as *a run at all* — the
-# protocol's active-run rule ("at least one artifact") over both
-# orientation tables. "code" never appears: implement's artifact is the
-# breakdown's checkboxes, already covered by decompose's row.
-_ARTIFACTS = sorted({artifact for _, artifact in
-                     STAGE_ARTIFACTS + MAINTENANCE_STAGE_ARTIFACTS})
 
 
 def repo_set(argv_paths, config_path=None):
@@ -104,17 +96,6 @@ def repo_set(argv_paths, config_path=None):
         return [], [f"dashboard: {path} must be a JSON object with a"
                     " \"repos\" list of paths"]
     return repos, []
-
-
-def _run_ref(root, run_dir):
-    """The protocol run-ref for a candidate directory: docs/ is the
-    product run; docs/features/<slug> and docs/fixes/<slug> carry their
-    scale in the parent name."""
-    rel = run_dir.relative_to(root)
-    if rel == Path("docs"):
-        return "product"
-    scale = "feature" if rel.parent.name == "features" else "maintenance"
-    return f"{scale}:{rel.name}"
 
 
 def remote_slug(repo_path, git=git_runner):
@@ -412,13 +393,13 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
     state["backlog"] = _backlog(root, state["problems"])
     for run_dir in run_dirs(root):
         if not any((run_dir / artifact).is_file()
-                   for artifact in _ARTIFACTS):
+                   for artifact in RUN_ARTIFACTS):
             continue
         stage = next_stage(run_dir)
         if stage == "complete":
             continue
         state["runs"].append({
-            "ref": _run_ref(root, run_dir),
+            "ref": run_ref(root, run_dir),
             "dir": str(run_dir.relative_to(root)),
             "stage": stage,
         })

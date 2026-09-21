@@ -28,7 +28,7 @@ UTILITY_SKILLS = ["address-pr-review", "animated-diagram",
                   "architecture-diagram", "audit", "automate", "autorun",
                   "deepen", "doctor", "factory-init",
                   "interactive-architecture-diagram", "mermaid",
-                  "work-queue"]
+                  "pipeline-board", "work-queue"]
 ALL_SKILLS = ["next"] + STAGES + MAINTENANCE_STAGES + UTILITY_SKILLS
 
 # (stage, artifact) rows in pipeline order; implement and the UX
@@ -62,6 +62,13 @@ MAINTENANCE_STAGE_ARTIFACTS = [
     ("ship", "release.md"),
     ("operate", "retro.md"),
 ]
+
+# Every artifact filename that marks a run dir as *a run at all* — the
+# protocol's active-run rule ("at least one artifact") over both
+# orientation tables. "code" never appears: implement's artifact is the
+# breakdown's checkboxes, already covered by decompose's row.
+RUN_ARTIFACTS = sorted({artifact for _, artifact
+                        in STAGE_ARTIFACTS + MAINTENANCE_STAGE_ARTIFACTS})
 
 _FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 # Bullet-and-whitespace shape aligned with knowledge_plane.ROW (the
@@ -154,14 +161,33 @@ def _ux_skipped(run_dir):
     return (read_frontmatter(prd) or {}).get("ux") == "not-applicable"
 
 
+def checkbox_progress(path):
+    """(checked, total) counts of the file's checkboxes under this
+    seam's own grammar; a missing file counts (0, 0)."""
+    path = Path(path)
+    if not path.is_file():
+        return (0, 0)
+    boxes = _CHECKBOX.findall(path.read_text(encoding="utf-8"))
+    return (sum(1 for box in boxes if box in "xX"), len(boxes))
+
+
 def _all_boxes_checked(path):
     """Every checkbox in the file is checked. Zero checkboxes counts as
     incomplete — no checkboxes is no evidence of implementation, and the
     breakdown (wherever the run keeps it) always emits them."""
-    if not path.is_file():
-        return False
-    boxes = _CHECKBOX.findall(path.read_text(encoding="utf-8"))
-    return bool(boxes) and all(box in "xX" for box in boxes)
+    checked, total = checkbox_progress(path)
+    return total > 0 and checked == total
+
+
+def run_ref(root, run_dir):
+    """The protocol run-ref for a run directory: docs/ is the product
+    run; docs/features/<slug> and docs/fixes/<slug> carry their scale
+    in the parent name."""
+    rel = Path(run_dir).relative_to(Path(root))
+    if rel == Path("docs"):
+        return "product"
+    scale = "feature" if rel.parent.name == "features" else "maintenance"
+    return f"{scale}:{rel.name}"
 
 
 def is_maintenance_run(run_dir):
@@ -192,6 +218,16 @@ def _maintenance_breakdown(run_dir):
     architect. There is no third option."""
     name = "breakdown.md" if _re_entry_architect(run_dir) else "defect.md"
     return run_dir / name
+
+
+def breakdown_path(run_dir):
+    """Where this run's implement checkboxes live: breakdown.md, except
+    a re-entry: implement maintenance run keeps them inline in
+    defect.md (the breakdown-placement rule, ADR-0025)."""
+    run_dir = Path(run_dir)
+    if is_maintenance_run(run_dir):
+        return _maintenance_breakdown(run_dir)
+    return run_dir / "breakdown.md"
 
 
 def _stage_complete(stage, artifact, run_dir):
@@ -230,6 +266,53 @@ def next_stage(run_dir):
         if not complete(stage, artifact, run_dir):
             return stage
     return "complete"
+
+
+def _stage_skipped(stage, artifact, run_dir):
+    """Completion excused by rule rather than by artifact: the ux:
+    conditional, with no ux.md actually written."""
+    return (stage == "ux-design"
+            and not (run_dir / artifact).is_file()
+            and _ux_skipped(run_dir))
+
+
+def _maintenance_stage_skipped(stage, artifact, run_dir):
+    """Completion excused by rule rather than by artifact: re-entry:
+    implement drops the architect + decompose chain (ADR-0025), unless
+    the artifact was written anyway."""
+    return (stage in ("architect", "decompose")
+            and not (run_dir / artifact).is_file()
+            and not _re_entry_architect(run_dir))
+
+
+def stage_states(run_dir):
+    """Every stage of this run's own ladder, in order, with its state:
+    done | current | ahead | skipped. The full form of the next_stage
+    walk — the one "current" row IS next_stage (a complete run has no
+    current row), "skipped" marks completion excused by rule rather
+    than by artifact, and a stage after current whose artifact exists
+    anyway reads "done" so a gapped run shows its gap."""
+    run_dir = Path(run_dir)
+    if is_maintenance_run(run_dir):
+        rows = MAINTENANCE_STAGE_ARTIFACTS
+        complete = _maintenance_stage_complete
+        skipped = _maintenance_stage_skipped
+    else:
+        rows = STAGE_ARTIFACTS
+        complete = _stage_complete
+        skipped = _stage_skipped
+    current_seen = (run_dir / "retro.md").is_file()
+    states = []
+    for stage, artifact in rows:
+        if complete(stage, artifact, run_dir):
+            state = ("skipped" if skipped(stage, artifact, run_dir)
+                     else "done")
+        elif not current_seen:
+            state, current_seen = "current", True
+        else:
+            state = "ahead"
+        states.append((stage, state))
+    return states
 
 
 # The seed-backlog entry grammar (ADR-0029): docs/backlog.md is an
