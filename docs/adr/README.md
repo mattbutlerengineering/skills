@@ -87,3 +87,4 @@ the canonical vocabulary.
 | [0064](0064-a-quoted-token-is-not-a-claim.md) | A quoted work-order token is not a claim | provisional |
 | [0065](0065-the-frontmatter-split-and-what-it-unblocks.md) | The frontmatter split, and what it does and does not unblock | provisional |
 | [0066](0066-no-seam-for-ghs-silence.md) | No seam for gh's silence; the rule is shared, the meaning is local | provisional |
+| [0069](0069-autonomy-per-gate-wait-hour.md) | Autonomy per human-hour: accepted orders per gate-wait hour | accepted |
