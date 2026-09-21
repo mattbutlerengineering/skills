@@ -92,6 +92,39 @@ class TestLinkIntegrity(unittest.TestCase):
                 "C: duplicate PRD id PRD-0001 in"
                 " docs/features/demo/prd.md, docs/features/other/prd.md"])
 
+    def test_dangling_token_outside_docs_is_now_flagged(self):
+        # Issue #456: _scannable_files used to be docs/**/*.md + CONTEXT.md
+        # only, so a dangling ADR token in .github/, factory/, skills/ or a
+        # root .md file was never seen.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp)
+            tree.write("README.md", "See ADR-0042 for context.\n")
+            tree.write(".github/PULL_REQUEST_TEMPLATE.md", "Cites ADR-0043.\n")
+            tree.write("skills/demo/SKILL.md", "Per ADR-0044.\n")
+            tree.write("factory/CHARTERS.md", "Per ADR-0045.\n")
+            problems = gates.check_link_integrity(tree.root)
+            self.assertEqual(problems, [
+                "C: .github/PULL_REQUEST_TEMPLATE.md:1 dangling ADR-0043"
+                " (no docs/adr file)",
+                "C: README.md:1 dangling ADR-0042 (no docs/adr file)",
+                "C: factory/CHARTERS.md:1 dangling ADR-0045"
+                " (no docs/adr file)",
+                "C: skills/demo/SKILL.md:1 dangling ADR-0044"
+                " (no docs/adr file)"])
+
+    def test_factory_templates_and_fixtures_stay_out_of_scope(self):
+        # factory/templates/ is a seed tree checked against its OWN
+        # numbering by TestSeededADRs, and factory/evals/fixtures/ carries
+        # intentionally fake WO-/PRD- tokens. Neither should ever surface
+        # a "C:" problem from the live repo's own detector.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp)
+            tree.write("factory/templates/docs/adr/0001-seed.md",
+                       "Cites ADR-9999.\n")
+            tree.write("factory/evals/fixtures/demo/work-order.md",
+                       "WO-9001 (PRD-9001 §Solution)\n")
+            self.assertEqual(gates.check_link_integrity(tree.root), [])
+
 
 class TestBlueprintDrift(unittest.TestCase):
     """D (origin: WO-0008): the approved blueprint is docs/adr — its files,
