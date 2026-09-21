@@ -9,6 +9,7 @@ takes root + wo + row, never an issue body, so there is no channel for
 attacker-controlled text to reach the pack.
 """
 import inspect
+import stat
 import sys
 import tempfile
 import unittest
@@ -268,6 +269,109 @@ class TestOrientationPack(unittest.TestCase):
         params = list(
             inspect.signature(orientation_pack.orientation_pack).parameters)
         self.assertEqual(params, ["root", "wo", "row"])
+
+
+class TestAFileThePackCannotReadIsANoteNotACrash(unittest.TestCase):
+    """The pack's own convention, applied to all three file kinds.
+
+    _python_structure states it for the codegraph half: a file that
+    cannot be read or parsed "degrades to (message, None) rather than
+    raising ... one unparseable file a row names must not crash the
+    assembler CLI". CONTEXT.md and the cited ADRs are read by the same
+    function on the same best-effort terms, out of a product repo this
+    module was mirrored into, so they degrade the same way.
+    """
+
+    # A latin-1 accent: valid text, invalid UTF-8. The one byte sequence
+    # that separates "a file exists and is readable" from "read_text
+    # succeeds", which is the gap the is_file() guard leaves open.
+    UNDECODABLE = "# Contexte\n\nvocabulaire d\xe9j\xe0 \xe9crit.\n".encode(
+        "latin-1")
+
+    def test_an_undecodable_context_md_is_a_note(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).orientation()
+            (tree.root / "CONTEXT.md").write_bytes(self.UNDECODABLE)
+            pack = orientation_pack.orientation_pack(
+                tree.root, "WO-0099", ROW_WITH_ADR)
+        self.assertIn("CONTEXT.md could not be read: UnicodeDecodeError",
+                      pack)
+
+    def test_the_rest_of_the_pack_survives_an_unreadable_context_md(self):
+        """Losing CONTEXT.md degrades the prompt; it must not empty it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).orientation()
+            tree.write("demo.py", '"""A demo module."""\n\n\ndef greet():\n'
+                       '    pass\n')
+            (tree.root / "CONTEXT.md").write_bytes(self.UNDECODABLE)
+            pack = orientation_pack.orientation_pack(
+                tree.root, "WO-0099", ROW_WITH_ADR)
+        self.assertIn("Factory dispatch plane", pack)
+        self.assertIn("Two planes.", pack)
+        self.assertIn("### Codegraph summary", pack)
+        self.assertIn("greet", pack)
+
+    def test_an_undecodable_adr_keeps_its_heading_and_gains_a_note(self):
+        """Silently dropping a cited ADR would leave the reader unable to
+        tell a missing citation from an unreadable file."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).orientation()
+            (tree.root / "docs/adr/0032-factory-dispatch-plane.md"
+             ).write_bytes(self.UNDECODABLE)
+            pack = orientation_pack.orientation_pack(
+                tree.root, "WO-0099", ROW_WITH_ADR)
+        self.assertIn("### ADR-0032", pack)
+        self.assertIn("ADR-0032 could not be read: UnicodeDecodeError", pack)
+        self.assertIn(CONTEXT.strip(), pack)
+
+    def test_a_context_md_the_process_may_not_read_is_a_note(self):
+        """is_file() answers a different question from the one read_text
+        asks — the mode can refuse after the guard has said yes."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).orientation()
+            context = tree.root / "CONTEXT.md"
+            context.chmod(0)
+            try:
+                try:
+                    context.read_text(encoding="utf-8")
+                except PermissionError:
+                    pass
+                else:
+                    self.skipTest("this process can read a mode-000 file"
+                                  " (running as root); the undecodable"
+                                  " cases cover the same branch")
+                pack = orientation_pack.orientation_pack(
+                    tree.root, "WO-0099", ROW_WITH_ADR)
+            finally:
+                context.chmod(stat.S_IRUSR | stat.S_IWUSR)
+        self.assertIn("CONTEXT.md could not be read: PermissionError", pack)
+
+    def test_the_same_bytes_degrade_whether_they_are_code_or_prose(self):
+        """The finding itself: identical bytes, identical row, one call —
+        a note when the file is code, and until this fix a traceback when
+        it was prose."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).orientation()
+            (tree.root / "CONTEXT.md").write_bytes(self.UNDECODABLE)
+            (tree.root / "demo.py").write_bytes(self.UNDECODABLE)
+            pack = orientation_pack.orientation_pack(
+                tree.root, "WO-0099", ROW_WITH_ADR)
+        self.assertIn("demo.py — (could not be parsed: UnicodeDecodeError)",
+                      pack)
+        self.assertIn("CONTEXT.md could not be read: UnicodeDecodeError",
+                      pack)
+
+    def test_the_assembler_prompt_still_builds(self):
+        """The consequence _python_structure's docstring names: the
+        assembler CLI has no except anywhere, so a raise here is the
+        process exit."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).orientation()
+            (tree.root / "CONTEXT.md").write_bytes(self.UNDECODABLE)
+            prompt = assembler.assemble_prompt(
+                "swe", "WO-0099", ROW_WITH_ADR, tree.root)
+        self.assertIn("### CONTEXT.md", prompt)
+        self.assertIn("Factory dispatch plane", prompt)
 
 
 class TestAssemblePromptBundlesOrientation(unittest.TestCase):
