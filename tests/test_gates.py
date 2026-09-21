@@ -880,6 +880,38 @@ class TestConfigShape(unittest.TestCase):
                 f"F: {rel} wip_cap must be a positive integer",
                 f"F: {rel} monthly_cap_usd must be a positive number"])
 
+    def test_a_config_that_is_not_an_object_is_one_problem(self):
+        """F parses the file itself rather than going through
+        factory_config.load, so it needs the same object rule the seam
+        applies — and it needs it BEFORE its key-set checks, which
+        subscript the parsed value. A non-object used to kill the whole
+        gate with an AttributeError: `python3 gates.py` is a CI command,
+        and in a stamped repo `.github/factory.json` is the repo's own
+        curated file, so the gate that exists to police the config's
+        shape was the thing a malformed config took down."""
+        for text in ("null", "[]", '"factory"', "5", "true"):
+            with self.subTest(text=text), tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                tree.write("factory/templates/factory.json", text)
+                self.assertEqual(gates.check_config_shape(tree.root), [
+                    "F: factory/templates/factory.json is not a JSON"
+                    " object"])
+
+    def test_a_non_object_home_does_not_mask_the_other_home(self):
+        """F checks every candidate home, not the first hit. A broken
+        payload copy must not stop the installed copy being reported —
+        the skip is per-file, the same shape as the invalid-JSON
+        continue beside it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", "null")
+            tree.write(".github/factory.json", json.dumps(
+                dict(CONFIG, wip_cap=0)))
+            self.assertEqual(gates.check_config_shape(tree.root), [
+                "F: factory/templates/factory.json is not a JSON object",
+                "F: .github/factory.json wip_cap must be a positive"
+                " integer"])
+
 
 class TestPrTraceability(unittest.TestCase):
     def event_env(self, tmp, event):
