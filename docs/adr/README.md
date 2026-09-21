@@ -66,7 +66,7 @@ the canonical vocabulary.
 | [0043](0043-pre-ledger-rows-are-annotated-in-the-knowledge-plane.md) | Pre-ledger rows are annotated in the knowledge plane | accepted |
 | [0044](0044-daily-improvement-routine.md) | A daily routine drives the factory's improvement loop | accepted |
 | [0045](0045-lifecycle-label-writers.md) | Every lifecycle label has a named writer; wo:blocked's is a human | accepted |
-| [0046](0046-tools-factory-symmetry-deferred.md) | tools/factory root symmetry deferred — flat root is load-bearing | amended by ADR-0059 (deferral stands; diagnosis replaced) |
+| [0046](0046-tools-factory-symmetry-deferred.md) | tools/factory root symmetry deferred — flat root is load-bearing | amended by ADR-0059 (deferral stands; diagnosis replaced; blocker narrowed by ADR-0065) |
 | [0047](0047-factory-roles-seam.md) | Factory roles seam: factory_roles.py owns the role vocabulary | accepted |
 | [0048](0048-artifact-path-grammar-joins-factory-config.md) | The installed-vs-payload path grammar joins factory_config | accepted |
 | [0049](0049-row-identity-joins-the-cost-ledger.md) | The row identity joins the cost ledger | accepted |
@@ -84,3 +84,5 @@ the canonical vocabulary.
 | [0061](0061-a-carve-out-lives-at-the-definition-site.md) | A carve-out lives at the definition site and must pay rent | provisional |
 | [0063](0063-a-terminal-verdict-requires-having-looked.md) | A terminal verdict requires having looked | provisional |
 | [0064](0064-a-quoted-token-is-not-a-claim.md) | A quoted work-order token is not a claim | provisional |
+| [0065](0065-the-frontmatter-split-and-what-it-unblocks.md) | The frontmatter split, and what it does and does not unblock | provisional |
+| [0066](0066-no-seam-for-ghs-silence.md) | No seam for gh's silence; the rule is shared, the meaning is local | provisional |

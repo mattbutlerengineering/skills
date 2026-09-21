@@ -1,6 +1,6 @@
 # The tools/factory root symmetry is deferred — the flat root is load-bearing
 
-- Status: amended by ADR-0059 (deferral stands; diagnosis replaced)
+- Status: amended by ADR-0059 (deferral stands; diagnosis replaced; blocker narrowed by ADR-0065)
 - Date: 2026-08-05
 
 ## Context

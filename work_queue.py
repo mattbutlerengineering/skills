@@ -188,8 +188,22 @@ def ready_issue_numbers(run=None):
     defer a ready order with "no open issue #N carries the label" and
     send the owner to apply a label the issue may already carry.
     """
+    # The full-window RULE is cli.gh_read's; the message stays this
+    # caller's own (ADR-0066). gh_read's default note tells whoever
+    # reads it to "raise the window or narrow the query" as if either
+    # were reachable right now — but LIST_WINDOW is a module constant,
+    # and in a stamped repo this tool is a mirrored payload copy, so
+    # neither remedy exists at runtime. The remedy is real, it is just a
+    # code edit in the tool's own source, not something this message
+    # should imply is one flag away.
     read = gh_read(list(LIST_ARGS), "gh issue list", label="wq",
-                   run=run or gh_runner, window=LIST_WINDOW)
+                   run=run or gh_runner, window=LIST_WINDOW,
+                   full_note=(
+                       f"returned a full {LIST_WINDOW}-entry window —"
+                       " older ready orders are invisible; LIST_WINDOW is"
+                       " a code constant in work_queue.py, not a runtime"
+                       " option, so the fix is raising it there (or"
+                       " narrowing LIST_ARGS) and redeploying"))
     if read.value is None or read.truncated:
         return None, read.problems
     return {item["number"] for item in read.value if isinstance(item, dict)
