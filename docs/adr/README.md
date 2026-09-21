@@ -70,7 +70,7 @@ the canonical vocabulary.
 | [0047](0047-factory-roles-seam.md) | Factory roles seam: factory_roles.py owns the role vocabulary | accepted |
 | [0048](0048-artifact-path-grammar-joins-factory-config.md) | The installed-vs-payload path grammar joins factory_config | accepted |
 | [0049](0049-row-identity-joins-the-cost-ledger.md) | The row identity joins the cost ledger | accepted |
-| [0050](0050-mirrors-carry-a-transform.md) | MIRRORS carries a transform: one authority per payload file | accepted |
+| [0050](0050-mirrors-carry-a-transform.md) | MIRRORS carries a transform: one authority per payload file | amended by ADR-0067 |
 | [0051](0051-report-joins-the-cli-seam.md) | The report epilogue joins the cli seam | accepted |
 | [0052](0052-skill-file-contract-joins-the-protocol-seam.md) | The skill-file contract joins the protocol seam; lint pins the recitals | accepted |
 | [0053](0053-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
@@ -87,3 +87,4 @@ the canonical vocabulary.
 | [0064](0064-a-quoted-token-is-not-a-claim.md) | A quoted work-order token is not a claim | provisional |
 | [0065](0065-the-frontmatter-split-and-what-it-unblocks.md) | The frontmatter split, and what it does and does not unblock | provisional |
 | [0066](0066-no-seam-for-ghs-silence.md) | No seam for gh's silence; the rule is shared, the meaning is local | provisional |
+| [0067](0067-codeowners-mirrors-through-product-codeowners.md) | CODEOWNERS mirrors through product_codeowners, not identity | accepted |
