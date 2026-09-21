@@ -82,9 +82,33 @@ def load(root):
     except (OSError, UnicodeDecodeError) as err:
         return None, [f"config: cannot read {rel}: {err}"]
     try:
-        return json.loads(text), []
+        config = json.loads(text)
     except json.JSONDecodeError as err:
         return None, [f"config: {rel} is not valid JSON: {err}"]
+    shape = object_problems(config)
+    if shape:
+        return None, [f"config: {rel} {problem}" for problem in shape]
+    return config, []
+
+
+def object_problems(config):
+    """Unlocated shape problem when a parsed factory config is not a JSON
+    object, else [].
+
+    A JSON document's top level is legally an array, string, number,
+    boolean or null, and json.loads returns each of them untouched — but
+    every accessor below subscripts the value, and so does every key-set
+    check in detector F. This is the one rule that says a config must be
+    an object, living where the rest of "what a valid config is" already
+    lives, so the runtime reader and the CI gate cannot disagree about
+    it.
+
+    Callers prefix their own label and location, the same split as
+    cost_ledger.line_problems: `load` reports it as
+    `config: <path> is not a JSON object`, detector F as
+    `F: <path> is not a JSON object`.
+    """
+    return [] if isinstance(config, dict) else ["is not a JSON object"]
 
 
 def resolve_model(band, config):
