@@ -376,3 +376,53 @@ scopes the docstring change to `label_events`, `waited_seconds`,
   Or a criterion is met for the garbage string only and the offset-naive class
   walks past it, which is the exact failure `architecture.md` measured to
   reject the small fix.
+
+## 2026-09-21 — superseded on its own headline criterion, re-entering blocked
+
+Attempting Implement against current main (`8e074d0`, moved on from this run's
+`622e7c0` baseline) found that PR #326 (`fix(gates): a timeline timestamp that
+is not one is not a well-formed flip`, commit `9324d31`, merged 2026-09-19 —
+one day after this breakdown was written, from an independently-seeded run
+`docs/fixes/gate-timeline-timestamp-trust/`) already shipped a fix for the
+crash this run exists to close, discovered before any Implement commit landed.
+
+**What #326 did, verified empirically against `defect.md`'s own §1 and §3
+repros on current main — neither raises any more:**
+`human_gates.label_events` now refuses an event whose `created_at` fails a
+new `_is_timestamp(value)` predicate (parses AND carries a UTC offset) and
+silently drops it; `gate_digest.run_daily` on the §1 history returns
+`{'changed': 'false', 'reason': 'gd: 0 item(s) waiting, 0 new gate-latency
+row(s)'}` with `problems: []` — no exception. The §3 open-stay history
+renders in `_queues` as `Item(number=106, ..., waited=None, aged=True)`,
+again no exception.
+
+**Why this breakdown can no longer be implemented as written, not just
+"already partly done":** A1's Accept clause requires `_parse_ts` itself
+become the total reader and states explicitly "No separate `is_timestamp()`
+predicate is added — one rule, one spelling, which is what `one_owner.py`
+exists to find." #326 shipped exactly that separate predicate, named
+`_is_timestamp`, reviewed and tested. Implementing A1 as specified now means
+reverting or restructuring already-merged, already-reviewed code on a stale
+design snapshot — a redesign decision, not an implementation step, and not
+this run's to make unilaterally.
+
+**The residual gap, real and not yet closed by #326:** #326's own commit
+message says it chose the drop "rather than adding a problems channel" —
+confirmed above: the malformed event vanishes with no `gd:`/`dashboard:`
+problem string and no nonzero exit anywhere in the chain, which is narrower
+than `defect.md`'s stated success criterion ("produces a `gd:`-prefixed
+problem string and a nonzero exit — never a traceback") and arguably in
+tension with the repo-wide problem-string contract (CLAUDE.md; ADR-0051).
+Milestone B's asymmetry question (does `rejection_mining` silently diverge
+from `gate_digest`?) is also still open, though now framed against #326's
+drop rule rather than against a raise.
+
+**Not decided here, on purpose:** whether the residual gap is worth closing
+at all (it is a silent-drop, not a crash, and this repo's honesty rule
+means a `problems` channel must not be bolted on as a rushed addition to
+someone else's just-reviewed code without its own pass), and if so whether
+it is a small additive follow-up on top of #326's `_is_timestamp` (a
+`problems` return threaded through the same three call sites, `dashboard`
+included) or something else. That call belongs to Architect or to the
+operator, not to a fork mid-Implement. This run stops here, uncommitted
+beyond landing the pre-existing Capture/Architect/Decompose artifacts.
