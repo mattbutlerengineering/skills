@@ -1226,6 +1226,19 @@ class TestDoctorChecklistMatchesThePayload(unittest.TestCase):
             "skills/doctor/SKILL.md's workflow list has drifted from the"
             " stamped payload")
 
+    def test_it_names_the_real_codeowners_placeholder(self):
+        """Issue #454: step 8 used to check "CODEOWNERS is substituted" in
+        prose ("if it still names the templates owner"). PR #354 shipped a
+        real placeholder token (factory_init.OWNER_PLACEHOLDER); this pins
+        the step to naming that literal token, so a future change to the
+        constant fails this test rather than drifting silently."""
+        item = self.numbered_item("CODEOWNERS is substituted")
+        self.assertIn(
+            f"`{factory_init.OWNER_PLACEHOLDER}`", item,
+            "skills/doctor/SKILL.md step 8 doesn't name the literal"
+            " placeholder token factory_init.product_codeowners"
+            " substitutes — doctor can't state a mechanical check for it")
+
     def test_the_stated_workflow_count_matches(self):
         """The step leads with a number ("The five workflows"), which goes
         stale independently of the list beside it."""

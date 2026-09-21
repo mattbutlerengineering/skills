@@ -25,6 +25,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -679,13 +680,34 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
             return path
         return created, record
 
-    def assert_grandchild_reaped(self):
-        deadline = time.time() + 2
-        while time.time() < deadline and not self.pid_file.is_file():
-            time.sleep(0.05)
-        self.assertTrue(self.pid_file.is_file(),
-                        "fake claude never started")
-        pid = int(self.pid_file.read_text())
+    def watch_for_grandchild(self, budget):
+        """Starts polling for the grandchild's PID file NOW, in a
+        background thread — running WHILE the timed claude_runner call
+        is still live, not only after it returns. Issue #446: a poll that
+        only starts after the call returns can never see a fake the
+        harness already killed before it got to write the file under
+        load (spawn latency exceeding the timeout beats the write), so
+        the search has to be looking during the window the file could
+        still appear in, not just after the group kill's grace period."""
+        found = {}
+
+        def watch():
+            deadline = time.time() + budget
+            while time.time() < deadline and not self.pid_file.is_file():
+                time.sleep(0.02)
+            if self.pid_file.is_file():
+                found["pid"] = int(self.pid_file.read_text())
+
+        thread = threading.Thread(target=watch, daemon=True)
+        thread.start()
+        return thread, found
+
+    def assert_grandchild_reaped(self, watcher):
+        thread, found = watcher
+        thread.join(timeout=2)
+        self.assertIn("pid", found, "fake claude never started")
+        pid = found["pid"]
+        # brief grace for the kill to land
         deadline = time.time() + 2
         while time.time() < deadline and pid_alive(pid):
             time.sleep(0.05)
@@ -717,6 +739,7 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
     def test_a_timeout_scores_as_an_honest_failure_and_reaps_the_group(self):
         self.install_fake(FAKE_SLEEPING_CLAUDE)
         created, record = self.scratch_recorder()
+        watcher = self.watch_for_grandchild(budget=6)
         with mock.patch.object(tempfile, "mkdtemp", record):
             transcript = charter_replay.claude_runner(self.root, "haiku",
                                                       2)(self.runner_case())
@@ -729,7 +752,7 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         self.assertFalse(result["pass"])
         self.assertEqual(result["failed"], ["runs-tests"])
         self.assertEqual([p for p in created if p.exists()], [])
-        self.assert_grandchild_reaped()
+        self.assert_grandchild_reaped(watcher)
 
     def test_a_dead_leaders_grandchild_is_still_reaped(self):
         # Deterministic by control flow, not timing: the fake writes
@@ -737,10 +760,11 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         # the reader can only leave its loop by observing the exit — the
         # cleanup therefore always runs against a dead leader.
         self.install_fake(FAKE_EXITING_CLAUDE)
+        watcher = self.watch_for_grandchild(budget=6)
         transcript = charter_replay.claude_runner(self.root, "haiku",
                                                   2)(self.runner_case())
         self.assertEqual(transcript, {"tool_calls": [], "text": ""})
-        self.assert_grandchild_reaped()
+        self.assert_grandchild_reaped(watcher)
 
     def forbid_only_runner_case(self):
         """The same runner case with its require dropped — the shape that
@@ -755,13 +779,14 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         the transcript it pins carries no error, so nothing downstream can
         tell that replay from a model that behaved."""
         self.install_fake(FAKE_EXITING_CLAUDE)
+        watcher = self.watch_for_grandchild(budget=6)
         transcript = charter_replay.claude_runner(self.root, "haiku",
                                                   2)(self.runner_case())
         self.assertNotIn("error", transcript)
         result = charter_replay.score_case(self.forbid_only_runner_case(),
                                            transcript)
         self.assertFalse(result["pass"])
-        self.assert_grandchild_reaped()
+        self.assert_grandchild_reaped(watcher)
 
     def test_a_missing_cli_cannot_score_a_pass(self):
         empty = Path(tempfile.mkdtemp(prefix="charter-nopath-"))

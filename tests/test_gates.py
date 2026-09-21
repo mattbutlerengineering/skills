@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from factory_fixture import CONFIG  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
-from make_parse import make_recipe  # noqa: E402
+from make_parse import make_recipe, make_targets, phony_targets  # noqa: E402
 import workflow_parse  # noqa: E402
 
 
@@ -91,6 +91,39 @@ class TestLinkIntegrity(unittest.TestCase):
             self.assertEqual(problems, [
                 "C: duplicate PRD id PRD-0001 in"
                 " docs/features/demo/prd.md, docs/features/other/prd.md"])
+
+    def test_dangling_token_outside_docs_is_now_flagged(self):
+        # Issue #456: _scannable_files used to be docs/**/*.md + CONTEXT.md
+        # only, so a dangling ADR token in .github/, factory/, skills/ or a
+        # root .md file was never seen.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp)
+            tree.write("README.md", "See ADR-0042 for context.\n")
+            tree.write(".github/PULL_REQUEST_TEMPLATE.md", "Cites ADR-0043.\n")
+            tree.write("skills/demo/SKILL.md", "Per ADR-0044.\n")
+            tree.write("factory/CHARTERS.md", "Per ADR-0045.\n")
+            problems = gates.check_link_integrity(tree.root)
+            self.assertEqual(problems, [
+                "C: .github/PULL_REQUEST_TEMPLATE.md:1 dangling ADR-0043"
+                " (no docs/adr file)",
+                "C: README.md:1 dangling ADR-0042 (no docs/adr file)",
+                "C: factory/CHARTERS.md:1 dangling ADR-0045"
+                " (no docs/adr file)",
+                "C: skills/demo/SKILL.md:1 dangling ADR-0044"
+                " (no docs/adr file)"])
+
+    def test_factory_templates_and_fixtures_stay_out_of_scope(self):
+        # factory/templates/ is a seed tree checked against its OWN
+        # numbering by TestSeededADRs, and factory/evals/fixtures/ carries
+        # intentionally fake WO-/PRD- tokens. Neither should ever surface
+        # a "C:" problem from the live repo's own detector.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp)
+            tree.write("factory/templates/docs/adr/0001-seed.md",
+                       "Cites ADR-9999.\n")
+            tree.write("factory/evals/fixtures/demo/work-order.md",
+                       "WO-9001 (PRD-9001 §Solution)\n")
+            self.assertEqual(gates.check_link_integrity(tree.root), [])
 
 
 class TestBlueprintDrift(unittest.TestCase):
@@ -1844,8 +1877,47 @@ class TestLockstep(unittest.TestCase):
                          self.ROOT_ONLY_CHECK + self.CANONICAL_CHECK)
 
     def test_template_makefile_check_is_exactly_the_canonical_set(self):
+        # This alone cannot catch a product_form regression — its own
+        # expectation is computed by the function under test. product_form
+        # is independently pinned against hand-typed input/output pairs by
+        # tests/test_factory_init.py::TestTheRespellingHasOneOwner, whose
+        # docstring names this exact limitation; this test's job is only
+        # "did the stamp forget to regenerate", not "is the regeneration
+        # itself correct" (issue #453).
         self.assertEqual(self.recipes(self.TEMPLATE_MAKEFILE, "check"),
                          [product_form(c) for c in self.CANONICAL_CHECK])
+
+    def test_both_makefiles_declare_the_same_target_names(self):
+        # Issue #453: the old suite only ever asked "does the canonical
+        # command set appear somewhere" for a FIXED, hand-typed list of
+        # targets — a target added to one Makefile and not the other was
+        # compared against nothing. Derive both sides from the files
+        # themselves and compare them to EACH OTHER.
+        root = set(make_targets(self.MAKEFILE.read_text(encoding="utf-8")))
+        template = set(
+            make_targets(self.TEMPLATE_MAKEFILE.read_text(encoding="utf-8")))
+        # Non-vacuity: a parser regex that matched nothing would pass this
+        # comparison trivially (set() == set()).
+        self.assertIn("check", root,
+                      "make_targets found no targets in the root Makefile")
+        self.assertEqual(root, template,
+                         "the root and template Makefiles declare"
+                         " different target names")
+
+    def test_each_makefiles_phony_list_matches_its_own_targets(self):
+        for path in (self.MAKEFILE, self.TEMPLATE_MAKEFILE):
+            with self.subTest(makefile=path.name, dir=path.parent.name):
+                text = path.read_text(encoding="utf-8")
+                declared = set(phony_targets(text))
+                recipes = set(make_targets(text))
+                self.assertTrue(
+                    declared, f"{path}: .PHONY parser found no names")
+                self.assertEqual(
+                    declared, recipes,
+                    f"{path}: .PHONY declares {declared - recipes or '{}'}"
+                    f" with no recipe, and/or a recipe exists for"
+                    f" {recipes - declared or '{}'} that .PHONY never"
+                    " names")
 
     def test_both_makefiles_expose_the_same_validator_targets(self):
         for target, commands in self.VALIDATOR_TARGETS.items():

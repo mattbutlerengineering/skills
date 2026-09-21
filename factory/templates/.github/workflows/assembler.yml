@@ -200,10 +200,16 @@ jobs:
       # Gated on the claim's own verdict, not just failure(): only an order
       # THIS run took out of ready may be flipped — a run that died before
       # or during the claim leaves the order's state exactly as it found it.
+      # ADR-0063: a terminal verdict requires having looked. find-pr
+      # writes looked=false when it could not observe the agent's
+      # delivery at all (an unusable gh, or a full window). `!=` not
+      # `==`: an unset output means the find step never ran, and a run
+      # that died before it must still flip.
       - name: Mark the work order failed
         if: >-
           failure()
           && steps.claim.outputs.transitioned == 'true'
+          && steps.find.outputs.looked != 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make wo-failed ISSUE=${{ github.event.issue.number }}

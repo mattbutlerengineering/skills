@@ -42,6 +42,7 @@ Two invariants here are security properties, not conveniences (ADR-0032):
 """
 import os
 import sys
+from collections import namedtuple
 from pathlib import Path
 
 import factory_config
@@ -58,6 +59,14 @@ READY_LABEL = "wo:ready-for-agent"
 # number, so the two can no longer drift apart.
 LIST_WINDOW = 1000
 PR_ARGS = ("pr", "list", "--state", "open", "--json", "number,body")
+
+# What find-pr learned. `looked` is False when this run could not observe
+# the agent's delivery at all — an unusable listing, or a full window the
+# PR may sit beyond — and it is a fact the caller READS, never one
+# inferred from `pr is None`, which is true in three different situations
+# that mean three different things. ADR-0063: only an observed absence
+# may put a work order into ADR-0032's terminal state.
+Find = namedtuple("Find", ("pr", "looked", "problems"))
 
 # ADR-0034: a hard-stopped order is re-dispatched only after the owner
 # clears this flag — the dispatcher itself enforces the no-self-retry rule.
@@ -246,27 +255,40 @@ def run_resolve(root, env, agents_dir=None):
 
 
 def pr_for_issue(issue_number, run=gh_runner):
-    """(the newest open PR whose body Closes the issue, problems). The
-    join is the Closes link — the same CLOSES_TOKEN grammar the mirror
-    and detector B read (ADR-0032) — never a branch-name convention:
+    """Find(the newest open PR whose body Closes the issue, whether this
+    run got to look, problems). The join is the Closes link — the same
+    CLOSES_TOKEN grammar the mirror and detector B read (ADR-0032) —
+    never a branch-name convention:
     the PR the dispatched agent delivered is exactly the one that cites
     its order, and an agent that delivered no such PR is a problem, not
     a silent miss. gh answers newest-first, so the first match is the
-    agent's latest attempt."""
+    agent's latest attempt.
+
+    `looked` separates "no such PR exists" from "I could not see" —
+    an unusable listing or a full window. Both answer pr=None, and only
+    the first is a fact about the agent (ADR-0063)."""
     read = gh_read(list(PR_ARGS), "gh pr list", label="asm", run=run,
                    window=LIST_WINDOW)
     if read.value is None:
-        return None, read.problems
+        return Find(None, False, read.problems)
     listing, problems = read.value, list(read.problems)
     for entry in listing:
         number = entry.get("number")
         refs = CLOSES_TOKEN.findall(entry.get("body") or "")
         if isinstance(number, int) and issue_number in map(int, refs):
-            return number, problems
+            return Find(number, True, problems)
+    if read.truncated:
+        # Absence unproven. The seam already reported the full window;
+        # this states what it costs HERE, which is the whole verdict.
+        problems.append(
+            f"asm: no open PR closing issue #{issue_number} was found in"
+            " a listing that came back full — absence is unproven, so"
+            " this run cannot pronounce on the agent")
+        return Find(None, False, problems)
     problems.append(
         f"asm: no open PR closes issue #{issue_number} — the dispatched"
         " agent delivered no traceable PR")
-    return None, problems
+    return Find(None, True, problems)
 
 
 def main(argv, env=None, run=gh_runner):
@@ -280,10 +302,13 @@ def main(argv, env=None, run=gh_runner):
     # isascii(): str.isdigit() is true for '\u00b2', which int() refuses.
     elif (len(argv) == 2 and argv[0] == "find-pr"
           and argv[1].isascii() and argv[1].isdigit()):
-        number, problems = pr_for_issue(int(argv[1]), run=run)
-        write_outputs(env, {"pr": "" if number is None else str(number)})
-        if number is not None:
-            print(f"asm: PR #{number} closes issue #{argv[1]}")
+        found = pr_for_issue(int(argv[1]), run=run)
+        problems = found.problems
+        write_outputs(env, {
+            "pr": "" if found.pr is None else str(found.pr),
+            "looked": "true" if found.looked else "false"})
+        if found.pr is not None:
+            print(f"asm: PR #{found.pr} closes issue #{argv[1]}")
     else:
         print(__doc__.strip())
         return 2
