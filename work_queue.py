@@ -189,7 +189,7 @@ def ready_issue_numbers(run=None):
     send the owner to apply a label the issue may already carry.
     """
     # The full-window RULE is cli.gh_read's; the message stays this
-    # caller's own (ADR-0063). gh_read's default note tells whoever
+    # caller's own (ADR-0066). gh_read's default note tells whoever
     # reads it to "raise the window or narrow the query" as if either
     # were reachable right now — but LIST_WINDOW is a module constant,
     # and in a stamped repo this tool is a mirrored payload copy, so

@@ -245,7 +245,7 @@ class TestReadyIssueNumbers(unittest.TestCase):
         window or narrow the query"); neither is reachable here —
         LIST_WINDOW is a module constant, and in a stamped repo this tool
         is a mirrored payload copy. The message must say the remedy is a
-        code edit, not imply a flag (ADR-0063, issue #449)."""
+        code edit, not imply a flag (ADR-0066, issue #449)."""
         runner = listing(*range(100))
         _, problems = work_queue.ready_issue_numbers(runner)
         self.assertEqual(len(problems), 1)
