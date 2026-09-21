@@ -46,11 +46,9 @@ def offending_run_steps(text, allowed=()):
 class TestWoCitation(unittest.TestCase):
     def test_uncited_row_is_flagged_and_cited_row_is_not(self):
         with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write("docs/features/demo/breakdown.md",
-                       "- [ ] WO-0001 slice one (PRD-0001 §Solution)\n"
-                       "- [ ] WO-0002 uncited\n")
-            problems = gates.check_wo_citation(tree.root)
+            root = Path(tmp)
+            gates._wo_citation_defect_fixture(root)
+            problems = gates.check_wo_citation(root)
             self.assertEqual(problems, [
                 "A: docs/features/demo/breakdown.md:2 work-order row"
                 " WO-0002 cites no PRD id"])
@@ -59,9 +57,7 @@ class TestWoCitation(unittest.TestCase):
 class TestLinkIntegrity(unittest.TestCase):
     def build(self, tmp):
         tree = FixtureTree(tmp)
-        tree.write("docs/features/demo/prd.md",
-                   "---\nstage: prd\nid: PRD-0001\n---\n# PRD\n")
-        tree.write("docs/adr/0001-real.md", "# Real\n")
+        gates._link_integrity_base_fixture(tree.root)
         return tree
 
     def test_resolving_tokens_are_silent(self):
@@ -651,10 +647,7 @@ class TestArchitectureDrift(unittest.TestCase):
 class TestScaffoldSync(unittest.TestCase):
     def manifested_tree(self, tmp, payload="check:\n"):
         tree = FixtureTree(tmp)
-        path = tree.write("factory/templates/Makefile", payload)
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        tree.write("factory/manifest.json",
-                   json.dumps({"files": {"templates/Makefile": digest}}))
+        gates._scaffold_sync_fixture(tree.root, payload=payload)
         return tree
 
     def test_matching_payload_is_silent(self):
@@ -751,19 +744,15 @@ class TestLabelWiring(unittest.TestCase):
     say about it nobody says."""
 
     REPO = Path(__file__).resolve().parents[1]
-    MAKEFILE = ("wo-merged:\n\tpython3 validator.py lifecycle"
-                " --label wo:merged\n")
+    MAKEFILE = gates._LABEL_WIRING_MAKEFILE
 
     def taxonomy(self, names):
-        return json.dumps([{"name": name, "color": "ededed",
-                            "description": name} for name in names])
+        return gates._label_taxonomy_json(names)
 
     def wired_tree(self, tmp, makefile=None):
         """(tree, every label it names) — the correctly curated state."""
         tree = FixtureTree(tmp)
-        tree.write("Makefile", self.MAKEFILE if makefile is None else makefile)
-        named = sorted(gates.declared_labels(tree.root))
-        tree.write(".github/labels.json", self.taxonomy(named))
+        named = gates._label_wiring_wired_fixture(tree.root, makefile=makefile)
         return tree, named
 
     def test_a_taxonomy_carrying_every_named_label_is_silent(self):
@@ -954,12 +943,10 @@ class TestConfigShape(unittest.TestCase):
 
     def test_invalid_fields_are_each_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write("factory/templates/factory.json", json.dumps(
-                {"budgets_usd": {"S": 5}, "routing": {"mechanical": "m"},
-                 "wip_cap": 0, "monthly_cap_usd": -1}))
+            root = Path(tmp)
+            gates._config_shape_defect_fixture(root)
             rel = "factory/templates/factory.json"
-            self.assertEqual(gates.check_config_shape(tree.root), [
+            self.assertEqual(gates.check_config_shape(root), [
                 f"F: {rel} budgets_usd must map exactly S, M, L",
                 f"F: {rel} routing must map exactly mechanical,"
                 " implementation, architecture_review",
@@ -1001,9 +988,7 @@ class TestConfigShape(unittest.TestCase):
 
 class TestPrTraceability(unittest.TestCase):
     def event_env(self, tmp, event):
-        path = Path(tmp) / "event.json"
-        path.write_text(json.dumps(event), encoding="utf-8")
-        return {"GITHUB_EVENT_PATH": str(path)}
+        return gates._pr_event_fixture(Path(tmp), event)
 
     def pr_env(self, tmp, title, body):
         return self.event_env(tmp, {"pull_request":

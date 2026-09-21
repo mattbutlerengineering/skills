@@ -1188,6 +1188,260 @@ def run_all(root, env=None):
     return problems
 
 
+# ---- planted-defect fixtures ----------------------------------------
+#
+# One builder per detector (or per detector's own sub-scenarios), each
+# writing an isolated tree from nothing. `selftest` below and
+# tests/test_gates.py both build detector fixtures through these — a
+# detector fixture is written here exactly once, whichever caller needs
+# it (issue #440). A builder writes files and returns nothing unless a
+# caller needs something back (a path, a computed label set).
+
+def _wo_citation_defect_fixture(root):
+    """A breakdown row that cites its PRD section, beside one that does
+    not."""
+    breakdown = root / "docs" / "features" / "demo" / "breakdown.md"
+    breakdown.parent.mkdir(parents=True, exist_ok=True)
+    breakdown.write_text(
+        "- [x] WO-0001 do the thing (PRD-0001 §Solution)\n"
+        "- [ ] WO-0002 uncited row\n", encoding="utf-8")
+
+
+def _link_integrity_base_fixture(root):
+    """A PRD declaring PRD-0001 and an ADR file declaring ADR-0001 — the
+    minimal resolvable pair C's dangling-token checks run against."""
+    run = root / "docs" / "features" / "demo"
+    run.mkdir(parents=True, exist_ok=True)
+    (run / "prd.md").write_text(
+        "---\nstage: prd\nid: PRD-0001\n---\n# PRD\n", encoding="utf-8")
+    adr_dir = root / "docs" / "adr"
+    adr_dir.mkdir(parents=True, exist_ok=True)
+    (adr_dir / "0001-real.md").write_text("# Real\n", encoding="utf-8")
+
+
+def _link_integrity_defect_fixture(root):
+    """PRD-0001 and ADR-0001 resolve; PRD-0099 and WO-0003 dangle."""
+    _link_integrity_base_fixture(root)
+    (root / "CONTEXT.md").write_text(
+        "See PRD-0001, PRD-0099, ADR-0001 and WO-0003.\n", encoding="utf-8")
+
+
+def _blueprint_drift_defect_fixture(root):
+    """The index disagrees with ADR-0002's own file, and an artifact
+    still cites ADR-0001, which ADR-0002 superseded."""
+    adr_dir = root / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-real.md").write_text(
+        "# Real\n\n- Status: superseded by ADR-0002\n", encoding="utf-8")
+    (adr_dir / "0002-new.md").write_text(
+        "# New\n\n- Status: accepted\n", encoding="utf-8")
+    (adr_dir / "README.md").write_text(
+        "| ADR | Decision | Status |\n|-----|----------|--------|\n"
+        "| [0001](0001-real.md) | Real | superseded by ADR-0002 |\n"
+        "| [0002](0002-new.md) | New | provisional |\n", encoding="utf-8")
+    (root / "CONTEXT.md").write_text(
+        "Per ADR-0001, which the blueprint already retired.\n",
+        encoding="utf-8")
+
+
+def _cost_ledger_defect_fixture(root):
+    """A merged work order the ledger never recorded, beside a line that
+    is not JSON at all."""
+    breakdown = root / "docs" / "features" / "demo" / "breakdown.md"
+    breakdown.parent.mkdir(parents=True, exist_ok=True)
+    breakdown.write_text(
+        "- [x] WO-0001 do the thing (PRD-0001 §Solution)\n"
+        "- [ ] WO-0002 uncited row\n", encoding="utf-8")
+    ledger = root / "docs" / "factory" / "costs.jsonl"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(
+        json.dumps({"wo": "WO-0002", "run_id": "r1", "model": "m",
+                    "tokens": 900, "cost": 0.3, "outcome": "failed"})
+        + "\n{\"wo\": \"WO-0001\"\n", encoding="utf-8")
+
+
+def _staleness_defect_fixture(root):
+    """A doc that links to a path which is not on disk."""
+    (root / "CONTEXT.md").write_text(
+        "The [handbook](docs/handbook.md) moved away.\n", encoding="utf-8")
+
+
+def _scaffold_sync_fixture(root, rel="Makefile", payload="check:\n"):
+    """A single template file under factory/templates/ whose manifest
+    checksum matches it exactly — E's baseline synced state, shared by
+    every caller that needs a starting point to tamper with."""
+    path = root / "factory" / "templates" / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload, encoding="utf-8")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    (root / "factory" / "manifest.json").write_text(
+        json.dumps({"files": {f"templates/{rel}": digest}}),
+        encoding="utf-8")
+    return path
+
+
+# The correctly curated state's Makefile: one lifecycle target, naming
+# the one label the fixtures below prune and restore.
+_LABEL_WIRING_MAKEFILE = (
+    "wo-merged:\n\tpython3 validator.py lifecycle --label wo:merged\n")
+
+
+def _label_taxonomy_json(names):
+    return json.dumps([{"name": name, "color": "ededed",
+                        "description": name} for name in names])
+
+
+def _label_wiring_wired_fixture(root, makefile=None):
+    """Write the correctly curated state — a Makefile plus a taxonomy
+    carrying every label the shipped tools and that Makefile name — and
+    return the sorted label list, so a caller can derive a pruned
+    variant. Derived from declared_labels rather than hand-listed, so
+    this fixture cannot drift out of step with the tools it wires."""
+    (root / "Makefile").write_text(
+        _LABEL_WIRING_MAKEFILE if makefile is None else makefile,
+        encoding="utf-8")
+    named = sorted(declared_labels(root))
+    labels = root / ".github" / "labels.json"
+    labels.parent.mkdir(parents=True, exist_ok=True)
+    labels.write_text(_label_taxonomy_json(named), encoding="utf-8")
+    return named
+
+
+def _config_shape_defect_fixture(root):
+    """A factory.json with every F-checked field wrong at once: an
+    incomplete budgets_usd and routing map, a non-positive wip_cap, and a
+    negative monthly_cap_usd."""
+    path = root / "factory" / "templates" / "factory.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(
+        {"budgets_usd": {"S": 5}, "routing": {"mechanical": "m"},
+         "wip_cap": 0, "monthly_cap_usd": -1}), encoding="utf-8")
+    return path
+
+
+def _pr_event_fixture(root, payload):
+    """Write a GITHUB_EVENT_PATH payload and return the env pointing
+    check_pr_traceability at it."""
+    event = root / "event.json"
+    event.write_text(json.dumps(payload), encoding="utf-8")
+    return {"GITHUB_EVENT_PATH": str(event)}
+
+
+def _evidence_honesty_defect_fixture(root):
+    """Four artifacts H must catch: a bare unevidenced claim, a
+    template-shaped roll-up with zero real output, a gamed artifact
+    exercising each bypass H closes, and an unclosed code fence that must
+    not silently swallow the rest of the file."""
+    demo = root / "docs" / "features" / "demo"
+    demo.mkdir(parents=True)
+    (demo / "verification.md").write_text(
+        "---\nstage: verify\n---\n# Verification\n\n"
+        "### Suite is green\n\n- Check: ran it, all good.\n"
+        "- Result: PASS\n", encoding="utf-8")
+    # A wholly fabricated, TEMPLATE-shaped artifact with ZERO command
+    # output. The `## Not verified` slot ships in every artifact, so its
+    # LABEL cannot be the disclosure — only what the author writes is.
+    fabricated = root / "docs" / "features" / "fabricated"
+    fabricated.mkdir(parents=True)
+    (fabricated / "verification.md").write_text(
+        "---\nstage: verify\n---\n# Verification\n\n"
+        "## Summary\n\n6/6 criteria pass. Verdict: ship it.\n\n"
+        "## Criteria & evidence\n\n### Test suite\n\n"
+        "- Check: ran the full suite; everything passed.\n\n"
+        "## Failures\n\nNone.\n\n"
+        "## Not verified\n\nNothing; everything was checked.\n",
+        encoding="utf-8")
+    # The gaming shapes H exists to stop: a lying roll-up RENAMED to dodge
+    # the (now deleted) roll-up excuse, one throwaway evidenced leaf trying
+    # to launder it, a relabelled verdict dodging the "Result:" token, a
+    # scoped hedge posing as a NOT-RUN disclaimer, and an unrelated
+    # appendix fence standing in for per-criterion evidence. Each fires in
+    # its own section's scope.
+    gamed = root / "docs" / "features" / "gamed"
+    gamed.mkdir(parents=True)
+    (gamed / "verification.md").write_text(
+        "---\nstage: verify\n---\n# Verification\n\n"
+        "### Grammar parses\n\n- Evidence:\n  ```\n  .\n  ```\n"
+        "- Result: PASS\n\n"
+        "## Results\n\n- Result: all 6 criteria PASS\n\n"
+        "### Budget guard holds\n\n- Verdict: PASS\n\n"
+        "### Router picks the model\n\n- Result: PASS\n"
+        "Note: not tested on Windows.\n\n"
+        "### Retry path\n\n- Result: PASS\n"
+        "- (the retry path itself was not run)\n\n"
+        "## Appendix\n\n```\ngit log --oneline -3\n```\n",
+        encoding="utf-8")
+    # An unclosed fence must be reported, never silently absorb the tail.
+    unclosed = root / "docs" / "features" / "unclosed"
+    unclosed.mkdir(parents=True)
+    (unclosed / "verification.md").write_text(
+        "---\nstage: verify\n---\n# Verification\n\n"
+        "### Report renders\n\n- Evidence:\n  ```\n  3 orders merged\n"
+        "- Result: PASS\n", encoding="utf-8")
+
+
+def _evidence_honesty_clean_fixture(root):
+    """Three artifacts H must stay silent on: literal fenced evidence, an
+    explicit NOT-RUN disclosure, and a narrative roll-up over evidenced
+    criteria below it."""
+    evidenced = root / "docs" / "features" / "evidenced"
+    evidenced.mkdir(parents=True)
+    (evidenced / "verification.md").write_text(
+        "---\nstage: verify\n---\n# Verification\n\n"
+        "### Suite is green\n\n- Evidence:\n  ```\n  Ran 212 tests\n"
+        "\n  OK\n  ```\n- Result: PASS\n", encoding="utf-8")
+    disclosed = root / "docs" / "features" / "disclosed"
+    disclosed.mkdir(parents=True)
+    (disclosed / "verification.md").write_text(
+        "---\nstage: verify\n---\n# Verification\n\n"
+        "### Non-owner dispatch does not fire\n\n"
+        "- Check: NOT RUN — needs a second GitHub account.\n"
+        "- Result: NOT VERIFIED\n", encoding="utf-8")
+    # A roll-up summary narrates the verdicts the criteria below evidence.
+    # It is not itself a criterion, and H must not read it as one.
+    rollup = root / "docs" / "features" / "rollup"
+    rollup.mkdir(parents=True)
+    (rollup / "verification.md").write_text(
+        "---\nstage: verify\n---\n# Verification\n\n"
+        "## Summary\n\n4/4 criteria pass; suite and lint green on the\n"
+        "branch. Verdict: the feature demonstrably works.\n\n"
+        "## Criteria & evidence\n\n### Suite is green\n\n- Evidence:\n"
+        "  ```\n  Ran 222 tests\n\n  OK\n  ```\n- Result: PASS\n",
+        encoding="utf-8")
+
+
+def _clean_repo_fixture(root):
+    """A fully stamped, fully honest repo: every detector's happy path at
+    once, the shape run_all must stay silent across."""
+    run = root / "docs" / "features" / "demo"
+    run.mkdir(parents=True)
+    (run / "prd.md").write_text(
+        "---\nstage: prd\nid: PRD-0001\n---\n# PRD\n", encoding="utf-8")
+    (run / "breakdown.md").write_text(
+        "- [x] WO-0001 shipped slice (PRD-0001 §Solution), per"
+        " [ADR-0001](../../adr/0001-spine.md)\n", encoding="utf-8")
+    (root / "docs" / "adr").mkdir()
+    (root / "docs" / "adr" / "0001-spine.md").write_text(
+        "# Spine\n\n- Status: accepted (shipped 2026-07-06)\n",
+        encoding="utf-8")
+    (root / "docs" / "adr" / "README.md").write_text(
+        "| ADR | Decision | Status |\n|-----|----------|--------|\n"
+        "| [0001](0001-spine.md) | Spine | accepted |\n",
+        encoding="utf-8")
+    (root / "docs" / "factory").mkdir()
+    (root / "docs" / "factory" / "costs.jsonl").write_text(
+        json.dumps({"wo": "WO-0001", "run_id": "r1", "model": "m",
+                    "tokens": 1200, "cost": 0.42, "outcome": "merged"})
+        + "\n", encoding="utf-8")
+    _evidence_honesty_clean_fixture(root)
+    config = json.dumps(
+        {"budgets_usd": {"S": 5, "M": 15, "L": 40},
+         "routing": {"mechanical": "m", "implementation": "i",
+                     "architecture_review": "a"},
+         "wip_cap": 3, "monthly_cap_usd": 300})
+    _scaffold_sync_fixture(root, rel="factory.json", payload=config)
+
+
 def selftest():
     """Fixture trees: each detector must catch its planted defect and stay
     silent on the clean tree."""
@@ -1203,60 +1457,52 @@ def selftest():
         if problems:
             failures.append(f"{label}: expected no problems, got {problems}")
 
+    # A: an isolated tree per detector, matching ordinary unittest
+    # per-test-method style — a failure for one detector must not depend
+    # on or corrupt state left behind by a previous one's fixture.
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        run = root / "docs" / "features" / "demo"
-        run.mkdir(parents=True)
-        (run / "prd.md").write_text(
-            "---\nstage: prd\nid: PRD-0001\n---\n# PRD\n", encoding="utf-8")
-        (run / "breakdown.md").write_text(
-            "- [x] WO-0001 do the thing (PRD-0001 §Solution)\n"
-            "- [ ] WO-0002 uncited row\n", encoding="utf-8")
-        (root / "CONTEXT.md").write_text(
-            "See PRD-0001, PRD-0099, ADR-0001 and WO-0003.\n"
-            "The [handbook](docs/handbook.md) moved away.\n",
-            encoding="utf-8")
-        (root / "docs" / "adr").mkdir()
-        (root / "docs" / "adr" / "0001-real.md").write_text(
-            "# Real\n\n- Status: superseded by ADR-0002\n", encoding="utf-8")
-        (root / "docs" / "adr" / "0002-new.md").write_text(
-            "# New\n\n- Status: accepted\n", encoding="utf-8")
-        (root / "docs" / "adr" / "README.md").write_text(
-            "| ADR | Decision | Status |\n|-----|----------|--------|\n"
-            "| [0001](0001-real.md) | Real | superseded by ADR-0002 |\n"
-            "| [0002](0002-new.md) | New | provisional |\n", encoding="utf-8")
+        _wo_citation_defect_fixture(root)
         expect("A", check_wo_citation(root), "WO-0002")
+
+    # C
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _link_integrity_defect_fixture(root)
         problems = check_link_integrity(root)
         expect("C", problems, "PRD-0099", "WO-0003")
         if any("PRD-0001 " in p and "dangling" in p for p in problems):
             failures.append(f"C: PRD-0001 should resolve, got {problems}")
 
-        # D: the index disagrees with ADR-0002's file, and CONTEXT.md still
-        # builds on ADR-0001, which ADR-0002 superseded.
+    # D: the index disagrees with ADR-0002's file, and an artifact still
+    # builds on ADR-0001, which ADR-0002 superseded.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _blueprint_drift_defect_fixture(root)
         expect("D", check_blueprint_drift(root),
                "ADR-0002 index status 'provisional'",
                "cites ADR-0001, superseded by ADR-0002")
 
-        # G: the ledger accounts for an unmerged order and misses a merged
-        # one, and one line is not JSON at all.
-        (root / "docs" / "factory").mkdir()
-        (root / "docs" / "factory" / "costs.jsonl").write_text(
-            json.dumps({"wo": "WO-0002", "run_id": "r1", "model": "m",
-                        "tokens": 900, "cost": 0.3, "outcome": "failed"})
-            + "\n{\"wo\": \"WO-0001\"\n", encoding="utf-8")
+    # G: the ledger accounts for an unmerged order and misses a merged
+    # one, and one line is not JSON at all.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _cost_ledger_defect_fixture(root)
         expect("G", check_cost_ledger(root),
                "merged work order WO-0001 has no line", "is not valid JSON")
 
-        # I: CONTEXT.md links a doc that is not on disk.
+    # I: a doc links to a path that is not on disk.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _staleness_defect_fixture(root)
         expect("I", check_staleness(root), "stale link docs/handbook.md")
 
-        factory = root / "factory" / "templates"
-        factory.mkdir(parents=True)
-        (factory / "Makefile").write_text("check:\n", encoding="utf-8")
-        digest = hashlib.sha256((factory / "Makefile").read_bytes()).hexdigest()
-        (root / "factory" / "manifest.json").write_text(json.dumps(
-            {"files": {"templates/Makefile": digest}}), encoding="utf-8")
+    # E
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _scaffold_sync_fixture(root)
         expect_clean("E clean", check_scaffold_sync(root))
+        factory = root / "factory" / "templates"
         (factory / "Makefile").write_text("check: tampered\n", encoding="utf-8")
         expect("E", check_scaffold_sync(root), "manifest checksum")
 
@@ -1289,32 +1535,18 @@ def selftest():
         expect("E partial", check_scaffold_sync(root),
                "tools/factory/cli.py is in the payload but missing here",
                "partial stamp")
-        (factory / "tools" / "factory" / "cli.py").unlink()
-        (factory / "Makefile").write_text("check: tampered\n", encoding="utf-8")
 
-        # J: the taxonomy is the repo's to curate, so a pruned label must
-        # be caught here — the alternative is finding out when CI flips it.
-        # Silent with no taxonomy at all: nothing stamped to be wrong.
+    # J: the taxonomy is the repo's to curate, so a pruned label must be
+    # caught here — the alternative is finding out when CI flips it.
+    # Silent with no taxonomy at all: nothing stamped to be wrong.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
         expect_clean("J unstamped", check_label_wiring(root))
-        labels = root / ".github" / "labels.json"
-        labels.parent.mkdir(parents=True, exist_ok=True)
-        (root / "Makefile").write_text(
-            "wo-merged:\n\tpython3 validator.py lifecycle --label wo:merged\n",
-            encoding="utf-8")
-
-        def taxonomy(names):
-            return json.dumps([{"name": name, "color": "ededed",
-                                "description": name} for name in names])
-
-        # The correctly curated state: every label the shipped tools and
-        # this Makefile name. Derived, so the fixture cannot drift out of
-        # step with the tools — what it proves is the PRUNE below, and the
-        # real repo run is what proves the shipped taxonomy is complete.
-        wired = sorted(declared_labels(root))
-        labels.write_text(taxonomy(wired), encoding="utf-8")
+        named = _label_wiring_wired_fixture(root)
         expect_clean("J clean", check_label_wiring(root))
+        labels = root / ".github" / "labels.json"
         labels.write_text(
-            taxonomy([name for name in wired if name != "wo:merged"]),
+            _label_taxonomy_json([n for n in named if n != "wo:merged"]),
             encoding="utf-8")
         expect("J", check_label_wiring(root), "Makefile:2 names wo:merged",
                "human_gates.py names wo:merged", "no such label")
@@ -1324,81 +1556,40 @@ def selftest():
         labels.write_text("{ not json", encoding="utf-8")
         expect("J unreadable", check_label_wiring(root),
                ".github/labels.json is not valid JSON")
-        labels.write_text(taxonomy(wired), encoding="utf-8")
+        labels.write_text(_label_taxonomy_json(named), encoding="utf-8")
         # the restore the later fixtures depend on, now asserted rather
         # than assumed
         expect_clean("J restored", check_label_wiring(root))
 
-        (factory / "factory.json").write_text(json.dumps(
-            {"budgets_usd": {"S": 5, "M": 15},
-             "routing": {"mechanical": "m"},
-             "wip_cap": 0, "monthly_cap_usd": -1}), encoding="utf-8")
+    # F
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _config_shape_defect_fixture(root)
         problems = check_config_shape(root)
         expect("F", problems, "budgets_usd", "routing", "wip_cap",
                "monthly_cap_usd")
 
-        event = root / "event.json"
-        env = {"GITHUB_EVENT_PATH": str(event)}
-        event.write_text(json.dumps({"pull_request": {
-            "title": "fix: something", "body": "no tokens here"}}),
-            encoding="utf-8")
+    # B
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        env = _pr_event_fixture(root, {"pull_request": {
+            "title": "fix: something", "body": "no tokens here"}})
         expect("B", check_pr_traceability(root, env),
                "cites no work-order id", "no Closes #N link")
         expect("B unreadable", check_pr_traceability(
             root, {"GITHUB_EVENT_PATH": str(root / "missing.json")}),
             "cannot read GITHUB_EVENT_PATH")
-        event.write_text(json.dumps({"ref": "refs/heads/main"}),
-                         encoding="utf-8")
+        env = _pr_event_fixture(root, {"ref": "refs/heads/main"})
         expect_clean("B non-PR", check_pr_traceability(root, env))
-        event.write_text(json.dumps({"pull_request": {
+        env = _pr_event_fixture(root, {"pull_request": {
             "title": "WO-0003: detector B",
-            "body": "WO-0003 (PRD-0001) Fixes: #108"}}), encoding="utf-8")
+            "body": "WO-0003 (PRD-0001) Fixes: #108"}})
         expect_clean("B clean", check_pr_traceability(root, env))
 
-        (run / "verification.md").write_text(
-            "---\nstage: verify\n---\n# Verification\n\n"
-            "### Suite is green\n\n- Check: ran it, all good.\n"
-            "- Result: PASS\n", encoding="utf-8")
-        # A wholly fabricated, TEMPLATE-shaped artifact with ZERO command
-        # output. The `## Not verified` slot ships in every artifact, so its
-        # LABEL cannot be the disclosure — only what the author writes is.
-        fabricated = root / "docs" / "features" / "fabricated"
-        fabricated.mkdir()
-        (fabricated / "verification.md").write_text(
-            "---\nstage: verify\n---\n# Verification\n\n"
-            "## Summary\n\n6/6 criteria pass. Verdict: ship it.\n\n"
-            "## Criteria & evidence\n\n### Test suite\n\n"
-            "- Check: ran the full suite; everything passed.\n\n"
-            "## Failures\n\nNone.\n\n"
-            "## Not verified\n\nNothing; everything was checked.\n",
-            encoding="utf-8")
-        # The gaming shapes H exists to stop: a lying roll-up RENAMED to dodge
-        # the (now deleted) roll-up excuse, one throwaway evidenced leaf trying
-        # to launder it, a relabelled verdict dodging the "Result:" token, a
-        # scoped hedge posing as a NOT-RUN disclaimer, and an unrelated
-        # appendix fence standing in for per-criterion evidence. Each fires in
-        # its own section's scope.
-        gamed = root / "docs" / "features" / "gamed"
-        gamed.mkdir()
-        (gamed / "verification.md").write_text(
-            "---\nstage: verify\n---\n# Verification\n\n"
-            "### Grammar parses\n\n- Evidence:\n  ```\n  .\n  ```\n"
-            "- Result: PASS\n\n"
-            "## Results\n\n- Result: all 6 criteria PASS\n\n"
-            "### Budget guard holds\n\n- Verdict: PASS\n\n"
-            "### Router picks the model\n\n- Result: PASS\n"
-            "Note: not tested on Windows.\n\n"
-            "### Retry path\n\n- Result: PASS\n"
-            "- (the retry path itself was not run)\n\n"
-            "## Appendix\n\n```\ngit log --oneline -3\n```\n",
-            encoding="utf-8")
-        # An unclosed fence must be reported, never silently absorb the tail.
-        unclosed = root / "docs" / "features" / "unclosed"
-        unclosed.mkdir()
-        (unclosed / "verification.md").write_text(
-            "---\nstage: verify\n---\n# Verification\n\n"
-            "### Report renders\n\n- Evidence:\n  ```\n  3 orders merged\n"
-            "- Result: PASS\n", encoding="utf-8")
+    # H: the planted-defect side.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _evidence_honesty_defect_fixture(root)
         expect("H", check_evidence_honesty(root),
                'criterion "Suite is green" asserts PASS with neither',
                "artifact shows neither literal evidence",
@@ -1408,64 +1599,18 @@ def selftest():
                'criterion "Retry path" asserts PASS with neither',
                "unclosed code fence")
 
+    # H: the honest side — three shapes that must stay silent.
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        run = root / "docs" / "features" / "demo"
-        run.mkdir(parents=True)
-        (run / "prd.md").write_text(
-            "---\nstage: prd\nid: PRD-0001\n---\n# PRD\n", encoding="utf-8")
-        (run / "breakdown.md").write_text(
-            "- [x] WO-0001 shipped slice (PRD-0001 §Solution), per"
-            " [ADR-0001](../../adr/0001-spine.md)\n", encoding="utf-8")
-        (root / "docs" / "adr").mkdir()
-        (root / "docs" / "adr" / "0001-spine.md").write_text(
-            "# Spine\n\n- Status: accepted (shipped 2026-07-06)\n",
-            encoding="utf-8")
-        (root / "docs" / "adr" / "README.md").write_text(
-            "| ADR | Decision | Status |\n|-----|----------|--------|\n"
-            "| [0001](0001-spine.md) | Spine | accepted |\n",
-            encoding="utf-8")
-        (root / "docs" / "factory").mkdir()
-        (root / "docs" / "factory" / "costs.jsonl").write_text(
-            json.dumps({"wo": "WO-0001", "run_id": "r1", "model": "m",
-                        "tokens": 1200, "cost": 0.42, "outcome": "merged"})
-            + "\n", encoding="utf-8")
-        evidenced = root / "docs" / "features" / "evidenced"
-        evidenced.mkdir(parents=True)
-        (evidenced / "verification.md").write_text(
-            "---\nstage: verify\n---\n# Verification\n\n"
-            "### Suite is green\n\n- Evidence:\n  ```\n  Ran 212 tests\n"
-            "\n  OK\n  ```\n- Result: PASS\n", encoding="utf-8")
-        disclosed = root / "docs" / "features" / "disclosed"
-        disclosed.mkdir()
-        (disclosed / "verification.md").write_text(
-            "---\nstage: verify\n---\n# Verification\n\n"
-            "### Non-owner dispatch does not fire\n\n"
-            "- Check: NOT RUN — needs a second GitHub account.\n"
-            "- Result: NOT VERIFIED\n", encoding="utf-8")
-        # A roll-up summary narrates the verdicts the criteria below evidence.
-        # It is not itself a criterion, and H must not read it as one.
-        rollup = root / "docs" / "features" / "rollup"
-        rollup.mkdir()
-        (rollup / "verification.md").write_text(
-            "---\nstage: verify\n---\n# Verification\n\n"
-            "## Summary\n\n4/4 criteria pass; suite and lint green on the\n"
-            "branch. Verdict: the feature demonstrably works.\n\n"
-            "## Criteria & evidence\n\n### Suite is green\n\n- Evidence:\n"
-            "  ```\n  Ran 222 tests\n\n  OK\n  ```\n- Result: PASS\n",
-            encoding="utf-8")
+        _evidence_honesty_clean_fixture(root)
         expect_clean("H honest", check_evidence_honesty(root))
-        payload = root / "factory" / "templates"
-        payload.mkdir(parents=True)
-        (payload / "factory.json").write_text(json.dumps(
-            {"budgets_usd": {"S": 5, "M": 15, "L": 40},
-             "routing": {"mechanical": "m", "implementation": "i",
-                         "architecture_review": "a"},
-             "wip_cap": 3, "monthly_cap_usd": 300}), encoding="utf-8")
-        digest = hashlib.sha256(
-            (payload / "factory.json").read_bytes()).hexdigest()
-        (root / "factory" / "manifest.json").write_text(json.dumps(
-            {"files": {"templates/factory.json": digest}}), encoding="utf-8")
+
+    # Every detector's happy path at once — the integration smoke test
+    # run_all must stay silent across, beyond any one detector's own
+    # fixture.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _clean_repo_fixture(root)
         expect_clean("clean tree", run_all(root, env={}))
 
     for failure in failures:
