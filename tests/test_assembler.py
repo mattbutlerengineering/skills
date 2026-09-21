@@ -430,27 +430,52 @@ class TestPrForIssue(unittest.TestCase):
 
     def test_newest_open_pr_closing_the_issue_wins(self):
         gh = self.gh()
-        self.assertEqual(assembler.pr_for_issue(110, run=gh), (6, []))
+        self.assertEqual(assembler.pr_for_issue(110, run=gh),
+                         (6, True, []))
 
     def test_a_pr_closing_another_issue_is_not_matched(self):
+        """Absence PROVEN: the listing was read in full and holds no
+        such PR, so the sentence about the agent is earned."""
         gh = self.gh()
-        number, problems = assembler.pr_for_issue(999, run=gh)
-        self.assertIsNone(number)
-        self.assertEqual(problems, [
+        found = assembler.pr_for_issue(999, run=gh)
+        self.assertIsNone(found.pr)
+        self.assertTrue(found.looked)
+        self.assertEqual(found.problems, [
             "asm: no open PR closes issue #999 — the dispatched agent"
             " delivered no traceable PR"])
 
     def test_gh_failure_is_a_problem_not_a_traceback(self):
         gh = FakeGh(failing=["pr", "list"])
-        number, problems = assembler.pr_for_issue(110, run=gh)
-        self.assertIsNone(number)
-        self.assertEqual(problems, ["asm: gh pr list failed: boom"])
+        found = assembler.pr_for_issue(110, run=gh)
+        self.assertIsNone(found.pr)
+        self.assertFalse(found.looked)
+        self.assertEqual(found.problems, ["asm: gh pr list failed: boom"])
+
+    def test_a_truncated_listing_does_not_blame_the_agent(self):
+        """Absence UNPROVEN: the window came back full, so the agent's
+        PR may sit beyond it. The old code took this row's silence for
+        the agent's silence."""
+        listing = json.dumps([
+            {"number": n, "body": f"Closes #{9000 + n}"}
+            for n in range(assembler.LIST_WINDOW)])
+        gh = FakeGh(answers={("pr", "list"): listing})
+        found = assembler.pr_for_issue(110, run=gh)
+        self.assertIsNone(found.pr)
+        self.assertFalse(found.looked)
+        self.assertNotIn("delivered no traceable PR",
+                         " ".join(found.problems))
+        self.assertTrue(any("full" in problem for problem in
+                            found.problems), found.problems)
 
 
 class TestFindPrVerb(unittest.TestCase):
-    """`find-pr <issue>` writes pr= to $GITHUB_OUTPUT for the workflow's
-    validator-dispatch step — empty when no PR matched, so the step's
-    guard can skip instead of dispatching the validator at nothing."""
+    """`find-pr <issue>` writes two outputs to $GITHUB_OUTPUT, and the
+    workflow branches on both. `pr` drives the validator-dispatch step —
+    empty when no PR matched, so the guard skips instead of dispatching
+    the validator at nothing. `looked` drives the failure step: it is
+    false when this run could not observe the agent's delivery at all,
+    and ADR-0063 suppresses the terminal wo:failed flip on exactly that
+    value. Both must be written even when the verb exits nonzero."""
 
     LISTING = TestPrForIssue.LISTING
 
@@ -485,6 +510,23 @@ class TestFindPrVerb(unittest.TestCase):
         self.assertIn("pr=\n", written)
         self.assertIn("asm: no open PR closes issue #999", printed)
 
+    def test_a_readable_find_says_it_looked(self):
+        gh = FakeGh(answers={("pr", "list"): self.LISTING})
+        for issue in ("110", "999"):
+            with self.subTest(issue=issue):
+                _, _, written = self.run_verb(issue, gh)
+                self.assertIn("looked=true", written)
+
+    def test_a_blind_find_says_it_did_not_look(self):
+        """The output ADR-0063's failure-step condition reads. It must be
+        written even though the verb exits nonzero — GitHub records a
+        failed step's outputs, and write_outputs runs before report."""
+        gh = FakeGh(failing=["pr", "list"])
+        code, printed, written = self.run_verb("110", gh)
+        self.assertEqual(code, 1)
+        self.assertIn("pr=\n", written)
+        self.assertIn("looked=false", written)
+
 
 class TestValidatorDispatchLockstep(unittest.TestCase):
     """WO-0030's split contract: GitHub suppresses pull_request events for
@@ -495,6 +537,17 @@ class TestValidatorDispatchLockstep(unittest.TestCase):
 
     VALIDATOR = (REPO_ROOT / ".github" / "workflows" / "validator.yml")
     ASSEMBLER = (REPO_ROOT / ".github" / "workflows" / "assembler.yml")
+
+    def test_the_failure_flip_requires_that_the_find_looked(self):
+        """ADR-0063: a run may apply the terminal wo:failed only when it
+        observed the agent's delivery to be absent. The `!=` form is
+        load-bearing — an unset output (the find step never ran) must
+        still flip, so only an explicit 'false' suppresses it."""
+        text = self.ASSEMBLER.read_text(encoding="utf-8")
+        flip = text.split("Mark the work order failed", 1)[1]
+        condition = flip.split("run:", 1)[0]
+        self.assertIn("steps.find.outputs.looked != 'false'", condition)
+        self.assertNotIn("steps.find.outputs.looked == 'true'", condition)
 
     def test_validator_accepts_a_dispatched_pr_number(self):
         text = self.VALIDATOR.read_text(encoding="utf-8")
