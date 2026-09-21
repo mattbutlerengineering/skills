@@ -1073,16 +1073,35 @@ class TestRouterConditionals(CheckerTreeTest):
             " Implement checkbox rule.",
             "Honor the `re-entry:` field in `defect.md` frontmatter.")
         self.write(body)
-        self.assertEqual(lint.check_router_conditionals(self.root),
-                         ["router names no 'ux' conditional (`ux:` field)",
-                          "router names no Implement checkbox rule"])
+        self.assertEqual(lint.check_router_conditionals(self.root), [
+            "router names no 'ux' conditional (`ux:` field in `<file>`)",
+            "router names no Implement checkbox rule"])
 
-    def test_a_conditional_missing_its_file_is_flagged(self):
+    def test_a_conditional_missing_its_file_entirely_is_flagged(self):
         body = self.clean_body().replace("`prd.md` frontmatter", "the run")
         self.write(body)
         self.assertEqual(lint.check_router_conditionals(self.root), [
-            "router names the 'ux' conditional but not the file it"
-            " lives in (prd.md)"])
+            "router names no 'ux' conditional (`ux:` field in `<file>`)"])
+
+    def test_cross_wired_fields_are_flagged(self):
+        """Review round 1 (issue #444): the first version of this checker
+        verified `ux:`/`re-entry:` and `prd.md`/`defect.md` each appeared
+        SOMEWHERE in the document, so swapping which file each conditional
+        claims to live in passed clean — the exact drift the checker's own
+        message claims to catch. CONDITIONAL_PHRASE requires the file to
+        sit in the same "`field:` field in `file`" clause as its field, so
+        a swap must now be caught."""
+        body = self.clean_body().replace(
+            "`ux:` field in `prd.md`", "`ux:` field in `TEMP`"
+        ).replace(
+            "`re-entry:` field in `defect.md`", "`re-entry:` field in `prd.md`"
+        ).replace("`TEMP`", "`defect.md`")
+        self.write(body)
+        self.assertEqual(lint.check_router_conditionals(self.root), [
+            "router's 'ux' conditional names 'defect.md';"
+            " protocol._ux_skipped reads it from 'prd.md'",
+            "router's 're-entry' conditional names 'prd.md';"
+            " protocol._re_entry_architect reads it from 'defect.md'"])
 
     def test_a_code_side_field_rename_is_flagged_not_missed(self):
         """The point of deriving from the code's own source rather than a
@@ -1098,6 +1117,35 @@ class TestRouterConditionals(CheckerTreeTest):
                 return False
             return (protocol.read_frontmatter(prd) or {}).get(
                 "ux-mode") == "not-applicable"
+
+        renamed.__name__ = "_ux_skipped"
+        original = lint.ROUTER_CONDITIONALS
+        lint.ROUTER_CONDITIONALS = (("ux", "prd.md", renamed),) \
+            + original[1:]
+        try:
+            self.assertEqual(lint.check_router_conditionals(self.root), [
+                "protocol._ux_skipped no longer reads 'ux' — the router"
+                " prose is stale"])
+        finally:
+            lint.ROUTER_CONDITIONALS = original
+
+    def test_a_docstring_decoy_does_not_defeat_the_rename_check(self):
+        """Review round 1 (issue #444): inspect.getsource returns the
+        docstring verbatim, unstripped. A migration-note docstring that
+        still quotes the OLD field name defeated a plain substring search
+        even though the function's real `.get(...)` call had moved on —
+        exactly the silent-drift shape this checker exists to catch.
+        _code_literals must see only what the function's body actually
+        executes, so this decoy must not launder a real rename."""
+        self.write(self.clean_body())
+
+        def renamed(run_dir):
+            """(renamed from "ux" to "ux_mode" — see migration notes)"""
+            prd = run_dir / "prd.md"  # was: reads "ux"
+            if not prd.is_file():
+                return False
+            return (protocol.read_frontmatter(prd) or {}).get(
+                "ux_mode") == "not-applicable"
 
         renamed.__name__ = "_ux_skipped"
         original = lint.ROUTER_CONDITIONALS

@@ -8,10 +8,12 @@ and ledger coverage. Exit 0 = clean, 1 = problems (printed one per line).
 Every checker takes the repo root as a parameter; the CLI entry passes
 the real repo, the test suite passes fixture trees.
 """
+import ast
 import inspect
 import json
 import re
 import sys
+import textwrap
 from pathlib import Path
 
 import eval_schema
@@ -492,12 +494,45 @@ def check_router(root):
 # The router's two frontmatter conditionals (issue #444): the field it
 # names, the file that field lives in, and the protocol.py function that
 # actually reads it. A rename on either side — the prose or the code —
-# must go red; deriving these from protocol.py's own source text (below)
-# means neither side is hand-typed against the other, without turning the
+# must go red; deriving these from protocol.py's own source (below) means
+# neither side is hand-typed against the other, without turning the
 # router's prose into generated output (that fork was raised and declined
 # — a five-line human-facing paragraph is not a good codegen target).
 ROUTER_CONDITIONALS = (("ux", "prd.md", protocol._ux_skipped),
                       ("re-entry", "defect.md", protocol._re_entry_architect))
+
+# "the `<field>:` field in `<file>`" — the phrase this repo's own prose
+# already uses everywhere it names one of these conditionals. Requiring
+# this shape, rather than "field and file both appear somewhere in the
+# document", is what catches a field bound to the WRONG file (issue #444
+# review round 1: swapping which file each conditional claims to live in
+# passed a membership-only check clean).
+CONDITIONAL_PHRASE = re.compile(
+    r"`(?P<field>[a-z][a-z-]*):`\s*field\s+in\s*`(?P<file>[\w.-]+)`")
+
+
+def _code_literals(func):
+    """Every string-literal VALUE in FUNC's body, excluding its docstring.
+
+    inspect.getsource returns the docstring and any comments verbatim —
+    review round 1 planted a stale field name in a migration-note
+    docstring while the real `.get(...)` call read the renamed key, and a
+    plain substring search over that text found the decoy and stayed
+    quiet. ast.walk never sees comments at all (they are not nodes), and
+    dropping the leading Expr(Constant(str)) statement drops the
+    docstring the same way — so what is left is only string literals the
+    function actually executes, exact-matched rather than substring-
+    matched (a literal equal to "ux" only, not one that merely contains
+    it).
+    """
+    source = textwrap.dedent(inspect.getsource(func))
+    body = ast.parse(source).body[0].body
+    if (body and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)):
+        body = body[1:]
+    return {node.value for stmt in body for node in ast.walk(stmt)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)}
 
 
 def check_router_conditionals(root):
@@ -508,11 +543,12 @@ def check_router_conditionals(root):
     _maintenance_stage_complete, and nothing checked that the restatement
     still says what the code does.
 
-    Cross-checked against the field name each function's OWN source text
-    reads (`inspect.getsource`), not a second hand-typed copy of "ux" and
-    "re-entry" — so a field rename in protocol.py, with the router prose
-    left alone, is caught here rather than only showing up as a run
-    silently routing wrong.
+    Cross-checked against the field name each function's own body ACTUALLY
+    reads (`_code_literals`, an ast-derived exact-match set — see its
+    docstring for why not a raw text search), not a second hand-typed copy
+    of "ux" and "re-entry" — so a field rename in protocol.py, with the
+    router prose left alone, is caught here rather than only showing up as
+    a run silently routing wrong.
 
     Deliberately NOT covered: docs/pipeline-protocol.md's "Complete when"
     column carries the same restatement and is equally unpinned
@@ -523,19 +559,22 @@ def check_router_conditionals(root):
     if not router.is_file():
         return []  # absence already reported by check_skills
     text = router.read_text(encoding="utf-8")
+    named = {m["field"]: m["file"] for m in
+            (m.groupdict() for m in CONDITIONAL_PHRASE.finditer(text))}
     problems = []
     for field, filename, func in ROUTER_CONDITIONALS:
-        if f"`{field}:`" not in text:
+        if field not in named:
             problems.append(f"router names no {field!r} conditional"
-                            f" (`{field}:` field)")
-        elif filename not in text:
-            problems.append(f"router names the {field!r} conditional but"
-                            f" not the file it lives in ({filename})")
-        source = inspect.getsource(func)
-        if f'"{field}"' not in source:
+                            f" (`{field}:` field in `<file>`)")
+        elif named[field] != filename:
+            problems.append(f"router's {field!r} conditional names"
+                            f" {named[field]!r}; protocol.{func.__name__}"
+                            f" reads it from {filename!r}")
+        literals = _code_literals(func)
+        if field not in literals:
             problems.append(f"protocol.{func.__name__} no longer reads"
                             f" {field!r} — the router prose is stale")
-        if f'"{filename}"' not in source:
+        if filename not in literals:
             problems.append(f"protocol.{func.__name__} no longer reads"
                             f" {filename} — the router prose is stale")
     if "Implement checkbox" not in text:
