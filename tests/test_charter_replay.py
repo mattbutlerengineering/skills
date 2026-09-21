@@ -97,6 +97,16 @@ class TestGoldenCaseSet(unittest.TestCase):
                 self.assertTrue(
                     (ROOT / c["fixture"] / "work-order.md").is_file())
 
+    def test_every_case_carries_a_require(self):
+        """validate() now demands one (#451); this pins that the shipped
+        set already clears the bar, same as test_set_loads_without_problems
+        pins it for the whole set, not by coincidence."""
+        for c in golden_cases():
+            with self.subTest(case=c["id"]):
+                self.assertTrue(
+                    any(e.get("mode") == "require"
+                        for e in c["expectations"]))
+
 
 class TestValidation(unittest.TestCase):
     """Problem-string contract: label-prefixed strings, never exceptions."""
@@ -139,8 +149,11 @@ class TestValidation(unittest.TestCase):
         """Validation is against the full vocabulary (factory_roles.ROLES,
         ADR-0047) — the retired three-role literal rejected six real
         charters; a fixture may target any of the nine."""
-        _, problems = self.load({"version": 1,
-                                 "cases": [case(role="toolsmith")]})
+        _, problems = self.load({"version": 1, "cases": [case(
+            role="toolsmith",
+            expectations=[expectation(),
+                          expectation(exp_id="req", mode="require",
+                                      pattern="WO-9001")])]})
         self.assertEqual(problems, [])
 
     def test_missing_fixture_work_order(self):
@@ -166,7 +179,9 @@ class TestValidation(unittest.TestCase):
 
     def test_uncompilable_pattern(self):
         _, problems = self.load({"version": 1, "cases": [case(
-            expectations=[expectation(pattern="(unclosed")])]})
+            expectations=[expectation(pattern="(unclosed"),
+                          expectation(exp_id="req", mode="require",
+                                      pattern="WO-9001")])]})
         self.assertEqual(len(problems), 1)
         self.assertIn("expectation 'trap' has an invalid pattern",
                       problems[0])
@@ -177,6 +192,17 @@ class TestValidation(unittest.TestCase):
                                       pattern="WO-9001")])]})
         self.assertIn(f"{LABEL} case 'c1' has no forbid expectation "
                       "(a regression case with no trap checks nothing)",
+                      problems)
+
+    def test_case_with_no_required_behaviour_checks_nothing(self):
+        """#451: a forbid-only case is indistinguishable from a replay
+        that did nothing at all — a forbidden pattern cannot fire in an
+        empty haystack, so nothing here proves the run ever engaged with
+        the trap. Mirrors the forbid check above."""
+        _, problems = self.load({"version": 1, "cases": [case(
+            expectations=[expectation()])]})
+        self.assertIn(f"{LABEL} case 'c1' has no require expectation "
+                      "(a successful empty replay checks nothing)",
                       problems)
 
     def test_invalid_set_yields_no_cases(self):
@@ -347,14 +373,19 @@ class TestAVerdictNeedsEvidence(unittest.TestCase):
     as the charter behaving perfectly."""
 
     def forbid_only(self):
-        """The shape the validator explicitly invites: 'a regression case
-        with no trap checks nothing' requires a forbid and never a
-        require, so a case written to a pure Must-never clause has no
-        required expectation to fail on an empty transcript."""
+        """Before #451, the validator invited this shape: 'a regression
+        case with no trap checks nothing' required a forbid and never a
+        require, so a case written to a pure Must-never clause had no
+        required expectation to fail on an empty transcript. validate()
+        now rejects it too (TestValidation pins that), but score_case
+        must defend on its own — handed this case dict directly, with no
+        validator in between, it still has to fail an errored or empty
+        replay."""
         c = case(expectations=[expectation()])
-        self.assertEqual(
-            charter_replay.validate({"version": 1, "cases": [c]}, ROOT, LABEL),
-            [], "a forbid-only case must stay legal")
+        self.assertIn(
+            f"{LABEL} case 'c1' has no require expectation (a successful"
+            " empty replay checks nothing)",
+            charter_replay.validate({"version": 1, "cases": [c]}, ROOT, LABEL))
         return c
 
     def test_an_errored_replay_cannot_pass(self):
