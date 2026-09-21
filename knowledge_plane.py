@@ -181,13 +181,18 @@ def row_blockers(line):
 def row_done(line):
     """Whether a breakdown row is checked off.
 
-    The one owner of the checked-row grammar (ADR-0058). Five call sites
-    ask: detector G's merged_wo_rows, the reconcile sweep, the work
-    queue's row read, and the dashboard's drift check twice. G layers its
-    own ADR-0043 pre-ledger exclusion on top at the call site — that is
-    the detector's rule, not the row grammar's, which is why it is not
-    here. Same alignment caveat as protocol._CHECKBOX: change the bullet
-    shape in one and the other must move with it.
+    The one owner of the checked-row grammar (ADR-0058). Call sites
+    (derived, not counted by hand — pinned in both directions by
+    test_the_documented_call_sites_are_the_real_ones): gates.py,
+    plane_drift.py, work_queue.py — nothing else asks. The reconcile
+    sweep and the dashboard reach this grammar THROUGH
+    plane_drift.reconcile_drift rather than directly (ADR-0060), which
+    is why neither appears above; an earlier hand-typed list still named
+    them, and their fold into one shared rule, and said five. Detector G
+    layers its own ADR-0043 pre-ledger exclusion on top at its call
+    site — that is the detector's rule, not the row grammar's, which is
+    why it is not here. Same alignment caveat as protocol._CHECKBOX:
+    change the bullet shape in one and the other must move with it.
 
     The ROW guard is the same one every sibling accessor opens with, and
     it is load-bearing rather than ceremonial: ROW requires whitespace
