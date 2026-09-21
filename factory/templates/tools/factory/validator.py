@@ -565,7 +565,8 @@ def parse(argv):
         return command, options
     if command == "review" and set(options) <= {"findings", "status"}:
         status = options.get("status", "0")
-        if not status.isdigit():
+        # isascii(): str.isdigit() is true for '\u00b2', which int() refuses.
+        if not (status.isascii() and status.isdigit()):
             return None, None
         return command, {"findings": options.get("findings", "findings.txt"),
                          "status": int(status)}

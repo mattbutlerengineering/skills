@@ -469,6 +469,15 @@ class TestFindPrVerb(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("pr=6", written)
 
+    def test_a_digit_that_int_refuses_is_usage_not_a_traceback(self):
+        """`argv[1].isdigit()` guards the int() on the next line, but
+        str.isdigit() is true for '\u00b2' and int() refuses it. ISSUE
+        comes from `make find-pr ISSUE=...`, so this is a CLI boundary and
+        owes a usage exit, never a traceback."""
+        gh = FakeGh(answers={("pr", "list"): self.LISTING})
+        code, printed, written = self.run_verb("\u00b2", gh)
+        self.assertEqual(code, 2)
+
     def test_no_match_writes_empty_and_exits_nonzero(self):
         gh = FakeGh(answers={("pr", "list"): self.LISTING})
         code, printed, written = self.run_verb("999", gh)
