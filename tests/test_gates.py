@@ -287,6 +287,20 @@ class TestCostLedger(unittest.TestCase):
                 "G: docs/features/demo/breakdown.md:2 merged work order"
                 " WO-0002 has no line in docs/factory/costs.jsonl"])
 
+    def test_a_row_no_other_accessor_can_parse_is_not_a_merged_order(self):
+        """G reaches row_done through a raw WO_TOKEN.search rather than
+        through a sibling accessor, so it is the one place the checked-row
+        grammar and the row grammar can disagree in production. A line
+        whose box has no trailing space is no row to work_queue, the
+        reconcile sweep or the dashboard; it must be no merged work order
+        here either, or G reports a WO id nothing else can see."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                row="- [x] WO-0001 one (PRD-0001)\n"
+                    "- [x]a WO-0002 no space after the box (PRD-0001)\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
     def test_pre_ledger_annotated_row_is_exempt_from_recording(self):
         """ADR-0043: a work order merged before the ledger was born carries
         (pre-ledger) on its breakdown row, and G's merged-row-must-be-
