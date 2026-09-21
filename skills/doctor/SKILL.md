@@ -78,7 +78,13 @@ plugin-only, which is a legitimate install.
    for a narrow reason worth passing on: `.github/labels.json` is theirs to
    curate, but the tools and the Makefile's lifecycle targets name labels
    in it, so a deletion would otherwise fail only when CI flips the label.
-   Adding labels stays free — J looks in one direction only.
+   Adding labels stays free — the WIRING check looks in one direction only.
+   J also reports a taxonomy it cannot read at all — corrupt JSON, not an
+   array, every entry malformed, a duplicated name — and those lines arrive
+   with an `L:` prefix because they are the loader's own words, forwarded
+   rather than restated. Pass that on too: an `L:` line under
+   `gates: N problem(s)` is J speaking, not the networked label-sync sweep
+   running inside the offline gate.
 
 5. **`tests/` exists.** The stamped `check` target runs
    `python3 -m unittest discover -q tests` and errors outright without a
