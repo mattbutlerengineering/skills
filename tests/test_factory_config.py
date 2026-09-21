@@ -104,6 +104,46 @@ class TestLoad(unittest.TestCase):
                 "config: cannot read .github/factory.json:"), problems)
 
 
+class TestInfiniteAmountsAreRefused(unittest.TestCase):
+    """An infinite cap cannot be crossed, so it is not a cap: `total >=
+    inf` is false at every spend and the ADR-0034 breaker returns
+    CONTINUE forever. json.loads accepts a bare Infinity literal, so
+    this arrives straight from factory.json. cost_report.decide already
+    refuses a non-finite SPEND for exactly this reason; the comparison
+    has two sides."""
+
+    def test_an_infinite_cap_does_not_resolve(self):
+        cap, problems = factory_config.resolve_cap(
+            {"monthly_cap_usd": float("inf")})
+        self.assertIsNone(cap)
+        self.assertEqual(problems, [
+            "config: factory.json names no positive monthly_cap_usd"])
+
+    def test_an_infinite_budget_does_not_resolve(self):
+        budget, problems = factory_config.resolve_budget(
+            "L", {"budgets_usd": {"S": 1, "M": 2, "L": float("inf")}})
+        self.assertIsNone(budget)
+        self.assertEqual(len(problems), 1)
+
+    def test_config_problems_reports_infinite_amounts(self):
+        # config_problems is what detector F prints, so an infinite
+        # amount must not pass CI either.
+        problems = factory_config.config_problems({
+            "monthly_cap_usd": float("inf"),
+            "budgets_usd": {"S": 1, "M": 2, "L": float("inf")},
+            "routing": {band: "m" for band in factory_config.BANDS},
+            "wip_cap": 2,
+        })
+        self.assertTrue(problems, "an infinite amount passed detector F")
+
+    def test_finite_positives_are_unaffected(self):
+        self.assertEqual(
+            factory_config.resolve_cap({"monthly_cap_usd": 100}), (100, []))
+        self.assertEqual(
+            factory_config.resolve_budget(
+                "M", {"budgets_usd": {"S": 1, "M": 2.5, "L": 9}}), (2.5, []))
+
+
 class TestConfigProblems(unittest.TestCase):
     """The whole-config field grammar, owned here (twin of
     cost_ledger.line_problems): detector F prefixes these and layers its
