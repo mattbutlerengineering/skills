@@ -114,9 +114,13 @@ def make_clean_tree(root):
         encoding="utf-8")
 
     # check_readme_skills holds the README to naming every skill, so the
-    # smallest clean tree carries one.
+    # smallest clean tree carries one. The `## Stages` heading is there for
+    # check_readme_no_orphans, which reads only that section (see
+    # lint.readme_stage_mentions) — without it, the smallest tree would
+    # fail the one checker whose whole job is reading that heading.
     (root / "README.md").write_text(
-        "# t\n\n" + "".join(f"- `{slug}`\n" for slug in ALL_SKILLS),
+        "# t\n\n## Stages\n\n"
+        + "".join(f"- `{slug}`\n" for slug in ALL_SKILLS),
         encoding="utf-8")
 
     (root / "docs").mkdir()
@@ -686,6 +690,90 @@ class TestReadmeSkills(CheckerTreeTest):
         (self.root / "README.md").unlink()
         self.assertEqual(lint.check_readme_skills(self.root),
                          ["missing README.md"])
+
+
+class TestReadmeNoOrphans(CheckerTreeTest):
+    """The reverse direction of check_readme_skills (issue #502 — the
+    README half of #455 that check_ledger_no_orphans left open, see
+    docs/fixes/nothing-notices-a-dropped-readme-mention/defect.md): a
+    skill named in README.md's `## Stages` section that the current
+    taxonomy no longer registers. Scoped to that section on purpose —
+    lint.readme_stage_mentions owns why."""
+
+    def test_every_current_mention_stays_clean(self):
+        # The clean fixture's README names every registered skill and
+        # nothing else. No false positives.
+        self.assertEqual(lint.check_readme_no_orphans(self.root), [])
+
+    def test_an_orphaned_table_mention_is_reported(self):
+        path = self.root / "README.md"
+        path.write_text(
+            path.read_text(encoding="utf-8") + "- `retired-skill`\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_readme_no_orphans(self.root),
+            ["README.md's '## Stages' section names 'retired-skill', "
+             "which the taxonomy no longer registers"])
+
+    def test_a_prose_only_utility_mention_is_reported(self):
+        """The scenario #502 was actually raised about: a utility skill
+        has no table row (ADR-0023), so its only mention is a prose
+        sentence in this same section. If that sentence outlives the
+        skill, this is the only checker that notices."""
+        path = self.root / "README.md"
+        path.write_text(
+            path.read_text(encoding="utf-8")
+            + "`retired-utility` used to do something useful.\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_readme_no_orphans(self.root),
+            ["README.md's '## Stages' section names 'retired-utility', "
+             "which the taxonomy no longer registers"])
+
+    def test_a_mention_nested_in_a_longer_registered_slug_is_not_an_orphan(
+            self):
+        """`architect` is a substring of `architecture-diagram`, both
+        registered. readme_stage_mentions reads exact backtick tokens
+        (SLUG_TOKEN), not substrings, so neither is mistaken for an
+        orphan of the other."""
+        self.assertEqual(lint.check_readme_no_orphans(self.root), [])
+        self.assertIn(
+            "architect",
+            lint.readme_stage_mentions(
+                (self.root / "README.md").read_text(encoding="utf-8")))
+
+    def test_a_backtick_token_outside_the_section_is_not_scanned(self):
+        """Why this checker cannot scan the whole document: the real
+        README names the `claude` CLI tool, not a skill, outside the
+        Stages section — a whole-document version of this check would
+        misfire on it the moment it was written (see defect.md). Mirrored
+        here with a planted, out-of-section, slug-shaped, non-skill
+        token."""
+        path = self.root / "README.md"
+        path.write_text(
+            path.read_text(encoding="utf-8")
+            + "\n## Development\n\nneeds the `claude` CLI\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_readme_no_orphans(self.root), [])
+
+    def test_missing_stages_heading_is_reported(self):
+        """check_readme_skills's forward direction never depended on this
+        heading, so nothing else would notice it disappearing."""
+        path = self.root / "README.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("## Stages\n\n", ""),
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_readme_no_orphans(self.root),
+            ["README.md has no '## Stages' section — it is where "
+             "check_readme_no_orphans reads which skills are currently "
+             "claimed"])
+
+    def test_missing_readme_yields_no_problem_here(self):
+        # check_readme_skills already reports "missing README.md"; a
+        # second checker reporting the same absence would double it.
+        (self.root / "README.md").unlink()
+        self.assertEqual(lint.check_readme_no_orphans(self.root), [])
 
 
 class TestPluginSkills(CheckerTreeTest):
