@@ -2,7 +2,7 @@
 stage: prd
 run: feature:pipeline-board
 date: 2026-08-25
-id: PRD-0004
+id: PRD-0005
 ux: required
 assumptions:
   - "Out-of-scope list (gate-level view, auto-refresh, interactivity) taken

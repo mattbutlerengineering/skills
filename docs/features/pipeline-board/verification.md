@@ -21,7 +21,7 @@ rendered file under test is the delivered live render
 
 ## Criteria & evidence
 
-### Placement parity (PRD-0004)
+### Placement parity (PRD-0005)
 
 - Check: pinned tests (`tests/test_protocol_stage_states.py` asserts
   `next_stage(run_dir)` equals the first non-done ladder row across
@@ -41,7 +41,7 @@ rendered file under test is the delivered live render
   snapshot by design).
 - Result: PASS
 
-### Completeness (PRD-0004)
+### Completeness (PRD-0005)
 
 - Check: the same independent walk compared as a set (active = has a
   stage artifact, no retro.md); plus the empty and attention edge
@@ -65,7 +65,7 @@ rendered file under test is the delivered live render
   reported, never guessed, never dropped.
 - Result: PASS
 
-### Glance test (PRD-0004)
+### Glance test (PRD-0005)
 
 - Check: the operator, shown only the delivered SVG (no commands, no
   repo), asked "which step is each run on?" for both runs.
@@ -78,7 +78,7 @@ rendered file under test is the delivered live render
   ```
 - Result: PASS
 
-### Aesthetic checklist (PRD-0004; authored in board-grammar.md, applied item by item)
+### Aesthetic checklist (PRD-0005; authored in board-grammar.md, applied item by item)
 
 - Check: each of the 8 items from
   `skills/pipeline-board/references/board-grammar.md` against the
@@ -118,7 +118,7 @@ rendered file under test is the delivered live render
      Corroborated by the operator's glance verdict. PASS
 - Result: PASS (8/8)
 
-### Self-containment (PRD-0004)
+### Self-containment (PRD-0005)
 
 - Check: enumerate every URL and external-resource construct in the
   delivered file.
