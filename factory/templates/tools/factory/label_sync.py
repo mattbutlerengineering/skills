@@ -27,6 +27,22 @@ from knowledge_plane import repo_root
 LABEL_FIELDS = ("name", "color", "description")
 
 
+def taxonomy_path(root):
+    """The labels.json this repo's taxonomy lives in, or None when none
+    of the candidate homes holds one.
+
+    Split out of load_labels so the question "is there a taxonomy at
+    all?" can be asked without also parsing it. Detector J needs exactly
+    that: an absent taxonomy is an unstamped repo, which has nothing to
+    be wrong about, while an unreadable one is the finding. Walking the
+    candidates a second time to tell them apart would give the gate and
+    the sync tool two answers to a question that must have one.
+    """
+    return next((path for path, _
+                 in artifact_paths(Path(root), "labels.json")
+                 if path.is_file()), None)
+
+
 def load_labels(root):
     """Desired taxonomy for a repo: the installed .github/labels.json when
     stamped, else the template payload copy — the first existing candidate
@@ -34,11 +50,11 @@ def load_labels(root):
     Returns (labels, problems); malformed entries are excluded from labels
     and reported."""
     root = Path(root)
-    candidates = artifact_paths(root, "labels.json")
-    path = next((p for p, _ in candidates if p.is_file()), None)
+    path = taxonomy_path(root)
     if path is None:
         homes = " or ".join(
-            p.relative_to(root).as_posix() for p, _ in candidates)
+            candidate.relative_to(root).as_posix()
+            for candidate, _ in artifact_paths(root, "labels.json"))
         return [], [f"L: missing labels.json ({homes})"]
     rel = path.relative_to(root).as_posix()
     # Decode before parse, guarded separately: see factory_config.load.
