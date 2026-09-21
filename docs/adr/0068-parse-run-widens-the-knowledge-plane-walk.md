@@ -80,7 +80,7 @@ then whether `_scannable_files` becomes knowledge-plane grammar too, or
   never a second, hand-typed tree.
 - ADR-0039's own Status line and `docs/adr/README.md`'s index row for it
   now read "amended by ADR-0040 (roster further amended by ADR-0058; walk
-  widened to `parse_run` by ADR-0067)".
+  widened to `parse_run` by ADR-0068)".
 - `#442` (migrate detectors onto `parse_run`, retiring the duplicated
   reads) and `#443` (contract: drop what migrate leaves unused) remain
   separately filed and blocked; nothing here unblocks or advances either.

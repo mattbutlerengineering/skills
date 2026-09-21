@@ -11,7 +11,7 @@ and cost_report.py locate the repo — and each imported gates for the
 privilege, while label_sync.py carried its own repo_root copy. ADR-0037
 gives the plane's grammar one home; gates.py keeps only the detectors.
 
-parse_run (ADR-0039's amendment, ADR-0067) widens the walk from
+parse_run (ADR-0039's amendment, ADR-0068) widens the walk from
 run_dirs/breakdown_files to the run-level artifacts several detectors
 independently re-read 3-4x per pass — still read-only, still no
 row/slice policy, added alongside the detectors rather than wired into
