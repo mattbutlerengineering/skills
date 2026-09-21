@@ -181,7 +181,7 @@ def load_case_set(path, label, validate):
         return [], [f"missing {label}"]
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as err:
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
         return [], [f"{label} is not valid JSON: {err}"]
     not_object = object_problems(data, label)
     if not_object:

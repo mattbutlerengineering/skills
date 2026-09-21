@@ -506,7 +506,7 @@ def main(argv=None):
         try:
             transcripts = json.loads(
                 Path(args.transcripts).read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as err:
+        except (OSError, json.JSONDecodeError, UnicodeDecodeError) as err:
             print(f"error: cannot read {args.transcripts}: {err}",
                   file=sys.stderr)
             return 1
