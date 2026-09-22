@@ -14,8 +14,12 @@ gives the plane's grammar one home; gates.py keeps only the detectors.
 parse_run (ADR-0039's amendment, ADR-0068) widens the walk from
 run_dirs/breakdown_files to the run-level artifacts several detectors
 independently re-read 3-4x per pass — still read-only, still no
-row/slice policy, added alongside the detectors rather than wired into
-any of them yet.
+row/slice policy. Issue #442 wired gate detectors A, C, D, G, H and I
+onto it; `scannable` is the one addition that migration made: gates.py
+keeps `_scannable_files` (its OWN policy — which directories count as
+"scannable" is a gates.py detector choice, not run layout), and hands
+parse_run the already-selected path list to read once, alongside
+everything else this function already reads once.
 """
 import re
 from pathlib import Path
@@ -261,7 +265,7 @@ def mirror_map(root):
     return mapping
 
 
-def parse_run(root):
+def parse_run(root, scannable=()):
     """Every artifact the gate detectors read from `root`, read ONCE.
 
     ADR-0037 kept this module walk-only ("Row and slice grammar stay
@@ -279,26 +283,32 @@ def parse_run(root):
     this module (there is no dataclass/NamedTuple precedent here to
     follow instead).
 
-    No detector reads this yet. Issue #441 only adds the function,
-    unused; a later, separate issue (#442) wires detectors onto it one
-    at a time, and only then does any detector's own filesystem access
-    or behavior change.
+    Issue #441 added this function, unused; issue #442 (the "migrate"
+    step) wired detectors A, C, D, G, H and I onto it — gates.run_all
+    now calls parse_run once per pass and hands the same parsed dict to
+    each of those six, and each of their own filesystem reads is gone.
 
-    Deliberately NOT covered by this first cut: detector E (the
-    template payload's byte hashes, via manifest_files), F (factory.json,
-    via factory_config.py), G's ledger (docs/factory/costs.jsonl, via
-    cost_ledger.py), J (.github/labels.json + the Makefile, via
-    label_sync.py) and B (the CI event payload, via cli.read_event) each
-    already read their own artifact exactly once, through their own
-    dedicated seam or single-pass function — there is no cross-detector
-    re-read to remove there. C/D/I's shared gates._scannable_files walk
-    IS a real, observed duplication of the same shape, but it is
-    gates.py-private policy (which directories count as "scannable" is
-    C/D/I's own shared choice, not run layout), and folding it in here
-    would mean changing C/D/I's own call sites — which issue #441 keeps
-    additive-only. Left for #442 to decide: fold `_scannable_files` into
-    this seam then (it reads as pure layout knowledge too), or hand
-    parse_run an already-selected file list.
+    `scannable`: an iterable of Paths the CALLER has already selected
+    (gates._scannable_files(root), for detectors C, D and I) — read once
+    each, in the given order, into the "scannable" key below. Selecting
+    WHICH paths count as scannable stays gates.py's own policy (which
+    directories to walk, which to exclude, is a detector choice, not run
+    layout — issue #441 flagged this and left the call for #442, which
+    chose to keep the selection in gates.py and hand parse_run the
+    already-selected list, so this module still owns no directory-walk
+    policy beyond run_dirs). The default `()` reads nothing, so callers
+    that never touch "scannable" (detectors A, G, H) pay nothing for it.
+
+    Deliberately NOT covered here: detector E (the template payload's
+    byte hashes, via manifest_files), F (factory.json, via
+    factory_config.py), G's OWN ledger read (docs/factory/costs.jsonl,
+    via cost_ledger.py — G's collect_wo_rows/merged_wo_rows cross-checks
+    moved here, but the ledger file itself is cost_ledger.py's dedicated
+    seam), J (.github/labels.json + the Makefile, via label_sync.py) and
+    B (the CI event payload, via cli.read_event) each already read their
+    own artifact exactly once, through their own dedicated seam or
+    single-pass function — there was no cross-detector re-read to remove
+    there, so #442 left them untouched.
 
     Returns a dict:
       "runs": one entry per run_dirs(root), in that order —
@@ -316,6 +326,9 @@ def parse_run(root):
         same sorted order check_blueprint_drift and check_link_integrity
         already glob it.
       "adr_readme": [str] | None for docs/adr/README.md.
+      "scannable": [(Path, [str]), ...], one entry per path in
+        `scannable`, in that order — read uncaught, same as every other
+        entry above.
 
     Read-only: parse_run never writes.
     """
@@ -356,7 +369,11 @@ def parse_run(root):
         if readme.is_file():
             adr_readme = readme.read_text(encoding="utf-8").splitlines()
 
-    return {"runs": runs, "adr_files": adr_files, "adr_readme": adr_readme}
+    scanned = [(path, path.read_text(encoding="utf-8").splitlines())
+              for path in scannable]
+
+    return {"runs": runs, "adr_files": adr_files, "adr_readme": adr_readme,
+            "scannable": scanned}
 
 
 def repo_root():

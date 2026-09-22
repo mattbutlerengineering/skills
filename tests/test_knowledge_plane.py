@@ -391,7 +391,30 @@ class TestParseRun(unittest.TestCase):
     def test_a_tree_without_docs_parses_to_an_empty_structure(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(parse_run(Path(tmp)),
-                             {"runs": [], "adr_files": [], "adr_readme": None})
+                             {"runs": [], "adr_files": [], "adr_readme": None,
+                              "scannable": []})
+
+    def test_scannable_defaults_to_empty_and_pays_no_i_o(self):
+        # No `scannable` argument: callers that never touch it (detectors
+        # A, G, H) do not pay for a walk they will not use.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _wo_citation_defect_fixture(root)
+            self.assertEqual(parse_run(root)["scannable"], [])
+
+    def test_scannable_reads_each_given_path_once_in_order(self):
+        # `scannable` is an already-selected path list (gates.py's own
+        # _scannable_files policy) — parse_run only reads it, in the
+        # order given, same shape as adr_files.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first = root / "CONTEXT.md"
+            first.write_text("first\ncontext\n", encoding="utf-8")
+            second = root / "README.md"
+            second.write_text("second\n", encoding="utf-8")
+            parsed = parse_run(root, scannable=[first, second])
+            self.assertEqual(parsed["scannable"], [
+                (first, ["first", "context"]), (second, ["second"])])
 
     def test_the_clean_repo_fixture_parses_without_error(self):
         # The integration smoke fixture every detector's happy path
