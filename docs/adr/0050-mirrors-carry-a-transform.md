@@ -1,6 +1,6 @@
 # MIRRORS carries a transform: one authority per payload file
 
-- Status: accepted
+- Status: amended by ADR-0067
 - Date: 2026-08-05
 
 ## Context
