@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import cost_ledger
 import gates
@@ -1852,6 +1853,24 @@ class TestRunAll(unittest.TestCase):
             self.assertEqual(
                 [p for p in gates.run_all(tree.root, env={})
                  if p.startswith("B:")], [])
+
+    def test_run_all_parses_the_knowledge_plane_exactly_once(self):
+        """Issue #443 (the "contract" step): run_all must build `parsed`
+        ONE time per pass and thread it to every _PARSED_CHECKERS entry —
+        never let a detector's own `parsed=None` fallback fire and
+        re-parse it. `wraps` keeps the real parse running (the six
+        detectors still need real content to stay silent on the clean
+        fixture) while counting calls, so this catches a regression a
+        problem-string diff alone would not: an accidental second parse
+        that happens to read the same content back."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            gates._clean_repo_fixture(root)
+            with mock.patch.object(
+                    gates, "parse_run", wraps=gates.parse_run) as parse_run:
+                problems = gates.run_all(root, env={})
+            self.assertEqual(problems, [])
+            self.assertEqual(parse_run.call_count, 1)
 
 
 class TestLockstep(unittest.TestCase):
