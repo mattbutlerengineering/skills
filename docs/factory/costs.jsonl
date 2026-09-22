@@ -48,3 +48,8 @@
 {"wo": "WO-0036", "run_id": "session-2026-09-12-wo-0036", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-12"}
 {"wo": "WO-0037", "run_id": "session-2026-09-15-wo-0037", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-15"}
 {"wo": "WO-0038", "run_id": "session-2026-09-15-wo-0038", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-15"}
+{"wo": "WO-0051", "run_id": "session-2026-09-21-wo-0051", "model": "claude-sonnet-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-21"}
+{"wo": "WO-0052", "run_id": "session-2026-09-21-wo-0052", "model": "claude-sonnet-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-21"}
+{"wo": "WO-0053", "run_id": "session-2026-09-21-wo-0053", "model": "claude-sonnet-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-21"}
+{"wo": "WO-0054", "run_id": "session-2026-09-21-wo-0054", "model": "claude-sonnet-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-21"}
+{"wo": "WO-0055", "run_id": "session-2026-09-21-wo-0055", "model": "claude-sonnet-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-21"}

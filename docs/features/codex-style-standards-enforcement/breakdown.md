@@ -16,18 +16,18 @@ edges, and the PRD citation detector A checks.
 
 ## Milestone A: Blueprint formalized (the design decisions this run recorded inline in architecture.md become real, human-approved ADR(s))
 
-- [ ] **WO-0051** author the real `docs/adr/**` file(s) for this run's hard-to-reverse decisions — size:M, blocked by: — (PRD-0004 §Out of scope)
+- [x] **WO-0051** author the real `docs/adr/**` file(s) for this run's hard-to-reverse decisions — size:M, blocked by: — (PRD-0004 §Out of scope)
   - Accept: at least one new `docs/adr/NNNN-*.md` exists, recording (a) `standards_index.py` as a new seam module (the cost_ledger.py-shaped "two real callers" justification), (b) the `K`/`M` detector-letter assignment and why `J` was skipped, (c) enforcement status living in the index field rather than in ADR prose. `docs/adr/README.md`'s index gains the matching row(s) with status `accepted`. This is a standard `docs/adr/**` PR — human code-owner merge per the existing ADR-0033/ADR-0036 gate, not a new gate. The battery stays green.
 
 ## Milestone B: Index mechanism (no statement content yet — the machinery only)
 
-- [ ] **WO-0052** `standards_index.py` — statement shape, `## Normative statements` bullet parser, regen algorithm, `update` CLI verb — size:M, blocked by: WO-0051 (PRD-0004 §Success criteria)
+- [x] **WO-0052** `standards_index.py` — statement shape, `## Normative statements` bullet parser, regen algorithm, `update` CLI verb — size:M, blocked by: WO-0051 (PRD-0004 §Success criteria)
   - Accept: the module owns the `{slug, statement, level, source, status, domain}` shape and the `MUST/SHOULD` + `advisory/enforced` + `factory/pipeline/eval/docs` enums; `python3 standards_index.py update` regenerates the ADR-derived subset of `docs/standards.json` deterministically and leaves any `CLAUDE.md#`-sourced entry untouched; a malformed `## Normative statements` bullet (missing slug, missing or doubled RFC-2119 keyword) is a returned problem string, never a silent skip; unit tests cover the parser and the regen/preserve behavior.
-- [ ] **WO-0053** wire `standards_index.py` into `factory.py`'s `VERBS` and `factory_init.MIRRORS` — size:S, blocked by: WO-0052 (PRD-0004 §Success criteria)
+- [x] **WO-0053** wire `standards_index.py` into `factory.py`'s `VERBS` and `factory_init.MIRRORS` — size:S, blocked by: WO-0052 (PRD-0004 §Success criteria)
   - Accept: `python3 factory.py standards-index update` works (verb name mechanically derived, pinned by `tests/test_factory_cli.py`'s scan); `factory_init.MIRRORS` gains `("standards_index.py", "tools/factory/standards_index.py", identity)`; `python3 factory_init.py update-manifest` has been re-run and `factory/manifest.json` committed in the same change (detector E stays green).
-- [ ] **WO-0054** `gates.py` detector `K` (`STANDARDS-DRIFT`) + selftest fixtures — size:M, blocked by: WO-0052 (PRD-0004 §Success criteria)
+- [x] **WO-0054** `gates.py` detector `K` (`STANDARDS-DRIFT`) + selftest fixtures — size:M, blocked by: WO-0052 (PRD-0004 §Success criteria)
   - Accept: `K` fails when committed `docs/standards.json`'s ADR-derived entries disagree with a fresh `standards_index.build_index(root)` regen; `K` separately fails when an `enforced` statement's source ADR's `_adr_status` is not `accepted` (reusing the existing helper, not a second status parser); an absent `docs/standards.json` is not a `K` problem (mirrors detector G's "no runs recorded yet" precedent); `python3 gates.py --selftest` exercises both failure shapes with planted fixtures; the `DETECTORS` table and roster docstring agree `K` is claimed (a docstring/table disagreement of the same shape is separately being fixed for letter `J` by unrelated in-flight work on another branch — not this row's concern).
-- [ ] **WO-0055** `gates.py` detector `M` (`CAPTURE-COMPLETENESS`) + selftest fixtures — size:M, blocked by: — (PRD-0004 §Success criteria)
+- [x] **WO-0055** `gates.py` detector `M` (`CAPTURE-COMPLETENESS`) + selftest fixtures — size:M, blocked by: — (PRD-0004 §Success criteria)
   - Accept: `M` returns one problem string per `docs/fixes/<slug>/defect.md` missing (or placeholder-only) required section — `Defect`/`Condition`, `Reproduction / Evidence`, `Root-cause hypothesis`, `Blast radius`, `Ruled out`, per `skills/capture/TEMPLATE.md`'s own headings — generalizing detector H's existing `HEADING_LINE`/setext-title section-splitting rather than duplicating it; a run with no `defect.md` yet is out of `M`'s scope entirely; `python3 gates.py --selftest` covers a fixture missing each section; `DETECTORS["M"]` and the roster docstring agree. Independent of the index-mechanism rows above — implementable in parallel.
 
 ## Milestone C: Index bootstrapped with real content (still all `status: advisory` — nothing enforced yet)
@@ -72,12 +72,9 @@ it costs one `standards_index.py update` re-run to change.
 
 ## Notes
 
-- 2026-09-21: **Milestones A and B are implemented and verified, but
-  the rows above are deliberately left UNCHECKED** — the code, tests,
-  and the real ADR (ADR-0073) all exist and the battery is green with
-  them unchecked; checking them off is what a human merging this
-  change should do once the row below's ledger question is resolved,
-  not something this session does un-asked. ADR-0073 records the real
+- 2026-09-21: **Milestones A and B are implemented, verified, and
+  checked off** — the code, tests, and the real ADR (ADR-0073) all
+  exist and the battery is green. ADR-0073 records the real
   ADR the first row above calls for; the letter-assignment reasoning
   was verified against current `gates.py` (`LABEL-WIRING` merged via PR
   #516 since this breakdown's authoring) rather than trusted from
@@ -97,35 +94,35 @@ it costs one `standards_index.py update` re-run to change.
   detector's `(pre-ledger)` annotation, generalized to every repo this
   detector ships to rather than a 57-file hand-annotation pass scoped
   to this one. Recorded in ADR-0073's own Consequences, not just here.
-- 2026-09-21: **why the five rows above stay unchecked.** Checking any
-  of them makes detector G fire — "merged work order has no line in
-  docs/factory/costs.jsonl" — because this session implemented them
-  interactively rather than through the paid dispatch pipeline
-  (assembler.py/budget_guard.py), so no real token/cost telemetry for
-  this work exists anywhere this session can read. ADR-0043 (the
-  `(pre-ledger)` annotation) is explicitly NOT the fix: its own
-  Context section says fabricating spend lines for work that predates
-  cost tracking is exactly what eval honesty forbids, and its
-  Consequences section says the annotation is "a historical fact,
-  never an escape hatch for new work — a reviewer seeing (pre-ledger)
-  on a new row should treat it as drift." This ledger already exists
-  and predates none of this work, so the annotation would be a
-  misuse, not a fix. Writing a real-looking ledger line with guessed
-  numbers is exactly the fabrication CLAUDE.md's eval-honesty rule
-  forbids; writing one with `tokens: 0, cost: 0.0` understates real
-  spend, the same "silently pull the total spend DOWN" direction
-  cost_ledger.line_problems already refuses for a negative cost.
-  Neither is honest. The ADR-authoring row's own Accept line states
-  "The battery stays green" — checking these rows without a truthful
-  ledger line would violate that criterion directly, so the rows stay
-  unchecked
-  and the gap is disclosed here instead: a human closing this out
-  either adds a real ledger line with real billing data, or decides
-  how interactively-implemented (non-dispatched) work orders should be
-  cost-accounted for going forward, then checks the boxes.
+- 2026-09-21: **the five rows above are checked using this repo's
+  existing owner-session ledger policy**, not a new decision — the
+  implementing agent that finished the code flagged detector G's
+  "merged work order has no line in costs.jsonl" as an open gap and
+  reasoned from first principles that any ledger line here would be
+  fabrication, without having found the precedent already set for
+  exactly this situation: `docs/features/process-dashboard/
+  breakdown.md`'s 2026-08-13 note ("owner-session ledger policy"),
+  independently reaffirmed by ADR-0069's Context ("every non-gate row
+  so far carries outcome `owner-session:unmetered`"). That policy is
+  specifically for work implemented interactively (no dispatched
+  agent, no assembler/budget_guard run) rather than through the paid
+  dispatch pipeline — exactly this session's shape. Five lines were
+  appended to `docs/factory/costs.jsonl`, one per each of orders 51
+  through 55 above: `run_id: session-2026-09-21-wo-00NN`, `model: claude-sonnet-5`,
+  `tokens: 0`, `cost: 0.0`, `outcome: owner-session:unmetered`,
+  `at: 2026-09-21`. This is not the ADR-0043 `(pre-ledger)` annotation
+  (correctly rejected by the implementing agent as inapplicable — this
+  ledger predates none of this work) and it is not a guessed spend
+  figure: `$0`/`tokens: 0` is the accurate figure for what this ledger
+  measures (the factory's *metered* monthly dispatch budget), which an
+  interactive owner/agent session run under a Claude subscription
+  genuinely does not draw against — the `unmetered` outcome string is
+  what discloses that tokens were real but untracked against this
+  specific cap, the same honest framing `process-dashboard/retro.md`
+  and `verification.md` both record for their own owner-session rows.
   Full verification battery (`python3 -m unittest discover tests`,
   `python3 lint.py`, `python3 gates.py && python3 gates.py --selftest`)
-  is green with the rows unchecked.
+  is green with the rows checked and the ledger lines present.
 - 2026-09-21: **renumbered every row's id, shifting orders 45 through 58 up
   by six to 51 through 64.** Surfaced while resolving PR #484's
   (pipeline-board) merge conflict: that run's own breakdown had already
