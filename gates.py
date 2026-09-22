@@ -45,7 +45,7 @@ ai-tooling suite where the rule is the same idea):
 
 The letter namespace does not end at I. Detector L (LABEL-SYNC) is
 network-side and lives in label_sync.py, driven by scheduled sweeps —
-network calls stay out of this offline gate — and J/K are unclaimed.
+network calls stay out of this offline gate — and K is unclaimed.
 DETECTORS (beside CHECKERS below) is the full roster.
 
 `--selftest` runs the checkers against fixture trees and exits nonzero
@@ -1208,9 +1208,9 @@ def check_evidence_honesty(root, parsed=None):
 # that drive them and are NEVER wired into CHECKERS: L reads the repo's
 # live label set through gh, which is why it lives in label_sync.py and
 # not here (the same posture that keeps every ADR-0037 seam offline).
-# J and K are unclaimed — the shared ai-tooling letter namespace assigns
-# nothing to them, so a new detector takes the next free letter and adds
-# its row here.
+# K is unclaimed — the shared ai-tooling letter namespace assigns
+# nothing to it, so a new detector takes it (or the next free letter)
+# and adds its row here.
 DETECTORS = {
     "A": ("WO-CITATION", "gates.py", "offline"),
     "B": ("PR-TRACEABILITY", "gates.py", "offline"),
@@ -1221,7 +1221,7 @@ DETECTORS = {
     "G": ("COST-LEDGER", "gates.py", "offline"),
     "H": ("EVIDENCE-HONESTY", "gates.py", "offline"),
     "I": ("STALENESS", "gates.py", "offline"),
-    "J": (None, None, "unused"),
+    "J": ("LABEL-WIRING", "gates.py", "offline"),
     "K": (None, None, "unused"),
     "L": ("LABEL-SYNC", "label_sync.py", "network"),
 }
