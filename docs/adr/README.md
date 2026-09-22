@@ -89,3 +89,4 @@ the canonical vocabulary.
 | [0066](0066-no-seam-for-ghs-silence.md) | No seam for gh's silence; the rule is shared, the meaning is local | provisional |
 | [0067](0067-codeowners-mirrors-through-product-codeowners.md) | CODEOWNERS mirrors through product_codeowners, not identity | accepted |
 | [0068](0068-parse-run-widens-the-knowledge-plane-walk.md) | parse_run widens the knowledge-plane walk (expand phase) | accepted |
+| [0069](0069-autonomy-per-gate-wait-hour.md) | Autonomy per human-hour: accepted orders per gate-wait hour | accepted |
