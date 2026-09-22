@@ -72,6 +72,60 @@ it costs one `standards_index.py update` re-run to change.
 
 ## Notes
 
+- 2026-09-21: **Milestones A and B are implemented and verified, but
+  the rows above are deliberately left UNCHECKED** — the code, tests,
+  and the real ADR (ADR-0073) all exist and the battery is green with
+  them unchecked; checking them off is what a human merging this
+  change should do once the row below's ledger question is resolved,
+  not something this session does un-asked. ADR-0073 records the real
+  ADR the first row above calls for; the letter-assignment reasoning
+  was verified against current `gates.py` (`LABEL-WIRING` merged via PR
+  #516 since this breakdown's authoring) rather than trusted from
+  `architecture.md`'s day-old snapshot — the conclusion (`K`/`M` are the
+  free letters) held, only the "why `J` is skipped" reasoning needed
+  updating to match reality. Implementing the `CAPTURE-COMPLETENESS`
+  detector surfaced a real conflict `architecture.md` did not
+  anticipate: this repo's own `docs/fixes/*/defect.md` corpus (57
+  files) almost entirely predates `skills/capture/TEMPLATE.md`'s
+  current heading set, so wiring it unconditionally would have turned
+  `gates.py` permanently red against this repo's own history. Resolved
+  with a `CAPTURE_ADOPTED` cutoff (`gates.py`) grandfathering any
+  `defect.md` whose own frontmatter `date:` predates it — deterministic
+  and hermetic (a file's own static field, never wall-clock "now"), the
+  same "a new rule does not retroactively apply to what predates it"
+  principle ADR-0043 already established for the cost-ledger
+  detector's `(pre-ledger)` annotation, generalized to every repo this
+  detector ships to rather than a 57-file hand-annotation pass scoped
+  to this one. Recorded in ADR-0073's own Consequences, not just here.
+- 2026-09-21: **why the five rows above stay unchecked.** Checking any
+  of them makes detector G fire — "merged work order has no line in
+  docs/factory/costs.jsonl" — because this session implemented them
+  interactively rather than through the paid dispatch pipeline
+  (assembler.py/budget_guard.py), so no real token/cost telemetry for
+  this work exists anywhere this session can read. ADR-0043 (the
+  `(pre-ledger)` annotation) is explicitly NOT the fix: its own
+  Context section says fabricating spend lines for work that predates
+  cost tracking is exactly what eval honesty forbids, and its
+  Consequences section says the annotation is "a historical fact,
+  never an escape hatch for new work — a reviewer seeing (pre-ledger)
+  on a new row should treat it as drift." This ledger already exists
+  and predates none of this work, so the annotation would be a
+  misuse, not a fix. Writing a real-looking ledger line with guessed
+  numbers is exactly the fabrication CLAUDE.md's eval-honesty rule
+  forbids; writing one with `tokens: 0, cost: 0.0` understates real
+  spend, the same "silently pull the total spend DOWN" direction
+  cost_ledger.line_problems already refuses for a negative cost.
+  Neither is honest. The ADR-authoring row's own Accept line states
+  "The battery stays green" — checking these rows without a truthful
+  ledger line would violate that criterion directly, so the rows stay
+  unchecked
+  and the gap is disclosed here instead: a human closing this out
+  either adds a real ledger line with real billing data, or decides
+  how interactively-implemented (non-dispatched) work orders should be
+  cost-accounted for going forward, then checks the boxes.
+  Full verification battery (`python3 -m unittest discover tests`,
+  `python3 lint.py`, `python3 gates.py && python3 gates.py --selftest`)
+  is green with the rows unchecked.
 - 2026-09-21: **renumbered every row's id, shifting orders 45 through 58 up
   by six to 51 through 64.** Surfaced while resolving PR #484's
   (pipeline-board) merge conflict: that run's own breakdown had already
