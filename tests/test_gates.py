@@ -992,6 +992,34 @@ class TestLabelWiring(unittest.TestCase):
                 problems)
 
 
+class TestDetectorRoster(unittest.TestCase):
+    """gates.DETECTORS is the letter namespace's one source of truth
+    (gates.py's own module docstring says so). Nothing previously
+    checked it against CHECKERS, which is exactly how "J": (None, None,
+    "unused") survived on `main` for months after check_label_wiring
+    (docstring: "J: every label...") was written, wired into CHECKERS,
+    and covered by TestLabelWiring above — three places agreeing
+    detector J exists, and the one roster table that is supposed to
+    list every claimed letter still saying it doesn't."""
+
+    def test_every_checker_s_own_letter_is_claimed_in_the_roster(self):
+        for checker in gates.CHECKERS:
+            letter = checker.__doc__.split(":", 1)[0].strip()
+            name, home, plane = gates.DETECTORS[letter]
+            self.assertIsNotNone(
+                name, f"{checker.__name__} is {letter}, but "
+                f"DETECTORS[{letter!r}] still says unused")
+            self.assertEqual(plane, "offline")
+
+    def test_no_roster_entry_claims_a_letter_no_checker_owns(self):
+        checker_letters = {c.__doc__.split(":", 1)[0].strip()
+                            for c in gates.CHECKERS}
+        claimed_offline = {letter for letter, (name, _, plane)
+                            in gates.DETECTORS.items()
+                            if name is not None and plane == "offline"}
+        self.assertEqual(claimed_offline, checker_letters)
+
+
 class TestConfigShape(unittest.TestCase):
     def test_the_shipped_config_is_silent(self):
         # the config we actually ship, not a synthetic twin — the valid
