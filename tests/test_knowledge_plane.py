@@ -9,9 +9,11 @@ import unittest
 from pathlib import Path
 
 import knowledge_plane
+from gates import (_clean_repo_fixture, _evidence_honesty_defect_fixture,
+                   _link_integrity_defect_fixture, _wo_citation_defect_fixture)
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              PRD_TOKEN, ROW, WO_TOKEN, breakdown_files,
-                             mirror_map, repo_root, row_done,
+                             mirror_map, parse_run, repo_root, row_done,
                              row_work_order, run_dirs, sanitize)
 
 
@@ -287,6 +289,126 @@ class TestBreakdownFiles(unittest.TestCase):
     def test_a_tree_without_docs_walks_to_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(list(breakdown_files(Path(tmp))), [])
+
+
+class TestParseRun(unittest.TestCase):
+    """parse_run (ADR-0039's amendment, issue #441 — expand phase only:
+    no detector reads this yet). Built through the SAME planted-defect
+    fixtures gates.py's own detector tests and selftest() share
+    (issue #440's consolidation), not a fresh hand-typed tree — the
+    exact duplication #440 closed."""
+
+    def run_entry(self, root, parsed, rel):
+        """The one run dict in parsed["runs"] at repo-relative `rel`."""
+        matches = [r for r in parsed["runs"]
+                  if r["path"].relative_to(root) == Path(rel)]
+        self.assertEqual(len(matches), 1, parsed["runs"])
+        return matches[0]
+
+    def test_breakdown_matches_breakdown_files_exactly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _wo_citation_defect_fixture(root)
+            parsed = parse_run(root)
+            expected = dict(breakdown_files(root))
+            path = root / "docs/features/demo/breakdown.md"
+            entry = self.run_entry(root, parsed, "docs/features/demo")
+            self.assertEqual(entry["breakdown"], expected[path])
+            self.assertIsNone(entry["prd_id"])
+            self.assertIsNone(entry["architecture"])
+            self.assertIsNone(entry["verification"])
+            self.assertIsNone(entry["verification_error"])
+
+    def test_prd_id_and_adr_files_from_link_integrity_fixture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _link_integrity_defect_fixture(root)
+            parsed = parse_run(root)
+            self.assertEqual(
+                self.run_entry(root, parsed, "docs/features/demo")["prd_id"],
+                "PRD-0001")
+            adr_names = {path.name for path, _ in parsed["adr_files"]}
+            self.assertEqual(adr_names, {"0001-real.md"})
+            _, lines = parsed["adr_files"][0]
+            self.assertEqual(lines, ["# Real"])
+
+    def test_verification_text_captured_per_run_and_unreadable_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _evidence_honesty_defect_fixture(root)
+            # Corrupt one of the fixture's four verification.md files —
+            # the case check_evidence_honesty turns into its own
+            # "H: ... cannot be read" problem string.
+            (root / "docs/features/gamed/verification.md").write_bytes(
+                b"\xff\xfe not valid utf-8")
+            parsed = parse_run(root)
+
+            demo = self.run_entry(root, parsed, "docs/features/demo")
+            self.assertIn("Suite is green", demo["verification"])
+            self.assertIsNone(demo["verification_error"])
+
+            gamed = self.run_entry(root, parsed, "docs/features/gamed")
+            self.assertIsNone(gamed["verification"])
+            self.assertIsNotNone(gamed["verification_error"])
+
+    def test_architecture_lines_captured_when_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / "docs" / "features" / "demo"
+            run.mkdir(parents=True)
+            (run / "architecture.md").write_text(
+                "# Architecture\n\nno `Makefile` here.\n", encoding="utf-8")
+            parsed = parse_run(root)
+            entry = self.run_entry(root, parsed, "docs/features/demo")
+            self.assertEqual(
+                entry["architecture"],
+                ["# Architecture", "", "no `Makefile` here."])
+            self.assertIsNone(entry["breakdown"])
+            self.assertIsNone(entry["prd_id"])
+
+    def test_run_with_none_of_the_four_files_is_still_represented(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs" / "features" / "empty").mkdir(parents=True)
+            parsed = parse_run(root)
+            entry = self.run_entry(root, parsed, "docs/features/empty")
+            self.assertEqual(entry, {
+                "path": root / "docs/features/empty",
+                "breakdown": None, "prd_id": None, "architecture": None,
+                "verification": None, "verification_error": None})
+
+    def test_adr_readme_lines_and_absence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertIsNone(parse_run(root)["adr_readme"])
+            (root / "docs" / "adr").mkdir(parents=True)
+            (root / "docs" / "adr" / "README.md").write_text(
+                "| ADR | Decision | Status |\n", encoding="utf-8")
+            self.assertEqual(
+                parse_run(root)["adr_readme"],
+                ["| ADR | Decision | Status |"])
+
+    def test_a_tree_without_docs_parses_to_an_empty_structure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(parse_run(Path(tmp)),
+                             {"runs": [], "adr_files": [], "adr_readme": None})
+
+    def test_the_clean_repo_fixture_parses_without_error(self):
+        # The integration smoke fixture every detector's happy path
+        # shares (selftest's "clean tree" case) — parse_run must read it
+        # without raising and must see every artifact it plants.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _clean_repo_fixture(root)
+            parsed = parse_run(root)
+            demo = self.run_entry(root, parsed, "docs/features/demo")
+            self.assertIsNotNone(demo["breakdown"])
+            self.assertEqual(demo["prd_id"], "PRD-0001")
+            evidenced = self.run_entry(root, parsed, "docs/features/evidenced")
+            self.assertIsNotNone(evidenced["verification"])
+            adr_names = {path.name for path, _ in parsed["adr_files"]}
+            self.assertEqual(adr_names, {"0001-spine.md"})
+            self.assertIsNotNone(parsed["adr_readme"])
 
 
 class TestMirrorMap(unittest.TestCase):

@@ -10,9 +10,17 @@ tracker issues, orientation_pack.py bundles cited ADRs, budget_guard.py
 and cost_report.py locate the repo — and each imported gates for the
 privilege, while label_sync.py carried its own repo_root copy. ADR-0037
 gives the plane's grammar one home; gates.py keeps only the detectors.
+
+parse_run (ADR-0039's amendment, ADR-0068) widens the walk from
+run_dirs/breakdown_files to the run-level artifacts several detectors
+independently re-read 3-4x per pass — still read-only, still no
+row/slice policy, added alongside the detectors rather than wired into
+any of them yet.
 """
 import re
 from pathlib import Path
+
+from protocol import read_frontmatter
 
 PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
 ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
@@ -251,6 +259,104 @@ def mirror_map(root):
             if wo and number is not None:
                 mapping[number] = wo
     return mapping
+
+
+def parse_run(root):
+    """Every artifact the gate detectors read from `root`, read ONCE.
+
+    ADR-0037 kept this module walk-only ("Row and slice grammar stay
+    with each caller") because nothing had yet observed a caller re-read
+    the SAME file more than once. That changed (ADR-0039's amendment,
+    issue #441's "expand" step of an expand->migrate->contract
+    sequence): detector A (check_wo_citation) and detector G
+    (check_cost_ledger, through both collect_wo_rows and merged_wo_rows)
+    each call breakdown_files independently, so one run_all pass
+    re-globs and re-reads every breakdown.md up to four times; detectors
+    C, D and I each independently re-glob and re-read the same wider
+    markdown tree via gates._scannable_files. parse_run widens the
+    walk-only seam to read the run-level overlap once, as plain data —
+    a dict of lists/tuples, no class, matching every other accessor in
+    this module (there is no dataclass/NamedTuple precedent here to
+    follow instead).
+
+    No detector reads this yet. Issue #441 only adds the function,
+    unused; a later, separate issue (#442) wires detectors onto it one
+    at a time, and only then does any detector's own filesystem access
+    or behavior change.
+
+    Deliberately NOT covered by this first cut: detector E (the
+    template payload's byte hashes, via manifest_files), F (factory.json,
+    via factory_config.py), G's ledger (docs/factory/costs.jsonl, via
+    cost_ledger.py), J (.github/labels.json + the Makefile, via
+    label_sync.py) and B (the CI event payload, via cli.read_event) each
+    already read their own artifact exactly once, through their own
+    dedicated seam or single-pass function — there is no cross-detector
+    re-read to remove there. C/D/I's shared gates._scannable_files walk
+    IS a real, observed duplication of the same shape, but it is
+    gates.py-private policy (which directories count as "scannable" is
+    C/D/I's own shared choice, not run layout), and folding it in here
+    would mean changing C/D/I's own call sites — which issue #441 keeps
+    additive-only. Left for #442 to decide: fold `_scannable_files` into
+    this seam then (it reads as pure layout knowledge too), or hand
+    parse_run an already-selected file list.
+
+    Returns a dict:
+      "runs": one entry per run_dirs(root), in that order —
+        {"path": Path, "breakdown": [str] | None, "prd_id": str | None,
+         "architecture": [str] | None, "verification": str | None,
+         "verification_error": str | None}.
+        A field is None when that run carries no such file.
+        verification_error carries str(err) when verification.md exists
+        but could not be decoded — check_evidence_honesty's own
+        "H: {rel} cannot be read: {err}" case — with verification then
+        None; every other artifact here is read the way its current
+        caller already reads it: uncaught, because no current caller
+        catches a read error there either.
+      "adr_files": [(Path, [str]), ...] for docs/adr/NNNN-*.md, in the
+        same sorted order check_blueprint_drift and check_link_integrity
+        already glob it.
+      "adr_readme": [str] | None for docs/adr/README.md.
+
+    Read-only: parse_run never writes.
+    """
+    runs = []
+    for run in run_dirs(root):
+        breakdown = run / "breakdown.md"
+        prd = run / "prd.md"
+        architecture = run / "architecture.md"
+        verification = run / "verification.md"
+        verification_text = None
+        verification_error = None
+        if verification.is_file():
+            try:
+                verification_text = verification.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as err:
+                verification_error = str(err)
+        runs.append({
+            "path": run,
+            "breakdown": (breakdown.read_text(encoding="utf-8").splitlines()
+                         if breakdown.is_file() else None),
+            "prd_id": ((read_frontmatter(prd) or {}).get("id")
+                      if prd.is_file() else None),
+            "architecture": (architecture.read_text(
+                encoding="utf-8").splitlines()
+                if architecture.is_file() else None),
+            "verification": verification_text,
+            "verification_error": verification_error,
+        })
+
+    adr_dir = root / "docs" / "adr"
+    adr_files = []
+    adr_readme = None
+    if adr_dir.is_dir():
+        for path in sorted(adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md")):
+            adr_files.append(
+                (path, path.read_text(encoding="utf-8").splitlines()))
+        readme = adr_dir / "README.md"
+        if readme.is_file():
+            adr_readme = readme.read_text(encoding="utf-8").splitlines()
+
+    return {"runs": runs, "adr_files": adr_files, "adr_readme": adr_readme}
 
 
 def repo_root():
