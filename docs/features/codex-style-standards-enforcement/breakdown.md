@@ -52,7 +52,7 @@ edges, and the PRD citation detector A checks.
 
 ## Milestone E: Close-out
 
-- [ ] **WO-0063** full battery green across every item above, traceability re-check — size:S, blocked by: WO-0059, WO-0060, WO-0061, WO-0062 (PRD-0004 §Success criteria)
+- [x] **WO-0063** full battery green across every item above, traceability re-check — size:S, blocked by: WO-0059, WO-0060, WO-0061, WO-0062 (PRD-0004 §Success criteria)
   - Accept: `python3 -m unittest discover tests`, `python3 lint.py`, and `python3 gates.py && python3 gates.py --selftest` are all green with every prior row's changes present; PRD-0004's success criteria are re-walked one by one against what actually landed (Verify's job, scaled to this feature — the run's own `verification.md`, when this feature run continues past this breakdown).
 - [ ] **WO-0064** ⚠️ **NEEDS HUMAN JUDGMENT — not implementable unilaterally.** Resolve PRD-0004's deferred "3 real advisory→enforced promotions with prior evidence" acceptance bar — size:S, blocked by: WO-0058 (PRD-0004 §Out of scope, §Open questions)
   - Accept: a human names either (a) three specific statements from the back-fill milestone above that already have real, pre-existing advisory-flagged evidence to point to honestly (a past PR review comment, an audit finding, a `one_owner.py` finding) — no evidence is fabricated to hit the count — or (b) an explicit decision to defer this criterion to a later run, once a real observation period under `status: advisory` has produced real findings to promote from. Either resolution gets recorded here and, if (a), the promoted entries' `status` flips to `enforced` with the cited evidence named inline in `docs/standards.json` or a linked note.
@@ -266,3 +266,60 @@ it costs one `standards_index.py update` re-run to change.
   run applies no labels at all — but the row is written so a human
   reading it, or a planner charter re-slicing this breakdown later,
   can apply the real label without having to first rediscover why.
+- 2026-09-21: **order 63's traceability re-check, PRD-0004's Success
+  criteria walked one by one against what actually landed** (Milestones
+  A through D, orders 51 through 62):
+  - `docs/standards.json` exists, shape matches issue #448's spec
+    exactly (`slug`/`statement`/`level`/`source`/`status`/`domain`,
+    `level ∈ {MUST, SHOULD}`, `status ∈ {advisory, enforced}`,
+    `domain ∈ {factory, pipeline, eval, docs}`) — met, order 52.
+  - A stdlib-only regeneration script deterministically rebuilds the
+    ADR-derived subset and leaves hand-curated `CLAUDE.md#` entries
+    untouched on regeneration — met, order 52 (parser/regen), order 58
+    (exercised for real against this repo's own content, both
+    back-fills survived).
+  - A new `gates.py` detector fails on committed-vs-regenerated drift
+    and on an `enforced` statement citing a non-`accepted` ADR, reusing
+    `_adr_status`/`ADR_STATUS` rather than a second status vocabulary —
+    met, order 54 (`K`).
+  - `gates.py --selftest` covers the new detector(s) with planted
+    fixtures — met, orders 54 and 55 (`K` and `M` each carry planted
+    fixtures for both their failure shapes).
+  - `skills/review/SKILL.md` + `factory/charters/reviewer/CHARTER.md`
+    load the index filtered by touched-path domain, cite slugs, and
+    block on an unresolved `enforced` finding while keeping advisory
+    findings non-blocking — met, orders 59 and 60.
+  - `skills/architect/SKILL.md` + `factory/charters/architect/
+    CHARTER.md` load the design-relevant slice
+    (`domain ∈ {factory, pipeline}`) before drafting and cite bearing
+    statements — met, orders 61 and 62.
+  - A new gate detector validates `defect.md` completeness against the
+    protocol's required sections, with exact problem strings and unit
+    tests — met, order 55 (`M`), generalizing detector H's
+    section-splitting per the PRD's own suggestion rather than a
+    lint-style checker (Implement's call, made at order 55: `gates.py`
+    over `lint.py` because the check is generic to any factory-stamped
+    repo, matching `architecture.md`'s own Component 3 reasoning).
+  - The full battery (`python3 -m unittest discover tests`,
+    `python3 lint.py`, `python3 gates.py && python3 gates.py
+    --selftest`) stayed green through every one of orders 51 through
+    62, independently re-confirmed at order 63 with every prior row's
+    changes present.
+  - No parallel docs tree: `docs/standards.json`'s `source` field
+    points at the ADR/CLAUDE.md passage rather than restating it, and
+    `K` itself is what verifies this (a `source` pointing at a
+    fictional or drifted passage is exactly what `K`'s regen-diff
+    catches) — met, orders 52 through 54, and this is checked
+    mechanically rather than asserted, per the PRD's own bar.
+  - **Not met, by design, not by gap:** the PRD's separately-scoped
+    "3 real advisory→enforced promotions with prior evidence"
+    acceptance bar (PRD-0004 §Out of scope) is order 64 below, flagged
+    since order 51 as needing a human decision this session cannot make
+    without fabricating evidence eval honesty forbids. Every other
+    Success-criteria line is met.
+  - PRD-0004's own checkbox list is left unchecked: this repo's other
+    completed feature PRDs (`process-dashboard`, `software-factory`)
+    likewise never check their own Success-criteria boxes — that
+    marking is not this repo's convention, and this walk-through is
+    written here instead, in the breakdown row whose Accept line calls
+    for it.
