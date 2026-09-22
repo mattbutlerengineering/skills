@@ -27,6 +27,25 @@ from make_parse import make_recipe, make_targets, phony_targets  # noqa: E402
 import workflow_parse  # noqa: E402
 
 
+def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=()):
+    """An in-memory knowledge_plane.parse_run()-shaped dict, built by hand
+    rather than through a real tempdir tree (issue #442). The migrated
+    detectors (A, C, D, G, H, I) read only this shape now — run_entry
+    below builds one "runs" entry; a fixture builder that only needs one
+    run can skip it and pass a single-element `runs` list directly."""
+    return {"runs": list(runs), "adr_files": list(adr_files),
+            "adr_readme": adr_readme, "scannable": list(scannable)}
+
+
+def run_entry(path, breakdown=None, prd_id=None, architecture=None,
+             verification=None, verification_error=None):
+    """One parsed_run() "runs" entry, defaulting to the "no such file"
+    shape parse_run itself returns for an artifact a run does not carry."""
+    return {"path": Path(path), "breakdown": breakdown, "prd_id": prd_id,
+            "architecture": architecture, "verification": verification,
+            "verification_error": verification_error}
+
+
 def offending_run_steps(text, allowed=()):
     """Run steps in a workflow text that neither go through make nor open
     with an allowlisted line — the run-step invariant's helper, factored
@@ -45,55 +64,81 @@ def offending_run_steps(text, allowed=()):
 
 class TestWoCitation(unittest.TestCase):
     def test_uncited_row_is_flagged_and_cited_row_is_not(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            gates._wo_citation_defect_fixture(root)
-            problems = gates.check_wo_citation(root)
-            self.assertEqual(problems, [
-                "A: docs/features/demo/breakdown.md:2 work-order row"
-                " WO-0002 cites no PRD id"])
+        # Mirrors gates._wo_citation_defect_fixture's content, built as an
+        # in-memory parsed run instead of a tempdir tree (issue #442).
+        root = Path("/repo")
+        parsed = parsed_run(runs=[run_entry(
+            root / "docs/features/demo", breakdown=[
+                "- [x] WO-0001 do the thing (PRD-0001 §Solution)",
+                "- [ ] WO-0002 uncited row"])])
+        problems = gates.check_wo_citation(root, parsed)
+        self.assertEqual(problems, [
+            "A: docs/features/demo/breakdown.md:2 work-order row"
+            " WO-0002 cites no PRD id"])
 
 
 class TestLinkIntegrity(unittest.TestCase):
-    def build(self, tmp):
-        tree = FixtureTree(tmp)
-        gates._link_integrity_base_fixture(tree.root)
-        return tree
+    """C is pure over `parsed` (issue #442): its own logic never touches
+    the filesystem, only token sets built from parsed["runs"],
+    parsed["adr_files"] and parsed["scannable"]. The two tests that pin
+    WHICH files are scannable (the boundary gates._scannable_files itself
+    draws, not C's own logic) stay tempdir-based below — a hand-built
+    `scannable` list would make them pass by construction regardless of
+    that boundary, testing nothing."""
+
+    ROOT = Path("/repo")
+
+    def base_parsed(self, scannable=()):
+        """PRD-0001 and ADR-0001 resolve — the minimal resolvable pair C's
+        dangling-token checks run against (mirrors
+        gates._link_integrity_base_fixture, in memory)."""
+        return parsed_run(
+            runs=[run_entry(self.ROOT / "docs/features/demo",
+                            prd_id="PRD-0001")],
+            adr_files=[(self.ROOT / "docs/adr/0001-real.md", ["# Real"])],
+            scannable=scannable)
 
     def test_resolving_tokens_are_silent(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.build(tmp)
-            tree.write("docs/features/demo/breakdown.md",
-                       "- [ ] WO-0001 slice (PRD-0001 §Solution)\n")
-            tree.write("CONTEXT.md", "PRD-0001 per ADR-0001, see WO-0001.\n")
-            self.assertEqual(gates.check_link_integrity(tree.root), [])
+        # WO-0001 must resolve against a breakdown ROW (collect_wo_rows,
+        # from parsed["runs"]), not merely appear in scannable text — so
+        # the run entry carries the same line the breakdown.md scannable
+        # entry does, exactly as one real file would in both walks.
+        parsed = self.base_parsed(scannable=[
+            (self.ROOT / "docs/features/demo/breakdown.md",
+             ["- [ ] WO-0001 slice (PRD-0001 §Solution)"]),
+            (self.ROOT / "CONTEXT.md",
+             ["PRD-0001 per ADR-0001, see WO-0001."])])
+        parsed["runs"][0]["breakdown"] = [
+            "- [ ] WO-0001 slice (PRD-0001 §Solution)"]
+        self.assertEqual(gates.check_link_integrity(self.ROOT, parsed), [])
 
     def test_dangling_tokens_are_flagged(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.build(tmp)
-            tree.write("CONTEXT.md", "PRD-0099 and ADR-0042 and WO-0003.\n")
-            self.assertEqual(gates.check_link_integrity(tree.root), [
-                "C: CONTEXT.md:1 dangling PRD-0099"
-                " (no prd.md declares this id)",
-                "C: CONTEXT.md:1 dangling ADR-0042 (no docs/adr file)",
-                "C: CONTEXT.md:1 dangling WO-0003 (no breakdown row)"])
+        parsed = self.base_parsed(scannable=[
+            (self.ROOT / "CONTEXT.md",
+             ["PRD-0099 and ADR-0042 and WO-0003."])])
+        self.assertEqual(gates.check_link_integrity(self.ROOT, parsed), [
+            "C: CONTEXT.md:1 dangling PRD-0099"
+            " (no prd.md declares this id)",
+            "C: CONTEXT.md:1 dangling ADR-0042 (no docs/adr file)",
+            "C: CONTEXT.md:1 dangling WO-0003 (no breakdown row)"])
 
     def test_duplicate_prd_id_is_flagged(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.build(tmp)
-            tree.write("docs/features/other/prd.md",
-                       "---\nstage: prd\nid: PRD-0001\n---\n# PRD\n")
-            problems = gates.check_link_integrity(tree.root)
-            self.assertEqual(problems, [
-                "C: duplicate PRD id PRD-0001 in"
-                " docs/features/demo/prd.md, docs/features/other/prd.md"])
+        parsed = self.base_parsed()
+        parsed["runs"].append(
+            run_entry(self.ROOT / "docs/features/other", prd_id="PRD-0001"))
+        problems = gates.check_link_integrity(self.ROOT, parsed)
+        self.assertEqual(problems, [
+            "C: duplicate PRD id PRD-0001 in"
+            " docs/features/demo/prd.md, docs/features/other/prd.md"])
 
     def test_dangling_token_outside_docs_is_now_flagged(self):
         # Issue #456: _scannable_files used to be docs/**/*.md + CONTEXT.md
         # only, so a dangling ADR token in .github/, factory/, skills/ or a
-        # root .md file was never seen.
+        # root .md file was never seen. Real tempdir tree: this pins
+        # _scannable_files' own INCLUSION boundary, not C's pure logic.
         with tempfile.TemporaryDirectory() as tmp:
-            tree = self.build(tmp)
+            tree = FixtureTree(tmp)
+            gates._link_integrity_base_fixture(tree.root)
             tree.write("README.md", "See ADR-0042 for context.\n")
             tree.write(".github/PULL_REQUEST_TEMPLATE.md", "Cites ADR-0043.\n")
             tree.write("skills/demo/SKILL.md", "Per ADR-0044.\n")
@@ -112,9 +157,11 @@ class TestLinkIntegrity(unittest.TestCase):
         # factory/templates/ is a seed tree checked against its OWN
         # numbering by TestSeededADRs, and factory/evals/fixtures/ carries
         # intentionally fake WO-/PRD- tokens. Neither should ever surface
-        # a "C:" problem from the live repo's own detector.
+        # a "C:" problem from the live repo's own detector. Real tempdir
+        # tree: this pins _scannable_files' own EXCLUSION boundary.
         with tempfile.TemporaryDirectory() as tmp:
-            tree = self.build(tmp)
+            tree = FixtureTree(tmp)
+            gates._link_integrity_base_fixture(tree.root)
             tree.write("factory/templates/docs/adr/0001-seed.md",
                        "Cites ADR-9999.\n")
             tree.write("factory/evals/fixtures/demo/work-order.md",
@@ -124,7 +171,19 @@ class TestLinkIntegrity(unittest.TestCase):
 
 class TestBlueprintDrift(unittest.TestCase):
     """D (origin: WO-0008): the approved blueprint is docs/adr — its files,
-    its index, and the artifacts that cite it must agree."""
+    its index, and the artifacts that cite it must agree.
+
+    check_blueprint_drift itself moved onto knowledge_plane.parse_run for
+    its CONTENT reads (issue #442; TestArchitectureDrift below exercises
+    the sibling tree-claims half). It stays real-tempdir-tested here,
+    deliberately: nearly every case turns on whether an index row's named
+    ADR file actually exists — a live `.is_file()` check parse_run cannot
+    answer purely (it only knows the files ITS OWN glob found; trusting
+    parsed["adr_files"] membership instead would silently reinterpret a
+    row naming a non-numbered filename, which the "problem strings must
+    not change" constraint rules out guessing at). A hand-built parsed
+    dict would need real files backing it anyway to prove the happy
+    paths, so a tempdir tree stays the more faithful fixture."""
 
     INDEX_HEAD = ("# ADRs\n\n| ADR | Decision | Status |\n"
                   "|-----|----------|--------|\n")
@@ -265,7 +324,16 @@ class TestAdrStatusVocabulary(unittest.TestCase):
 class TestCostLedger(unittest.TestCase):
     """G (origin: WO-0008, ADR-0034): the append-only cost ledger is the
     factory's measurement substrate; a merged order missing from it is a
-    gating finding, and an absent ledger means no runs are recorded yet."""
+    gating finding, and an absent ledger means no runs are recorded yet.
+
+    check_cost_ledger's breakdown-side cross-checks (collect_wo_rows,
+    merged_wo_rows) moved onto parsed (issue #442) and no longer re-walk
+    breakdown_files — but the ledger read itself is cost_ledger.load,
+    G's OWN dedicated seam, deliberately untouched (out of scope per the
+    issue). Every test below exercises both halves together against a
+    real docs/factory/costs.jsonl, so a tempdir tree stays the fixture:
+    faking the ledger file out from under cost_ledger.load is a
+    cost_ledger.py concern, not this issue's."""
 
     # Fixture rows come from the writer seam itself (cost_ledger.entry),
     # so this suite cannot pin G against a shape no current writer
@@ -467,7 +535,13 @@ class TestCostLedger(unittest.TestCase):
 
 class TestStaleness(unittest.TestCase):
     """I (origin: WO-0008): a doc that points at a path which no longer
-    exists is stale — the knowledge plane has moved on without it."""
+    exists is stale — the knowledge plane has moved on without it.
+
+    check_staleness moved its CONTENT read onto parsed["scannable"]
+    (issue #442), but the rule it enforces IS a live existence check —
+    parse_run captures content, never existence — so both tests below
+    stay real-tempdir-tested, the same carve-out issue #442 makes for
+    detector D's tree-claims."""
 
     def test_resolving_links_are_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1165,16 +1239,19 @@ class TestEvidenceHonesty(unittest.TestCase):
             "- Result: NOT VERIFIED\n"), [])
 
     def test_asserted_but_unevidenced_criterion_is_flagged(self):
-        """Filesystem: pins the detector wrapper's output — the H: label and
-        the rel:lineno prefix around the grammar's suffix (HEAD is 7 lines,
-        so the body's line 4 lands on line 11)."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.verification(tmp, (
+        """Pins the detector wrapper's output — the H: label and the
+        rel:lineno prefix around the grammar's suffix (HEAD is 7 lines, so
+        the body's line 4 lands on line 11) — over an in-memory parsed run
+        (issue #442) rather than a tempdir tree."""
+        root = Path("/repo")
+        parsed = parsed_run(runs=[run_entry(
+            root / "docs/features/demo",
+            verification=self.HEAD + (
                 "### Suite is green\n\n"
                 "- Check: ran the tests, everything looks correct.\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [
-                f"H: {self.REL}:11 " + self.claim("Suite is green", "PASS")])
+                "- Result: PASS\n"))])
+        self.assertEqual(gates.check_evidence_honesty(root, parsed), [
+            f"H: {self.REL}:11 " + self.claim("Suite is green", "PASS")])
 
     def test_relabelled_verdict_lines_still_engage_the_rule(self):
         """`Verdict:` / `Outcome:` / `Status:` assert exactly what `Result:`
@@ -1380,10 +1457,13 @@ class TestEvidenceHonesty(unittest.TestCase):
         author's assertion: `status: draft` was read as a labelled verdict
         claiming "draft" in an untitled section — a false positive on an
         honest artifact, and (worse) a `results` entry that disarmed the
-        artifact-wide backstop."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write("docs/features/demo/verification.md", (
+        artifact-wide backstop. In-memory parsed run (issue #442), not a
+        tempdir tree — the wrapper's own job here is just the "H:
+        {rel}:{lineno}" prefix around evidence_problems' verdict."""
+        root = Path("/repo")
+        parsed = parsed_run(runs=[run_entry(
+            root / "docs/features/demo",
+            verification=(
                 "---\nstage: verify\nstatus: draft\nrun: feature:demo\n---\n\n"
                 "# Verification\n\n"
                 "### Suite is green\n\n"
@@ -1391,8 +1471,8 @@ class TestEvidenceHonesty(unittest.TestCase):
                 "  ```\n"
                 "  OK\n"
                 "  ```\n"
-                "- Result: PASS\n"))
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+                "- Result: PASS\n"))])
+        self.assertEqual(gates.check_evidence_honesty(root, parsed), [])
 
     def test_frontmatter_status_does_not_buy_off_the_backstop(self):
         """The same bug from the other side: a prose-only artifact whose
@@ -1730,20 +1810,26 @@ class TestEvidenceHonesty(unittest.TestCase):
             "The whole suite was not run — the CI runner was offline.\n"), [])
 
     def test_unreadable_artifact_is_a_problem_not_a_traceback(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            path = tree.write("docs/features/demo/verification.md", "")
-            path.write_bytes(b"\xff\xfe not utf-8 \xff")
-            problems = gates.check_evidence_honesty(tree.root)
-            self.assertEqual(len(problems), 1)
-            self.assertTrue(problems[0].startswith(
-                f"H: {self.REL} cannot be read:"), problems)
+        # The read-and-catch itself is knowledge_plane.parse_run's job now
+        # (TestParseRun::test_verification_text_captured_per_run_and_
+        # unreadable_is_flagged pins that); what H still owns is turning
+        # a populated verification_error into its own "H: {rel} cannot
+        # be read: {err}" problem string, in memory (issue #442).
+        root = Path("/repo")
+        parsed = parsed_run(runs=[run_entry(
+            root / "docs/features/demo",
+            verification_error="'utf-8' codec can't decode byte 0xff in"
+                               " position 0: invalid start byte")])
+        problems = gates.check_evidence_honesty(root, parsed)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            f"H: {self.REL} cannot be read:"), problems)
 
     def test_tree_without_a_verification_artifact_is_silent(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write("docs/features/demo/prd.md", "# PRD\n")
-            self.assertEqual(gates.check_evidence_honesty(tree.root), [])
+        root = Path("/repo")
+        parsed = parsed_run(
+            runs=[run_entry(root / "docs/features/demo")])
+        self.assertEqual(gates.check_evidence_honesty(root, parsed), [])
 
     def test_repo_verification_artifacts_are_honest(self):
         problems = gates.check_evidence_honesty(TestLockstep.REPO)

@@ -70,9 +70,7 @@ import factory_config
 from cli import read_event, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             breakdown_files, repo_root, row_done,
-                             row_pre_ledger, run_dirs)
-from protocol import read_frontmatter
+                             parse_run, repo_root, row_done, row_pre_ledger)
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
 # `WO-####`. Such a PR declares that EXPLICITLY — the same "declared, never
@@ -300,14 +298,24 @@ def _scannable_files(root):
     return sorted(files)
 
 
-def check_wo_citation(root):
-    """A: a work-order row that cites no PRD section is untraceable scope."""
+def check_wo_citation(root, parsed=None):
+    """A: a work-order row that cites no PRD section is untraceable scope.
+
+    Pure over `parsed` (knowledge_plane.parse_run); `root` stays only to
+    relativize the paths problem strings print. `parsed` defaults to a
+    fresh parse of `root` so every existing caller that passes root
+    alone keeps working — run_all builds it once and threads it through
+    instead (issue #442)."""
+    if parsed is None:
+        parsed = parse_run(root)
     problems = []
-    for breakdown, lines in breakdown_files(root):
-        for lineno, line in enumerate(lines, 1):
+    for entry in parsed["runs"]:
+        if entry["breakdown"] is None:
+            continue
+        rel = (entry["path"] / "breakdown.md").relative_to(root)
+        for lineno, line in enumerate(entry["breakdown"], 1):
             wo = WO_TOKEN.search(line)
             if wo and not PRD_TOKEN.search(line):
-                rel = breakdown.relative_to(root)
                 problems.append(
                     f"A: {rel}:{lineno} work-order row {wo.group(0)}"
                     " cites no PRD id")
@@ -349,48 +357,50 @@ def check_pr_traceability(root, env=None):
     return problems
 
 
-def collect_prd_ids(root):
-    """Map PRD id -> list of prd.md paths declaring it in frontmatter."""
+def collect_prd_ids(root, parsed):
+    """Map PRD id -> list of prd.md paths declaring it in frontmatter.
+    Pure over `parsed`; `root` only relativizes the paths returned."""
     ids = {}
-    for run in run_dirs(root):
-        prd = run / "prd.md"
-        if not prd.is_file():
-            continue
-        fields = read_frontmatter(prd) or {}
-        prd_id = fields.get("id")
-        if prd_id:
-            ids.setdefault(prd_id, []).append(prd.relative_to(root))
+    for entry in parsed["runs"]:
+        if entry["prd_id"]:
+            path = (entry["path"] / "prd.md").relative_to(root)
+            ids.setdefault(entry["prd_id"], []).append(path)
     return ids
 
 
-def collect_wo_rows(root):
-    """Set of WO tokens that appear in any breakdown.md row."""
+def collect_wo_rows(parsed):
+    """Set of WO tokens that appear in any breakdown.md row. Pure over
+    `parsed`."""
     rows = set()
-    for _, lines in breakdown_files(root):
-        for line in lines:
+    for entry in parsed["runs"]:
+        if entry["breakdown"] is None:
+            continue
+        for line in entry["breakdown"]:
             rows.update(WO_TOKEN.findall(line))
     return rows
 
 
-def check_link_integrity(root):
-    """C: typed cross-link tokens must resolve; duplicate PRD ids fail."""
+def check_link_integrity(root, parsed=None):
+    """C: typed cross-link tokens must resolve; duplicate PRD ids fail.
+
+    Pure over `parsed` (`root` only relativizes problem-string paths);
+    `parsed` defaults to a fresh parse — including gates._scannable_files'
+    own selection — of `root`, same lazy-default convention as A, D, G, H
+    and I (issue #442)."""
+    if parsed is None:
+        parsed = parse_run(root, scannable=_scannable_files(root))
     problems = []
-    prd_ids = collect_prd_ids(root)
+    prd_ids = collect_prd_ids(root, parsed)
     for prd_id, paths in sorted(prd_ids.items()):
         if len(paths) > 1:
             listed = ", ".join(str(p) for p in paths)
             problems.append(f"C: duplicate PRD id {prd_id} in {listed}")
-    adr_dir = root / "docs" / "adr"
-    adr_numbers = set()
-    if adr_dir.is_dir():
-        for path in adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md"):
-            adr_numbers.add(path.name[:4])
-    wo_rows = collect_wo_rows(root)
-    for path in _scannable_files(root):
+    adr_numbers = {path.name[:4] for path, _ in parsed["adr_files"]}
+    wo_rows = collect_wo_rows(parsed)
+    for path, lines in parsed["scannable"]:
         rel = path.relative_to(root)
         in_breakdown = path.name == "breakdown.md"
-        for lineno, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(), 1):
+        for lineno, line in enumerate(lines, 1):
             for token in PRD_TOKEN.findall(line):
                 if token not in prd_ids:
                     problems.append(
@@ -410,14 +420,24 @@ def check_link_integrity(root):
     return problems
 
 
-def _adr_status(path):
-    """(lineno, status text) of an ADR's Status line; (0, None) if absent."""
-    for lineno, line in enumerate(
-            path.read_text(encoding="utf-8").splitlines(), 1):
+def _adr_status_from_lines(lines):
+    """(lineno, status text) of an ADR's Status line, given its LINES
+    (a knowledge_plane.parse_run adr_files entry); (0, None) if absent.
+    Pure sibling of _adr_status, which reads the file itself —
+    tests/test_factory_init.py::TestSeededADRs still calls that one
+    directly against the seed tree on disk, so its own signature stays
+    (path) -> (lineno, text)."""
+    for lineno, line in enumerate(lines, 1):
         match = ADR_STATUS_LINE.match(line)
         if match:
             return lineno, match.group(1)
     return 0, None
+
+
+def _adr_status(path):
+    """(lineno, status text) of an ADR's Status line; (0, None) if absent."""
+    return _adr_status_from_lines(
+        path.read_text(encoding="utf-8").splitlines())
 
 
 def _status_head(text):
@@ -483,20 +503,23 @@ def _prose_claims(root, rel, lineno, line):
     return problems
 
 
-def _architecture_drift(root):
+def _architecture_drift(root, parsed):
     """D: every file architecture.md names as present or absent in THIS repo
     must agree with the tree. Fenced examples are inert — a doc quoting a
     claim is not making it — except for the ```tree-claims block, which is
-    where a claim prose can only state behaviourally gets declared."""
+    where a claim prose can only state behaviourally gets declared.
+
+    Content comes from `parsed`; the existence checks each claim makes
+    (_declared_claims/_prose_claims, via _claim_path) stay live against
+    `root` — parse_run captures content, not existence, and that half of
+    D can never become pure (issue #442)."""
     problems = []
-    for run in run_dirs(root):
-        arch = run / "architecture.md"
-        if not arch.is_file():
+    for entry in parsed["runs"]:
+        if entry["architecture"] is None:
             continue
-        rel = arch.relative_to(root)
+        rel = (entry["path"] / "architecture.md").relative_to(root)
         fence = None  # None | "tree-claims" | "other"
-        for lineno, line in enumerate(
-                arch.read_text(encoding="utf-8").splitlines(), 1):
+        for lineno, line in enumerate(entry["architecture"], 1):
             if fence is not None:
                 if ARCH_FENCE.match(line):
                     fence = None
@@ -514,7 +537,7 @@ def _architecture_drift(root):
     return problems
 
 
-def check_blueprint_drift(root):
+def check_blueprint_drift(root, parsed=None):
     """D: docs/adr is the approved blueprint (ADR-0033's second gate). It
     must describe itself consistently — every ADR carries a known status
     and is indexed with that status — and no artifact outside docs/adr may
@@ -525,17 +548,37 @@ def check_blueprint_drift(root):
     it goes on describing a tree that has moved out from under it (#142). So
     a file it names as present or absent in this repo must agree with the
     tree, on the same principle — the doc does not get to disagree with what
-    is there."""
-    problems = _architecture_drift(root)
+    is there.
+
+    Content (ADR status lines, the index, the retired-citation scan) comes
+    from `parsed`, defaulting to a fresh parse of `root` (with
+    gates._scannable_files' own selection) exactly like C, G, H and I.
+    Two existence checks stay live against `root` and can never become
+    pure: architecture.md's own tree-claims (_architecture_drift) and
+    whether an index row's named file actually exists — parse_run only
+    captures the ADR files it FOUND via its own glob, so a row naming one
+    it did not find is either genuinely missing or (rarer) names a file
+    outside the NNNN-*.md pattern parse_run does not walk; only a live
+    `.is_file()` answers both cases the same way the pre-migration code
+    did, and the "problem strings byte-identical" constraint rules out
+    guessing from parsed["adr_files"] membership instead."""
+    if parsed is None:
+        parsed = parse_run(root, scannable=_scannable_files(root))
+    problems = _architecture_drift(root, parsed)
     adr_dir = root / "docs" / "adr"
-    if not adr_dir.is_dir():
+    # Equivalent to the pre-migration `if not adr_dir.is_dir(): return
+    # problems` (see gates.py history): with no ADR files and no README,
+    # `statuses`/`retired` end up empty either way and the loops below are
+    # no-ops, so the two conditions produce identical problems — this one
+    # just skips paying for parsed["scannable"]'s no-op scan.
+    if not parsed["adr_files"] and parsed["adr_readme"] is None:
         return problems
     statuses = {}  # ADR number -> status text (None when unusable)
     retired = {}   # ADR number -> the ADR number that superseded it
-    for path in sorted(adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md")):
+    for path, lines in parsed["adr_files"]:
         rel = path.relative_to(root)
         number = path.name[:4]
-        lineno, text = _adr_status(path)
+        lineno, text = _adr_status_from_lines(lines)
         statuses[number] = None
         if text is None:
             problems.append(f"D: {rel} declares no Status line")
@@ -548,14 +591,13 @@ def check_blueprint_drift(root):
         if match.group("retired"):
             retired[number] = match.group("by")
 
-    index = adr_dir / "README.md"
-    if statuses and not index.is_file():
+    readme_lines = parsed["adr_readme"]
+    if statuses and readme_lines is None:
         problems.append("D: docs/adr/README.md is missing"
                         " (ADR files present, no blueprint index)")
-    elif index.is_file():
+    elif readme_lines is not None:
         rows = {}
-        for lineno, line in enumerate(
-                index.read_text(encoding="utf-8").splitlines(), 1):
+        for lineno, line in enumerate(readme_lines, 1):
             match = ADR_INDEX_ROW.match(line)
             if not match:
                 continue
@@ -579,12 +621,11 @@ def check_blueprint_drift(root):
                     f"D: docs/adr/README.md:{lineno} ADR-{number} index"
                     f" status {indexed!r} does not match the file's {text!r}")
 
-    for path in _scannable_files(root):
+    for path, lines in parsed["scannable"]:
         if adr_dir in path.parents:
             continue
         rel = path.relative_to(root)
-        for lineno, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(), 1):
+        for lineno, line in enumerate(lines, 1):
             for number in ADR_TOKEN.findall(line):
                 if number in retired:
                     problems.append(
@@ -593,16 +634,19 @@ def check_blueprint_drift(root):
     return problems
 
 
-def merged_wo_rows(root):
+def merged_wo_rows(root, parsed):
     """(breakdown path, lineno, WO token) for every checked breakdown row —
     the artifact-side record that a work order merged (ADR-0004). Rows
     carrying the trailing (pre-ledger) annotation — knowledge_plane's
     row_pre_ledger grammar — are excluded: they merged before the ledger
-    existed and G owes them no ledger line (ADR-0043)."""
+    existed and G owes them no ledger line (ADR-0043). Pure over `parsed`;
+    `root` only relativizes the paths returned."""
     rows = []
-    for breakdown, lines in breakdown_files(root):
-        rel = breakdown.relative_to(root)
-        for lineno, line in enumerate(lines, 1):
+    for entry in parsed["runs"]:
+        if entry["breakdown"] is None:
+            continue
+        rel = (entry["path"] / "breakdown.md").relative_to(root)
+        for lineno, line in enumerate(entry["breakdown"], 1):
             wo = WO_TOKEN.search(line)
             if (row_done(line) and wo
                     and not row_pre_ledger(line)):
@@ -610,7 +654,7 @@ def merged_wo_rows(root):
     return rows
 
 
-def check_cost_ledger(root):
+def check_cost_ledger(root, parsed=None):
     """G: every run appends {wo, run_id, model, tokens, cost, outcome} to
     the append-only docs/factory/costs.jsonl, and a merged work order with
     no ledger line is a gating finding (ADR-0034). An absent ledger is
@@ -620,21 +664,26 @@ def check_cost_ledger(root):
 
     The file read and line grammar are cost_ledger.load — the same
     labelled read the weekly report is built on (ADR-0037, ADR-0049), so
-    the two cannot diverge, down to the cannot-read string. What stays
-    here is G's own work: the cross-checks between ledger and breakdown
-    (a recorded wo must have a row; a merged row must be recorded).
+    the two cannot diverge, down to the cannot-read string. cost_ledger.py
+    is G's own dedicated seam (like factory_config.py is F's) and stays
+    untouched by issue #442: only the cross-checks between ledger and
+    breakdown below (a recorded wo must have a row; a merged row must be
+    recorded) moved onto `parsed`, defaulting to a fresh parse of `root`
+    like every other migrated detector.
 
     A gate-latency row (ADR-0041) never satisfies the merged-order
     check: it records queue time at $0 with no tokens, and the monthly
     breaker's sum excludes it — counting it as spend coverage kept G
     green on a ledger that accounted for nothing (issue #222)."""
+    if parsed is None:
+        parsed = parse_run(root)
     rows, problems = cost_ledger.load(root, "G")
     if rows is None:
         # Absent (silent, no runs yet) or unreadable (the labelled
         # cannot-read problem) — either way the line walk and the
         # merged-row cross-check have no ledger to bite on.
         return problems
-    wo_rows = collect_wo_rows(root)
+    wo_rows = collect_wo_rows(parsed)
     recorded = set()
     for lineno, entry, located in rows:
         problems.extend(located)
@@ -645,23 +694,29 @@ def check_cost_ledger(root):
             if wo not in wo_rows:
                 problems.append(f"G: {COST_LEDGER}:{lineno} wo {wo}"
                                 " has no breakdown row")
-    for rel, lineno, wo in merged_wo_rows(root):
+    for rel, lineno, wo in merged_wo_rows(root, parsed):
         if wo not in recorded:
             problems.append(f"G: {rel}:{lineno} merged work order {wo} has"
                             f" no line in {COST_LEDGER}")
     return problems
 
 
-def check_staleness(root):
+def check_staleness(root, parsed=None):
     """I: a doc that links to a path which no longer exists on disk is
     stale — the knowledge plane moved and the doc did not. Deliberately
     filesystem-shaped, not time-shaped: a detector must be deterministic
-    and hermetic, which "older than the code it describes" is not."""
+    and hermetic, which "older than the code it describes" is not.
+
+    The scanned CONTENT comes from `parsed["scannable"]` (defaulting to a
+    fresh parse of `root`, with gates._scannable_files' own selection);
+    whether a link's TARGET exists stays a live check against `root` —
+    that is the rule I enforces, and it can never become pure."""
+    if parsed is None:
+        parsed = parse_run(root, scannable=_scannable_files(root))
     problems = []
-    for path in _scannable_files(root):
+    for path, lines in parsed["scannable"]:
         rel = path.relative_to(root)
-        for lineno, line in enumerate(
-                path.read_text(encoding="utf-8").splitlines(), 1):
+        for lineno, line in enumerate(lines, 1):
             for target in MD_LINK.findall(line):
                 if URL_TARGET.match(target) or target.startswith("#"):
                     continue
@@ -1113,7 +1168,7 @@ def evidence_problems(text):
     return problems
 
 
-def check_evidence_honesty(root):
+def check_evidence_honesty(root, parsed=None):
     """H: a criterion that asserts a verdict must show literal output or
     disclose that the check was NOT RUN. Prose confidence is not evidence
     (PRD-0001: a change whose verification is asserted but not evidenced
@@ -1121,22 +1176,26 @@ def check_evidence_honesty(root):
 
     The grammar — what asserts, what evidences, what discloses — is
     evidence_problems, pure over the artifact's text. What stays here is
-    the detector's own job: find each run's verification.md, read it (an
-    unreadable artifact is a problem, never a traceback), and prefix each
-    (lineno, suffix) the grammar returns."""
+    the detector's own job: walk each run's verification.md from `parsed`
+    (an unreadable artifact is a problem, never a traceback — parse_run
+    already caught that read and carries it as verification_error) and
+    prefix each (lineno, suffix) the grammar returns. `parsed` defaults
+    to a fresh parse of `root`, same convention as A, C, D, G and I."""
+    if parsed is None:
+        parsed = parse_run(root)
     problems = []
-    for run in run_dirs(root):
-        artifact = run / "verification.md"
-        if not artifact.is_file():
+    for entry in parsed["runs"]:
+        if entry["verification"] is None \
+                and entry["verification_error"] is None:
             continue
-        rel = artifact.relative_to(root)
-        try:
-            text = artifact.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as err:
-            problems.append(f"H: {rel} cannot be read: {err}")
+        rel = (entry["path"] / "verification.md").relative_to(root)
+        if entry["verification_error"] is not None:
+            problems.append(
+                f"H: {rel} cannot be read: {entry['verification_error']}")
             continue
         problems.extend(f"H: {rel}:{lineno} {suffix}"
-                        for lineno, suffix in evidence_problems(text))
+                        for lineno, suffix
+                        in evidence_problems(entry["verification"]))
     return problems
 
 
@@ -1172,17 +1231,37 @@ CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
             check_config_shape, check_cost_ledger, check_evidence_honesty,
             check_staleness)
 
+# The CHECKERS that read the knowledge plane's run artifacts and were
+# migrated onto knowledge_plane.parse_run (issue #442): A, C, D, G, H and
+# I. E, F and J each already read their own dedicated seam exactly once
+# (factory_config.py, cost_ledger.py's own ledger file, label_sync.py)
+# and B reads the CI event payload — none of those four touch `parsed`,
+# so run_all keeps threading `root, env` to B and bare `root` to E/F/J,
+# same as before this issue. Identity-checked, same style as the
+# existing check_pr_traceability special-case below, rather than adding
+# an `env`-shaped parameter every CHECKERS entry must now accept.
+_PARSED_CHECKERS = frozenset((
+    check_wo_citation, check_link_integrity, check_blueprint_drift,
+    check_cost_ledger, check_evidence_honesty, check_staleness))
+
 
 def run_all(root, env=None):
     """Run every detector. `env` (default os.environ) is threaded to the
     checkers that read the process environment, so callers can stay
-    hermetic without mutating global state."""
+    hermetic without mutating global state. The knowledge plane is
+    parsed ONCE (parse_run, with gates._scannable_files' own selection)
+    and threaded to every _PARSED_CHECKERS entry, rather than each one
+    re-parsing it (issue #442's "migrate" step, following #441's
+    "expand")."""
     if env is None:
         env = os.environ
+    parsed = parse_run(root, scannable=_scannable_files(root))
     problems = []
     for checker in CHECKERS:
         if checker is check_pr_traceability:
             problems.extend(checker(root, env))
+        elif checker in _PARSED_CHECKERS:
+            problems.extend(checker(root, parsed))
         else:
             problems.extend(checker(root))
     return problems
