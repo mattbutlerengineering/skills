@@ -32,11 +32,11 @@ edges, and the PRD citation detector A checks.
 
 ## Milestone C: Index bootstrapped with real content (still all `status: advisory` — nothing enforced yet)
 
-- [ ] **WO-0056** back-fill `## Normative statements` sections into a first small set of existing ADRs — size:M, blocked by: WO-0052 (PRD-0004 §Solution)
+- [x] **WO-0056** back-fill `## Normative statements` sections into a first small set of existing ADRs — size:M, blocked by: WO-0052 (PRD-0004 §Solution)
   - Accept: a human-reviewed, non-exhaustive first set of statements worth enforcing (candidates: the one-way dispatch-mirror rule, ADR-0004's "typed IDs live only in run-artifact frontmatter," the stdlib-only rule) is added under a `## Normative statements` heading in their source ADRs, each with a stable slug and exactly one RFC-2119 keyword, every one at `status: advisory` (nothing is created pre-enforced — mirrors this repo's own LEDGER discipline of graduating only on evidence). Standard `docs/adr/**` human-merge gate applies; no special flag needed beyond that existing policy.
-- [ ] **WO-0057** hand-curate a first small set of `CLAUDE.md`-sourced entries directly in `docs/standards.json` — size:S, blocked by: WO-0052 (PRD-0004 §Solution)
+- [x] **WO-0057** hand-curate a first small set of `CLAUDE.md`-sourced entries directly in `docs/standards.json` — size:S, blocked by: WO-0052 (PRD-0004 §Solution)
   - Accept: a small number of CLAUDE.md "Hard conventions" bullets judged worth enforcing (candidates: "Stdlib only," "Never fabricate... eval honesty") get hand-authored entries with `source: CLAUDE.md#<anchor>`, `status: advisory`; the anchor form is resolvable by a human/reviewer reading CLAUDE.md even though CLAUDE.md has no heading-anchor convention of its own (Implement's call on the exact `source` string shape, per architecture.md's Open-question resolution — not hard-to-reverse, no ADR needed for this row itself).
-- [ ] **WO-0058** regenerate and commit the bootstrapped `docs/standards.json`; confirm detector `K` green — size:S, blocked by: WO-0053, WO-0054, WO-0056, WO-0057 (PRD-0004 §Success criteria)
+- [x] **WO-0058** regenerate and commit the bootstrapped `docs/standards.json`; confirm detector `K` green — size:S, blocked by: WO-0053, WO-0054, WO-0056, WO-0057 (PRD-0004 §Success criteria)
   - Accept: `python3 factory.py standards-index update` produces a `docs/standards.json` that includes both the ADR back-fill and the CLAUDE.md back-fill entries from the two rows above; `python3 gates.py` (including `K`) is green; `python3 gates.py --selftest` stays green.
 
 ## Milestone D: Standards-aware review and blueprint gate
@@ -72,6 +72,64 @@ it costs one `standards_index.py update` re-run to change.
 
 ## Notes
 
+- 2026-09-21: **Milestone C is implemented, verified, and checked off**
+  (orders 56 through 58). `docs/adr/0032-factory-dispatch-plane.md` and
+  `docs/adr/0004-artifacts-are-the-state.md` each gained one
+  `## Normative statements` bullet — `adr0032-one-way-mirror` (factory,
+  the module docstring's own worked example verbatim) and
+  `adr0004-typed-ids-in-frontmatter` (pipeline) — both `status:
+  advisory`. `docs/standards.json` was hand-authored with two
+  `CLAUDE.md#`-sourced entries (`eval-honesty`, domain eval; and
+  `stdlib-only`, domain factory — see judgment call below), then
+  regenerated via `python3 factory.py standards-index update`, which
+  combined both back-fills: the file now carries all four entries,
+  sorted by slug, and detector `K` is green. Full verification battery
+  (`python3 -m unittest discover tests`, `python3 lint.py`,
+  `python3 gates.py && python3 gates.py --selftest`) is green. Three
+  more lines were appended to `docs/factory/costs.jsonl` under the same
+  owner-session ledger policy the prior note below already establishes
+  (`run_id: session-2026-09-21-wo-00NN`, `model: claude-sonnet-5`,
+  `tokens: 0`, `cost: 0.0`, `outcome: owner-session:unmetered`), one
+  each for orders 56 through 58 — detector G would otherwise have
+  flagged all three as checked off with no ledger line.
+  - Judgment call: the breakdown's third ADR candidate — "the
+    stdlib-only rule" — was left out of the ADR back-fill. No
+    `docs/adr/*.md` file's own `## Decision` section actually ratifies
+    "stdlib only" as a decision; every ADR mentioning "stdlib" (0021,
+    0027, 0046, 0062, 0065) treats it as a pre-existing convention it
+    relies on or is blocked by, never as something it decides. Its real
+    ratified home is `CLAUDE.md`'s own "Hard conventions" bullet
+    ("Stdlib only. Every script is standalone Python 3 standard
+    library."), so it was hand-curated into the CLAUDE.md-sourced row
+    instead (slug `stdlib-only`), per the breakdown's own contingency
+    for exactly this case.
+  - Judgment call: the breakdown attributes "typed IDs live only in
+    run-artifact frontmatter" to ADR-0004, matching `CLAUDE.md`'s own
+    citation for that rule. Read literally, ADR-0004's text ("No
+    manifest or state file...") never says "typed ID" or "frontmatter"
+    for an identifier specifically — the concrete `id: PRD-####`
+    frontmatter grammar is actually spelled out in ADR-0032's Decision,
+    not ADR-0004's. Followed the breakdown's (and `CLAUDE.md`'s)
+    citation rather than override it, but worded the back-filled
+    statement to match what ADR-0004 itself actually decided — an
+    artifact's identity lives in the artifact, never a parallel
+    manifest or tracking tree — instead of restating ADR-0032's
+    PRD-#### grammar detail under the wrong ADR's heading.
+  - Judgment call: `standards_index.update`'s preserve-hand-curated-
+    entries path (`foreign_entries`) was already covered by real unit
+    tests before this row — `tests/test_standards_index.py`'s
+    `test_preserves_hand_curated_entries_untouched` and
+    `test_only_claude_md_sourced_entries_are_returned`, plus
+    `gates.py`'s `test_a_hand_curated_entry_never_drifts` — all
+    exercised against synthetic tempdir fixtures and genuinely passing,
+    not aspirational. What had never happened before this row was
+    running `update` against this repo's own real `docs/standards.json`
+    for the first time; that has now happened and was confirmed correct
+    by inspection (both hand-curated entries survived verbatim, both
+    ADR-derived entries appeared, the whole file sorted by slug). No new
+    unit test was added — the logic path was already real-tested, not
+    merely promised, so a duplicate fixture test would not have closed
+    an actual gap.
 - 2026-09-21: **Milestones A and B are implemented, verified, and
   checked off** — the code, tests, and the real ADR (ADR-0073) all
   exist and the battery is green. ADR-0073 records the real
