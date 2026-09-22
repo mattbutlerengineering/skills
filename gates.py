@@ -1244,6 +1244,35 @@ _PARSED_CHECKERS = frozenset((
     check_wo_citation, check_link_integrity, check_blueprint_drift,
     check_cost_ledger, check_evidence_honesty, check_staleness))
 
+# Issue #443 (the sequence's "contract" step) asked whether dropping the
+# migrate-era shim means making `parsed` a required argument on these six
+# functions. It does not, and this is that judgment call, made and kept
+# in one place rather than six.
+#
+# The thing #443 actually asks to be gone — a detector, reached through
+# `run_all`, re-walking the filesystem another detector (or itself) has
+# already walked this pass — IS gone, and was already gone as of #442:
+# `run_all` below builds `parsed` exactly once and threads it to every
+# _PARSED_CHECKERS entry by identity, so none of the six ever takes its
+# own `if parsed is None` branch on that path (pinned by
+# TestRunAll.test_run_all_parses_the_knowledge_plane_exactly_once in
+# tests/test_gates.py, which counts parse_run's calls directly rather
+# than trusting the code doesn't regress).
+#
+# What stays is each function's OWN fallback, for a caller that invokes
+# it directly rather than through run_all — and this repo leans on that
+# in ~50 places (tests/test_gates.py, tests/test_budget_guard.py, and
+# seven calls in selftest() below), several of which need a real tree no
+# hand-built `parsed` dict substitutes for: D's tree-claims happy path,
+# G's ledger seam, I's live link-target check, and H's TestLockstep read
+# of this repo's OWN verification.md. Requiring `parsed` would not
+# remove one filesystem read from the path that gates every push/PR —
+# only push `parse_run(root, ...)` boilerplate onto every one of those
+# standalone callers, for a test-count-sized diff with no behavior
+# change. `check_pr_traceability`'s own `env=None` sibling default has
+# stood since ADR-0033 without ever being treated as debt to strip; the
+# `parsed=None` fallback is the same convention, not the shim.
+
 
 def run_all(root, env=None):
     """Run every detector. `env` (default os.environ) is threaded to the
@@ -1251,8 +1280,9 @@ def run_all(root, env=None):
     hermetic without mutating global state. The knowledge plane is
     parsed ONCE (parse_run, with gates._scannable_files' own selection)
     and threaded to every _PARSED_CHECKERS entry, rather than each one
-    re-parsing it (issue #442's "migrate" step, following #441's
-    "expand")."""
+    re-parsing it — issue #442's "migrate" step built this (following
+    #441's "expand"); #443's "contract" step confirmed nothing more was
+    left to remove (see the _PARSED_CHECKERS comment above)."""
     if env is None:
         env = os.environ
     parsed = parse_run(root, scannable=_scannable_files(root))
