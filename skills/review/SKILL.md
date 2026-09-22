@@ -31,19 +31,30 @@ arbitrate severity.
    - **Security** — inputs validated at boundaries, no secrets in code,
      injection surfaces parameterized, errors don't leak internals.
 
-5. **Rank and verify.** Order findings by severity (critical / major /
+5. **Load applicable standards.** Read `../../docs/standards.json` if
+   present (an unbootstrapped repo has none yet — proceed). Filter to
+   statements whose `domain` matches what the diff touches: `factory` for
+   root-tool/`factory/**` changes, `pipeline` or `docs` for skill-body/
+   `docs/**` changes, `eval` for eval-set/harness changes. A finding that
+   matches a filtered statement cites its `slug`.
+
+6. **Rank and verify.** Order findings by severity (critical / major /
    minor). Re-read the code for each before writing it down — a false
    finding costs more trust than it's worth.
 
-6. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
+7. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `review.md` with protocol frontmatter. Record
    what was examined, findings, and the fix/defer decision per finding.
 
-7. **Fix loop.** Critical findings are fixed before Ship (route to
-   Implement for anything non-trivial, then re-verify). Majors are fixed or
-   explicitly deferred by the user. Minors may be deferred freely.
+8. **Fix loop.** Critical findings — and any unresolved finding that cites
+   an `enforced` standards-index statement, whatever severity it was ranked
+   at — are fixed before Ship (route to Implement for anything non-trivial,
+   then re-verify); the enforced-statement trigger sits alongside the
+   critical-finding one, it doesn't redefine what "critical" means. Majors
+   are fixed or explicitly deferred by the user. Minors, and findings
+   against `advisory` statements, may be deferred freely.
 
-8. **Hand off.** Next stage is Ship.
+9. **Hand off.** Next stage is Ship.
 
 ## Rules
 

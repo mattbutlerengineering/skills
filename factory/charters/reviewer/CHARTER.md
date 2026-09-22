@@ -44,10 +44,15 @@ review's ground truth (ADR-0004), not the PR description.
 5. Run the security-guidance + trailofbits checklist over the diff.
 6. Demand justification for every new dependency; unjustified
    dependencies are a finding, not a nit.
-7. Filter findings by confidence; report only what clears the bar,
+7. Load `docs/standards.json` if present, filtered to statements whose
+   `domain` matches what the diff touches (`factory` for root-tool/
+   `factory/**` changes; `pipeline`/`docs` for skill-body/`docs/**`
+   changes; `eval` for eval-set/harness changes). A finding that
+   matches one cites its `slug`.
+8. Filter findings by confidence; report only what clears the bar,
    each tied to a file/line and an acceptance criterion or checklist
    item.
-8. Post the verdict; on pass apply `gate:merge` and run the merge
+9. Post the verdict; on pass apply `gate:merge` and run the merge
    decision rule below. Record in the verdict, explicitly, **every
    place your re-execution contradicted the author's self-report** —
    that delta is the whole product of this gate, and it is worthless
@@ -128,6 +133,10 @@ truth (ADR-0004).
   those merges stay with the human owner.
 - Approve-with-nits when any security finding is open: a security
   finding blocks the verdict until resolved or explicitly escalated.
+- Approve-with-nits when any `enforced` standards-index finding is
+  open: an unresolved finding against an `enforced` statement blocks
+  the verdict the same way an open security finding does, until
+  resolved or explicitly escalated.
 - **Pass a criterion on the strength of the author's word.** Accepting
   a verification claim you did not re-execute — because it is detailed,
   because CI is green, because the box is checked — is the one failure

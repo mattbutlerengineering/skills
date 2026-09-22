@@ -41,13 +41,13 @@ edges, and the PRD citation detector A checks.
 
 ## Milestone D: Standards-aware review and blueprint gate
 
-- [ ] **WO-0059** `skills/review/SKILL.md` + `skills/review/TEMPLATE.md` — load, filter, cite, block — size:M, blocked by: WO-0058 (PRD-0004 §Success criteria)
+- [x] **WO-0059** `skills/review/SKILL.md` + `skills/review/TEMPLATE.md` — load, filter, cite, block — size:M, blocked by: WO-0058 (PRD-0004 §Success criteria)
   - Accept: a new process step loads `docs/standards.json`, filters to statements whose `domain` matches the diff's touched paths, and requires findings to cite a matching slug where one applies; `TEMPLATE.md` gains a slug-citation line per finding; an unresolved `enforced`-statement finding is treated by the existing fix-loop rule the same way a critical finding already is (fixed before Ship), without redefining "critical" for anything else; advisory findings stay non-blocking, recorded like any other minor.
-- [ ] **WO-0060** `factory/charters/reviewer/CHARTER.md` — same load/cite step + `Must never` clause — size:S, blocked by: WO-0058 (PRD-0004 §Success criteria)
+- [x] **WO-0060** `factory/charters/reviewer/CHARTER.md` — same load/cite step + `Must never` clause — size:S, blocked by: WO-0058 (PRD-0004 §Success criteria)
   - Accept: "Actions per cycle" gains the load/filter/cite step; "Must never" gains a sibling clause to the existing open-security-finding rule: an unresolved `enforced`-statement finding blocks the pass verdict; ADR-0036's merge-decision conditions are otherwise unchanged.
-- [ ] **WO-0061** `skills/architect/SKILL.md` + `skills/architect/TEMPLATE.md` — design-relevant load/cite step — size:S, blocked by: WO-0058 (PRD-0004 §Success criteria)
+- [x] **WO-0061** `skills/architect/SKILL.md` + `skills/architect/TEMPLATE.md` — design-relevant load/cite step — size:S, blocked by: WO-0058 (PRD-0004 §Success criteria)
   - Accept: a step before drafting loads statements filtered to `domain ∈ {factory, pipeline}`; `TEMPLATE.md`'s "Decisions & alternatives" guidance notes citing a matching slug where a design decision bears on one, alongside the existing ADR-citation convention.
-- [ ] **WO-0062** `factory/charters/architect/CHARTER.md` — same design-relevant load/cite step — size:S, blocked by: WO-0058 (PRD-0004 §Success criteria)
+- [x] **WO-0062** `factory/charters/architect/CHARTER.md` — same design-relevant load/cite step — size:S, blocked by: WO-0058 (PRD-0004 §Success criteria)
   - Accept: "Actions per cycle" gains the same filtered-load-and-cite step as the architect skill's own item above, for the chartered-agent path.
 
 ## Milestone E: Close-out
@@ -72,6 +72,53 @@ it costs one `standards_index.py update` re-run to change.
 
 ## Notes
 
+- 2026-09-21: **Milestone D is implemented, verified, and checked off**
+  (orders 59 through 62) — all prose, no new Python. `skills/review/
+  SKILL.md` gained a "Load applicable standards" step between the
+  three-pass review and ranking (before findings are ranked, per this
+  row's own Accept line), filtering `docs/standards.json` by domain
+  against the diff's touched paths; its fix-loop step now treats an
+  unresolved finding against an `enforced` statement as a second,
+  independent trigger of the existing before-Ship rule, explicitly
+  without redefining "critical" for anything else. `skills/review/
+  TEMPLATE.md` gained a `- Standard: <slug or "none">` line per
+  finding. `factory/charters/reviewer/CHARTER.md`'s "Actions per
+  cycle" gained the mirrored load/filter/cite step (placed right
+  before "filter findings by confidence," the charter's analogue of
+  ranking), and "Must never" gained a sibling bullet to the existing
+  open-security-finding rule, same shape, same consequence, for an
+  open `enforced`-statement finding — ADR-0036's merge-decision
+  conditions were not touched. `skills/architect/SKILL.md` gained the
+  same shape of step before "Draft," filtered to `factory`/`pipeline`
+  domains (no diff exists yet at design time, so there is no path-based
+  filter to state, unlike review's). `skills/architect/TEMPLATE.md`'s
+  "Decisions & alternatives" placeholder bullet gained a citation
+  clause. `factory/charters/architect/CHARTER.md`'s "Actions per
+  cycle" gained the mirrored step right after the initial
+  read-the-codebase step and before designing starts — no `Must never`
+  change, since the architect skill's own row (which this row mirrors)
+  didn't add a blocking rule either. Full verification battery
+  (`python3 -m unittest discover tests`, `python3 lint.py`,
+  `python3 gates.py && python3 gates.py --selftest`) is green, on the
+  first run after all six file edits landed — none of the new numbered
+  steps disturbed `lint.py`'s soft-gate or hand-off recital checks,
+  which key off phrase content, not step numbers. Four more lines were
+  appended to
+  `docs/factory/costs.jsonl` under the same owner-session ledger
+  policy, one each for orders 59 through 62.
+  - Judgment call: no real run in this repo's history has ever cited an
+    ADR number inline inside an architecture.md's own "Decisions &
+    alternatives" bullets (checked mechanically — grepped every
+    `architecture.md` under `docs/features/**` and `docs/**` for
+    `ADR-\d{4}` inside that section; zero hits, including this run's
+    own). So there is no literal existing "cite `(ADR-####)` in a
+    Decisions bullet" convention to extend. What this run's own
+    `architecture.md` does use, elsewhere in its prose (e.g. its Data
+    model section), is a general pattern — state the clause, cite the
+    ADR number in parens right after it. `skills/architect/TEMPLATE.md`'s
+    new clause follows that same shape (cite the standards `slug`
+    alongside any ADR number, in the same spot a decision already names
+    one), rather than inventing a different citation syntax.
 - 2026-09-21: **Milestone C is implemented, verified, and checked off**
   (orders 56 through 58). `docs/adr/0032-factory-dispatch-plane.md` and
   `docs/adr/0004-artifacts-are-the-state.md` each gained one
