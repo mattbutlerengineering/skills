@@ -192,7 +192,11 @@ def product_codeowners(text):
 # only, the workflow is the one that mutates (gh issue create, gh variable
 # set). knowledge_plane.py, cli.py, factory_config.py, and cost_ledger.py
 # are the ADR-0037 seam modules the tools above import as siblings —
-# mirrored for the same reason protocol.py is. human_gates.py is the gate
+# mirrored for the same reason protocol.py is. standards_index.py is the
+# ADR-0073 seam gates.py's detector K imports (the normative-statement
+# index's shape/parsing/regen), mirrored for the identical reason: the
+# detector ships to every stamped repo, so its import must resolve
+# there too. human_gates.py is the gate
 # vocabulary and the stay partition (ADR-0056), and it ships for that same
 # reason and not optionally: gate_digest.py and rejection_mining.py both
 # ship and both import it as a bare sibling, so a stamped repo without it
@@ -224,6 +228,7 @@ MIRRORS = (
     ("gate_digest.py", "tools/factory/gate_digest.py", identity),
     ("rejection_mining.py", "tools/factory/rejection_mining.py", identity),
     ("work_queue.py", "tools/factory/work_queue.py", identity),
+    ("standards_index.py", "tools/factory/standards_index.py", identity),
     (".github/workflows/validator.yml",
      ".github/workflows/validator.yml", identity),
     (".github/workflows/assembler.yml",
