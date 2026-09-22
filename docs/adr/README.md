@@ -90,3 +90,6 @@ the canonical vocabulary.
 | [0067](0067-codeowners-mirrors-through-product-codeowners.md) | CODEOWNERS mirrors through product_codeowners, not identity | accepted |
 | [0068](0068-parse-run-widens-the-knowledge-plane-walk.md) | parse_run widens the knowledge-plane walk (expand phase) | accepted |
 | [0069](0069-autonomy-per-gate-wait-hour.md) | Autonomy per human-hour: accepted orders per gate-wait hour | accepted |
+| [0070](0070-github-merge-queue-composes-with-agent-merge.md) | Adopt GitHub's native merge queue, composing with agent-merge | accepted |
+| [0071](0071-needs-clarification-markers.md) | Inline [NEEDS CLARIFICATION] markers, CI-enforced | accepted |
+| [0072](0072-prd-coverage-check.md) | Bidirectional PRD-requirement <-> work-item coverage check | accepted |
