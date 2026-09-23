@@ -1,6 +1,6 @@
 Seed inbox — advisory only, never orientation state; grammar and read moments in `docs/pipeline-protocol.md` ("Seed backlog (optional)", ADR-0029).
 
-- omp near-miss under-triggering: 8/16 near-miss cases under-trigger on omp vs Claude Code (from: session:2026-07-05)
+- omp near-miss under-triggering: 8/16 near-miss cases under-trigger on omp vs Claude Code; tracked as near-miss micro recall 18/39 = 0.462 via `python3 trigger_eval.py --metrics evals/results/trigger-omp-2026-07-05.json --kind near-miss` (from: session:2026-07-05)
 - omp cannot traverse `skill://` references to the protocol doc — stage skills' step-1 read needs a packaging answer on the second harness (from: session:2026-07-05)
 - The `next-maintenance-1` routing case under-triggers in trigger evals (from: session:2026-07-05)
 - Is Pi's 1024 description limit chars or bytes? lint counts chars; a multibyte description could pass lint yet drop on omp (from: session:2026-07-05)
