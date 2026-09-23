@@ -239,7 +239,12 @@ def run_daily(root, run=gh_runner, clock=None):
     digest — the rows are the data half of the work order, the digest
     only points at them. outputs carries `changed` ('true' when ledger
     rows were appended — the workflow's cue to commit) and a one-line
-    reason."""
+    reason.
+
+    A full issue window is REPORTED AND CONTINUED here, unlike
+    sweeps.live_issues: an issue past the window only goes unlisted, so
+    the digest under-covers (TRUNCATED_NOTE says so in its body) but
+    invents nothing, and a partial digest beats no digest (ADR-0066)."""
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
     mirror = mirror_map(root)
