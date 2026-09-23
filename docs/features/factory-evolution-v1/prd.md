@@ -14,6 +14,8 @@ assumptions:
 
 ## Problem statement
 
+<!-- coverage-waiver: context for the requirements below, not a deliverable; the Success criteria carry the work every breakdown row cites -->
+
 Epic #439's map is ratified but not yet formalized: four mechanisms
 have a settled adopt verdict (docs/backlog.md's tail, issue #436) and
 three routines have a settled roster (issue #437's closing comment),
@@ -25,6 +27,8 @@ hour — has nothing beneath it yet tying any specific backlog item back
 to that number.
 
 ## Solution
+
+<!-- coverage-waiver: narrates the same seven items the Success criteria enumerate one checkbox each; the breakdown rows cite those checkboxes, not this summary of them -->
 
 When the *future implementation runs* this PRD's breakdown seeds are
 actually built (this run itself stops at Decompose — see Out of
@@ -41,6 +45,8 @@ of the seven items is traceable, in its own success criterion below, to
 why it serves autonomy-per-human-hour.
 
 ## Actors
+
+<!-- coverage-waiver: names who is involved; no actor is itself something to build -->
 
 - **Matt (repo maintainer)** — ratified all seven items via HITL
   (issues #436, #437) before this run started; approves this run's own
@@ -59,6 +65,8 @@ why it serves autonomy-per-human-hour.
   implementation run).
 
 ## User stories
+
+<!-- coverage-waiver: each story is realized through the Success criteria the breakdown rows cite, not built as separate work -->
 
 1. As Matt closing out epic #439's map, I want every ratified mechanism
    and routine to have a citable artifact (an ADR where one is called
@@ -135,6 +143,8 @@ why it serves autonomy-per-human-hour.
 
 ## Out of scope
 
+<!-- coverage-waiver: exclusions: by definition nothing here is decomposed into work -->
+
 - **Implementing any of the seven backlog items.** This run stops at
   Decompose — idea, this PRD, `architecture.md`, `breakdown.md`. No
   `gates.py` detector, no `trigger_eval.py` function, no workflow YAML,
@@ -169,6 +179,8 @@ why it serves autonomy-per-human-hour.
   apply; this run produces artifacts only.
 
 ## Open questions
+
+<!-- coverage-waiver: questions deferred to each item's own implementation run, not requirements of this one -->
 
 - **Exact detector letters for the merge-queue's, clarification-
   markers', and coverage-check's new `gates.py` checks** — left to each

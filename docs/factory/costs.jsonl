@@ -48,3 +48,5 @@
 {"wo": "WO-0036", "run_id": "session-2026-09-12-wo-0036", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-12"}
 {"wo": "WO-0037", "run_id": "session-2026-09-15-wo-0037", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-15"}
 {"wo": "WO-0038", "run_id": "session-2026-09-15-wo-0038", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-15"}
+{"wo": "WO-0066", "run_id": "session-2026-09-23-wo-0066", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-23"}
+{"wo": "WO-0067", "run_id": "session-2026-09-23-wo-0067", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-23"}

@@ -42,10 +42,18 @@ ai-tooling suite where the rule is the same idea):
                      NOT-RUN disclaimer anywhere fails outright
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
+  N NEEDS-CLARIFICATION — no prd.md or architecture.md carries an
+                     unresolved inline [NEEDS CLARIFICATION: ...] marker
+                     (ADR-0071)
+  O PRD-COVERAGE   — the reverse of A: every section of a prd.md with a
+                     declared id is cited by a work-order row of its run's
+                     breakdown, or carries a reasoned coverage waiver
+                     (ADR-0072)
 
 The letter namespace does not end at I. Detector L (LABEL-SYNC) is
 network-side and lives in label_sync.py, driven by scheduled sweeps —
-network calls stay out of this offline gate — and K is unclaimed.
+network calls stay out of this offline gate. K and M are unclaimed here
+but reserved by in-flight work (PR #517), which is why N and O skip them.
 DETECTORS (beside CHECKERS below) is the full roster.
 
 `--selftest` runs the checkers against fixture trees and exits nonzero
@@ -1199,6 +1207,131 @@ def check_evidence_honesty(root, parsed=None):
     return problems
 
 
+# N (ADR-0071): the inline ambiguity marker a drafting stage leaves at the
+# exact clause it could not settle. Only the colon form is a marker — the
+# convention's bare name, `[NEEDS CLARIFICATION]`, is how docs talk about
+# it — and a marker inside a code span or a fenced block is quoted, not
+# live: the PRD and architecture templates document the syntax that way.
+CLARIFICATION_MARKER = re.compile(r"\[NEEDS CLARIFICATION:")
+CODE_SPAN = re.compile(r"(`+).*?\1")
+
+# O (ADR-0072): a PRD section's coverage waiver, directly under its
+# heading. Like detector B's `No work order:` declaration it owes a
+# reason — a bare marker waives nothing.
+COVERAGE_WAIVER = re.compile(
+    r"^\s*<!--\s*coverage-waiver:\s*(?!-->)\S.*?-->\s*$")
+SECTION_CITATION = re.compile(r"§\s*([^,;)§]+)")
+# O's grandfather cutoff: ADR-0072's own date. Coverage is a NEW rule, and
+# a PRD approved and decomposed before it existed does not owe it — the
+# principle ADR-0043's `(pre-ledger)` annotation established for G, keyed
+# (as detector M's cutoff in the standards-enforcement design is) on the
+# PRD's own frontmatter `date:`, a fixed constant against a static field,
+# so the same tree always answers the same way. This repo's PRD-0001..
+# PRD-0005 predate it; PRD-0006, dated on it, carries its own waivers, as
+# ADR-0072's Consequences ask. A missing date is NOT grandfathered — fail
+# closed, so omitting the date cannot dodge O.
+COVERAGE_ADOPTED = "2026-09-21"
+
+
+def _unfenced(lines):
+    """(lineno, line) for every line outside a fenced code block — fenced
+    content is quoted, not asserted, for N and O alike."""
+    fence = None
+    for lineno, line in enumerate(lines, 1):
+        if fence is not None:
+            if _fence_closes(line, fence[0], fence[1]):
+                fence = None
+            continue
+        fence = _fence_open(line)
+        if fence is None:
+            yield lineno, line
+
+
+def check_needs_clarification(root, parsed=None):
+    """N: a prd.md or architecture.md — the two artifacts with a human
+    approval gate (ADR-0033) — must carry no unresolved
+    `[NEEDS CLARIFICATION: ...]` marker (ADR-0071). The clarify pass
+    removes a marker as it writes the answer back, so a live one is an
+    ambiguity nobody has settled: the gate is CI-enforced, not just
+    prompt-enforced. `parsed` defaults to a fresh parse of `root`, same
+    convention as A, C, D, G, H and I."""
+    if parsed is None:
+        parsed = parse_run(root)
+    problems = []
+    for entry in parsed["runs"]:
+        for name, key in (("prd.md", "prd"),
+                          ("architecture.md", "architecture")):
+            if entry[key] is None:
+                continue
+            rel = (entry["path"] / name).relative_to(root)
+            for lineno, line in _unfenced(entry[key]):
+                if CLARIFICATION_MARKER.search(CODE_SPAN.sub("", line)):
+                    problems.append(f"N: {rel}:{lineno} unresolved"
+                                    " [NEEDS CLARIFICATION] marker")
+    return problems
+
+
+def _prd_sections(lines):
+    """(lineno, title, waived) per `##` section of a PRD, fences skipped.
+    `waived`: the first non-blank line under the heading is a reasoned
+    coverage waiver."""
+    sections = []
+    pending = None  # the section still looking for its first body line
+    for lineno, line in _unfenced(lines):
+        heading = HEADING_LINE.match(line)
+        if heading and len(heading.group(1)) == 2:
+            pending = [lineno, heading.group(2), False]
+            sections.append(pending)
+        elif pending is not None and line.strip():
+            pending[2] = bool(COVERAGE_WAIVER.match(line))
+            pending = None
+    return [tuple(section) for section in sections]
+
+
+def _cites(citations, title):
+    """Does any `§` citation name this whole section title?"""
+    title = title.casefold()
+    return any(cited == title or (cited.startswith(title)
+                                  and not cited[len(title)].isalnum())
+               for cited in citations)
+
+
+def check_prd_coverage(root, parsed=None):
+    """O: the reverse of A (ADR-0072). A says every work-order row cites a
+    PRD section; O says every `##` section of a prd.md declaring an
+    `id: PRD-####` is cited `§<section>` by at least one work-order row
+    of that run's OWN breakdown.md that names that id — or carries a
+    `<!-- coverage-waiver: <reason> -->` directly under its heading. An
+    absence is either covered or explicitly excused, never invisible.
+
+    Coverage is a Decompose-time property, so a run with no breakdown.md
+    yet (a PRD still at its approval gate) is out of scope, as is a PRD
+    whose `date:` predates COVERAGE_ADOPTED. `parsed` defaults to a fresh
+    parse of `root`, same convention as A, C, D, G, H and I."""
+    if parsed is None:
+        parsed = parse_run(root)
+    problems = []
+    for entry in parsed["runs"]:
+        prd_id = entry["prd_id"]
+        if not prd_id or entry["prd"] is None or entry["breakdown"] is None:
+            continue
+        date = entry["prd_date"]
+        if isinstance(date, str) and date < COVERAGE_ADOPTED:
+            continue
+        citations = [cited.strip().casefold()
+                     for line in entry["breakdown"]
+                     if WO_TOKEN.search(line) and prd_id in PRD_TOKEN.findall(
+                         line)
+                     for cited in SECTION_CITATION.findall(line)]
+        rel = (entry["path"] / "prd.md").relative_to(root)
+        for lineno, title, waived in _prd_sections(entry["prd"]):
+            if not waived and not _cites(citations, title):
+                problems.append(
+                    f"O: {rel}:{lineno} {prd_id} §{title} is cited by no"
+                    " breakdown row and carries no coverage waiver")
+    return problems
+
+
 # The detector letter namespace, indexed in ONE place: letter -> (name,
 # home module, plane). A letter's plane decides where its code goes.
 # Offline detectors live in this module and gate every push/PR through
@@ -1208,9 +1341,10 @@ def check_evidence_honesty(root, parsed=None):
 # that drive them and are NEVER wired into CHECKERS: L reads the repo's
 # live label set through gh, which is why it lives in label_sync.py and
 # not here (the same posture that keeps every ADR-0037 seam offline).
-# K is unclaimed — the shared ai-tooling letter namespace assigns
-# nothing to it, so a new detector takes it (or the next free letter)
-# and adds its row here.
+# K and M are unclaimed on main but reserved: the in-flight
+# standards-enforcement work (PR #517) claims K (STANDARDS-DRIFT) and M
+# (CAPTURE-COMPLETENESS), so N and O skipped both rather than collide. A
+# new detector takes the next free letter (P) and adds its row here.
 DETECTORS = {
     "A": ("WO-CITATION", "gates.py", "offline"),
     "B": ("PR-TRACEABILITY", "gates.py", "offline"),
@@ -1224,12 +1358,15 @@ DETECTORS = {
     "J": ("LABEL-WIRING", "gates.py", "offline"),
     "K": (None, None, "unused"),
     "L": ("LABEL-SYNC", "label_sync.py", "network"),
+    "M": (None, None, "unused"),
+    "N": ("NEEDS-CLARIFICATION", "gates.py", "offline"),
+    "O": ("PRD-COVERAGE", "gates.py", "offline"),
 }
 
 CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
             check_blueprint_drift, check_scaffold_sync, check_label_wiring,
             check_config_shape, check_cost_ledger, check_evidence_honesty,
-            check_staleness)
+            check_staleness, check_needs_clarification, check_prd_coverage)
 
 # The CHECKERS that read the knowledge plane's run artifacts and were
 # migrated onto knowledge_plane.parse_run (issue #442): A, C, D, G, H and
@@ -1242,7 +1379,8 @@ CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
 # an `env`-shaped parameter every CHECKERS entry must now accept.
 _PARSED_CHECKERS = frozenset((
     check_wo_citation, check_link_integrity, check_blueprint_drift,
-    check_cost_ledger, check_evidence_honesty, check_staleness))
+    check_cost_ledger, check_evidence_honesty, check_staleness,
+    check_needs_clarification, check_prd_coverage))
 
 # Issue #443 (the sequence's "contract" step) asked whether dropping the
 # migrate-era shim means making `parsed` a required argument on these six
@@ -1536,6 +1674,35 @@ def _evidence_honesty_clean_fixture(root):
         encoding="utf-8")
 
 
+def _needs_clarification_defect_fixture(root):
+    """A PRD and an architecture doc each still carrying a live marker,
+    beside a quoted one (a code span) that is a mention, not a marker."""
+    run = root / "docs" / "features" / "demo"
+    run.mkdir(parents=True, exist_ok=True)
+    (run / "prd.md").write_text(
+        "# PRD\n\nMark ambiguity as `[NEEDS CLARIFICATION: <question>]`.\n"
+        "Users sign in via [NEEDS CLARIFICATION: auth method?].\n",
+        encoding="utf-8")
+    (run / "architecture.md").write_text(
+        "# Architecture\n\nState lives in [NEEDS CLARIFICATION: which DB?]\n",
+        encoding="utf-8")
+
+
+def _prd_coverage_fixture(root, waive_actors):
+    """A PRD dated on COVERAGE_ADOPTED whose §Solution a work-order row
+    cites and whose §Actors none does — waived or not, per the caller."""
+    run = root / "docs" / "features" / "demo"
+    run.mkdir(parents=True, exist_ok=True)
+    waiver = ("<!-- coverage-waiver: actors are context, not work -->\n\n"
+              if waive_actors else "")
+    (run / "prd.md").write_text(
+        f"---\nstage: prd\nid: PRD-0001\ndate: {COVERAGE_ADOPTED}\n---\n"
+        "# PRD\n\n## Solution\n\nBuild it.\n\n## Actors\n\n" + waiver
+        + "- **Dev**\n", encoding="utf-8")
+    (run / "breakdown.md").write_text(
+        "- [ ] **WO-0001** build it (PRD-0001 §Solution)\n", encoding="utf-8")
+
+
 def _clean_repo_fixture(root):
     """A fully stamped, fully honest repo: every detector's happy path at
     once, the shape run_all must stay silent across."""
@@ -1730,6 +1897,29 @@ def selftest():
         root = Path(tmp)
         _evidence_honesty_clean_fixture(root)
         expect_clean("H honest", check_evidence_honesty(root))
+
+    # N: a live marker in each gated artifact fires; the quoted one in a
+    # code span (prd.md:3) does not.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _needs_clarification_defect_fixture(root)
+        problems = check_needs_clarification(root)
+        expect("N", problems, "demo/prd.md:4 unresolved",
+               "demo/architecture.md:3 unresolved")
+        if any("prd.md:3" in p for p in problems):
+            failures.append(f"N: a quoted marker fired, got {problems}")
+
+    # O: an uncited, unwaived PRD section fires; the same section with a
+    # declared waiver passes.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _prd_coverage_fixture(root, waive_actors=False)
+        expect("O", check_prd_coverage(root),
+               "PRD-0001 §Actors is cited by no breakdown row")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _prd_coverage_fixture(root, waive_actors=True)
+        expect_clean("O waived", check_prd_coverage(root))
 
     # Every detector's happy path at once — the integration smoke test
     # run_all must stay silent across, beyond any one detector's own

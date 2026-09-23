@@ -39,10 +39,12 @@ def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=()):
 
 
 def run_entry(path, breakdown=None, prd_id=None, architecture=None,
-             verification=None, verification_error=None):
+             verification=None, verification_error=None, prd=None,
+             prd_date=None):
     """One parsed_run() "runs" entry, defaulting to the "no such file"
     shape parse_run itself returns for an artifact a run does not carry."""
     return {"path": Path(path), "breakdown": breakdown, "prd_id": prd_id,
+            "prd": prd, "prd_date": prd_date,
             "architecture": architecture, "verification": verification,
             "verification_error": verification_error}
 
@@ -1018,6 +1020,133 @@ class TestDetectorRoster(unittest.TestCase):
                             in gates.DETECTORS.items()
                             if name is not None and plane == "offline"}
         self.assertEqual(claimed_offline, checker_letters)
+
+
+class TestNeedsClarification(unittest.TestCase):
+    """N (ADR-0071): a prd.md or architecture.md carrying a live
+    `[NEEDS CLARIFICATION: ...]` marker is not ready for its human
+    approval gate. Pure over `parsed`."""
+
+    ROOT = Path("/repo")
+    REPO = Path(__file__).resolve().parent.parent
+
+    def test_live_markers_in_prd_and_architecture_are_flagged(self):
+        parsed = parsed_run(runs=[run_entry(
+            self.ROOT / "docs/features/demo",
+            prd=["# PRD", "",
+                 "Users sign in via [NEEDS CLARIFICATION: auth method?]."],
+            architecture=["# Architecture",
+                          "Store in [NEEDS CLARIFICATION: which DB?]"])])
+        self.assertEqual(gates.check_needs_clarification(self.ROOT, parsed), [
+            "N: docs/features/demo/prd.md:3 unresolved"
+            " [NEEDS CLARIFICATION] marker",
+            "N: docs/features/demo/architecture.md:2 unresolved"
+            " [NEEDS CLARIFICATION] marker"])
+
+    def test_quoted_markers_are_mentions_not_markers(self):
+        """A code span or a fenced block quotes the syntax (the templates'
+        own guidance comment does); only a bare marker is live. So is the
+        colon-less name of the convention."""
+        parsed = parsed_run(runs=[run_entry(
+            self.ROOT / "docs/features/demo",
+            prd=["Mark it: `[NEEDS CLARIFICATION: <question>]`.",
+                 "```", "[NEEDS CLARIFICATION: quoted]", "```",
+                 "the `[NEEDS CLARIFICATION]` convention (ADR-0071)"],
+            architecture=["resolved - no markers left"])])
+        self.assertEqual(
+            gates.check_needs_clarification(self.ROOT, parsed), [])
+
+    def test_this_repo_carries_no_live_marker(self):
+        self.assertEqual(gates.check_needs_clarification(self.REPO), [])
+
+
+class TestPrdCoverage(unittest.TestCase):
+    """O (ADR-0072): every `##` section of a prd.md declaring a PRD id
+    is cited `§<section>` by a work-order row of that run's own
+    breakdown.md, or carries a `<!-- coverage-waiver: <reason> -->`
+    directly under its heading. Pure over `parsed`."""
+
+    ROOT = Path("/repo")
+    REPO = Path(__file__).resolve().parent.parent
+    RUN = ROOT / "docs/features/demo"
+    PRD = ["---", "stage: prd", "id: PRD-0001", "date: 2026-09-21", "---",
+           "# PRD: demo", "",
+           "## Solution", "", "Build it.", "",
+           "## Actors", "", "<!-- coverage-waiver: actors are context -->",
+           "- **Dev**", "",
+           "## Out of scope", "", "- Nothing."]
+    ROWS = ["- [ ] **WO-0001** build it (PRD-0001 §Solution)",
+            "  - Accept: see §Out of scope in the PRD."]
+
+    def check(self, prd=None, breakdown=None, prd_id="PRD-0001",
+              prd_date="2026-09-21"):
+        parsed = parsed_run(runs=[run_entry(
+            self.RUN, prd_id=prd_id, prd_date=prd_date,
+            prd=self.PRD if prd is None else prd,
+            breakdown=self.ROWS if breakdown is None else breakdown)])
+        return gates.check_prd_coverage(self.ROOT, parsed)
+
+    def test_uncovered_unwaived_section_is_flagged(self):
+        """§Solution is cited, §Actors is waived; §Out of scope is only
+        mentioned on an Accept line — not a work-order row — so nothing
+        covers it."""
+        self.assertEqual(self.check(), [
+            "O: docs/features/demo/prd.md:17 PRD-0001 §Out of scope is"
+            " cited by no breakdown row and carries no coverage waiver"])
+
+    def test_every_section_cited_or_waived_is_silent(self):
+        rows = ["- [ ] **WO-0001** build it (PRD-0001 §Solution,"
+                " §Out of scope)"]
+        self.assertEqual(self.check(breakdown=rows), [])
+
+    def test_a_waiver_owes_a_reason(self):
+        prd = [line.replace("coverage-waiver: actors are context",
+                            "coverage-waiver:") for line in self.PRD]
+        rows = ["- [ ] **WO-0001** (PRD-0001 §Solution, §Out of scope)"]
+        self.assertEqual(self.check(prd=prd, breakdown=rows), [
+            "O: docs/features/demo/prd.md:12 PRD-0001 §Actors is"
+            " cited by no breakdown row and carries no coverage waiver"])
+
+    def test_a_waiver_not_directly_under_the_heading_waives_nothing(self):
+        prd = self.PRD[:13] + ["Prose first."] + self.PRD[13:]
+        rows = ["- [ ] **WO-0001** (PRD-0001 §Solution, §Out of scope)"]
+        self.assertEqual(self.check(prd=prd, breakdown=rows), [
+            "O: docs/features/demo/prd.md:12 PRD-0001 §Actors is"
+            " cited by no breakdown row and carries no coverage waiver"])
+
+    def test_a_row_citing_another_prd_covers_nothing_here(self):
+        rows = ["- [ ] **WO-0001** (PRD-0001 §Solution)",
+                "- [ ] **WO-0002** (PRD-0009 §Out of scope)"]
+        self.assertEqual(self.check(breakdown=rows), [
+            "O: docs/features/demo/prd.md:17 PRD-0001 §Out of scope is"
+            " cited by no breakdown row and carries no coverage waiver"])
+
+    def test_a_citation_matches_a_whole_title_not_a_prefix_of_one(self):
+        rows = ["- [ ] **WO-0001** (PRD-0001 §Solutions, §Out of scopes)"]
+        self.assertEqual(len(self.check(breakdown=rows)), 2)
+
+    def test_a_prd_predating_adoption_is_grandfathered(self):
+        self.assertEqual(self.check(prd_date="2026-09-20"), [])
+
+    def test_a_missing_date_is_not_grandfathered(self):
+        self.assertEqual(len(self.check(prd_date=None)), 1)
+
+    def test_a_run_not_yet_decomposed_is_out_of_scope(self):
+        parsed = parsed_run(runs=[run_entry(
+            self.RUN, prd_id="PRD-0001", prd_date="2026-09-21",
+            prd=self.PRD)])
+        self.assertEqual(gates.check_prd_coverage(self.ROOT, parsed), [])
+
+    def test_a_prd_without_a_declared_id_is_out_of_scope(self):
+        self.assertEqual(self.check(prd_id=None), [])
+
+    def test_fenced_headings_are_not_sections(self):
+        prd = self.PRD + ["```", "## Quoted heading", "```"]
+        rows = ["- [ ] **WO-0001** (PRD-0001 §Solution, §Out of scope)"]
+        self.assertEqual(self.check(prd=prd, breakdown=rows), [])
+
+    def test_this_repo_is_covered(self):
+        self.assertEqual(gates.check_prd_coverage(self.REPO), [])
 
 
 class TestConfigShape(unittest.TestCase):
