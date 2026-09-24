@@ -25,7 +25,13 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
    the ground rules instead (language, framework, storage, deployment
    target) — these are the questions to ask first.
 
-4. **Draft.** Read [`references/canon.md`](references/canon.md) first — the
+4. **Load applicable standards.** Read `../../docs/standards.json` if
+   present (an unbootstrapped repo has none yet — proceed). Filter to
+   statements whose `domain` is `factory` or `pipeline` — the
+   design-relevant slice. A decision below that bears on one cites its
+   `slug` in `TEMPLATE.md`'s "Decisions & alternatives" section.
+
+5. **Draft.** Read [`references/canon.md`](references/canon.md) first — the
    design rules that constrain what you may draft, and the vocabulary they
    are written in. Then fill `TEMPLATE.md` (in this skill's directory) end
    to end: approach, components and their responsibilities, data model,
@@ -33,23 +39,23 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
    decision that had real alternatives, record the alternative and why it
    lost — one line each.
 
-5. **Surface the trade-offs.** Present the draft with the 2–4 decisions that
+6. **Surface the trade-offs.** Present the draft with the 2–4 decisions that
    genuinely could have gone another way, each with your recommendation.
    Revise on feedback.
 
-6. **Offer ADRs sparingly.** Offer an ADR only when a decision is all three:
+7. **Offer ADRs sparingly.** Offer an ADR only when a decision is all three:
    hard to reverse, surprising without context, and the result of a real
    trade-off. If any is missing, the one-line record in the artifact is
    enough. ADRs go in the target repo's `docs/adr/`.
 
-7. **Write the artifact.** Walk the closing checklist in
+8. **Write the artifact.** Walk the closing checklist in
    [`references/canon.md`](references/canon.md) against the draft first —
    it is written against the template's own sections, so a miss names the
    line to fix. Then save as `architecture.md` in the run directory with
    protocol frontmatter. If UX Design was skipped, echo it:
    `ux: skipped — <ux-reason from prd.md>`.
 
-8. **Hand off.** Next stage is Decompose.
+9. **Hand off.** Next stage is Decompose.
 
 ## Rules
 

@@ -50,6 +50,7 @@ VERBS = {
     "lint": ("lint", "bare"),
     "one-owner": ("one_owner", "argv"),
     "rejection-mining": ("rejection_mining", "argv"),
+    "standards-index": ("standards_index", "argv"),
     "sweeps": ("sweeps", "argv"),
     "trigger-eval": ("trigger_eval", "bare"),
     "validator": ("validator", "argv"),

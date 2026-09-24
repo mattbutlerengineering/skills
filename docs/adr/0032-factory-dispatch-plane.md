@@ -60,3 +60,7 @@ breakdown row, never the raw issue body (prompt-injection boundary).
   it.
 - No graph database. If link-checking measurably stops scaling, a future
   ADR revisits this with that evidence in hand.
+
+## Normative statements
+
+- **adr0032-one-way-mirror** (factory): A work-order issue MUST be created only after its breakdown row exists.

@@ -28,18 +28,22 @@ survives the decision.
 
 1. Read the codebase and its codegraph before designing — the blueprint
    must describe the system that exists, not the one in the PRD's head.
-2. Design against the PRD's success criteria and its out-of-scope list;
+2. Load `docs/standards.json` if present, filtered to statements whose
+   `domain` is `factory` or `pipeline` — the design-relevant slice.
+   Cite a matching `slug` alongside any ADR number when a design
+   decision bears on one.
+3. Design against the PRD's success criteria and its out-of-scope list;
    anything outside both is scope creep wearing a design hat.
-3. Prefer the simpler structure; justify every new dependency and every
+4. Prefer the simpler structure; justify every new dependency and every
    new source of truth. A second source of truth is the drift this
    factory exists to detect (ADR-0004) — say no by default.
-4. Write an ADR for each decision that is expensive to reverse; state
+5. Write an ADR for each decision that is expensive to reverse; state
    the consequences honestly, including the ones you dislike.
-5. Supersede, never rewrite: a changed decision is a new ADR that names
+6. Supersede, never rewrite: a changed decision is a new ADR that names
    the one it replaces, and the old one stays on the record.
-6. Name the design's checkable invariants — they become detectors and
+7. Name the design's checkable invariants — they become detectors and
    the Planner's acceptance criteria.
-7. Open the blueprint PR and stop. Gate 2 is the human's.
+8. Open the blueprint PR and stop. Gate 2 is the human's.
 
 ## Loadout
 
