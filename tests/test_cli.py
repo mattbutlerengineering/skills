@@ -424,10 +424,14 @@ echo 'not json'
 echo '{"type": "result", "result": "ok"}'
 """
 
+# The fakes publish the PID file by rename, never by writing it in
+# place: `>` creates the file before echo fills it, so a group kill
+# landing between the two leaves it present and empty, and reading it
+# dies on int('') instead of reporting on the grandchild.
 FAKE_SLEEPER = """#!/bin/sh
 # Spawn a grandchild that outlives us unless the caller kills our group.
 sleep 300 &
-echo $! > "$PID_FILE"
+echo $! > "$PID_FILE.tmp" && mv "$PID_FILE.tmp" "$PID_FILE"
 echo '{"n": 1}'
 sleep 300
 """
@@ -436,7 +440,7 @@ FAKE_EXITING = """#!/bin/sh
 # Leader exits immediately; the grandchild inherits the stdout pipe and
 # keeps the process group alive after the leader is gone.
 sleep 300 &
-echo $! > "$PID_FILE"
+echo $! > "$PID_FILE.tmp" && mv "$PID_FILE.tmp" "$PID_FILE"
 exit 0
 """
 
@@ -583,11 +587,20 @@ class TestHarnessRun(unittest.TestCase):
                              [{"type": "result", "result": "ok"}])
         self.assertFalse(events.timed_out)
 
+    def gated_on_the_grandchild(self):
+        """The harness timeout counts from the PID file, not the spawn:
+        a spawn stall past a spawn-counted timeout kills the fake before
+        its grandchild exists, or abandons a leader that has not yet
+        exited, and either reads as a harness failure (beads wo-yjq)."""
+        return mock.patch.object(cli, "time",
+                                 ReadinessGatedClock(self.pid_file))
+
     def test_a_timeout_flips_timed_out_and_reaps_the_group(self):
         cmd = [self.script(FAKE_SLEEPER)]
-        with cli.harness_run(cmd, cwd=self.dir, timeout=2,
-                             env=self.env()) as events:
-            self.assertEqual(list(events), [{"n": 1}])
+        with self.gated_on_the_grandchild():
+            with cli.harness_run(cmd, cwd=self.dir, timeout=2,
+                                 env=self.env()) as events:
+                self.assertEqual(list(events), [{"n": 1}])
         self.assertTrue(events.timed_out)
         self.assert_grandchild_reaped()
 
@@ -597,9 +610,10 @@ class TestHarnessRun(unittest.TestCase):
         # only leave its loop by observing the exit — the cleanup always
         # runs against a dead leader.
         cmd = [self.script(FAKE_EXITING)]
-        with cli.harness_run(cmd, cwd=self.dir, timeout=2,
-                             env=self.env()) as events:
-            self.assertEqual(list(events), [])
+        with self.gated_on_the_grandchild():
+            with cli.harness_run(cmd, cwd=self.dir, timeout=2,
+                                 env=self.env()) as events:
+                self.assertEqual(list(events), [])
         self.assertFalse(events.timed_out)
         self.assert_grandchild_reaped()
 
