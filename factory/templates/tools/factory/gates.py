@@ -42,10 +42,19 @@ ai-tooling suite where the rule is the same idea):
                      NOT-RUN disclaimer anywhere fails outright
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
+  K STANDARDS-DRIFT — docs/standards.json's ADR-derived entries match a
+                     fresh standards_index.build_index(root) regen, and
+                     every `enforced`-status entry's source ADR is
+                     `accepted` (ADR-0073)
+  M CAPTURE-COMPLETENESS — every docs/fixes/<slug>/defect.md that exists
+                     carries skills/capture/TEMPLATE.md's required
+                     sections, each with real (non-placeholder) content
+                     (ADR-0073)
 
 The letter namespace does not end at I. Detector L (LABEL-SYNC) is
 network-side and lives in label_sync.py, driven by scheduled sweeps —
-network calls stay out of this offline gate — and K is unclaimed.
+network calls stay out of this offline gate. K and M are claimed above;
+a new detector beyond them takes the next free letter (or N).
 DETECTORS (beside CHECKERS below) is the full roster.
 
 `--selftest` runs the checkers against fixture trees and exits nonzero
@@ -67,10 +76,13 @@ from pathlib import Path
 
 import cost_ledger
 import factory_config
+import standards_index
 from cli import read_event, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             parse_run, repo_root, row_done, row_pre_ledger)
+                             parse_run, repo_root, row_done, row_pre_ledger,
+                             run_dirs)
+from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
 # `WO-####`. Such a PR declares that EXPLICITLY — the same "declared, never
@@ -1048,6 +1060,74 @@ def _fence_closes(line, char, length):
     return marker[0] == char and len(marker) >= length
 
 
+def _skip_frontmatter(lines):
+    """The index of the first BODY line of an artifact's LINES: content
+    after a closing `---` fence, when the artifact opens with a YAML
+    frontmatter block (metadata, not sectioned content — no caller may
+    header-split it or read a `status:` field as a verdict), else 0. An
+    unterminated opener is not frontmatter: the whole file is scanned,
+    same convention verification_sections has always used. Shared by
+    every section-splitting caller (verification_sections for H,
+    capture_sections for M) so frontmatter skipping has one home."""
+    if lines and FRONTMATTER_FENCE.match(lines[0]):
+        for index in range(1, len(lines)):
+            if FRONTMATTER_FENCE.match(lines[index]):
+                return index + 1
+        # An unterminated opener is not frontmatter: fall through to 0.
+    return 0
+
+
+def _walk_sections(lines, body_start):
+    """Yield (kind, lineno, payload) events over LINES[body_start:] — the
+    shared heading/fence engine verification_sections (H) and
+    capture_sections (M) both consume into their own per-section state.
+    Two kinds:
+
+      ("heading", lineno, title) — a new section starts here (ATX via
+        HEADING_LINE, or Setext via _is_setext_title; the underline that
+        follows a Setext title is consumed, never yielded).
+      ("line", lineno, (line, in_fence)) — ordinary content. `in_fence`
+        marks a line read while a fence opened by FENCE_OPEN is still
+        open, so a caller applies its own "is this evidence" or "is this
+        body text" rule without re-deriving fence state itself. A line
+        that OPENS or CLOSES a fence is itself never yielded — matching
+        verification_sections' original behaviour, where neither an
+        opening nor a closing fence marker is read as content or as a
+        possible verdict/heading line.
+
+    Finally, if the last fence opened is never closed, yields
+    ("unclosed", lineno, None) with the fence's OWN opening line number —
+    a caller that owes no such rule (M) may simply ignore the event, the
+    same way H already reports it and nothing else has ever needed to."""
+    fence = None  # (marker char, marker length, opening line number)
+    underlined = False
+    for lineno, line in enumerate(lines[body_start:], body_start + 1):
+        if fence is not None:
+            if _fence_closes(line, fence[0], fence[1]):
+                fence = None
+            else:
+                yield "line", lineno, (line, True)
+            continue
+        if underlined:  # the ===/--- under a Setext title, already consumed
+            underlined = False
+            continue
+        opened = _fence_open(line)
+        if opened:
+            fence = (opened[0], opened[1], lineno)
+            continue
+        heading = HEADING_LINE.match(line)
+        if heading:
+            yield "heading", lineno, (heading.group(2) or "(untitled)")
+            continue
+        if _is_setext_title(lines, lineno - 1):
+            yield "heading", lineno, line.strip()
+            underlined = True
+            continue
+        yield "line", lineno, (line, False)
+    if fence is not None:
+        yield "unclosed", fence[2], None
+
+
 def verification_sections(text):
     """Split a verification artifact's TEXT into heading-delimited sections,
     each recording — IN ITS OWN SCOPE — whether it shows literal output,
@@ -1067,57 +1147,42 @@ def verification_sections(text):
     grammar is exercisable without a fixture tree. Returns (sections,
     unclosed), where each section is {"title", "lineno", "evidence",
     "not_run", "results"} and `unclosed` is the line number of a fence that
-    is never closed, or None."""
-    sections = []
+    is never closed, or None.
+
+    Built on the shared _skip_frontmatter/_walk_sections engine (also used
+    by capture_sections, detector M's own reader): this function owns only
+    the H-specific per-line rule (what counts as evidence, a NOT-RUN
+    disclosure, or a labelled verdict), not the heading/fence grammar
+    itself."""
 
     def blank(title, lineno):
         return {"title": title, "lineno": lineno, "evidence": False,
                 "not_run": False, "results": []}
 
     lines = text.splitlines()
-    body = 0
-    if lines and FRONTMATTER_FENCE.match(lines[0]):
-        for index in range(1, len(lines)):
-            if FRONTMATTER_FENCE.match(lines[index]):
-                body = index + 1
-                break
-        # An unterminated opener is not frontmatter: scan the whole file.
-
+    body = _skip_frontmatter(lines)
+    sections = []
     current = blank("(untitled)", body + 1)
-    fence = None  # (marker char, marker length, opening line number)
-    underlined = False
-    for lineno, line in enumerate(lines[body:], body + 1):
-        if fence is not None:
-            if _fence_closes(line, fence[0], fence[1]):
-                fence = None
-            elif line.strip() and not PLACEHOLDER_LINE.match(line):
-                current["evidence"] = True
-            continue
-        if underlined:  # the ===/--- under a Setext title, already consumed
-            underlined = False
-            continue
-        opened = _fence_open(line)
-        if opened:
-            fence = (opened[0], opened[1], lineno)
-            continue
-        heading = HEADING_LINE.match(line)
-        if heading:
-            title = heading.group(2) or "(untitled)"
-        elif _is_setext_title(lines, lineno - 1):
-            title, underlined = line.strip(), True
-        else:
-            title = None
-        if title is not None:
+    unclosed = None
+    for kind, lineno, payload in _walk_sections(lines, body):
+        if kind == "heading":
             sections.append(current)
-            current = blank(title, lineno)
-            continue
-        if NOT_RUN_TOKEN.search(line):
-            current["not_run"] = True
-        result = RESULT_LINE.match(line)
-        if result:
-            current["results"].append((lineno, result.group(1)))
+            current = blank(payload, lineno)
+        elif kind == "unclosed":
+            unclosed = lineno
+        else:  # "line"
+            line, in_fence = payload
+            if in_fence:
+                if line.strip() and not PLACEHOLDER_LINE.match(line):
+                    current["evidence"] = True
+                continue
+            if NOT_RUN_TOKEN.search(line):
+                current["not_run"] = True
+            result = RESULT_LINE.match(line)
+            if result:
+                current["results"].append((lineno, result.group(1)))
     sections.append(current)
-    return sections, (fence[2] if fence else None)
+    return sections, unclosed
 
 
 def evidence_problems(text):
@@ -1199,6 +1264,263 @@ def check_evidence_honesty(root, parsed=None):
     return problems
 
 
+def _adr_status_by_number(parsed):
+    """{ADR number: raw Status text (None when absent or unparseable)} —
+    reuses D's own _adr_status_from_lines over parsed["adr_files"], never
+    a second status parser. Detector K's own tiny slice of what D already
+    validates: K only needs the raw text to compare against "accepted"
+    (_status_head), it does not need D's own malformed-status problem
+    strings (D already owns reporting those)."""
+    return {path.name[:4]: _adr_status_from_lines(lines)[1]
+            for path, lines in parsed["adr_files"]}
+
+
+# ADR-0073's Consequences: build_index never reads the previously
+# committed docs/standards.json, so every ADR-derived entry it builds
+# fresh carries status "advisory" by construction — it has no other
+# honest source for status. Comparing `status` here would make a
+# promoted (enforced) entry read as "drifted" forever, which would
+# defeat decision (c)'s whole point (a promotion is a docs/standards.json
+# edit that must survive a later regeneration). So the drift comparison
+# below is over every field EXCEPT status; K's second check (the
+# enforced/accepted cross-check further down) is what validates `status`
+# instead, directly against the COMMITTED entry, never against a regen.
+_DRIFT_FIELDS = ("slug", "statement", "level", "source", "domain")
+
+
+def _drift_fingerprint(entry):
+    """The fields of a docs/standards.json ENTRY that a fresh ADR regen
+    can and must reproduce exactly — everything build_index derives,
+    deliberately excluding `status` (see _DRIFT_FIELDS above)."""
+    return tuple(entry.get(field) for field in _DRIFT_FIELDS)
+
+
+def check_standards_drift(root, parsed=None):
+    """K: docs/standards.json is a derived, regenerable index (ADR-0073)
+    over docs/adr/*.md's `## Normative statements` sections — the same
+    checksum-pinned relationship detector E has with
+    factory/manifest.json: a hand-edited or stale index is worse than no
+    index, because a reviewer citing a slug trusts it still matches its
+    source.
+
+    K fails two independent ways, kept in one detector because both read
+    the same committed file:
+
+    (1) the committed file's ADR-derived entries (every entry whose
+        `source` is NOT a standards_index.HAND_CURATED_PREFIX entry)
+        disagree with a fresh standards_index.build_index(root) regen,
+        compared on every field EXCEPT `status` (see _DRIFT_FIELDS —
+        `status` can never "drift" from an ADR regen by definition, since
+        an ADR bullet never states one).
+    (2) an `enforced`-status entry's source ADR's status
+        (_adr_status_by_number, reusing _adr_status_from_lines/
+        _status_head — the same machinery detector D already owns, not a
+        second status parser) is not `accepted`.
+
+    An absent docs/standards.json is not a K problem — mirrors detector
+    G's "an absent ledger is silent" precedent (check_cost_ledger): the
+    index is created by the first `standards_index.py update` run, so a
+    repo that has never run it has nothing to account for yet.
+
+    `parsed` defaults to a fresh parse of `root`, same lazy-default
+    convention as A, C, D, G, H and I; run_all threads the shared parse
+    in (K joins _PARSED_CHECKERS) so this never re-parses on that path."""
+    standards_path = root / standards_index.STANDARDS_PATH
+    if not standards_path.is_file():
+        return []
+    try:
+        committed_text = standards_path.read_text(encoding="utf-8")
+    except OSError as err:
+        return [f"K: cannot read {standards_index.STANDARDS_PATH}: {err}"]
+    try:
+        committed = json.loads(committed_text)
+    except json.JSONDecodeError as err:
+        return [f"K: {standards_index.STANDARDS_PATH} is not valid JSON:"
+                f" {err}"]
+    if not isinstance(committed, list):
+        return [f"K: {standards_index.STANDARDS_PATH} must be a JSON array"]
+
+    if parsed is None:
+        parsed = parse_run(root)
+    fresh, build_problems = standards_index.build_index(root)
+    problems = [f"K: {p}" for p in build_problems]
+
+    committed_adr = sorted(
+        _drift_fingerprint(entry) for entry in committed
+        if isinstance(entry, dict)
+        and not (isinstance(entry.get("source"), str)
+                 and entry["source"].startswith(
+                     standards_index.HAND_CURATED_PREFIX)))
+    fresh_fingerprint = sorted(_drift_fingerprint(entry) for entry in fresh)
+    if committed_adr != fresh_fingerprint:
+        problems.append(
+            f"K: {standards_index.STANDARDS_PATH} has drifted from a"
+            " fresh ADR regeneration (run"
+            " `python3 standards_index.py update`)")
+
+    statuses = _adr_status_by_number(parsed)
+    for entry in committed:
+        if not isinstance(entry, dict) or entry.get("status") != "enforced":
+            continue
+        number = standards_index.adr_number(entry.get("source"))
+        if number is None:
+            continue
+        status = statuses.get(number)
+        if _status_head(status) != "accepted":
+            problems.append(
+                f"K: enforced statement {entry.get('slug')!r} cites"
+                f" ADR-{number}, status {status!r} (not accepted)")
+    return problems
+
+
+# skills/capture/TEMPLATE.md's own `##` headings, verbatim — the ground
+# truth M checks against (a paraphrase drifts from the template the
+# moment either one is edited alone; this list is the one place that
+# would need to move with it). "Work items" and "Notes" are
+# deliberately excluded: "Work items" only applies when
+# `re-entry: implement` (protocol.py, not this module's concern) and
+# "Notes" is an open catch-all with no placeholder to be filled in —
+# neither is a section M can call missing-or-placeholder in every brief.
+CAPTURE_REQUIRED_SECTIONS = (
+    "Defect (or Condition)",
+    "Reproduction / Evidence",
+    "Root-cause hypothesis",
+    "Blast radius",
+    "Ruled out",
+)
+
+# TEMPLATE.md's own placeholder shape: a whole line (an optional leading
+# list marker, for "## Ruled out"'s `- <...>` bullet form) that is
+# nothing but a single bracketed span of instructional prose, e.g.
+# `<What is broken — observed vs expected behavior...>`. Deliberately a
+# looser shape rule than H's PLACEHOLDER_LINE (which matches by FILLER
+# TEXT, not by shape alone — H's own comment explains why: `<html>`-shaped
+# real evidence would false-positive on a shape-only rule). That risk is
+# H's, not M's: TEMPLATE.md's own placeholders are full descriptive
+# prose, not short filler tokens, and a capture brief's prose is never
+# expected to be a single line wrapped end-to-end in angle brackets, so
+# the shape alone is the safe, sufficient signal here.
+CAPTURE_PLACEHOLDER = re.compile(r"^\s*[-*+]?\s*<[^>]*>\s*$")
+
+# M's grandfather cutoff (ADR-0073): CAPTURE_REQUIRED_SECTIONS is a NEW
+# rule, and a new rule cannot retroactively apply to briefs written
+# before it existed — the same "an old thing does not owe a new rule"
+# principle ADR-0043's `(pre-ledger)` annotation already established for
+# detector G, applied here without a 57-file hand-annotation pass: a
+# defect.md's own frontmatter `date:` is already the fact that tells the
+# two eras apart (this repo's OWN docs/fixes/*/defect.md corpus predates
+# TEMPLATE.md's current heading set almost entirely — most captured
+# `## Reproduction`, `## Why it matters`, `## Fix`, never `## Root-cause
+# hypothesis`/`## Blast radius`/`## Ruled out` at all). A FIXED constant
+# compared against a file's own static field is deterministic and
+# hermetic (unlike comparing against wall-clock "now", the pattern
+# check_staleness's own docstring rules out for the opposite reason) —
+# the same tree always answers the same way, forever. This also
+# generalizes correctly for every OTHER repo this detector ships to
+# (factory_init.MIRRORS): any defect.md already on disk when a repo
+# takes this factory update predates M by construction, and a fresh
+# capture from here on carries today's date and is checked in full.
+# A missing or unparseable `date:` is NOT grandfathered — fail closed,
+# the same direction cost_ledger.line_problems takes on a bad `at`
+# field, so an author cannot dodge M by omitting the date.
+CAPTURE_ADOPTED = "2026-09-21"
+
+
+def capture_sections(text):
+    """Split a capture artifact's (defect.md) TEXT into heading-delimited
+    sections, built on the same _skip_frontmatter/_walk_sections engine
+    verification_sections (H) uses — same frontmatter skip, same
+    ATX/Setext heading grammar, same fence tracking. Unlike H, a defect.md
+    section is read for PRESENCE, not for a verdict: each entry is
+    {"title", "lineno", "lines": [str]} — the section's own literal
+    content lines (fenced or not; M owes no evidence-vs-narration
+    distinction, only "is there real content here"). An unclosed fence is
+    not M's concern (H already owns reporting that, for the artifact type
+    where it matters) and is silently ignored here.
+
+    Public with capture_completeness_problems: pure text in, structure
+    out, the same H-derived convention (evidence_problems)."""
+    lines = text.splitlines()
+    body = _skip_frontmatter(lines)
+    sections = []
+    current = {"title": "(untitled)", "lineno": body + 1, "lines": []}
+    for kind, lineno, payload in _walk_sections(lines, body):
+        if kind == "heading":
+            sections.append(current)
+            current = {"title": payload, "lineno": lineno, "lines": []}
+        elif kind == "line":
+            line, _in_fence = payload
+            current["lines"].append(line)
+        # "unclosed" carries nothing M reads.
+    sections.append(current)
+    return sections
+
+
+def _section_has_content(section):
+    """Does this capture section carry anything beyond blank lines and
+    TEMPLATE.md's own unfilled placeholder?"""
+    return any(line.strip() and not CAPTURE_PLACEHOLDER.match(line)
+              for line in section["lines"])
+
+
+def capture_completeness_problems(text):
+    """The M grammar over one defect.md's TEXT: a problem string
+    (unlocated — check_capture_completeness prefixes "M: {rel}") for
+    every CAPTURE_REQUIRED_SECTIONS heading that is missing outright or
+    present with only TEMPLATE.md's own bracketed filler left unedited.
+    Matching is case-insensitive on the trimmed heading text — an
+    author's own casing is not the claim here, the section's presence
+    is."""
+    sections = {section["title"].strip().casefold(): section
+                for section in capture_sections(text)}
+    problems = []
+    for name in CAPTURE_REQUIRED_SECTIONS:
+        section = sections.get(name.casefold())
+        if section is None:
+            problems.append(f"missing required section {name!r}")
+        elif not _section_has_content(section):
+            problems.append(
+                f"required section {name!r} is present but"
+                " placeholder-only (template text was never filled in)")
+    return problems
+
+
+def check_capture_completeness(root):
+    """M: every docs/fixes/<slug>/defect.md must carry skills/capture/
+    TEMPLATE.md's required sections, each with real content — the same
+    "a criterion that asserts must show its own evidence" discipline H
+    already applies to verification.md, generalized to a fixed, named
+    heading list instead of H's open one (H reads WHATEVER headings the
+    author wrote; M reads for a SPECIFIC, protocol-required set).
+
+    A run with no defect.md yet (an idea/PRD-only feature run, or a
+    maintenance run mid-Capture) is out of scope entirely — M walks only
+    the defect.md files run_dirs(root) finds, the same "absence
+    elsewhere is not this detector's problem" discipline C already
+    applies file-by-file. A defect.md whose own frontmatter `date:`
+    predates CAPTURE_ADOPTED is grandfathered (see that constant's own
+    comment) — a missing or unparseable date is NOT grandfathered, fail
+    closed. Bare `root`, no `parsed`: defect.md is not one of
+    parse_run's run-level artifacts (its own docstring says so), so
+    threading `parsed` here would either grow that walk for one detector
+    or leave M re-deriving the same thing under a different name — this
+    reads the tree directly, the same shape E/F/J already have."""
+    problems = []
+    for run in run_dirs(root):
+        defect = run / "defect.md"
+        if not defect.is_file():
+            continue
+        frontmatter = read_frontmatter(defect) or {}
+        date = frontmatter.get("date")
+        if isinstance(date, str) and date < CAPTURE_ADOPTED:
+            continue
+        rel = defect.relative_to(root)
+        text = defect.read_text(encoding="utf-8")
+        problems.extend(f"M: {rel} {suffix}"
+                        for suffix in capture_completeness_problems(text))
+    return problems
+
+
 # The detector letter namespace, indexed in ONE place: letter -> (name,
 # home module, plane). A letter's plane decides where its code goes.
 # Offline detectors live in this module and gate every push/PR through
@@ -1208,9 +1530,10 @@ def check_evidence_honesty(root, parsed=None):
 # that drive them and are NEVER wired into CHECKERS: L reads the repo's
 # live label set through gh, which is why it lives in label_sync.py and
 # not here (the same posture that keeps every ADR-0037 seam offline).
-# K is unclaimed — the shared ai-tooling letter namespace assigns
-# nothing to it, so a new detector takes it (or the next free letter)
-# and adds its row here.
+# K and M are claimed below (ADR-0073) — the two new offline detectors
+# this row adds. `J` was reserved by unrelated in-flight work at design
+# time and is fully wired by now (see ADR-0073's own account); a new
+# detector beyond K/M takes the next free letter.
 DETECTORS = {
     "A": ("WO-CITATION", "gates.py", "offline"),
     "B": ("PR-TRACEABILITY", "gates.py", "offline"),
@@ -1222,14 +1545,15 @@ DETECTORS = {
     "H": ("EVIDENCE-HONESTY", "gates.py", "offline"),
     "I": ("STALENESS", "gates.py", "offline"),
     "J": ("LABEL-WIRING", "gates.py", "offline"),
-    "K": (None, None, "unused"),
+    "K": ("STANDARDS-DRIFT", "gates.py", "offline"),
     "L": ("LABEL-SYNC", "label_sync.py", "network"),
+    "M": ("CAPTURE-COMPLETENESS", "gates.py", "offline"),
 }
 
 CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
             check_blueprint_drift, check_scaffold_sync, check_label_wiring,
             check_config_shape, check_cost_ledger, check_evidence_honesty,
-            check_staleness)
+            check_staleness, check_standards_drift, check_capture_completeness)
 
 # The CHECKERS that read the knowledge plane's run artifacts and were
 # migrated onto knowledge_plane.parse_run (issue #442): A, C, D, G, H and
@@ -1242,7 +1566,8 @@ CHECKERS = (check_wo_citation, check_pr_traceability, check_link_integrity,
 # an `env`-shaped parameter every CHECKERS entry must now accept.
 _PARSED_CHECKERS = frozenset((
     check_wo_citation, check_link_integrity, check_blueprint_drift,
-    check_cost_ledger, check_evidence_honesty, check_staleness))
+    check_cost_ledger, check_evidence_honesty, check_staleness,
+    check_standards_drift))
 
 # Issue #443 (the sequence's "contract" step) asked whether dropping the
 # migrate-era shim means making `parsed` a required argument on these six
@@ -1373,6 +1698,84 @@ def _staleness_defect_fixture(root):
     """A doc that links to a path which is not on disk."""
     (root / "CONTEXT.md").write_text(
         "The [handbook](docs/handbook.md) moved away.\n", encoding="utf-8")
+
+
+def _standards_drift_defect_fixture(root):
+    """Two failure shapes K must catch, from one committed
+    docs/standards.json: a committed ADR-derived entry whose statement
+    text disagrees with a fresh regen of its own source ADR, and an
+    `enforced`-status entry whose source ADR is not `accepted`."""
+    adr_dir = root / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-real.md").write_text(
+        "# Real\n\n- Status: accepted\n\n## Normative statements\n\n"
+        "- **some-slug** (factory): Something MUST happen.\n",
+        encoding="utf-8")
+    (adr_dir / "0002-provisional.md").write_text(
+        "# Provisional\n\n- Status: provisional\n", encoding="utf-8")
+    standards_path = root / standards_index.STANDARDS_PATH
+    standards_path.parent.mkdir(parents=True, exist_ok=True)
+    standards_path.write_text(json.dumps([
+        {"slug": "some-slug",
+         "statement": "Something MUST happen (STALE WORDING).",
+         "level": "MUST", "source": "adr/0001#some-slug",
+         "status": "advisory", "domain": "factory"},
+        {"slug": "enforced-slug", "statement": "Something else MUST"
+         " happen.", "level": "MUST", "source": "adr/0002#enforced-slug",
+         "status": "enforced", "domain": "factory"},
+    ]), encoding="utf-8")
+
+
+def _standards_drift_clean_fixture(root):
+    """The happy path: docs/standards.json matches a fresh regen exactly,
+    and its one `enforced` entry cites an `accepted` ADR."""
+    adr_dir = root / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    (adr_dir / "0001-real.md").write_text(
+        "# Real\n\n- Status: accepted\n\n## Normative statements\n\n"
+        "- **some-slug** (factory): Something MUST happen.\n",
+        encoding="utf-8")
+    standards_path = root / standards_index.STANDARDS_PATH
+    standards_path.parent.mkdir(parents=True, exist_ok=True)
+    standards_path.write_text(json.dumps([
+        {"slug": "some-slug", "statement": "Something MUST happen.",
+         "level": "MUST", "source": "adr/0001#some-slug",
+         "status": "enforced", "domain": "factory"},
+    ]), encoding="utf-8")
+
+
+def _capture_completeness_defect_fixture(root):
+    """A fresh (dated on CAPTURE_ADOPTED, so not grandfathered) defect.md:
+    two required sections missing outright, two present as unfilled
+    TEMPLATE.md placeholders, and one filled in for real — every shape M
+    must tell apart, in one fixture."""
+    path = root / "docs" / "fixes" / "demo" / "defect.md"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "---\nstage: capture\nrun: maintenance:demo\n"
+        f"date: {CAPTURE_ADOPTED}\nre-entry: implement\n---\n\n"
+        "# Defect: demo\n\n"
+        "## Defect (or Condition)\n\n<What is broken — observed vs"
+        " expected behavior.>\n\n"
+        "## Reproduction / Evidence\n\nRun `make check`; it fails with"
+        " a traceback.\n\n"
+        "## Ruled out\n\n- <Dead ends already investigated and why"
+        " they're not it — or \"none yet\".>\n",
+        encoding="utf-8")
+
+
+def _capture_completeness_grandfathered_fixture(root):
+    """A defect.md dated well before CAPTURE_ADOPTED, missing every
+    required section — M must stay silent: the brief predates the
+    convention (ADR-0073)."""
+    path = root / "docs" / "fixes" / "old" / "defect.md"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "---\nstage: capture\nrun: maintenance:old\ndate: 2026-01-01\n"
+        "re-entry: implement\n---\n\n# Defect: old\n\n"
+        "## Defect\n\nSomething broke, written before the convention"
+        " existed.\n",
+        encoding="utf-8")
 
 
 def _scaffold_sync_fixture(root, rel="Makefile", payload="check:\n"):
@@ -1622,6 +2025,58 @@ def selftest():
         root = Path(tmp)
         _staleness_defect_fixture(root)
         expect("I", check_staleness(root), "stale link docs/handbook.md")
+
+    # K: a committed ADR-derived entry has drifted from a fresh regen,
+    # and an enforced entry cites a not-accepted ADR — both from one
+    # committed docs/standards.json.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _standards_drift_defect_fixture(root)
+        expect("K", check_standards_drift(root),
+               "docs/standards.json has drifted",
+               "enforced statement 'enforced-slug' cites ADR-0002,"
+               " status 'provisional' (not accepted)")
+
+    # K: the happy path — a regen-matching index, and no ADR standing.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _standards_drift_clean_fixture(root)
+        expect_clean("K clean", check_standards_drift(root))
+
+    # K: an absent docs/standards.json is silent — no runs recorded yet,
+    # same precedent as detector G.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        expect_clean("K absent", check_standards_drift(root))
+
+    # M: a fresh defect.md missing sections, and one placeholder-only.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _capture_completeness_defect_fixture(root)
+        expect("M", check_capture_completeness(root),
+               "missing required section 'Root-cause hypothesis'",
+               "missing required section 'Blast radius'",
+               "required section 'Defect (or Condition)' is present but"
+               " placeholder-only",
+               "required section 'Ruled out' is present but"
+               " placeholder-only")
+        if any("Reproduction / Evidence" in p
+               for p in check_capture_completeness(root)):
+            failures.append("M: Reproduction / Evidence should be clean,"
+                            f" got {check_capture_completeness(root)}")
+
+    # M: a defect.md dated before CAPTURE_ADOPTED is grandfathered —
+    # missing every section, but M must stay silent (ADR-0073).
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        _capture_completeness_grandfathered_fixture(root)
+        expect_clean("M grandfathered", check_capture_completeness(root))
+
+    # M: no defect.md at all is out of scope entirely.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "docs" / "features" / "demo").mkdir(parents=True)
+        expect_clean("M no defect", check_capture_completeness(root))
 
     # E
     with tempfile.TemporaryDirectory() as tmp:
