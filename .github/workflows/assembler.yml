@@ -124,7 +124,15 @@ jobs:
           # --max-turns is ADR-0034's second mechanical stop (WO-0034):
           # like the job timeout, a backstop a runaway loop cannot argue
           # with — generous enough that no honest size-L run meets it.
-          claude_args: --model ${{ steps.resolve.outputs.model }} --max-turns 100
+          # --allowedTools: automation mode denies Bash unless named here,
+          # and the SWE's exit (branch, commit, push, verify, open the PR)
+          # is all Bash — the first live dispatch (issue #536) was denied
+          # nine times and delivered no PR. Pushes are allowed only to the
+          # wo- branch assemble_prompt names: no branch protection guards
+          # main on this plan, so this list is the push boundary.
+          claude_args: >-
+            --model ${{ steps.resolve.outputs.model }} --max-turns 100
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git checkout:*),Bash(git switch:*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin wo-*),Bash(gh pr create:*),Bash(gh issue view:*),Bash(make:*),Bash(python3:*)"
       # The run's own spend, machine-written to the append-only cost ledger
       # (issue #222; ADR-0034): tokens and cost come from the action's
       # execution file — the harness's record, never a hand-typed figure.
