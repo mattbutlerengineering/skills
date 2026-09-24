@@ -20,6 +20,9 @@ has been modified from the original: multi-skill routing detection,
 per-run isolated project directories, settings-source isolation, and a
 routing-case schema with confusion-matrix reporting.
 
+`--metrics RESULTS_FILE [--kind KIND]` runs nothing: it derives per-skill
+precision/recall/F1 from an already-recorded results file (read-only).
+
 POSIX-only (cli.harness_run selects on pipes). Requires the `claude`
 CLI (or the `omp` CLI with --harness omp).
 """
@@ -361,6 +364,73 @@ def summarize(results):
     }
 
 
+def _ratio(numerator, denominator):
+    """None when the denominator is zero: undefined, not measured-as-0."""
+    return numerator / denominator if denominator else None
+
+
+def skill_metrics(confusion):
+    """Per-skill precision/recall/F1 from summarize()'s confusion dict.
+
+    A pure second pass over already-recorded counts (never a re-run).
+    Rows are expected, columns fired; "none" is the negative class, so it
+    is never itself a skill. For skill S: tp = confusion[S][S], fp = S
+    fired under any other expected row, fn = every other fire in S's row
+    (including "none" — an under-trigger). Zero-denominator contract:
+    precision is None when S never fired, recall is None when S was never
+    expected, F1 is None when either is None, and 0.0 when both are 0.0.
+    """
+    skills = (set(confusion)
+              | {fired for row in confusion.values() for fired in row})
+    skills.discard("none")
+    metrics = {}
+    for skill in sorted(skills):
+        row = confusion.get(skill, {})
+        tp = row.get(skill, 0)
+        fn = sum(row.values()) - tp
+        fp = sum(r.get(skill, 0) for expected, r in confusion.items()
+                 if expected != skill)
+        precision = _ratio(tp, tp + fp)
+        recall = _ratio(tp, tp + fn)
+        if precision is None or recall is None:
+            f1 = None
+        else:
+            f1 = _ratio(2 * precision * recall, precision + recall) or 0.0
+        metrics[skill] = {"tp": tp, "fp": fp, "fn": fn, "precision":
+                          precision, "recall": recall, "f1": f1}
+    return metrics
+
+
+def _fmt(value):
+    return "n/a" if value is None else f"{value:.3f}"
+
+
+def metrics_report(output, kind=None):
+    """Report lines for a recorded results dict, optionally one kind only.
+
+    The confusion matrix is rebuilt through summarize() from the selected
+    per-case results, so a kind filter (e.g. near-miss) never needs a
+    field the record does not already hold. Micro recall — skill-expected
+    runs that fired the expected skill — is the single trackable number.
+    """
+    results = [r for r in output["results"]
+               if kind is None or r["kind"] == kind]
+    metrics = skill_metrics(summarize(results)["confusion"])
+    lines = [f"kind: {kind or 'all'} ({len(results)} case(s))"]
+    tp = sum(m["tp"] for m in metrics.values())
+    expected = tp + sum(m["fn"] for m in metrics.values())
+    if expected:
+        lines.append(f"micro recall: {tp}/{expected} = "
+                     f"{_fmt(tp / expected)}")
+    else:
+        lines.append("micro recall: n/a (no skill-expected runs)")
+    for skill, m in metrics.items():
+        lines.append(f"  {skill}: tp={m['tp']} fp={m['fp']} fn={m['fn']} "
+                     f"precision={_fmt(m['precision'])} "
+                     f"recall={_fmt(m['recall'])} f1={_fmt(m['f1'])}")
+    return lines
+
+
 def run_eval(cases, descriptions, workers, runs_per_query, timeout,
              threshold, model, isolate, harness="claude"):
     """Fan out cases x runs_per_query; return per-case results + summary."""
@@ -432,6 +502,20 @@ def print_report(output):
         print(f"  {expected}: {cells}", file=sys.stderr)
 
 
+def print_metrics(path, kind):
+    """Print metrics_report() for one recorded results file; never writes."""
+    try:
+        output = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as err:
+        print(f"error: cannot read results file {path}: {err}",
+              file=sys.stderr)
+        return 1
+    print(f"{path.name} (harness: {output.get('harness') or 'claude'})")
+    for line in metrics_report(output, kind):
+        print(line)
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Cross-skill trigger/routing eval via claude -p or omp -p")
@@ -458,7 +542,17 @@ def main():
     parser.add_argument("--no-isolate-settings", action="store_true",
                         help="drop --setting-sources project (auth fallback; "
                              "claude harness only)")
+    parser.add_argument("--metrics", metavar="RESULTS_FILE", default=None,
+                        help="run nothing: print per-skill precision/recall/"
+                             "F1 derived from an already-recorded results "
+                             "file (read-only)")
+    parser.add_argument("--kind", default=None,
+                        help="with --metrics, only cases of this kind "
+                             "(e.g. near-miss)")
     args = parser.parse_args()
+
+    if args.metrics:
+        return print_metrics(Path(args.metrics), args.kind)
 
     cases, problems = eval_schema.load(Path(args.eval_set), ALL_SKILLS,
                                        label=args.eval_set)

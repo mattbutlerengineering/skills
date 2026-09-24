@@ -374,8 +374,26 @@ class TestParseRun(unittest.TestCase):
             entry = self.run_entry(root, parsed, "docs/features/empty")
             self.assertEqual(entry, {
                 "path": root / "docs/features/empty",
-                "breakdown": None, "prd_id": None, "architecture": None,
+                "breakdown": None, "prd_id": None, "prd": None,
+                "prd_date": None, "architecture": None,
                 "verification": None, "verification_error": None})
+
+    def test_prd_lines_and_date_captured_when_present(self):
+        """Detectors N and O read the PRD's body and its frontmatter
+        date (ADR-0071, ADR-0072) — read here once, like architecture."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run = root / "docs" / "features" / "demo"
+            run.mkdir(parents=True)
+            (run / "prd.md").write_text(
+                "---\nid: PRD-0001\ndate: 2026-09-21\n---\n## Solution\n",
+                encoding="utf-8")
+            entry = self.run_entry(root, parse_run(root), "docs/features/demo")
+            self.assertEqual(entry["prd"], ["---", "id: PRD-0001",
+                                            "date: 2026-09-21", "---",
+                                            "## Solution"])
+            self.assertEqual(entry["prd_id"], "PRD-0001")
+            self.assertEqual(entry["prd_date"], "2026-09-21")
 
     def test_adr_readme_lines_and_absence(self):
         with tempfile.TemporaryDirectory() as tmp:

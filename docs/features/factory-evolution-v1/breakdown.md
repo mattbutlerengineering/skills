@@ -20,14 +20,14 @@ detector A checks.
 
 - [ ] **WO-0065** implement GitHub native merge queue adoption (ADR-0070) — size:M, blocked by: — (PRD-0006 §Success criteria)
   - Accept: GitHub's merge queue is enabled on the branch-protection rule guarding `main`; every required-check workflow mirrored via `factory_init.MIRRORS` (`.github/workflows/validator.yml` and siblings) gains `merge_group` as a trigger; the cascade-cost and queue-admission-vs-review-requirement questions ADR-0070 and `prd.md`'s Open questions leave open are resolved and recorded in that future run's own `verification.md`; the battery stays green. This is a repo-settings + workflow-trigger change, not a `gates.py`/Python change — no new detector is implied by this row alone.
-- [ ] **WO-0066** implement inline `[NEEDS CLARIFICATION]` markers + bounded clarify pass + CI enforcement (ADR-0071) — size:M, blocked by: — (PRD-0006 §Success criteria)
+- [x] **WO-0066** implement inline `[NEEDS CLARIFICATION]` markers + bounded clarify pass + CI enforcement (ADR-0071) — size:M, blocked by: — (PRD-0006 §Success criteria)
   - Accept: `skills/prd/TEMPLATE.md` and `skills/architect/TEMPLATE.md` document the marker syntax; the PRD skill's process gains a bounded clarify step (max 5 questions per pass, taxonomy from the artifact's own section headings, answers written back under a dated `### Clarifications / Session YYYY-MM-DD` heading); a new `gates.py` detector (letter chosen at implementation time, avoiding whatever is claimed by then) fails when a `prd.md` or `architecture.md` carries an unresolved marker, with `python3 gates.py --selftest` coverage; the battery stays green.
-- [ ] **WO-0067** implement bidirectional PRD-requirement<->work-item coverage check (ADR-0072) — size:M, blocked by: — (PRD-0006 §Success criteria)
+- [x] **WO-0067** implement bidirectional PRD-requirement<->work-item coverage check (ADR-0072) — size:M, blocked by: — (PRD-0006 §Success criteria)
   - Accept: detector A (or a sibling detector, implementation's call per ADR-0072) fails when a `prd.md` `§` section with a declared `id: PRD-####` is cited by zero breakdown rows and carries no `<!-- coverage-waiver: <reason> -->` comment; `python3 gates.py --selftest` covers both the uncovered-and-unwaived failure and the declared-waiver pass case; the battery stays green. Independent of the two rows above — implementable in parallel.
 
 ## Milestone B: Non-ADR derived-metric extension
 
-- [ ] **WO-0068** derive per-skill precision/recall/F1 from `trigger_eval.py`'s existing confusion matrix — size:S, blocked by: — (PRD-0006 §Success criteria)
+- [x] **WO-0068** derive per-skill precision/recall/F1 from `trigger_eval.py`'s existing confusion matrix — size:S, blocked by: — (PRD-0006 §Success criteria)
   - Accept: a new pure function in `trigger_eval.py` reads `summarize()`'s `confusion` dict and computes per-skill precision, recall, and F1 as a second pass over already-recorded results — no re-running any eval, no touching `evals/results/**` (append-only, CLAUDE.md eval honesty); unit tests cover the derivation against a fixture confusion matrix; the function is wired to answer `docs/backlog.md`'s existing "omp near-miss under-triggering: 8/16 near-miss cases under-trigger" seed with a trackable number. No new ADR (per `docs/research/eval-and-memory.md` shortlist item 5's own verdict — this row implements it as-is). Independent of every other row in this breakdown — implementable in parallel with any of them.
 
 ## Milestone C: Routine roster v2 (design + land the protocol doc + trigger only — issue #438's own scope bound; no new ADR, per architecture.md's Decisions)
@@ -88,6 +88,17 @@ not to cover an unmapped component.
   nothing in `architecture.md` makes any one a prerequisite for
   another; sequencing them is a future dispatch-time choice, not a
   dependency this breakdown asserts.
+- 2026-09-23: **orders 66-67 landed as detectors N (NEEDS-CLARIFICATION)
+  and O (PRD-COVERAGE)** — answering `prd.md`'s first and third Open
+  questions. K and M were skipped as reserved by the in-flight
+  standards-enforcement work (PR #517), not by anything on `main`. O is
+  a sibling letter, not a widening of A (ADR-0072's own lean: A's
+  contract stays one-directional). O grandfathers PRDs dated before
+  ADR-0072 (2026-09-21) — PRD-0001 through PRD-0005 were decomposed
+  before the rule existed — and this run's own PRD-0006, dated on it,
+  carries honest `coverage-waiver` comments on the six sections no row
+  cites, as ADR-0072's Consequences ask. O skips a run with no
+  `breakdown.md` yet: coverage is a Decompose-time property.
 - 2026-09-23: **the protocol-doc half of orders 69-71 landed** —
   `docs/factory/retro-reflect-routine.md`,
   `docs/factory/queue-groomer-routine.md` and

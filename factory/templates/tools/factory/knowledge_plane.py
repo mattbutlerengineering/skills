@@ -313,8 +313,11 @@ def parse_run(root, scannable=()):
     Returns a dict:
       "runs": one entry per run_dirs(root), in that order —
         {"path": Path, "breakdown": [str] | None, "prd_id": str | None,
+         "prd": [str] | None, "prd_date": str | None,
          "architecture": [str] | None, "verification": str | None,
          "verification_error": str | None}.
+        "prd" and "prd_date" (the frontmatter `date:`) are what detectors
+        N and O read (ADR-0071, ADR-0072).
         A field is None when that run carries no such file.
         verification_error carries str(err) when verification.md exists
         but could not be decoded — check_evidence_honesty's own
@@ -345,12 +348,15 @@ def parse_run(root, scannable=()):
                 verification_text = verification.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError) as err:
                 verification_error = str(err)
+        prd_fields = (read_frontmatter(prd) or {}) if prd.is_file() else {}
         runs.append({
             "path": run,
             "breakdown": (breakdown.read_text(encoding="utf-8").splitlines()
                          if breakdown.is_file() else None),
-            "prd_id": ((read_frontmatter(prd) or {}).get("id")
-                      if prd.is_file() else None),
+            "prd_id": prd_fields.get("id"),
+            "prd": (prd.read_text(encoding="utf-8").splitlines()
+                    if prd.is_file() else None),
+            "prd_date": prd_fields.get("date"),
             "architecture": (architecture.read_text(
                 encoding="utf-8").splitlines()
                 if architecture.is_file() else None),

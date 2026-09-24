@@ -8,6 +8,11 @@ ux: required | not-applicable
 
 # PRD: <title>
 
+<!-- Ambiguity mid-draft? Mark it inline at the exact clause:
+     `[NEEDS CLARIFICATION: <question>]`. The clarify pass resolves every
+     marker before the PRD's approval gate, and gates.py detector N fails
+     a prd.md that still carries one (ADR-0071). -->
+
 ## Problem statement
 
 <The problem from the user's perspective. Inherit and sharpen idea.md.>

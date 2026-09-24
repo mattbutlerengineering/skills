@@ -163,3 +163,27 @@ Issue #430 mirrors the payload row (WO-0039, PRD-0003 §Success criteria).
 Stop line: the gate walk (WO-0040, PRD-0003 §Success criteria) onward is
 the operator's — applying `wo:ready-for-agent` fires a real, paid
 dispatch, and the branch's `(tracker: #430)` ref must reach main first.
+
+## Resumed 2026-09-22 — WO-0039 superseded, replacement payload minted as WO-0073/WO-0074
+
+Re-verified state at Implement (full detail in `breakdown.md`'s 2026-09-22
+note). #430 (WO-0039's mirror issue) was closed by the operator's own hand
+on 2026-09-21T14:15:09Z, outside the dispatch flow; the functional fix
+landed separately via PR #516, explicitly disclaiming WO-0039's credit.
+Surfaced to the operator as a redesign call, not an interview gap: they
+chose to swap in a fresh, small, mechanical, currently-unclaimed backlog
+item — the workflow-vocabulary sweep (`docs/backlog.md`, "Six workflow
+headers and one module docstring still say...") — as the new live-dispatch
+payload, minted as WO-0073 (author the mirror issue) and WO-0074 (the
+dispatched payload), continuing the repo-global WO sequence from its true
+max, WO-0072 (found by scanning every run's breakdown, not PRD-0003's own
+local max). WO-0039's row is checked on an amended scope (functional
+outcome confirmed, dispatch proof obligation transferred) — not as a
+dispatch demonstration.
+
+Stop line, same shape as 2026-09-15's: WO-0073's mirror issue can only be
+authored after this breakdown lands on `main` (ADR-0032 one-way order),
+and this run's authorization is still prepare-and-stop — no merge. This
+change goes up as a PR (same shape as PR #489) for the operator to review
+and merge; once merged, the next resume authors WO-0073's mirror issue and
+the run continues toward WO-0040's gate walk on WO-0074.
