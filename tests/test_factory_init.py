@@ -59,6 +59,7 @@ EXPECTED_RELS = {
     "templates/tools/factory/human_gates.py",
     "templates/tools/factory/gate_digest.py",
     "templates/tools/factory/rejection_mining.py",
+    "templates/tools/factory/standards_index.py",
 }
 
 SEEDED_ADRS = REPO_ROOT / "factory" / "templates" / "docs" / "adr"
