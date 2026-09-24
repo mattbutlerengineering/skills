@@ -249,6 +249,15 @@ class TestAssemblePrompt(unittest.TestCase):
         self.assertIn("# Context", prompt)
         self.assertIn("Codegraph summary", prompt)
 
+    def test_the_prompt_names_the_one_branch_the_agent_may_push(self):
+        """The workflow's --allowedTools permits pushing only a wo- branch
+        (TestAgentToolAllowlist), so the prompt must name that branch and
+        the exact push form, or the agent's push is denied."""
+        with tempfile.TemporaryDirectory() as tmp:
+            prompt = assembler.assemble_prompt(
+                "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
+        self.assertIn("git push -u origin wo-0005", prompt)
+
 
 class TestRunResolve(unittest.TestCase):
     """End to end: label event -> actor check -> row substrate -> charter ->
@@ -633,6 +642,48 @@ class TestMechanicalStops(unittest.TestCase):
     def test_the_agent_step_carries_a_max_turns_cap(self):
         self.assertIn("--max-turns",
                       self.WORKFLOW.read_text(encoding="utf-8"))
+
+
+class TestAgentToolAllowlist(unittest.TestCase):
+    """The first live dispatch (run 35956027401, issue #536) ended with
+    nine permission denials and no PR: claude-code-action denies Bash in
+    automation mode unless --allowedTools names it, so the SWE could edit
+    files but never commit, push, verify, or open its PR. The list carries
+    what the SWE charter's exit needs — and pushes only to a wo- branch,
+    never bare `git push` or `git:*`, since no branch protection guards
+    main on this plan."""
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "assembler.yml"
+
+    def allowlist(self):
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        found = re.search(r'--allowedTools "([^"]*)"', text)
+        self.assertIsNotNone(found, "the agent step names no --allowedTools")
+        return found.group(1).split(",")
+
+    def test_the_swe_exit_is_allowed(self):
+        tools = self.allowlist()
+        for tool in ("Edit", "Write", "Bash(git commit:*)",
+                     "Bash(git push -u origin wo-*)", "Bash(gh pr create:*)",
+                     "Bash(make:*)", "Bash(python3:*)"):
+            with self.subTest(tool=tool):
+                self.assertIn(tool, tools)
+
+    def test_no_entry_can_push_anywhere_but_a_wo_branch(self):
+        for tool in self.allowlist():
+            with self.subTest(tool=tool):
+                self.assertNotIn(tool, ("Bash", "Bash(*)", "Bash(git:*)",
+                                        "Bash(git push:*)", "Bash(gh:*)"))
+                if tool.startswith("Bash(git push"):
+                    self.assertRegex(tool, r"origin wo-\*\)$")
+
+    def test_the_prompts_push_is_one_the_allowlist_permits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            prompt = assembler.assemble_prompt(
+                "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
+        push = re.search(r"git push -u origin (\S+)", prompt).group(1)
+        self.assertTrue(push.startswith("wo-"), push)
+        self.assertIn("Bash(git push -u origin wo-*)", self.allowlist())
 
 
 if __name__ == "__main__":
