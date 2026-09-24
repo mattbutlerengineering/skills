@@ -99,3 +99,11 @@ not to cover an unmapped component.
   carries honest `coverage-waiver` comments on the six sections no row
   cites, as ADR-0072's Consequences ask. O skips a run with no
   `breakdown.md` yet: coverage is a Decompose-time property.
+- 2026-09-23: **the protocol-doc half of orders 69-71 landed** —
+  `docs/factory/retro-reflect-routine.md`,
+  `docs/factory/queue-groomer-routine.md` and
+  `docs/factory/doc-gardener-routine.md` exist, each shaped like
+  `docs/factory/improvement-routine.md` and each specifying its
+  ADR-0044-style trigger. The rows stay unchecked: the trigger half of
+  each acceptance criterion is not met, because a scheduled trigger is
+  recurring paid spend and creating one awaits the owner's approval.
