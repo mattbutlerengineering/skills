@@ -424,10 +424,14 @@ echo 'not json'
 echo '{"type": "result", "result": "ok"}'
 """
 
+# The fakes publish the PID file by rename, never by writing it in
+# place: `>` creates the file before echo fills it, so a group kill
+# landing between the two leaves it present and empty, and reading it
+# dies on int('') instead of reporting on the grandchild.
 FAKE_SLEEPER = """#!/bin/sh
 # Spawn a grandchild that outlives us unless the caller kills our group.
 sleep 300 &
-echo $! > "$PID_FILE"
+echo $! > "$PID_FILE.tmp" && mv "$PID_FILE.tmp" "$PID_FILE"
 echo '{"n": 1}'
 sleep 300
 """
@@ -436,7 +440,7 @@ FAKE_EXITING = """#!/bin/sh
 # Leader exits immediately; the grandchild inherits the stdout pipe and
 # keeps the process group alive after the leader is gone.
 sleep 300 &
-echo $! > "$PID_FILE"
+echo $! > "$PID_FILE.tmp" && mv "$PID_FILE.tmp" "$PID_FILE"
 exit 0
 """
 
@@ -446,6 +450,7 @@ exit 0
 
 FAKE_ENV_PROBE = """#!/bin/sh
 echo "{\\"guard\\": \\"${CLAUDECODE:-absent}\\"}"
+: > "$READY_FILE"
 """
 
 
@@ -480,6 +485,36 @@ def pid_alive(pid):
     """
     state = process_state(pid)
     return state is not None and not state.startswith("Z")
+
+
+class ReadinessGatedClock:
+    """Stands in for cli's `time` module so a harness timeout counts
+    from the fake's readiness, not from its spawn.
+
+    A timeout counted from spawn races the fake's own startup: under
+    load a cold spawn can outlast it, and the reader abandons a fake
+    that has not yet written anything. This clock holds still until
+    `marker` exists (the fake's readiness handshake), then runs at real
+    speed from where it stood, so the fake always gets its whole timeout
+    after it is set up. A fake that never gets ready releases the clock
+    after `ceiling` real seconds, so the test fails instead of hanging.
+    The tests/test_cli_process_reaping.py copy is the same clock.
+    """
+
+    def __init__(self, marker, ceiling=60):
+        self.marker = marker
+        self.ceiling = ceiling
+        self.start = time.time()
+        self.held = None  # seconds spent holding still, once released
+
+    def time(self):
+        now = time.time()
+        if self.held is None:
+            waiting = now - self.start < self.ceiling
+            if waiting and not self.marker.is_file():
+                return self.start
+            self.held = now - self.start
+        return now - self.held
 
 
 class FakeProcess:
@@ -552,11 +587,20 @@ class TestHarnessRun(unittest.TestCase):
                              [{"type": "result", "result": "ok"}])
         self.assertFalse(events.timed_out)
 
+    def gated_on_the_grandchild(self):
+        """The harness timeout counts from the PID file, not the spawn:
+        a spawn stall past a spawn-counted timeout kills the fake before
+        its grandchild exists, or abandons a leader that has not yet
+        exited, and either reads as a harness failure (beads wo-yjq)."""
+        return mock.patch.object(cli, "time",
+                                 ReadinessGatedClock(self.pid_file))
+
     def test_a_timeout_flips_timed_out_and_reaps_the_group(self):
         cmd = [self.script(FAKE_SLEEPER)]
-        with cli.harness_run(cmd, cwd=self.dir, timeout=2,
-                             env=self.env()) as events:
-            self.assertEqual(list(events), [{"n": 1}])
+        with self.gated_on_the_grandchild():
+            with cli.harness_run(cmd, cwd=self.dir, timeout=2,
+                                 env=self.env()) as events:
+                self.assertEqual(list(events), [{"n": 1}])
         self.assertTrue(events.timed_out)
         self.assert_grandchild_reaped()
 
@@ -566,9 +610,10 @@ class TestHarnessRun(unittest.TestCase):
         # only leave its loop by observing the exit — the cleanup always
         # runs against a dead leader.
         cmd = [self.script(FAKE_EXITING)]
-        with cli.harness_run(cmd, cwd=self.dir, timeout=2,
-                             env=self.env()) as events:
-            self.assertEqual(list(events), [])
+        with self.gated_on_the_grandchild():
+            with cli.harness_run(cmd, cwd=self.dir, timeout=2,
+                                 env=self.env()) as events:
+                self.assertEqual(list(events), [])
         self.assertFalse(events.timed_out)
         self.assert_grandchild_reaped()
 
@@ -582,15 +627,16 @@ class TestHarnessRun(unittest.TestCase):
             self.assertEqual(list(events), [])
 
     def test_the_default_env_strips_the_nesting_guard(self):
-        # Flakes under machine load (issue #446): a cold first spawn in
-        # the test process competes with everything else the suite has
-        # running. Warm the spawn path once before the timed call and
-        # give the read loop a much wider margin than the fake's actual
-        # near-instant echo needs — neither changes the happy path,
-        # which returns the moment EOF is hit.
-        subprocess.run([sys.executable, "-c", "pass"], check=True)  # warm
+        # The timeout clock starts once the probe has written its line,
+        # not at the spawn: under load a cold spawn can outlast any
+        # timeout counted from spawn, and the reader then abandons the
+        # run before the line exists (issue #446, beads wo-hdl). The
+        # happy path never reaches the timeout — it returns at EOF.
+        ready = self.dir / "ready"
         cmd = [self.script(FAKE_ENV_PROBE)]
-        with mock.patch.dict(os.environ, {"CLAUDECODE": "1"}):
+        env = {"CLAUDECODE": "1", "READY_FILE": str(ready)}
+        with mock.patch.dict(os.environ, env), \
+                mock.patch.object(cli, "time", ReadinessGatedClock(ready)):
             with cli.harness_run(cmd, cwd=self.dir, timeout=20) as events:
                 self.assertEqual(list(events), [{"guard": "absent"}])
 
