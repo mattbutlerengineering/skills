@@ -88,3 +88,11 @@ not to cover an unmapped component.
   nothing in `architecture.md` makes any one a prerequisite for
   another; sequencing them is a future dispatch-time choice, not a
   dependency this breakdown asserts.
+- 2026-09-23: **the protocol-doc half of orders 69-71 landed** —
+  `docs/factory/retro-reflect-routine.md`,
+  `docs/factory/queue-groomer-routine.md` and
+  `docs/factory/doc-gardener-routine.md` exist, each shaped like
+  `docs/factory/improvement-routine.md` and each specifying its
+  ADR-0044-style trigger. The rows stay unchecked: the trigger half of
+  each acceptance criterion is not met, because a scheduled trigger is
+  recurring paid spend and creating one awaits the owner's approval.

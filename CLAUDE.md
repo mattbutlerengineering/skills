@@ -90,6 +90,10 @@ pre-pass, deliberately **not** a gate:
 - `LEDGER.md` — per-skill maturity, linked to eval evidence
 - `docs/factory/improvement-routine.md` — the daily cloud routine's
   protocol (ADR-0044); tuned by PR, never edited by the routine itself
+- `docs/factory/retro-reflect-routine.md`,
+  `docs/factory/queue-groomer-routine.md`,
+  `docs/factory/doc-gardener-routine.md` — the weekly roster routines'
+  protocols (ADR-0044's pattern); triggers not yet created
 
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 -->
