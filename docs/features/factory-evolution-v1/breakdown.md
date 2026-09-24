@@ -27,7 +27,7 @@ detector A checks.
 
 ## Milestone B: Non-ADR derived-metric extension
 
-- [ ] **WO-0068** derive per-skill precision/recall/F1 from `trigger_eval.py`'s existing confusion matrix — size:S, blocked by: — (PRD-0006 §Success criteria)
+- [x] **WO-0068** derive per-skill precision/recall/F1 from `trigger_eval.py`'s existing confusion matrix — size:S, blocked by: — (PRD-0006 §Success criteria)
   - Accept: a new pure function in `trigger_eval.py` reads `summarize()`'s `confusion` dict and computes per-skill precision, recall, and F1 as a second pass over already-recorded results — no re-running any eval, no touching `evals/results/**` (append-only, CLAUDE.md eval honesty); unit tests cover the derivation against a fixture confusion matrix; the function is wired to answer `docs/backlog.md`'s existing "omp near-miss under-triggering: 8/16 near-miss cases under-trigger" seed with a trackable number. No new ADR (per `docs/research/eval-and-memory.md` shortlist item 5's own verdict — this row implements it as-is). Independent of every other row in this breakdown — implementable in parallel with any of them.
 
 ## Milestone C: Routine roster v2 (design + land the protocol doc + trigger only — issue #438's own scope bound; no new ADR, per architecture.md's Decisions)

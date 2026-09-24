@@ -19,16 +19,22 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import cli  # noqa: E402
 from trigger_eval import run_single_query  # noqa: E402
 
+# The fakes publish the PID file by rename, never by writing it in
+# place: `>` creates the file before echo fills it, so a poller can find
+# it present and empty, and a watcher that reads '' dies on int() and
+# reports a fake that did start as one that never did.
 FAKE_CLAUDE = """#!/bin/sh
 # Spawn a grandchild that outlives us unless the caller kills our group.
 sleep 300 &
-echo $! > "$PID_FILE"
+echo $! > "$PID_FILE.tmp" && mv "$PID_FILE.tmp" "$PID_FILE"
 sleep 300
 """
 
@@ -36,7 +42,7 @@ FAKE_EXITING_CLAUDE = """#!/bin/sh
 # Leader exits immediately; the grandchild inherits the stdout pipe and
 # keeps the process group alive after the leader is gone.
 sleep 300 &
-echo $! > "$PID_FILE"
+echo $! > "$PID_FILE.tmp" && mv "$PID_FILE.tmp" "$PID_FILE"
 exit 0
 """
 
@@ -82,6 +88,36 @@ def pid_alive(pid):
     """
     state = process_state(pid)
     return state is not None and not state.startswith("Z")
+
+
+class ReadinessGatedClock:
+    """Stands in for cli's `time` module so a harness timeout counts
+    from the fake's readiness, not from its spawn.
+
+    A timeout counted from spawn races the fake's own startup: under
+    load a cold spawn can outlast it, the harness group-kills a fake
+    that has not yet written anything, and no poll afterwards can find a
+    file that will now never appear. This clock holds still until
+    `marker` exists (the fake's readiness handshake), then runs at real
+    speed from where it stood, so the fake always gets its whole timeout
+    after it is set up. A fake that never gets ready releases the clock
+    after `ceiling` real seconds, so the test fails instead of hanging.
+    """
+
+    def __init__(self, marker, ceiling=60):
+        self.marker = marker
+        self.ceiling = ceiling
+        self.start = time.time()
+        self.held = None  # seconds spent holding still, once released
+
+    def time(self):
+        now = time.time()
+        if self.held is None:
+            waiting = now - self.start < self.ceiling
+            if waiting and not self.marker.is_file():
+                return self.start
+            self.held = now - self.start
+        return now - self.held
 
 
 class TestProcessTreeReaping(unittest.TestCase):
@@ -145,13 +181,15 @@ class TestProcessTreeReaping(unittest.TestCase):
 
     def test_grandchild_is_dead_after_timeout_return(self):
         self.install_fake(FAKE_CLAUDE)
-        # Warm the spawn path once, and give the fake more real room to
-        # fork+write its PID file before the harness's own timeout can
-        # kill the group out from under it (issue #446).
-        subprocess.run([sys.executable, "-c", "pass"], check=True)  # warm
-        watcher = self.watch_for_grandchild(budget=8)
-        fired = run_single_query("q", {"idea": "d"}, timeout=4,
-                                 model=None, isolate=False)
+        # The timeout clock starts at the PID file, not at the spawn:
+        # the kill under test can only land on a grandchild that exists,
+        # and no timeout counted from spawn is wide enough to promise one
+        # does under load (issue #446, beads wo-hdl).
+        watcher = self.watch_for_grandchild(budget=70)
+        with mock.patch.object(cli, "time",
+                               ReadinessGatedClock(self.pid_file)):
+            fired = run_single_query("q", {"idea": "d"}, timeout=2,
+                                     model=None, isolate=False)
         self.assertIsNone(fired)
         self.assert_grandchild_reaped(watcher)
 

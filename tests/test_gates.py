@@ -566,6 +566,254 @@ class TestStaleness(unittest.TestCase):
                 "I: docs/guide.md:1 stale link adr/0009-x.md (no such path)"])
 
 
+class TestStandardsDrift(unittest.TestCase):
+    """K (ADR-0073): docs/standards.json's ADR-derived entries must match
+    a fresh standards_index.build_index(root) regen, and an `enforced`
+    entry's source ADR must be `accepted`."""
+
+    def adr(self, tree, rel, status, bullet=None):
+        body = f"# X\n\n- Status: {status}\n"
+        if bullet is not None:
+            body += f"\n## Normative statements\n\n{bullet}\n"
+        tree.write(rel, body)
+
+    def standards(self, tree, entries):
+        tree.write("docs/standards.json", json.dumps(entries))
+
+    def test_an_absent_index_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.assertEqual(gates.check_standards_drift(tree.root), [])
+
+    def test_a_matching_index_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md", "accepted",
+                     "- **some-slug** (factory): Something MUST happen.")
+            self.standards(tree, [
+                {"slug": "some-slug", "statement": "Something MUST"
+                 " happen.", "level": "MUST", "source": "adr/0001#some-slug",
+                 "status": "advisory", "domain": "factory"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [])
+
+    def test_promoting_to_enforced_alone_is_not_drift(self):
+        # Decision (c), ADR-0073: status lives only in the index and
+        # build_index never derives it, so a promoted entry must not
+        # read as drifted just because it disagrees with a fresh
+        # regen's always-"advisory" status.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md", "accepted",
+                     "- **some-slug** (factory): Something MUST happen.")
+            self.standards(tree, [
+                {"slug": "some-slug", "statement": "Something MUST"
+                 " happen.", "level": "MUST", "source": "adr/0001#some-slug",
+                 "status": "enforced", "domain": "factory"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [])
+
+    def test_a_changed_statement_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md", "accepted",
+                     "- **some-slug** (factory): Something MUST happen.")
+            self.standards(tree, [
+                {"slug": "some-slug", "statement": "Something ELSE"
+                 " entirely.", "level": "MUST",
+                 "source": "adr/0001#some-slug", "status": "advisory",
+                 "domain": "factory"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: docs/standards.json has drifted from a fresh ADR"
+                " regeneration (run `python3 standards_index.py"
+                " update`)"])
+
+    def test_a_removed_bullet_is_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md", "accepted")
+            self.standards(tree, [
+                {"slug": "some-slug", "statement": "Something MUST"
+                 " happen.", "level": "MUST", "source": "adr/0001#some-slug",
+                 "status": "advisory", "domain": "factory"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: docs/standards.json has drifted from a fresh ADR"
+                " regeneration (run `python3 standards_index.py"
+                " update`)"])
+
+    def test_a_hand_curated_entry_never_drifts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md", "accepted")
+            self.standards(tree, [
+                {"slug": "stdlib-only", "statement": "Stdlib only.",
+                 "level": "MUST", "source": "CLAUDE.md#stdlib-only",
+                 "status": "advisory", "domain": "factory"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [])
+
+    def test_an_enforced_entry_needs_an_accepted_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md", "provisional",
+                     "- **some-slug** (factory): Something MUST happen.")
+            self.standards(tree, [
+                {"slug": "some-slug", "statement": "Something MUST"
+                 " happen.", "level": "MUST", "source": "adr/0001#some-slug",
+                 "status": "enforced", "domain": "factory"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: enforced statement 'some-slug' cites ADR-0001, status"
+                " 'provisional' (not accepted)"])
+
+    def test_an_enforced_entry_citing_a_superseded_adr_fails_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md",
+                     "superseded by ADR-0002",
+                     "- **some-slug** (factory): Something MUST happen.")
+            self.standards(tree, [
+                {"slug": "some-slug", "statement": "Something MUST"
+                 " happen.", "level": "MUST", "source": "adr/0001#some-slug",
+                 "status": "enforced", "domain": "factory"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: enforced statement 'some-slug' cites ADR-0001, status"
+                " 'superseded by ADR-0002' (not accepted)"])
+
+    def test_a_malformed_committed_index_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/standards.json", "not json")
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: docs/standards.json is not valid JSON: Expecting value:"
+                " line 1 column 1 (char 0)"])
+
+    def test_a_non_array_committed_index_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/standards.json", json.dumps({"not": "array"}))
+            self.assertEqual(gates.check_standards_drift(tree.root),
+                             ["K: docs/standards.json must be a JSON array"])
+
+    def test_a_malformed_source_adr_bullet_is_propagated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md", "accepted",
+                     "- **some-slug** (factory): No keyword here.")
+            self.standards(tree, [])
+            problems = gates.check_standards_drift(tree.root)
+            self.assertEqual(problems, [
+                "K: docs/adr/0001-x.md:7 statement carries no RFC-2119"
+                " keyword (MUST/MUST NOT/SHOULD/SHOULD NOT)"])
+
+
+class TestCaptureCompleteness(unittest.TestCase):
+    """M (ADR-0073): every docs/fixes/<slug>/defect.md that exists and is
+    not grandfathered must carry skills/capture/TEMPLATE.md's required
+    sections, each with real content."""
+
+    TODAY = gates.CAPTURE_ADOPTED
+
+    def defect(self, tree, rel, body, date=None):
+        date = date or self.TODAY
+        tree.write(rel, "---\nstage: capture\nrun: maintenance:x\n"
+                        f"date: {date}\nre-entry: implement\n---\n\n"
+                        f"# Defect: x\n\n{body}")
+
+    REQUIRED_BODY = (
+        "## Defect (or Condition)\n\nReal defect prose.\n\n"
+        "## Reproduction / Evidence\n\nReal repro steps.\n\n"
+        "## Root-cause hypothesis\n\nunknown\n\n"
+        "## Blast radius\n\nReal blast radius prose.\n\n"
+        "## Ruled out\n\n- none yet\n")
+
+    def test_no_docs_fixes_directory_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.assertEqual(gates.check_capture_completeness(tree.root), [])
+
+    def test_no_defect_md_in_a_run_is_out_of_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/fixes/demo/.keep", "")
+            self.assertEqual(gates.check_capture_completeness(tree.root), [])
+
+    def test_a_fully_filled_brief_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.defect(tree, "docs/fixes/demo/defect.md", self.REQUIRED_BODY)
+            self.assertEqual(gates.check_capture_completeness(tree.root), [])
+
+    def test_a_missing_section_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.defect(tree, "docs/fixes/demo/defect.md",
+                       "## Defect (or Condition)\n\nReal prose.\n")
+            self.assertEqual(gates.check_capture_completeness(tree.root), [
+                "M: docs/fixes/demo/defect.md missing required section"
+                " 'Reproduction / Evidence'",
+                "M: docs/fixes/demo/defect.md missing required section"
+                " 'Root-cause hypothesis'",
+                "M: docs/fixes/demo/defect.md missing required section"
+                " 'Blast radius'",
+                "M: docs/fixes/demo/defect.md missing required section"
+                " 'Ruled out'"])
+
+    def test_a_placeholder_only_section_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            body = self.REQUIRED_BODY.replace(
+                "Real blast radius prose.",
+                "<Who and what is affected, how badly, since when.>")
+            self.defect(tree, "docs/fixes/demo/defect.md", body)
+            self.assertEqual(gates.check_capture_completeness(tree.root), [
+                "M: docs/fixes/demo/defect.md required section 'Blast"
+                " radius' is present but placeholder-only (template text"
+                " was never filled in)"])
+
+    def test_heading_case_does_not_matter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.defect(tree, "docs/fixes/demo/defect.md",
+                       self.REQUIRED_BODY.replace(
+                           "## Root-cause hypothesis",
+                           "## root-cause HYPOTHESIS"))
+            self.assertEqual(gates.check_capture_completeness(tree.root), [])
+
+    def test_a_brief_dated_before_adoption_is_grandfathered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.defect(tree, "docs/fixes/demo/defect.md",
+                       "## Defect (or Condition)\n\nReal prose.\n",
+                       date="2026-01-01")
+            self.assertEqual(gates.check_capture_completeness(tree.root), [])
+
+    def test_a_brief_dated_on_adoption_day_is_not_grandfathered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.defect(tree, "docs/fixes/demo/defect.md",
+                       "## Defect (or Condition)\n\nReal prose.\n",
+                       date=self.TODAY)
+            self.assertNotEqual(gates.check_capture_completeness(tree.root),
+                                [])
+
+    def test_a_missing_date_is_not_grandfathered(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/fixes/demo/defect.md",
+                       "---\nstage: capture\n---\n\n# Defect: x\n\n"
+                       "## Defect (or Condition)\n\nReal prose.\n")
+            self.assertNotEqual(gates.check_capture_completeness(tree.root),
+                                [])
+
+    def test_multiple_defects_across_runs_are_each_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.defect(tree, "docs/fixes/one/defect.md",
+                       "## Defect (or Condition)\n\nReal prose.\n")
+            self.defect(tree, "docs/fixes/two/defect.md", self.REQUIRED_BODY)
+            problems = gates.check_capture_completeness(tree.root)
+            self.assertTrue(
+                all("docs/fixes/one/defect.md" in p for p in problems))
+            self.assertTrue(problems)
+
+
 class TestArchitectureDrift(unittest.TestCase):
     """D (origin: #142): architecture.md is a blueprint too. A file it names
     as present or absent must agree with the tree, or the doc has gone stale

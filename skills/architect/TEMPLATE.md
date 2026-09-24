@@ -41,7 +41,7 @@ date: YYYY-MM-DD
 
 ## Decisions & alternatives
 
-- **<Decision>** over <alternative> — <why it lost, one line>
+- **<Decision>** over <alternative> — <why it lost, one line; cite a matching `docs/standards.json` slug alongside any ADR number when the decision bears on one>
 
 ## ADRs
 

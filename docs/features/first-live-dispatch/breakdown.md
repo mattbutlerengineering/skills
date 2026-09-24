@@ -28,10 +28,14 @@ PRD citation — v1's breakdown records the same dodge).
 
 - [x] **WO-0038** author the payload's mirror issue at the gate line — size:S, blocked by: WO-0036, WO-0037 (PRD-0003 §Success criteria)
   - Accept: the payload row below is on main BEFORE its mirror issue exists (ADR-0032 one-way); the issue is labeled `type:chore` + `wo:draft` and its number is appended to the payload row as its tracker ref.
-- [ ] **WO-0039** gates.py J-roster agreement — the dispatched payload — size:S, blocked by: WO-0038 (PRD-0003 §Success criteria) (tracker: #430)
-  - Accept: gates.py's detector-roster docstring, the DETECTORS `"J"` entry, and the unclaimed-letters comment all agree detector J is claimed and implemented (K stays unclaimed); the battery stays green. Delivered by the dispatched agent as a PR closing the mirror issue — never by hand.
-- [ ] **WO-0040** gate walk and supervised dispatch — size:S, blocked by: WO-0038, WO-0044 (PRD-0003 §Success criteria)
-  - Accept: Matt applies `wo:prd-approved`, `wo:blueprint-approved`, then `wo:ready-for-agent` on the mirror issue, each after reading what the gate approves; the assembler run concludes `success`; the agent's PR closes the issue via the Closes grammar; the spend row lands on main workflow-committed with real nonzero tokens; the validator hand-off fires and the order flips to `wo:needs-review` untouched by hands.
+- [x] **WO-0039** gates.py J-roster agreement — superseded, proof obligation moved to WO-0073/WO-0074 — size:S, blocked by: WO-0038 (PRD-0003 §Success criteria) (tracker: #430)
+  - Accept (amended 2026-09-22, see Notes): checked on the amended scope only — the functional target (detector-roster docstring, `DETECTORS["J"]`, and the unclaimed-letters comment all agreeing J is claimed) is verified fixed on `main` via PR #516 (merged 2026-09-22T03:38:57Z), independent of this row and explicitly disclaiming its credit. The original criterion — delivered by the dispatched agent as a PR closing the mirror issue, never by hand — was not met: #430 was closed by the operator's own hand on 2026-09-21T14:15:09Z, before any dispatched PR existed, foreclosing that path for this payload. This row does not stand in as a dispatch demonstration; the two new rows below carry that obligation forward.
+- [ ] **WO-0073** author the mirror issue for the replacement payload — size:S, blocked by: WO-0036, WO-0037 (PRD-0003 §Success criteria)
+  - Accept: a new issue exists, labeled `type:chore` + `wo:draft` + `size:S`, body describing the fix in the row below in the #285/#430 grammar; the issue is created only after this breakdown row is on `main` (ADR-0032 one-way order); its number is appended to that row as `(tracker: #NNN)`.
+- [ ] **WO-0074** workflow-vocabulary sweep — the dispatched payload — size:S, blocked by: WO-0073 (PRD-0003 §Success criteria)
+  - Accept: `.github/workflows/cost-report.yml`, `design.yml`, `assembler.yml`, `toolsmith-mine.yml`, and `gate-digest.yml`, plus `assembler.py`'s module docstring, are corrected from "names no command(s) of its own" to the "names no repo tool of its own" phrasing `validator.yml`, `factory_init.py`, and `validator.py` already carry; `tests/test_design_pipeline.py`'s and `tests/test_gates.py`'s docstrings quoting the old phrasing are updated to match; `python3 factory_init.py update-manifest` is regenerated in the same commit (all six files are `factory_init.MIRRORS` entries); the full battery stays green. Delivered by the dispatched agent as a PR closing the mirror issue — never by hand.
+- [ ] **WO-0040** gate walk and supervised dispatch — size:S, blocked by: WO-0073, WO-0044 (PRD-0003 §Success criteria)
+  - Accept: Matt applies `wo:prd-approved`, `wo:blueprint-approved`, then `wo:ready-for-agent` on the vocabulary-sweep row's mirror issue (the row above; #430 is closed and no longer this run's dispatch target), each after reading what the gate approves; the assembler run concludes `success`; the agent's PR closes the issue via the Closes grammar; the spend row lands on main workflow-committed with real nonzero tokens; the validator hand-off fires and the order flips to `wo:needs-review` untouched by hands.
 - [ ] **WO-0041** gate 3: review, merge, close out — size:S, blocked by: WO-0040 (PRD-0003 §Success criteria)
   - Accept: Matt reviews and merges the agent's PR manually; the order reaches `wo:merged`; detector G is green on the close-out; the payload row above is checked as merged.
 
@@ -177,3 +181,31 @@ success criterion is covered by an Accept line above.
   wants the row first. It bears on the sibling run, whose branch
   modifies `cli.py` and the flaky test's own file while leaving that
   test byte-identical.
+- 2026-09-22 (autorun resume, Implement): re-verifying state at Implement
+  found #430 (the mirror issue for WO-0039, PRD-0003 §Success criteria)
+  closed by the operator's own hand on 2026-09-21T14:15:09Z — one second
+  after PR #489 (Milestone-A bookkeeping) merged, and *not* through the
+  `wo:ready-for-agent` dispatch flow. Separately, PR #516 (merged
+  2026-09-22T03:38:57Z) shipped the exact functional fix that row targeted
+  (`DETECTORS["J"]` and the two "J/K are unclaimed" comments), explicitly as
+  a standalone maintenance fix that disclaims that row's credit and does not
+  touch #430 or its checkbox. Net: the bug is fixed on `main`, but this
+  run's actual point — proving one real work order travels through the
+  gates to a dispatched, paid, agent-authored PR — never happened for that
+  payload, and #430 being closed forecloses it happening for that payload
+  now. Surfaced to the operator rather than resolved unilaterally (a
+  redesign call, same class as the sibling
+  `a-timestamp-the-digest-cannot-parse` run's stop-and-surface). Operator's
+  decision: that row (WO-0039, PRD-0003 §Success criteria) is checked on an
+  amended, honest scope (confirming the functional outcome, recording why
+  the dispatch proof cannot be salvaged) — not as a dispatch demonstration
+  — and the dispatch-proof obligation moves to a new payload: one row that
+  authors the new mirror issue (WO-0073, PRD-0003 §Success criteria) and one
+  that carries the workflow-vocabulary sweep itself (WO-0074, PRD-0003
+  §Success criteria) — `docs/backlog.md`'s "Six workflow headers..." seed,
+  mechanical, single-commit, no design decision, unclaimed. The gate-walk
+  row's (WO-0040, PRD-0003 §Success criteria) blocked-by moves from the
+  authoring row (WO-0038, PRD-0003 §Success criteria) to the new authoring
+  row (WO-0073, PRD-0003 §Success criteria) accordingly. The new ids (WO-0073, WO-0074, PRD-0003 §Success criteria) continue the true repo-global max found by scanning every run's breakdown (WO-0072, PRD-0003 §Success criteria), not this PRD's own local max (WO-0044, PRD-0003 §Success criteria). Nothing dispatched yet — the new authoring row's (WO-0073, PRD-0003 §Success criteria) mirror issue is authored only after this
+  breakdown lands on `main` (ADR-0032), so this change goes up as a PR for
+  the operator to review and merge, same as PR #489.
