@@ -7,6 +7,11 @@ date: YYYY-MM-DD
 
 # Architecture: <title>
 
+<!-- Ambiguity mid-draft? Mark it inline at the exact clause:
+     `[NEEDS CLARIFICATION: <question>]`. The clarify pass resolves every
+     marker before the blueprint gate, and gates.py detector N fails
+     an architecture.md that still carries one (ADR-0071). -->
+
 ## Approach
 
 <The design in one paragraph: shape of the solution and why this shape.>
