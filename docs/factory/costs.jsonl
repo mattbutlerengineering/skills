@@ -61,3 +61,4 @@
 {"wo": "WO-0061", "run_id": "session-2026-09-21-wo-0061", "model": "claude-sonnet-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-21"}
 {"wo": "WO-0062", "run_id": "session-2026-09-21-wo-0062", "model": "claude-sonnet-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-21"}
 {"wo": "WO-0063", "run_id": "session-2026-09-21-wo-0063", "model": "claude-sonnet-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-21"}
+{"wo": "WO-0039", "run_id": "session-2026-09-22-wo-0039", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-22"}
