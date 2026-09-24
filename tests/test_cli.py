@@ -446,6 +446,7 @@ exit 0
 
 FAKE_ENV_PROBE = """#!/bin/sh
 echo "{\\"guard\\": \\"${CLAUDECODE:-absent}\\"}"
+: > "$READY_FILE"
 """
 
 
@@ -480,6 +481,36 @@ def pid_alive(pid):
     """
     state = process_state(pid)
     return state is not None and not state.startswith("Z")
+
+
+class ReadinessGatedClock:
+    """Stands in for cli's `time` module so a harness timeout counts
+    from the fake's readiness, not from its spawn.
+
+    A timeout counted from spawn races the fake's own startup: under
+    load a cold spawn can outlast it, and the reader abandons a fake
+    that has not yet written anything. This clock holds still until
+    `marker` exists (the fake's readiness handshake), then runs at real
+    speed from where it stood, so the fake always gets its whole timeout
+    after it is set up. A fake that never gets ready releases the clock
+    after `ceiling` real seconds, so the test fails instead of hanging.
+    The tests/test_cli_process_reaping.py copy is the same clock.
+    """
+
+    def __init__(self, marker, ceiling=60):
+        self.marker = marker
+        self.ceiling = ceiling
+        self.start = time.time()
+        self.held = None  # seconds spent holding still, once released
+
+    def time(self):
+        now = time.time()
+        if self.held is None:
+            waiting = now - self.start < self.ceiling
+            if waiting and not self.marker.is_file():
+                return self.start
+            self.held = now - self.start
+        return now - self.held
 
 
 class FakeProcess:
@@ -582,15 +613,16 @@ class TestHarnessRun(unittest.TestCase):
             self.assertEqual(list(events), [])
 
     def test_the_default_env_strips_the_nesting_guard(self):
-        # Flakes under machine load (issue #446): a cold first spawn in
-        # the test process competes with everything else the suite has
-        # running. Warm the spawn path once before the timed call and
-        # give the read loop a much wider margin than the fake's actual
-        # near-instant echo needs — neither changes the happy path,
-        # which returns the moment EOF is hit.
-        subprocess.run([sys.executable, "-c", "pass"], check=True)  # warm
+        # The timeout clock starts once the probe has written its line,
+        # not at the spawn: under load a cold spawn can outlast any
+        # timeout counted from spawn, and the reader then abandons the
+        # run before the line exists (issue #446, beads wo-hdl). The
+        # happy path never reaches the timeout — it returns at EOF.
+        ready = self.dir / "ready"
         cmd = [self.script(FAKE_ENV_PROBE)]
-        with mock.patch.dict(os.environ, {"CLAUDECODE": "1"}):
+        env = {"CLAUDECODE": "1", "READY_FILE": str(ready)}
+        with mock.patch.dict(os.environ, env), \
+                mock.patch.object(cli, "time", ReadinessGatedClock(ready)):
             with cli.harness_run(cmd, cwd=self.dir, timeout=20) as events:
                 self.assertEqual(list(events), [{"guard": "absent"}])
 
