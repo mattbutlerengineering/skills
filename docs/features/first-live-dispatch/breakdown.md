@@ -41,9 +41,9 @@ PRD citation — v1's breakdown records the same dodge).
 
 ## Milestone C: Breaker proven (the stop machinery has fired for real and the run's evidence is verification-grade)
 
-- [ ] **WO-0042** fire the breaker on real spend and prove dispatch inert — size:S, blocked by: WO-0041 (PRD-0003 §Success criteria)
+- [x] **WO-0042** fire the breaker on real spend and prove dispatch inert — size:S, blocked by: WO-0041 (PRD-0003 §Success criteria)
   - Accept: a PR lowers `monthly_cap_usd` to 0.01 with `factory_init.py update-manifest` in the same commit; a `workflow_dispatch` cost-report run computes PAUSE from real rows and itself sets `FACTORY_PAUSED=true`; an owner-applied ready label while paused yields an assembler run concluding `skipped`; a second PR reverts the cap (manifest regenerated); Matt clears the flag by hand.
-- [ ] **WO-0043** evidence bundle and spend rollup — size:S, blocked by: WO-0042 (PRD-0003 §Success criteria)
+- [x] **WO-0043** evidence bundle and spend rollup — size:S, blocked by: WO-0042 (PRD-0003 §Success criteria)
   - Accept: every PRD-0003 success criterion has a quotable, fenced check recorded for Verify (run conclusions, label timelines, ledger rows, secret names); the ledger rollup shows total recorded run spend ≤ $10 (notional list-rate figures — subscription auth bills nothing per-run).
 
 ## Design gaps found
@@ -248,3 +248,102 @@ success criterion is covered by an Accept line above.
   not post on #545: its branch predates #547, and with no
   `FACTORY_REVIEW_TOKEN` the reviewer would share the author's identity,
   which PRD-0001 forbids.
+
+## Evidence for Verify (2026-09-25)
+
+One quotable check per PRD-0003 §Success criteria bullet, in PRD order. The status line under each is the operating session's reading. Verify rules on it, not this section.
+
+1. Both secrets exist in Actions. Met.
+
+```text
+$ gh secret list
+CLAUDE_CODE_OAUTH_TOKEN
+FACTORY_PAUSE_TOKEN
+```
+
+2. The mirror issue carries the full gate history. Met on a **delegated** basis: the owner directed the operating session to apply the three gate labels, so the timeline's `by mattbutlerengineering` is the owner's account, not a hand-read gate.
+
+```text
+$ gh api repos/{owner}/{repo}/issues/536/timeline --paginate  # labeled events  # gate walk and terminal flips; retries elided
+2026-09-24T04:31:31Z labeled wo:prd-approved by mattbutlerengineering
+2026-09-24T04:31:35Z labeled wo:blueprint-approved by mattbutlerengineering
+2026-09-24T04:31:39Z labeled wo:ready-for-agent by mattbutlerengineering
+2026-09-24T04:31:50Z unlabeled wo:prd-approved by github-actions[bot]
+2026-09-24T04:31:50Z unlabeled wo:blueprint-approved by github-actions[bot]
+2026-09-25T04:11:29Z labeled wo:needs-review by github-actions[bot]
+2026-09-25T04:20:46Z labeled wo:merged by github-actions[bot]
+2026-09-25T04:20:47Z unlabeled wo:needs-review by github-actions[bot]
+```
+
+3. An assembler run concludes `success` and the agent's PR closes the mirror via `Closes #N`. Met (attempt 6; attempts 1-5 failed on harness defects #539 and #546, and the PR-creation setting).
+
+```text
+$ gh run view 36092718537 --json conclusion,event
+issues success
+$ gh pr view 545 --json author,body
+author=app/github-actions
+WO-0074 (PRD-0003 §Success criteria) — Closes #536
+```
+
+4. The validator hand-off fires live: check + review + label jobs, flip untouched by hands. **Partial.** The automatic hand-off (36093103416) failed on #546. After #547 it was re-fired by hand (36093426992): `check` and `needs-review-label` succeeded, and the flip itself had no hand on the label. `review` has never posted: #545's branch predates #547, and without a `FACTORY_REVIEW_TOKEN` it would share the author's identity.
+
+```text
+$ gh run view 36093103416 --json jobs
+created 2026-09-25T04:06:49Z
+  needs-review-label failure
+  check failure
+  review failure
+  merged-label skipped
+$ gh run view 36093426992 --json jobs
+created 2026-09-25T04:11:21Z
+  review failure
+  needs-review-label success
+  check success
+  merged-label skipped
+```
+
+5. The owner merges the PR manually; `wo:merged` with detector G green. Met: merged by hand, not delegated.
+
+```text
+$ gh pr view 545 --json mergedBy,mergedAt
+mattbutlerengineering 2026-09-25T04:20:35Z
+$ gh issue view 536 --json state,labels
+CLOSED wo:merged,size:S,type:chore
+$ python3 gates.py
+gates: 0 problem(s)
+```
+
+6. The dispatched run's spend row, real nonzero tokens, workflow-committed. Met.
+
+```text
+$ git log --format="%an | %s" -S 36092718537 -- docs/factory/costs.jsonl
+github-actions[bot] | chore(factory): run-spend row (assembler)
+$ python3 -c "import json; [print(json.dumps({k: v for k, v in json.loads(l).items() if k != 'wo'})) for l in open('docs/factory/costs.jsonl') if '36092718537' in l]"
+{"run_id": "36092718537", "model": "claude-sonnet-5", "tokens": 2813411, "cost": 1.3091811000000004, "outcome": "completed", "at": "2026-09-25"}
+```
+
+7. The breaker fires for real and a ready label is inert until the flag is cleared by hand. Met. The pause was set by automation (the cost-report workflow). The final clear was delegated to the operating session (04:35:51Z). `main` was deliberately red between the paired cap PRs #555 and #557.
+
+```text
+$ gh run view 36094902578 --log | grep cr:
+cr: spend $5.43 has reached or exceeded the $0.01 monthly cap — pausing dispatch (FACTORY_PAUSED)
+$ gh run view 36094946935 --json event,conclusion
+issues skipped
+```
+
+8. Total run spend ≤ $10, readable from the ledger. Met: $5.43 across six dispatches. The cost-report and validator runs record no spend.
+
+```text
+$ python3 -c "import json; r = [json.loads(l) for l in open('docs/factory/costs.jsonl')]; d = [x for x in r if x['run_id'].isdigit()]; print(len(d), 'workflow-recorded runs, total $%.2f' % sum(x['cost'] for x in d))"
+6 workflow-recorded runs, total $5.43
+```
+
+9. The J-roster fix lands correct. Met by #516 on the amended scope, not by a dispatch (see the 2026-09-22 note).
+
+```text
+$ grep -n "\"J\":" gates.py
+1678:    "J": ("LABEL-WIRING", "gates.py", "offline"),
+$ python3 -m unittest discover tests
+Ran 1791 tests in 20.685s
+OK
+```
