@@ -277,6 +277,7 @@ class TestRunResolve(unittest.TestCase):
             self.assertEqual(outputs["band"], "implementation")
             self.assertEqual(outputs["model"], "claude-sonnet-5")
             self.assertIn("WO-0005", outputs["prompt"])
+            self.assertEqual(outputs["branch"], "wo-0005")
 
     def test_a_budget_exhausted_order_is_refused(self):
         """ADR-0034: the dispatcher refuses a budget-exhausted order until
@@ -644,6 +645,12 @@ class TestMechanicalStops(unittest.TestCase):
                       self.WORKFLOW.read_text(encoding="utf-8"))
 
 
+# The one push the agent may make: its own order's branch, exactly. Run
+# 36083668042 proved a prefix rule `wo-:*` never matches `wo-0074` (a
+# `:*` prefix ends at a word boundary), so the rule is resolved per order.
+PUSH_RULE = "Bash(git push -u origin ${{ steps.resolve.outputs.branch }})"
+
+
 class TestAgentToolAllowlist(unittest.TestCase):
     """The first live dispatch (run 35956027401, issue #536) ended with
     nine permission denials and no PR: claude-code-action denies Bash in
@@ -664,7 +671,7 @@ class TestAgentToolAllowlist(unittest.TestCase):
     def test_the_swe_exit_is_allowed(self):
         tools = self.allowlist()
         for tool in ("Edit", "Write", "Bash(git commit:*)",
-                     "Bash(git push -u origin wo-:*)", "Bash(gh pr create:*)",
+                     PUSH_RULE, "Bash(gh pr create:*)",
                      "Bash(make:*)", "Bash(python3:*)"):
             with self.subTest(tool=tool):
                 self.assertIn(tool, tools)
@@ -675,7 +682,7 @@ class TestAgentToolAllowlist(unittest.TestCase):
                 self.assertNotIn(tool, ("Bash", "Bash(*)", "Bash(git:*)",
                                         "Bash(git push:*)", "Bash(gh:*)"))
                 if tool.startswith("Bash(git push"):
-                    self.assertRegex(tool, r"origin wo-:\*\)$")
+                    self.assertEqual(tool, PUSH_RULE)
 
     def test_the_run_keeps_its_denials_inspectable(self):
         """Run 35956750804 reported 7 denials and the log showed only the
@@ -690,9 +697,9 @@ class TestAgentToolAllowlist(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             prompt = assembler.assemble_prompt(
                 "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
-        push = re.search(r"git push -u origin (\S+)", prompt).group(1)
-        self.assertTrue(push.startswith("wo-"), push)
-        self.assertIn("Bash(git push -u origin wo-:*)", self.allowlist())
+        push = re.search(r"git push -u origin (\S+)`", prompt).group(1)
+        self.assertEqual(push, assembler.branch_for("WO-0005"))
+        self.assertIn(PUSH_RULE, self.allowlist())
 
 
 if __name__ == "__main__":
