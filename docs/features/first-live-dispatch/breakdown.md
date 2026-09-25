@@ -34,7 +34,7 @@ PRD citation — v1's breakdown records the same dodge).
   - Accept: a new issue exists, labeled `type:chore` + `wo:draft` + `size:S`, body describing the fix in the row below in the #285/#430 grammar; the issue is created only after this breakdown row is on `main` (ADR-0032 one-way order); its number is appended to that row as `(tracker: #NNN)`.
 - [ ] **WO-0074** workflow-vocabulary sweep — the dispatched payload — size:S, blocked by: WO-0073 (PRD-0003 §Success criteria) (tracker: #536)
   - Accept (amended 2026-09-25, see Notes): `assembler.py`'s module docstring is corrected from "names no commands of its own" to the "names no repo tool of its own" phrasing `validator.yml`, `factory_init.py`, and `validator.py` already carry; `tests/test_design_pipeline.py`'s and `tests/test_gates.py`'s docstrings quoting the old phrasing are updated to match; `python3 factory_init.py update-manifest` is regenerated in the same commit (`assembler.py` is a `factory_init.MIRRORS` entry); no file under `.github/workflows/` is touched; the full battery stays green. Delivered by the dispatched agent as a PR closing the mirror issue — never by hand.
-- [ ] **WO-0040** gate walk and supervised dispatch — size:S, blocked by: WO-0073, WO-0044 (PRD-0003 §Success criteria)
+- [x] **WO-0040** gate walk and supervised dispatch — size:S, blocked by: WO-0073, WO-0044 (PRD-0003 §Success criteria)
   - Accept: Matt applies `wo:prd-approved`, `wo:blueprint-approved`, then `wo:ready-for-agent` on the vocabulary-sweep row's mirror issue (the row above; #430 is closed and no longer this run's dispatch target), each after reading what the gate approves; the assembler run concludes `success`; the agent's PR closes the issue via the Closes grammar; the spend row lands on main workflow-committed with real nonzero tokens; the validator hand-off fires and the order flips to `wo:needs-review` untouched by hands.
 - [ ] **WO-0041** gate 3: review, merge, close out — size:S, blocked by: WO-0040 (PRD-0003 §Success criteria)
   - Accept: Matt reviews and merges the agent's PR manually; the order reaches `wo:merged`; detector G is green on the close-out; the payload row above is checked as merged.
@@ -225,3 +225,18 @@ success criterion is covered by an Accept line above.
   `.github/workflows/`. The owner chose to narrow the payload to the
   non-workflow files instead of issuing a workflow-scoped token; the
   five workflow headers stay a hand-done backlog seed.
+- 2026-09-25: **WO-0040 (PRD-0003 §Success criteria) checked, with two
+  caveats on the record.** Dispatch attempt 6 (run 36092718537)
+  concluded `success`: the agent opened PR #545 with `Closes #536`,
+  and its spend row (2,813,411 tokens, $1.31) landed on main,
+  workflow-committed. Attempt 5 had pushed `wo-0074` but could not open
+  its PR ("GitHub Actions is not permitted to create or approve pull
+  requests"), so the owner enabled that repo setting (default token
+  permissions stay read-only) and the stale branch was deleted before
+  attempt 6. Caveat one: the gate labels were delegated (see the note
+  above). Caveat two: the validator hand-off fired but every job failed
+  (run 36093103416) on two latent defects, a missing pull-requests scope
+  and a synthesized event written to the unwritable GITHUB_EVENT_PATH
+  (#546, fixed by #547). After the fix the hand-off was re-fired by hand,
+  and needs-review-label then flipped #536 to `wo:needs-review` with no
+  hand on the label. Six attempts cost $5.43 in total.
