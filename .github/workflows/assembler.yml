@@ -127,12 +127,14 @@ jobs:
           # --allowedTools: automation mode denies Bash unless named here,
           # and the SWE's exit (branch, commit, push, verify, open the PR)
           # is all Bash — the first live dispatch (issue #536) was denied
-          # nine times and delivered no PR. Pushes are allowed only to the
-          # wo- branch assemble_prompt names: no branch protection guards
-          # main on this plan, so this list is the push boundary.
+          # nine times and delivered no PR. The one allowed push is this
+          # order's own branch, exactly (assembler.branch_for): no branch
+          # protection guards main on this plan, so this list is the push
+          # boundary. A `wo-:*` prefix rule never matched `wo-0074` (run
+          # 36083668042) — a `:*` prefix ends at a word boundary.
           claude_args: >-
             --model ${{ steps.resolve.outputs.model }} --max-turns 100
-            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git checkout:*),Bash(git switch:*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin wo-:*),Bash(gh pr create:*),Bash(gh issue view:*),Bash(make:*),Bash(python3:*)"
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git checkout:*),Bash(git switch:*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin ${{ steps.resolve.outputs.branch }}),Bash(gh pr create:*),Bash(gh issue view:*),Bash(make:*),Bash(python3:*)"
       # The run's own spend, machine-written to the append-only cost ledger
       # (issue #222; ADR-0034): tokens and cost come from the action's
       # execution file — the harness's record, never a hand-typed figure.
