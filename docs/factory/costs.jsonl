@@ -73,3 +73,4 @@
 {"wo": "WO-0074", "run_id": "36083668042", "model": "claude-sonnet-5", "tokens": 1160689, "cost": 0.5526167999999999, "outcome": "completed", "at": "2026-09-25"}
 {"wo": "WO-0074", "run_id": "36084092173", "model": "claude-sonnet-5", "tokens": 1312460, "cost": 0.7334955000000001, "outcome": "completed", "at": "2026-09-25"}
 {"wo": "WO-0074", "run_id": "36090269361", "model": "claude-sonnet-5", "tokens": 1821429, "cost": 0.9545238, "outcome": "completed", "at": "2026-09-25"}
+{"wo": "WO-0074", "run_id": "36092718537", "model": "claude-sonnet-5", "tokens": 2813411, "cost": 1.3091811000000004, "outcome": "completed", "at": "2026-09-25"}
