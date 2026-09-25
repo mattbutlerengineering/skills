@@ -2284,7 +2284,7 @@ class TestLockstep(unittest.TestCase):
     The old version asserted *membership* — every canonical command appears
     somewhere — so drift by ADDITION was invisible: a step added to CI and
     not to the Makefile passed. These assert exact, ordered equality of the
-    command sets, and that the workflow names no command of its own (it goes
+    command sets, and that the workflow names no repo tool of its own (it goes
     through `make`), which is what lets one workflow file serve both this
     repo and every stamped product repo. The root->product respelling the
     assertions lean on is factory_init.product_form — the production
