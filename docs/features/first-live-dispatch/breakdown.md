@@ -33,7 +33,7 @@ PRD citation — v1's breakdown records the same dodge).
 - [x] **WO-0073** author the mirror issue for the replacement payload — size:S, blocked by: WO-0036, WO-0037 (PRD-0003 §Success criteria)
   - Accept: a new issue exists, labeled `type:chore` + `wo:draft` + `size:S`, body describing the fix in the row below in the #285/#430 grammar; the issue is created only after this breakdown row is on `main` (ADR-0032 one-way order); its number is appended to that row as `(tracker: #NNN)`.
 - [ ] **WO-0074** workflow-vocabulary sweep — the dispatched payload — size:S, blocked by: WO-0073 (PRD-0003 §Success criteria) (tracker: #536)
-  - Accept: `.github/workflows/cost-report.yml`, `design.yml`, `assembler.yml`, `toolsmith-mine.yml`, and `gate-digest.yml`, plus `assembler.py`'s module docstring, are corrected from "names no command(s) of its own" to the "names no repo tool of its own" phrasing `validator.yml`, `factory_init.py`, and `validator.py` already carry; `tests/test_design_pipeline.py`'s and `tests/test_gates.py`'s docstrings quoting the old phrasing are updated to match; `python3 factory_init.py update-manifest` is regenerated in the same commit (all six files are `factory_init.MIRRORS` entries); the full battery stays green. Delivered by the dispatched agent as a PR closing the mirror issue — never by hand.
+  - Accept (amended 2026-09-25, see Notes): `assembler.py`'s module docstring is corrected from "names no commands of its own" to the "names no repo tool of its own" phrasing `validator.yml`, `factory_init.py`, and `validator.py` already carry; `tests/test_design_pipeline.py`'s and `tests/test_gates.py`'s docstrings quoting the old phrasing are updated to match; `python3 factory_init.py update-manifest` is regenerated in the same commit (`assembler.py` is a `factory_init.MIRRORS` entry); no file under `.github/workflows/` is touched; the full battery stays green. Delivered by the dispatched agent as a PR closing the mirror issue — never by hand.
 - [ ] **WO-0040** gate walk and supervised dispatch — size:S, blocked by: WO-0073, WO-0044 (PRD-0003 §Success criteria)
   - Accept: Matt applies `wo:prd-approved`, `wo:blueprint-approved`, then `wo:ready-for-agent` on the vocabulary-sweep row's mirror issue (the row above; #430 is closed and no longer this run's dispatch target), each after reading what the gate approves; the assembler run concludes `success`; the agent's PR closes the issue via the Closes grammar; the spend row lands on main workflow-committed with real nonzero tokens; the validator hand-off fires and the order flips to `wo:needs-review` untouched by hands.
 - [ ] **WO-0041** gate 3: review, merge, close out — size:S, blocked by: WO-0040 (PRD-0003 §Success criteria)
@@ -209,3 +209,19 @@ success criterion is covered by an Accept line above.
   row (WO-0073, PRD-0003 §Success criteria) accordingly. The new ids (WO-0073, WO-0074, PRD-0003 §Success criteria) continue the true repo-global max found by scanning every run's breakdown (WO-0072, PRD-0003 §Success criteria), not this PRD's own local max (WO-0044, PRD-0003 §Success criteria). Nothing dispatched yet — the new authoring row's (WO-0073, PRD-0003 §Success criteria) mirror issue is authored only after this
   breakdown lands on `main` (ADR-0032), so this change goes up as a PR for
   the operator to review and merge, same as PR #489.
+- 2026-09-25: **WO-0074 (PRD-0003 §Success criteria) re-scoped after four dispatch attempts; the
+  gate labels were delegated.** The owner chose to delegate the three
+  gate labels on #536 to the operating agent session rather than apply
+  them by hand, so WO-0040's (PRD-0003 §Success criteria) "applies each after reading what the gate
+  approves" is met on a delegated basis, not as independent human
+  review. Four dispatches (runs 35956027401, 35956750804, 36083668042,
+  36084092173; $3.17 total, workflow-committed ledger rows) each ended
+  `wo:failed` with no PR. Attempts 1-3 exposed a harness defect: the
+  agent step passed no `--allowedTools`, so every Bash call was denied
+  (#539; fixed by #540, #541, #542, which also keep the execution file
+  as an artifact and allow exactly the order's own branch push).
+  Attempt 4 did the whole payload correctly and was stopped by GitHub:
+  the workflow's `GITHUB_TOKEN` can never push changes under
+  `.github/workflows/`. The owner chose to narrow the payload to the
+  non-workflow files instead of issuing a workflow-scoped token; the
+  five workflow headers stay a hand-done backlog seed.
