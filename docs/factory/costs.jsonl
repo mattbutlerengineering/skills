@@ -70,3 +70,4 @@
 {"wo": "WO-0074", "run_id": "35956750804", "model": "claude-sonnet-5", "tokens": 2529525, "cost": 1.1777046, "outcome": "completed", "at": "2026-09-24"}
 {"wo": "WO-0074", "run_id": "gate-prd-2026-09-24T04:31:50Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:prd:1399s", "at": "2026-09-24"}
 {"wo": "WO-0074", "run_id": "gate-blueprint-2026-09-24T04:31:50Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:blueprint:19s", "at": "2026-09-24"}
+{"wo": "WO-0074", "run_id": "36083668042", "model": "claude-sonnet-5", "tokens": 1160689, "cost": 0.5526167999999999, "outcome": "completed", "at": "2026-09-25"}
