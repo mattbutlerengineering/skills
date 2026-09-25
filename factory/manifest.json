@@ -21,7 +21,7 @@
     "templates/docs/adr/TEMPLATE.md": "eeba4ada146a6a9dac29098ca52750b18307ae14602aca469c66408bddda3afa",
     "templates/docs/design/TEMPLATE.md": "e1f91e3f34bb0f742ca40e2390e5dfbeaaca585eddb69437b9a71b56708500a0",
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
-    "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
+    "templates/factory.json": "9350225260fa2884353806633aa48630b53b6e33831b6ede4b2acf444fe466e0",
     "templates/tools/factory/assembler.py": "d443489c10c43e75e80a5806f538bc5dc00feff3db55b99186d912ff5d69ae46",
     "templates/tools/factory/budget_guard.py": "f4e3abe3dfc820d3f397efc463f6d229925d33acf7625bde59fcc92bf6db20b4",
     "templates/tools/factory/cli.py": "023d0d2d403dca28dc9b43a5500b4db3dac495a3275735a87b92c4519c7b039b",
