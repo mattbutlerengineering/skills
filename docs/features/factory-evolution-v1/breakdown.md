@@ -107,3 +107,19 @@ not to cover an unmapped component.
   ADR-0044-style trigger. The rows stay unchecked: the trigger half of
   each acceptance criterion is not met, because a scheduled trigger is
   recurring paid spend and creating one awaits the owner's approval.
+- 2026-09-25: **WO-0065 (PRD-0006 §Success criteria) is blocked by
+  hosting, not by design.** `mattbutlerengineering/skills` is
+  user-owned, private, and on the free plan: `gh api
+  repos/{owner}/{repo}/branches/main/protection` and
+  `.../rulesets` both return HTTP 403 ("Upgrade to GitHub Pro or make
+  this repository public"), and GitHub offers the merge queue only on
+  organization-owned repositories (public, or private on Enterprise
+  Cloud). No `merge_group` triggers were added, because they would
+  never fire. One consequence is on the record: no status check is
+  enforced on `main` at all today, so ADR-0036's "required checks" are
+  convention, not a GitHub rule. The owner decides whether to move the
+  repo to an organization. WO-0072 (PRD-0006 §Success criteria), which
+  closes out this run, waits on this row and on the trigger halves of
+  WO-0069, WO-0070 and WO-0071 (PRD-0006 §Success criteria). Creating
+  those triggers failed with `401 oauth_scope_insufficient` until the
+  owner signs in again.
