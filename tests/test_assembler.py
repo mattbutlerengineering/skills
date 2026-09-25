@@ -573,8 +573,29 @@ class TestValidatorDispatchLockstep(unittest.TestCase):
         # (test_validator.TestPrEvent); what this pins is that the
         # workflow still asks for it and still says where it lands.
         text = self.VALIDATOR.read_text(encoding="utf-8")
-        self.assertIn("GITHUB_EVENT_PATH=", text)
         self.assertIn("make pr-event", text)
+        # GitHub refuses to let $GITHUB_ENV overwrite a GITHUB_* default,
+        # so a shim that writes GITHUB_EVENT_PATH there is silently
+        # ignored and the steps read the dispatch event, which carries no
+        # pull_request (run 36093103416: "V: no pull_request in the CI
+        # event payload"). Every shim hands its path over as
+        # FACTORY_EVENT_PATH, which cli.read_event prefers.
+        shims = text.count("name: Synthesize the PR event payload")
+        self.assertEqual(text.count('echo "FACTORY_EVENT_PATH='), shims)
+        self.assertNotIn('echo "GITHUB_EVENT_PATH=', text)
+
+    def test_every_job_that_reads_the_pr_may_read_pull_requests(self):
+        """On a private repo `gh api pulls/N` needs pull-requests read;
+        a job granted only contents/issues got HTTP 403 (run
+        36093103416). Every job carrying a synthesize shim must name a
+        pull-requests scope."""
+        text = self.VALIDATOR.read_text(encoding="utf-8")
+        jobs = re.split(r"\n  (?=[a-z][a-z-]*:\n)", text.split("\njobs:\n", 1)[1])
+        for job in jobs:
+            if "name: Synthesize the PR event payload" not in job:
+                continue
+            with self.subTest(job=job.split(":", 1)[0]):
+                self.assertRegex(job, r"pull-requests: (read|write)")
 
     def test_every_dispatch_shim_goes_through_the_one_target(self):
         """One owner for the synthetic event, counted rather than

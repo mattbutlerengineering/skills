@@ -677,6 +677,29 @@ class TestReadEvent(unittest.TestCase):
                 cli.read_event({"GITHUB_EVENT_PATH": str(path)}),
                 ({"action": "labeled"}, None))
 
+    def test_the_factory_override_wins_over_the_runner_path(self):
+        """A step cannot overwrite GITHUB_EVENT_PATH through $GITHUB_ENV
+        (GitHub protects GITHUB_* defaults), so validator.yml's dispatch
+        shims hand their synthesized payload over as FACTORY_EVENT_PATH."""
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = Path(tmp) / "dispatch.json"
+            runner.write_text('{"inputs": {"pr": "7"}}', encoding="utf-8")
+            synthesized = Path(tmp) / "pr-event.json"
+            synthesized.write_text('{"pull_request": {"number": 7}}',
+                                   encoding="utf-8")
+            self.assertEqual(
+                cli.read_event({"GITHUB_EVENT_PATH": str(runner),
+                                "FACTORY_EVENT_PATH": str(synthesized)}),
+                ({"pull_request": {"number": 7}}, None))
+
+    def test_an_unreadable_override_names_the_override(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = str(Path(tmp) / "nope.json")
+            event, error = cli.read_event({"FACTORY_EVENT_PATH": missing})
+            self.assertIsNone(event)
+            self.assertTrue(error.startswith(
+                f"cannot read FACTORY_EVENT_PATH {missing}:"), error)
+
     def test_an_unreadable_path_is_an_unlabeled_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             missing = str(Path(tmp) / "nope" / "event.json")
