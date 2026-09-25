@@ -249,16 +249,23 @@ def read_event(env):
     when the environment carries no event path — absence is a fact, not an
     error, and each caller judges it (detector B skips silently outside a
     PR run; the assembler calls it a problem). An unreadable, unparsable,
-    or non-object payload is an error string the caller labels."""
-    path = env.get("GITHUB_EVENT_PATH")
+    or non-object payload is an error string the caller labels.
+
+    $FACTORY_EVENT_PATH, when set, wins: a step cannot overwrite the
+    runner's GITHUB_EVENT_PATH through $GITHUB_ENV (GitHub protects its
+    GITHUB_* defaults), so validator.yml's dispatch shims hand their
+    synthesized pull_request payload over under this name instead."""
+    name = ("FACTORY_EVENT_PATH" if env.get("FACTORY_EVENT_PATH")
+            else "GITHUB_EVENT_PATH")
+    path = env.get(name)
     if not path:
         return None, None
     try:
         event = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as err:
-        return None, f"cannot read GITHUB_EVENT_PATH {path}: {err}"
+        return None, f"cannot read {name} {path}: {err}"
     if not isinstance(event, dict):
-        return None, f"GITHUB_EVENT_PATH {path} is not a JSON object"
+        return None, f"{name} {path} is not a JSON object"
     return event, None
 
 

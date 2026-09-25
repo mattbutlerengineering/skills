@@ -84,11 +84,15 @@ EXPECTED = {
                  " queue issue"),
     },
     "validator.yml": {
-        "check": ({"contents": "read"}, "runs `make check` and nothing else"),
+        "check": ({"contents": "read", "pull-requests": "read"},
+                  "runs `make check`; reads the dispatched PR to synthesize"
+                  " its event"),
         "review": ({"contents": "read", "pull-requests": "write"},
                    "posts the review comment on the PR"),
-        "needs-review-label": ({"contents": "read", "issues": "write"},
-                               "applies wo:needs-review to the issue"),
+        "needs-review-label": ({"contents": "read", "issues": "write",
+                                "pull-requests": "read"},
+                               "applies wo:needs-review to the issue; reads"
+                               " the dispatched PR to synthesize its event"),
         "merged-label": ({"contents": "read", "issues": "write"},
                          "applies wo:merged to the issue"),
     },
