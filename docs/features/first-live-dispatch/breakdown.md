@@ -32,11 +32,11 @@ PRD citation — v1's breakdown records the same dodge).
   - Accept (amended 2026-09-22, see Notes): checked on the amended scope only — the functional target (detector-roster docstring, `DETECTORS["J"]`, and the unclaimed-letters comment all agreeing J is claimed) is verified fixed on `main` via PR #516 (merged 2026-09-22T03:38:57Z), independent of this row and explicitly disclaiming its credit. The original criterion — delivered by the dispatched agent as a PR closing the mirror issue, never by hand — was not met: #430 was closed by the operator's own hand on 2026-09-21T14:15:09Z, before any dispatched PR existed, foreclosing that path for this payload. This row does not stand in as a dispatch demonstration; the two new rows below carry that obligation forward.
 - [x] **WO-0073** author the mirror issue for the replacement payload — size:S, blocked by: WO-0036, WO-0037 (PRD-0003 §Success criteria)
   - Accept: a new issue exists, labeled `type:chore` + `wo:draft` + `size:S`, body describing the fix in the row below in the #285/#430 grammar; the issue is created only after this breakdown row is on `main` (ADR-0032 one-way order); its number is appended to that row as `(tracker: #NNN)`.
-- [ ] **WO-0074** workflow-vocabulary sweep — the dispatched payload — size:S, blocked by: WO-0073 (PRD-0003 §Success criteria) (tracker: #536)
+- [x] **WO-0074** workflow-vocabulary sweep — the dispatched payload — size:S, blocked by: WO-0073 (PRD-0003 §Success criteria) (tracker: #536)
   - Accept (amended 2026-09-25, see Notes): `assembler.py`'s module docstring is corrected from "names no commands of its own" to the "names no repo tool of its own" phrasing `validator.yml`, `factory_init.py`, and `validator.py` already carry; `tests/test_design_pipeline.py`'s and `tests/test_gates.py`'s docstrings quoting the old phrasing are updated to match; `python3 factory_init.py update-manifest` is regenerated in the same commit (`assembler.py` is a `factory_init.MIRRORS` entry); no file under `.github/workflows/` is touched; the full battery stays green. Delivered by the dispatched agent as a PR closing the mirror issue — never by hand.
 - [x] **WO-0040** gate walk and supervised dispatch — size:S, blocked by: WO-0073, WO-0044 (PRD-0003 §Success criteria)
   - Accept: Matt applies `wo:prd-approved`, `wo:blueprint-approved`, then `wo:ready-for-agent` on the vocabulary-sweep row's mirror issue (the row above; #430 is closed and no longer this run's dispatch target), each after reading what the gate approves; the assembler run concludes `success`; the agent's PR closes the issue via the Closes grammar; the spend row lands on main workflow-committed with real nonzero tokens; the validator hand-off fires and the order flips to `wo:needs-review` untouched by hands.
-- [ ] **WO-0041** gate 3: review, merge, close out — size:S, blocked by: WO-0040 (PRD-0003 §Success criteria)
+- [x] **WO-0041** gate 3: review, merge, close out — size:S, blocked by: WO-0040 (PRD-0003 §Success criteria)
   - Accept: Matt reviews and merges the agent's PR manually; the order reaches `wo:merged`; detector G is green on the close-out; the payload row above is checked as merged.
 
 ## Milestone C: Breaker proven (the stop machinery has fired for real and the run's evidence is verification-grade)
@@ -240,3 +240,11 @@ success criterion is covered by an Accept line above.
   (#546, fixed by #547). After the fix the hand-off was re-fired by hand,
   and needs-review-label then flipped #536 to `wo:needs-review` with no
   hand on the label. Six attempts cost $5.43 in total.
+- 2026-09-25: **WO-0074 and WO-0041 (PRD-0003 §Success criteria)
+  checked.** The owner reviewed and merged the dispatched agent's PR #545
+  by hand (2026-09-25T04:20:35Z). This gate was not delegated. The
+  merged-label job flipped #536 to `wo:merged` and closed it, and
+  detector G is green on the close-out. The validator's `review` job did
+  not post on #545: its branch predates #547, and with no
+  `FACTORY_REVIEW_TOKEN` the reviewer would share the author's identity,
+  which PRD-0001 forbids.
