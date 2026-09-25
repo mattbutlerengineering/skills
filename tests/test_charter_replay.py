@@ -36,6 +36,10 @@ sys.path.insert(0, str(ROOT))
 
 import charter_replay  # noqa: E402
 import cli  # noqa: E402
+# The readiness-gated clock lives in test_cli; the reaping suite already
+# carries a second copy, so this suite imports rather than add a third.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_cli import ReadinessGatedClock  # noqa: E402
 
 CASES = ROOT / "factory" / "evals" / "charters.json"
 SYNTHETIC = (Path(__file__).resolve().parent / "fixtures"
@@ -565,10 +569,13 @@ printf '%s\\0' "$@" > "$ARGS_FILE"
 echo '{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {"command": "git diff"}}]}}'
 """
 
+# The reaping fakes publish the PID file by rename, never in place (the
+# tests/test_cli.py fakes' rule): `>` creates the file before echo fills
+# it, so the watcher could read it empty and die on int('').
 FAKE_SLEEPING_CLAUDE = """#!/bin/sh
 # Spawn a grandchild that outlives us unless the caller kills our group.
 sleep 300 &
-echo $! > "$PID_FILE"
+echo $! > "$PID_FILE.tmp" && mv "$PID_FILE.tmp" "$PID_FILE"
 echo '{"type": "assistant", "message": {"content": [{"type": "tool_use", "name": "Bash", "input": {"command": "git diff"}}]}}'
 sleep 300
 """
@@ -577,7 +584,7 @@ FAKE_EXITING_CLAUDE = """#!/bin/sh
 # Leader exits immediately; the grandchild inherits the stdout pipe and
 # keeps the process group alive after the leader is gone.
 sleep 300 &
-echo $! > "$PID_FILE"
+echo $! > "$PID_FILE.tmp" && mv "$PID_FILE.tmp" "$PID_FILE"
 exit 0
 """
 
@@ -680,6 +687,14 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
             return path
         return created, record
 
+    def gated_on_the_grandchild(self):
+        """claude_runner's timeout counts from the PID file, not the
+        spawn: a spawn stall past a spawn-counted 2s timeout kills the
+        fake before its grandchild exists (beads wo-l1o, the wo-hdl
+        class). Same clock and gate as tests/test_cli.py."""
+        return mock.patch.object(cli, "time",
+                                 ReadinessGatedClock(self.pid_file))
+
     def watch_for_grandchild(self, budget):
         """Starts polling for the grandchild's PID file NOW, in a
         background thread — running WHILE the timed claude_runner call
@@ -739,8 +754,9 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
     def test_a_timeout_scores_as_an_honest_failure_and_reaps_the_group(self):
         self.install_fake(FAKE_SLEEPING_CLAUDE)
         created, record = self.scratch_recorder()
-        watcher = self.watch_for_grandchild(budget=6)
-        with mock.patch.object(tempfile, "mkdtemp", record):
+        watcher = self.watch_for_grandchild(budget=60)
+        with mock.patch.object(tempfile, "mkdtemp", record), \
+                self.gated_on_the_grandchild():
             transcript = charter_replay.claude_runner(self.root, "haiku",
                                                       2)(self.runner_case())
         self.assertEqual(transcript["error"], "timed out after 2s")
@@ -760,9 +776,10 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         # the reader can only leave its loop by observing the exit — the
         # cleanup therefore always runs against a dead leader.
         self.install_fake(FAKE_EXITING_CLAUDE)
-        watcher = self.watch_for_grandchild(budget=6)
-        transcript = charter_replay.claude_runner(self.root, "haiku",
-                                                  2)(self.runner_case())
+        watcher = self.watch_for_grandchild(budget=60)
+        with self.gated_on_the_grandchild():
+            transcript = charter_replay.claude_runner(self.root, "haiku",
+                                                      2)(self.runner_case())
         self.assertEqual(transcript, {"tool_calls": [], "text": ""})
         self.assert_grandchild_reaped(watcher)
 
@@ -779,9 +796,10 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         the transcript it pins carries no error, so nothing downstream can
         tell that replay from a model that behaved."""
         self.install_fake(FAKE_EXITING_CLAUDE)
-        watcher = self.watch_for_grandchild(budget=6)
-        transcript = charter_replay.claude_runner(self.root, "haiku",
-                                                  2)(self.runner_case())
+        watcher = self.watch_for_grandchild(budget=60)
+        with self.gated_on_the_grandchild():
+            transcript = charter_replay.claude_runner(self.root, "haiku",
+                                                      2)(self.runner_case())
         self.assertNotIn("error", transcript)
         result = charter_replay.score_case(self.forbid_only_runner_case(),
                                            transcript)
