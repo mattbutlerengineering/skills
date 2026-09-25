@@ -2,7 +2,7 @@
 """assembler: the brain behind .github/workflows/assembler.yml (PRD-0001;
 ADR-0032 dispatch plane, ADR-0033 human gates, ADR-0034 routing bands).
 
-The workflow names no commands of its own — it runs a `make` target, and the
+The workflow names no repo tool of its own — it runs a `make` target, and the
 judgment lands here. It reads the `issues` labeled event (GITHUB_EVENT_PATH)
 and resolves, from the REPO-CONTROLLED breakdown row, everything the chartered
 agent needs to run. Conventions match gates.py/validator.py: functions return

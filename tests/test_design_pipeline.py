@@ -2,7 +2,7 @@
 target + the docs/design seed shipped in the template payload.
 
 Same discipline as test_gates::TestLockstep and test_sweeps'
-workflow tests: the workflow names no command of its own (every step goes
+workflow tests: the workflow names no repo tool of its own (every step goes
 through `make`), the payload copy is a byte mirror of the root one, and the
 web-quality target is identical in both Makefiles. The design-system seed the
 pipeline ships is checked for presence and for where factory-init stamps it.
