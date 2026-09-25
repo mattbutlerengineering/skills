@@ -664,7 +664,7 @@ class TestAgentToolAllowlist(unittest.TestCase):
     def test_the_swe_exit_is_allowed(self):
         tools = self.allowlist()
         for tool in ("Edit", "Write", "Bash(git commit:*)",
-                     "Bash(git push -u origin wo-*)", "Bash(gh pr create:*)",
+                     "Bash(git push -u origin wo-:*)", "Bash(gh pr create:*)",
                      "Bash(make:*)", "Bash(python3:*)"):
             with self.subTest(tool=tool):
                 self.assertIn(tool, tools)
@@ -675,7 +675,16 @@ class TestAgentToolAllowlist(unittest.TestCase):
                 self.assertNotIn(tool, ("Bash", "Bash(*)", "Bash(git:*)",
                                         "Bash(git push:*)", "Bash(gh:*)"))
                 if tool.startswith("Bash(git push"):
-                    self.assertRegex(tool, r"origin wo-\*\)$")
+                    self.assertRegex(tool, r"origin wo-:\*\)$")
+
+    def test_the_run_keeps_its_denials_inspectable(self):
+        """Run 35956750804 reported 7 denials and the log showed only the
+        count. The execution file lists each denied call; it must survive
+        the runner as an artifact, even when the run fails."""
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("actions/upload-artifact@", text)
+        self.assertIn("path: ${{ steps.agent.outputs.execution_file }}",
+                      text)
 
     def test_the_prompts_push_is_one_the_allowlist_permits(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -683,7 +692,7 @@ class TestAgentToolAllowlist(unittest.TestCase):
                 "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
         push = re.search(r"git push -u origin (\S+)", prompt).group(1)
         self.assertTrue(push.startswith("wo-"), push)
-        self.assertIn("Bash(git push -u origin wo-*)", self.allowlist())
+        self.assertIn("Bash(git push -u origin wo-:*)", self.allowlist())
 
 
 if __name__ == "__main__":
