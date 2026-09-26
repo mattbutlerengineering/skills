@@ -163,8 +163,41 @@ date: 2026-09-25
 - **Criterion 4 (live validator hand-off).** Route back to Implement. Two prerequisites: (1) a `FACTORY_REVIEW_TOKEN` secret for a reviewer login that never authors PRs (an owner action, since only the owner can create that credential); (2) one fresh dispatch whose PR is opened after #547, so the automatic hand-off runs the fixed shims without a hand re-fire.
 - **Also on record, not a criterion failure:** criterion 3 took six dispatches ($5.43 total). Attempts 1-5 failed on the missing `--allowedTools` (#539; #540, #541, #542), the `GITHUB_TOKEN` being unable to push workflow files (payload re-scoped, #544), and the repo setting that blocked Actions from opening PRs (enabled by the owner). Each fix is merged.
 
+## Gate-latency reconciliation (added 2026-09-26)
+
+The ledger's first-ever prd and blueprint gate rows overstate the human
+wait. `human_gates` ends a stay when the gate's queue label is removed.
+The delegated gate walk applied each pass label with `gh issue edit
+--add-label` and never removed the queue label, which breaks ADR-0032's
+one-lifecycle-label rule. So `wo:draft` and `wo:prd-approved` stayed on
+until the claim step stripped both at 04:31:50Z.
+
+```
+$ grep '"gate_wait:\(prd\|blueprint\)' docs/factory/costs.jsonl | grep -o '"outcome": "[^"]*"'
+"outcome": "gate_wait:prd:1399s"
+"outcome": "gate_wait:blueprint:19s"
+$ gh api repos/{owner}/{repo}/issues/536/timeline --paginate -q '...'   # the relevant flips
+2026-09-24T04:08:31Z labeled wo:draft by mattbutlerengineering
+2026-09-24T04:31:31Z labeled wo:prd-approved by mattbutlerengineering
+2026-09-24T04:31:35Z labeled wo:blueprint-approved by mattbutlerengineering
+2026-09-24T04:31:50Z unlabeled wo:draft by github-actions[bot]
+2026-09-24T04:31:50Z unlabeled wo:prd-approved by github-actions[bot]
+```
+
+| Gate | Recorded | Queue label on → pass label on | Overstated by |
+|---|---|---|---|
+| prd | 1,399s | 1,380s (04:08:31 → 04:31:31) | 19s |
+| blueprint | 19s | 4s (04:31:31 → 04:31:35) | 15s |
+
+The merge row (558s: `wo:needs-review` on at 04:11:29, off at 04:20:47)
+is correct, because the automated flips keep one lifecycle label. The
+ledger is append-only, so the two rows stand as recorded and this section
+is the correction. The error is small here but structural: a pass label
+added days before the queue label is removed would fold the next gate's
+wait into this one, and ADR-0069's metric divides by these rows. A
+structural fix is filed as a bead; this run does not implement it.
+
 ## Not verified
 
 - **Secret values and provenance** (criterion 1): only the names are checked. That the values were console-set and never in the repo rests on the arming procedure, not on a check here.
-- **The 1,399s prd-gate wait** in the ledger's gate-latency rows was not reconciled against the label timeline, which puts that label at 04:31:31Z. The blueprint row (19s) was not checked either.
 - **Review job behavior on a post-#547 PR** has not been observed at all (see Failures, criterion 4).
