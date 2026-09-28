@@ -18,7 +18,7 @@ detector A checks.
 
 ## Milestone A: ADR-backed mechanisms (the three ADRs already exist as of this run — orders 65-67 land their implementation)
 
-- [ ] **WO-0065** implement GitHub native merge queue adoption (ADR-0070) — size:M, blocked by: — (PRD-0006 §Success criteria)
+- [x] **WO-0065** implement GitHub native merge queue adoption (ADR-0070) — size:M, blocked by: — (PRD-0006 §Success criteria)
   - Accept: GitHub's merge queue is enabled on the branch-protection rule guarding `main`; every required-check workflow mirrored via `factory_init.MIRRORS` (`.github/workflows/validator.yml` and siblings) gains `merge_group` as a trigger; the cascade-cost and queue-admission-vs-review-requirement questions ADR-0070 and `prd.md`'s Open questions leave open are resolved and recorded in that future run's own `verification.md`; the battery stays green. This is a repo-settings + workflow-trigger change, not a `gates.py`/Python change — no new detector is implied by this row alone.
 - [x] **WO-0066** implement inline `[NEEDS CLARIFICATION]` markers + bounded clarify pass + CI enforcement (ADR-0071) — size:M, blocked by: — (PRD-0006 §Success criteria)
   - Accept: `skills/prd/TEMPLATE.md` and `skills/architect/TEMPLATE.md` document the marker syntax; the PRD skill's process gains a bounded clarify step (max 5 questions per pass, taxonomy from the artifact's own section headings, answers written back under a dated `### Clarifications / Session YYYY-MM-DD` heading); a new `gates.py` detector (letter chosen at implementation time, avoiding whatever is claimed by then) fails when a `prd.md` or `architecture.md` carries an unresolved marker, with `python3 gates.py --selftest` coverage; the battery stays green.
@@ -123,3 +123,12 @@ not to cover an unmapped component.
   WO-0069, WO-0070 and WO-0071 (PRD-0006 §Success criteria). Creating
   those triggers failed with `401 oauth_scope_insufficient` until the
   owner signs in again.
+- 2026-09-28: **WO-0065 (PRD-0006 §Success criteria) checked as
+  deferred by owner decision.** The merge queue cannot be enabled on a
+  user-owned, private, free-plan repository (see the 2026-09-25 note), and
+  the owner chose not to move the repo to an organization now. No
+  `merge_group` triggers were added and no branch-protection setting
+  changed; ADR-0070's adoption stands as a decision waiting on hosting.
+  The revisit is seeded in `docs/backlog.md`. WO-0072 (PRD-0006 §Success
+  criteria) now waits only on the trigger halves of the three roster
+  routine rows (PRD-0006 §Success criteria), orders 69-71.
