@@ -157,6 +157,12 @@ def completed_stays(events, gate):
     block) leaves the stay unconfirmed even when the gate is re-entered
     and passed later.
 
+    A stay ends when its queue label is removed or, for a confirmed stay,
+    at its first pass label if that came earlier (ADR-0074, amending
+    ADR-0056): ADR-0032's one-lifecycle-label rule is not enforced when
+    a human applies a gate label, so an added pass label must not leave
+    the stay running until the next automated flip.
+
     This is the invariant made executable. A completed stay is confirmed
     or it is not, so the digest and the miner partition one list between
     them — every stay a passage there or a rejection here, never both —
@@ -178,10 +184,13 @@ def completed_stays(events, gate):
     for index, (start, end) in enumerate(stays):
         next_start = (stays[index + 1][0] if index + 1 < len(stays)
                       else None)
-        confirmed = any(
-            start <= ts and (next_start is None or ts < next_start)
-            for ts in confirmations)
-        completed.append((start, end, confirmed))
+        inside = [ts for ts in confirmations
+                  if start <= ts and (next_start is None or ts < next_start)]
+        # A confirmed stay ends at its pass label when that came first
+        # (ADR-0074): a pass label ADDED beside the queue label leaves the
+        # queue label on until some later flip strips it, and that gap is
+        # automation's, not the human's wait.
+        completed.append((start, min([end, *inside]), bool(inside)))
     return completed
 
 

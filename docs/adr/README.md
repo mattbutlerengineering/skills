@@ -76,7 +76,7 @@ the canonical vocabulary.
 | [0053](0053-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
 | [0054](0054-front-door-routes-humans.md) | The front door routes humans, not files | accepted |
 | [0055](0055-deferred-stops-and-payload-charters.md) | The budget hook and payload charters stay deferred | accepted |
-| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | accepted |
+| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | amended by ADR-0074 (a confirmed stay ends at its pass label) |
 | [0057](0057-lifecycle-legs-agree-about-an-uncited-pr.md) | Both lifecycle legs treat an uncited PR the same way | amended by ADR-0064 |
 | [0058](0058-checkbox-regex-roster-is-two-owners.md) | The checkbox-regex roster is two owners, not three | accepted |
 | [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | accepted |
@@ -94,3 +94,4 @@ the canonical vocabulary.
 | [0071](0071-needs-clarification-markers.md) | Inline [NEEDS CLARIFICATION] markers, CI-enforced | accepted |
 | [0072](0072-prd-coverage-check.md) | Bidirectional PRD-requirement <-> work-item coverage check | accepted |
 | [0073](0073-standards-index-seam-and-detector-letters-k-m.md) | Standards index as a seam module; detector letters K and M | accepted |
+| [0074](0074-a-gate-stay-ends-at-its-pass-label.md) | A gate stay ends at its pass label | accepted |

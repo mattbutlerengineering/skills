@@ -1,6 +1,6 @@
 # The three human gates get a module of their own
 
-- Status: accepted
+- Status: amended by ADR-0074 (a confirmed stay ends at its pass label)
 - Date: 2026-08-18
 
 ## Context
