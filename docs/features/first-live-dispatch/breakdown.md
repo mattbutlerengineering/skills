@@ -46,6 +46,20 @@ PRD citation — v1's breakdown records the same dodge).
 - [x] **WO-0043** evidence bundle and spend rollup — size:S, blocked by: WO-0042 (PRD-0003 §Success criteria)
   - Accept: every PRD-0003 success criterion has a quotable, fenced check recorded for Verify (run conclusions, label timelines, ledger rows, secret names); the ledger rollup shows total recorded run spend ≤ $10 (notional list-rate figures — subscription auth bills nothing per-run).
 
+## Milestone D: Criterion 4 re-proof (route-back from Verify, 2026-09-28)
+
+verification.md failed PRD-0003's validator hand-off criterion: the live
+hand-off has not run clean, and the review job has never posted. These
+rows re-run the traversal with a PR opened after #547's fix and a
+separate reviewer identity. The owner applies the gate labels by hand
+this time, replacing each queue label rather than adding beside it, so
+the gate-history criterion is proven too.
+
+- [ ] **WO-0075** author the mirror issue for the criterion-4 payload — size:S, blocked by: WO-0074 (PRD-0003 §Success criteria)
+  - Accept: a new issue exists, labeled `type:chore` + `wo:draft` + `size:S`, body in the #536 grammar; created only after this row is on `main` (ADR-0032 one-way order); its number is appended to the row below as `(tracker: #NNN)`; the `FACTORY_REVIEW_TOKEN` secret exists (`gh secret list`) before any gate label is applied.
+- [ ] **WO-0076** resolve the duplicated `ROOT` one-owner finding — the dispatched payload — size:S, blocked by: WO-0075 (PRD-0003 §Success criteria)
+  - Accept: `python3 one_owner.py` no longer reports `charter_replay.py` and `trigger_eval.py` stating the same `ROOT`, resolved EITHER by `charter_replay.py` importing `ROOT` from `trigger_eval` (it already imports `HARNESSES` from there) OR by a `# one-owner:` marker at the second definition stating why each module keeps its own (ADR-0061), with the choice argued in the PR body; no file under `.github/workflows/` is touched; the full battery stays green. Delivered by the dispatched agent as a PR closing the mirror issue, never by hand. Proof obligations carried by this dispatch: the owner applies the three gate labels by hand, the automatic validator hand-off runs with no hand re-fire, and the review job posts under the reviewer identity.
+
 ## Design gaps found
 
 None — every component in architecture.md's seven phases maps to a row
