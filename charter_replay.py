@@ -44,9 +44,7 @@ from pathlib import Path
 import cli
 import eval_schema
 import factory_roles
-from trigger_eval import HARNESSES
-
-ROOT = Path(__file__).resolve().parent
+from trigger_eval import HARNESSES, ROOT
 
 # A fixture may target any chartered role (factory_roles.ROLES — the
 # vocabulary seam, ADR-0047); validation checks against the full set, so
