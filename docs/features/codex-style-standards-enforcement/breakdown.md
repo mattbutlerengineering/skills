@@ -54,7 +54,7 @@ edges, and the PRD citation detector A checks.
 
 - [x] **WO-0063** full battery green across every item above, traceability re-check — size:S, blocked by: WO-0059, WO-0060, WO-0061, WO-0062 (PRD-0004 §Success criteria)
   - Accept: `python3 -m unittest discover tests`, `python3 lint.py`, and `python3 gates.py && python3 gates.py --selftest` are all green with every prior row's changes present; PRD-0004's success criteria are re-walked one by one against what actually landed (Verify's job, scaled to this feature — the run's own `verification.md`, when this feature run continues past this breakdown).
-- [ ] **WO-0064** ⚠️ **NEEDS HUMAN JUDGMENT — not implementable unilaterally.** Resolve PRD-0004's deferred "3 real advisory→enforced promotions with prior evidence" acceptance bar — size:S, blocked by: WO-0058 (PRD-0004 §Out of scope, §Open questions) — tracked at issue #518
+- [x] **WO-0064** ⚠️ **NEEDS HUMAN JUDGMENT — not implementable unilaterally.** Resolve PRD-0004's deferred "3 real advisory→enforced promotions with prior evidence" acceptance bar — size:S, blocked by: WO-0058 (PRD-0004 §Out of scope, §Open questions) — tracked at issue #518
   - Accept: a human names either (a) three specific statements from the back-fill milestone above that already have real, pre-existing advisory-flagged evidence to point to honestly (a past PR review comment, an audit finding, a `one_owner.py` finding) — no evidence is fabricated to hit the count — or (b) an explicit decision to defer this criterion to a later run, once a real observation period under `status: advisory` has produced real findings to promote from. Either resolution gets recorded here and, if (a), the promoted entries' `status` flips to `enforced` with the cited evidence named inline in `docs/standards.json` or a linked note.
   - **Why this can't be picked unilaterally:** the acceptance bar as issue #448 literally states it requires evidence that cannot exist before the index does — satisfying it without a human either supplying real prior evidence or explicitly accepting deferral would mean fabricating "previously flagged" history, which `CLAUDE.md`'s eval-honesty rule forbids outright. This is the one row in this breakdown that mirrors this repo's own `wo-cxu.1`-style "needs /grilling"/`ready-for-human` convention (issues #440/#444/#434/#435): a genuine design-policy fork, not a missing detail Implement can default its way through.
 
@@ -323,3 +323,10 @@ it costs one `standards_index.py update` re-run to change.
     marking is not this repo's convention, and this walk-through is
     written here instead, in the breakdown row whose Accept line calls
     for it.
+- 2026-09-28: **WO-0064 (PRD-0004 §Out of scope, §Open questions)
+  resolved by option (b), deferral.** The owner chose to defer the "3
+  real advisory→enforced promotions" bar to a later run. At decision
+  time `docs/standards.json` held 4 statements, all `status: advisory`,
+  and none had been flagged under the index since it went live with
+  #517 on 2026-09-23. No statement's `status` was changed and no prior
+  evidence was claimed. The revisit is seeded in `docs/backlog.md`.
