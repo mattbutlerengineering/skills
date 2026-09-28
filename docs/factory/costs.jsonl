@@ -81,3 +81,4 @@
 {"wo": "WO-0074", "run_id": "gate-merge-2026-09-25T04:20:47Z", "model": "none", "tokens": 0, "cost": 0.0, "outcome": "gate_wait:merge:558s", "at": "2026-09-25"}
 {"wo": "WO-0064", "run_id": "session-2026-09-28-wo-0064", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-28"}
 {"wo": "WO-0075", "run_id": "session-2026-09-28-wo-0075", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-09-28"}
+{"wo": "WO-0076", "run_id": "36474781292", "model": "claude-sonnet-5", "tokens": 868393, "cost": 0.4737711, "outcome": "completed", "at": "2026-09-28"}
