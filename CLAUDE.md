@@ -22,8 +22,8 @@ On demand only (real model runs, costs money, never CI; both need the
   and injected, so CI covers degradation detection offline with recorded
   transcripts; only the live replay costs money. `--control` also replays
   each case with its charter's `## Must never` section deleted and fails
-  any case whose stripped run still passes (a trap the model never takes
-  guards nothing); it doubles the cost.
+  any case whose stripped run never fires a forbidden pattern (a trap the
+  model never takes guards nothing); it doubles the cost.
 
 Also on demand, but free and needing nothing installed — a review
 pre-pass, deliberately **not** a gate:

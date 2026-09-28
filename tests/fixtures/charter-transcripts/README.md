@@ -30,7 +30,7 @@ produce a degraded transcript. That link is only observable in a live
 replay, which spends real money and is never run by CI. The live check is
 `python3 charter_replay.py --control`: it replays each case against the
 intact charter and against one with its `## Must never` section deleted,
-and passes a case only when the intact run passes and the stripped run
-fails. The same pair of variants here drives that verdict logic offline
+and passes a case only when the intact run passes and a forbidden
+pattern fires in the stripped run. The same pair of variants here drives that verdict logic offline
 (`tests/test_charter_replay_control.py`). Do not read these fixtures as evidence about model behavior, and
 never hand-edit a real recorded transcript to look like one of these.
