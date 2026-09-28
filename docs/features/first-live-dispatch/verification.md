@@ -8,7 +8,7 @@ date: 2026-09-25
 
 ## Summary
 
-8 PASS, 2 FAIL across 10 criteria (PRD-0003's nine plus one breakdown acceptance no PRD criterion covers). The machinery works end to end: a real order ran from gate labels through a paid dispatch to an agent-authored PR, a human merge, `wo:merged`, and a real breaker trip, at $5.43 of the $10 bound. Two things the run existed to demonstrate are **not** demonstrated: the gates were not human-applied (delegated), and the validator hand-off has not run live and clean.
+**Updated 2026-09-28: 9 PASS, 1 FAIL.** Criterion 4 now passes on the WO-0076 (PRD-0003 §Success criteria) re-run (see Re-verification below); criterion 2 still fails. Original verdict, kept for the record: 8 PASS, 2 FAIL across 10 criteria (PRD-0003's nine plus one breakdown acceptance no PRD criterion covers). The machinery works end to end: a real order ran from gate labels through a paid dispatch to an agent-authored PR, a human merge, `wo:merged`, and a real breaker trip, at $5.43 of the $10 bound. Two things the run existed to demonstrate are **not** demonstrated: the gates were not human-applied (delegated), and the validator hand-off has not run live and clean.
 
 ## Criteria & evidence
 
@@ -156,6 +156,47 @@ date: 2026-09-25
   step: Run the chartered agent success
   ```
 - Result: PASS
+
+## Re-verification (2026-09-28)
+
+A second traversal, rows WO-0075 and WO-0076 (PRD-0003 §Success criteria), mirror #574, re-tested the two failed criteria with a PR opened after #547's fix and a separate reviewer identity (`FACTORY_REVIEW_TOKEN`, login `mattbutlerengineeringreviewer`).
+
+### The validator hand-off fires live: check + review + label jobs, flip untouched by hands (re-run)
+
+- Check: read the automatic validator dispatch for the agent's PR #579, the review comment's author, and #574's flip. No hand re-fire happened.
+- Evidence:
+  ```
+  $ gh run view 36474781292 --json conclusion     # the dispatch
+  success
+  $ gh run view 36475022721 --json createdAt,jobs  # automatic hand-off
+  created 2026-09-28T19:50:34Z
+    check success
+    needs-review-label success
+    review success
+    merged-label skipped
+  $ gh pr view 579 --json comments -q '.comments[]|.author.login'
+  mattbutlerengineeringreviewer
+  $ gh api repos/{owner}/{repo}/issues/574/timeline --paginate -q '...'   # the flip
+  2026-09-28T19:50:43Z unlabeled wo:in-progress by github-actions[bot]
+  2026-09-28T19:50:43Z labeled wo:needs-review by github-actions[bot]
+  ```
+- Result: PASS. It now supersedes the FAIL recorded for this criterion above.
+
+### The mirror issue carries the full gate history, applied by Matt (re-run)
+
+- Check: read #574's gate labels.
+- Evidence:
+  ```
+  2026-09-28T19:48:17Z unlabeled wo:draft by mattbutlerengineering
+  2026-09-28T19:48:17Z labeled wo:prd-approved by mattbutlerengineering
+  2026-09-28T19:48:21Z unlabeled wo:prd-approved by mattbutlerengineering
+  2026-09-28T19:48:22Z labeled wo:blueprint-approved by mattbutlerengineering
+  2026-09-28T19:48:27Z labeled wo:ready-for-agent by mattbutlerengineering
+  2026-09-28T19:48:27Z unlabeled wo:blueprint-approved by mattbutlerengineering
+  ```
+- Result: FAIL, again. The history is complete, in order, and this time replaces each queue label (ADR-0032), but the owner again delegated the labels to the operating session. A future traversal where the owner applies them by hand still owes this criterion.
+
+Also on record for this re-run: the owner merged #579 **by hand** (2026-09-28T20:32:39Z), and the merged-label job flipped #574 to `wo:merged`. The dispatch's spend row is workflow-committed (868,393 tokens, $0.47), so the six-plus-one dispatch total is $5.90, still within the $10 bound. `one_owner.py` no longer reports the duplicated `ROOT`.
 
 ## Failures
 
