@@ -140,8 +140,13 @@ class TestProcessTreeReaping(unittest.TestCase):
         os.environ.pop("PID_FILE", None)
         if self.pid_file.is_file():
             pid = int(self.pid_file.read_text())
+            # pid_alive then kill is a race: a grandchild that exits between
+            # the two raises ProcessLookupError, and a dead one needs no kill.
             if pid_alive(pid):
-                os.kill(pid, 9)
+                try:
+                    os.kill(pid, 9)
+                except ProcessLookupError:
+                    pass
         import shutil
         shutil.rmtree(self.dir, ignore_errors=True)
 
