@@ -245,6 +245,52 @@ class TestCharterFiles(unittest.TestCase):
                 self.assertIn(f"`{fields.get('route')}`", text)
 
 
+def h2_section(text, heading):
+    """The body under one '## ' heading, up to the next '## ' heading."""
+    parts = re.split(r"^## ", text, flags=re.MULTILINE)
+    for part in parts[1:]:
+        title, _, body = part.partition("\n")
+        if title.strip() == heading:
+            return body
+    raise AssertionError(f"no '## {heading}' section")
+
+
+class TestTheConcernsChannel(unittest.TestCase):
+    """Done-but-doubtful has a channel (obra/superpowers' DONE_WITH_CONCERNS,
+    2026-09-28). Escalation covers work that cannot finish; an engineer
+    that finished but doubts part of it had nowhere to say so, and a doubt
+    kept out of the PR ships the work as more certain than it is. The
+    channel needs a writer and readers, or it is a section nobody fills
+    or nobody checks: pin all three ends."""
+
+    def test_the_swe_handoff_names_the_section(self):
+        text = charter_path("swe").read_text(encoding="utf-8")
+        self.assertIn("## Concerns", h2_section(text, "Handoff artifact"))
+
+    def test_a_concern_is_not_an_escalation(self):
+        text = charter_path("swe").read_text(encoding="utf-8")
+        handoff = " ".join(h2_section(text, "Handoff artifact").split())
+        self.assertIn("A concern is not an escalation", handoff)
+
+    def test_the_swe_stub_carries_it(self):
+        flat = " ".join(agent_body("swe").split())
+        self.assertIn("## Concerns", flat)
+
+    def test_the_reviewer_reads_it_first(self):
+        text = charter_path("reviewer").read_text(encoding="utf-8")
+        actions = h2_section(text, "Actions per cycle")
+        first = actions.split("\n2. ", 1)[0]
+        self.assertIn("## Concerns", first)
+
+    def test_work_queue_asks_for_it_and_reports_it(self):
+        text = (REPO_ROOT / "skills" / "work-queue" / "SKILL.md").read_text(
+            encoding="utf-8")
+        run = text.split("### 4. Run the batch", 1)[1].split("### 5.", 1)[0]
+        report = text.split("### 5. Report", 1)[1].split("### 6.", 1)[0]
+        self.assertIn("## Concerns", run)
+        self.assertIn("concerns", report.lower())
+
+
 class TestNoSecondRoutingSource(unittest.TestCase):
     def test_no_charter_file_names_a_model_id(self):
         """Not just frontmatter: a model id anywhere in a charter competes

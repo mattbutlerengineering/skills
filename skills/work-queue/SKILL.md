@@ -87,6 +87,9 @@ Each agent's prompt must carry:
    it means stopping and handing off, never quietly continuing.
 5. **Open a PR and stop.** Do not merge. Do not approve. Do not apply
    `wo:merged`.
+6. **Say what it doubts.** Finished work it is unsure of goes in a
+   `## Concerns` section of the PR body, one line per doubt, rather than
+   shipping as if it were certain. Unfinished work escalates instead.
 
 Model per work order follows `factory.json`'s routing bands — mechanical
 work does not need the implementation model.
@@ -94,7 +97,8 @@ work does not need the implementation model.
 ### 5. Report — and stop at the gate
 
 Report per work order: the PR, whether `make check` passed inside the
-worktree, and the budget it actually used.
+worktree, the budget it actually used, and any concerns its PR raised.
+A PR with concerns is reported with them, never as a clean result.
 
 Then record that spend, once per work order:
 
