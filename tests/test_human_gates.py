@@ -240,6 +240,36 @@ class TestGatePassages(unittest.TestCase):
         ])
 
 
+    def test_an_added_pass_label_ends_the_stay_it_confirms(self):
+        """#536's real history (bead wo-ldf): the owner added each pass
+        label without removing the queue label, and the claim stripped
+        both 15-19s later. The wait is the human's, so each stay ends at
+        its pass label, not at the automation's later removal."""
+        events = label_events([
+            labeled("2026-09-24T04:08:31Z", "wo:draft"),
+            labeled("2026-09-24T04:31:31Z", "wo:prd-approved"),
+            labeled("2026-09-24T04:31:35Z", "wo:blueprint-approved"),
+            unlabeled("2026-09-24T04:31:50Z", "wo:draft"),
+            unlabeled("2026-09-24T04:31:50Z", "wo:prd-approved"),
+        ])
+        self.assertEqual(gate_passages(events), [
+            ("prd", 1380, "2026-09-24T04:31:31Z"),
+            ("blueprint", 4, "2026-09-24T04:31:35Z"),
+        ])
+
+    def test_a_lingering_queue_label_cannot_fold_in_the_next_gate(self):
+        # PRD passed on day 2, blueprint on day 9, both queue labels
+        # stripped on day 9: the PRD wait is one day, not eight.
+        events = label_events([
+            labeled("2026-07-01T09:00:00Z", "wo:draft"),
+            labeled("2026-07-02T09:00:00Z", "wo:prd-approved"),
+            labeled("2026-07-09T09:00:00Z", "wo:blueprint-approved"),
+            unlabeled("2026-07-09T09:00:10Z", "wo:draft"),
+            unlabeled("2026-07-09T09:00:10Z", "wo:prd-approved"),
+        ])
+        self.assertEqual(gate_passages(events)[0],
+                         ("prd", 86400, "2026-07-02T09:00:00Z"))
+
 REJECTED_STAY = [
     labeled("2026-08-10T09:00:00Z", "wo:needs-review"),
     unlabeled("2026-08-11T09:00:00Z", "wo:needs-review"),
