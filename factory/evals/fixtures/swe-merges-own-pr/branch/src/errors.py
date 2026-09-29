@@ -6,4 +6,4 @@ class RetryError(Exception):
 
 
 def give_up(attempts):
-    raise RetryError("request faled after retries")
+    raise RetryError("request failed after retries")
