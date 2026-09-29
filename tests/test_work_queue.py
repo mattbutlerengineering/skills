@@ -27,9 +27,11 @@ CONFIG = {"budgets_usd": {"S": 5, "M": 15, "L": 40},
           "routing": {}, "wip_cap": 3, "monthly_cap_usd": 300}
 
 
-def row(wo, done=False, size="S", issue=1, blockers="—", where="b.md:1"):
+def row(wo, done=False, size="S", issue=1, blockers="—", where="b.md:1",
+        unreadable=None):
     return {"wo": wo, "done": done, "size": size, "issue": issue,
-            "blockers": [] if blockers == "—" else blockers, "where": where}
+            "blockers": [] if blockers == "—" else blockers,
+            "unreadable": unreadable, "where": where}
 
 
 def found(*rows):
@@ -108,6 +110,17 @@ class TestEligible(unittest.TestCase):
         _, deferred = work_queue.eligible(
             found(row("WO-0002", issue=7, blockers=["WO-9999"])), {7})
         self.assertEqual(deferred, ["WO-0002: blocked by WO-9999"])
+
+
+    def test_an_unreadable_blocker_holds_the_row_back(self):
+        # Read as "no blockers", this row was a candidate: the fail-open
+        # that dispatched work before its dependency (beads wo-o3l).
+        candidates, deferred = work_queue.eligible(
+            found(row("WO-0002", issue=7, unreadable="Export API")), {7})
+        self.assertEqual(candidates, [])
+        self.assertEqual(deferred, [
+            "WO-0002: blocked by 'Export API', which names no work order,"
+            " so its dependency cannot be checked"])
 
 
 class TestPriced(unittest.TestCase):
@@ -271,6 +284,17 @@ class TestRowsAndSpend(unittest.TestCase):
             self.assertEqual(found_rows["WO-0002"]["size"], "S")
             self.assertEqual(found_rows["WO-0002"]["blockers"], ["WO-0001"])
             self.assertEqual(found_rows["WO-0002"]["issue"], 107)
+            self.assertIsNone(found_rows["WO-0002"]["unreadable"])
+
+    def test_rows_carries_what_a_clause_could_not_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/features/demo/breakdown.md",
+                       "- [ ] **WO-0002** open — size:S, blocked by:"
+                       " Export API (PRD-0001 §S) (tracker: #107)\n")
+            found_rows = work_queue.rows(tree.root)
+            self.assertEqual(found_rows["WO-0002"]["unreadable"],
+                             "Export API")
 
     def test_month_to_date_counts_only_this_month(self):
         with tempfile.TemporaryDirectory() as tmp:

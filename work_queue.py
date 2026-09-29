@@ -33,6 +33,7 @@ import cost_ledger
 import factory_config
 from cli import gh_read, gh_runner, report
 from knowledge_plane import (breakdown_files, repo_root, row_blockers,
+                             row_unreadable_blockers,
                              row_done, row_size, row_tracker_issue,
                              row_work_order)
 
@@ -70,6 +71,7 @@ def rows(root):
                 "wo": wo, "done": row_done(line), "size": row_size(line),
                 "issue": row_tracker_issue(line),
                 "blockers": row_blockers(line),
+                "unreadable": row_unreadable_blockers(line),
                 "where": f"{path.relative_to(root)}:{lineno}",
             }
     return found
@@ -89,7 +91,13 @@ def eligible(found, ready_issues):
             continue
         unmet = sorted(b for b in row["blockers"]
                        if b not in found or not found[b]["done"])
-        if unmet:
+        if row["unreadable"]:
+            # Read as "no blockers" this row was a candidate: dispatching
+            # work before a dependency nobody could check (beads wo-o3l).
+            deferred.append(f"{wo}: blocked by {row['unreadable']!r}, which"
+                            " names no work order, so its dependency cannot"
+                            " be checked")
+        elif unmet:
             deferred.append(f"{wo}: blocked by {', '.join(unmet)}")
         elif row["issue"] is None:
             deferred.append(f"{wo}: its row carries no (tracker: #N) mirror,"
