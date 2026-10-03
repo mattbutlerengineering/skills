@@ -73,7 +73,9 @@ On demand only (real model runs, costs money, never CI; both need the
 - `docs/factory/retro-reflect-routine.md`,
   `docs/factory/queue-groomer-routine.md`,
   `docs/factory/doc-gardener-routine.md` — the weekly roster routines'
-  protocols (ADR-0044's pattern); triggers not yet created
+  protocols (ADR-0044's pattern); only the queue groomer's trigger
+  exists (created 2026-09-29 as the pilot), and the retro/reflect and
+  doc-gardener triggers are deferred by owner decision
 
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
