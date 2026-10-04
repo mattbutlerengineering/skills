@@ -112,3 +112,18 @@ against `origin/main`. Next stage is Review, then Ship.
   brief and the run directory, may run the free battery, and may not run
   paid tools, touch triggers, commit, push, or write to the tracker. The
   orchestrator commits each stage's artifact after gating it.
+- **Review took two attempts.** The first Review subagent, dispatched
+  2026-10-03 around 04:20 UTC, died on a model usage limit (HTTP 429)
+  before writing anything, and left the working tree clean. A second,
+  fresh subagent was dispatched 2026-10-04 around 01:25 UTC on a
+  different model (Opus) and wrote `review.md`: no critical finding,
+  four majors recorded for the owner, six minors deferred. The
+  orchestrator gated it before committing: every template section is
+  present, the scratch probe behind the first major was re-run and
+  returned the same empty result, and gates and lint are clean with the
+  file in place.
+- **A second trigger-API attempt also failed.** `get` and `list_runs`
+  at 2026-10-04T01:22Z returned the same `HTTP 401
+  oauth_scope_insufficient` (request ids `req_011CfgKcdBTN4CPcybhCUvtD`,
+  `req_011CfgKcdnAnPg3tUGTPT5fK`). Issue #590 held the same three
+  comments as the first capture, with nothing newer.
