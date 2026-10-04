@@ -458,7 +458,7 @@ class TestRecord(unittest.TestCase):
         problem carrying the ledger's own, and not a byte appended —
         where the read raised UnicodeDecodeError before the refusal
         could be reached."""
-        wo = "WO-%04d" % 7
+        wo = "WO-0007"
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
             ledger = tree.write("docs/factory/costs.jsonl", "")
