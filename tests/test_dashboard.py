@@ -680,6 +680,23 @@ class TestImprovementRates(unittest.TestCase):
             f" 13] Permission denied: '{path}'"])
         self.assertEqual(state["metrics"]["rework"], 0.5)
 
+    def test_a_corrections_stream_that_is_not_utf8_is_a_problem(self):
+        # The stream is text, so bytes that will not decode are a read
+        # failure like the one above: one problem, no corrections folded
+        # in, and the rest of the repo's state still gathered.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/corrections.jsonl", "").write_bytes(
+                b"\xff\xfe")
+            state = dashboard.gather(tmp, run=queue_gh(prs=RATED_PRS),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [
+            "dashboard: cannot read docs/factory/corrections.jsonl: 'utf-8'"
+            " codec can't decode byte 0xff in position 0: invalid start"
+            " byte"])
+        self.assertEqual(state["metrics"]["acceptance"], 0.5)
+        self.assertEqual(state["metrics"]["rework"], 0.5)
+
 
 class TestRespond(unittest.TestCase):
     """The read endpoints' pure half — every handler test pins
@@ -778,6 +795,20 @@ class TestPage(unittest.TestCase):
         self.assertEqual((status, payload), (500, {"problems": [
             "dashboard: cannot read dashboard.html: [Errno 13] Permission"
             f" denied: '{unreadable}'"]}))
+
+    def test_a_page_file_that_is_not_utf8_is_a_500(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            undecodable = FixtureTree(tmp).write("dashboard.html", "")
+            undecodable.write_bytes(b"\xff\xfe")
+            page, dashboard.PAGE = dashboard.PAGE, undecodable
+            try:
+                status, payload = dashboard.respond("/", self.repos_fn,
+                                                    None)
+            finally:
+                dashboard.PAGE = page
+        self.assertEqual((status, payload), (500, {"problems": [
+            "dashboard: cannot read dashboard.html: 'utf-8' codec can't"
+            " decode byte 0xff in position 0: invalid start byte"]}))
 
     def test_page_fires_one_request_per_repo(self):
         page = dashboard.PAGE.read_text(encoding="utf-8")
@@ -1070,6 +1101,17 @@ class TestGatherBacklog(unittest.TestCase):
                 "dashboard: cannot read docs/backlog.md: [Errno 13]"
                 f" Permission denied: '{path}'"])
 
+    def test_a_backlog_that_is_not_utf8_is_null_and_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            FixtureTree(tmp).write("docs/backlog.md", "").write_bytes(
+                b"\xff\xfe")
+            state = dashboard.gather(tmp)
+            self.assertIsNone(state["backlog"])
+            self.assertEqual(state["problems"], [
+                "dashboard: cannot read docs/backlog.md: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"])
+
 
 class TestRespondPost(unittest.TestCase):
     """WO-0029: POST /api/backlog-order — the write endpoint's pure
@@ -1158,6 +1200,18 @@ class TestRespondPost(unittest.TestCase):
                 f" Permission denied: '{path}'"]}))
             self.assertEqual(path.read_text(encoding="utf-8"),
                              self.TEXT)
+
+    def test_a_backlog_that_is_not_utf8_is_500_and_left_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.backlog(tmp)
+            path.write_bytes(b"\xff\xfe")
+            body = json.dumps({"i": 0, "hash": "x", "order": [1]})
+            status, payload = self.post(tmp, body)
+            self.assertEqual((status, payload), (500, {"problems": [
+                "dashboard: cannot read docs/backlog.md: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"]}))
+            self.assertEqual(path.read_bytes(), b"\xff\xfe")
 
     def test_an_unwritable_backlog_is_500_with_the_os_detail(self):
         with tempfile.TemporaryDirectory() as tmp:
