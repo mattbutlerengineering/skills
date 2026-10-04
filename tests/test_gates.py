@@ -726,6 +726,19 @@ class TestStandardsDrift(unittest.TestCase):
             finally:
                 path.chmod(0o644)
 
+    def test_a_committed_index_that_is_not_utf8_is_a_problem(self):
+        """A JSON document must be UTF-8 (RFC 8259 §8.1), so bytes that
+        will not decode join the not-valid-JSON problem — where the
+        decode used to escape K's OSError guard and take the whole gate
+        run down with it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/standards.json", "").write_bytes(b"\xff\xfe")
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: docs/standards.json is not valid JSON: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"])
+
     def test_a_malformed_source_adr_bullet_is_propagated(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
@@ -1066,6 +1079,33 @@ class TestScaffoldSync(unittest.TestCase):
             tree.write("factory/manifest.json", "{}")
             self.assertEqual(gates.check_scaffold_sync(tree.root),
                              ["E: factory/manifest.json has no files map"])
+
+    def test_a_manifest_that_is_not_an_object_is_one_problem(self):
+        """A JSON top level is legally any of these and none of them has
+        .get — E asked for the files map anyway and raised
+        AttributeError, so the manifest's own detector was the thing a
+        malformed manifest took down."""
+        for text in ('["x"]', '"x"', "null", "5", "true"):
+            with self.subTest(text=text), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                tree.write("factory/manifest.json", text)
+                self.assertEqual(
+                    gates.check_scaffold_sync(tree.root),
+                    ["E: factory/manifest.json is not a JSON object"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_manifest_the_process_may_not_read_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = tree.write("factory/manifest.json", '{"files": {}}')
+            path.chmod(0)
+            try:
+                self.assertEqual(gates.check_scaffold_sync(tree.root), [
+                    "E: cannot read factory/manifest.json: [Errno 13]"
+                    f" Permission denied: '{path}'"])
+            finally:
+                path.chmod(0o644)
 
 
 class TestManifestFiles(unittest.TestCase):
@@ -1549,6 +1589,30 @@ class TestConfigShape(unittest.TestCase):
                 "F: .github/factory.json is not valid JSON: Expecting"
                 " property name enclosed in double quotes: line 1 column 2"
                 " (char 1)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_config_the_process_may_not_read_is_a_problem_per_home(self):
+        """Each home that exists is read and reported on its own, in
+        F's payload-first order — an unreadable one is a problem string
+        and the walk goes on, where the read used to raise
+        PermissionError out of the gate."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            payload = tree.write("factory/templates/factory.json",
+                                 json.dumps(CONFIG))
+            installed = tree.write(".github/factory.json",
+                                   json.dumps(CONFIG))
+            payload.chmod(0)
+            installed.chmod(0)
+            try:
+                self.assertEqual(gates.check_config_shape(tree.root), [
+                    "F: cannot read factory/templates/factory.json: [Errno"
+                    f" 13] Permission denied: '{payload}'",
+                    "F: cannot read .github/factory.json: [Errno 13]"
+                    f" Permission denied: '{installed}'"])
+            finally:
+                payload.chmod(0o644)
+                installed.chmod(0o644)
 
 
 class TestPrTraceability(unittest.TestCase):
