@@ -744,6 +744,191 @@ class TestReadEvent(unittest.TestCase):
                 (None, f"GITHUB_EVENT_PATH {path} is not a JSON object"))
 
 
+class TestReadFile(unittest.TestCase):
+    """read_file — the guarded local-file read (ADR-0075), asserted as
+    the exact (value, problem) pair for every kind against real temp
+    files. The readers that adopt it keep testing their own half — the
+    label they prefix and what absence means to them — without each
+    re-proving the failure vocabulary."""
+
+    SHOWN = "docs/thing.json"
+    KINDS = (str, dict, list, object)
+    NOT_UTF8 = ("'utf-8' codec can't decode byte 0xff in position 0:"
+                " invalid start byte")
+    NOT_JSON = ("Expecting property name enclosed in double quotes:"
+                " line 1 column 2 (char 1)")
+    EMPTY = "Expecting value: line 1 column 1 (char 0)"
+
+    def read(self, data, kind):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "thing.json"
+            path.write_bytes(data)
+            return cli.read_file(path, self.SHOWN, kind)
+
+    def assert_pairs(self, data, expected):
+        """expected maps each kind to its exact pair; a value must also
+        be the expected TYPE, because True == 1 would let a bool pass
+        for a number."""
+        self.assertEqual(set(expected), set(self.KINDS))
+        for kind, pair in expected.items():
+            with self.subTest(kind=kind.__name__):
+                got = self.read(data, kind)
+                self.assertEqual(got, pair)
+                self.assertIs(type(got[0]), type(pair[0]))
+
+    def test_an_absent_file_is_none_none_for_every_kind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for kind in self.KINDS:
+                with self.subTest(kind=kind.__name__):
+                    self.assertEqual(
+                        cli.read_file(Path(tmp) / "nope.json", self.SHOWN,
+                                      kind),
+                        (None, None))
+
+    def test_a_directory_in_its_place_counts_as_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "thing.json").mkdir()
+            for kind in self.KINDS:
+                with self.subTest(kind=kind.__name__):
+                    self.assertEqual(
+                        cli.read_file(Path(tmp) / "thing.json", self.SHOWN,
+                                      kind),
+                        (None, None))
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_an_unreadable_file_is_cannot_read_for_every_kind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "thing.json"
+            path.write_text('{"a": 1}', encoding="utf-8")
+            path.chmod(0)
+            try:
+                for kind in self.KINDS:
+                    with self.subTest(kind=kind.__name__):
+                        self.assertEqual(
+                            cli.read_file(path, self.SHOWN, kind),
+                            (None, f"cannot read {self.SHOWN}: [Errno 13]"
+                                   f" Permission denied: '{path}'"))
+            finally:
+                path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+    def test_bytes_that_are_not_utf8(self):
+        """The ADR-0075 wording rule: a text reader has no grammar to
+        blame, so the bytes are a read failure; a JSON reader's document
+        must be UTF-8 (RFC 8259 §8.1), so they are a defect in it."""
+        not_json = (None, f"{self.SHOWN} is not valid JSON: {self.NOT_UTF8}")
+        self.assert_pairs(b"\xff\xfe", {
+            str: (None, f"cannot read {self.SHOWN}: {self.NOT_UTF8}"),
+            dict: not_json, list: not_json, object: not_json})
+
+    def test_text_that_is_not_json(self):
+        not_json = (None, f"{self.SHOWN} is not valid JSON: {self.NOT_JSON}")
+        self.assert_pairs(b"{nope", {
+            str: ("{nope", None),
+            dict: not_json, list: not_json, object: not_json})
+
+    def test_an_empty_file(self):
+        not_json = (None, f"{self.SHOWN} is not valid JSON: {self.EMPTY}")
+        self.assert_pairs(b"", {
+            str: ("", None),
+            dict: not_json, list: not_json, object: not_json})
+
+    def test_a_json_object(self):
+        self.assert_pairs(b'{"a": 1}', {
+            str: ('{"a": 1}', None),
+            dict: ({"a": 1}, None),
+            list: (None, f"{self.SHOWN} is not a JSON array"),
+            object: ({"a": 1}, None)})
+
+    def test_a_json_array(self):
+        self.assert_pairs(b'["a"]', {
+            str: ('["a"]', None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (["a"], None),
+            object: (["a"], None)})
+
+    def test_a_json_string(self):
+        self.assert_pairs(b'"a"', {
+            str: ('"a"', None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array"),
+            object: ("a", None)})
+
+    def test_a_json_null(self):
+        """(None, None) already means absent, so a null document asked
+        for as `object` is a problem of its own — never a value."""
+        self.assert_pairs(b"null", {
+            str: ("null", None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array"),
+            object: (None, f"{self.SHOWN} is null")})
+
+    def test_a_json_number(self):
+        self.assert_pairs(b"5", {
+            str: ("5", None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array"),
+            object: (5, None)})
+
+    def test_json_true(self):
+        self.assert_pairs(b"true", {
+            str: ("true", None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array"),
+            object: (True, None)})
+
+    def test_json_false(self):
+        self.assert_pairs(b"false", {
+            str: ("false", None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array"),
+            object: (False, None)})
+
+    def test_every_non_object_top_level_is_one_problem_under_dict(self):
+        """The object rule both config readers shared before it moved
+        here (factory_config.object_problems' cells): every JSON top
+        level that is not an object is the same one problem."""
+        for value in (None, [], ["a"], "factory", 5, 0.5, True, False):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self.read(json.dumps(value).encode("utf-8"), dict),
+                    (None, f"{self.SHOWN} is not a JSON object"))
+
+    def test_shown_is_echoed_verbatim(self):
+        """The problem names the file as the caller's `shown`, never as
+        the path it read — and a Path formats as its own text."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "thing.json"
+            path.write_text("[]", encoding="utf-8")
+            for shown in ("any name at all", Path("docs") / "thing.json"):
+                with self.subTest(shown=shown):
+                    self.assertEqual(
+                        cli.read_file(path, shown, dict),
+                        (None, f"{shown} is not a JSON object"))
+            self.assertEqual(
+                cli.read_file(str(path), Path("docs") / "thing.json", dict),
+                (None, "docs/thing.json is not a JSON object"))
+
+    @unittest.skipIf(os.geteuid() == 0, "root searches a mode-000 directory")
+    def test_an_unsearchable_parent_never_raises(self):
+        """Path.is_file raises PermissionError under an unsearchable
+        parent before Python 3.14 and answers False from 3.14 on, so the
+        outcome is a problem on one and absence on the other. Only the
+        promise is pinned: nothing raises, and no value comes back."""
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp) / "locked"
+            parent.mkdir()
+            (parent / "thing.json").write_text('{"a": 1}', encoding="utf-8")
+            parent.chmod(0)
+            try:
+                for kind in self.KINDS:
+                    with self.subTest(kind=kind.__name__):
+                        value, _ = cli.read_file(
+                            parent / "thing.json", self.SHOWN, kind)
+                        self.assertIsNone(value)
+            finally:
+                parent.chmod(stat.S_IRWXU)
+
+
 class TestReadExecution(unittest.TestCase):
     """read_execution — the claude-code-action execution file's (tokens,
     cost), issue #222's harness-side spend record. Every shape it cannot

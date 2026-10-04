@@ -25,7 +25,10 @@ pipes, os.killpg), the stance trigger_eval.py has always documented.
 report is the caller half of the problem-string contract — print the
 problems, print the `<label>: N problem(s)` summary with a computed
 count, return the exit code — retyped in ten mains before it moved here
-(ADR-0051).
+(ADR-0051). read_file is the guarded local-file read — unreadable,
+undecodable, unparsable, or the wrong top-level shape, each an
+unlabelled problem string where every reader had typed its own guard,
+and absence left to the caller (ADR-0075).
 
 gh_runner, the stdout port over runner("gh"), lives beside runner for the
 same reason write_outputs moved here (ADR-0040): it had grown four real
@@ -267,6 +270,58 @@ def read_event(env):
     if not isinstance(event, dict):
         return None, f"{name} {path} is not a JSON object"
     return event, None
+
+
+def read_file(path, shown, kind):
+    """(value, problem) for one local file — the guarded read every
+    reader of a repo file shares (ADR-0075). kind is what the caller
+    needs back: str (the text), dict (a JSON object), list (a JSON
+    array), or object (any JSON document except null).
+
+    (None, None) when no regular file is at path: absence is a fact, not
+    an error, and each caller keeps its own meaning for it (a "missing"
+    problem, an empty result, a skip) — read_event's convention.
+    Otherwise exactly one of the pair is None: value is an instance of
+    kind, or problem is one unlabelled string naming the file as
+    `shown`, which the caller prefixes with its own label (ADR-0051):
+
+      cannot read <shown>: <err>        any OSError; bytes that are not
+                                        UTF-8, when kind is str
+      <shown> is not valid JSON: <err>  a parse failure; bytes that are
+                                        not UTF-8, when kind is JSON
+      <shown> is not a JSON object      kind dict, any other top level
+      <shown> is not a JSON array       kind list, any other top level
+      <shown> is null                   kind object, a null document —
+                                        (None, None) already means absent
+
+    Never raises for a local-file failure: the existence check sits
+    inside the guard because Path.is_file raises PermissionError under
+    an unsearchable parent before Python 3.14. A reader whose shape
+    wording is its own asks for object and keeps its own check."""
+    path = Path(path)
+    try:
+        if not path.is_file():
+            return None, None
+        text = path.read_text(encoding="utf-8")
+    except OSError as err:
+        return None, f"cannot read {shown}: {err}"
+    except UnicodeDecodeError as err:
+        if kind is str:
+            return None, f"cannot read {shown}: {err}"
+        return None, f"{shown} is not valid JSON: {err}"
+    if kind is str:
+        return text, None
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError as err:
+        return None, f"{shown} is not valid JSON: {err}"
+    if kind is dict and not isinstance(value, dict):
+        return None, f"{shown} is not a JSON object"
+    if kind is list and not isinstance(value, list):
+        return None, f"{shown} is not a JSON array"
+    if value is None:
+        return None, f"{shown} is null"
+    return value, None
 
 
 # The usage counts a result entry may carry; absent fields count zero
