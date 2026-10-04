@@ -8,6 +8,7 @@ exact problem strings callers will print.
 """
 import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -691,6 +692,40 @@ class TestStandardsDrift(unittest.TestCase):
             self.assertEqual(gates.check_standards_drift(tree.root),
                              ["K: docs/standards.json must be a JSON array"])
 
+    def test_a_string_or_null_committed_index_is_the_same_problem(self):
+        """K's shape wording is its own and covers null too — which is
+        why K keeps its own check rather than asking cli.read_file for a
+        shape."""
+        for text in ('"standards"', "null"):
+            with self.subTest(text=text), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                tree.write("docs/standards.json", text)
+                self.assertEqual(
+                    gates.check_standards_drift(tree.root),
+                    ["K: docs/standards.json must be a JSON array"])
+
+    def test_an_empty_committed_index_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/standards.json", "")
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: docs/standards.json is not valid JSON: Expecting value:"
+                " line 1 column 1 (char 0)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_committed_index_the_process_may_not_read_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = tree.write("docs/standards.json", "[]")
+            path.chmod(0)
+            try:
+                self.assertEqual(gates.check_standards_drift(tree.root), [
+                    "K: cannot read docs/standards.json: [Errno 13]"
+                    f" Permission denied: '{path}'"])
+            finally:
+                path.chmod(0o644)
+
     def test_a_malformed_source_adr_bullet_is_propagated(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
@@ -1016,6 +1051,21 @@ class TestScaffoldSync(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
                 "E: factory/manifest.json is not valid JSON:"), problems)
+
+    def test_an_empty_manifest_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/manifest.json", "")
+            self.assertEqual(gates.check_scaffold_sync(tree.root), [
+                "E: factory/manifest.json is not valid JSON: Expecting"
+                " value: line 1 column 1 (char 0)"])
+
+    def test_an_object_with_no_files_map_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/manifest.json", "{}")
+            self.assertEqual(gates.check_scaffold_sync(tree.root),
+                             ["E: factory/manifest.json has no files map"])
 
 
 class TestManifestFiles(unittest.TestCase):
@@ -1464,6 +1514,41 @@ class TestConfigShape(unittest.TestCase):
                 "F: factory/templates/factory.json is not a JSON object",
                 "F: .github/factory.json wip_cap must be a positive"
                 " integer"])
+
+    def test_no_config_in_either_home_is_silent(self):
+        # an unstamped, payload-less tree has nothing for F to police;
+        # factory_config.load is the one that calls absence a problem
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(gates.check_config_shape(Path(tmp)), [])
+
+    def test_a_config_that_is_not_json_is_one_exact_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", "{nope")
+            self.assertEqual(gates.check_config_shape(tree.root), [
+                "F: factory/templates/factory.json is not valid JSON:"
+                " Expecting property name enclosed in double quotes:"
+                " line 1 column 2 (char 1)"])
+
+    def test_an_empty_config_is_one_exact_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", "")
+            self.assertEqual(gates.check_config_shape(tree.root), [
+                "F: factory/templates/factory.json is not valid JSON:"
+                " Expecting value: line 1 column 1 (char 0)"])
+
+    def test_a_broken_installed_home_is_reported_beside_a_clean_payload(self):
+        """Every home, not the first hit: a clean payload copy does not
+        excuse an installed copy that will not parse."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", json.dumps(CONFIG))
+            tree.write(".github/factory.json", "{nope")
+            self.assertEqual(gates.check_config_shape(tree.root), [
+                "F: .github/factory.json is not valid JSON: Expecting"
+                " property name enclosed in double quotes: line 1 column 2"
+                " (char 1)"])
 
 
 class TestPrTraceability(unittest.TestCase):

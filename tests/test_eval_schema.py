@@ -160,6 +160,12 @@ class TestLoad(unittest.TestCase):
         self.assertTrue(problems[0].startswith(
             "evals/routing.json is not valid JSON: "))
 
+    def test_an_empty_file(self):
+        self.path.write_text("", encoding="utf-8")
+        self.assertEqual(eval_schema.load(self.path, SKILLS, LABEL), ([], [
+            "evals/routing.json is not valid JSON: Expecting value: line 1"
+            " column 1 (char 0)"]))
+
     def test_invalid_set_returns_no_cases(self):
         self.path.write_text(json.dumps({"cases": []}), encoding="utf-8")
         cases, problems = eval_schema.load(self.path, SKILLS, LABEL)

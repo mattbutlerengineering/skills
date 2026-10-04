@@ -6,6 +6,7 @@ its public interface and tests assert the EXACT strings callers will
 print or write.
 """
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -254,6 +255,40 @@ class TestForeignEntries(unittest.TestCase):
             self.assertEqual(standards_index.foreign_entries(tmp),
                              ([], [f"{standards_index.STANDARDS_PATH} is"
                                    " not a JSON array"]))
+
+    def test_a_string_and_a_null_are_the_same_problem(self):
+        for text in ('"standards"', "null"):
+            with self.subTest(text=text), \
+                    tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / standards_index.STANDARDS_PATH
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text, encoding="utf-8")
+                self.assertEqual(
+                    standards_index.foreign_entries(tmp),
+                    ([], ["docs/standards.json is not a JSON array"]))
+
+    def test_an_empty_file_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / standards_index.STANDARDS_PATH
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("", encoding="utf-8")
+            self.assertEqual(standards_index.foreign_entries(tmp), ([], [
+                "docs/standards.json is not valid JSON: Expecting value:"
+                " line 1 column 1 (char 0)"]))
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_file_the_process_may_not_read_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / standards_index.STANDARDS_PATH
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("[]", encoding="utf-8")
+            path.chmod(0)
+            try:
+                self.assertEqual(standards_index.foreign_entries(tmp), ([], [
+                    "cannot read docs/standards.json: [Errno 13] Permission"
+                    f" denied: '{path}'"]))
+            finally:
+                path.chmod(0o644)
 
 
 class TestUpdate(unittest.TestCase):

@@ -9,6 +9,7 @@ append_ledger_line) and test_cost_report (read, against
 cost_report.read_ledger) — one grammar, one home, one test file.
 """
 import json
+import os
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -379,6 +380,26 @@ class TestRead(unittest.TestCase):
     def test_a_missing_ledger_is_empty_not_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(cost_ledger.read(tmp), ([], []))
+
+    def test_an_empty_ledger_is_empty_not_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "")
+            self.assertEqual(cost_ledger.read(tmp), ([], []))
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_ledger_the_process_may_not_read_is_a_ledger_problem(self):
+        # read() reports the file-level failure under its own label and
+        # returns no entries — the fail-closed half its callers act on
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "")
+            path = Path(tmp) / cost_ledger.COST_LEDGER
+            path.chmod(0)
+            try:
+                self.assertEqual(cost_ledger.read(tmp), ([], [
+                    "ledger: cannot read docs/factory/costs.jsonl: [Errno"
+                    f" 13] Permission denied: '{path}'"]))
+            finally:
+                path.chmod(0o644)
 
     def test_reads_well_formed_lines(self):
         with tempfile.TemporaryDirectory() as tmp:

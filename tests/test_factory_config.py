@@ -9,6 +9,7 @@ TestResolveBudget (test_budget_guard), TestResolveCap (test_cost_report) —
 one schema, one home, one test file.
 """
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -111,6 +112,39 @@ class TestLoad(unittest.TestCase):
             config, problems = factory_config.load(tmp)
             self.assertIsNone(config)
             self.assertTrue(problems)
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_config_the_process_may_not_read_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = FixtureTree(tmp).write(".github/factory.json",
+                                          json.dumps(CONFIG))
+            path.chmod(0)
+            try:
+                self.assertEqual(factory_config.load(tmp), (None, [
+                    "config: cannot read .github/factory.json: [Errno 13]"
+                    f" Permission denied: '{path}'"]))
+            finally:
+                path.chmod(0o644)
+
+    def test_an_empty_config_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            FixtureTree(tmp).write(".github/factory.json", "")
+            self.assertEqual(factory_config.load(tmp), (None, [
+                "config: .github/factory.json is not valid JSON:"
+                " Expecting value: line 1 column 1 (char 0)"]))
+
+    def test_a_broken_installed_config_is_reported_not_skipped(self):
+        """First home wins (ADR-0048), broken or not: an installed copy
+        that is present but does not parse is the result. It never falls
+        through to a clean payload copy — the repo's own curated config
+        would be silently replaced by the shipped default."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.write(".github/factory.json", "{nope")
+            self.assertEqual(factory_config.load(tmp), (None, [
+                "config: .github/factory.json is not valid JSON:"
+                " Expecting property name enclosed in double quotes:"
+                " line 1 column 2 (char 1)"]))
 
 
 class TestObjectProblems(unittest.TestCase):

@@ -224,6 +224,20 @@ class TestManifest(CheckerTreeTest):
                 problems += checker(self.root)
         self.assertEqual(problems, ["plugin.json is not a JSON object"])
 
+    def test_a_manifest_that_is_not_json_is_one_exact_problem(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "{not json", encoding="utf-8")
+        self.assertEqual(lint.check_manifest(self.root), [
+            "plugin.json is not valid JSON: Expecting property name"
+            " enclosed in double quotes: line 1 column 2 (char 1)"])
+
+    def test_an_empty_manifest_is_one_exact_problem(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "", encoding="utf-8")
+        self.assertEqual(lint.check_manifest(self.root), [
+            "plugin.json is not valid JSON: Expecting value: line 1 column 1"
+            " (char 0)"])
+
 
 class TestPiPackage(CheckerTreeTest):
     """The Pi (oh-my-pi) discovery manifest, guarded like the Claude one so
@@ -849,6 +863,13 @@ class TestPluginSkills(CheckerTreeTest):
             "{not json", encoding="utf-8")
         self.assertEqual(lint.check_plugin_skills(self.root), [])
         self.assertEqual(len(lint.check_manifest(self.root)), 1)
+
+    def test_a_non_object_manifest_is_left_to_check_manifest(self):
+        path = self.root / ".claude-plugin" / "plugin.json"
+        for shape in ('["a"]', '"text"'):
+            with self.subTest(shape=shape):
+                path.write_text(shape, encoding="utf-8")
+                self.assertEqual(lint.check_plugin_skills(self.root), [])
 
 
 class TestProtocolTables(CheckerTreeTest):
