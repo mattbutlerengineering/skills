@@ -499,3 +499,76 @@ A record of what happened, for a later resume. It adds no decision.
 - An orchestrator slip, undone: after gating Implement, a stray checkout
   detached the worktree at `110ffc6`. It was put back on the branch at
   `e974147` before any further work, and no commit was lost.
+
+## Resume, 2026-10-04 (UTC): the fix loop for the open major
+
+**What the operator did.** The orchestrating session's report after Ship
+ended with one question: "Should I drop the uncalled kind?" It
+recommended yes, and said that on a yes it would "run one more Implement
+pass that also takes the mechanical minors, then re-verify, all still
+local". The operator's reply was to invoke autorun again, with no
+arguments and no other words.
+
+**What that is taken to mean, and by whom.** The operator did not say
+yes and did not name an option. The orchestrating session reads the
+re-invocation as "keep driving this run", and applies autorun's rule for
+a silent brief: `review.md` names three options for the major and
+recommends (a), so (a) is taken as the default. **This is the
+orchestrating session's reading, not the operator's words.** Every stage
+that leans on it logs it under `assumptions:`, and the final report says
+so first.
+
+**Why proceeding is safe.** Everything below is local commits on a
+branch that was never pushed, on top of `864f1aa`. ADR-0075 is
+provisional and unmerged, so correcting it is not rewriting a record.
+If the operator wanted (b) or (c), `git reset --hard 864f1aa` on this
+branch restores the state the operator was shown, and nothing outside
+this worktree has moved.
+
+**What does not change.** The authorization is the one the operator
+gave, word for word, at the top of this brief: local commits per work
+item; Ship prepares and stops; no push, no pull request, no issue, no
+paid tool. This resume adds no authority.
+
+**Scope of the fix loop**, all from `review.md` and step 1 of
+`release.md`:
+
+- The major, option (a): `read_file` has three kinds (`str`, `dict`,
+  `list`). The `object` kind, its `is null` branch, its docstring row
+  and its `TestReadFile` rows go. The docstring's last sentence says a
+  reader whose shape or `null` wording is its own does not adopt and
+  gets its missing arm by hand. ADR-0075 decision 1 names three kinds,
+  and the record keeps the dropped kind among the alternatives that
+  lost, with the measurement that removed it.
+- Minor 1: `read_file` catches `ValueError` and `RecursionError` from
+  the parse, worded `is not valid JSON`, so "never raises for a
+  local-file failure" is true.
+- Minor 2: an unknown `kind` raises `ValueError` at the call, before
+  the file is touched. It is a programming error, not a file failure.
+- Minor 4: ADR-0075 decision 2 names `cli.read_event` and
+  `dashboard.repo_set` as keeping `cannot read` under decision 4.
+- Minor 5: each of the eight other hand-written readers says in code
+  why it does not use `read_file`.
+- Minor 6: the format-expression id in `tests/test_budget_guard.py`
+  becomes the literal its neighbours use.
+- Minor 3 stays deferred, as `review.md` decided: a seed for the retro.
+  `docs/backlog.md` is still not touched.
+
+**What must still hold.** No pinned problem string changes. The
+144-cell matrix against the `661ffc7` baseline still ends
+`cells 144 | identical 123 | fixed 16 | wording changed 2 | still raising 3 | newly raising 0`.
+The battery is green at every commit. Tests come first: a new test is
+written and watched failing for the right reason before the change that
+turns it green, and a test dies only in the commit that removes what it
+tests. The payload rule in `breakdown.md` applies to every mirrored
+file. Hand-written JSON readers are not given the Minor 1 arm: that is
+out of scope, and the stages say so rather than widen.
+
+**How the stages run.** As before: one fresh context per stage, each
+appending a dated section to its own artifact rather than rewriting the
+record of the first pass. Architect amends `architecture.md` and
+ADR-0075. Decompose adds a Milestone D to `breakdown.md`. Implement
+commits per item. Verify appends a re-verification. Review appends a
+re-review of the fix commits and closes or keeps each finding. Ship
+re-runs pre-flight and refreshes `release.md`, and still executes
+nothing.
