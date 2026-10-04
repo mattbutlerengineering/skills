@@ -269,6 +269,12 @@ class TestPiPackage(CheckerTreeTest):
         self.assertTrue(problems[0].startswith(
             "package.json is not valid JSON:"))
 
+    def test_an_empty_package_json_is_one_exact_problem(self):
+        (self.root / "package.json").write_text("", encoding="utf-8")
+        self.assertEqual(lint.check_pi_package(self.root), [
+            "package.json is not valid JSON: Expecting value: line 1 column 1"
+            " (char 0)"])
+
 
     def test_a_package_that_is_not_an_object_names_its_shape(self):
         path = self.root / "package.json"
@@ -1297,6 +1303,22 @@ class TestOutputEvals(CheckerTreeTest):
         self.assertTrue(problems[0].startswith(
             "evals/output/idea.json is not valid JSON:"), problems)
 
+    def test_a_record_file_that_is_not_json_is_one_exact_problem(self):
+        (self.root / "evals" / "output" / "idea.json").write_text(
+            "{nope", encoding="utf-8")
+        self.assertEqual(lint.check_output_evals(self.root), [
+            "evals/output/idea.json is not valid JSON: Expecting property"
+            " name enclosed in double quotes: line 1 column 2 (char 1)"])
+
+    def test_a_null_record_file_is_not_a_json_object(self):
+        """The shape wording is eval_schema.validate_output's and covers
+        null — which is why this reader keeps its own parse rather than
+        asking cli.read_file for a shape."""
+        (self.root / "evals" / "output" / "idea.json").write_text(
+            "null", encoding="utf-8")
+        self.assertEqual(lint.check_output_evals(self.root),
+                         ["evals/output/idea.json is not a JSON object"])
+
 
 class TestBacklog(CheckerTreeTest):
     """The seed backlog is strictly opt-in (ADR-0029): the clean tree has
@@ -1330,6 +1352,10 @@ class TestBacklog(CheckerTreeTest):
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "backlog: docs/backlog.md is unreadable:"))
+
+    def test_an_empty_backlog_yields_no_problems(self):
+        (self.root / "docs" / "backlog.md").write_text("", encoding="utf-8")
+        self.assertEqual(lint.check_backlog(self.root), [])
 
 
 class TestLedger(CheckerTreeTest):

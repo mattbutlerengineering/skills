@@ -974,6 +974,46 @@ class TestReadExecution(unittest.TestCase):
             self.assertTrue(error.startswith(
                 f"execution file {path} is not valid JSON:"), error)
 
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_file_the_process_may_not_read_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, [self.RESULT])
+            os.chmod(path, 0)
+            try:
+                self.assertEqual(cli.read_execution(path), (
+                    None, f"cannot read execution file {path}: [Errno 13]"
+                    f" Permission denied: '{path}'"))
+            finally:
+                os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+    def test_a_directory_in_its_place_is_an_error(self):
+        # not absence: the caller named a path, and what is there cannot
+        # be read as a file — the OS's own message says so
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "execution.json")
+            os.mkdir(path)
+            self.assertEqual(cli.read_execution(path), (
+                None, f"cannot read execution file {path}: [Errno 21] Is a"
+                f" directory: '{path}'"))
+
+    def test_an_empty_file_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "execution.json"
+            path.write_text("", encoding="utf-8")
+            self.assertEqual(cli.read_execution(str(path)), (
+                None, f"execution file {path} is not valid JSON: Expecting"
+                " value: line 1 column 1 (char 0)"))
+
+    def test_a_null_log_has_no_result_entry(self):
+        """null parses, so it is a shape this cannot account for rather
+        than a read failure: no entry, no spend, the same refusal as a
+        log that simply lacks its result."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, None)
+            self.assertEqual(
+                cli.read_execution(path),
+                (None, f"execution file {path} has no result entry"))
+
     def test_a_log_with_no_result_entry_is_an_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = self.write(tmp, [{"type": "assistant"}])

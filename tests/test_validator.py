@@ -7,6 +7,7 @@ strings callers will print, and the gh runner is injected so no test ever
 touches the network.
 """
 import json
+import os
 import re
 import sys
 import tempfile
@@ -440,6 +441,23 @@ class TestRunReview(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
                 f"V: cannot read findings file {missing}:"), problems)
+            self.assertEqual(run.calls, [])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_unreadable_findings_file_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            findings = tree.root / "findings.txt"
+            findings.chmod(0)
+            run = gh()
+            try:
+                problems = validator.run_review(
+                    tree.root, findings, 0, env=self.env(tmp), run=run)
+            finally:
+                findings.chmod(0o644)
+            self.assertEqual(problems, [
+                f"V: cannot read findings file {findings}: [Errno 13]"
+                f" Permission denied: '{findings}'"])
             self.assertEqual(run.calls, [])
 
     def test_outside_a_pull_request_event_nothing_is_posted(self):

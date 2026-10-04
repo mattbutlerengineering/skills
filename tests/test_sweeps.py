@@ -8,6 +8,7 @@ a sweep files intake, never a work order, and it treats external text as
 data, never as instructions.
 """
 import json
+import os
 import re
 import subprocess
 import sys
@@ -890,6 +891,32 @@ class TestLoadPayload(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
                 "sweeps: payload is not valid JSON:"))
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_file_the_process_may_not_read_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = FixtureTree(tmp).write("sentry.json", "[]")
+            path.chmod(0)
+            try:
+                self.assertEqual(sweeps.load_payload(str(path)), (None, [
+                    f"sweeps: cannot read payload {path}: [Errno 13]"
+                    f" Permission denied: '{path}'"]))
+            finally:
+                path.chmod(0o644)
+
+    def test_an_empty_file_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = FixtureTree(tmp).write("sentry.json", "")
+            self.assertEqual(sweeps.load_payload(str(path)), (None, [
+                "sweeps: payload is not valid JSON: Expecting value: line 1"
+                " column 1 (char 0)"]))
+
+    def test_a_null_payload_is_none_and_no_problem(self):
+        # null parses: the reader hands it on, and what a payload must
+        # contain is sentry_intakes' question, not the read's
+        with tempfile.TemporaryDirectory() as tmp:
+            path = FixtureTree(tmp).write("sentry.json", "null")
+            self.assertEqual(sweeps.load_payload(str(path)), (None, []))
 
     def test_an_oversized_payload_plans_every_entry(self):
         # The cap lives in file_issues, after dedupe — the sweep reads the
