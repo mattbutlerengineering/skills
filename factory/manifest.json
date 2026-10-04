@@ -38,7 +38,7 @@
     "templates/tools/factory/protocol.py": "4d216fb9c27e38b844609571237ea62ad44e601672759ff9680464f5c5a5c8cb",
     "templates/tools/factory/rejection_mining.py": "ab0531f59126de7fe6f761846d1433827ff972cc30c4e3b7f7fa0d0dc69fc555",
     "templates/tools/factory/standards_index.py": "eca6d399fecb25e4df2d62f2291bd9e0b216f3a6421a5fd57eb7b189075232a2",
-    "templates/tools/factory/validator.py": "de141f32d67c4bb6cb4308c377a1b515c573beadb703b841b30acd4eb20bd0e4",
+    "templates/tools/factory/validator.py": "28f9409b77fcfb8056d1485ae1827639fbd700fd818944e5b98f7d07e9e45215",
     "templates/tools/factory/work_queue.py": "3bee3948f28614d32d6a85d9967a2bce6b45dd08a7acde411414a5315ef485b6"
   }
 }

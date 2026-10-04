@@ -322,7 +322,7 @@ def run_review(root, findings, status, env, run=gh_runner):
         return problems
     try:
         output = Path(findings).read_text(encoding="utf-8")
-    except OSError as err:
+    except (OSError, UnicodeDecodeError) as err:
         return [f"V: cannot read findings file {findings}: {err}"]
     # The heading is cosmetic. An unresolvable citation must not silence the
     # reviewer (the findings are the point) — but it must not name a work

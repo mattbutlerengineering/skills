@@ -460,6 +460,24 @@ class TestRunReview(unittest.TestCase):
                 f" Permission denied: '{findings}'"])
             self.assertEqual(run.calls, [])
 
+    def test_findings_that_are_not_utf8_are_a_problem_not_a_traceback(self):
+        """The findings file is another step's captured output, so its
+        bytes are whatever that step printed. Undecodable ones are a
+        read failure like a missing file — a problem string and nothing
+        posted, where the review job used to die on the decode."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            findings = tree.root / "findings.txt"
+            findings.write_bytes(b"\xff\xfe")
+            run = gh()
+            problems = validator.run_review(
+                tree.root, findings, 0, env=self.env(tmp), run=run)
+            self.assertEqual(problems, [
+                f"V: cannot read findings file {findings}: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"])
+            self.assertEqual(run.calls, [])
+
     def test_outside_a_pull_request_event_nothing_is_posted(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
