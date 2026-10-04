@@ -572,3 +572,35 @@ commits per item. Verify appends a re-verification. Review appends a
 re-review of the fix commits and closes or keeps each finding. Ship
 re-runs pre-flight and refreshes `release.md`, and still executes
 nothing.
+
+## Outcome of the resume — driven through Ship again on 2026-10-04 (UTC)
+
+A record of what happened, for a later resume. It adds no decision.
+
+- Stages, one fresh agent each, every artifact gated by the orchestrator
+  before the next stage: Architect amendment with ADR-0075 corrected in
+  place (`4fe2983`), Decompose with Milestone D (`ad4c812`), Implement
+  (five item commits, `e6abfc1` to `b94462b`), Verify (`95830fa`),
+  Review (`e46fa71`), Ship (the commit that adds this section).
+- State: local only. The branch was never pushed, no pull request or
+  issue exists, no tag exists, and no paid tool ran. `origin/main` was
+  still `661ffc7` when Ship checked.
+- Verdict: prepared and ready for the operator's steps. At `b94462b` the
+  nine criteria pass on Python 3.14 and 3.12 with 1877 tests, the matrix
+  is byte-identical to the one recorded before the fix loop, and the
+  re-review found no critical and no major.
+- Still the operator's, in order, as `release.md` lists them:
+  1. Confirming option (a). The operator never said it. If the operator
+     wanted (b) or (c), `git reset --hard 864f1aa` restores what the
+     operator was shown.
+  2. N1, a new minor from the re-review: a ledger line that `json.loads`
+     refuses with anything but `JSONDecodeError` still makes the monthly
+     cap check raise instead of pausing, as at `661ffc7`. The reviewer
+     recommends the one-line fix in `cost_ledger.parse` before the merge.
+     The run did not take it: it is outside the scope the operator was
+     told about. N2, one sentence in ADR-0075, goes with that decision.
+  3. Every release step: push, tracking issue, draft pull request, the
+     human gate-2 merge.
+- Left for the retro, none added to `docs/backlog.md`: Minor 3, N3, the
+  parse arm for the hand-written JSON readers, `AGENTS.md`'s older seam
+  bullet, and the `trigger_eval.print_metrics` shape cells.
