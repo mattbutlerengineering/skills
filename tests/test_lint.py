@@ -1332,6 +1332,29 @@ class TestOutputEvals(CheckerTreeTest):
         self.assertEqual(lint.check_output_evals(self.root),
                          ["evals/output/idea.json is not a JSON object"])
 
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_record_file_the_process_may_not_read_is_a_problem(self):
+        """The glob only says the name is there. A file the walk may not
+        open is one problem for that file, never a PermissionError that
+        takes the rest of the walk — and lint's whole report — with it."""
+        path = self.root / "evals" / "output" / "idea.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_output_evals(self.root), [
+                "cannot read evals/output/idea.json: [Errno 13] Permission"
+                f" denied: '{path}'"])
+        finally:
+            path.chmod(0o644)
+
+    def test_a_directory_named_like_a_record_file_is_a_problem(self):
+        # the glob matches names, not kinds: a directory called prd.json
+        # is walked like a file and cannot be read as one
+        path = self.root / "evals" / "output" / "prd.json"
+        path.mkdir()
+        self.assertEqual(lint.check_output_evals(self.root), [
+            "cannot read evals/output/prd.json: [Errno 21] Is a directory:"
+            f" '{path}'"])
+
 
 class TestBacklog(CheckerTreeTest):
     """The seed backlog is strictly opt-in (ADR-0029): the clean tree has
@@ -1369,6 +1392,14 @@ class TestBacklog(CheckerTreeTest):
     def test_an_empty_backlog_yields_no_problems(self):
         (self.root / "docs" / "backlog.md").write_text("", encoding="utf-8")
         self.assertEqual(lint.check_backlog(self.root), [])
+
+    def test_a_backlog_that_is_not_utf8_yields_one_problem_string(self):
+        """The backlog is text, so bytes that will not decode are a read
+        failure — this checker's own phrase for one is "is unreadable"."""
+        (self.root / "docs" / "backlog.md").write_bytes(b"\xff\xfe")
+        self.assertEqual(lint.check_backlog(self.root), [
+            "backlog: docs/backlog.md is unreadable: 'utf-8' codec can't"
+            " decode byte 0xff in position 0: invalid start byte"])
 
 
 class TestLedger(CheckerTreeTest):

@@ -770,6 +770,8 @@ def check_output_evals(root):
         label = f"evals/output/{path.name}"
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as err:
+            return [f"cannot read {label}: {err}"]
         except (json.JSONDecodeError, UnicodeDecodeError) as err:
             return [f"{label} is not valid JSON: {err}"]
         return (
@@ -871,7 +873,7 @@ def check_backlog(root):
         return []
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as err:
+    except (OSError, UnicodeDecodeError) as err:
         return [f"backlog: docs/backlog.md is unreadable: {err}"]
     return protocol.check_backlog(text)
 
