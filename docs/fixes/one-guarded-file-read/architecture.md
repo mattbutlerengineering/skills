@@ -17,6 +17,11 @@ assumptions:
   - "Amendment 2026-10-04, the scope fence, decided without live operator input: the brief fences the hand-written JSON readers out of Minor 1. The replay found a group the brief does not name, the readers that adopted with kind str and parse each line themselves (cost_ledger.load, and so read, and dashboard._corrections). They are treated as inside the same fence and still raise on those two documents, as at 661ffc7. ADR-0075 decision 5's closing gains one sentence saying the wider parse guard is read_file's alone, which is an edit beyond the four the orchestrating session listed."
   - "Amendment 2026-10-04, the eight comments, decided without live operator input: the wording of the eight Minor 5 comments is the Architect's. For lint.check_output_evals' problems_for the reason given is not a null wording of its own (with dict its null cell reads the same words) but the stem line it reports beside the shape problem and the directory it words 'cannot read'. ADR-0075 decision 5's first bullet is reworded to match, and its new alternative names five readers where review.md counted four, because the first pass's counterfactual also changed sweeps.load_payload's null cell."
   - "Amendment 2026-10-04, the test pins, decided without live operator input: the two Minor 1 documents are pinned at read_file's own tests only, the integer by its exact string (the same on 3.12 and 3.14) and the nesting by prefix (the text differs by version), with 1,000,000 balanced arrays rather than 200,000 (the first nesting that raises on 3.14 here is about 116,000). No reader-level test is added for them."
+  - "Second amendment 2026-10-04, taking the fix: cost_ledger.parse gets the wider parse guard (re-review N1; release.md step 2, Path A) because the operator, asked 'Should I fix the cap-check gap before you push?', re-invoked autorun with no arguments and no other words (autorun-brief.md, 'Second resume, 2026-10-04'). The operator did not say yes. Taking the fix is the orchestrating session's reading, not the operator's words, and so is its scope: cost_ledger.parse only, with dashboard._corrections left as it is."
+  - "Second amendment 2026-10-04, the docstring sentence, decided without live operator input: parse's docstring gains one sentence saying why the arm is wider than JSONDecodeError, as read_file's docstring does. The operator was told 'one line in the ledger parser'. The sentence changes no behaviour, and without it the arm reads as a slip to tidy back. It can be struck: a scratch copy with the arm changed and the docstring left as at HEAD passes the same suite and battery on both Pythons."
+  - "Second amendment 2026-10-04, the tests, decided without live operator input: three tests, not the two the operator was told. Two pin the 5,000-digit integer line by its exact string, through cost_report.guard and budget_guard.record. The third pins the nested line by prefix at cost_ledger.parse, because with the first two alone narrowing the arm to ValueError passes (measured). The nested line gets no reader-level test, and work_queue.month_to_date, detector G, gate_digest and the dashboard get none for either line: the scratch replay shows each treating both lines exactly as it treats a line that is plainly not JSON."
+  - "Second amendment 2026-10-04, the new tests and N3, decided without live operator input: the three tests use the real documents under the interpreter's default limits (the 4,300-digit limit and the default stack), as the first amendment's read_file tests do, so the re-review's N3 applies to them too. N3 is not fixed here and stays a seed for the retro."
+  - "Second amendment 2026-10-04, ADR-0075, decided without live operator input: decision 5's closing gains a paragraph in the Architect's wording, not review.md's N2 sentence, which was written for the case where the fix is not taken. The Consequences sentence about the fail-closed paths is left as written, because with this change it is true for a ledger that is not UTF-8 and for a line the parser refuses."
 ---
 
 # Architecture: one owner for the guarded local-file read
@@ -1412,3 +1417,210 @@ tests, at least one for each of the four readers:
 The four `fixed` cells in the 204 are those readers' 5,000-digit
 integer cell, which adoption would bring under the wider parse guard.
 That does not outweigh the pins.
+
+### Second amendment (2026-10-04): the ledger parse guard
+
+Appended on the second resume (`autorun-brief.md`, "Second resume,
+2026-10-04 (UTC): the ledger parse guard"), after the re-review
+(`review.md`, N1 and N2). Nothing above is rewritten. Where this entry
+contradicts the scope-fence entry above, this entry is the design.
+
+- **2026-10-04 — `cost_ledger.parse` takes the wider parse guard
+  (re-review N1).** `load` adopted `read_file` with `str`, so
+  `read_file`'s parse guard never sees a ledger line, and `parse`
+  caught `JSONDecodeError` alone. A line `json.loads` refuses any other
+  way raised out of the monthly cap check before `pause=` was written,
+  and `cost-report.yml` runs its pause step only on `pause == 'true'`
+  (*Proof A*). Of the readers the first amendment left raising, this
+  is the one where a traceback is the unsafe direction: the pause
+  never happens.
+  So `parse`'s arm takes `ValueError` and `RecursionError`, as
+  `read_file`'s does, and keeps the suffix `is not valid JSON: {err}`.
+  `load` keeps its signature and return shape (ADR-0049). This
+  reverses the first amendment's scope fence for `cost_ledger.parse`
+  only. Taking the fix at all is the orchestrating session's reading,
+  not the operator's words (frontmatter).
+  The docstring gains one sentence, so the arm does not read as a slip
+  to tidy back. Nothing else in `cost_ledger.py` changes. The whole
+  change, as `diff -U1` of HEAD's file against the amended one, for
+  Implement to apply as it stands. `python3 factory_init.py
+  update-manifest` brings the payload twin and `factory/manifest.json`
+  level, in the same commit.
+
+  ```diff
+  @@ -215,3 +215,7 @@
+       problems are its unlocated parse + shape complaints. The one walk both
+  -    detector G and read() are built on."""
+  +    detector G and read() are built on. The parse guard takes ValueError
+  +    and RecursionError, not JSONDecodeError alone, as cli.read_file's does
+  +    (ADR-0075): a line json.loads refuses any other way must be a problem
+  +    too, or the monthly cap check raises where it promises to fail
+  +    closed."""
+       parsed = []
+  @@ -222,3 +226,3 @@
+               record = json.loads(line)
+  -        except json.JSONDecodeError as err:
+  +        except (ValueError, RecursionError) as err:
+               parsed.append((lineno, None, [f"is not valid JSON: {err}"]))
+  ```
+
+  The cost of catching `RecursionError` here is the one the first
+  amendment accepted for `read_file`: the exception names no cause, so
+  a line can be blamed for how deep its caller already sits. Over the
+  suite on both Pythons, `parse`'s caller sits at most 21 Python
+  frames down of 1000, and this repo's 92 ledger rows nest one deep
+  (`depth_parse.py`). A wrong cause here still ends in a pause.
+
+- **2026-10-04 — what each caller does with the line.** An AST sweep
+  of the 30 root modules (`callers.py`) finds one call of `parse`
+  (`load`, `cost_ledger.py:253`), two of `load` (`read`, and detector
+  G at `gates.py:699`) and five of `read`. Three callers see the
+  line's `None` entry. `load` passes it on as `(lineno, None, [located
+  problem])`. `read` keeps a row only when its entry is not `None` and
+  it has no problem, so the line is left out and its problem returned.
+  Detector G reports the problem, and asks for a row's work order only
+  when the entry is not `None`. `read`'s five callers see the problem
+  and never a `None`; what each returns is in *Proof A*. None turns
+  the problem into a pass: each does with the two lines exactly what
+  it does with a line that is plainly not JSON, the arm `661ffc7`
+  already had.
+
+- **2026-10-04 — three tests, written first.** No existing test is
+  edited, and each id is written as the neighbouring test writes it.
+  `<integer text>` is the first line of *Proof A*'s last block.
+  1. `tests/test_cost_report.py`, `TestGuard`,
+     `test_a_ledger_line_the_parser_refuses_fails_closed`, directly
+     after `test_a_ledger_that_is_not_utf8_fails_closed`. On
+     `FixtureTree(tmp).factory()` the ledger is two lines: `good`, the
+     `json.dumps` of the row
+     `test_under_cap_continues_using_repo_config` builds with `entry`,
+     then `good.replace('"tokens": 1000', '"tokens": ' + "1" * 5000)`.
+     Asserts: `verdict == PAUSE`; `reason == "cr: unreadable ledger —
+     failing closed"`; `cap is None`; `totals` and `month_totals` both
+     the good row's rollup (`total_cost` 50.0, `total_tokens` 1000,
+     `run_count` 1, `by_wo` that id at 50.0); `problems == ["ledger:
+     docs/factory/costs.jsonl:2 is not valid JSON: <integer text>"]`.
+  2. `tests/test_budget_guard.py`, `TestRecord`, the same test name,
+     directly after `test_a_ledger_that_is_not_utf8_fails_closed`,
+     with `wo` bound as that test binds it and `record` given that
+     test's arguments. On `FixtureTree(tmp)` the ledger `text` is two
+     lines: `good`, the `json.dumps` of `cost_ledger.entry(wo, "r-0",
+     "claude-sonnet-5", 100, 0.5, "completed", "2026-08-06")`, then
+     `good.replace('"tokens": 100', '"tokens": ' + "1" * 5000)`.
+     Asserts: `problems == [f"bg: refusing to record {wo}: ledger:
+     docs/factory/costs.jsonl:2 is not valid JSON: <integer text>"]`;
+     the ledger still reads `text`.
+  3. `tests/test_cost_ledger.py`, `TestParse`,
+     `test_a_line_nested_past_the_recursion_limit_is_the_same_suffix`,
+     directly after `test_invalid_json_is_an_unlocated_suffix`. The
+     text is two lines: `"[" * 1_000_000 + "]" * 1_000_000`, then the
+     row `test_blank_lines_are_skipped_and_linenos_kept` builds.
+     Asserts two entries: `(1, None, [problem])`, the problem starting
+     `is not valid JSON: `; then `(2, record, [])`, so the walk went
+     on.
+
+  The integer text is pinned exactly: it is the same on both Pythons.
+  The nested line is pinned by prefix: the rest is the interpreter's
+  and differs by version. Failing first, at HEAD: 1 and 2 are errors
+  with `ValueError` and the integer text; 3 is an error with
+  `RecursionError` and each Python's nesting text (*Proof B*).
+  The nested line gets no reader-level test: a reader adds only its
+  label and location, and its fail-closed branch does not depend on
+  which exception the line raised. It gets test 3 because with 1 and 2
+  alone, narrowing the arm to `except ValueError` passes (*Proof B*).
+  The tests use the real documents under the interpreter's default
+  limits, as the first amendment's do, so the re-review's N3 covers
+  them too, and it stays deferred.
+
+- **2026-10-04 — the fence that remains.** `dashboard._corrections`
+  keeps `except json.JSONDecodeError` (`dashboard.py:329`), and so do
+  the hand-written JSON readers: `label_sync.load_labels`, detector K,
+  `lint.check_output_evals`' `problems_for`, `cli.read_execution`,
+  `sweeps.load_payload`, `cli.read_event` and `dashboard.repo_set`. On
+  the two documents each still raises, as at `661ffc7` (*Proof C*).
+  `_corrections` has the same line and the same fix. It is left
+  because the operator was told "one line in the ledger parser", and a
+  traceback there is a failed dashboard page, not a missed pause. It
+  stays a seed for the retro, with the first review's Minor 3 and N3.
+  No pinned problem string changes.
+
+- **2026-10-04 — ADR-0075 is corrected in place again (re-review
+  N2).** It is still provisional and unmerged. Decision 5's closing
+  gains a paragraph: `cost_ledger.parse` takes the wider guard, with
+  the same trade-off, because the monthly cap check must fail closed,
+  and `dashboard._corrections` keeps its arm, as the hand-written JSON
+  readers do. *Consequences* is not edited: "The monthly cap check and
+  `budget_guard.record` reach their fail-closed paths" is now true as
+  written, for a ledger that is not UTF-8 and for a line the parser
+  refuses. No other sentence of the record is made false.
+
+**Scratch proof.** Run for this entry on Python 3.14.6 (`python3`) and
+Python 3.12.13 (`python3.12`), in `git archive` copies under the
+session scratchpad (`ogfr/amend2/`), never in the worktree. `base/` is
+`661ffc7`, `head/` is HEAD `77d0c82`, `fixed/` is HEAD with the diff
+above and the manifest regenerated, and `fixed-t/` adds the three
+tests. In quoted output the id a probe passes reads `<work-order id>`
+and the interpreter's text reads `<err>`. Both are put there by `sed
+-E -f` on the probe's output, never by hand, because detector C reads
+this file.
+
+*Proof A: the scenario.* `scenario.py` writes one good row and one
+more line, and runs every reader built on `parse`. At `661ffc7` and at
+HEAD the recordings are identical on each Python: all nine readers
+raise on both lines, and `cost_report.main` leaves `GITHUB_OUTPUT` at
+0 bytes. In `fixed/` none raises. The integer line, 3.14:
+
+```
+  cost_ledger.load(root, 'G') as ([(lineno, entry is None, problems)], file problems): ([(1, False, []), (2, True, ['G: docs/factory/costs.jsonl:2 is not valid JSON: <err>'])], [])
+  cost_ledger.read as (entries kept, problems): (1, ['ledger: docs/factory/costs.jsonl:2 is not valid JSON: <err>'])
+  detector G: ['G: docs/factory/costs.jsonl:1 wo <work-order id> has no breakdown row', 'G: docs/factory/costs.jsonl:2 is not valid JSON: <err>']
+  cost_report.guard as (verdict, reason, cap, month's total_cost, problems): ('PAUSE', 'cr: unreadable ledger — failing closed', None, 0.5, ['ledger: docs/factory/costs.jsonl:2 is not valid JSON: <err>'])
+  cost_report.main(['report']) exit code: 1 | GITHUB_OUTPUT 443 bytes, ['pause=true', 'reason=cr: unreadable ledger — failing closed']
+  budget_guard.record: ['bg: refusing to record <work-order id>: ledger: docs/factory/costs.jsonl:2 is not valid JSON: <err>'] | ledger unchanged: True
+  work_queue.month_to_date as (spent, problems): (0.5, ['ledger: docs/factory/costs.jsonl:2 is not valid JSON: <err>'])
+  gate_digest._capture_latency as (new rows, problems): ([], ['ledger: docs/factory/costs.jsonl:2 is not valid JSON: <err>'])
+  dashboard.gather, its ledger: problems: ['ledger: docs/factory/costs.jsonl:2 is not valid JSON: <err>']
+  the next parse of the good row: [(1, True, [])]
+```
+
+That section is byte-identical on 3.12 before `<err>` is put in. With
+`<err>` in, the nested line's section and the control's (a line
+reading `{not json`) are identical to it on both Pythons, and the
+control's section is the same at HEAD. What `<err>` stands for:
+
+```
+integer, 3.14 and 3.12: Exceeds the limit (4300 digits) for integer string conversion: value has 5000 digits; use sys.set_int_max_str_digits() to increase the limit
+nesting, 3.14: Stack overflow (used 16352 kB) while decoding a JSON array from a unicode string
+nesting, 3.12: maximum recursion depth exceeded while decoding a JSON array from a unicode string
+```
+
+*Proof B: the tests and what else moves.* The three tests alone, two
+mutations of `fixed-t/` (each prints the arm that landed), then the
+unedited suite, the battery, the 144-cell matrix and the six outside
+sites. The last line is a copy with the arm changed and the docstring
+left as at HEAD:
+
+```
+3.14 and 3.12 | HEAD + tests: Ran 3 tests, FAILED (errors=3): 1 RecursionError, 2 ValueError | fixed + tests: Ran 3 tests, OK
+m1 landed: except ValueError as err: | 3.14: FAILED (errors=1) in TestParse | 3.12: FAILED (errors=1) in TestParse
+m2 landed: except (json.JSONDecodeError, RecursionError) as err: | 3.14: FAILED (errors=2) in TestRecord+TestGuard | 3.12: FAILED (errors=2) in TestRecord+TestGuard
+3.14 and 3.12, line for line the same:
+head: Ran 1877 tests, OK | fixed: Ran 1877 tests, OK | fixed-t: Ran 1880 tests, OK
+fixed: lint: 0 problem(s) across 25 skills | gates: 0 problem(s) | selftest: ok
+fixed-t: lint: 0 problem(s) across 25 skills | gates: 0 problem(s) | selftest: ok
+fixed against baseline-661ffc7.json: cells 144 | identical 123 | fixed 16 | wording changed 2 | still raising 3 | newly raising 0
+fixed against after-implement.json: cmp: byte-identical to after-implement.json
+fixed, probe_six.py: 17 lines, 0 holding RAISES, identical to six.out
+arm only, docstring as at HEAD, plus the three tests: Ran 1880 tests, OK | lint: 0 problem(s) across 25 skills | gates: 0 problem(s) | selftest: ok
+```
+
+*Proof C: the fence.* The first amendment's `extra3.py`, unedited: 20
+readers, three documents, 60 cells.
+
+```
+3.14 HEAD to fixed: cells 60 | identical 40 | fixed 4 | wording changed 0 | still raising 16 | newly raising 0
+3.12 HEAD to fixed: cells 60 | identical 30 | fixed 6 | wording changed 0 | still raising 24 | newly raising 0
+fixed, both Pythons: cost_ledger.load (label G), cost_ledger.read
+still raising, both Pythons: cli.read_event, cli.read_execution, dashboard._corrections, dashboard.repo_set, gates K check_standards_drift, label_sync.load_labels, lint.check_output_evals, sweeps.load_payload
+those cells, both Pythons: the same exception at 661ffc7, at HEAD and in fixed
+```

@@ -108,6 +108,17 @@ callers, and observed divergence between their copies.
    2. None gets the wider parse guard of 1: on those two documents the
    JSON readers among them raise as they did before this record.
 
+   Two adopters, `cost_ledger.load` and `dashboard._corrections`, read
+   with `str` and parse each line themselves, so the guard of 1 never
+   sees their lines. `cost_ledger.parse`, which `cost_ledger.load` and
+   `read` are built on, takes the same wider parse guard as
+   `read_file`, with the same trade-off, because the monthly cap check
+   must fail closed: a traceback there is a pause that does not
+   happen. `dashboard._corrections` keeps its `JSONDecodeError` arm, as
+   the hand-written JSON readers do: on those two documents it raises
+   as it did before this record, and a traceback there is a failed
+   dashboard page, not a missed pause.
+
 ## Alternatives that lost
 
 - **A module that classifies the failure and lets each caller word it.**
