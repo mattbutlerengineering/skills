@@ -604,3 +604,65 @@ A record of what happened, for a later resume. It adds no decision.
 - Left for the retro, none added to `docs/backlog.md`: Minor 3, N3, the
   parse arm for the hand-written JSON readers, `AGENTS.md`'s older seam
   bullet, and the `trigger_eval.print_metrics` shape cells.
+
+## Second resume, 2026-10-04 (UTC): the ledger parse guard
+
+**What the operator did.** The report after the first resume said that
+option (a) had been taken on the orchestrating session's own reading,
+gave the command that undoes it, and ended with one question: "Should I
+fix the cap-check gap before you push?" It recommended yes, described
+the fix as "one line in the ledger parser plus two tests", and priced it
+as "one more local round of Implement, Verify, Review and Ship". The
+operator's reply was, again, to invoke autorun with no arguments and no
+other words.
+
+**What that is taken to mean, and by whom.** The operator did not say
+yes. The orchestrating session reads the re-invocation as "keep driving
+this run" and takes the recommended path: step 2 of `release.md` names
+Path A, the fix before the merge, as the reviewer's recommendation.
+**This is the orchestrating session's reading, not the operator's
+words.** Every stage that leans on it logs it under `assumptions:`. The
+operator has also still not confirmed option (a) in words, and did not
+undo it either. Confirming (a) stays the first operator step.
+
+**Why proceeding is safe.** Everything below is local commits on top of
+`261e486`, on a branch that was never pushed. `git reset --hard 261e486`
+restores the state before this resume, and `git reset --hard 864f1aa`
+the state before the first one.
+
+**What does not change.** The authorization is still the operator's
+original one, word for word: local commits per work item; Ship prepares
+and stops; no push, no pull request, no issue, no paid tool.
+
+**Scope**: Path A of step 2 in `release.md` as it stands at `261e486`,
+which answers the re-review's N1 and N2, and nothing more.
+
+- In `cost_ledger.parse`, the arm `except json.JSONDecodeError` takes
+  `ValueError` and `RecursionError`, as `read_file`'s does. The wording
+  `is not valid JSON: {err}` stays.
+- Tests first, through `cost_report.guard` and `budget_guard.record`,
+  each watched failing with the traceback before the change: a ledger
+  line that `json.loads` refuses with something other than
+  `JSONDecodeError` makes the cap check pause and `record` refuse.
+- `cost_ledger.py` is mirrored: payload twin and manifest in the same
+  commit.
+- ADR-0075 says which line-parsing reader has the wider guard and which
+  does not (N2). The sentence about the cap check reaching its
+  fail-closed path must be true as written.
+- Out of scope, each staying as it is: `dashboard._corrections` (the
+  operator was told "one line in the ledger parser"; a traceback there
+  is a failed page, not a missed pause), the hand-written JSON readers,
+  the first review's Minor 3, and N3. They stay seeds for the retro.
+
+**What must still hold.** No pinned problem string changes and no
+existing test is edited. The 144-cell matrix against the `661ffc7`
+baseline still ends
+`cells 144 | identical 123 | fixed 16 | wording changed 2 | still raising 3 | newly raising 0`.
+The battery is green on Python 3.14 and 3.12 at every commit.
+
+**How the stages run.** One fresh context per stage, each scaled to this
+one change and each appending to its own document: Architect a second
+dated amendment and the ADR sentence, Decompose a Milestone E, Implement
+one commit per item, Verify a second re-verification, Review a re-review
+of the new commits, Ship a third preparation of `release.md`. Ship still
+executes nothing.
