@@ -47,14 +47,22 @@ callers, and observed divergence between their copies.
    None)` when no regular file is at `path`, because absence is the
    caller's to interpret, as it already is for `read_event`. Otherwise
    exactly one of the two is `None`. `kind` is required and is one of
-   `str`, `dict`, `list` or `object` (any JSON document except null).
-   The problem is unlabelled; the caller prefixes its own label
-   (ADR-0051). The function never raises for a local-file failure. Its
-   existence check sits inside the guard, because `Path.is_file` raises
-   `PermissionError` under an unsearchable parent on Python 3.12.
-   There are three parameters and no fourth. There is no new module, no
-   new `MIRRORS` entry, and no port: the dependency is the local
-   filesystem in-process, and one adapter does not make a seam.
+   `str`, `dict` or `list`. Any other `kind` is a `ValueError` at the
+   call, before the file is touched: a programming error, not a file
+   failure. The problem is unlabelled; the caller prefixes its own
+   label (ADR-0051). The function never raises for a local-file
+   failure. Its existence check sits inside the guard, because
+   `Path.is_file` raises `PermissionError` under an unsearchable parent
+   on Python 3.12. Its parse guard takes `ValueError` and
+   `RecursionError`, not `JSONDecodeError` alone, because an integer
+   literal past the interpreter's digit limit and nesting past its
+   recursion limit raise those. Both are worded as a parse failure.
+   A `RecursionError` names no cause, so a document that tips a caller
+   already deep in recursion over the limit is reported as the
+   document's defect. No caller recurses, and this record accepts
+   that. There are three parameters and no fourth. There is no new
+   module, no new `MIRRORS` entry, and no port: the dependency is the
+   local filesystem in-process, and one adapter does not make a seam.
 2. **The wording rule for bytes that are not UTF-8.** For the JSON
    kinds the problem reads `<shown> is not valid JSON: <err>`; for `str`
    it reads `cannot read <shown>: <err>`. JSON exchanged between systems
@@ -62,6 +70,9 @@ callers, and observed divergence between their copies.
    defect in the document. Seven JSON readers already worded it this
    way. A text reader has no grammar to blame, so the failure is a read
    failure. That is `cost_ledger.load`'s phrasing, which the rule keeps.
+   `cli.read_event` and `dashboard.repo_set` keep `cannot read` for
+   bytes that are not UTF-8, under 4: neither has a raising cell, so
+   both stay as they are.
 3. **Two deliberate reversals.** `json-that-is-not-utf8` (2026-08-30)
    chose "cannot read" for `factory_config.load` and
    `label_sync.load_labels`, following `cost_ledger.load`'s
@@ -79,9 +90,14 @@ callers, and observed divergence between their copies.
 5. **Readers that stay hand-written,** each because adoption would
    change a cell's wording:
    - `label_sync.load_labels`, detector K, `lint.check_output_evals`
-     and `cli.read_execution` all handle a JSON `null` their own way.
-     Asking for `object` turns that into `<shown> is null`, because
-     `(None, None)` already means absent.
+     and `cli.read_execution` each judge the parsed document's top
+     level, a JSON `null` included, in their own way. `load_labels`
+     and K word a wrong top level in their own phrase.
+     `check_output_evals` reports it beside the file's stem, and words
+     a directory under a globbed name `cannot read`. `read_execution`
+     takes an array or a single object. `read_file` has no kind that
+     parses without its own shape wording, so each keeps its own
+     parse.
    - `cli.read_execution`, `sweeps.load_payload`, `dashboard.respond`,
      `dashboard.respond_post` and `validator.run_review` word an absent
      file as an `OSError` message. The absence contract cannot
@@ -89,7 +105,8 @@ callers, and observed divergence between their copies.
    - `lint.check_backlog`'s phrase is "is unreadable".
 
    Each of these gets its missing exception arm, worded by the rule in
-   2.
+   2. None gets the wider parse guard of 1: on those two documents the
+   JSON readers among them raise as they did before this record.
 
 ## Alternatives that lost
 
@@ -102,6 +119,16 @@ callers, and observed divergence between their copies.
 - **Two functions with required shape and absence arguments.** They
   give the same result as the decision, through six parameters instead
   of three.
+- **A fourth kind, `object` (any JSON document except null).** It was
+  in the approved interface for two named callers, `label_sync` and
+  detector K, which were to keep their own shape check behind it. The
+  replay showed it changing the `null` cell of every reader it was
+  tried on (`label_sync.load_labels`, detector K,
+  `lint.check_output_evals`, `cli.read_execution` and
+  `sweeps.load_payload`) to `<shown> is null`, because `(None, None)`
+  already means absent. Those readers stayed hand-written, no adopter
+  asked for the kind, and it was dropped after review: a kind with no
+  caller is the anticipated reuse CLAUDE.md's bar excludes.
 
 ## Consequences
 
