@@ -213,14 +213,18 @@ def parse(text):
     """[(lineno, entry, problems)] for every non-blank ledger line: entry
     is the parsed record (None when the line is not a JSON object) and
     problems are its unlocated parse + shape complaints. The one walk both
-    detector G and read() are built on."""
+    detector G and read() are built on. The parse guard takes ValueError
+    and RecursionError, not JSONDecodeError alone, as cli.read_file's does
+    (ADR-0075): a line json.loads refuses any other way must be a problem
+    too, or the monthly cap check raises where it promises to fail
+    closed."""
     parsed = []
     for lineno, line in enumerate(text.splitlines(), 1):
         if not line.strip():
             continue
         try:
             record = json.loads(line)
-        except json.JSONDecodeError as err:
+        except (ValueError, RecursionError) as err:
             parsed.append((lineno, None, [f"is not valid JSON: {err}"]))
             continue
         if not isinstance(record, dict):

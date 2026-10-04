@@ -308,6 +308,35 @@ class TestGuard(unittest.TestCase):
                 " can't decode byte 0xff in position 0: invalid start"
                 " byte"])
 
+    def test_a_ledger_line_the_parser_refuses_fails_closed(self):
+        """The same promise one step further in: a line json.loads
+        refuses with ValueError, not JSONDecodeError (an integer past
+        the interpreter's digit limit), decides PAUSE with the line's
+        own located problem, where it raised out of the monthly cap
+        check. The rollup is still the row that could be read."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            good = json.dumps(entry("WO-0001", "r-1", "m", 1000, 50.0,
+                                    "merged", "2026-07-06"))
+            refused = good.replace(
+                '"tokens": 1000', '"tokens": ' + "1" * 5000)
+            tree.write("docs/factory/costs.jsonl",
+                       good + "\n" + refused + "\n")
+            result = cost_report.guard(tree.root)
+            readable = {"total_cost": 50.0, "total_tokens": 1000,
+                        "run_count": 1, "by_wo": {"WO-0001": 50.0}}
+            self.assertEqual(result.verdict, cost_report.PAUSE)
+            self.assertEqual(
+                result.reason, "cr: unreadable ledger — failing closed")
+            self.assertIsNone(result.cap)
+            self.assertEqual(result.totals, readable)
+            self.assertEqual(result.month_totals, readable)
+            self.assertEqual(result.problems, [
+                "ledger: docs/factory/costs.jsonl:2 is not valid JSON:"
+                " Exceeds the limit (4300 digits) for integer string"
+                " conversion: value has 5000 digits; use"
+                " sys.set_int_max_str_digits() to increase the limit"])
+
 
 class TestComposeReport(unittest.TestCase):
     def test_report_body_shows_totals_and_verdict(self):

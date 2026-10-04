@@ -472,6 +472,32 @@ class TestRecord(unittest.TestCase):
                 " 0xff in position 0: invalid start byte"])
             self.assertEqual(ledger.read_bytes(), b"\xff\xfe\x00")
 
+    def test_a_ledger_line_the_parser_refuses_fails_closed(self):
+        """The same refusal for a line json.loads refuses with
+        ValueError, not JSONDecodeError (an integer past the
+        interpreter's digit limit): one bg: problem carrying the line's
+        own, and not a byte appended — where the read raised before the
+        refusal could be reached."""
+        wo = "WO-0007"
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            good = json.dumps(cost_ledger.entry(
+                wo, "r-0", "claude-sonnet-5", 100, 0.5, "completed",
+                "2026-08-06"))
+            text = (good + "\n" + good.replace(
+                '"tokens": 100', '"tokens": ' + "1" * 5000) + "\n")
+            ledger = tree.write("docs/factory/costs.jsonl", text)
+            problems = budget_guard.record(
+                tree.root, wo, "r-1", "claude-sonnet-5", 4200, 1.25,
+                "completed", "2026-08-07")
+            self.assertEqual(problems, [
+                f"bg: refusing to record {wo}: ledger:"
+                " docs/factory/costs.jsonl:2 is not valid JSON: Exceeds the"
+                " limit (4300 digits) for integer string conversion: value"
+                " has 5000 digits; use sys.set_int_max_str_digits() to"
+                " increase the limit"])
+            self.assertEqual(ledger.read_text(encoding="utf-8"), text)
+
     def test_an_exhaustion_row_and_a_completion_row_coexist(self):
         """hard_stop and record write the same shape; only outcome differs,
         and cost_report sums both."""

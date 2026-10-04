@@ -304,6 +304,23 @@ class TestParse(unittest.TestCase):
         self.assertTrue(problems[0].startswith("is not valid JSON:"),
                         problems)
 
+    def test_a_line_nested_past_the_recursion_limit_is_the_same_suffix(self):
+        """json.loads refuses this line with RecursionError, not
+        JSONDecodeError: it is the same unlocated suffix, pinned by its
+        prefix because the interpreter's words differ by version. The
+        walk goes on, so the row after it still parses."""
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-02")
+        nested = "[" * 1_000_000 + "]" * 1_000_000
+        parsed = cost_ledger.parse(
+            nested + "\n" + json.dumps(record) + "\n")
+        self.assertEqual(len(parsed), 2)
+        lineno, refused, problems = parsed[0]
+        self.assertEqual((lineno, refused, len(problems)), (1, None, 1))
+        self.assertTrue(problems[0].startswith("is not valid JSON: "),
+                        problems)
+        self.assertEqual(parsed[1], (2, record, []))
+
     def test_a_non_object_line_is_an_unlocated_suffix(self):
         self.assertEqual(cost_ledger.parse("[1, 2, 3]\n"),
                          [(1, None, ["is not a JSON object"])])
