@@ -18,7 +18,7 @@ from pathlib import Path
 
 import eval_schema
 import protocol
-from cli import report
+from cli import read_file, report
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
                       TEMPLATED_STAGES, UTILITY_SKILLS)
 
@@ -48,16 +48,12 @@ def object_problems(data, label):
 
 
 def check_manifest(root):
-    path = root / ".claude-plugin" / "plugin.json"
-    if not path.is_file():
+    data, problem = read_file(root / ".claude-plugin" / "plugin.json",
+                              "plugin.json", dict)
+    if problem:
+        return [problem]
+    if data is None:
         return ["missing .claude-plugin/plugin.json"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as err:
-        return [f"plugin.json is not valid JSON: {err}"]
-    shape = object_problems(data, "plugin.json")
-    if shape:
-        return shape
     return [f"plugin.json missing field: {field}"
             for field in ("name", "description", "version")
             if not data.get(field)]
@@ -87,18 +83,14 @@ def check_plugin_skills(root):
     exists to catch. names_slug is the one owner of that rule; this
     checker no longer retypes it.
 
-    A missing or unparseable manifest returns nothing: check_manifest
-    already reports both, and this checker reporting them too would give
-    one broken file two problem strings.
+    A missing, unreadable, unparseable or non-object manifest returns
+    nothing — read_file's problem is discarded on purpose: check_manifest
+    already reports it, and this checker reporting it too would give one
+    broken file two problem strings.
     """
-    path = root / ".claude-plugin" / "plugin.json"
-    if not path.is_file():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(data, dict):
+    data, _ = read_file(root / ".claude-plugin" / "plugin.json",
+                        "plugin.json", dict)
+    if data is None:
         return []
     text = data.get("description") or ""
     return [f"plugin.json's description never names utility skill {slug!r}"

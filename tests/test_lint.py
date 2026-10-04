@@ -8,6 +8,7 @@ test seeds the clean tree, breaks one aspect, and asserts the checker's
 exact problem strings through its public interface.
 """
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -237,6 +238,19 @@ class TestManifest(CheckerTreeTest):
         self.assertEqual(lint.check_manifest(self.root), [
             "plugin.json is not valid JSON: Expecting value: line 1 column 1"
             " (char 0)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_manifest_the_process_may_not_read_is_a_problem(self):
+        # check_manifest is CHECKERS[0]: a PermissionError here hid every
+        # other finding in the repo behind a traceback
+        path = self.root / ".claude-plugin" / "plugin.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_manifest(self.root), [
+                "cannot read plugin.json: [Errno 13] Permission denied:"
+                f" '{path}'"])
+        finally:
+            path.chmod(0o644)
 
 
 class TestPiPackage(CheckerTreeTest):
@@ -870,6 +884,21 @@ class TestPluginSkills(CheckerTreeTest):
             with self.subTest(shape=shape):
                 path.write_text(shape, encoding="utf-8")
                 self.assertEqual(lint.check_plugin_skills(self.root), [])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_an_unreadable_manifest_is_left_to_check_manifest(self):
+        path = self.root / ".claude-plugin" / "plugin.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_plugin_skills(self.root), [])
+        finally:
+            path.chmod(0o644)
+
+    def test_a_manifest_that_is_not_utf8_is_left_to_check_manifest(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_bytes(
+            b"\xff\xfe")
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+        self.assertEqual(len(lint.check_manifest(self.root)), 1)
 
 
 class TestProtocolTables(CheckerTreeTest):
