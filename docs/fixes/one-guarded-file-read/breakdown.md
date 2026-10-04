@@ -109,7 +109,7 @@ four later-milestone cells (`check_pi_package`, `check_backlog`,
 
 - [x] **C1** state the new entry point in CLAUDE.md's seam line — size:S, blocked by: A1
   - Accept: in CLAUDE.md's "Seam modules" bullet, the phrase `` `cli.py` external-CLI + harness-IO conventions, `` is replaced by `` `cli.py` external-CLI + harness-IO conventions and the guarded local-file read (`read_file`, ADR-0075), ``; `grep -n "read_file" CLAUDE.md` finds that one line; `python3 lint.py` ends `lint: 0 problem(s)`. No other line of CLAUDE.md changes, and `CONTEXT.md` is not touched (the architecture adds no term).
-- [ ] **C2** replay the behaviour matrix and run the full battery — size:S, blocked by: A1, A2, A3, A4, A5, A6, A7, A8, A9, B1, B2, B3, B4, B5, B6, B7, C1
+- [x] **C2** replay the behaviour matrix and run the full battery — size:S, blocked by: A1, A2, A3, A4, A5, A6, A7, A8, A9, B1, B2, B3, B4, B5, B6, B7, C1
   - Accept: no source change; the checkbox is the record. Quoted in the commit message or Notes: (a) the 144-cell matrix re-recorded against the 661ffc7 baseline ends `cells 144 | identical 123 | fixed 16 | wording changed 2 | still raising 3 | newly raising 0`, the two changed being `factory_config.load / not utf-8` and `label_sync.load_labels / not utf-8`, the three still raising being `trigger_eval.print_metrics`'s array, object and string cells; (b) `git log --oneline refactor/one-guarded-file-read` shows A1 then A2 before the first reader item, and each reader item's tests in the same commit as its change; (c) a grep shows no in-scope adopted reader still types its own `read_text` guard, and the hand-written ones are exactly those named in architecture.md's "Hand-written exceptions"; (d) `python3 -m unittest discover tests` ends `OK`; `python3 lint.py` ends `lint: 0 problem(s)`; `python3 gates.py && python3 gates.py --selftest` ends `gates: 0 problem(s)` then `selftest: ok`; `python3 -m unittest tests.test_factory_init` ends `OK`; (e) `docs/adr/0075-the-guarded-file-read-joins-the-cli-seam.md` is present, indexed in `docs/adr/README.md` as `provisional`, and detector D is green inside `gates: 0 problem(s)`. `trigger_eval.py` and `charter_replay.py` are not run.
 
 ## Success-criteria coverage
@@ -139,3 +139,46 @@ none. Two placement notes, neither a design gap, are under Notes.
 - **2026-10-04, implement: the net commits carry one non-test line.** A2's and B1's Accept say the commit's `git diff --stat` lists no non-test file. Each item's checkbox edit in this file rides in the item's own commit (one item, one commit), so those two commits list `breakdown.md` beside the test files. No source file is in either: the tests pass against the unmodified readers, which is what the line is for.
 - **2026-10-04, implement: only one hand-written reader says why in the code.** ADR-0075's last consequence reads "a reader that cannot use it says why". `label_sync.load_labels` carries that comment, because architecture.md asked for it by name (A7). The other hand-written readers (detector K in A5, and `problems_for`, `check_backlog`, `respond`, `respond_post`, `run_review`, `read_execution`, `load_payload` in B3 to B7) got the missing exception arm and no comment: architecture.md specifies the arm only, and its "Hand-written exceptions" section is where each reason is recorded. Logged, not fixed: adding the comments is a separate, cosmetic pass over three mirrored files.
 - **2026-10-04, implement: `AGENTS.md` carries an older copy of the seam bullet.** C1 edits CLAUDE.md only, as its Accept says. `AGENTS.md` line 35 holds the same phrase (`` `cli.py` external-CLI + harness-IO conventions, ``) in a copy of the bullet that had already drifted from CLAUDE.md before this run (it names neither `human_gates.py` nor `plane_drift.py`), and nothing checks one file against the other. Logged, not fixed. In CLAUDE.md the replaced phrase wraps onto a second line, so the diff is one line out and two in; no other line changes.
+- **2026-10-04, implement: C2, the replay and the battery, at `012bede`.** The scratch tools were present. No source file changes in C2.
+  - (a) The 144-cell matrix, re-recorded into `ogfr/after-implement.json` from a fresh tree directory and compared with `ogfr/baseline-661ffc7.json` (checksum unchanged before and after):
+
+    ```
+    cells 144 | identical 123 | fixed 16 | wording changed 2 | still raising 3 | newly raising 0
+      CHANGED  factory_config.load / not utf-8
+                 was: (None, ["config: cannot read .github/factory.json: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+                 now: (None, ["config: .github/factory.json is not valid JSON: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+      CHANGED  label_sync.load_labels / not utf-8
+                 was: ([], ["L: cannot read .github/labels.json: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+                 now: ([], ["L: .github/labels.json is not valid JSON: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+      STILL RAISES  trigger_eval.print_metrics / json array: RAISES AttributeError
+      STILL RAISES  trigger_eval.print_metrics / json object: RAISES KeyError
+      STILL RAISES  trigger_eval.print_metrics / json string: RAISES AttributeError
+    ```
+
+    The 16 fixed cells: `standards_index.foreign_entries` not utf-8; K not utf-8; E unreadable, json array, json string; F unreadable; `lint.check_manifest` unreadable; `lint.check_plugin_skills` unreadable, not utf-8; `lint.check_pi_package` unreadable; `lint.check_backlog` not utf-8; `eval_schema.load_case_set` unreadable; `cli.read_execution` not utf-8; `sweeps.load_payload` not utf-8; `cost_ledger.load` not utf-8; `cost_ledger.read` not utf-8. After A9 alone the same replay read `cells 144 | identical 123 | fixed 12 | wording changed 2 | still raising 7 | newly raising 0`, as architecture.md predicted for milestone one.
+  - The six sites outside the matrix (`ogfr/probe_six.py`, fresh tree directory). None raises:
+
+    ```
+    dashboard._corrections / not utf-8
+        ({}, ["dashboard: cannot read docs/factory/corrections.jsonl: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+    dashboard._corrections / unreadable
+        ({}, ["dashboard: cannot read docs/factory/corrections.jsonl: [Errno 13] Permission denied: '<path>'"])
+    dashboard._backlog / not utf-8
+        (None, ["dashboard: cannot read docs/backlog.md: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+    dashboard.respond('/') / page not utf-8
+        (500, {'problems': ["dashboard: cannot read dashboard.html: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"]})
+    dashboard.respond_post / backlog not utf-8
+        (500, {'problems': ["dashboard: cannot read docs/backlog.md: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"]})
+    validator.run_review / findings not utf-8
+        ["V: cannot read findings file <path>: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"]
+        (fake gh calls made before the read: 0)
+    lint.check_output_evals / unreadable
+        ["cannot read evals/output/idea.json: [Errno 13] Permission denied: '<path>'"]
+    lint.check_output_evals / not utf-8
+        ["evals/output/idea.json is not valid JSON: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"]
+    ```
+  - (b) `git log --oneline 110ffc6..HEAD` reads, oldest first: A1 `5e5f494`, A2 `8bbf427`, A3 `733b5f2`, A4 `5f9dd45`, A5 `6584c37`, A6 `729510e`, A7 `9f93c0f`, A8 `fb2b0f2`, A9 `b308a94`, B1 `7fc79e7`, B2 `00af49c`, B3 `287809d`, B4 `9948b30`, B5 `389d43e`, B6 `b20ec4b`, B7 `ea30c6f`, C1 `012bede`. The function and its matrix, then the net, then each reader with its tests in the same commit as its change. Across all of them the only removed test lines are the two decided pins and the two tests that died with `factory_config.object_problems`.
+  - (c) The AST sweep (`ogfr/sites.py`) reads `sites 57 | guarded 18 | unguarded 39 | open() among them 2`, down from 67 and 28 with the 39 unguarded reads untouched. The 18 guarded sites are `cli.read_file` itself; the nine readers under architecture.md's "Hand-written exceptions" (`label_sync.load_labels`, detector K, `lint.check_output_evals`' `problems_for`, `lint.check_backlog`, `cli.read_execution`, `sweeps.load_payload`, `dashboard.respond`, `dashboard.respond_post`, `validator.run_review`); and the eight left alone (`cli.read_event`, `dashboard.repo_set`, `one_owner.source_files`, `orientation_pack` twice, `knowledge_plane.parse_run`, `charter_replay.main`, `trigger_eval.print_metrics`). No adopter types its own guard: the eleven adopting sites call `read_file`.
+  - (d) `python3 -m unittest discover tests` ends `Ran 1874 tests` and `OK`; `python3 lint.py` ends `lint: 0 problem(s) across 25 skills`; `python3 gates.py` ends `gates: 0 problem(s)`; `python3 gates.py --selftest` ends `selftest: ok`; `python3 -m unittest tests.test_factory_init` ends `Ran 68 tests` and `OK`.
+  - (e) `docs/adr/0075-the-guarded-file-read-joins-the-cli-seam.md` is present with `Status: provisional`, indexed in `docs/adr/README.md` as `provisional`, and detector D reports nothing inside `gates: 0 problem(s)`.
+  - `trigger_eval.py` and `charter_replay.py` were never run as scripts. The matrix recorder imports `trigger_eval` to call `print_metrics` on scratch files, which makes no model call.
