@@ -768,6 +768,9 @@ def check_output_evals(root):
     def problems_for(path):
         slug = path.stem
         label = f"evals/output/{path.name}"
+        # Hand-written rather than cli.read_file (ADR-0075): the shape
+        # check is validate_output's, reported beside the stem line, and
+        # a directory the glob matched is "cannot read", not absent.
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except OSError as err:
@@ -871,6 +874,8 @@ def check_backlog(root):
     path = root / "docs" / "backlog.md"
     if not path.is_file():
         return []
+    # Hand-written rather than cli.read_file (ADR-0075): this checker's
+    # phrase is "is unreadable", where read_file says "cannot read".
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as err:

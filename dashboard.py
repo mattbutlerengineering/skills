@@ -506,6 +506,9 @@ def respond(target, repos_fn, gather_fn):
     render past."""
     url = urlsplit(target)
     if url.path == "/":
+        # Hand-written rather than cli.read_file (ADR-0075): an absent
+        # page is an OSError message here, where read_file gives
+        # (None, None).
         try:
             return 200, PAGE.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as err:
@@ -562,6 +565,9 @@ def respond_post(target, body, repos_fn):
             and 0 <= index < len(repos)):
         return 404, {"problems": ["dashboard: no such repo index"]}
     path = Path(repos[index]) / BACKLOG
+    # Hand-written rather than cli.read_file (ADR-0075): an absent
+    # backlog is an OSError message here, where read_file gives
+    # (None, None).
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as err:

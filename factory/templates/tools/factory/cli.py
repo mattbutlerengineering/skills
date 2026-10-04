@@ -345,6 +345,9 @@ def read_execution(path):
     (None, error) — the caller (budget_guard record-run) refuses to write
     rather than inventing a ledger row, the same fail-closed direction as
     the ledger itself."""
+    # Hand-written rather than read_file (ADR-0075): an absent file is
+    # an OSError message here, where read_file gives (None, None), and
+    # the log may be an array or one object, so neither JSON kind fits.
     try:
         text = Path(path).read_text(encoding="utf-8")
     except OSError as err:

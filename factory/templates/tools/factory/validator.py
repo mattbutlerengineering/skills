@@ -320,6 +320,9 @@ def run_review(root, findings, status, env, run=gh_runner):
                                     reviewer))
     if problems:
         return problems
+    # Hand-written rather than cli.read_file (ADR-0075): an absent
+    # findings file is an OSError message here, where read_file gives
+    # (None, None).
     try:
         output = Path(findings).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as err:

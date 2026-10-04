@@ -1454,6 +1454,9 @@ def check_standards_drift(root, parsed=None):
     standards_path = root / standards_index.STANDARDS_PATH
     if not standards_path.is_file():
         return []
+    # Hand-written rather than cli.read_file (ADR-0075): the shape
+    # wording below is K's own and covers null. Bytes that are not
+    # UTF-8 join the parse failure's wording, by that record's rule.
     try:
         committed_text = standards_path.read_text(encoding="utf-8")
     except OSError as err:

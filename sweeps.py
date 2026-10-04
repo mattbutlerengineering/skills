@@ -467,6 +467,9 @@ def load_payload(path):
     """Read the fetched Sentry payload from PATH (or stdin). Untrusted from
     the first byte: a payload that is not JSON is a problem, never an
     exception trace in a scheduled run's log."""
+    # Hand-written rather than cli.read_file (ADR-0075): an absent file
+    # is an OSError message here, where read_file gives (None, None),
+    # and this read also takes stdin.
     try:
         text = (sys.stdin.read() if path in (None, "-")
                 else Path(path).read_text(encoding="utf-8"))

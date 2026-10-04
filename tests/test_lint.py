@@ -1324,9 +1324,9 @@ class TestOutputEvals(CheckerTreeTest):
             " name enclosed in double quotes: line 1 column 2 (char 1)"])
 
     def test_a_null_record_file_is_not_a_json_object(self):
-        """The shape wording is eval_schema.validate_output's and covers
-        null — which is why this reader keeps its own parse rather than
-        asking cli.read_file for a shape."""
+        """A null record file reads eval_schema.validate_output's shape
+        wording: the one problem it gives any top level that is not a
+        JSON object."""
         (self.root / "evals" / "output" / "idea.json").write_text(
             "null", encoding="utf-8")
         self.assertEqual(lint.check_output_evals(self.root),
