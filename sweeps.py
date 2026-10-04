@@ -472,6 +472,8 @@ def load_payload(path):
                 else Path(path).read_text(encoding="utf-8"))
     except OSError as err:
         return None, [f"sweeps: cannot read payload {path}: {err}"]
+    except UnicodeDecodeError as err:
+        return None, [f"sweeps: payload is not valid JSON: {err}"]
     try:
         return json.loads(text), []
     except json.JSONDecodeError as err:

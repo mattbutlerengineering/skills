@@ -7,6 +7,7 @@ touches the network. The two invariants of ADR-0032 get their own class:
 a sweep files intake, never a work order, and it treats external text as
 data, never as instructions.
 """
+import io
 import json
 import os
 import re
@@ -15,6 +16,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import knowledge_plane
 import plane_drift
@@ -917,6 +919,30 @@ class TestLoadPayload(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = FixtureTree(tmp).write("sentry.json", "null")
             self.assertEqual(sweeps.load_payload(str(path)), (None, []))
+
+    def test_a_file_that_is_not_utf8_is_a_problem_not_a_traceback(self):
+        """Untrusted from the first byte includes the encoding: a JSON
+        payload must be UTF-8 (RFC 8259 §8.1), so bytes that will not
+        decode are the same problem as text that will not parse."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = FixtureTree(tmp).write("sentry.json", "")
+            path.write_bytes(b"\xff\xfe")
+            self.assertEqual(sweeps.load_payload(str(path)), (None, [
+                "sweeps: payload is not valid JSON: 'utf-8' codec can't"
+                " decode byte 0xff in position 0: invalid start byte"]))
+
+    def test_stdin_that_is_not_utf8_is_a_problem_not_a_traceback(self):
+        # the piped form reads the same payload from stdin, and its
+        # decode fails the same way — inside the same guard
+        for path in (None, "-"):
+            stdin = io.TextIOWrapper(io.BytesIO(b"\xff\xfe"),
+                                     encoding="utf-8")
+            with self.subTest(path=path), \
+                    mock.patch.object(sys, "stdin", stdin):
+                self.assertEqual(sweeps.load_payload(path), (None, [
+                    "sweeps: payload is not valid JSON: 'utf-8' codec can't"
+                    " decode byte 0xff in position 0: invalid start"
+                    " byte"]))
 
     def test_an_oversized_payload_plans_every_entry(self):
         # The cap lives in file_issues, after dedupe — the sweep reads the
