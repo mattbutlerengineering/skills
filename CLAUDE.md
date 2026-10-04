@@ -44,7 +44,8 @@ pre-pass, deliberately **not** a gate:
   eval-set shape/kinds/validation, output-eval record shape, results
   naming grammar), and the four factory seams (ADR-0037, ADR-0039,
   ADR-0040 — `knowledge_plane.py` typed-ID grammar + run walk, `cli.py`
-  external-CLI + harness-IO conventions, `factory_config.py` factory.json
+  external-CLI + harness-IO conventions and the guarded local-file read
+  (`read_file`, ADR-0075), `factory_config.py` factory.json
   reader/resolvers, `cost_ledger.py` cost-ledger shape), plus
   `human_gates.py` (ADR-0056 — what a gate is: its ledger name, its
   queue and passed labels, its digest heading, the label-event walk, and
