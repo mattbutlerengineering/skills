@@ -14,6 +14,8 @@ is eval knowledge, not pipeline-protocol knowledge.
 import json
 import re
 
+from cli import read_file
+
 KINDS = ("direct", "situational", "near-miss", "distractor", "router")
 
 # Harnesses a trigger run can drive (ADR-0027, ADR-0031). claude is the
@@ -177,15 +179,11 @@ def load_case_set(path, label, validate):
     one that does not (charter_replay's returns no problems at all for a
     bare-string file) would otherwise leave the crash to land here.
     """
-    if not path.is_file():
+    data, problem = read_file(path, label, dict)
+    if problem:
+        return [], [problem]
+    if data is None:
         return [], [f"missing {label}"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as err:
-        return [], [f"{label} is not valid JSON: {err}"]
-    not_object = object_problems(data, label)
-    if not_object:
-        return [], not_object
     problems = validate(data)
     return ([], problems) if problems else (data.get("cases", []), [])
 

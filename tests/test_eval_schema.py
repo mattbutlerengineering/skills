@@ -8,6 +8,7 @@ traceback) because that behavior — not the strings alone — is the
 acceptance criterion.
 """
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -165,6 +166,22 @@ class TestLoad(unittest.TestCase):
         self.assertEqual(eval_schema.load(self.path, SKILLS, LABEL), ([], [
             "evals/routing.json is not valid JSON: Expecting value: line 1"
             " column 1 (char 0)"]))
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_file_the_process_may_not_read(self):
+        """is_file() says yes and the read still refuses: a set the
+        loader may not open is a diagnostic like every other unusable
+        set, where the PermissionError used to escape the JSON-only
+        guard."""
+        self.path.write_text(json.dumps(valid_data()), encoding="utf-8")
+        self.path.chmod(0)
+        try:
+            self.assertEqual(
+                eval_schema.load(self.path, SKILLS, LABEL), ([], [
+                    "cannot read evals/routing.json: [Errno 13] Permission"
+                    f" denied: '{self.path}'"]))
+        finally:
+            self.path.chmod(0o644)
 
     def test_invalid_set_returns_no_cases(self):
         self.path.write_text(json.dumps({"cases": []}), encoding="utf-8")
