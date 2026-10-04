@@ -758,6 +758,9 @@ class TestReadFile(unittest.TestCase):
     NOT_JSON = ("Expecting property name enclosed in double quotes:"
                 " line 1 column 2 (char 1)")
     EMPTY = "Expecting value: line 1 column 1 (char 0)"
+    TOO_MANY_DIGITS = ("Exceeds the limit (4300 digits) for integer string"
+                       " conversion: value has 5000 digits; use"
+                       " sys.set_int_max_str_digits() to increase the limit")
 
     def read(self, data, kind):
         with tempfile.TemporaryDirectory() as tmp:
@@ -856,6 +859,37 @@ class TestReadFile(unittest.TestCase):
         self.assert_pairs(b"", {
             str: ("", None),
             dict: not_json, list: not_json})
+
+    def test_an_integer_literal_past_the_digit_limit(self):
+        """json.loads raises a plain ValueError, not a JSONDecodeError,
+        for an integer literal longer than the interpreter's digit
+        limit. It is a parse failure like any other. The text embeds
+        the default limit, so PYTHONINTMAXSTRDIGITS must be unset."""
+        not_json = (None, f"{self.SHOWN} is not valid JSON:"
+                          f" {self.TOO_MANY_DIGITS}")
+        self.assert_pairs(b"1" * 5000, {
+            str: ("1" * 5000, None),
+            dict: not_json, list: not_json})
+
+    def test_arrays_nested_past_the_recursion_limit(self):
+        """json.loads raises RecursionError for nesting it cannot
+        follow. Only the prefix is pinned: the rest is the interpreter's
+        and differs by version (a recursion depth on 3.12, the C stack
+        from 3.14 on, which is why the document is a million arrays
+        deep). The last read pins that the interpreter is usable
+        afterwards."""
+        depth = 1_000_000
+        data = b"[" * depth + b"]" * depth
+        for kind in (dict, list):
+            with self.subTest(kind=kind.__name__):
+                value, problem = self.read(data, kind)
+                self.assertIsNone(value)
+                self.assertTrue(problem.startswith(
+                    f"{self.SHOWN} is not valid JSON: "), problem)
+        text, problem = self.read(data, str)
+        self.assertIsNone(problem)
+        self.assertEqual(text, data.decode("ascii"))
+        self.assertEqual(self.read(b'{"a": 1}', dict), ({"a": 1}, None))
 
     def test_a_json_object(self):
         self.assert_pairs(b'{"a": 1}', {

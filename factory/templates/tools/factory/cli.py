@@ -295,9 +295,12 @@ def read_file(path, shown, kind):
 
     Never raises for a local-file failure: the existence check sits
     inside the guard because Path.is_file raises PermissionError under
-    an unsearchable parent before Python 3.14. A reader whose shape
-    wording or null wording is its own does not adopt: it gets its
-    missing arm by hand (ADR-0075 decision 5)."""
+    an unsearchable parent before Python 3.14, and the parse guard takes
+    ValueError and RecursionError, not JSONDecodeError alone, because an
+    integer literal past the interpreter's digit limit and nesting past
+    its recursion limit raise those. A reader whose shape wording or
+    null wording is its own does not adopt: it gets its missing arm by
+    hand (ADR-0075 decision 5)."""
     if kind not in (str, dict, list):
         raise ValueError(
             f"read_file kind must be str, dict or list, not {kind!r}")
@@ -316,7 +319,7 @@ def read_file(path, shown, kind):
         return text, None
     try:
         value = json.loads(text)
-    except json.JSONDecodeError as err:
+    except (ValueError, RecursionError) as err:
         return None, f"{shown} is not valid JSON: {err}"
     if kind is dict and not isinstance(value, dict):
         return None, f"{shown} is not a JSON object"
