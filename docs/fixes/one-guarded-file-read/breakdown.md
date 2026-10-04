@@ -163,7 +163,7 @@ are marked **mirrored** and carry the five-step sequence in their own commit.
   - Accept: no behaviour changes and no test is added. Each comment is copied verbatim from architecture.md's "The eight comments" and sits directly above the `try:` of its reader's read, at that `try:`'s indentation. The eight, each with its `try:` line as it stands when the comment goes in (after D2, and after any earlier comment in the same file): detector K, `check_standards_drift`, at `gates.py:1457` (3 lines); `problems_for` inside `check_output_evals` at `lint.py:771` (3); `check_backlog` at `lint.py:877` (2); `read_execution` at `cli.py:348` (3, and it says `read_file`, not `cli.read_file`, because it is in the same module); `load_payload` at `sweeps.py:470` (3); `respond`, inside `if url.path == "/":`, at `dashboard.py:509` (3); `respond_post` at `dashboard.py:568` (3); `run_review` at `validator.py:323` (3). If a number has drifted, the function and "directly above its read's `try:`" decide the place. `label_sync.load_labels`' comment at `label_sync.py:60` stays as it is, and `label_sync.py` is not in the commit. Comments only: `git diff --numstat` for the commit reads `3 0` for `gates.py`, `5 0` for `lint.py`, `3 0` for `cli.py`, `3 0` for `sweeps.py`, `6 0` for `dashboard.py` and `3 0` for `validator.py`; every line added to those six files is a `#` comment, and none is wider than 72 columns. The test docstring: in tests/test_lint.py, `TestOutputEvals.test_a_null_record_file_is_not_a_json_object` (line 1326) says the shape wording "covers null — which is why this reader keeps its own parse rather than asking cli.read_file for a shape". That reason no longer holds: with three kinds, `dict` words a `null` record file the same way (architecture.md, Proof 7). The docstring is rewritten to say what the test pins (a `null` record file reads `validate_output`'s shape wording) without giving that as why the reader is hand-written. If it gives a reason, it is the one `problems_for`'s new comment gives: the stem line reported beside the shape problem, and a directory the glob matched worded `cannot read`. The test's name, body and asserted string `evals/output/idea.json is not a JSON object` do not change, and no other line of tests/test_lint.py does. `gates.py`, `cli.py` and `validator.py` are mirrored: the three payload twins and the manifest are regenerated in the same commit by the five-step sequence, detector E and `tests.test_factory_init` green. `lint.py`, `sweeps.py` and `dashboard.py` are not mirrored. The battery is green on `python3` and on `python3.12`, with the suite's `Ran` count equal to D2's.
 - [x] **D4** the non-UTF-8 ledger test in tests/test_budget_guard.py writes its id as the literal its neighbours use — size:S, blocked by: —
   - Accept: test-only, one line. In `test_a_ledger_that_is_not_utf8_fails_closed` (tests/test_budget_guard.py:456), line 461 builds the id it passes to `budget_guard.record` with a `%04d` format expression. It becomes the plain string literal that expression evaluates to, which is how the file's other tests write the same id. `grep -c "%04d" tests/test_budget_guard.py` prints `0` (it prints `1` before), `git diff --numstat` for the commit reads `1 1` for tests/test_budget_guard.py, and no other line of the test changes: its call and its asserted problem string are as A3 left them, and it passes. No source file and no payload file is in the commit, so there is no manifest step. The battery is green on `python3` and on `python3.12`.
-- [ ] **D5** replay the behaviour matrix, re-run the six outside sites, and run the battery on both Pythons — size:S, blocked by: D1, D2, D3, D4
+- [x] **D5** replay the behaviour matrix, re-run the six outside sites, and run the battery on both Pythons — size:S, blocked by: D1, D2, D3, D4
   - Accept: no source change; the checkbox is the record. Quoted under Notes: (a) the 144-cell matrix, re-recorded from the worktree root with `ogfr/matrix.py` into a fresh scratch directory and compared by `ogfr/diff_matrix.py` with `ogfr/baseline-661ffc7.json`, ends `cells 144 | identical 123 | fixed 16 | wording changed 2 | still raising 3 | newly raising 0` on `python3` and on `python3.12`, the two changed being `factory_config.load / not utf-8` and `label_sync.load_labels / not utf-8` and the three still raising being `trigger_eval.print_metrics`'s array, object and string cells; compared with `ogfr/after-implement.json` it ends `cells 144 | identical 141 | fixed 0 | wording changed 0 | still raising 3 | newly raising 0` and `cmp` finds the two recordings byte-identical, so no matrix cell moved in this milestone; (b) `ogfr/probe_six.py`, in a fresh scratch directory, prints no line holding `RAISES` on either Python, and its output is the block quoted under C2 in Notes; (c) on `python3` and on `python3.12`: `-m unittest discover tests` ends `OK`, `lint.py` ends `lint: 0 problem(s)`, `gates.py` ends `gates: 0 problem(s)`, `gates.py --selftest` ends `selftest: ok`, and `-m unittest tests.test_factory_init` ends `OK`; (d) `git log --oneline` shows D1, D2, D3 and D4 as one commit each, each new test in the same commit as the change that turns it green, and `git diff` across those commits for `tests/` shows that the only existing test lines removed or edited are the `object` rows and `test_a_json_null`'s docstring in tests/test_cli.py (D1), one docstring in tests/test_lint.py (D3) and one line in tests/test_budget_guard.py (D4); (e) `read_file` in `cli.py` and in its payload twin is architecture.md's "Final text (2026-10-04)", and every call of it outside `tests/` passes `str`, `dict` or `list` as a bare name (eleven calls in the root modules, as in Proof 1). `trigger_eval.py` and `charter_replay.py` are not run as scripts. If the scratch tools are gone, the fallback under Notes applies.
 
 ## Success-criteria coverage
@@ -273,3 +273,61 @@ D3 corrects.
 - **2026-10-04, Milestone D: replay tools for D5.** Under the session scratchpad the brief names: `ogfr/matrix.py`, `ogfr/diff_matrix.py`, `ogfr/probe_six.py`, `ogfr/baseline-661ffc7.json` (read-only) and `ogfr/after-implement.json`, all present when this milestone was cut. The amendment's own proofs are under `ogfr/amend/` (`run_all.sh`, `callers.py`, `probe_amended.py`). Each runs from the worktree root and writes nothing inside the repo. If they are gone at implement time, the per-cell tests added by A2 to B7 and by D1 and D2 are the durable evidence, and D5 says so rather than inventing a matrix result.
 - **2026-10-04, Milestone D: checkbox edits.** As in the first pass, each item's checkbox edit in this file rides in the item's own commit, so every D commit lists `breakdown.md` beside its other files, and D5's commit lists nothing else.
 - **2026-10-04, implement, D1: ten diff lines that are not row edits.** Taking the `object:` entry out of a mapping moves the mapping's closing `})` up onto the entry before it. So the D1 diff of tests/test_cli.py shows the `list:` line of seven methods (`test_a_json_object`, `test_a_json_array`, `test_a_json_string`, `test_a_json_null`, `test_a_json_number`, `test_json_true`, `test_json_false`) and the shared `dict: not_json, list: not_json` line of three (`test_bytes_that_are_not_utf8`, `test_text_that_is_not_json`, `test_an_empty_file`) as removed and added. On each the only change is that `, object: ...` or the following `object:` line is gone and `})` now closes the line: the `str`, `dict` and `list` pairs are character for character what they were. The new test is `test_an_unknown_kind_is_a_value_error_at_the_call`; its path that raises if touched is a class whose `__fspath__` raises `AssertionError`, so touching it is a test failure, not an error.
+- **2026-10-04, implement: D5, the replay and the battery, at `5ecde58`.** The scratch tools were present, and `baseline-661ffc7.json` and `after-implement.json` had the same checksums before and after. No source file changes in D5. `python3` was 3.14.6 and `python3.12` was 3.12.13; `PYTHONINTMAXSTRDIGITS` was unset.
+  - (a) The 144-cell matrix, recorded from the worktree root by `ogfr/matrix.py` into a fresh scratch directory, once on each Python. `ogfr/diff_matrix.py` against `ogfr/baseline-661ffc7.json` printed the same on both. Its summary, `CHANGED` and `STILL RAISES` lines (the 16 `FIXED` lines between them are left out here: they are the 16 cells listed under C2 above, cell for cell):
+
+    ```
+    cells 144 | identical 123 | fixed 16 | wording changed 2 | still raising 3 | newly raising 0
+      CHANGED  factory_config.load / not utf-8
+                 was: (None, ["config: cannot read .github/factory.json: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+                 now: (None, ["config: .github/factory.json is not valid JSON: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+      CHANGED  label_sync.load_labels / not utf-8
+                 was: ([], ["L: cannot read .github/labels.json: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+                 now: ([], ["L: .github/labels.json is not valid JSON: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+      STILL RAISES  trigger_eval.print_metrics / json array: RAISES AttributeError
+      STILL RAISES  trigger_eval.print_metrics / json object: RAISES KeyError
+      STILL RAISES  trigger_eval.print_metrics / json string: RAISES AttributeError
+    ```
+    Against `ogfr/after-implement.json`, the whole output, the same on both Pythons:
+
+    ```
+    cells 144 | identical 141 | fixed 0 | wording changed 0 | still raising 3 | newly raising 0
+      STILL RAISES  trigger_eval.print_metrics / json array: RAISES AttributeError
+      STILL RAISES  trigger_eval.print_metrics / json object: RAISES KeyError
+      STILL RAISES  trigger_eval.print_metrics / json string: RAISES AttributeError
+    ```
+    `cmp ogfr/after-implement.json <recording>` printed nothing and exited 0 for the 3.14 recording and for the 3.12 one: both are byte-identical to `after-implement.json`, so no matrix cell moved in this milestone.
+  - (b) `ogfr/probe_six.py`, in a fresh scratch directory on each Python: `grep -c RAISES` prints `0` for both outputs. `cmp` finds the 3.12 output identical to the 3.14 output and to `ogfr/six.out`, and compared line for line it is the block quoted under C2 above. Its first probe:
+
+    ```
+    dashboard._corrections / not utf-8
+        ({}, ["dashboard: cannot read docs/factory/corrections.jsonl: 'utf-8' codec can't decode byte 0xff in position 0: invalid start byte"])
+    ```
+  - (c) On `python3` and on `python3.12`, each exiting 0: `-m unittest discover tests` ends `Ran 1877 tests` and `OK`; `lint.py` ends `lint: 0 problem(s) across 25 skills`; `gates.py` ends `gates: 0 problem(s)`; `gates.py --selftest` ends `selftest: ok`; `-m unittest tests.test_factory_init` ends `Ran 68 tests` and `OK`. The suite's count at each commit, the same on both Pythons: 1874 at `ad4c812`, 1875 at D1 (one test added), 1877 at D2 (two added), 1877 at D3 and at D4.
+  - (d) `git log --oneline ad4c812..HEAD`, oldest first:
+
+    ```
+    e6abfc1 refactor(cli): D1 read_file takes three kinds and refuses any other at the call
+    b121f2c fix(cli): D2 read_file reports a 5,000-digit integer and nesting past the limit as not valid JSON
+    cb5a75b docs(readers): D3 each hand-written reader says in code why it does not use read_file
+    5ecde58 test(budget_guard): D4 the non-UTF-8 ledger test writes its id as the literal its neighbours use
+    ```
+    One commit each, each new test in the commit of the change that turns it green (D1's and D2's messages quote the failing output watched first, per Python). `git diff ad4c812..HEAD -- tests/` removes 24 lines and no others: in tests/test_cli.py, the `KINDS` line, the three shared `dict: not_json, list: not_json, object: not_json})` lines, the seven `object:` lines with the seven `list:` lines above them (re-added with the closing `})`, pairs unchanged, as the D1 note says) and the two lines of `test_a_json_null`'s docstring, 20 in all (D1); the three docstring lines in tests/test_lint.py (D3); the `%04d` line in tests/test_budget_guard.py (D4). D2 removes no test line.
+  - (e) From a `git archive` export of `5ecde58`: `read_file` extracted from `cli.py` and from `factory/templates/tools/factory/cli.py`, each compared by `diff` with the block under architecture.md's "Final text (2026-10-04)", shows no difference (54 lines, the longest 72 columns), and `cmp` finds `cli.py`, `gates.py` and `validator.py` each byte-identical to its payload twin. The AST sweep `ogfr/amend/callers.py` on the same export, root modules:
+
+    ```
+    == root: 11 call(s)
+       cost_ledger.py:245  load  kind=str (Name)
+       dashboard.py:318  _corrections  kind=str (Name)
+       dashboard.py:459  _backlog  kind=str (Name)
+       eval_schema.py:182  load_case_set  kind=dict (Name)
+       factory_config.py:74  load  kind=dict (Name)
+       gates.py:843  check_scaffold_sync  kind=dict (Name)
+       gates.py:999  check_config_shape  kind=dict (Name)
+       lint.py:27  check_manifest  kind=dict (Name)
+       lint.py:67  check_plugin_skills  kind=dict (Name)
+       lint.py:81  check_pi_package  kind=dict (Name)
+       standards_index.py:248  foreign_entries  kind=list (Name)
+    ```
+    Eleven calls, each passing `str`, `dict` or `list` as a bare name, as in Proof 1. The five calls in the payload copies pass the same kinds, and the only other calls are `TestReadFile`'s.
+  - `trigger_eval.py` and `charter_replay.py` were never run as scripts. As under C2, the matrix recorder imports `trigger_eval` to call `print_metrics` on scratch files, which makes no model call.
