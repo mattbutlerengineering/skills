@@ -472,3 +472,30 @@ Each runs from the worktree root and writes nothing inside the repo.
 - `sites.py <out.json>` — the AST sweep of read sites.
 - `proto/cli_h.py`, `proto/design_h.py` — the hybrid prototype and the
   replayed readers rewritten against it.
+
+## Outcome — driven through Ship on 2026-10-04 (UTC)
+
+A record of what happened, for a later resume. It adds no decision.
+
+- Stages, one fresh agent each, every artifact gated by the orchestrator
+  before the next stage: Capture (`adf2b8f`), Architect with ADR-0075
+  (`ded2650`), Decompose (`110ffc6`), Implement (18 item commits,
+  `5e5f494` to `e974147`), Verify (`1d93e71`), Review (`8924ebb`), Ship
+  (the commit that adds this section).
+- State: local only. The branch was never pushed, no pull request or
+  issue exists, and no paid tool ran. `origin/main` was still `661ffc7`
+  when Ship checked.
+- Verdict: prepared, not ready. Verification passes nine of nine
+  criteria and Review found no critical, but one major is open for the
+  operator: `read_file`'s `object` kind has no caller, and its docstring
+  and ADR-0075 still describe it. Review recommends dropping it.
+- One change from what the operator was shown: `label_sync.load_labels`
+  and detector K are fixed by hand instead of adopting `read_file`,
+  because `object` would reword their JSON `null` cell. The two decided
+  wording changes still happened, and no other pinned wording changed.
+- The brief said "no issue". Ship found detector B has no waiver for the
+  closing link, so the eventual pull request needs a tracking issue.
+  That is an operator step in `release.md`; the run created none.
+- An orchestrator slip, undone: after gating Implement, a stray checkout
+  detached the worktree at `110ffc6`. It was put back on the branch at
+  `e974147` before any further work, and no commit was lost.
