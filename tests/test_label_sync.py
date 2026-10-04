@@ -119,9 +119,10 @@ class TestLoadLabels(unittest.TestCase):
             path.write_bytes(b'[{"name": "caf\xe9"}]')
             labels, problems = label_sync.load_labels(Path(tmp))
             self.assertEqual(labels, [])
-            self.assertEqual(len(problems), 1)
-            self.assertTrue(problems[0].startswith(
-                "L: cannot read .github/labels.json:"), problems)
+            self.assertEqual(problems, [
+                "L: .github/labels.json is not valid JSON: 'utf-8' codec"
+                " can't decode byte 0xe9 in position 14: invalid"
+                " continuation byte"])
 
     def test_non_array_and_empty_array_are_flagged(self):
         for payload in ("{}", "[]"):

@@ -57,11 +57,17 @@ def load_labels(root):
             for candidate, _ in artifact_paths(root, "labels.json"))
         return [], [f"L: missing labels.json ({homes})"]
     rel = path.relative_to(root).as_posix()
-    # Decode before parse, guarded separately: see factory_config.load.
+    # ADR-0075's wording rule, applied by hand: bytes that are not UTF-8
+    # are a defect in a JSON document, so they join the parse failure's
+    # wording, not the read failure's. Hand-written rather than
+    # cli.read_file because the shape wording below is this loader's own
+    # and covers null.
     try:
         text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as err:
+    except OSError as err:
         return [], [f"L: cannot read {rel}: {err}"]
+    except UnicodeDecodeError as err:
+        return [], [f"L: {rel} is not valid JSON: {err}"]
     try:
         data = json.loads(text)
     except json.JSONDecodeError as err:

@@ -33,7 +33,7 @@
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/human_gates.py": "4ab98cede8a4f7faa133aae397dd4c516d2af6a7610f49b8dc6a2825e4d3cdf1",
     "templates/tools/factory/knowledge_plane.py": "be6a87f0a02aa6a8f19783a60e55bbb1b5d99b1e8427fcd4111e28505c8147df",
-    "templates/tools/factory/label_sync.py": "3f52393f2fc7bb5877f9545f241a861200dc1de1d58574b36221586dcac8089b",
+    "templates/tools/factory/label_sync.py": "5472f21671f76160bdd7faebb52fff4101d1daad4217749a015c16131de7d660",
     "templates/tools/factory/orientation_pack.py": "082cbd235b5cc9f0b0e31828260c65214c20e0453b936f35f67f6169d2d1ebbd",
     "templates/tools/factory/protocol.py": "4d216fb9c27e38b844609571237ea62ad44e601672759ff9680464f5c5a5c8cb",
     "templates/tools/factory/rejection_mining.py": "ab0531f59126de7fe6f761846d1433827ff972cc30c4e3b7f7fa0d0dc69fc555",
