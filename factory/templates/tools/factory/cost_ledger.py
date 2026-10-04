@@ -21,6 +21,7 @@ import re
 from datetime import date
 from pathlib import Path
 
+from cli import read_file
 from knowledge_plane import WO_TOKEN
 
 # The append-only cost ledger (ADR-0034). The outcome vocabulary is
@@ -231,7 +232,7 @@ def parse(text):
 
 def load(root, label, ledger_path=None):
     """(rows, problems): the labelled ledger read every reader is built
-    on — one existence check, one OSError-to-problem translation, one
+    on — one existence check, one guarded read (cli.read_file), one
     located problem grammar. rows is parse()'s [(lineno, entry, problems)]
     with each problem located and prefixed for the caller
     ("<label>: <path>:<lineno> <suffix>"), or None when the ledger does
@@ -241,12 +242,11 @@ def load(root, label, ledger_path=None):
     failure ("<label>: cannot read …"), so read() and detector G report
     an unreadable ledger with the same body under their own prefix."""
     path = Path(ledger_path) if ledger_path else Path(root) / COST_LEDGER
-    if not path.is_file():
+    text, problem = read_file(path, COST_LEDGER, str)
+    if problem:
+        return None, [f"{label}: {problem}"]
+    if text is None:
         return None, []
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as err:
-        return None, [f"{label}: cannot read {COST_LEDGER}: {err}"]
     rows = [(lineno, record,
              [f"{label}: {COST_LEDGER}:{lineno} {suffix}"
               for suffix in suffixes])

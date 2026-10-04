@@ -359,6 +359,18 @@ class TestLoad(unittest.TestCase):
             self.assertTrue(problems[0].startswith(
                 "G: cannot read docs/factory/costs.jsonl:"), problems)
 
+    def test_a_ledger_that_is_not_utf8_is_the_callers_problem_string(self):
+        """The ledger is text, not one JSON document, so bytes that will
+        not decode are a read failure (ADR-0075's wording rule) — and a
+        problem string like the OSError beside it, never a traceback out
+        of every reader built on this one."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "").write_bytes(b"\xff\xfe\x00")
+            self.assertEqual(cost_ledger.load(tmp, "G"), (None, [
+                "G: cannot read docs/factory/costs.jsonl: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"]))
+
     def test_an_injected_ledger_path_overrides_the_repo_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             custom = Path(tmp) / "custom.jsonl"
@@ -400,6 +412,15 @@ class TestRead(unittest.TestCase):
                     f" 13] Permission denied: '{path}'"]))
             finally:
                 path.chmod(0o644)
+
+    def test_a_ledger_that_is_not_utf8_is_a_ledger_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "")
+            (Path(tmp) / cost_ledger.COST_LEDGER).write_bytes(b"\xff\xfe\x00")
+            self.assertEqual(cost_ledger.read(tmp), ([], [
+                "ledger: cannot read docs/factory/costs.jsonl: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"]))
 
     def test_reads_well_formed_lines(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -453,6 +453,25 @@ class TestRecord(unittest.TestCase):
                 (tree.root / "docs" / "factory" / "costs.jsonl").read_text(
                     encoding="utf-8"), "{not json\n")
 
+    def test_a_ledger_that_is_not_utf8_fails_closed(self):
+        """The same refusal for bytes that will not decode: one bg:
+        problem carrying the ledger's own, and not a byte appended —
+        where the read raised UnicodeDecodeError before the refusal
+        could be reached."""
+        wo = "WO-%04d" % 7
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            ledger = tree.write("docs/factory/costs.jsonl", "")
+            ledger.write_bytes(b"\xff\xfe\x00")
+            problems = budget_guard.record(
+                tree.root, wo, "r-1", "claude-sonnet-5", 4200, 1.25,
+                "completed", "2026-08-07")
+            self.assertEqual(problems, [
+                f"bg: refusing to record {wo}: ledger: cannot read"
+                " docs/factory/costs.jsonl: 'utf-8' codec can't decode byte"
+                " 0xff in position 0: invalid start byte"])
+            self.assertEqual(ledger.read_bytes(), b"\xff\xfe\x00")
+
     def test_an_exhaustion_row_and_a_completion_row_coexist(self):
         """hard_stop and record write the same shape; only outcome differs,
         and cost_report sums both."""

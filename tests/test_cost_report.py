@@ -285,6 +285,29 @@ class TestGuard(unittest.TestCase):
             self.assertIsNone(result.cap)
             self.assertTrue(result.problems)
 
+    def test_a_ledger_that_is_not_utf8_fails_closed(self):
+        """The docstring's promise, kept for the one read failure that
+        used to escape it: a ledger whose bytes will not decode decides
+        PAUSE with the ledger's own problem, where it raised
+        UnicodeDecodeError out of the monthly cap check."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.write("docs/factory/costs.jsonl", "").write_bytes(
+                b"\xff\xfe\x00")
+            result = cost_report.guard(tree.root)
+            zero = {"total_cost": 0.0, "total_tokens": 0, "run_count": 0,
+                    "by_wo": {}}
+            self.assertEqual(result.verdict, cost_report.PAUSE)
+            self.assertEqual(
+                result.reason, "cr: unreadable ledger — failing closed")
+            self.assertIsNone(result.cap)
+            self.assertEqual(result.totals, zero)
+            self.assertEqual(result.month_totals, zero)
+            self.assertEqual(result.problems, [
+                "ledger: cannot read docs/factory/costs.jsonl: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"])
+
 
 class TestComposeReport(unittest.TestCase):
     def test_report_body_shows_totals_and_verdict(self):
