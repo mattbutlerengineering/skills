@@ -275,8 +275,9 @@ def read_event(env):
 def read_file(path, shown, kind):
     """(value, problem) for one local file — the guarded read every
     reader of a repo file shares (ADR-0075). kind is what the caller
-    needs back: str (the text), dict (a JSON object), list (a JSON
-    array), or object (any JSON document except null).
+    needs back: str (the text), dict (a JSON object) or list (a JSON
+    array). Any other kind is a ValueError at the call, before the file
+    is touched: a slip in the caller, never a failure of the file.
 
     (None, None) when no regular file is at path: absence is a fact, not
     an error, and each caller keeps its own meaning for it (a "missing"
@@ -291,13 +292,15 @@ def read_file(path, shown, kind):
                                         not UTF-8, when kind is JSON
       <shown> is not a JSON object      kind dict, any other top level
       <shown> is not a JSON array       kind list, any other top level
-      <shown> is null                   kind object, a null document —
-                                        (None, None) already means absent
 
     Never raises for a local-file failure: the existence check sits
     inside the guard because Path.is_file raises PermissionError under
     an unsearchable parent before Python 3.14. A reader whose shape
-    wording is its own asks for object and keeps its own check."""
+    wording or null wording is its own does not adopt: it gets its
+    missing arm by hand (ADR-0075 decision 5)."""
+    if kind not in (str, dict, list):
+        raise ValueError(
+            f"read_file kind must be str, dict or list, not {kind!r}")
     path = Path(path)
     try:
         if not path.is_file():
@@ -319,8 +322,6 @@ def read_file(path, shown, kind):
         return None, f"{shown} is not a JSON object"
     if kind is list and not isinstance(value, list):
         return None, f"{shown} is not a JSON array"
-    if value is None:
-        return None, f"{shown} is null"
     return value, None
 
 

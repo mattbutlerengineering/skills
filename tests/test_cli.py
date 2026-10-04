@@ -752,7 +752,7 @@ class TestReadFile(unittest.TestCase):
     re-proving the failure vocabulary."""
 
     SHOWN = "docs/thing.json"
-    KINDS = (str, dict, list, object)
+    KINDS = (str, dict, list)
     NOT_UTF8 = ("'utf-8' codec can't decode byte 0xff in position 0:"
                 " invalid start byte")
     NOT_JSON = ("Expecting property name enclosed in double quotes:"
@@ -775,6 +775,31 @@ class TestReadFile(unittest.TestCase):
                 got = self.read(data, kind)
                 self.assertEqual(got, pair)
                 self.assertIs(type(got[0]), type(pair[0]))
+
+    def test_an_unknown_kind_is_a_value_error_at_the_call(self):
+        """A kind that is not str, dict or list is a slip in the caller,
+        never a failure of the file: it raises whether the file is
+        there or not, and before the path is touched at all — a wrong
+        kind must not pass for a read that found nothing wrong."""
+        class Touched:
+            def __fspath__(self):
+                raise AssertionError("the path was touched")
+
+        must = "read_file kind must be str, dict or list, not "
+        with tempfile.TemporaryDirectory() as tmp:
+            present = Path(tmp) / "thing.json"
+            present.write_text('{"a": 1}', encoding="utf-8")
+            paths = (("present", present),
+                     ("absent", Path(tmp) / "nope.json"),
+                     ("raises if touched", Touched()))
+            for kind, message in ((object, must + "<class 'object'>"),
+                                  ("dict", must + "'dict'"),
+                                  (int, must + "<class 'int'>")):
+                for name, path in paths:
+                    with self.subTest(kind=kind, path=name):
+                        with self.assertRaises(ValueError) as caught:
+                            cli.read_file(path, self.SHOWN, kind)
+                        self.assertEqual(str(caught.exception), message)
 
     def test_an_absent_file_is_none_none_for_every_kind(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -818,70 +843,61 @@ class TestReadFile(unittest.TestCase):
         not_json = (None, f"{self.SHOWN} is not valid JSON: {self.NOT_UTF8}")
         self.assert_pairs(b"\xff\xfe", {
             str: (None, f"cannot read {self.SHOWN}: {self.NOT_UTF8}"),
-            dict: not_json, list: not_json, object: not_json})
+            dict: not_json, list: not_json})
 
     def test_text_that_is_not_json(self):
         not_json = (None, f"{self.SHOWN} is not valid JSON: {self.NOT_JSON}")
         self.assert_pairs(b"{nope", {
             str: ("{nope", None),
-            dict: not_json, list: not_json, object: not_json})
+            dict: not_json, list: not_json})
 
     def test_an_empty_file(self):
         not_json = (None, f"{self.SHOWN} is not valid JSON: {self.EMPTY}")
         self.assert_pairs(b"", {
             str: ("", None),
-            dict: not_json, list: not_json, object: not_json})
+            dict: not_json, list: not_json})
 
     def test_a_json_object(self):
         self.assert_pairs(b'{"a": 1}', {
             str: ('{"a": 1}', None),
             dict: ({"a": 1}, None),
-            list: (None, f"{self.SHOWN} is not a JSON array"),
-            object: ({"a": 1}, None)})
+            list: (None, f"{self.SHOWN} is not a JSON array")})
 
     def test_a_json_array(self):
         self.assert_pairs(b'["a"]', {
             str: ('["a"]', None),
             dict: (None, f"{self.SHOWN} is not a JSON object"),
-            list: (["a"], None),
-            object: (["a"], None)})
+            list: (["a"], None)})
 
     def test_a_json_string(self):
         self.assert_pairs(b'"a"', {
             str: ('"a"', None),
             dict: (None, f"{self.SHOWN} is not a JSON object"),
-            list: (None, f"{self.SHOWN} is not a JSON array"),
-            object: ("a", None)})
+            list: (None, f"{self.SHOWN} is not a JSON array")})
 
     def test_a_json_null(self):
-        """(None, None) already means absent, so a null document asked
-        for as `object` is a problem of its own — never a value."""
         self.assert_pairs(b"null", {
             str: ("null", None),
             dict: (None, f"{self.SHOWN} is not a JSON object"),
-            list: (None, f"{self.SHOWN} is not a JSON array"),
-            object: (None, f"{self.SHOWN} is null")})
+            list: (None, f"{self.SHOWN} is not a JSON array")})
 
     def test_a_json_number(self):
         self.assert_pairs(b"5", {
             str: ("5", None),
             dict: (None, f"{self.SHOWN} is not a JSON object"),
-            list: (None, f"{self.SHOWN} is not a JSON array"),
-            object: (5, None)})
+            list: (None, f"{self.SHOWN} is not a JSON array")})
 
     def test_json_true(self):
         self.assert_pairs(b"true", {
             str: ("true", None),
             dict: (None, f"{self.SHOWN} is not a JSON object"),
-            list: (None, f"{self.SHOWN} is not a JSON array"),
-            object: (True, None)})
+            list: (None, f"{self.SHOWN} is not a JSON array")})
 
     def test_json_false(self):
         self.assert_pairs(b"false", {
             str: ("false", None),
             dict: (None, f"{self.SHOWN} is not a JSON object"),
-            list: (None, f"{self.SHOWN} is not a JSON array"),
-            object: (False, None)})
+            list: (None, f"{self.SHOWN} is not a JSON array")})
 
     def test_every_non_object_top_level_is_one_problem_under_dict(self):
         """The object rule both config readers shared before it moved
