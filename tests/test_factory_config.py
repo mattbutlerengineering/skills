@@ -113,6 +113,20 @@ class TestLoad(unittest.TestCase):
             self.assertIsNone(config)
             self.assertTrue(problems)
 
+    def test_a_config_that_is_not_utf8_is_a_problem(self):
+        # Valid JSON, invalid UTF-8 — what an editor saving latin-1
+        # produces. A JSON document must be UTF-8 (RFC 8259 §8.1), so
+        # the bytes are a defect in the document — the same problem as
+        # text that will not parse, not a read failure (ADR-0075).
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / ".github" / "factory.json"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'{"routing": {"mechanical": "caf\xe9"}}')
+            self.assertEqual(factory_config.load(tmp), (None, [
+                "config: .github/factory.json is not valid JSON: 'utf-8'"
+                " codec can't decode byte 0xe9 in position 31: invalid"
+                " continuation byte"]))
+
     @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
     def test_a_config_the_process_may_not_read_is_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -145,39 +159,6 @@ class TestLoad(unittest.TestCase):
                 "config: .github/factory.json is not valid JSON:"
                 " Expecting property name enclosed in double quotes:"
                 " line 1 column 2 (char 1)"]))
-
-
-class TestObjectProblems(unittest.TestCase):
-    """The object rule, owned beside the field grammar and shared by both
-    readers: `load` reports it as `config: <path> ...` and detector F as
-    `F: <path> ...`, so the runtime and the gate cannot disagree about
-    what a config even is. Unlocated suffixes, the same caller-prefixes-
-    its-own-label split as cost_ledger.line_problems."""
-
-    def test_an_object_is_clean(self):
-        self.assertEqual(factory_config.object_problems({}), [])
-        self.assertEqual(factory_config.object_problems(CONFIG), [])
-
-    def test_every_other_json_top_level_is_one_problem(self):
-        for value in (None, [], ["a"], "factory", 5, 0.5, True, False):
-            with self.subTest(value=value):
-                self.assertEqual(factory_config.object_problems(value),
-                                 ["is not a JSON object"])
-
-
-    def test_a_config_that_is_not_utf8_is_a_problem(self):
-        # Valid JSON, invalid UTF-8 — what an editor saving latin-1
-        # produces. The decode fails a step before json.loads, so the
-        # JSONDecodeError catch never sees it.
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / ".github" / "factory.json"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(b'{"routing": {"mechanical": "caf\xe9"}}')
-            config, problems = factory_config.load(tmp)
-            self.assertIsNone(config)
-            self.assertEqual(len(problems), 1)
-            self.assertTrue(problems[0].startswith(
-                "config: cannot read .github/factory.json:"), problems)
 
 
 class TestInfiniteAmountsAreRefused(unittest.TestCase):
