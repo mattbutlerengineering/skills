@@ -290,6 +290,19 @@ class TestForeignEntries(unittest.TestCase):
             finally:
                 path.chmod(0o644)
 
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        """A JSON document must be UTF-8 (RFC 8259 §8.1), so bytes that
+        will not decode are the same problem as text that will not
+        parse — and a problem string, where the decode used to escape
+        the OSError guard as a traceback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / standards_index.STANDARDS_PATH
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"\xff\xfe")
+            self.assertEqual(standards_index.foreign_entries(tmp), ([], [
+                "docs/standards.json is not valid JSON: 'utf-8' codec can't"
+                " decode byte 0xff in position 0: invalid start byte"]))
+
 
 class TestUpdate(unittest.TestCase):
     def test_regenerates_from_adrs_when_absent(self):
@@ -371,6 +384,18 @@ class TestUpdate(unittest.TestCase):
                 " valid JSON: Expecting value: line 1 column 1 (char 0)"])
             # Refused, not clobbered: the malformed file is untouched.
             self.assertEqual(path.read_text(encoding="utf-8"), "not json")
+
+    def test_an_existing_file_that_is_not_utf8_refuses_to_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / standards_index.STANDARDS_PATH
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"\xff\xfe")
+            self.assertEqual(standards_index.update(tmp), [
+                "standards-index: docs/standards.json is not valid JSON:"
+                " 'utf-8' codec can't decode byte 0xff in position 0:"
+                " invalid start byte"])
+            # Refused, not clobbered: the undecodable file is untouched.
+            self.assertEqual(path.read_bytes(), b"\xff\xfe")
 
 
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
