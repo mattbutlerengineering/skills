@@ -127,3 +127,11 @@ against `origin/main`. Next stage is Review, then Ship.
   oauth_scope_insufficient` (request ids `req_011CfgKcdBTN4CPcybhCUvtD`,
   `req_011CfgKcdnAnPg3tUGTPT5fK`). Issue #590 held the same three
   comments as the first capture, with nothing newer.
+- **Ship prepared and stopped; the work is up for the owner.** A fresh
+  Ship subagent wrote `release.md` with a not-ready verdict: verification
+  is red on four owner deferrals and review carries four open majors.
+  Nothing was released. The orchestrator then ran the prepared steps the
+  operator approved: branch pushed, tracking issue #607 created, draft
+  PR #608 opened against `main`, checks green. The merge, the trigger
+  decisions and the version bump stay with the owner; `release.md`
+  part (c) lists them in order.

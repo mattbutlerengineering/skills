@@ -449,13 +449,35 @@ backtick in a double-quoted argument executes.
    Run `python3 gates.py` after the edit. Detector C reads run
    artifacts.
 
-#### (b) results — placeholder, filled by the orchestrator
+#### (b) results — filled by the orchestrator, 2026-10-04 (UTC)
 
-- Commit of this file: `<not yet run>`
-- Push: `<not yet run>`
-- Tracking issue: `<not yet run>`
-- Draft PR: `<not yet run>`
-- PR checks: `<not yet run>`
+- Commit of this file: `29ad965`, alone, after `python3 gates.py` and
+  `python3 lint.py` both reported 0 problems. `origin/main` was still
+  at 661ffc7, so no rebase was needed.
+- Push: `git push -u origin feat/factory-evolution-queue-groomer`
+  created the remote branch at `29ad965` (four commits: `8ebfd12`,
+  `206b72b`, `e4c0ec3`, `29ad965`). First attempt, no retry.
+- Tracking issue: #607, "Verify, review and prepare the release of
+  PRD-0006 (factory evolution)", label `type:chore`, created
+  2026-10-04T01:41Z. Its body adds "the 2026-09-29 implement
+  close-out" to the text drafted above, because the PR lands that too.
+- Draft PR: #608, "docs(factory-evolution): verify, review and prepare
+  release for PRD-0006 (autorun)". Draft, base `main`, 12 files,
+  mergeable, `Closes #607`. The body carries the exact `No work order:`
+  line and no work-order id token.
+- PR checks on `29ad965`, all terminal by 2026-10-04T01:42:51Z across
+  two validator runs (37168793370 and 37168797621): `check` passed on
+  both; `review` passed on one and was skipped on the other;
+  `needs-review-label` passed on one and was skipped on the other;
+  `merged-label` was skipped on both. No failure and no retry. The
+  checks on the commit that records these results are not recorded
+  here.
+- One addition to hiccup 1 in part (a): its statement is true as
+  scoped to `docs/` and `CLAUDE.md`. Outside that scope, `origin/main`
+  already carries one trigger id: the daily improvement routine's
+  appears three times in the `.beads/` export.
+- Not executed, and still the owner's: every step in part (c). No
+  merge, tag, version bump, label change or trigger call was made.
 
 ### (c) Owner-only steps
 
