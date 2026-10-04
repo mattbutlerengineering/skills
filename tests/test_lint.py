@@ -275,6 +275,19 @@ class TestPiPackage(CheckerTreeTest):
             "package.json is not valid JSON: Expecting value: line 1 column 1"
             " (char 0)"])
 
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_package_json_the_process_may_not_read_is_a_problem(self):
+        """Guarded like check_manifest (ADR-0027) — and that has to
+        include the read itself, not only the parse."""
+        path = self.root / "package.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_pi_package(self.root), [
+                "cannot read package.json: [Errno 13] Permission denied:"
+                f" '{path}'"])
+        finally:
+            path.chmod(0o644)
+
 
     def test_a_package_that_is_not_an_object_names_its_shape(self):
         path = self.root / "package.json"
