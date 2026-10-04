@@ -345,6 +345,8 @@ def read_execution(path):
         text = Path(path).read_text(encoding="utf-8")
     except OSError as err:
         return None, f"cannot read execution file {path}: {err}"
+    except UnicodeDecodeError as err:
+        return None, f"execution file {path} is not valid JSON: {err}"
     try:
         log = json.loads(text)
     except json.JSONDecodeError as err:

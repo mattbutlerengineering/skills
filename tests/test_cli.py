@@ -1004,6 +1004,19 @@ class TestReadExecution(unittest.TestCase):
                 None, f"execution file {path} is not valid JSON: Expecting"
                 " value: line 1 column 1 (char 0)"))
 
+    def test_bytes_that_are_not_utf8_are_an_error(self):
+        """The execution file is one JSON document, and JSON must be
+        UTF-8 (RFC 8259 §8.1): bytes that will not decode are the same
+        refusal as text that will not parse. The decode used to escape
+        the OSError guard, so record-run died instead of refusing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "execution.json"
+            path.write_bytes(b"\xff\xfe")
+            self.assertEqual(cli.read_execution(str(path)), (
+                None, f"execution file {path} is not valid JSON: 'utf-8'"
+                " codec can't decode byte 0xff in position 0: invalid start"
+                " byte"))
+
     def test_a_null_log_has_no_result_entry(self):
         """null parses, so it is a shape this cannot account for rather
         than a read failure: no entry, no spend, the same refusal as a
