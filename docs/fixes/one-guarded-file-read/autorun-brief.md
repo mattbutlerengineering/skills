@@ -666,3 +666,51 @@ dated amendment and the ADR sentence, Decompose a Milestone E, Implement
 one commit per item, Verify a second re-verification, Review a re-review
 of the new commits, Ship a third preparation of `release.md`. Ship still
 executes nothing.
+
+## Outcome of the second resume — driven through Ship a third time on 2026-10-05 (UTC)
+
+A record of what happened, for a later resume. It adds no decision.
+
+- Stages, one fresh agent each, every artifact gated by the orchestrator
+  before the next stage: Architect's second amendment with one paragraph
+  in ADR-0075 (`19a5070`), Decompose with Milestone E (`d7d92cd`),
+  Implement (`ecf86f0` the change and its three tests, `a69b3c9` the
+  replay), Verify (`6d0bef8`), Review (`c4bbe0b`), Ship (the commit that
+  adds this section).
+- While the stages ran, the operator invoked autorun three more times
+  with no arguments. Each arrived mid-run, answered no question, and
+  changed nothing: the same run carried on.
+- State: local only. The branch was never pushed, no pull request or
+  issue exists, no tag exists, and no paid tool ran. `origin/main` was
+  still `661ffc7` when Ship checked.
+- Verdict: prepared and ready for the operator's steps. At `c4bbe0b` the
+  battery is green on Python 3.14 and 3.12 with 1880 tests, and the
+  matrix is byte-identical to the one recorded before either fix loop.
+  A ledger line that `json.loads` refuses now makes the monthly cap check
+  write its pause signal, where it raised and wrote nothing.
+- Beyond what the operator was told ("one line in the ledger parser plus
+  two tests"): one docstring sentence in `cost_ledger.parse`, and a third
+  test, added because the first two alone do not notice the guard being
+  narrowed.
+- Still the operator's, in order, as `release.md` lists them:
+  1. Confirming option (a). Undo: `git reset --hard 864f1aa`, which now
+     discards both fix loops.
+  2. Confirming the ledger-parser fix. Undo: `git reset --hard 261e486`.
+  3. N4, a new minor from the second re-review: on a ledger it can only
+     partly read, `work_queue.py plan` still prints a batch priced on the
+     readable rows before exiting 1. The path predates the run, and the
+     run has moved three kinds of bad ledger onto it from a traceback.
+     The reviewer recommends merging and taking it as the first
+     follow-up. The run did not take it.
+  4. Every release step: push, tracking issue, draft pull request, the
+     human gate-2 merge.
+- Found and not addressed, outside this run's subject and the same on
+  `origin/main`: four ledgers whose every line parses still defeat the
+  cap check or the planner. The one to read first: the record command
+  accepts `nan` as a cost, after which the planner's cap comparison is
+  always false. They are a seed for a run of their own.
+- Left for the retro, none added to `docs/backlog.md`: the first
+  review's Minor 3, N3 (five tests rely on interpreter defaults), the
+  wider parse guard for `dashboard._corrections` and the hand-written
+  JSON readers, `AGENTS.md`'s older seam bullet, and the
+  `trigger_eval.print_metrics` shape cells.
