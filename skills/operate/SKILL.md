@@ -42,10 +42,10 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
    mechanical mistake gets a check, never a prose rule; a prose rule is
    what the mistake already slipped past. Propose the carrier as an
    existing thing — the checker, detector, hook, job or file that would
-   hold it. A repo with no guardrail at all (no hook and no CI job
-   running its own check command) is itself a finding, not a neutral
-   default. The structure restates the `retro` skill in mattpocock/skills
-   (MIT, Matt Pocock); the words are this pipeline's.
+   hold it. A repo whose own check command runs under no hook and no CI
+   job has no guardrail at all; record that as a finding rather than
+   treating it as the baseline. The structure restates the `retro` skill
+   in mattpocock/skills (MIT, Matt Pocock); the words are this pipeline's.
 
 7. **Seed the next runs.** Every gap, complaint, and "next time" becomes a
    one-line idea seed — the natural input to the next Idea-stage run. For

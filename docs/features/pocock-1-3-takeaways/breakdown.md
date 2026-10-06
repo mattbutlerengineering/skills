@@ -123,3 +123,15 @@ heading rather than restating it.
   gate-3 reviewer be an agent), as `skills/work-queue/SKILL.md` already
   says. The protocol section cites gate 3. The upstream artifacts'
   wording is left as written, not rewritten.
+- 2026-10-06: two minor findings in `review.md` fixed after Verify, one
+  sentence each: `skills/operate/SKILL.md` step 6's guardrail sentence
+  is reworded in this pipeline's voice (it had tracked the credited
+  `retro` source nearly word for word), and `skills/work-queue/SKILL.md`
+  item 7 now ends "so the branch applies cleanly to the tip as of
+  hand-off" in place of a fast-forward promise the human squash merge
+  cannot keep; items 6 and 7 say "the remote's default-branch tip". No
+  Accept criterion changed: row 0084's named the step, its mistake
+  sources, the classification and the carrier, not this sentence; row
+  0089's named two rules, both still present with `default-branch tip`
+  twice. Both `description:` lines are byte-identical; no checkbox
+  flipped and no ledger row appended, since no row changed state.
