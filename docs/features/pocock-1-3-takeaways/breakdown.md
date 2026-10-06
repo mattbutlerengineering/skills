@@ -34,7 +34,7 @@ before the rule.
 
 ## Milestone 2: A pull request body says what the merge risks
 
-- [ ] **WO-0080** Protocol section Pull request body — size:M, blocked by: — (PRD-0007 §Success criteria)
+- [x] **WO-0080** Protocol section Pull request body — size:M, blocked by: — (PRD-0007 §Success criteria)
   - Accept: `docs/pipeline-protocol.md` gains a `## Pull request body` section placed after `## Artifact frontmatter` and before `## Harness neutrality`, stating the three parts of a body: the smallest visual that shows the change (pseudocode, call tree, file tree, diagram or diff), before-and-after evidence, and a merge-danger call under the one fixed heading `## Merge danger` carrying `Door:` (one-way or two-way) and `Blast radius:` (what breaks if the call is wrong), the heading fixed so a reviewer at gate 2 (ADR-0033) finds it and the rest prose; the section says detector B's lines stay (`Closes #N`, and a work-order id or the `No work order:` waiver, written in prose without a literal id token); it credits mattpocock/skills `pr` and Dex Horthy's `show-me` (Humanlayer), restating structure and copying no text; it is harness-neutral (no Claude Code or omp mechanics); detector B is unchanged so no existing PR goes red; `python3 gates.py` prints `gates: 0 problem(s)` (detector I reads the section's links) and `python3 lint.py` prints `lint: 0 problem(s)`.
 - [ ] **WO-0081** Work-queue worker brief cites the section — size:S, blocked by: WO-0080 (PRD-0007 §Success criteria)
   - Accept: `skills/work-queue/SKILL.md` step 4's numbered list "Each agent's prompt must carry" gains one new numbered item telling the worker the PR body follows the protocol's Pull request body section (named by heading, nothing restated), keeping item 2's `Closes #N` line and detector B's work-order citation; `grep -n 'Pull request body' skills/work-queue/SKILL.md` finds the item; the skill's `description:` is unchanged; `python3 lint.py` prints `lint: 0 problem(s)`.
@@ -117,3 +117,9 @@ heading rather than restating it.
   `tokens: 0`, `cost: 0.0`, `outcome: owner-session:unmetered`).
   Not in the rows' Accept text, which assumed `gates: 0 problem(s)`
   followed from the edits alone; the ledger row is what makes it so.
+- 2026-10-06: the Milestone 2 Accept text and `architecture.md` place
+  the merge reviewer at "gate 2 (ADR-0033)"; ADR-0033 numbers the PR
+  merge as gate 3 (gate 2 is blueprint/ADR approval; ADR-0036 lets the
+  gate-3 reviewer be an agent), as `skills/work-queue/SKILL.md` already
+  says. The protocol section cites gate 3. The upstream artifacts'
+  wording is left as written, not rewritten.

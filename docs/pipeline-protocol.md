@@ -244,6 +244,47 @@ date: 2026-07-01
 ---
 ```
 
+## Pull request body
+
+A pull request body tells the reviewer at the merge gate (ADR-0033 gate 3)
+what the merge risks, not only what the branch did. Traceability comes
+first and is unchanged: the `Closes #N` line for the issue the change
+closes, and either the work-order id the change implements or a
+`No work order:` line giving the reason. Detector B checks those lines
+alone; this section changes the body, not the check.
+
+Below them, three parts:
+
+1. **The smallest visual that shows the change** — pseudocode for a
+   rule, a call tree for control flow, a file tree for layout, a diagram
+   for interaction between parts, or a diff when the surrounding shape
+   already exists and the point is what moved. One view that carries the
+   point beats several that share it.
+2. **Before-and-after evidence** — the failing output or test before and
+   the passing one after, as it actually ran rather than as described. A
+   screenshot when the change is visible; command output otherwise.
+3. **The merge-danger call**, under this one fixed heading so the
+   reviewer finds it without reading everything above it:
+
+   ```markdown
+   ## Merge danger
+
+   Door: <one-way or two-way> — <why>
+   Blast radius: <what breaks if the call is wrong>
+   ```
+
+   A two-way door is undone by a revert; a one-way door is not (a
+   migration that drops data, a published version, a renamed public
+   interface). The blast radius names who or what notices if the call is
+   wrong — one consumer, every stamped repo, nobody until the next
+   release.
+
+The heading is the only fixed string; the visual and the evidence vary
+with the change. Ship's rollback plan in `release.md` records the same
+door and blast radius, so the two documents agree. Structure restated,
+no text copied, from mattpocock/skills' `pr` skill (MIT, copyright Matt
+Pocock) and the visuals menu of Dex Horthy's `show-me` (Humanlayer).
+
 ## Harness neutrality
 
 Skill content must stay harness-neutral: plain process, file conventions, and
