@@ -32,7 +32,22 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
    skipped or backfilled and was that right? Keep / change / stop — a few
    sharp entries beat an exhaustive ceremony.
 
-6. **Seed the next runs.** Every gap, complaint, and "next time" becomes a
+6. **Retrospect on the environment.** The run's own record of its
+   mistakes is `verification.md`'s failures, `review.md`'s findings and
+   `breakdown.md`'s Notes. For each mistake, name the check, pointer or
+   rule that would have caught it, and classify it: **mechanical** (a
+   deterministic check would have caught it — a lint rule, a hook, a CI
+   job, a gate detector) or **judgement** (only a reader could — a
+   `CLAUDE.md` or `AGENTS.md` line, or a standards statement). A
+   mechanical mistake gets a check, never a prose rule; a prose rule is
+   what the mistake already slipped past. Propose the carrier as an
+   existing thing — the checker, detector, hook, job or file that would
+   hold it. A repo with no guardrail at all (no hook and no CI job
+   running its own check command) is itself a finding, not a neutral
+   default. The structure restates the `retro` skill in mattpocock/skills
+   (MIT, Matt Pocock); the words are this pipeline's.
+
+7. **Seed the next runs.** Every gap, complaint, and "next time" becomes a
    one-line idea seed — the natural input to the next Idea-stage run. For
    maintenance runs, the defect or degradation itself becomes a seed for
    preventive work: if the same bug recurs, the retro asks whether the
@@ -41,7 +56,7 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
    `docs/backlog.md` as a well-formed entry per the protocol's seed-backlog
    section, creating the file if absent — never rewrite existing lines.
 
-7. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
+8. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `retro.md` with protocol frontmatter. This
    completes the run.
 
