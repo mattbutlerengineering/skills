@@ -103,6 +103,7 @@ Verify's scratch outputs (`red-green-01ca2ff.txt`, `unittest-312.txt`,
   or drop "the words are this pipeline's" and leave the credit. Either
   keeps operate's `description:` byte-identical and nothing in lint
   reads the sentence.
+- Fixed in 09709c7.
 
 ### Minor: work-queue item 7 promises a fast-forward the repo's merge path cannot deliver
 
@@ -124,6 +125,7 @@ Verify's scratch outputs (`red-green-01ca2ff.txt`, `unittest-312.txt`,
   replace it with "so the PR applies cleanly to the tip as of hand-off";
   optionally "the remote's default-branch tip" in items 6 and 7. The
   grep the row's Accept names (`default-branch tip` twice) still holds.
+- Fixed in 09709c7.
 
 ### Minor: three run artifacts place the merge reviewer at "gate 2 (ADR-0033)"; ADR-0033 numbers the PR merge gate 3
 
