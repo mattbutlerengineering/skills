@@ -85,7 +85,10 @@ Each agent's prompt must carry:
    implementation; `make check` must pass before it declares itself done.
 4. Its dollar budget from the plan, and the ADR-0034 rule that exhausting
    it means stopping and handing off, never quietly continuing.
-5. **Open a PR and stop.** Do not merge. Do not approve. Do not apply
+5. The PR body follows the protocol's Pull request body section
+   (`../../docs/pipeline-protocol.md`), with item 2's `Closes #N` line
+   and the work-order id citation detector B reads kept first.
+6. **Open a PR and stop.** Do not merge. Do not approve. Do not apply
    `wo:merged`.
 
 Model per work order follows `factory.json`'s routing bands — mechanical
