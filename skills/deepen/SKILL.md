@@ -26,8 +26,8 @@ the last one, and its wins cannot be checked.
 
 Two inputs constrain everything you may propose:
 
-- **The domain glossary** — `CONTEXT.md` or whatever the repo uses. It
-  gives the good seams their names. A deepened module called
+- **The domain glossary** — `CONTEXT.md` or `GLOSSARY.md`, or whatever the
+  repo uses. It gives the good seams their names. A deepened module called
   `OrderIntakeHandler` in a codebase whose glossary says *Order* is a
   worse proposal than the same module called the Order intake module.
 - **The recorded decisions** — `docs/adr/`, design notes, the "why we did

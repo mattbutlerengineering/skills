@@ -59,7 +59,7 @@ before the rule.
 
 ## Milestone 5: Small borrowings and close-out
 
-- [ ] **WO-0088** Glossary under either name — size:S, blocked by: — (PRD-0007 §Success criteria)
+- [x] **WO-0088** Glossary under either name — size:S, blocked by: — (PRD-0007 §Success criteria)
   - Accept: `skills/audit/SKILL.md` (the orientation list line naming `CONTEXT.md`, line 30 today), `skills/deepen/SKILL.md` (the domain-glossary bullet, line 29 today) and `skills/automate/SKILL.md` (the Agent instructions row of step 1's surface table) each name `GLOSSARY.md` beside `CONTEXT.md` where they read a target repo's vocabulary; this repo's own `CONTEXT.md` is not renamed and no other file changes; `grep -l 'GLOSSARY.md' skills/audit/SKILL.md skills/deepen/SKILL.md skills/automate/SKILL.md` lists all three; the three `description:` lines are unchanged; `python3 lint.py` prints `lint: 0 problem(s)`.
 - [ ] **WO-0089** Worker base-and-tip rules in work-queue — size:S, blocked by: — (PRD-0007 §Success criteria)
   - Accept: `skills/work-queue/SKILL.md` step 4's "Each agent's prompt must carry" list carries two further worker rules: confirm the branch base is the default-branch tip before writing anything, and merge or rebase that tip into the branch before declaring done; both are checkable by grep (`default-branch tip` or equivalent wording appears twice in the brief, once per rule); the existing items (row scope, `Closes #N`, test-first and `make check`, budget, open-a-PR-and-stop) are unchanged in meaning; the skill's `description:` is unchanged; `python3 lint.py` prints `lint: 0 problem(s)`.

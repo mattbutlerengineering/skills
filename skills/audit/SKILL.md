@@ -27,8 +27,8 @@ up describing a different repo than the one it names.
 
 Then map the territory:
 
-- `README`, `CLAUDE.md`/`AGENTS.md`, `CONTEXT.md`, contributing notes, root
-  config, CI config, directory shape.
+- `README`, `CLAUDE.md`/`AGENTS.md`, `CONTEXT.md`/`GLOSSARY.md`, contributing
+  notes, root config, CI config, directory shape.
 - The **exact** build, test, lint, and gate commands. These go into every
   finding's reproduction, so guessing them poisons the whole round.
 - Conventions worth matching: error handling, naming, layout, where the

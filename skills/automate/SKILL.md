@@ -34,7 +34,7 @@ exists is the fastest way to be ignored:
 
 | Surface | Where |
 |---|---|
-| Agent instructions | `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `CONTEXT.md` |
+| Agent instructions | `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `CONTEXT.md`, `GLOSSARY.md` |
 | Hooks and settings | `.claude/settings.json`, `settings.local.json`, `~/.claude/settings.json` if the ask is about this user |
 | Subagents | `.claude/agents/*.md` |
 | Skills and plugins | `.claude/skills/`, `skills/`, `.claude-plugin/plugin.json`, `marketplace.json` |
