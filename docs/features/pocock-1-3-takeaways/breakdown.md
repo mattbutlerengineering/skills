@@ -54,7 +54,7 @@ before the rule.
 
 ## Milestone 4: The router's hand-off names the mechanism
 
-- [ ] **WO-0087** Reword next step 5 and record the hand-off decision — size:S, blocked by: — (PRD-0007 §Success criteria)
+- [x] **WO-0087** Reword next step 5 and record the hand-off decision — size:S, blocked by: — (PRD-0007 §Success criteria)
   - Accept: in `skills/next/SKILL.md` step 5 keeps its number and `**Hand off.**` label and its lead sentence becomes the architecture's neutral wording: "Load the matching stage skill through the harness's skill-loading mechanism (a skill tool where one exists, otherwise a read of the skill file) and follow it; naming the skill in prose does not load it."; the eleven list lines beneath it (`- <stage> → the `<stage>` skill`, capture through operate) are byte-identical to before (`git diff` touches only the lead line) so `lint.check_router`'s `HANDOFF_LINE` membership and order check is unchanged; `docs/pipeline-protocol.md`'s `## Harness neutrality` section records the decision as adopt-with-neutral-wording with its reason and what was checked: omp's `docs/skills.md` exposes skills to the model as on-demand content read via the `read` tool against `skill://` paths and its Skills vs custom tools section separates skill content from model-callable tool APIs, so omp has no skill tool and Pocock's literal "Call the Skill tool with X" fails one harness (ADR-0027), while the lesson (name the mechanism, not just the skill) survives as the neutral sentence, applying ADR-0027 rather than amending it (no new ADR); `evals/routing.json` is untouched; `python3 lint.py` prints `lint: 0 problem(s)` and `python3 gates.py` prints `gates: 0 problem(s)`.
 
 ## Milestone 5: Small borrowings and close-out

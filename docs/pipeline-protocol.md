@@ -296,3 +296,17 @@ This is not hypothetical: the skills run on two harnesses — Claude Code
 (primary) and oh-my-pi/omp (ADR-0027) — from a single neutral body. Each
 harness has its own packaging (`.claude-plugin/` manifests vs the root
 `package.json` `pi.skills` entry); the stage instructions know about neither.
+
+Operative hand-offs name the mechanism, never one harness's tool. The
+router's step 5 tells the agent to load the stage skill through the
+harness's skill-loading mechanism (a skill tool where one exists, otherwise
+a read of the skill file), because naming a skill in prose does not load
+it. The literal borrowing, "call the Skill tool with X" (mattpocock/skills),
+was checked against omp on 2026-10-06 and adopted with neutral wording
+instead: omp's `docs/skills.md` exposes skills to the model as on-demand
+content read via its `read` tool against `skill://` paths, and its "Skills
+vs custom tools" section separates skill content from model-callable tool
+APIs, so omp has no skill tool and the literal wording fails one of the two
+harnesses. The lesson (name the mechanism, not just the skill) survives as
+the neutral sentence. This applies ADR-0027 rather than amending it; no new
+ADR.
