@@ -25,7 +25,7 @@ before the rule.
 
 ## Milestone 1: Every skill description survives a strict YAML loader
 
-- [ ] **WO-0077** Reword the six colon descriptions — size:S, blocked by: — (PRD-0007 §Success criteria)
+- [x] **WO-0077** Reword the six colon descriptions — size:S, blocked by: — (PRD-0007 §Success criteria)
   - Accept: the `description:` of audit, automate, deepen, doctor, pipeline-board and work-queue each lose their single `: ` (a semicolon or full stop joins the two clauses instead) and no other skill's description changes; a read-only script over all twenty-five `skills/*/SKILL.md` reports no description containing `: ` or ` #`, none starting with a character from `-?:,[]{}#&*!|>'"%@` or a backtick, and each within 1024 characters; `git diff` of the six description lines read side by side shows every trigger phrase surviving; nothing under `evals/` changes; `python3 lint.py` prints `lint: 0 problem(s)`, `python3 gates.py` prints `gates: 0 problem(s)`, and `python3 -m unittest discover tests` prints `OK`.
 - [ ] **WO-0078** Pin the bare-scalar rule with tests — size:M, blocked by: — (PRD-0007 §Success criteria)
   - Accept: `tests/test_protocol_frontmatter.py` `TestSkillFrontmatterProblems` gains, through its `seed` helper and the public `skill_frontmatter_problems(root, slug)`, tests asserting the exact strings: a description holding `: ` yields `skills/<slug>/SKILL.md description is not a bare YAML scalar: contains ': '`; one holding ` #` yields `skills/<slug>/SKILL.md description is not a bare YAML scalar: contains ' #'`; one holding both yields both strings in that order; a double-quoted description yields `skills/<slug>/SKILL.md description is not a bare YAML scalar: starts with '"'` (the first character rendered with Python's `!r`), plus one further indicator case such as `[` or `|`; a missing description still yields only its existing string; the existing conformant fixture still yields none. Observed red: run against the tree before the rule exists, each new test fails and every other test passes (write the output to a file and grep `FAILED`); the rule's row turns the same file green without editing a test.
@@ -106,3 +106,14 @@ heading rather than restating it.
   work-queue step 4 brief, and two rows of Milestones 3 and 5 both edit
   automate's surface table; Implement works them in document order on one
   branch, so no merge edge is declared between them.
+- 2026-10-06: Implement's checked rows follow this repo's existing
+  owner-session ledger policy (`docs/features/process-dashboard/
+  breakdown.md`, 2026-08-13 note; reaffirmed 2026-09-21 and in
+  ADR-0069's Context): detector G reads a checked row as a merged
+  work order owed a `docs/factory/costs.jsonl` line, and this run's
+  rows are implemented interactively with no dispatched agent, so
+  each check-off appends one honest `$0` row via `budget_guard
+  record` (`run_id: session-<date>-wo-<n>`, the session's model,
+  `tokens: 0`, `cost: 0.0`, `outcome: owner-session:unmetered`).
+  Not in the rows' Accept text, which assumed `gates: 0 problem(s)`
+  followed from the edits alone; the ledger row is what makes it so.
