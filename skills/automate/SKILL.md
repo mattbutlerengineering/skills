@@ -41,6 +41,7 @@ exists is the fastest way to be ignored:
 | MCP servers | `.mcp.json`, `settings.json` `mcpServers` |
 | The real command set | `Makefile`, `package.json` scripts, `justfile`, CI workflow files |
 | Decisions already taken | `docs/adr/`, design notes, `CONTRIBUTING` |
+| Environment retrospectives | the `## Environment` section of every `docs/**/retro.md` — a mistake the run recorded, its evidence, its class (`mechanical` or `judgement`) and the carrier that would have caught it |
 
 An automation the repo already has is not a finding. An automation it has
 that is **inert** — installed and unable to fire — is one of the best
