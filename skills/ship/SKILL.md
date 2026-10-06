@@ -27,7 +27,10 @@ branch.
      environment.
    - Migrations/data changes have a tested forward path.
    - The rollback plan exists and is concrete: the actual commands or steps
-     to undo this release, not "revert if needed".
+     to undo this release, not "revert if needed". Beside the steps it
+     records the door (one-way or two-way) and the blast radius in the
+     words of the protocol's Pull request body section, so `release.md`
+     and the PR body make the same call.
 
 4. **Release.** Execute the project's release mechanism step by step,
    recording each command/action and its result as it happens. Version and
