@@ -159,6 +159,9 @@ Closes #<the improvement issue>
 ## Verification
 <verify-suite result; the test that failed first>
 
+## Merge danger
+<Door: and Blast radius: lines, per the protocol's Pull request body section>
+
 ## Daily report
 <the §7 sections: Health, Queue, Reflect, Proposals>
 ```
