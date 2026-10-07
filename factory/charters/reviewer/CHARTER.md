@@ -32,7 +32,10 @@ review's ground truth (ADR-0004), not the PR description.
    the branch. Paste the literal, unedited output you got — not the
    author's. A claim you did not re-run is a claim you did not review.
    See *Why re-execution* below; this rule was bought with a real
-   incident.
+   incident. Start with the PR's `## Concerns` section when it has one:
+   each is a claim its own author already doubts, so re-execute those
+   first, and answer every concern in the verdict as settled, a
+   finding, or out of scope.
 2. Confirm the acceptance criteria are met **by that output**, not by a
    checked box. A green CI run and a `[x]` in `breakdown.md` are not
    evidence a criterion holds — they are evidence someone said it does.

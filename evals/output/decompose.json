@@ -13,7 +13,8 @@
         "every success criterion in prd.md is covered by at least one item's acceptance criterion",
         "every work item is a markdown checkbox with an explicit acceptance criterion (no item lacks an Accept line)",
         "items are grouped into milestones and blocking edges between items are stated explicitly",
-        "the breakdown introduces no design decisions absent from architecture.md (no new components, storage choices, or delivery targets)"
+        "the breakdown introduces no design decisions absent from architecture.md (no new components, storage choices, or delivery targets)",
+        "no TEMPLATE.md slot survives in breakdown.md (no <...> placeholder text, TBD, or TODO), every Accept line states a checkable outcome rather than 'works correctly', and every Blocked by line names an item that exists in the breakdown, or is —"
       ]
     },
     {

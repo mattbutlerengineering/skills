@@ -20,9 +20,10 @@ Conventions match gates.py: functions return (value, problems) with
 config:-prefixed problem strings; a field the config does not cover is a
 problem, never a silent default.
 """
-import json
 import math
 from pathlib import Path
+
+from cli import read_file
 
 # The routing-band vocabulary (ADR-0034): the exact key set factory.json's
 # routing table must map. One home (ADR-0048) — gates' detector F and the
@@ -65,50 +66,19 @@ def load(root):
     shape as label_sync.load_labels."""
     root = Path(root)
     candidates = artifact_paths(root, "factory.json")
-    path = next((p for p, _ in candidates if p.is_file()), None)
-    if path is None:
-        homes = " or ".join(
-            p.relative_to(root).as_posix() for p, _ in candidates)
-        return None, [f"config: missing factory.json ({homes})"]
-    rel = path.relative_to(root).as_posix()
-    # Decode and parse are guarded separately because they fail
-    # separately: a file saved in another encoding raises
-    # UnicodeDecodeError before json.loads is ever reached, and that is
-    # not a JSONDecodeError. Same split, same phrasing as
-    # cost_ledger.load — a config this module cannot read is a problem
-    # string like any other, never a traceback out of detector F.
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as err:
-        return None, [f"config: cannot read {rel}: {err}"]
-    try:
-        config = json.loads(text)
-    except json.JSONDecodeError as err:
-        return None, [f"config: {rel} is not valid JSON: {err}"]
-    shape = object_problems(config)
-    if shape:
-        return None, [f"config: {rel} {problem}" for problem in shape]
-    return config, []
-
-
-def object_problems(config):
-    """Unlocated shape problem when a parsed factory config is not a JSON
-    object, else [].
-
-    A JSON document's top level is legally an array, string, number,
-    boolean or null, and json.loads returns each of them untouched — but
-    every accessor below subscripts the value, and so does every key-set
-    check in detector F. This is the one rule that says a config must be
-    an object, living where the rest of "what a valid config is" already
-    lives, so the runtime reader and the CI gate cannot disagree about
-    it.
-
-    Callers prefix their own label and location, the same split as
-    cost_ledger.line_problems: `load` reports it as
-    `config: <path> is not a JSON object`, detector F as
-    `F: <path> is not a JSON object`.
-    """
-    return [] if isinstance(config, dict) else ["is not a JSON object"]
+    # The first home that is there decides, broken or not: only absence
+    # moves on to the next. dict, because every accessor below subscripts
+    # the config — detector F asks read_file the same question, so the
+    # runtime reader and the CI gate cannot disagree about it (ADR-0075).
+    for path, _ in candidates:
+        config, problem = read_file(
+            path, path.relative_to(root).as_posix(), dict)
+        if problem:
+            return None, [f"config: {problem}"]
+        if config is not None:
+            return config, []
+    homes = " or ".join(p.relative_to(root).as_posix() for p, _ in candidates)
+    return None, [f"config: missing factory.json ({homes})"]
 
 
 def resolve_model(band, config):

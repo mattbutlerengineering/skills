@@ -44,7 +44,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from cli import CLI_FAILURES, gh_read, gh_runner, label_names
-from cli import report, runner
+from cli import read_file, report, runner
 import cost_ledger
 import cost_report
 import factory_config
@@ -315,13 +315,10 @@ def _corrections(root, problems):
     absence is normal, not an error — but a present line that cannot be
     accounted to a work order is a problem, never a silently smaller
     rework rate."""
-    path = root / CORRECTIONS
-    if not path.is_file():
-        return {}
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as err:
-        problems.append(f"dashboard: cannot read {CORRECTIONS}: {err}")
+    text, problem = read_file(root / CORRECTIONS, CORRECTIONS, str)
+    if problem:
+        problems.append(f"dashboard: {problem}")
+    if text is None:
         return {}
     counts = {}
     for lineno, line in enumerate(text.splitlines(), 1):
@@ -459,13 +456,10 @@ def _backlog(root, problems):
     seeds the page lists, or None on a repo without one — the backlog
     is advisory and optional (ADR-0029), so absent is normal, never a
     problem."""
-    path = root / BACKLOG
-    if not path.is_file():
-        return None
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as err:
-        problems.append(f"dashboard: cannot read {BACKLOG}: {err}")
+    text, problem = read_file(root / BACKLOG, BACKLOG, str)
+    if problem:
+        problems.append(f"dashboard: {problem}")
+    if text is None:
         return None
     return {"hash": backlog_hash(text),
             "seeds": [{"line": entry["line"], "text": entry["text"],
@@ -512,9 +506,12 @@ def respond(target, repos_fn, gather_fn):
     render past."""
     url = urlsplit(target)
     if url.path == "/":
+        # Hand-written rather than cli.read_file (ADR-0075): an absent
+        # page is an OSError message here, where read_file gives
+        # (None, None).
         try:
             return 200, PAGE.read_text(encoding="utf-8")
-        except OSError as err:
+        except (OSError, UnicodeDecodeError) as err:
             return 500, {"problems": [
                 f"dashboard: cannot read dashboard.html: {err}"]}
     if url.path == "/api/repos":
@@ -568,9 +565,12 @@ def respond_post(target, body, repos_fn):
             and 0 <= index < len(repos)):
         return 404, {"problems": ["dashboard: no such repo index"]}
     path = Path(repos[index]) / BACKLOG
+    # Hand-written rather than cli.read_file (ADR-0075): an absent
+    # backlog is an OSError message here, where read_file gives
+    # (None, None).
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as err:
+    except (OSError, UnicodeDecodeError) as err:
         return 500, {"problems": [
             f"dashboard: cannot read {BACKLOG}: {err}"]}
     new_text, reorder_problems = reorder_backlog(text, posted_hash,

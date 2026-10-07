@@ -8,6 +8,7 @@ test seeds the clean tree, breaks one aspect, and asserts the checker's
 exact problem strings through its public interface.
 """
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -224,6 +225,33 @@ class TestManifest(CheckerTreeTest):
                 problems += checker(self.root)
         self.assertEqual(problems, ["plugin.json is not a JSON object"])
 
+    def test_a_manifest_that_is_not_json_is_one_exact_problem(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "{not json", encoding="utf-8")
+        self.assertEqual(lint.check_manifest(self.root), [
+            "plugin.json is not valid JSON: Expecting property name"
+            " enclosed in double quotes: line 1 column 2 (char 1)"])
+
+    def test_an_empty_manifest_is_one_exact_problem(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "", encoding="utf-8")
+        self.assertEqual(lint.check_manifest(self.root), [
+            "plugin.json is not valid JSON: Expecting value: line 1 column 1"
+            " (char 0)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_manifest_the_process_may_not_read_is_a_problem(self):
+        # check_manifest is CHECKERS[0]: a PermissionError here hid every
+        # other finding in the repo behind a traceback
+        path = self.root / ".claude-plugin" / "plugin.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_manifest(self.root), [
+                "cannot read plugin.json: [Errno 13] Permission denied:"
+                f" '{path}'"])
+        finally:
+            path.chmod(0o644)
+
 
 class TestPiPackage(CheckerTreeTest):
     """The Pi (oh-my-pi) discovery manifest, guarded like the Claude one so
@@ -240,6 +268,25 @@ class TestPiPackage(CheckerTreeTest):
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "package.json is not valid JSON:"))
+
+    def test_an_empty_package_json_is_one_exact_problem(self):
+        (self.root / "package.json").write_text("", encoding="utf-8")
+        self.assertEqual(lint.check_pi_package(self.root), [
+            "package.json is not valid JSON: Expecting value: line 1 column 1"
+            " (char 0)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_package_json_the_process_may_not_read_is_a_problem(self):
+        """Guarded like check_manifest (ADR-0027) — and that has to
+        include the read itself, not only the parse."""
+        path = self.root / "package.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_pi_package(self.root), [
+                "cannot read package.json: [Errno 13] Permission denied:"
+                f" '{path}'"])
+        finally:
+            path.chmod(0o644)
 
 
     def test_a_package_that_is_not_an_object_names_its_shape(self):
@@ -850,6 +897,28 @@ class TestPluginSkills(CheckerTreeTest):
         self.assertEqual(lint.check_plugin_skills(self.root), [])
         self.assertEqual(len(lint.check_manifest(self.root)), 1)
 
+    def test_a_non_object_manifest_is_left_to_check_manifest(self):
+        path = self.root / ".claude-plugin" / "plugin.json"
+        for shape in ('["a"]', '"text"'):
+            with self.subTest(shape=shape):
+                path.write_text(shape, encoding="utf-8")
+                self.assertEqual(lint.check_plugin_skills(self.root), [])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_an_unreadable_manifest_is_left_to_check_manifest(self):
+        path = self.root / ".claude-plugin" / "plugin.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_plugin_skills(self.root), [])
+        finally:
+            path.chmod(0o644)
+
+    def test_a_manifest_that_is_not_utf8_is_left_to_check_manifest(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_bytes(
+            b"\xff\xfe")
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+        self.assertEqual(len(lint.check_manifest(self.root)), 1)
+
 
 class TestProtocolTables(CheckerTreeTest):
     """The protocol doc and protocol.py are both authorities on the walk
@@ -1247,6 +1316,45 @@ class TestOutputEvals(CheckerTreeTest):
         self.assertTrue(problems[0].startswith(
             "evals/output/idea.json is not valid JSON:"), problems)
 
+    def test_a_record_file_that_is_not_json_is_one_exact_problem(self):
+        (self.root / "evals" / "output" / "idea.json").write_text(
+            "{nope", encoding="utf-8")
+        self.assertEqual(lint.check_output_evals(self.root), [
+            "evals/output/idea.json is not valid JSON: Expecting property"
+            " name enclosed in double quotes: line 1 column 2 (char 1)"])
+
+    def test_a_null_record_file_is_not_a_json_object(self):
+        """A null record file reads eval_schema.validate_output's shape
+        wording: the one problem it gives any top level that is not a
+        JSON object."""
+        (self.root / "evals" / "output" / "idea.json").write_text(
+            "null", encoding="utf-8")
+        self.assertEqual(lint.check_output_evals(self.root),
+                         ["evals/output/idea.json is not a JSON object"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_record_file_the_process_may_not_read_is_a_problem(self):
+        """The glob only says the name is there. A file the walk may not
+        open is one problem for that file, never a PermissionError that
+        takes the rest of the walk — and lint's whole report — with it."""
+        path = self.root / "evals" / "output" / "idea.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_output_evals(self.root), [
+                "cannot read evals/output/idea.json: [Errno 13] Permission"
+                f" denied: '{path}'"])
+        finally:
+            path.chmod(0o644)
+
+    def test_a_directory_named_like_a_record_file_is_a_problem(self):
+        # the glob matches names, not kinds: a directory called prd.json
+        # is walked like a file and cannot be read as one
+        path = self.root / "evals" / "output" / "prd.json"
+        path.mkdir()
+        self.assertEqual(lint.check_output_evals(self.root), [
+            "cannot read evals/output/prd.json: [Errno 21] Is a directory:"
+            f" '{path}'"])
+
 
 class TestBacklog(CheckerTreeTest):
     """The seed backlog is strictly opt-in (ADR-0029): the clean tree has
@@ -1280,6 +1388,18 @@ class TestBacklog(CheckerTreeTest):
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "backlog: docs/backlog.md is unreadable:"))
+
+    def test_an_empty_backlog_yields_no_problems(self):
+        (self.root / "docs" / "backlog.md").write_text("", encoding="utf-8")
+        self.assertEqual(lint.check_backlog(self.root), [])
+
+    def test_a_backlog_that_is_not_utf8_yields_one_problem_string(self):
+        """The backlog is text, so bytes that will not decode are a read
+        failure — this checker's own phrase for one is "is unreadable"."""
+        (self.root / "docs" / "backlog.md").write_bytes(b"\xff\xfe")
+        self.assertEqual(lint.check_backlog(self.root), [
+            "backlog: docs/backlog.md is unreadable: 'utf-8' codec can't"
+            " decode byte 0xff in position 0: invalid start byte"])
 
 
 class TestLedger(CheckerTreeTest):

@@ -24,6 +24,11 @@ on:
         description: claude CLI version to install (pinned default)
         required: false
         default: "2.1.221"
+      control:
+        description: Also replay each case with its Must never section removed (doubles the cost)
+        type: boolean
+        required: false
+        default: false
 
 # Checkout + artifact upload is all this job does with the token; a replay
 # case — a real agent run — must never hold ambient write authority.
@@ -49,9 +54,11 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MODEL: ${{ inputs.model }}
           ONLY: ${{ inputs.only }}
+          CONTROL: ${{ inputs.control }}
         run: |
           args=(--model "$MODEL" --record)
           if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+          if [ "$CONTROL" = "true" ]; then args+=(--control); fi
           python3 charter_replay.py "${args[@]}"
       - name: Upload the replay snapshot
         if: always()

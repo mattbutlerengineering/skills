@@ -15,6 +15,13 @@ date: YYYY-MM-DD
 
 ## Rollback plan
 
+Door: <one-way or two-way> — <why>
+
+Blast radius: <what breaks if the call is wrong>
+
+(the same call the PR body makes under the protocol's Pull request body
+section)
+
 ```
 <the actual commands/steps to undo this release>
 ```

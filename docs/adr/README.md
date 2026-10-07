@@ -95,3 +95,4 @@ the canonical vocabulary.
 | [0072](0072-prd-coverage-check.md) | Bidirectional PRD-requirement <-> work-item coverage check | accepted |
 | [0073](0073-standards-index-seam-and-detector-letters-k-m.md) | Standards index as a seam module; detector letters K and M | accepted |
 | [0074](0074-a-gate-stay-ends-at-its-pass-label.md) | A gate stay ends at its pass label | accepted |
+| [0075](0075-the-guarded-file-read-joins-the-cli-seam.md) | The guarded local-file read joins the cli seam | provisional |

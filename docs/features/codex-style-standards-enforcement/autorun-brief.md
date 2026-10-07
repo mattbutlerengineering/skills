@@ -135,3 +135,29 @@ problem statement context and cited, never re-typed as if original.
   artifact, not only before.
 - No `wo:*` label, no tracker mirror issue, no `docs/adr/**` file, no
   merge — this run's only output is the four artifacts plus this brief.
+
+## Resume — 2026-09-28 (Verify → Review → Ship)
+
+Resumed by `/idea-to-prod:autorun` invoked with no arguments and no live
+interviewer. Gaps the original brief leaves for these stages, and how
+each was closed:
+
+- **Which run.** Run discovery found many active runs, so the protocol
+  says to ask. No one was available to ask. This run was chosen because
+  it is the only active run with an autorun brief whose next stage needs
+  no human action. Every breakdown row is checked (WO-0064 closed by the
+  owner's 2026-09-28 deferral). `first-live-dispatch`'s open failure
+  needs a human to apply gate labels. `factory-evolution-v1` has no
+  brief and its open rows need live routine triggers. Every shipped
+  maintenance run waits only on Operate, which autorun does not drive.
+- **Stages covered.** Verify, Review, Ship. Operate is out of scope
+  because no post-release feedback exists yet.
+- **Release authorization: none.** The original brief forbade merges
+  and says nothing about releasing. Ship therefore prepares and stops.
+  No merge, tag, push, deploy, or published plugin version bump.
+- **Tracker.** The original brief skipped the mirror. No tracker
+  interaction in this resume either (WO-0064's issue #518 is read-only
+  context).
+- **Where the work lives.** Worktree branch
+  `docs/standards-448-verify-review-ship` off `origin/main` at 6742c9f.
+  Nothing is committed or pushed (the repo's conservative git profile).

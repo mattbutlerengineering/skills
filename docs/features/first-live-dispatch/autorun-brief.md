@@ -187,3 +187,22 @@ and this run's authorization is still prepare-and-stop — no merge. This
 change goes up as a PR (same shape as PR #489) for the operator to review
 and merge; once merged, the next resume authors WO-0073's mirror issue and
 the run continues toward WO-0040's gate walk on WO-0074.
+
+## Resumed 2026-10-02 — Review and Ship (prepare-and-stop)
+
+Autorun invoked with no arguments. Run discovery found three pre-ship
+runs on `main`, so the protocol's ask rule applied; the operator chose
+this run. Orientation at resume: all 13 breakdown rows checked;
+`verification.md` exists (9 PASS, 1 FAIL after the 2026-09-28
+re-verification). Next stage is Review, then Ship.
+
+- **Release authorization: unchanged, prepare-and-stop.** No merge,
+  tag, push of a release, deploy, or label applied by this pass.
+- **The open failure is carried, not fixed.** Criterion 2 (gate labels
+  applied by the owner's own hand) is a proof obligation only the owner
+  can discharge on a future dispatch. Review and Ship record it as open;
+  no Implement work exists for it and none is dispatched.
+- **Tracker: read-only.** No issue is created, labelled, or closed.
+- **Where the work lives.** Worktree branch
+  `docs/first-live-dispatch-review-ship` off `origin/main` at 661ffc7.
+  Artifacts go up as a PR for the operator, as every earlier resume did.

@@ -33,7 +33,10 @@ the correct stage skill. This skill never produces an artifact itself.
    what exists, what's next, and why. Example: "Feature run `dark-mode`: PRD
    exists and declares a UI surface, no `ux.md` — next stage is UX Design."
 
-5. **Hand off.** Invoke the matching stage skill and follow it:
+5. **Hand off.** Load the matching stage skill through the harness's
+   skill-loading mechanism (a skill tool where one exists, otherwise a read
+   of the skill file) and follow it; naming the skill in prose does not
+   load it.
    - capture → the `capture` skill (maintenance runs only)
    - idea → the `idea` skill
    - prd → the `prd` skill

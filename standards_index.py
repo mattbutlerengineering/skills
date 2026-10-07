@@ -62,7 +62,7 @@ import re
 import sys
 from pathlib import Path
 
-from cli import report
+from cli import read_file, report
 from knowledge_plane import repo_root
 
 STANDARDS_PATH = "docs/standards.json"
@@ -245,19 +245,12 @@ def foreign_entries(root):
     array, is a problem: `update` must refuse to overwrite a committed
     file it cannot make sense of half of, the same fail-closed direction
     cost_ledger.load takes on an unreadable ledger."""
-    path = Path(root) / STANDARDS_PATH
-    if not path.is_file():
+    existing, problem = read_file(Path(root) / STANDARDS_PATH,
+                                  STANDARDS_PATH, list)
+    if problem:
+        return [], [problem]
+    if existing is None:
         return [], []
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as err:
-        return [], [f"cannot read {STANDARDS_PATH}: {err}"]
-    try:
-        existing = json.loads(text)
-    except json.JSONDecodeError as err:
-        return [], [f"{STANDARDS_PATH} is not valid JSON: {err}"]
-    if not isinstance(existing, list):
-        return [], [f"{STANDARDS_PATH} is not a JSON array"]
     return [entry for entry in existing
             if isinstance(entry, dict)
             and isinstance(entry.get("source"), str)

@@ -9,6 +9,7 @@ append_ledger_line) and test_cost_report (read, against
 cost_report.read_ledger) — one grammar, one home, one test file.
 """
 import json
+import os
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -303,6 +304,23 @@ class TestParse(unittest.TestCase):
         self.assertTrue(problems[0].startswith("is not valid JSON:"),
                         problems)
 
+    def test_a_line_nested_past_the_recursion_limit_is_the_same_suffix(self):
+        """json.loads refuses this line with RecursionError, not
+        JSONDecodeError: it is the same unlocated suffix, pinned by its
+        prefix because the interpreter's words differ by version. The
+        walk goes on, so the row after it still parses."""
+        record = entry("WO-0001", "r-1", "m", 100, 1.5, "merged",
+                       "2026-08-02")
+        nested = "[" * 1_000_000 + "]" * 1_000_000
+        parsed = cost_ledger.parse(
+            nested + "\n" + json.dumps(record) + "\n")
+        self.assertEqual(len(parsed), 2)
+        lineno, refused, problems = parsed[0]
+        self.assertEqual((lineno, refused, len(problems)), (1, None, 1))
+        self.assertTrue(problems[0].startswith("is not valid JSON: "),
+                        problems)
+        self.assertEqual(parsed[1], (2, record, []))
+
     def test_a_non_object_line_is_an_unlocated_suffix(self):
         self.assertEqual(cost_ledger.parse("[1, 2, 3]\n"),
                          [(1, None, ["is not a JSON object"])])
@@ -358,6 +376,18 @@ class TestLoad(unittest.TestCase):
             self.assertTrue(problems[0].startswith(
                 "G: cannot read docs/factory/costs.jsonl:"), problems)
 
+    def test_a_ledger_that_is_not_utf8_is_the_callers_problem_string(self):
+        """The ledger is text, not one JSON document, so bytes that will
+        not decode are a read failure (ADR-0075's wording rule) — and a
+        problem string like the OSError beside it, never a traceback out
+        of every reader built on this one."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "").write_bytes(b"\xff\xfe\x00")
+            self.assertEqual(cost_ledger.load(tmp, "G"), (None, [
+                "G: cannot read docs/factory/costs.jsonl: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"]))
+
     def test_an_injected_ledger_path_overrides_the_repo_default(self):
         with tempfile.TemporaryDirectory() as tmp:
             custom = Path(tmp) / "custom.jsonl"
@@ -379,6 +409,35 @@ class TestRead(unittest.TestCase):
     def test_a_missing_ledger_is_empty_not_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(cost_ledger.read(tmp), ([], []))
+
+    def test_an_empty_ledger_is_empty_not_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "")
+            self.assertEqual(cost_ledger.read(tmp), ([], []))
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_ledger_the_process_may_not_read_is_a_ledger_problem(self):
+        # read() reports the file-level failure under its own label and
+        # returns no entries — the fail-closed half its callers act on
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "")
+            path = Path(tmp) / cost_ledger.COST_LEDGER
+            path.chmod(0)
+            try:
+                self.assertEqual(cost_ledger.read(tmp), ([], [
+                    "ledger: cannot read docs/factory/costs.jsonl: [Errno"
+                    f" 13] Permission denied: '{path}'"]))
+            finally:
+                path.chmod(0o644)
+
+    def test_a_ledger_that_is_not_utf8_is_a_ledger_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, "")
+            (Path(tmp) / cost_ledger.COST_LEDGER).write_bytes(b"\xff\xfe\x00")
+            self.assertEqual(cost_ledger.read(tmp), ([], [
+                "ledger: cannot read docs/factory/costs.jsonl: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"]))
 
     def test_reads_well_formed_lines(self):
         with tempfile.TemporaryDirectory() as tmp:
