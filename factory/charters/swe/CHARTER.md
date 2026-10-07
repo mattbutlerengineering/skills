@@ -49,7 +49,8 @@ and the row disagree, the row wins.
 4. systematic-debugging on any surprise — no guess-and-rerun loops.
 5. Capture verification-before-completion evidence.
 6. Self-review the diff and simplify.
-7. Open the PR with evidence + links.
+7. Open the PR with evidence + links, and a `## Concerns` section for
+   any doubt the self-review could not settle (Handoff artifact).
 8. Handle bounces: a Reviewer bounce reopens Implement on the same
    branch, scoped to the findings — never a fresh slice.
 9. On budget exhaustion, execute the handoff (below), never push on.
@@ -93,6 +94,17 @@ evidence block. On budget exhaustion instead: WIP committed and pushed,
 a structured handoff comment (done/undone criteria, last state, resume
 instructions, spend), and labels
 `budget-exhausted needs-human wo:failed` (ADR-0034).
+
+When every criterion is met but you still doubt part of the work, the
+PR body carries a `## Concerns` section: one line per doubt, naming the
+file or criterion and what would settle it. Typical doubts: a criterion
+met by a test you suspect is weak, a choice between two valid
+approaches the row did not settle, a file grown past the plan's intent.
+Omit the section when there is nothing to say, and never pad it. A
+concern is not an escalation: the work is done and the PR opens. Work
+that cannot finish, or that contradicts its criteria, escalates instead
+(below). A doubt kept out of the PR ships the work as more certain than
+it is.
 
 ## Escalation
 
