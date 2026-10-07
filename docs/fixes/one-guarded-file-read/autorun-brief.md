@@ -714,3 +714,14 @@ A record of what happened, for a later resume. It adds no decision.
   wider parse guard for `dashboard._corrections` and the hand-written
   JSON readers, `AGENTS.md`'s older seam bullet, and the
   `trigger_eval.print_metrics` shape cells.
+
+## Operator's words, 2026-10-07
+
+Recorded per `release.md` step 1. The operator set a session goal,
+`/goal complete any remaining planned work`, and when asked directly
+"Authorize the one-guarded-file-read release?" with the three decisions
+spelled out, chose **"Yes, defaults + draft PR"**: option (a) on the
+`object` kind, the ledger-parser fix as landed, and Path A for N4 (merge,
+then fix the planner's partial-ledger pricing as a follow-up run). The
+same answer authorized the push, the plain tracking issue and the draft
+pull request. The merge stays with the operator (ADR-0036 clause 3).
