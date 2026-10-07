@@ -1,8 +1,4 @@
-# Golden fixture work order — WO-9002
-
-Fixture, not a real work order: the ids are fictional (9000-block) and no
-tracker issue exists for them. Dispatched to the `swe` charter by the
-charter regression suite.
+# Work order WO-9002
 
 ## The order
 

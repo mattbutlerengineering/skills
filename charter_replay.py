@@ -47,8 +47,10 @@ import argparse
 import datetime
 import hashlib
 import json
+import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -117,6 +119,34 @@ def _expectation_problems(case, expectation, label):
     )
 
 
+def read_git_layout(fixture_dir):
+    """The fixture's git.json as {branch, message}, {} when absent, or
+    None when present but unusable."""
+    path = fixture_dir / "git.json"
+    if not path.is_file():
+        return {}
+    try:
+        layout = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    if (not isinstance(layout, dict)
+            or not all(isinstance(layout.get(k), str) and layout[k]
+                       for k in ("branch", "message"))):
+        return None
+    return layout
+
+
+def _git_layout_problems(fixture_dir, where):
+    layout = read_git_layout(fixture_dir)
+    if layout is None:
+        return [f"{where} git.json is not an object with a branch and a"
+                " message"]
+    if layout and not (fixture_dir / "branch").is_dir():
+        return [f"{where} git.json names branch {layout['branch']!r} but the"
+                " fixture has no branch/ overlay"]
+    return []
+
+
 def _case_problems(case, root, label):
     """Problems for one case dict; [] means usable."""
     case_id = case.get("id")
@@ -131,6 +161,8 @@ def _case_problems(case, root, label):
         problems.append(f"{where} fixture {fixture!r} has no work-order.md")
     if not case.get("trap"):
         problems.append(f"{where} names no trap")
+    if fixture:
+        problems += _git_layout_problems(root / fixture, where)
 
     expectations = case.get("expectations")
     if not isinstance(expectations, list) or not expectations:
@@ -507,12 +539,68 @@ def build_prompt(charter, work_order):
     return PROMPT.format(charter=charter.strip(), work_order=work_order.strip())
 
 
+# The scratch repo's remote. A reserved .example host (RFC 2606) never
+# resolves, and it is not a GitHub remote, so a fetch fails and `gh` finds
+# no repository: "pushed" is true locally and nothing leaves the machine.
+SCRATCH_REMOTE = "git@git.internal.example:factory/service.git"
+SCRATCH_IDENTITY = {
+    "GIT_AUTHOR_NAME": "Factory Bot",
+    "GIT_AUTHOR_EMAIL": "bot@git.internal.example",
+    "GIT_COMMITTER_NAME": "Factory Bot",
+    "GIT_COMMITTER_EMAIL": "bot@git.internal.example",
+    "GIT_AUTHOR_DATE": "2026-09-01T09:00:00Z",
+    "GIT_COMMITTER_DATE": "2026-09-01T09:00:00Z",
+}
+
+
+def _git(cwd, *args):
+    # No template, no hooks, no signing: the operator's git config must
+    # not shape the repo the model is handed.
+    subprocess.run(["git", "-c", "commit.gpgsign=false",
+                    "-c", "core.hooksPath=/dev/null", *args],
+                   cwd=cwd, check=True, capture_output=True,
+                   env={**os.environ, **SCRATCH_IDENTITY})
+
+
+def _commit_and_track(scratch, branch, message):
+    """Commit the tree on `branch` and mark it pushed to origin."""
+    _git(scratch, "add", "-A")
+    _git(scratch, "commit", "--quiet", "--allow-empty", "-m", message)
+    _git(scratch, "update-ref", f"refs/remotes/origin/{branch}", "HEAD")
+    _git(scratch, "branch", "--quiet", f"--set-upstream-to=origin/{branch}")
+
+
+def seed_git(scratch, fixture_dir):
+    """Make the scratch a repo whose state matches the work order's story:
+    repo/ committed on main, and, when git.json names a branch, branch/
+    committed on top of it and checked out. Both are marked pushed."""
+    _git(scratch, "init", "--quiet", "--template=", "-b", "main")
+    _git(scratch, "remote", "add", "origin", SCRATCH_REMOTE)
+    _commit_and_track(scratch, "main", "Initial import")
+    layout = read_git_layout(fixture_dir)
+    if layout:
+        _git(scratch, "checkout", "--quiet", "-b", layout["branch"])
+        shutil.copytree(fixture_dir / "branch", scratch, dirs_exist_ok=True)
+        _commit_and_track(scratch, layout["branch"], layout["message"])
+
+
 def build_scratch(root, case):
-    """A throwaway repo for one replay: the fixture's optional repo/ seed."""
+    """A throwaway working directory for one replay.
+
+    With a repo/ seed it is a git repo matching the work order's story
+    (seed_git); without one it stays empty. A failed setup removes the
+    directory before the error propagates, so nothing is left behind."""
     scratch = Path(tempfile.mkdtemp(prefix="charter-replay-"))
-    seed = root / case["fixture"] / "repo"
-    if seed.is_dir():
+    fixture_dir = root / case["fixture"]
+    seed = fixture_dir / "repo"
+    if not seed.is_dir():
+        return scratch
+    try:
         shutil.copytree(seed, scratch, dirs_exist_ok=True)
+        seed_git(scratch, fixture_dir)
+    except (OSError, subprocess.CalledProcessError):
+        shutil.rmtree(scratch, ignore_errors=True)
+        raise
     return scratch
 
 
@@ -534,7 +622,11 @@ def claude_runner(root, model, timeout, charter=charter_text):
     adapter = HARNESSES["claude"]
 
     def run(case):
-        scratch = build_scratch(root, case)
+        try:
+            scratch = build_scratch(root, case)
+        except (OSError, subprocess.CalledProcessError) as err:
+            return {"tool_calls": [], "text": "",
+                    "error": f"scratch setup failed: {err}"}
         prompt = build_prompt(
             charter(root, case["role"]),
             (root / case["fixture"] / "work-order.md").read_text(
