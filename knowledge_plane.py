@@ -190,6 +190,34 @@ def row_blockers(line):
     return WO_TOKEN.findall(match.group(1)) if match else []
 
 
+# What a blocked-by clause may hold besides WO tokens: separators, and a
+# lone dash, the written form of "nothing".
+_BLOCKER_SEPARATORS = re.compile(r"[\s,;&]+|\band\b")
+_NOTHING = ("", "—", "–", "-")
+
+
+def row_unreadable_blockers(line):
+    """What the row's `blocked by:` clause says that names no work order,
+    or None when every part of it reads.
+
+    row_blockers reads WO tokens only, so a clause naming a title
+    ("blocked by: Export API") or a mistyped id ("WO-001") reads as no
+    blockers at all, and a planner would dispatch the row before its
+    dependency. A caller asks this first and refuses to guess (beads
+    wo-o3l). The WO tokens a mixed clause does name still count.
+    """
+    if not ROW.match(line):
+        return None
+    match = BLOCKED_BY.search(line)
+    if not match:
+        return None
+    rest = WO_TOKEN.sub(" ", match.group(1)).strip()
+    if rest in _NOTHING:
+        return None
+    residue = " ".join(_BLOCKER_SEPARATORS.sub(" ", rest).split())
+    return residue or None
+
+
 def row_done(line):
     """Whether a breakdown row is checked off.
 
