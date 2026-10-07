@@ -530,9 +530,16 @@ and none follows.
   two earlier outcome sections were each added by the orchestrator, in the
   commit that added that preparation of this file.
 
-## Release steps (prepared, NOT EXECUTED)
+## Release steps (prepared; 1–7 executed 2026-10-07)
 
-Run from the worktree root, in order. None of these was run.
+Run from the worktree root, in order. Steps 1–7 ran on 2026-10-07 after
+the operator, asked directly, chose "Yes, defaults + draft PR" (the
+words are in `autorun-brief.md`): option (a), the ledger-parser fix and
+Path A for N4 confirmed; branch pushed; tracking issue #612; draft pull
+request #613; checks green on the pull-request event (`check`, `review`,
+`needs-review-label` pass, `merged-label` skipped). Step 8, the human
+gate merge, and the post-release checks remain with the operator. The
+step text below is kept as written.
 
 1. **NOT EXECUTED. The operator confirms option (a).** The first review
    left one major open and gave three options:
