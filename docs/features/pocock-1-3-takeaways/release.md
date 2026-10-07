@@ -179,9 +179,13 @@ claude plugin update idea-to-prod@skills     # or: claude plugin uninstall idea-
 
 ## Release log
 
-Nothing below has run. Each step is the exact command for the operator,
-in order, with the result expected when it does run. Precondition: this
-artifact is committed on the branch before step 1, so the PR carries it.
+Steps 1–3 ran on 2026-10-07 under the owner's later `/goal` instruction
+(not under the autorun brief, which authorized prepare-and-stop only):
+the branch is pushed, the audit anchor is #610, and the draft PR is #611.
+Step 4 (merge, ADR-0033 gate 3) and step 5 remain with the operator.
+Each step below is the exact command, in order, with the result expected
+when it runs. Precondition: this artifact is committed on the branch
+before step 1, so the PR carries it.
 
 1. `git push -u origin feat/pocock-1-3-takeaways` → the branch appears on
    the remote and its upstream becomes `origin/feat/pocock-1-3-takeaways`
