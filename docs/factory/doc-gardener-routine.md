@@ -180,6 +180,11 @@ by the human.
 
 ## Trigger
 
+**2026-09-29: deferred by owner decision** while the
+[queue groomer](queue-groomer-routine.md)'s trigger pilots, so one weekly
+run bounds the new spend while its journal shows real cost. The deferral
+is not an approval: nothing authorizes creating this trigger.
+
 **Not yet created.** A scheduled trigger is recurring paid spend, and
 creating one awaits the owner's explicit approval. Nothing in this file
 authorizes creating it, and no agent or routine creates it on the

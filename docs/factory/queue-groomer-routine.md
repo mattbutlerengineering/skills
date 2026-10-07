@@ -182,17 +182,21 @@ by the human.
 
 ## Trigger
 
-**Not yet created.** A scheduled trigger is recurring paid spend, and
-creating one awaits the owner's explicit approval. Nothing in this file
-authorizes creating it, and no agent or routine creates it on the
-strength of this file. When the owner approves, the trigger takes
-ADR-0044's shape:
+**Created 2026-09-29.** A scheduled trigger is recurring paid spend, and
+the owner explicitly approved this one on 2026-09-29, as the pilot for
+the roster routines. Nothing in this file authorizes creating, editing
+or running a trigger, and no agent or routine does so on the strength of
+this file. The trigger takes ADR-0044's shape:
 
 - **Name:** `factory-weekly-queue-groomer`.
-- **Cadence:** weekly — proposed Wednesday 13:17 UTC (`17 13 * * 3`),
-  off the daily routine's slot and the other roster routines' days.
-- **Model:** Sonnet.
-- **Connectors:** none — no MCP connectors; `gh` and `git` only.
+- **Trigger id:** `trig_01W5PgiQb4G2qwMXnNVFtACx`, created 2026-09-29
+  04:11 UTC. First run 2026-09-30 13:17 UTC.
+- **Cadence:** weekly — Wednesday 13:17 UTC (`17 13 * * 3`), off the
+  daily routine's slot and the other roster routines' days.
+- **Model:** Sonnet (`claude-sonnet-5-5`).
+- **Connectors:** none — no MCP connectors; `gh` and `git` only. The
+  create call attaches every account connector by default; they were
+  cleared at 04:11:48 UTC, before any run.
 - **Prompt:** a thin pointer to this file, plus duplicated hard limits
   as defense in depth: one PR, never merge, never relabel a work order,
   no self-edit. A change to any of those updates prompt and playbook
@@ -200,5 +204,3 @@ ADR-0044's shape:
 - **Reporting:** the marker-found journal issue in §6.
 - **Spend:** reported in the journal; excluded from the cost ledger
   exactly as ADR-0044 decided.
-
-Once it exists, a human PR records its trigger id in this section.

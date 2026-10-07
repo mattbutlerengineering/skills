@@ -5,6 +5,10 @@ date: 2026-09-21
 assumptions:
   - "No tracker mirror issues created for any row below (ADR-0032's one-way rule and the planner charter both presume the blueprint already passed the human blueprint gate; this run's architecture.md has not). See Notes."
   - "WO ids continue the repo-global sequence, starting at order 65 — the highest claimed id found across every docs/features/*/breakdown.md at the time this run started was order 64 (docs/features/codex-style-standards-enforcement/breakdown.md)."
+  - "2026-09-29, Implement (autorun) — each of orders 69-72 checked on this date gets one zero-cost owner-session ledger row in docs/factory/costs.jsonl (model claude-fable-5-1, tokens 0, cost 0.0), the same shape as order 65's 2026-09-28 row. The brief is silent; detector G fails a checked row with no ledger line, and the owner-session ledger policy covers it."
+  - "2026-09-29, Implement (autorun) — order 70 is checked on the orchestrating session's record of the trigger (autorun-brief.md, Trigger record). This Implement pass may not list, create or run triggers, so it did not observe the trigger itself."
+  - "2026-09-29, Implement (autorun) — orders 69 and 71 are deferred with a docs/backlog.md revisit seed, the same as order 65; the orchestrator added the seed after the Implement pass, and each routine doc also carries a dated Trigger line."
+  - "2026-09-29, Implement (autorun) — order 72 is checked on its battery half. Its epic #439 Destination re-check is treated as riding with the PRD-0006 re-walk, which the row itself assigns to Verify's verification.md; the brief names only the re-walk as Verify's, so this is logged rather than confirmed."
 ---
 
 # Breakdown: Factory evolution backlog seed
@@ -32,16 +36,16 @@ detector A checks.
 
 ## Milestone C: Routine roster v2 (design + land the protocol doc + trigger only — issue #438's own scope bound; no new ADR, per architecture.md's Decisions)
 
-- [ ] **WO-0069** design and land the weekly retro/reflect-deepening routine's protocol doc + ADR-0044-style trigger — size:M, blocked by: — (PRD-0006 §Success criteria)
+- [x] **WO-0069** design and land the weekly retro/reflect-deepening routine's protocol doc + ADR-0044-style trigger — size:M, blocked by: — (PRD-0006 §Success criteria)
   - Accept: `docs/factory/retro-reflect-routine.md` exists, shaped like `docs/factory/improvement-routine.md` (preconditions/degrade ladder, orient, one bounded action per run, report-and-journal, non-negotiables, amendment-by-PR) but scoped to this routine's own mission — a deeper weekly pass over the correction stream than the daily routine's own §6 Reflect step already does, per issue #437's roster decision; a weekly-cadence Sonnet trigger exists with no MCP connectors, reporting to the same pinned journal issue pattern, cost-ledger-excluded exactly as ADR-0044 already decided for the daily routine. This row does not author the full ~12-section protocol content beyond what "design and land" requires to actually run once — per issue #438's explicit deferral of full protocol rigor to this future run itself.
-- [ ] **WO-0070** design and land the queue-groomer routine's protocol doc + ADR-0044-style trigger — size:M, blocked by: — (PRD-0006 §Success criteria)
+- [x] **WO-0070** design and land the queue-groomer routine's protocol doc + ADR-0044-style trigger — size:M, blocked by: — (PRD-0006 §Success criteria)
   - Accept: `docs/factory/queue-groomer-routine.md` exists, same shape as its sibling row above, scoped to grooming the ready queue (stale/blocked `wo:*`-labeled issues, `docs/backlog.md` seed hygiene) rather than reflect-loop mining; same weekly-cadence, Sonnet, no-MCP-connectors, cost-ledger-excluded trigger shape as ADR-0044's daily routine.
-- [ ] **WO-0071** design and land the doc-gardener routine's protocol doc + ADR-0044-style trigger — size:M, blocked by: — (PRD-0006 §Success criteria)
+- [x] **WO-0071** design and land the doc-gardener routine's protocol doc + ADR-0044-style trigger — size:M, blocked by: — (PRD-0006 §Success criteria)
   - Accept: `docs/factory/doc-gardener-routine.md` exists, same shape as its two sibling rows above, scoped to documentation hygiene (stale cross-references, drifted `docs/adr/README.md`-style indexes outside what `gates.py`'s own detectors already gate, LEDGER.md upkeep) rather than reflect-loop mining or queue grooming; same weekly-cadence, Sonnet, no-MCP-connectors, cost-ledger-excluded trigger shape.
 
 ## Milestone D: Close-out
 
-- [ ] **WO-0072** full battery green across every item above, PRD-0006 traceability re-check — size:S, blocked by: WO-0065, WO-0066, WO-0067, WO-0068, WO-0069, WO-0070, WO-0071 (PRD-0006 §Success criteria)
+- [x] **WO-0072** full battery green across every item above, PRD-0006 traceability re-check — size:S, blocked by: WO-0065, WO-0066, WO-0067, WO-0068, WO-0069, WO-0070, WO-0071 (PRD-0006 §Success criteria)
   - Accept: `python3 -m unittest discover tests`, `python3 lint.py`, and `python3 gates.py && python3 gates.py --selftest` are all green with every prior row's changes present; PRD-0006's success criteria are re-walked one by one against what actually landed (Verify's job, scaled to this feature — the run's own `verification.md`, when this feature run continues past this breakdown); epic #439's map Destination ("Done when nothing is left to decide before building starts") is re-checked against the state of all seven items.
 
 ## Design gaps found
@@ -132,3 +136,46 @@ not to cover an unmapped component.
   The revisit is seeded in `docs/backlog.md`. WO-0072 (PRD-0006 §Success
   criteria) now waits only on the trigger halves of the three roster
   routine rows (PRD-0006 §Success criteria), orders 69-71.
+- 2026-09-29: **WO-0070 (PRD-0006 §Success criteria) checked: the queue
+  groomer's trigger exists.** The owner explicitly approved this one
+  recurring spend as the roster's pilot, and the orchestrating session
+  created `factory-weekly-queue-groomer` as `trig_01W5PgiQb4G2qwMXnNVFtACx`
+  at 2026-09-29 04:11 UTC: cron `17 13 * * 3` (Wednesdays 13:17 UTC),
+  model `claude-sonnet-5-5`, no MCP connectors, first run 2026-09-30
+  13:17 UTC. The create call attached every account connector by
+  default; they were cleared at 04:11:48 UTC, before any run. The
+  evidence is the orchestrator's record in `autorun-brief.md` §Trigger
+  record: this Implement pass may not list triggers and did not observe
+  it. `docs/factory/queue-groomer-routine.md` §Trigger now records it.
+  Its spend is reported in the journal and excluded from the cost
+  ledger (ADR-0044). Ledger: one `owner-session:unmetered` row for this
+  session's work, `cost: 0.0`.
+- 2026-09-29: **WO-0069 and WO-0071 (PRD-0006 §Success criteria) checked
+  as deferred by owner decision.** The owner chose to pilot one roster
+  trigger first, the queue groomer's, so one weekly run bounds the new
+  spend while its journal shows real cost; the retro/reflect and
+  doc-gardener triggers follow with one command each once it does. Their
+  protocol-doc halves landed on 2026-09-23 (see that note). No trigger
+  was created for either, and each doc's §Trigger
+  (`docs/factory/retro-reflect-routine.md`,
+  `docs/factory/doc-gardener-routine.md`) now opens with a dated line
+  saying the trigger is deferred by owner decision and that nothing
+  authorizes creating it. No `docs/backlog.md` seed was added; the
+  revisit lives in those two lines. Ledger: one `owner-session:unmetered`
+  row each, `cost: 0.0`. WO-0072 (PRD-0006 §Success criteria), the
+  close-out, is now unblocked.
+- 2026-09-29: **WO-0072 (PRD-0006 §Success criteria) checked on its
+  battery half.** Run from this run's worktree with every prior row's
+  changes present (orders 65-71 checked, the three routine docs and the
+  ledger rows on disk), each command's last lines:
+  `python3 -m unittest discover tests` → `Ran 1793 tests in 20.318s` /
+  `OK`; `python3 lint.py` → `lint: 0 problem(s) across 25 skills`;
+  `python3 gates.py && python3 gates.py --selftest` →
+  `gates: 0 problem(s)` / `selftest: ok`. The row's other half,
+  re-walking PRD-0006's success criteria one by one against what landed,
+  is by the row's own wording Verify's job, in this run's
+  `verification.md`; Implement did not write that file and claims
+  nothing about the re-walk here. The epic #439 Destination re-check is
+  left with it (see `assumptions:`). Ledger: one
+  `owner-session:unmetered` row, `cost: 0.0`. **Every row is checked;
+  Implement is complete and the next stage is Verify.**
