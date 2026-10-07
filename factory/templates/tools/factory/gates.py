@@ -84,7 +84,7 @@ from pathlib import Path
 import cost_ledger
 import factory_config
 import standards_index
-from cli import read_event, report
+from cli import read_event, read_file, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
                              parse_run, repo_root, row_done, row_pre_ledger,
@@ -840,13 +840,12 @@ def check_scaffold_sync(root):
     """E: the template payload must match its checksum manifest exactly, and
     a stamped repo's executable payload must match what it was stamped
     from."""
-    manifest_path = root / "factory" / "manifest.json"
-    if not manifest_path.is_file():
+    manifest, problem = read_file(root / "factory" / "manifest.json",
+                                  "factory/manifest.json", dict)
+    if problem:
+        return [f"E: {problem}"]
+    if manifest is None:
         return ["E: missing factory/manifest.json"]
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as err:
-        return [f"E: factory/manifest.json is not valid JSON: {err}"]
     files = manifest.get("files")
     if not isinstance(files, dict) or not files:
         return ["E: factory/manifest.json has no files map"]
@@ -993,20 +992,15 @@ def check_config_shape(root):
         factory_config.artifact_paths(root, "factory.json"))]
     problems = []
     for path in candidates:
-        if not path.is_file():
-            continue
         rel = path.relative_to(root)
-        try:
-            config = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError) as err:
-            problems.append(f"F: {rel} is not valid JSON: {err}")
+        # dict: a config that is not an object has no fields to check, and
+        # the key-set checks below subscript it — read_file owns the rule
+        # (ADR-0075), so the gate words it as the runtime reader does
+        config, problem = read_file(path, rel, dict)
+        if problem:
+            problems.append(f"F: {problem}")
             continue
-        # a config that is not an object has no fields to check, and the
-        # key-set checks below subscript it — the seam owns the rule so
-        # the gate and the runtime reader cannot disagree about it
-        shape = factory_config.object_problems(config)
-        if shape:
-            problems += [f"F: {rel} {problem}" for problem in shape]
+        if config is None:
             continue
         # key-set completeness is this gate's whole-shape concern; the
         # field-VALUE grammar is factory_config.config_problems — one
@@ -1460,10 +1454,16 @@ def check_standards_drift(root, parsed=None):
     standards_path = root / standards_index.STANDARDS_PATH
     if not standards_path.is_file():
         return []
+    # Hand-written rather than cli.read_file (ADR-0075): the shape
+    # wording below is K's own and covers null. Bytes that are not
+    # UTF-8 join the parse failure's wording, by that record's rule.
     try:
         committed_text = standards_path.read_text(encoding="utf-8")
     except OSError as err:
         return [f"K: cannot read {standards_index.STANDARDS_PATH}: {err}"]
+    except UnicodeDecodeError as err:
+        return [f"K: {standards_index.STANDARDS_PATH} is not valid JSON:"
+                f" {err}"]
     try:
         committed = json.loads(committed_text)
     except json.JSONDecodeError as err:

@@ -317,6 +317,18 @@ class TestRowsAndSpend(unittest.TestCase):
                 Path(tmp), datetime(2026, 8, 6, tzinfo=timezone.utc))
             self.assertEqual((spent, problems), (0, []))
 
+    def test_a_ledger_that_is_not_utf8_is_a_problem_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/factory/costs.jsonl", "").write_bytes(
+                b"\xff\xfe\x00")
+            self.assertEqual(
+                work_queue.month_to_date(
+                    tree.root, datetime(2026, 8, 6, tzinfo=timezone.utc)),
+                (0, ["ledger: cannot read docs/factory/costs.jsonl: 'utf-8'"
+                     " codec can't decode byte 0xff in position 0: invalid"
+                     " start byte"]))
+
 
 class TestMain(cli_contract.ReportContract, unittest.TestCase):
     """main's summary line, on every leg that emits one.

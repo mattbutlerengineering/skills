@@ -18,46 +18,18 @@ from pathlib import Path
 
 import eval_schema
 import protocol
-from cli import report
+from cli import read_file, report
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
                       TEMPLATED_STAGES, UTILITY_SKILLS)
 
 
-def object_problems(data, label):
-    """[] when `data` is a JSON object, else the one problem naming its
-    shape.
-
-    Both manifest readers open with this. A JSON document's top level is
-    legally an array, string, number, boolean or null, and json.loads
-    hands every one of them back untouched — so dict-ness is the one
-    thing a reader that then calls `.get` cannot assume.
-    check_pi_package already applies the idiom one level down, to `pi`;
-    only the top level was taken on trust, in both readers, because the
-    second was written to match the first.
-
-    Reported alone, never beside derived complaints: on a string
-    `data.get("keywords")` cannot even be asked, and a reader that
-    guessed past the shape would describe its own confusion instead of
-    the file. Both readers are early entries in CHECKERS and lint.main
-    does not catch, so the alternative to a problem string here is not a
-    thinner report — it is no report at all.
-    """
-    if isinstance(data, dict):
-        return []
-    return [f"{label} is not a JSON object"]
-
-
 def check_manifest(root):
-    path = root / ".claude-plugin" / "plugin.json"
-    if not path.is_file():
+    data, problem = read_file(root / ".claude-plugin" / "plugin.json",
+                              "plugin.json", dict)
+    if problem:
+        return [problem]
+    if data is None:
         return ["missing .claude-plugin/plugin.json"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as err:
-        return [f"plugin.json is not valid JSON: {err}"]
-    shape = object_problems(data, "plugin.json")
-    if shape:
-        return shape
     return [f"plugin.json missing field: {field}"
             for field in ("name", "description", "version")
             if not data.get(field)]
@@ -87,18 +59,14 @@ def check_plugin_skills(root):
     exists to catch. names_slug is the one owner of that rule; this
     checker no longer retypes it.
 
-    A missing or unparseable manifest returns nothing: check_manifest
-    already reports both, and this checker reporting them too would give
-    one broken file two problem strings.
+    A missing, unreadable, unparseable or non-object manifest returns
+    nothing — read_file's problem is discarded on purpose: check_manifest
+    already reports it, and this checker reporting it too would give one
+    broken file two problem strings.
     """
-    path = root / ".claude-plugin" / "plugin.json"
-    if not path.is_file():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(data, dict):
+    data, _ = read_file(root / ".claude-plugin" / "plugin.json",
+                        "plugin.json", dict)
+    if data is None:
         return []
     text = data.get("description") or ""
     return [f"plugin.json's description never names utility skill {slug!r}"
@@ -110,16 +78,11 @@ def check_pi_package(root):
     the Claude plugin manifest (ADR-0027): omp finds the skills through a
     `package.json` `pi.skills` entry. Guarded like check_manifest so the
     dual-target packaging can't silently drift."""
-    path = root / "package.json"
-    if not path.is_file():
+    data, problem = read_file(root / "package.json", "package.json", dict)
+    if problem:
+        return [problem]
+    if data is None:
         return ["missing package.json"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as err:
-        return [f"package.json is not valid JSON: {err}"]
-    shape = object_problems(data, "package.json")
-    if shape:
-        return shape
     problems = []
     if data.get("private") is not True:
         problems.append("package.json must set private: true")
@@ -805,8 +768,13 @@ def check_output_evals(root):
     def problems_for(path):
         slug = path.stem
         label = f"evals/output/{path.name}"
+        # Hand-written rather than cli.read_file (ADR-0075): the shape
+        # check is validate_output's, reported beside the stem line, and
+        # a directory the glob matched is "cannot read", not absent.
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as err:
+            return [f"cannot read {label}: {err}"]
         except (json.JSONDecodeError, UnicodeDecodeError) as err:
             return [f"{label} is not valid JSON: {err}"]
         return (
@@ -906,9 +874,11 @@ def check_backlog(root):
     path = root / "docs" / "backlog.md"
     if not path.is_file():
         return []
+    # Hand-written rather than cli.read_file (ADR-0075): this checker's
+    # phrase is "is unreadable", where read_file says "cannot read".
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as err:
+    except (OSError, UnicodeDecodeError) as err:
         return [f"backlog: docs/backlog.md is unreadable: {err}"]
     return protocol.check_backlog(text)
 
