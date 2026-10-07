@@ -38,14 +38,30 @@ architecture contains the answers; the user reviews the cut lines.
      `(tracker: #123)` form — the same form imported items already carry.
      The breakdown remains the state; the tracker is the mirror.
 
-4. **Review the cut.** Present the draft; the user's judgment calls are the
+4. **Check the draft before presenting it.** Read it as the implementer
+   who will pick up one item cold, and fix what you find in place:
+   - No template slot survives: no `<...>` placeholder from `TEMPLATE.md`,
+     no TBD or TODO, no "same as the item above". An item that cannot be
+     written yet is a design gap (see Rules), not a placeholder.
+   - Every `Accept:` line states an outcome someone can check. "Works
+     correctly" and "handles errors appropriately" are hopes, not
+     criteria.
+   - Names hold still. Components and interfaces keep the architecture's
+     spelling, and every `Blocked by:` names an item that exists, by its
+     exact title or its `WO-####` id where rows carry one. A dependency
+     that names nothing real orders nothing.
+
+   This check matters most when nobody reviews the cut live: an autorun,
+   or a user who accepts the recommended boundaries as-is.
+
+5. **Review the cut.** Present the draft; the user's judgment calls are the
    milestone boundaries and anything that looks mis-sized. Revise.
 
-5. **Write the artifact.** Save as `breakdown.md` in the run directory with
+6. **Write the artifact.** Save as `breakdown.md` in the run directory with
    protocol frontmatter. Items are markdown checkboxes — Implement checks
    them off, and the pipeline reads progress from them.
 
-6. **Hand off.** Next stage is Implement.
+7. **Hand off.** Next stage is Implement.
 
 ## Rules
 
