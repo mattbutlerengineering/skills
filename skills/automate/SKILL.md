@@ -1,6 +1,6 @@
 ---
 name: automate
-description: Use when the ask is what Claude Code automation a repo should have — "what hooks should I add", "should this be a skill or a subagent", "recommend automations for this project", "what's worth automating here", "is there an MCP server worth wiring up". Read-only: it recommends, prices, and hands off — it never scaffolds the thing it proposes. Every recommendation must cite the friction it removes (a step an artifact records as manual, a command the repo repeats, a rule stated in CLAUDE.md that nothing enforces); file presence alone is a suspicion, never evidence. Six categories — hooks, subagents, skills, plugins, MCP servers, and drift detectors for rules nothing checks — each capped, each priced, each routed to a carrier that already exists. Not `doctor` (is the install wired up), not `audit` (what is wrong with the code), not `deepen` (what shape are the modules).
+description: Use when the ask is what Claude Code automation a repo should have — "what hooks should I add", "should this be a skill or a subagent", "recommend automations for this project", "what's worth automating here", "is there an MCP server worth wiring up". Read-only; it recommends, prices, and hands off — it never scaffolds the thing it proposes. Every recommendation must cite the friction it removes (a step an artifact records as manual, a command the repo repeats, a rule stated in CLAUDE.md that nothing enforces); file presence alone is a suspicion, never evidence. Six categories — hooks, subagents, skills, plugins, MCP servers, and drift detectors for rules nothing checks — each capped, each priced, each routed to a carrier that already exists. Not `doctor` (is the install wired up), not `audit` (what is wrong with the code), not `deepen` (what shape are the modules).
 ---
 
 # Automate
@@ -34,13 +34,14 @@ exists is the fastest way to be ignored:
 
 | Surface | Where |
 |---|---|
-| Agent instructions | `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `CONTEXT.md` |
+| Agent instructions | `CLAUDE.md`, `AGENTS.md`, `.cursorrules`, `CONTEXT.md`, `GLOSSARY.md` |
 | Hooks and settings | `.claude/settings.json`, `settings.local.json`, `~/.claude/settings.json` if the ask is about this user |
 | Subagents | `.claude/agents/*.md` |
 | Skills and plugins | `.claude/skills/`, `skills/`, `.claude-plugin/plugin.json`, `marketplace.json` |
 | MCP servers | `.mcp.json`, `settings.json` `mcpServers` |
 | The real command set | `Makefile`, `package.json` scripts, `justfile`, CI workflow files |
 | Decisions already taken | `docs/adr/`, design notes, `CONTRIBUTING` |
+| Environment retrospectives | the `## Environment` section of every `docs/**/retro.md` — a mistake the run recorded, its evidence, its class (`mechanical` or `judgement`) and the carrier that would have caught it |
 
 An automation the repo already has is not a finding. An automation it has
 that is **inert** — installed and unable to fire — is one of the best

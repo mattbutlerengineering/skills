@@ -1,6 +1,6 @@
 ---
 name: deepen
-description: Use when the question is the shape of existing code rather than a defect in it — "improve the architecture", "find refactoring opportunities", "this is hard to test", "these modules are too coupled", "make this codebase easier for an agent to navigate". Reviews a codebase for deepening opportunities (shallow modules whose interface is nearly as complex as their implementation), confirms each candidate against its real call sites rather than a feeling of friction, presents them as a self-contained before/after HTML report, then designs the chosen interface with you. Read-only on source: it proposes and hands off, never refactors. Not a pipeline stage — invoke it directly, on any repo. Not `architect` (which designs one run's technical approach from its PRD), not `audit` (which sweeps every category for defects and routes them into the pipeline), and not `interactive-architecture-diagram` (which draws a system without judging its shape).
+description: Use when the question is the shape of existing code rather than a defect in it — "improve the architecture", "find refactoring opportunities", "this is hard to test", "these modules are too coupled", "make this codebase easier for an agent to navigate". Reviews a codebase for deepening opportunities (shallow modules whose interface is nearly as complex as their implementation), confirms each candidate against its real call sites rather than a feeling of friction, presents them as a self-contained before/after HTML report, then designs the chosen interface with you. Read-only on source; it proposes and hands off, never refactors. Not a pipeline stage — invoke it directly, on any repo. Not `architect` (which designs one run's technical approach from its PRD), not `audit` (which sweeps every category for defects and routes them into the pipeline), and not `interactive-architecture-diagram` (which draws a system without judging its shape).
 ---
 
 # Deepen
@@ -26,8 +26,8 @@ the last one, and its wins cannot be checked.
 
 Two inputs constrain everything you may propose:
 
-- **The domain glossary** — `CONTEXT.md` or whatever the repo uses. It
-  gives the good seams their names. A deepened module called
+- **The domain glossary** — `CONTEXT.md` or `GLOSSARY.md`, or whatever the
+  repo uses. It gives the good seams their names. A deepened module called
   `OrderIntakeHandler` in a codebase whose glossary says *Order* is a
   worse proposal than the same module called the Order intake module.
 - **The recorded decisions** — `docs/adr/`, design notes, the "why we did

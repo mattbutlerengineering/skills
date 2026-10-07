@@ -10,8 +10,9 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 - `python3 -m unittest discover tests`
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
 - `python3 gates.py && python3 gates.py --selftest` — factory drift
-  detectors (A–I; B skips locally without a PR event payload, but the
-  selftest exercises it), output matching `gates: 0 problem(s)`
+  detectors (roster in `gates.py`'s module docstring; B skips locally
+  without a PR event payload, but the selftest exercises it), output
+  matching `gates: 0 problem(s)`
 
 On demand only (real model runs, costs money, never CI; both need the
 `claude` CLI):
@@ -20,7 +21,10 @@ On demand only (real model runs, costs money, never CI; both need the
 - `python3 charter_replay.py` — charter regression suite: golden fixture
   work orders replayed against the role charters. Its scoring seam is pure
   and injected, so CI covers degradation detection offline with recorded
-  transcripts; only the live replay costs money.
+  transcripts; only the live replay costs money. `--control` also replays
+  each case with its charter's `## Must never` section deleted and fails
+  any case whose stripped run never fires a forbidden pattern (a trap the
+  model never takes guards nothing); it doubles the cost.
 
 Also on demand, but free and needing nothing installed — a review
 pre-pass, deliberately **not** a gate:

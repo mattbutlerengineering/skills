@@ -1,6 +1,6 @@
 ---
 name: audit
-description: Use when the ask is to go looking for what to improve in a codebase — "audit this repo", "find the bugs / security holes / tech debt / coverage gaps", "what's rotting here", "where should we take this next", "what should I work on" — with no defect named and no run in flight. Read-only on source, always: it produces evidenced findings, ranked, and routes each one to a carrier this pipeline already has (a `docs/backlog.md` seed, a maintenance run via `capture`, a feature run via `idea`). It never fixes anything and never opens a parallel plans/ tree. A finding counts only once reproduced; everything else is reported as a suspicion. Not `review` (that grades one run's implementation against its own plan), not `doctor` (that checks whether the pipeline install is wired up), and not `capture` (that takes down a defect you already know about) — this one goes and finds them.
+description: Use when the ask is to go looking for what to improve in a codebase — "audit this repo", "find the bugs / security holes / tech debt / coverage gaps", "what's rotting here", "where should we take this next", "what should I work on" — with no defect named and no run in flight. Read-only on source, always; it produces evidenced findings, ranked, and routes each one to a carrier this pipeline already has (a `docs/backlog.md` seed, a maintenance run via `capture`, a feature run via `idea`). It never fixes anything and never opens a parallel plans/ tree. A finding counts only once reproduced; everything else is reported as a suspicion. Not `review` (that grades one run's implementation against its own plan), not `doctor` (that checks whether the pipeline install is wired up), and not `capture` (that takes down a defect you already know about) — this one goes and finds them.
 ---
 
 # Audit
@@ -27,8 +27,8 @@ up describing a different repo than the one it names.
 
 Then map the territory:
 
-- `README`, `CLAUDE.md`/`AGENTS.md`, `CONTEXT.md`, contributing notes, root
-  config, CI config, directory shape.
+- `README`, `CLAUDE.md`/`AGENTS.md`, `CONTEXT.md`/`GLOSSARY.md`, contributing
+  notes, root config, CI config, directory shape.
 - The **exact** build, test, lint, and gate commands. These go into every
   finding's reproduction, so guessing them poisons the whole round.
 - Conventions worth matching: error handling, naming, layout, where the
