@@ -961,7 +961,7 @@ CHECKERS = (check_manifest, check_plugin_skills,
             check_skill_recitals, check_skill_assets, check_templates,
             check_router, check_router_conditionals,
             check_readme_skills, check_readme_no_orphans,
-            check_protocol,
+            check_readme_figure, check_protocol,
             check_protocol_tables, check_backlog, check_evals,
             check_output_evals, check_ledger, check_ledger_no_orphans,
             check_ledger_links)

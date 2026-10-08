@@ -40,7 +40,7 @@ README embed exist, so every commit on the branch stays lint-green.
 
 ## Milestone 3: The check is live and the branch is verified
 
-- [ ] **WO-0095** Register check_readme_figure in CHECKERS and prove it bites — size:S, blocked by: WO-0094 (PRD-0008 §Success criteria)
+- [x] **WO-0095** Register check_readme_figure in CHECKERS and prove it bites — size:S, blocked by: WO-0094 (PRD-0008 §Success criteria)
   - Accept: `lint.CHECKERS` lists `check_readme_figure` directly after `check_readme_no_orphans` and before `check_protocol` (`python3 -c "import lint; print([c.__name__ for c in lint.CHECKERS])"` shows the order); `python3 lint.py` prints `lint: 0 problem(s)`; `python3 -m unittest tests.test_lint` prints `OK` with `TestCleanTree` now exercising the checker on the fixture figure and no test edited; and the PRD's Room-for-lean-and-polish check passes in a scratch copy of the tree made outside the repo (`cp -R` to a temporary directory, never the checkout): `mkdir skills/lean` there, then `python3 lint.py` prints `LINT: docs/assets/skill-map.svg never names skill 'lean'` beside the existing `LINT: README.md never names skill 'lean'` among its problems; the scratch copy is deleted afterwards and `git status` in the checkout is clean.
 - [ ] **WO-0096** Full battery and untouched surfaces — size:S, blocked by: WO-0091, WO-0092, WO-0093, WO-0094, WO-0095 (PRD-0008 §Success criteria)
   - Accept: on the branch tip, `python3 -m unittest discover tests` prints `OK`, `python3 lint.py` prints `lint: 0 problem(s)`, and `python3 gates.py && python3 gates.py --selftest` prints `gates: 0 problem(s)` and `selftest: ok` (each output written to a file and grepped, per the brief's zsh note); `git diff --stat main -- skills/ .claude-plugin/plugin.json evals/ LEDGER.md` prints nothing; `git diff --stat main` lists only `README.md`, `docs/assets/skill-map.svg`, `lint.py`, `tests/test_lint.py`, this run's artifacts under `docs/features/readme-skill-map/` and `docs/factory/costs.jsonl` (the ledger rows the Notes policy owes), nothing else; the README's Install, Usage, Development and License sections are byte-identical to main (row 0094's two `diff` commands print nothing); and every row above is checked.
@@ -177,3 +177,19 @@ same reading.
   (bottom-band gaps 120/128) and centred every card on its row's
   centre line; v3 reworded the subtitle and `<desc>`, which had said
   "Ten" and "Six", to carry no count.
+- 2026-10-07 (row 0095, the check bites): in a `cp -R` of the tree
+  under the session scratchpad, never the checkout, `mkdir skills/lean`
+  with a minimal `SKILL.md`, then `python3 lint.py` printed, in this
+  order: `LINT: skills/lean is not in the skill taxonomy (protocol.py
+  ALL_SKILLS)`, `LINT: README.md never names skill 'lean'`, `LINT:
+  docs/assets/skill-map.svg never names skill 'lean'`, `LINT: LEDGER.md
+  has no row for skill 'lean'`, `lint: 4 problem(s) across 26 skills`.
+  In a second fresh copy, the one `<text>` element holding
+  `address-pr-review` deleted from the figure, `python3 lint.py`
+  printed `LINT: docs/assets/skill-map.svg never names skill
+  'address-pr-review'` and `lint: 1 problem(s) across 25 skills`, exit
+  1. Both copies deleted afterwards; `git status` in the checkout shows
+  only this row's `lint.py` edit. The registration is pinned the way
+  every checker's is — `TestCleanTree` walks `lint.CHECKERS` against
+  the fixture figure — with no test edited (`git diff --stat main --
+  tests/` is row 0091's addition alone).
