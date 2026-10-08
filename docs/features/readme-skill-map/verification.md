@@ -306,6 +306,17 @@ Repository visibility: `PUBLIC`.
   README column is wider than the blob view's. Noted for Review; the
   slug names and card titles, which the thirty-second test is timed on,
   read without zooming.
+- 2026-10-07, Review (finding 1): the committed `github-light.png` and
+  `github-dark.png` are pixel-exact crops of the 2400 × 4400 captures to
+  the README content column — columns 660 to 2399, rows 0 to 2249, so
+  1740 × 2250 — made with `sips --cropOffset 0 660 -c 2250 1740` on a
+  copy of each capture. The signed-out header, the branch commit in the
+  commit bar, the Preview toolbar and the whole figure are inside the
+  crop; the file sidebar and the page below the figure are not. Every
+  coordinate quoted above is in the uncropped capture: subtract 660
+  from x to find the same pixel in the committed file (y is unchanged);
+  the four samples re-read at the shifted coordinates give the same four
+  values. 934 KB and 942 KB became 358 KB each.
 - Result: PASS. The mermaid block is gone and one committed SVG is
   embedded as a plain image; the file makes no external request (the
   only grep hit is the namespace identifier); every roster slug is the
