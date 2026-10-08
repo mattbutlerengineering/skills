@@ -1,0 +1,254 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 688" width="880" height="688" role="img"
+     aria-labelledby="ad-title ad-desc">
+<title id="ad-title">Every skill, and the moment you reach for it</title>
+<desc id="ad-desc">The pipeline stages form a clockwise loop, each writing
+the artifact the stage after it reads; the router sits inside the loop
+and hands off to whichever stage is due; a maintenance run enters the
+loop from outside through its defect brief. Cards around the loop group
+the utility skills by the moment a person reaches for them.</desc>
+<style>
+  /* Tokens mirror references/design-system.md — change both together.
+     Dark overrides ONLY the custom properties; every painted element
+     resolves a token, so the whole figure flips at once. */
+  :root {
+    --paper: #f6f5f1;
+    --raised: #ffffff;
+    --ink: #262a33;
+    --muted: #5b6472;
+    --soft: #878e9c;
+    --rule: rgba(38,42,51,0.12);
+    --accent: #d9622b;
+    --accent-tint: rgba(217,98,43,0.08);
+    --fill-zone: rgba(38,42,51,0.02);
+    --fill-store: rgba(38,42,51,0.05);
+    --fill-ext: rgba(38,42,51,0.03);
+    --stroke-ext: rgba(38,42,51,0.30);
+    --fill-queue: rgba(38,42,51,0.02);
+    --stroke-queue: rgba(38,42,51,0.20);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0d1117;
+      --raised: #161b22;
+      --ink: #e6edf3;
+      --muted: #8b949e;
+      --soft: #6e7681;
+      --rule: rgba(230,237,243,0.12);
+      --accent: #f0925e;
+      --accent-tint: rgba(240,146,94,0.10);
+      --fill-zone: rgba(230,237,243,0.02);
+      --fill-store: rgba(230,237,243,0.05);
+      --fill-ext: rgba(230,237,243,0.03);
+      --stroke-ext: rgba(230,237,243,0.30);
+      --fill-queue: rgba(230,237,243,0.02);
+      --stroke-queue: rgba(230,237,243,0.20);
+    }
+  }
+
+  text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+  .title { font-family: Georgia, 'Times New Roman', serif; font-size: 20px; fill: var(--ink); }
+  .eyebrow { font-size: 10px; font-weight: 500; fill: var(--soft);
+             text-transform: uppercase; letter-spacing: 0.14em; }
+  .sub { font-size: 11px; fill: var(--muted); }
+  .name { font-size: 13px; font-weight: 600; fill: var(--ink); }
+  .sublabel { font-size: 10px; fill: var(--muted); }
+  .row { font-size: 11px; fill: var(--ink); }
+  .elabel { font-size: 10px; fill: var(--soft);
+            text-transform: uppercase; letter-spacing: 0.06em; }
+  .legend-t { font-size: 10px; font-weight: 500; fill: var(--soft);
+              text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .bg { fill: var(--paper); }
+  .mask { fill: var(--paper); }
+  .zone { fill: var(--fill-zone); stroke: var(--rule); stroke-width: 0.8; }
+  .hairline { stroke: var(--rule); stroke-width: 0.8; }
+
+  .conn { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+  .conn.async { stroke-width: 1; stroke-dasharray: 4 3; }
+  .arrowhead { fill: var(--muted); }
+
+  .node-focal { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 1.2; }
+  .node-solid { fill: var(--raised); stroke: var(--ink); stroke-width: 1; }
+  .node-store { fill: var(--fill-store); stroke: var(--muted); stroke-width: 1; }
+  .node-ext { fill: var(--fill-ext); stroke: var(--stroke-ext); stroke-width: 1; }
+  .node-queue { fill: var(--fill-queue); stroke: var(--stroke-queue);
+                stroke-width: 1; stroke-dasharray: 4 3; }
+</style>
+
+<defs>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+          markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path class="arrowhead" d="M 0 1 L 9 5 L 0 9 z"/>
+  </marker>
+</defs>
+
+<rect class="bg" width="880" height="688"/>
+
+<!-- header: eyebrow, serif title, one-line subtitle -->
+<text class="eyebrow mono" x="48" y="44">Plugin overview</text>
+<text class="title" x="48" y="72">Every skill, and the moment you reach for it</text>
+<text class="sub" x="48" y="92">The stages close a loop, each writing the artifact the stage after it reads; the router inside hands off between them.</text>
+
+<!-- connectors: drawn before nodes; d authored source → target, endpoints
+     4px short of node edges. The ten loop edges share an axis with both
+     ends and run straight; the one off-axis run (e11, the no-UI skip) is a
+     two-bend r=8 elbow routed above the top row so it transits no node. -->
+<path id="e1" class="conn" d="M 380,188 H 420" marker-end="url(#arrow)"/>
+<path id="e2" class="conn" d="M 532,188 H 572" marker-end="url(#arrow)"/>
+<path id="e3" class="conn" d="M 684,188 H 724" marker-end="url(#arrow)"/>
+<path id="e4" class="conn" d="M 780,220 V 264" marker-end="url(#arrow)"/>
+<path id="e5" class="conn" d="M 780,328 V 372" marker-end="url(#arrow)"/>
+<path id="e6" class="conn" d="M 724,404 H 684" marker-end="url(#arrow)"/>
+<path id="e7" class="conn" d="M 572,404 H 532" marker-end="url(#arrow)"/>
+<path id="e8" class="conn" d="M 420,404 H 380" marker-end="url(#arrow)"/>
+<path id="e9" class="conn" d="M 324,372 V 328" marker-end="url(#arrow)"/>
+<path id="e10" class="conn" d="M 324,264 V 220" marker-end="url(#arrow)"/>
+<path id="e11" class="conn async" d="M 476,156 V 140 Q 476,132 484,132 H 772 Q 780,132 780,140 V 156" marker-end="url(#arrow)"/>
+<path id="e12" class="conn async" d="M 780,492 V 436" marker-end="url(#arrow)"/>
+
+<!-- edge labels: the skip's label sits above its horizontal run behind an
+     opaque paper mask with an 8px gap to the stroke; the two vertical runs
+     take their labels beside the line -->
+<rect class="mask" x="584" y="110" width="88" height="14" rx="2"/>
+<text class="elabel mono" x="628" y="120" text-anchor="middle">no ui surface</text>
+<text class="elabel mono" x="332" y="241">retro seeds</text>
+<text class="elabel mono" x="772" y="467" text-anchor="end">re-entry</text>
+
+<!-- the loop: four columns, three rows, read clockwise from the top-left;
+     opaque paper mask first, styled rect over it -->
+<g>
+  <rect class="mask" x="272" y="160" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="272" y="160" width="104" height="56" rx="6"/>
+  <text class="name" x="324" y="184" text-anchor="middle">idea</text>
+  <text class="sublabel mono" x="324" y="202" text-anchor="middle">idea.md</text>
+</g>
+<g>
+  <rect class="mask" x="424" y="160" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="424" y="160" width="104" height="56" rx="6"/>
+  <text class="name" x="476" y="184" text-anchor="middle">prd</text>
+  <text class="sublabel mono" x="476" y="202" text-anchor="middle">prd.md</text>
+</g>
+<g>
+  <rect class="mask" x="576" y="160" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="576" y="160" width="104" height="56" rx="6"/>
+  <text class="name" x="628" y="184" text-anchor="middle">ux-design</text>
+  <text class="sublabel mono" x="628" y="202" text-anchor="middle">ux.md</text>
+</g>
+<g>
+  <rect class="mask" x="728" y="160" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="728" y="160" width="104" height="56" rx="6"/>
+  <text class="name" x="780" y="184" text-anchor="middle">architect</text>
+  <text class="sublabel mono" x="780" y="202" text-anchor="middle">architecture.md</text>
+</g>
+<g>
+  <rect class="mask" x="728" y="268" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="728" y="268" width="104" height="56" rx="6"/>
+  <text class="name" x="780" y="292" text-anchor="middle">decompose</text>
+  <text class="sublabel mono" x="780" y="310" text-anchor="middle">breakdown.md</text>
+</g>
+<g>
+  <rect class="mask" x="728" y="376" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="728" y="376" width="104" height="56" rx="6"/>
+  <text class="name" x="780" y="400" text-anchor="middle">implement</text>
+  <text class="sublabel mono" x="780" y="418" text-anchor="middle">code + tests</text>
+</g>
+<g>
+  <rect class="mask" x="576" y="376" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="576" y="376" width="104" height="56" rx="6"/>
+  <text class="name" x="628" y="400" text-anchor="middle">verify</text>
+  <text class="sublabel mono" x="628" y="418" text-anchor="middle">verification.md</text>
+</g>
+<g>
+  <rect class="mask" x="424" y="376" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="424" y="376" width="104" height="56" rx="6"/>
+  <text class="name" x="476" y="400" text-anchor="middle">review</text>
+  <text class="sublabel mono" x="476" y="418" text-anchor="middle">review.md</text>
+</g>
+<g>
+  <rect class="mask" x="272" y="376" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="272" y="376" width="104" height="56" rx="6"/>
+  <text class="name" x="324" y="400" text-anchor="middle">ship</text>
+  <text class="sublabel mono" x="324" y="418" text-anchor="middle">release.md</text>
+</g>
+<g>
+  <rect class="mask" x="272" y="268" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="272" y="268" width="104" height="56" rx="6"/>
+  <text class="name" x="324" y="292" text-anchor="middle">operate</text>
+  <text class="sublabel mono" x="324" y="310" text-anchor="middle">retro.md</text>
+</g>
+
+<!-- inside the loop: the focal node — the one place the accent appears —
+     and the card for the skills that steer a run -->
+<g>
+  <rect class="mask" x="424" y="268" width="96" height="56" rx="6"/>
+  <rect class="node-focal" x="424" y="268" width="96" height="56" rx="6"/>
+  <text class="name" x="472" y="292" text-anchor="middle">next</text>
+  <text class="sublabel mono" x="472" y="310" text-anchor="middle">the router</text>
+</g>
+<g>
+  <rect class="mask" x="568" y="264" width="112" height="64" rx="6"/>
+  <rect class="node-ext" x="568" y="264" width="112" height="64" rx="6"/>
+  <text class="name" x="580" y="284">Driving a run</text>
+  <text class="row mono" x="580" y="302">autorun</text>
+  <text class="row mono" x="580" y="318">work-queue</text>
+</g>
+
+<!-- outside the loop: the maintenance entry, and the five other cards,
+     each placed by the stretch of the loop its moment sits nearest -->
+<g>
+  <rect class="mask" x="728" y="496" width="104" height="56" rx="6"/>
+  <rect class="node-solid" x="728" y="496" width="104" height="56" rx="6"/>
+  <text class="name" x="780" y="520" text-anchor="middle">capture</text>
+  <text class="sublabel mono" x="780" y="538" text-anchor="middle">defect.md</text>
+</g>
+<g>
+  <rect class="mask" x="48" y="156" width="168" height="64" rx="6"/>
+  <rect class="node-ext" x="48" y="156" width="168" height="64" rx="6"/>
+  <text class="name" x="60" y="176">Before a run exists</text>
+  <text class="row mono" x="60" y="194">audit</text>
+  <text class="row mono" x="60" y="210">automate</text>
+</g>
+<g>
+  <rect class="mask" x="48" y="272" width="168" height="48" rx="6"/>
+  <rect class="node-ext" x="48" y="272" width="168" height="48" rx="6"/>
+  <text class="name" x="60" y="292">Reshaping what's built</text>
+  <text class="row mono" x="60" y="310">deepen</text>
+</g>
+<g>
+  <rect class="mask" x="48" y="380" width="168" height="48" rx="6"/>
+  <rect class="node-ext" x="48" y="380" width="168" height="48" rx="6"/>
+  <text class="name" x="60" y="400">Around a pull request</text>
+  <text class="row mono" x="60" y="418">address-pr-review</text>
+</g>
+<g>
+  <rect class="mask" x="48" y="496" width="256" height="112" rx="6"/>
+  <rect class="node-ext" x="48" y="496" width="256" height="112" rx="6"/>
+  <text class="name" x="60" y="516">Drawing pictures</text>
+  <text class="row mono" x="60" y="534">mermaid</text>
+  <text class="row mono" x="60" y="550">architecture-diagram</text>
+  <text class="row mono" x="60" y="566">animated-diagram</text>
+  <text class="row mono" x="60" y="582">interactive-architecture-diagram</text>
+  <text class="row mono" x="60" y="598">pipeline-board</text>
+</g>
+<g>
+  <rect class="mask" x="424" y="496" width="176" height="64" rx="6"/>
+  <rect class="node-ext" x="424" y="496" width="176" height="64" rx="6"/>
+  <text class="name" x="436" y="516">Installing the factory</text>
+  <text class="row mono" x="436" y="534">factory-init</text>
+  <text class="row mono" x="436" y="550">doctor</text>
+</g>
+
+<!-- legend: hairline, then exactly the treatments and line kinds used -->
+<line class="hairline" x1="48" y1="640" x2="832" y2="640"/>
+<rect class="node-focal" x="48" y="654" width="12" height="12" rx="3"/>
+<text class="legend-t" x="68" y="664">router</text>
+<rect class="node-solid" x="136" y="654" width="12" height="12" rx="3"/>
+<text class="legend-t" x="156" y="664">pipeline stage</text>
+<rect class="node-ext" x="280" y="654" width="12" height="12" rx="3"/>
+<text class="legend-t" x="300" y="664">utility skills, by moment</text>
+<path class="conn" d="M 504,660 H 544"/>
+<text class="legend-t" x="552" y="664">stage hand-off</text>
+<path class="conn async" d="M 680,660 H 720"/>
+<text class="legend-t" x="728" y="664">conditional</text>
+</svg>

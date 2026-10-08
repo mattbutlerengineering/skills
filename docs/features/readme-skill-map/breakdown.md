@@ -33,7 +33,7 @@ README embed exist, so every commit on the branch stays lint-green.
 
 ## Milestone 2: The figure is drawn and the README shows it
 
-- [ ] **WO-0093** Draw docs/assets/skill-map.svg with the architecture-diagram skill — size:L, blocked by: WO-0092 (PRD-0008 §Success criteria)
+- [x] **WO-0093** Draw docs/assets/skill-map.svg with the architecture-diagram skill — size:L, blocked by: WO-0092 (PRD-0008 §Success criteria)
   - Accept: `docs/assets/skill-map.svg` exists, made by working `skills/architecture-diagram/SKILL.md`'s seven steps in order from a copy of its `assets/boilerplate.svg` with the model `architecture.md` fixes under The figure and The six moment cards: stage-side nodes `idea`, `prd`, `ux-design`, `architect`, `decompose`, `implement`, `verify`, `review`, `ship`, `operate` (solid, mono sublabel the stage artifact the mermaid shows today), `next` (the one accented focal node, inside the loop, sublabel naming it the router) and `capture` (solid, outside the loop, sublabel `defect.md`); six cards titled verbatim "Before a run exists", "Reshaping what's built", "Driving a run", "Around a pull request", "Drawing pictures", "Installing the factory", each holding as mono rows exactly the members the card table lists today (thirteen rows in all; neither `lean` nor `polish`), placed as the table's Sits-by column says where the grid allows; exactly twelve connectors — ten solid closing the loop idea→prd→ux-design→architect→decompose→implement→verify→review→ship→operate→idea with the closing edge labelled as the retro seeding the idea, one dashed prd→architect labelled for the no-UI case, one dashed capture→architect or capture→implement (whichever routes straight), and none into or out of `next`. Every slug is literal `<text>` content, bare and lowercase (no leading slash, no display casing); the title, subtitle, eyebrow, edge labels and legend contain no whole-slug match for any roster slug (check: read those elements); no count of anything appears in the figure; the root `viewBox` is 880 wide and the root carries `width` and `height` attributes equal to its size; no text class is below 10px (`grep -E 'font-size: *[0-9]px' docs/assets/skill-map.svg` prints nothing); `grep -c 'prefers-color-scheme: dark' docs/assets/skill-map.svg` prints `1` and the body paints only tokens (`awk '/<\/style>/{p=1;next} p' docs/assets/skill-map.svg | grep -E '#[0-9a-fA-F]{3,6}\b'` prints nothing); `grep -E 'http|<script|@import|@font-face' docs/assets/skill-map.svg` prints the root's `xmlns` line and nothing else; `python3 -c "import lint, pathlib; print(lint.check_readme_figure(pathlib.Path('.')))"` prints exactly `["README.md never embeds 'docs/assets/skill-map.svg'"]` (every roster slug found; the embed is the next row's); `git diff --stat main -- skills/` is empty (the asset is copied, never edited); and a dated Notes entry below lists every hand-edit the scaffold needed (the root size attributes and the raised text tiers at least), the node and connector counts against the skill's budget, and which of step 7's checks (both themes standalone, both themes embedded as an image, the remove test) ran, each with its outcome — a check that did not run is written as not run, never as passed.
 - [ ] **WO-0094** README: the embed and the utility table — size:M, blocked by: WO-0093 (PRD-0008 §Success criteria)
   - Accept: in `README.md` the mermaid fence at the top and everything inside it are gone (``grep -c '^```mermaid' README.md`` prints `0`) and in their place stands one markdown image line referencing `docs/assets/skill-map.svg` whose alt text says in one sentence what the figure shows; the `## Stages` heading and the stage table under it are byte-identical to main (`diff <(git show main:README.md | sed -n '/^## Stages/,/^## Development/p' | grep '^|') <(sed -n '/^## Stages/,/^## Development/p' README.md | grep '^|' | head -14)` prints nothing); the utility-skill prose paragraph below the stage table is replaced by a short lead-in that keeps the existing ADR-0023 link (relative path `docs/adr/0023-utility-skills.md`, as main has it) and points up at the figure, then a table with the header `| Skill | Moment | Why it matters |` and exactly one body row per `protocol.UTILITY_SKILLS` entry, rows grouped in card order — Before a run exists: `audit`, `automate`; Reshaping what's built: `deepen`; Driving a run: `autorun`, `work-queue`; Around a pull request: `address-pr-review`; Drawing pictures: `mermaid`, `architecture-diagram`, `animated-diagram`, `interactive-architecture-diagram`, `pipeline-board`; Installing the factory: `factory-init`, `doctor` — the Skill cell the bare slug in backticks, the Moment cell the card title verbatim as plain text, the Why cell one line distilled from that skill's `description:`; the closing sentence linking `docs/pipeline-protocol.md` stays. Neither `lean` nor `polish` appears anywhere in README.md (`grep -c -E '\blean\b|\bpolish\b' README.md` prints `0`); inside `## Stages` every slug-shaped backtick token is a registered skill (`python3 -c "import lint, pathlib; print(lint.readme_stage_mentions(pathlib.Path('README.md').read_text()) - set(lint.ALL_SKILLS))"` prints `set()`) and the utility table has thirteen body rows, one per `UTILITY_SKILLS` slug with none repeated (count the `| `-prefixed lines after the second table header whose first cell is a backticked slug; the set equals `set(protocol.UTILITY_SKILLS)`); `python3 lint.py` prints `lint: 0 problem(s)` (`check_readme_skills` and `check_readme_no_orphans` both pass, unchanged) and `python3 -c "import lint, pathlib; print(lint.check_readme_figure(pathlib.Path('.')))"` prints `[]`; Install, Usage, Development and License are byte-identical to main (`diff <(git show main:README.md | sed -n '/^## Install/,/^## Stages/p') <(sed -n '/^## Install/,/^## Stages/p' README.md)` and the same pair with `/^## Development/,$p` both print nothing); `.claude-plugin/plugin.json` is untouched.
@@ -134,3 +134,46 @@ same reading.
   architecture's decision (c); row 0093's Notes entry records the counts
   so Verify reports the overage as the fit between a system-figure skill
   and a roster map, not as a surprise.
+- 2026-10-07 (row 0093, the figure's provenance record): drawn by
+  working `skills/architecture-diagram/SKILL.md`'s seven steps in order
+  from a `cp` of its `assets/boilerplate.svg`; the asset is unchanged
+  (`git diff --stat main -- skills/` is empty). Hand-edits the scaffold
+  needed beyond replacing the sample content and the title/desc text,
+  each a departure the skill's own text does not sanction:
+  (1) root `width="880" height="688"` beside the `viewBox` — the
+  scaffold carries only a `viewBox`, and an SVG with no intrinsic size
+  is fitted to 300×150 inside `<img>`; (2) the `.eyebrow` tier raised
+  8→10px, `.elabel` 9→10px and `.legend-t` 9→10px, so no text in the
+  figure is below 10px at README width; (3) one added class, `.row`
+  (mono via the existing `.mono`, 11px, `--ink`), for a card's member
+  slugs — the design system has no list-row tier, and its 10px muted
+  sublabel is too faint for the one thing a reader came to find;
+  (4) the edge-label mask is 14px tall (the scaffold's is 12) to clear
+  the raised label; (5) the six "moment cards" are a composition the
+  design system does not define — its `node-ext` treatment with a
+  left-aligned `.name` title and `.row` members — used as node-like
+  containers per `architecture.md` decision (c). Counts against the
+  skill's budget: 18 nodes (12 stage-side boxes plus 6 cards) against a
+  ceiling of 9 — the overage decision (c) records; 12 connectors against
+  12; 0 zones against 3; 1 accent element against 2. Step 7's checks,
+  each with its outcome: both themes standalone — ran, headless Chrome
+  (`--blink-settings=preferredColorScheme=1` for light, `=0` for dark;
+  `rsvg-convert` is not installed) at 2× device scale, both PNGs
+  inspected: every element flips, no stranded light colour, the
+  label mask included — pass; both themes embedded as an image — ran,
+  a scratch HTML page with `<img src>` in an 830px column (GitHub's
+  README width) under both schemes: renders identically at intrinsic
+  size scaled to the column, the dark paper matching GitHub's
+  `#0d1117` — pass; the remove test — ran, nothing removed: the stage
+  sublabels carry "artifacts are the state", `the router` names the
+  focal node, `no ui surface`, `retro seeds` and `re-entry` each
+  explain the one edge whose meaning its style does not, and the five
+  legend rows are exactly the treatments and line kinds drawn. Not
+  run: the real github.com page in either appearance setting (Verify's
+  check, by the architecture's verification plan). Three drawing
+  iterations: v1 placed "Installing the factory" in a 256-wide card
+  with a blank right half and top-aligned the cards to the 56-tall
+  nodes; v2 made that card 176 wide under the review–verify columns
+  (bottom-band gaps 120/128) and centred every card on its row's
+  centre line; v3 reworded the subtitle and `<desc>`, which had said
+  "Ten" and "Six", to carry no count.
