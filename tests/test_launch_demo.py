@@ -426,5 +426,46 @@ class TestCheckStoryboard(unittest.TestCase):
                                  [f"{SB} is not a JSON object"])
 
 
+PLAN_BOARD = {"title": "T", "tagline": "G", "intro": "A.",
+              "steps": [{"say": "B.", "do": ["python3 board.py"]}],
+              "outro": "C."}
+
+
+class TestPlan(unittest.TestCase):
+    def test_the_timeline_of_a_one_step_storyboard(self):
+        plan = launch_demo.plan(PLAN_BOARD, [2.0, 3.0, 1.0])
+        self.assertEqual(plan["title"], "T")
+        self.assertEqual(plan["tagline"], "G")
+        self.assertEqual(plan["scenes"], [
+            {"kind": "title", "say": "A.", "do": [], "hold": 3.0,
+             "offset": 0.0},
+            {"kind": "step", "say": "B.", "do": ["python3 board.py"],
+             "hold": 3.5, "offset": 3.0},
+            {"kind": "outro", "say": "C.", "do": [], "hold": 1.5,
+             "offset": 7.3}])
+        self.assertEqual(plan["planned"], 8.8)
+
+    def test_a_long_intro_holds_the_title_card_past_its_floor(self):
+        plan = launch_demo.plan(PLAN_BOARD, [4.0, 3.0, 1.0])
+        self.assertEqual(plan["scenes"][0]["hold"], 4.5)
+
+    def test_a_string_or_empty_do_adds_no_typing_time(self):
+        for do in ("await page.click('#count');", []):
+            with self.subTest(do=do):
+                board = {**PLAN_BOARD, "steps": [{"say": "B.", "do": do}]}
+                plan = launch_demo.plan(board, [2.0, 3.0, 1.0])
+                self.assertEqual(plan["scenes"][2]["offset"], 6.5)
+                self.assertEqual(plan["scenes"][1]["do"], do)
+
+    def test_a_step_without_do_plans_an_empty_one(self):
+        board = {**PLAN_BOARD, "steps": [{"say": "B."}]}
+        plan = launch_demo.plan(board, [2.0, 3.0, 1.0])
+        self.assertEqual(plan["scenes"][1]["do"], [])
+
+    def test_a_seconds_count_that_does_not_fit_is_a_caller_slip(self):
+        with self.assertRaises(ValueError):
+            launch_demo.plan(PLAN_BOARD, [2.0, 3.0])
+
+
 if __name__ == "__main__":
     unittest.main()

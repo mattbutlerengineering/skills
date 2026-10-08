@@ -204,6 +204,39 @@ def check_storyboard(storyboard, copy_text, recorder):
     return problems
 
 
+def plan(storyboard, seconds):
+    """The timeline, the one owner of its arithmetic: scenes in order
+    (title card, each step, outro), each with its kind, narration line,
+    actions, hold and offset — hold is the narration's seconds plus
+    SETTLE (the title card at least TITLE_SECONDS); offset is the sum of
+    every earlier scene's hold and typing time, where that scene's
+    narration starts — and `planned`, the whole recording's expected
+    length. `seconds` is one narration duration per scene. A count that
+    does not fit is a caller slip, so a ValueError, never a problem
+    string. Pure: the same plan feeds the driver and the mux, so the
+    two cannot disagree."""
+    steps = storyboard["steps"]
+    if len(seconds) != len(steps) + 2:
+        raise ValueError(f"plan needs {len(steps) + 2} narration durations"
+                         f" for {len(steps)} steps, got {len(seconds)}")
+    cuts = ([("title", storyboard["intro"], [])]
+            + [("step", step["say"], step.get("do", [])) for step in steps]
+            + [("outro", storyboard["outro"], [])])
+    scenes, offset = [], 0.0
+    for (kind, say, do), narrated in zip(cuts, seconds):
+        hold = narrated + SETTLE
+        if kind == "title":
+            hold = max(float(TITLE_SECONDS), hold)
+        scenes.append({"kind": kind, "say": say, "do": do,
+                       "hold": round(hold, 3), "offset": round(offset, 3)})
+        # Typing a command costs TYPING_SPEED per character; a string do
+        # (the browser form, run rather than typed) costs nothing.
+        typed = sum(len(c) for c in do) if isinstance(do, list) else 0
+        offset += hold + typed * TYPING_SPEED
+    return {"title": storyboard["title"], "tagline": storyboard["tagline"],
+            "scenes": scenes, "planned": round(offset, 3)}
+
+
 def _entry(name):
     purpose, hint = TOOLS[name]
     return (name, purpose, hint)
