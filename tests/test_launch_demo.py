@@ -881,5 +881,17 @@ class TestRenderLeg(RenderMixin, cli_contract.CliContract,
             "launch-demo: 1 problem(s)"])
 
 
+FIXTURE = Path(__file__).resolve().parent / "fixtures" / "launch-demo"
+
+
+class TestBrowserFixture(unittest.TestCase):
+    def test_the_fixture_storyboard_is_cut_from_its_copy(self):
+        board = json.loads((FIXTURE / "storyboard.json").read_text("utf-8"))
+        copy = (FIXTURE / "launch.md").read_text("utf-8")
+        body = copy.split("\n---\n", 1)[1]
+        self.assertEqual(launch_demo.check_storyboard(board, body, "browser"),
+                         [])
+
+
 if __name__ == "__main__":
     unittest.main()

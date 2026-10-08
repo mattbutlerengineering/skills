@@ -1,0 +1,12 @@
+{
+  "title": "Counter and greeter",
+  "tagline": "The browser recorder, proved on a fixture",
+  "intro": "A single page with a counter and a greeter, kept in the plugin's own tests so the browser recorder has something to drive.",
+  "steps": [
+    {"say": "Pressing the counting button raises the number on the page by one.",
+     "do": "await page.click('#count'); await page.click('#count');"},
+    {"say": "Typing a name and pressing the greeting button writes a hello to that name beneath it.",
+     "do": "await page.fill('#name', 'Ada'); await page.click('#greet');"}
+  ],
+  "outro": "A recorder that can count and greet here can drive a real product page the same way."
+}
