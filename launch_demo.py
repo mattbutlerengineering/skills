@@ -17,6 +17,7 @@ import os
 import shlex
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -405,6 +406,89 @@ def assemble(raw, clips, offsets, out, runner=cli.runner):
             if line.strip()], []
 
 
+# recorder -> (adapter, the driver it writes to the scratch directory,
+# copied beside the mp4 so a reader sees what ran).
+ADAPTERS = {"terminal": (record_terminal, "demo.tape")}
+
+
+def _body(text):
+    """launch.md's body: the text after its frontmatter block."""
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 4)
+        if end != -1:
+            return text[end + 5:]
+    return text
+
+
+def _narration_lines(board):
+    return ([board["intro"]] + [step["say"] for step in board["steps"]]
+            + [board["outro"]])
+
+
+def _read_sources(root, shown_dir, slug_dir):
+    """(copy body, storyboard, problems) from the slug directory."""
+    problems = []
+    copy, problem = cli.read_file(slug_dir / "launch.md",
+                                  f"{shown_dir}/launch.md", str)
+    if problem:
+        problems.append(f"{LABEL}: {problem}")
+    elif copy is None:
+        problems.append(f"{LABEL}: missing {shown_dir}/launch.md")
+    board, problem = cli.read_file(slug_dir / "storyboard.json",
+                                   f"{shown_dir}/storyboard.json", dict)
+    if problem:
+        problems.append(f"{LABEL}: {problem}")
+    elif board is None:
+        problems.append(f"{LABEL}: missing {shown_dir}/storyboard.json")
+    return copy, board, problems
+
+
+def render(root, config, slug, which=shutil.which, runner=cli.runner,
+           head=None, scratch=None):
+    """(verdict, lines, problems) for <publish>/<slug>/: the composed
+    run and the verdict. Checks run in cost order — the copy and the
+    storyboard read and held to the grammar (problems before any tool
+    runs), the probe (COPY-ONLY before any tool runs), then narration,
+    the configured recorder and the mux. In COPY-ONLY nothing is
+    written to the publish path; on PRODUCED the slug directory gains
+    the driver and launch.mp4. Intermediates stay in the scratch
+    directory (a launch-demo- tempdir unless given), named in the
+    first line so a failed run can be inspected. Reads nothing about
+    the repo but the config and the slug directory."""
+    root = Path(root)
+    shown_dir = f"{config['publish']}/{slug}"
+    slug_dir = root / config["publish"] / slug
+    copy, board, problems = _read_sources(root, shown_dir, slug_dir)
+    if problems:
+        return None, [], problems
+    problems = check_storyboard(board, _body(copy), config["recorder"])
+    if problems:
+        return None, [], problems
+    missing, _ = probe(config, which, runner)
+    if missing:
+        return "COPY-ONLY", [_missing_line(entry) for entry in missing], []
+    workdir = Path(scratch or tempfile.mkdtemp(prefix="launch-demo-"))
+    lines = [f"{LABEL}: scratch {workdir}"]
+    clips, problems = narrate(_narration_lines(board), config["voice"],
+                              workdir, runner)
+    if problems:
+        return None, lines, problems
+    timeline = plan(board, [seconds for _, seconds in clips])
+    record, driver = ADAPTERS[config["recorder"]]
+    result, problems = record(timeline, workdir, config["against"], runner)
+    if problems:
+        return None, lines, problems
+    raw, offsets = result
+    summary, problems = assemble(raw, clips, offsets, slug_dir / "launch.mp4",
+                                 runner)
+    if problems:
+        return None, lines, problems
+    shutil.copyfile(workdir / driver, slug_dir / driver)
+    lines += [f"{LABEL}: wrote {shown_dir}/{driver}",
+              f"{LABEL}: wrote {shown_dir}/launch.mp4"]
+    return "PRODUCED", lines + summary, []
+
+
 def _entry(name):
     purpose, hint = TOOLS[name]
     return (name, purpose, hint)
@@ -437,9 +521,9 @@ def probe(config, which=shutil.which, runner=cli.runner):
     return missing, []
 
 
-def _print_missing(missing):
-    for name, purpose, hint in missing:
-        print(f"{LABEL}: missing {name} — {purpose}; install: {hint}")
+def _missing_line(entry):
+    name, purpose, hint = entry
+    return f"{LABEL}: missing {name} — {purpose}; install: {hint}"
 
 
 def main(argv, root=None, which=shutil.which, runner=cli.runner,
@@ -457,8 +541,20 @@ def main(argv, root=None, which=shutil.which, runner=cli.runner,
         if problems:
             return cli.report(LABEL, problems)
         missing, problems = probe(config, which, runner)
-        _print_missing(missing)
+        for entry in missing:
+            print(_missing_line(entry))
         print("COPY-ONLY" if missing else "READY")
+        return cli.report(LABEL, problems)
+    if len(argv) == 2 and argv[0] == "render":
+        config, problems = load(root, platform)
+        if problems:
+            return cli.report(LABEL, problems)
+        verdict, lines, problems = render(root, config, argv[1], which,
+                                          runner)
+        for line in lines:
+            print(line)
+        if verdict:
+            print(verdict)
         return cli.report(LABEL, problems)
     print(USAGE)
     return 2

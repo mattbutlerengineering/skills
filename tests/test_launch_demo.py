@@ -701,5 +701,185 @@ class TestAssemble(WorkdirMixin, unittest.TestCase):
         self.assertFalse(self.out.exists())
 
 
+LAUNCH_MD = """---
+launch: demo
+date: 2026-10-08
+sources: [docs/features/demo/prd.md]
+video: launch.mp4
+---
+
+# Launch: demo
+
+""" + COPY
+
+
+def vhs_writes_raw(args, input):
+    (Path(args[0]).parent / "raw.mp4").write_text("v", encoding="utf-8")
+    return ""
+
+
+def produced_script():
+    """Fakes for one PRODUCED terminal run of STORYBOARD: four narration
+    lines, the recording, the mux, the summary."""
+    return {"say": [writes()] * 4,
+            "ffprobe": ["2.0\n", "3.0\n", "1.0\n", "1.0\n", "10.5\n",
+                        PROBE_LINES],
+            "vhs": [vhs_writes_raw],
+            "ffmpeg": [writes()]}
+
+
+class RenderMixin:
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.config = {**VALID, "publish": "out", "voice": "say -o {out}"}
+        write_config(self.root, self.config)
+        self.slug_dir = self.root / "out" / "demo"
+        self.slug_dir.mkdir(parents=True)
+        (self.slug_dir / "launch.md").write_text(LAUNCH_MD, encoding="utf-8")
+        (self.slug_dir / "storyboard.json").write_text(
+            json.dumps(STORYBOARD), encoding="utf-8")
+        self.scratch = self.root / "scratch"
+        self.scratch.mkdir()
+        self.which = FakeWhich(ALL_TOOLS)
+        self.runners = FakeRunners(produced_script())
+
+    def render(self):
+        return launch_demo.render(self.root, self.config, "demo", self.which,
+                                  self.runners, scratch=self.scratch)
+
+    def published(self):
+        return sorted(path.name for path in self.slug_dir.iterdir())
+
+
+class TestRender(RenderMixin, unittest.TestCase):
+    def test_no_copy_is_the_missing_problem(self):
+        (self.slug_dir / "launch.md").unlink()
+        self.assertEqual(self.render(),
+                         (None, [], ["launch-demo: missing out/demo/launch.md"]))
+
+    def test_no_storyboard_is_the_missing_problem(self):
+        (self.slug_dir / "storyboard.json").unlink()
+        self.assertEqual(self.render(), (None, [], [
+            "launch-demo: missing out/demo/storyboard.json"]))
+
+    def test_a_bad_storyboard_is_problems_before_any_tool_runs(self):
+        board = storyboard(outro="Something is guessed.")
+        (self.slug_dir / "storyboard.json").write_text(json.dumps(board),
+                                                       encoding="utf-8")
+        self.assertEqual(self.render(), (None, [], [
+            f"{SB} outro is not a sentence of launch.md"]))
+        self.assertEqual(self.runners.calls, [])
+
+    def test_a_missing_tool_is_copy_only_before_any_tool_runs(self):
+        self.which = FakeWhich({**ALL_TOOLS, "vhs": None})
+        verdict, lines, problems = self.render()
+        self.assertEqual((verdict, problems), ("COPY-ONLY", []))
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].startswith("launch-demo: missing vhs — "),
+                        lines)
+        self.assertEqual(self.runners.calls, [])
+        self.assertEqual(self.published(), ["launch.md", "storyboard.json"])
+
+    def test_a_produced_run_in_order(self):
+        verdict, lines, problems = self.render()
+        self.assertEqual((verdict, problems), ("PRODUCED", []))
+        self.assertEqual(lines[:3], [
+            f"launch-demo: scratch {self.scratch}",
+            "launch-demo: wrote out/demo/demo.tape",
+            "launch-demo: wrote out/demo/launch.mp4"])
+        self.assertEqual(lines[3:], ["launch-demo: codec_name=h264",
+                                     "launch-demo: codec_type=video",
+                                     "launch-demo: codec_name=aac",
+                                     "launch-demo: codec_type=audio"])
+        self.assertEqual(self.runners.binaries(), [
+            "say", "ffprobe", "say", "ffprobe", "say", "ffprobe", "say",
+            "ffprobe", "vhs", "ffprobe", "ffmpeg", "ffprobe"])
+        self.assertEqual(self.published(), ["demo.tape", "launch.md",
+                                            "launch.mp4", "storyboard.json"])
+        self.assertEqual((self.slug_dir / "demo.tape").read_text(),
+                         (self.scratch / "demo.tape").read_text())
+        for name in ("line-1.wav", "raw.mp4", "demo.tape"):
+            self.assertTrue((self.scratch / name).is_file(), name)
+
+    def test_the_narration_is_every_line_in_scene_order(self):
+        self.render()
+        spoken = [call[3] for call in self.runners.calls if call[0] == "say"]
+        self.assertEqual(spoken, [STORYBOARD["intro"] + "\n",
+                                  STORYBOARD["steps"][0]["say"] + "\n",
+                                  STORYBOARD["steps"][1]["say"] + "\n",
+                                  STORYBOARD["outro"] + "\n"])
+
+    def test_a_default_scratch_is_a_named_launch_demo_tempdir(self):
+        import shutil
+        verdict, lines, _ = launch_demo.render(self.root, self.config, "demo",
+                                               self.which, self.runners)
+        scratch = Path(lines[0].removeprefix("launch-demo: scratch "))
+        self.addCleanup(shutil.rmtree, scratch, True)
+        self.assertEqual(verdict, "PRODUCED")
+        self.assertTrue(scratch.name.startswith("launch-demo-"))
+        self.assertTrue((scratch / "raw.mp4").is_file())
+
+    def test_a_voice_failure_writes_nothing(self):
+        err = subprocess.CalledProcessError(1, ["say"],
+                                            stderr="Voice not found\n")
+        self.runners = FakeRunners({**produced_script(), "say": [err]})
+        verdict, lines, problems = self.render()
+        self.assertEqual((verdict, problems), (None, [
+            "launch-demo: voice failed on line 1: Voice not found"]))
+        self.assertEqual(lines, [f"launch-demo: scratch {self.scratch}"])
+        self.assertEqual(self.published(), ["launch.md", "storyboard.json"])
+
+    def test_a_drift_failure_writes_nothing(self):
+        script = produced_script()
+        script["ffprobe"][4] = "20.0\n"
+        self.runners = FakeRunners(script)
+        verdict, _, problems = self.render()
+        self.assertEqual((verdict, problems), (None, [
+            "launch-demo: recording ran 20.0 s where the plan expected"
+            " 10.3 s — narration would drift"]))
+        self.assertEqual(self.published(), ["launch.md", "storyboard.json"])
+
+    def test_an_ffmpeg_failure_writes_nothing(self):
+        err = subprocess.CalledProcessError(
+            1, ["ffmpeg"], stderr="Unrecognized option 'nope'\n")
+        self.runners = FakeRunners({**produced_script(), "ffmpeg": [err]})
+        verdict, _, problems = self.render()
+        self.assertEqual((verdict, problems), (None, [
+            "launch-demo: ffmpeg failed: Unrecognized option 'nope'"]))
+        self.assertEqual(self.published(), ["launch.md", "storyboard.json"])
+
+
+class TestRenderLeg(RenderMixin, cli_contract.CliContract,
+                    unittest.TestCase):
+    usage_fragment = "python3 launch_demo.py config | probe | render"
+    bad_argv = ("render",)
+
+    def run_cli(self, argv):
+        return cli_contract.capture(launch_demo.main, argv, root=self.root,
+                                    which=self.which, runner=self.runners,
+                                    platform="darwin")
+
+    def test_a_produced_run_prints_lines_verdict_and_summary(self):
+        code, out = self.run_cli(["render", "demo"])
+        self.assertEqual(code, 0)
+        lines = out.splitlines()
+        self.assertTrue(lines[0].startswith("launch-demo: scratch "))
+        self.assertEqual(lines[1:3], ["launch-demo: wrote out/demo/demo.tape",
+                                      "launch-demo: wrote out/demo/launch.mp4"])
+        self.assertEqual(lines[-2:], ["PRODUCED", "launch-demo: 0 problem(s)"])
+        import shutil
+        shutil.rmtree(lines[0].removeprefix("launch-demo: scratch "), True)
+
+    def test_problems_print_with_the_count_and_no_verdict(self):
+        (self.slug_dir / "storyboard.json").unlink()
+        code, out = self.run_cli(["render", "demo"])
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            "launch-demo: missing out/demo/storyboard.json",
+            "launch-demo: 1 problem(s)"])
+
+
 if __name__ == "__main__":
     unittest.main()
