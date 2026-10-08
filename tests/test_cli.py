@@ -182,6 +182,14 @@ class TestDetail(unittest.TestCase):
         err = subprocess.CalledProcessError(1, ["git", "push"], stderr="  \n")
         self.assertEqual(cli.detail(err), str(err))
 
+    def test_a_timed_out_childs_bytes_stderr_is_decoded(self):
+        # subprocess.run attaches the child's UNDECODED stderr to a
+        # TimeoutExpired even in text mode, so a hung vhs that wrote a
+        # line would otherwise surface as a bytes repr in the problem.
+        err = subprocess.TimeoutExpired(["vhs"], 600,
+                                        stderr=b"ttyd: not found\n")
+        self.assertEqual(cli.detail(err), "ttyd: not found")
+
 
 class TestFailureVocabulary(unittest.TestCase):
     def test_covers_ran_and_failed_and_never_ran(self):
@@ -392,6 +400,21 @@ class TestRunner(unittest.TestCase):
     def test_a_real_run_returns_the_completed_process(self):
         run = cli.runner("true")
         self.assertEqual(run([]).returncode, 0)
+
+    def test_a_timeout_raises_into_the_vocabulary(self):
+        run = cli.runner("bash", timeout=0.5)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            run(["-c", "sleep 5"])
+        try:
+            run(["-c", "sleep 5"])
+        except cli.CLI_FAILURES:
+            pass
+        else:
+            self.fail("TimeoutExpired is not in CLI_FAILURES")
+
+    def test_stdin_input_reaches_the_child(self):
+        run = cli.runner("cat")
+        self.assertEqual(run([], input="hello\n").stdout, "hello\n")
 
 
 class TestGhRunner(unittest.TestCase):

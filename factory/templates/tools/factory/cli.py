@@ -28,7 +28,9 @@ count, return the exit code — retyped in ten mains before it moved here
 (ADR-0051). read_file is the guarded local-file read — unreadable,
 undecodable, unparsable, or the wrong top-level shape, each an
 unlabelled problem string where every reader had typed its own guard,
-and absence left to the caller (ADR-0075).
+and absence left to the caller (ADR-0075). runner takes an optional
+timeout and its run an optional stdin input, so a tool driving a
+recorder or a voice (launch_demo.py) needs no private runner.
 
 gh_runner, the stdout port over runner("gh"), lives beside runner for the
 same reason write_outputs moved here (ADR-0040): it had grown four real
@@ -49,9 +51,11 @@ import time
 from collections import namedtuple
 from pathlib import Path
 
-# A failed or missing binary raises one of these; callers turn that into
-# a label-prefixed problem string instead of a traceback.
-CLI_FAILURES = (subprocess.CalledProcessError, OSError)
+# A failed or missing binary raises one of these, as does one that
+# outlives its runner's timeout; callers turn that into a label-prefixed
+# problem string instead of a traceback.
+CLI_FAILURES = (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+                OSError)
 
 
 def child_env():
@@ -67,7 +71,12 @@ def detail(err):
     """One-line detail for a failed CLI call's problem string: the
     command's own stderr when it ran, else the OS error (e.g. the binary
     not installed)."""
-    stderr = (getattr(err, "stderr", None) or "").strip()
+    stderr = getattr(err, "stderr", None) or ""
+    if isinstance(stderr, bytes):
+        # subprocess.run attaches a timed-out child's output undecoded,
+        # even in text mode.
+        stderr = stderr.decode("utf-8", errors="replace")
+    stderr = stderr.strip()
     return stderr.splitlines()[-1] if stderr else str(err)
 
 
@@ -384,13 +393,17 @@ def read_execution(path):
     return (tokens, float(cost)), None
 
 
-def runner(binary):
-    """A run(args) callable shelling out to `binary`, returning the
-    CompletedProcess. A failed or missing binary raises CLI_FAILURES —
-    the caller's concern, not this adapter's."""
-    def run(args):
+def runner(binary, timeout=None):
+    """A run(args, input=None) callable shelling out to `binary`,
+    returning the CompletedProcess. A failed or missing binary raises
+    CLI_FAILURES — the caller's concern, not this adapter's — as does
+    one still running after `timeout` seconds (None: wait forever).
+    `input` is the child's stdin text; both defaults leave every
+    earlier caller byte-for-byte unchanged."""
+    def run(args, input=None):
         return subprocess.run([binary, *args], check=True,
-                              capture_output=True, text=True)
+                              capture_output=True, text=True,
+                              timeout=timeout, input=input)
     return run
 
 
