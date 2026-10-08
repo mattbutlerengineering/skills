@@ -96,3 +96,47 @@ evidentiary question — stop and surface. Never fabricate verification
 evidence: run the real commands (`python3 -m unittest discover tests`,
 `python3 lint.py`, `python3 gates.py && python3 gates.py --selftest`).
 Commit each stage's artifact on the branch before handing back.
+
+## Feedback on hand at Operate (2026-10-08)
+
+Collected by the orchestrating session; the Operate stage's only source
+beside the artifacts. Every signal below is anecdote-strength unless it
+says otherwise.
+
+- **Owner, at the gate (2026-10-07 local):** asked "What should this
+  resume do?" with the rendered page linked, chose "I've looked;
+  squash-merge #615" — approval of the figure as rendered, no change
+  requested. Asked on 2026-10-08 whether to run the retro now or let it
+  breathe, chose "Run the retro now" and added no further words.
+- **Release outcome:** PR #615 squash-merged as `15caaa9`; anchor issue
+  #614 closed on merge; branch deleted locally and on origin, so the
+  uncropped 1.88 MB screenshots at the branch's `07ff88a` are
+  unreachable; main's `check` run on `15caaa9` succeeded; `python3
+  lint.py` on main prints 0 problems with `check_readme_figure`
+  registered.
+- **Home page at full README width:** observed by the orchestrator with
+  headless Chrome (1280px window, 1x, light scheme, signed out) on the
+  repository home page after the merge — the figure renders in the
+  README column with the loop, six cards and legend legible. Dark was
+  not re-captured on the home page; the blob-view proof in
+  verification.md used the same mechanism.
+- **Outside signal at retro time:** 0 stars, 0 forks, 0 watchers; no PR
+  comment beyond the factory review; no issue opened since the merge.
+  The repository has been public for about one day. Absence, not
+  evidence.
+- **Known consequences left open:** installed plugin caches (0.3.0)
+  still carry the mermaid until the next version bump; the
+  lean-and-polish worktree will fail lint on rebase until `lean` and
+  `polish` get a table row and a figure `<text>`; two deferred minors in
+  review.md (filename sublabels that stand in for three stage names; the
+  embed check's substring form).
+- **Process observations for the environment retro:** the 1.88 MB
+  screenshots were caught only by Review's judgement — no mechanical
+  check in `gates.py` or CI looks at added-binary size; the ledger rows'
+  `at` field is UTC while `run_id` carries the local date (budget_guard
+  stamps UTC by design); `gh pr merge --delete-branch` fails to delete
+  the local branch from a worktree layout where main is checked out
+  elsewhere (the remote branch had to be deleted by hand); the harness's
+  permission classifier stopped `gh pr merge` until the owner answered a
+  direct question; the orchestrator's first home-page capture missed the
+  README because the file list pushed it below a 1800px window.
