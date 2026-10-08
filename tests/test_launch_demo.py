@@ -550,5 +550,79 @@ class TestNarrate(WorkdirMixin, unittest.TestCase):
                           ["-w", str(self.work / "line-1.wav")]))
 
 
+class TestRecordTerminal(WorkdirMixin, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.plan = launch_demo.plan(PLAN_BOARD, [2.0, 3.0, 1.0])
+        self.raw = self.work / "raw.mp4"
+        self.tape = self.work / "demo.tape"
+
+    def record(self, runners):
+        return launch_demo.record_terminal(self.plan, self.work, "bash",
+                                           runners)
+
+    def test_the_tape_the_vhs_run_and_the_computed_offsets(self):
+        runners = FakeRunners({"vhs": [lambda args, input:
+                                       self.raw.write_text("v") and ""],
+                               "ffprobe": ["9.1\n"]})
+        result, problems = self.record(runners)
+        self.assertEqual(problems, [])
+        self.assertEqual(result, (self.raw, [0.0, 3.0, 7.3]))
+        self.assertEqual(runners.calls, [
+            ("vhs", launch_demo.RECORD_TIMEOUT, [str(self.tape)], None),
+            ("ffprobe", launch_demo.PROBE_TIMEOUT, duration_argv(self.raw),
+             None)])
+        lines = self.tape.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(lines[:6], [
+            f"Output {self.raw.resolve()}", "Set Shell bash",
+            "Set Width 1280", "Set Height 720", "Set FontSize 18",
+            "Set TypingSpeed 50ms"])
+        body = lines[6:]
+        blocks = []
+        for line in body:
+            if line == "Hide":
+                blocks.append([])
+            blocks[-1].append(line)
+        self.assertEqual(len(blocks), 3)
+        for block, text, commands, sleep in (
+                (blocks[0], ("T", "G"), [], "Sleep 3.0s"),
+                (blocks[1], ("B.",), ["python3 board.py"], "Sleep 3.5s"),
+                (blocks[2], ("C.",), [], "Sleep 1.5s")):
+            self.assertEqual(block[0], "Hide")
+            self.assertTrue(block[1].startswith("Type "), block[1])
+            self.assertIn("clear; printf", block[1])
+            for part in text:
+                self.assertIn(part, block[1])
+            self.assertEqual(block[2:4], ["Enter", "Show"])
+            typed = block[4:-1]
+            self.assertEqual(len(typed), 2 * len(commands))
+            for index, command in enumerate(commands):
+                self.assertTrue(typed[2 * index].startswith("Type "))
+                self.assertIn(command, typed[2 * index])
+                self.assertEqual(typed[2 * index + 1], "Enter")
+            self.assertEqual(block[-1], sleep)
+
+    def test_drift_past_the_tolerance_is_a_problem_and_no_result(self):
+        runners = FakeRunners({"vhs": [lambda args, input:
+                                       self.raw.write_text("v") and ""],
+                               "ffprobe": ["11.0\n"]})
+        self.assertEqual(self.record(runners), (None, [
+            "launch-demo: recording ran 11.0 s where the plan expected"
+            " 8.8 s — narration would drift"]))
+
+    def test_a_failing_vhs(self):
+        err = subprocess.CalledProcessError(
+            1, ["vhs"], stderr="File: demo.tape\nttyd: command not found\n")
+        self.assertEqual(self.record(FakeRunners({"vhs": [err]})), (None, [
+            "launch-demo: terminal recorder failed: ttyd: command not"
+            " found"]))
+
+    def test_a_hung_vhs(self):
+        import cli
+        err = subprocess.TimeoutExpired(["vhs"], 600)
+        self.assertEqual(self.record(FakeRunners({"vhs": [err]})), (None, [
+            f"launch-demo: terminal recorder failed: {cli.detail(err)}"]))
+
+
 if __name__ == "__main__":
     unittest.main()

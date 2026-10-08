@@ -280,6 +280,78 @@ def narrate(lines, voice, workdir, runner=cli.runner):
     return clips, []
 
 
+FONT_SIZE = 18
+# What each scene kind prints before its hold: a bold title over its
+# tagline, a dim caption line, the bold closing line. The recorder
+# draws every word; ffmpeg draws nothing.
+SCREEN_FORMATS = {"title": r"\033[1m%s\033[0m\n\n%s\n",
+                  "step": r"\033[2m%s\033[0m\n\n",
+                  "outro": r"\033[1m%s\033[0m\n"}
+
+
+def _tape_string(text):
+    """A vhs string literal. vhs strings carry no escape processing, so
+    the delimiter is one the text does not contain; a text holding all
+    three loses its backticks."""
+    for quote in ("`", '"', "'"):
+        if quote not in text:
+            return f"{quote}{text}{quote}"
+    return "`" + text.replace("`", "'") + "`"
+
+
+def _screen(plan, scene):
+    """The shell line that clears the terminal and prints a scene's
+    on-screen text, typed off camera."""
+    words = ([plan["title"], plan["tagline"]] if scene["kind"] == "title"
+             else [scene["say"]])
+    return (f"clear; printf '{SCREEN_FORMATS[scene['kind']]}' "
+            + " ".join(shlex.quote(word) for word in words))
+
+
+def _tape(plan, raw, against):
+    """The vhs tape realised from the plan: a header carrying no timing,
+    then per scene the hidden screen print, the step's commands typed
+    and entered, and the scene's hold."""
+    lines = [f"Output {raw.resolve()}", f"Set Shell {against}",
+             f"Set Width {WIDTH}", f"Set Height {HEIGHT}",
+             f"Set FontSize {FONT_SIZE}",
+             f"Set TypingSpeed {round(TYPING_SPEED * 1000)}ms"]
+    for scene in plan["scenes"]:
+        lines += ["Hide", f"Type {_tape_string(_screen(plan, scene))}",
+                  "Enter", "Show"]
+        for command in scene["do"]:
+            lines += [f"Type {_tape_string(command)}", "Enter"]
+        lines.append(f"Sleep {scene['hold']:.1f}s")
+    return "\n".join(lines) + "\n"
+
+
+def record_terminal(plan, workdir, against, runner=cli.runner):
+    """The terminal adapter: ((raw video path, offsets), []) or (None,
+    [one problem]). Writes workdir/demo.tape from the plan, runs vhs on
+    it under RECORD_TIMEOUT, then measures the raw recording — offsets
+    are the plan's computed ones, so a recording further than
+    DRIFT_TOLERANCE from the planned length is refused: an out-of-sync
+    video is worse than none. Knows no publish path."""
+    workdir = Path(workdir)
+    raw, tape = workdir / "raw.mp4", workdir / "demo.tape"
+    tape.write_text(_tape(plan, raw, against), encoding="utf-8")
+    failed = f"{LABEL}: terminal recorder failed"
+    try:
+        runner("vhs", RECORD_TIMEOUT)([str(tape)])
+    except cli.CLI_FAILURES as err:
+        return None, [f"{failed}: {cli.detail(err)}"]
+    if not raw.is_file():
+        return None, [f"{failed}: wrote no {raw.name}"]
+    recorded, problem = _duration(raw, runner)
+    if problem:
+        return None, [f"{failed}: {problem}"]
+    if abs(recorded - plan["planned"]) > DRIFT_TOLERANCE:
+        return None, [f"{LABEL}: recording ran {recorded:.1f} s where the"
+                      f" plan expected {plan['planned']:.1f} s — narration"
+                      " would drift"]
+    return (raw, [scene["offset"] for scene in plan["scenes"]]), []
+
+
 def _entry(name):
     purpose, hint = TOOLS[name]
     return (name, purpose, hint)
