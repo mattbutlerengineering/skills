@@ -13,6 +13,7 @@ the skill's directory, not mirrored into stamped repos. Every external
 CLI (ffmpeg, ffprobe, vhs, node, the voice) goes through cli.runner, so
 tests inject fake runners and CI runs no real recorder. Stdlib only.
 """
+import os
 import shlex
 import shutil
 import sys
@@ -350,6 +351,58 @@ def record_terminal(plan, workdir, against, runner=cli.runner):
                       f" plan expected {plan['planned']:.1f} s — narration"
                       " would drift"]
     return (raw, [scene["offset"] for scene in plan["scenes"]]), []
+
+
+FRAME_RATE = 30
+SUMMARY_ENTRIES = "stream=codec_type,codec_name:format=duration"
+
+
+def _filter_graph(count, offsets):
+    """One ffmpeg filter graph: the raw video scaled into and padded to
+    the frame, each narration clip delayed to its scene's offset (in
+    whole milliseconds, both channels), all of them mixed into one
+    track at full level."""
+    video = (f"[0:v]scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio="
+             f"decrease,pad={WIDTH}:{HEIGHT}:(ow-iw)/2:(oh-ih)/2[v]")
+    delays = []
+    for index, offset in enumerate(offsets[:count], 1):
+        ms = round(offset * 1000)
+        delays.append(f"[{index}:a]adelay={ms}|{ms}[a{index}]")
+    mix = ("".join(f"[a{index}]" for index in range(1, count + 1))
+           + f"amix=inputs={count}:normalize=0[a]")
+    return ";".join([video, *delays, mix])
+
+
+def assemble(raw, clips, offsets, out, runner=cli.runner):
+    """(summary, []) or (None, [one problem]). The one ffmpeg call: the
+    raw recording and every narration WAV in, one H.264 video stream
+    and one AAC mix out, written beside the raw recording and probed
+    there; only a result ffprobe can read is os.replace-d into `out`
+    (its parent created), so the publish path never holds a partial
+    mp4. The summary is ffprobe's stream and duration lines, each
+    prefixed, for Verify to paste. ffmpeg draws nothing: every word on
+    screen is the recorder's."""
+    raw, out = Path(raw), Path(out)
+    scratch_out = raw.parent / out.name
+    argv = ["-y", "-i", str(raw)]
+    for wav, _ in clips:
+        argv += ["-i", str(wav)]
+    argv += ["-filter_complex", _filter_graph(len(clips), offsets),
+             "-map", "[v]", "-map", "[a]",
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(FRAME_RATE),
+             "-c:a", "aac", "-movflags", "+faststart", str(scratch_out)]
+    failed = f"{LABEL}: ffmpeg failed"
+    try:
+        runner("ffmpeg", FFMPEG_TIMEOUT)(argv)
+        out_text = runner("ffprobe", PROBE_TIMEOUT)(
+            ["-v", "error", "-show_entries", SUMMARY_ENTRIES,
+             str(scratch_out)]).stdout
+    except cli.CLI_FAILURES as err:
+        return None, [f"{failed}: {cli.detail(err)}"]
+    out.parent.mkdir(parents=True, exist_ok=True)
+    os.replace(scratch_out, out)
+    return [f"{LABEL}: {line}" for line in out_text.splitlines()
+            if line.strip()], []
 
 
 def _entry(name):

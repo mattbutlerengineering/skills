@@ -624,5 +624,82 @@ class TestRecordTerminal(WorkdirMixin, unittest.TestCase):
             f"launch-demo: terminal recorder failed: {cli.detail(err)}"]))
 
 
+SUMMARY_ARGV = ["-v", "error", "-show_entries",
+                "stream=codec_type,codec_name:format=duration"]
+PROBE_LINES = "codec_name=h264\ncodec_type=video\ncodec_name=aac\n" \
+              "codec_type=audio\n"
+ENCODE_TAIL = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30",
+               "-c:a", "aac", "-movflags", "+faststart"]
+
+
+class TestAssemble(WorkdirMixin, unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.raw = self.work / "raw.mp4"
+        self.clips = [(self.work / "line-1.wav", 2.0),
+                      (self.work / "line-2.wav", 3.0)]
+        self.out = Path(self.tmp.name) / "publish" / "demo" / "launch.mp4"
+        self.scratch_out = self.work / "launch.mp4"
+
+    def assemble(self, runners):
+        return launch_demo.assemble(self.raw, self.clips, [0.0, 3.0],
+                                    self.out, runners)
+
+    def test_one_ffmpeg_call_then_the_move_then_the_summary(self):
+        runners = FakeRunners({"ffmpeg": [writes()],
+                               "ffprobe": [PROBE_LINES]})
+        summary, problems = self.assemble(runners)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary, ["launch-demo: codec_name=h264",
+                                   "launch-demo: codec_type=video",
+                                   "launch-demo: codec_name=aac",
+                                   "launch-demo: codec_type=audio"])
+        self.assertTrue(self.out.is_file())
+        self.assertFalse(self.scratch_out.exists())
+        self.assertEqual(runners.binaries(), ["ffmpeg", "ffprobe"])
+        binary, timeout, args, _ = runners.calls[0]
+        self.assertEqual(timeout, launch_demo.FFMPEG_TIMEOUT)
+        self.assertEqual(args[:7], ["-y", "-i", str(self.raw),
+                                    "-i", str(self.clips[0][0]),
+                                    "-i", str(self.clips[1][0])])
+        self.assertEqual(args[7], "-filter_complex")
+        graph = args[8]
+        self.assertIn("adelay=0|0", graph)
+        self.assertIn("adelay=3000|3000", graph)
+        self.assertEqual(graph.count("amix=inputs=2"), 1)
+        self.assertIn("scale=1280:720", graph)
+        self.assertIn("pad=1280:720", graph)
+        self.assertEqual(args[-11:], ENCODE_TAIL + [str(self.scratch_out)])
+        self.assertNotIn(str(self.out), args)
+        self.assertEqual(runners.calls[1],
+                         ("ffprobe", launch_demo.PROBE_TIMEOUT,
+                          SUMMARY_ARGV + [str(self.scratch_out)], None))
+
+    def test_a_failing_ffmpeg_leaves_nothing_at_out(self):
+        err = subprocess.CalledProcessError(
+            1, ["ffmpeg"], stderr="ffmpeg version 8.1\nUnrecognized option"
+                                  " 'nope'\n")
+        self.assertEqual(self.assemble(FakeRunners({"ffmpeg": [err]})),
+                         (None, ["launch-demo: ffmpeg failed: Unrecognized"
+                                 " option 'nope'"]))
+        self.assertFalse(self.out.exists())
+
+    def test_a_hung_ffmpeg(self):
+        import cli
+        err = subprocess.TimeoutExpired(["ffmpeg"], 600)
+        self.assertEqual(self.assemble(FakeRunners({"ffmpeg": [err]})),
+                         (None, [f"launch-demo: ffmpeg failed:"
+                                 f" {cli.detail(err)}"]))
+
+    def test_an_unreadable_result_is_the_same_problem_and_no_file(self):
+        err = subprocess.CalledProcessError(
+            1, ["ffprobe"], stderr="moov atom not found\n")
+        runners = FakeRunners({"ffmpeg": [writes()], "ffprobe": [err]})
+        self.assertEqual(self.assemble(runners),
+                         (None, ["launch-demo: ffmpeg failed: moov atom not"
+                                 " found"]))
+        self.assertFalse(self.out.exists())
+
+
 if __name__ == "__main__":
     unittest.main()
