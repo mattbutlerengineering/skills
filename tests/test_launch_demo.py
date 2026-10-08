@@ -467,5 +467,88 @@ class TestPlan(unittest.TestCase):
             launch_demo.plan(PLAN_BOARD, [2.0, 3.0])
 
 
+def duration_argv(path):
+    return ["-v", "error", "-show_entries", "format=duration", "-of",
+            "default=noprint_wrappers=1:nokey=1", str(path)]
+
+
+def writes(path_index=-1, text="x"):
+    """A fake answer that writes the file named by one of its args."""
+    def answer(args, input):
+        Path(args[path_index]).write_text(text, encoding="utf-8")
+        return ""
+    return answer
+
+
+class WorkdirMixin:
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.work = Path(self.tmp.name) / "work"
+        self.work.mkdir()
+
+
+class TestNarrate(WorkdirMixin, unittest.TestCase):
+    LINES = ["A.", "B."]
+    VOICE = "say -o {out}"
+
+    def test_each_line_is_spoken_to_its_own_wav_and_measured(self):
+        runners = FakeRunners({"say": [writes(), writes()],
+                               "ffprobe": ["2.0\n", "3.0\n"]})
+        clips, problems = launch_demo.narrate(self.LINES, self.VOICE,
+                                              self.work, runners)
+        one, two = self.work / "line-1.wav", self.work / "line-2.wav"
+        self.assertEqual(problems, [])
+        self.assertEqual(clips, [(one, 2.0), (two, 3.0)])
+        self.assertEqual(runners.calls, [
+            ("say", launch_demo.VOICE_TIMEOUT, ["-o", str(one)], "A.\n"),
+            ("ffprobe", launch_demo.PROBE_TIMEOUT, duration_argv(one), None),
+            ("say", launch_demo.VOICE_TIMEOUT, ["-o", str(two)], "B.\n"),
+            ("ffprobe", launch_demo.PROBE_TIMEOUT, duration_argv(two), None),
+        ])
+
+    def test_a_failing_voice_stops_at_its_line(self):
+        err = subprocess.CalledProcessError(1, ["say"],
+                                            stderr="Voice not found\n")
+        runners = FakeRunners({"say": [err, writes()]})
+        self.assertEqual(
+            launch_demo.narrate(self.LINES, self.VOICE, self.work, runners),
+            (None, ["launch-demo: voice failed on line 1: Voice not found"]))
+        self.assertEqual(runners.binaries(), ["say"])
+
+    def test_a_hung_voice_is_the_same_shape(self):
+        err = subprocess.TimeoutExpired(["say"], 60)
+        runners = FakeRunners({"say": [err]})
+        import cli
+        self.assertEqual(
+            launch_demo.narrate(self.LINES, self.VOICE, self.work, runners),
+            (None, [f"launch-demo: voice failed on line 1: {cli.detail(err)}"]))
+
+    def test_a_voice_that_writes_nothing(self):
+        runners = FakeRunners({"say": [""]})
+        self.assertEqual(
+            launch_demo.narrate(self.LINES, self.VOICE, self.work, runners),
+            (None, ["launch-demo: voice wrote no file for line 1"]))
+
+    def test_an_unmeasurable_wav_is_a_voice_failure(self):
+        err = subprocess.CalledProcessError(
+            1, ["ffprobe"], stderr="header\nInvalid data found\n")
+        runners = FakeRunners({"say": [writes(), writes()],
+                               "ffprobe": ["2.0\n", err]})
+        self.assertEqual(
+            launch_demo.narrate(self.LINES, self.VOICE, self.work, runners),
+            (None, ["launch-demo: voice failed on line 2: Invalid data"
+                    " found"]))
+
+    def test_the_voice_template_names_the_binary(self):
+        runners = FakeRunners({"espeak-ng": [writes()], "ffprobe": ["1.0\n"]})
+        clips, problems = launch_demo.narrate(["A."], "espeak-ng -w {out}",
+                                              self.work, runners)
+        self.assertEqual(problems, [])
+        self.assertEqual(runners.calls[0][:3],
+                         ("espeak-ng", launch_demo.VOICE_TIMEOUT,
+                          ["-w", str(self.work / "line-1.wav")]))
+
+
 if __name__ == "__main__":
     unittest.main()

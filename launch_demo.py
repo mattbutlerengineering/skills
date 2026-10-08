@@ -17,6 +17,7 @@ import shlex
 import shutil
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import cli
 
@@ -44,6 +45,7 @@ HEAD_TIMEOUT = 5
 
 WHENS = ("ship", "on-demand")
 RECORDERS = ("terminal", "browser")
+URL_SCHEMES = ("http", "https")
 VOICE_DEFAULTS = {"darwin": "say --data-format=LEI16@22050 -o {out}"}
 VOICE_FALLBACK = "espeak-ng -w {out}"
 
@@ -96,7 +98,7 @@ def _check_against(raw):
     if not _is_text(raw["against"]):
         return "against must be a non-empty string"
     if (raw.get("recorder") == "browser"
-            and not raw["against"].startswith(("http://", "https://"))):
+            and urlsplit(raw["against"]).scheme not in URL_SCHEMES):
         return "against must be an http(s) URL for the browser recorder"
 
 
@@ -235,6 +237,47 @@ def plan(storyboard, seconds):
         offset += hold + typed * TYPING_SPEED
     return {"title": storyboard["title"], "tagline": storyboard["tagline"],
             "scenes": scenes, "planned": round(offset, 3)}
+
+
+def _duration(path, runner):
+    """(seconds, None) from ffprobe's format=duration of one media file,
+    or (None, the last line of ffprobe's stderr) — the one owner of the
+    measurement argv, shared by narration and the recorders."""
+    argv = ["-v", "error", "-show_entries", "format=duration", "-of",
+            "default=noprint_wrappers=1:nokey=1", str(path)]
+    try:
+        out = runner("ffprobe", PROBE_TIMEOUT)(argv).stdout
+        return float(out.strip()), None
+    except cli.CLI_FAILURES as err:
+        return None, cli.detail(err)
+    except ValueError:
+        return None, f"ffprobe answered {out.strip()!r}"
+
+
+def narrate(lines, voice, workdir, runner=cli.runner):
+    """(clips, []) — one (wav path, seconds) per line, in order — or
+    (None, [one problem]) at the first line the voice cannot render.
+    The voice is the config's template with {out} substituted by
+    workdir/line-N.wav and split with shlex (no shell), the line on
+    stdin; the WAV is measured by ffprobe. Retry is safe: each run
+    overwrites its own file."""
+    clips = []
+    for number, line in enumerate(lines, 1):
+        wav = Path(workdir) / f"line-{number}.wav"
+        argv = shlex.split(voice.replace("{out}", str(wav)))
+        try:
+            runner(argv[0], VOICE_TIMEOUT)(argv[1:], input=line + "\n")
+        except cli.CLI_FAILURES as err:
+            return None, [f"{LABEL}: voice failed on line {number}:"
+                          f" {cli.detail(err)}"]
+        if not wav.is_file():
+            return None, [f"{LABEL}: voice wrote no file for line {number}"]
+        seconds, problem = _duration(wav, runner)
+        if problem:
+            return None, [f"{LABEL}: voice failed on line {number}:"
+                          f" {problem}"]
+        clips.append((wav, seconds))
+    return clips, []
 
 
 def _entry(name):
