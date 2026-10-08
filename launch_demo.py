@@ -13,11 +13,15 @@ the skill's directory, not mirrored into stamped repos. Every external
 CLI (ffmpeg, ffprobe, vhs, node, the voice) goes through cli.runner, so
 tests inject fake runners and CI runs no real recorder. Stdlib only.
 """
+import html
+import json
 import os
 import shlex
 import shutil
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -406,9 +410,179 @@ def assemble(raw, clips, offsets, out, runner=cli.runner):
             if line.strip()], []
 
 
+CARD_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>{title}</title>
+<style>
+html, body {{ margin: 0; width: {width}px; height: {height}px;
+  background: #14130f; color: #f3efe6; overflow: hidden; }}
+body {{ display: flex; flex-direction: column; justify-content: center;
+  align-items: center; text-align: center; padding: 0 96px;
+  box-sizing: border-box; font-family: system-ui, sans-serif; }}
+h1 {{ font-size: 56px; font-weight: 700; margin: 0 0 24px; }}
+p {{ font-size: 28px; opacity: 0.8; margin: 0; }}
+</style></head>
+<body><h1>{title}</h1><p>{text}</p></body></html>
+"""
+
+# The browser driver, filled by _driver: the scene code is generated
+# per scene and spliced in at {scenes}; the two values the run needs
+# travel as argv, never the environment.
+DRIVER_HEAD = """import {{ chromium }} from "playwright";
+import {{ renameSync, writeFileSync }} from "node:fs";
+import {{ join }} from "node:path";
+import {{ pathToFileURL }} from "node:url";
+
+const against = process.argv[2];
+const work = process.argv[3];
+let currentCaption = "";
+const CAPTION_SCRIPT = `
+  window.__launchDemoShowCaption = (text) => {{
+    let bar = document.getElementById("launch-demo-caption");
+    if (!text) {{ if (bar) bar.remove(); return; }}
+    if (!bar) {{
+      bar = document.createElement("div");
+      bar.id = "launch-demo-caption";
+      bar.style.cssText = "position:fixed;left:0;right:0;bottom:0;"
+        + "z-index:2147483647;padding:16px 32px;"
+        + "background:rgba(20,19,15,0.9);color:#f3efe6;"
+        + "font:24px/1.4 system-ui,sans-serif;";
+      (document.body || document.documentElement).appendChild(bar);
+    }}
+    bar.textContent = text;
+  }};
+  document.addEventListener("DOMContentLoaded", async () => {{
+    window.__launchDemoShowCaption(await window.__launchDemoCaptionText());
+  }});
+`;
+
+const browser = await chromium.launch({{ headless: true }});
+const context = await browser.newContext({{
+  viewport: {{ width: {width}, height: {height} }},
+  recordVideo: {{ dir: work, size: {{ width: {width}, height: {height} }} }},
+}});
+// The caption bar is re-added on every document load, so a step that
+// navigates keeps its caption; the text comes from this process.
+await context.exposeFunction("__launchDemoCaptionText", () => currentCaption);
+await context.addInitScript(CAPTION_SCRIPT);
+const page = await context.newPage();
+const marks = [Date.now()];
+const sleep = (seconds) => new Promise((r) => setTimeout(r, seconds * 1000));
+const caption = async (text) => {{
+  currentCaption = text;
+  await page.evaluate((t) => window.__launchDemoShowCaption(t), text);
+}};
+const card = (name) => pathToFileURL(join(work, name)).href;
+
+{scenes}
+const video = page.video();
+await context.close();
+renameSync(await video.path(), join(work, "raw.webm"));
+writeFileSync(join(work, "marks.json"), JSON.stringify(marks));
+await browser.close();
+"""
+
+
+def _scene_code(scene, first_step):
+    """One scene's statements: mark its start, then the title card,
+    the step (caption, its do inside an async (page) => wrapper), or
+    the outro card, each held for its planned seconds."""
+    lines = ["marks.push(Date.now());"]
+    if scene["kind"] == "title":
+        lines.append('await page.goto(card("title.html"));')
+    elif scene["kind"] == "outro":
+        lines += ['await caption("");', 'await page.goto(card("outro.html"));']
+    else:
+        if first_step:
+            lines.append("await page.goto(against);")
+        do = scene["do"] if isinstance(scene["do"], str) else ""
+        lines += [f"await caption({json.dumps(scene['say'])});",
+                  f"await (async (page) => {{ {do} }})(page);"]
+    lines.append(f"await sleep({scene['hold']});")
+    return "\n".join(lines)
+
+
+def _driver(plan):
+    steps_seen = 0
+    blocks = []
+    for scene in plan["scenes"]:
+        first_step = scene["kind"] == "step" and steps_seen == 0
+        steps_seen += scene["kind"] == "step"
+        blocks.append(_scene_code(scene, first_step))
+    return DRIVER_HEAD.format(width=WIDTH, height=HEIGHT,
+                              scenes="\n\n".join(blocks))
+
+
+def _card(title, text):
+    return CARD_HTML.format(width=WIDTH, height=HEIGHT,
+                            title=html.escape(title), text=html.escape(text))
+
+
+def record_browser(plan, workdir, against, runner=cli.runner):
+    """The browser adapter: ((raw video path, offsets), []) or (None,
+    [one problem]). Writes the title and outro cards and demo.mjs from
+    the plan, runs it under node with RECORD_TIMEOUT (the URL and the
+    scratch directory as arguments), and reads the marks the driver
+    recorded — page creation, then each scene start — so offsets are
+    measured, not the plan's. Knows no publish path."""
+    workdir = Path(workdir)
+    outro = plan["scenes"][-1]
+    (workdir / "title.html").write_text(
+        _card(plan["title"], plan["tagline"]), encoding="utf-8")
+    (workdir / "outro.html").write_text(_card(outro["say"], ""),
+                                        encoding="utf-8")
+    driver = workdir / "demo.mjs"
+    driver.write_text(_driver(plan), encoding="utf-8")
+    failed = f"{LABEL}: browser recorder failed"
+    try:
+        runner("node", RECORD_TIMEOUT)([str(driver), against, str(workdir)])
+    except cli.CLI_FAILURES as err:
+        return None, [f"{failed}: {cli.detail(err)}"]
+    raw = workdir / "raw.webm"
+    if not raw.is_file():
+        return None, [f"{failed}: wrote no {raw.name}"]
+    marks, problem = cli.read_file(workdir / "marks.json", "marks.json", list)
+    if problem or marks is None:
+        return None, [f"{failed}: {problem or 'wrote no marks.json'}"]
+    scenes = len(plan["scenes"])
+    if len(marks) != scenes + 1:
+        return None, [f"{failed}: marks.json has {len(marks)} marks for"
+                      f" {scenes} scenes"]
+    offsets = [round((mark - marks[0]) / 1000, 3) for mark in marks[1:]]
+    return (raw, offsets), []
+
+
+def _head(url, timeout):
+    """An HTTP HEAD of url: its status, with an HTTP error status still
+    a status (the server answered); anything else raises."""
+    request = urllib.request.Request(url, method="HEAD")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return response.status
+    except urllib.error.HTTPError as err:
+        return err.code
+
+
+def reachable(against, head=None):
+    """(True, None) when a HEAD of against is answered with any HTTP
+    status, else (False, reason). The default head goes through
+    urllib.request under HEAD_TIMEOUT; tests inject one."""
+    try:
+        (head or _head)(against, HEAD_TIMEOUT)
+    except TimeoutError:
+        return False, f"timed out after {HEAD_TIMEOUT} s"
+    except urllib.error.URLError as err:
+        if isinstance(err.reason, TimeoutError):
+            return False, f"timed out after {HEAD_TIMEOUT} s"
+        return False, str(err.reason)
+    except OSError as err:
+        return False, str(err)
+    return True, None
+
+
 # recorder -> (adapter, the driver it writes to the scratch directory,
 # copied beside the mp4 so a reader sees what ran).
-ADAPTERS = {"terminal": (record_terminal, "demo.tape")}
+ADAPTERS = {"terminal": (record_terminal, "demo.tape"),
+            "browser": (record_browser, "demo.mjs")}
 
 
 def _body(text):
@@ -467,6 +641,11 @@ def render(root, config, slug, which=shutil.which, runner=cli.runner,
     missing, _ = probe(config, which, runner)
     if missing:
         return "COPY-ONLY", [_missing_line(entry) for entry in missing], []
+    if config["recorder"] == "browser":
+        ok, reason = reachable(config["against"], head)
+        if not ok:
+            return "COPY-ONLY", [f"{LABEL}: against {config['against']} is"
+                                 f" unreachable: {reason}"], []
     workdir = Path(scratch or tempfile.mkdtemp(prefix="launch-demo-"))
     lines = [f"{LABEL}: scratch {workdir}"]
     clips, problems = narrate(_narration_lines(board), config["voice"],

@@ -893,5 +893,163 @@ class TestBrowserFixture(unittest.TestCase):
                          [])
 
 
+class TestReachable(unittest.TestCase):
+    def test_any_http_status_counts(self):
+        for code in (200, 404):
+            with self.subTest(status=code):
+                self.assertEqual(
+                    launch_demo.reachable("http://h", lambda url, t: code),
+                    (True, None))
+
+    def test_a_connection_failure_is_its_reason(self):
+        import urllib.error
+
+        def head(url, timeout):
+            raise urllib.error.URLError("Connection refused")
+        self.assertEqual(launch_demo.reachable("http://h", head),
+                         (False, "Connection refused"))
+
+    def test_a_timeout_names_the_budget(self):
+        def head(url, timeout):
+            raise TimeoutError()
+        self.assertEqual(launch_demo.reachable("http://h", head),
+                         (False, "timed out after 5 s"))
+
+    def test_the_head_is_asked_with_the_timeout(self):
+        seen = []
+        launch_demo.reachable("http://h", lambda url, t: seen.append((url, t)))
+        self.assertEqual(seen, [("http://h", launch_demo.HEAD_TIMEOUT)])
+
+
+BROWSER_BOARD = {
+    "title": "Counter and greeter", "tagline": "Proved on a fixture",
+    "intro": "A single page.",
+    "steps": [{"say": "Pressing the button counts.",
+               "do": "await page.click('#count'); await page.click('#count');"},
+              {"say": "Typing a name greets it.",
+               "do": "await page.fill('#name', 'Ada'); await page.click('#greet');"}],
+    "outro": "Every recording is comparable."}
+MARKS = [1000, 1000, 4100, 8300, 12000]
+
+
+def node_writes(marks=MARKS):
+    def answer(args, input):
+        work = Path(args[2])
+        (work / "raw.webm").write_text("v", encoding="utf-8")
+        (work / "marks.json").write_text(json.dumps(marks), encoding="utf-8")
+        return ""
+    return answer
+
+
+class TestRecordBrowser(WorkdirMixin, unittest.TestCase):
+    AGAINST = "http://127.0.0.1:8765"
+
+    def setUp(self):
+        super().setUp()
+        self.plan = launch_demo.plan(BROWSER_BOARD, [2.0, 3.0, 3.5, 1.0])
+
+    def record(self, runners):
+        return launch_demo.record_browser(self.plan, self.work, self.AGAINST,
+                                          runners)
+
+    def test_the_driver_the_node_run_and_the_measured_offsets(self):
+        runners = FakeRunners({"node": [node_writes()]})
+        result, problems = self.record(runners)
+        self.assertEqual(problems, [])
+        self.assertEqual(result, (self.work / "raw.webm",
+                                  [0.0, 3.1, 7.3, 11.0]))
+        self.assertEqual(runners.calls, [
+            ("node", launch_demo.RECORD_TIMEOUT,
+             [str(self.work / "demo.mjs"), self.AGAINST, str(self.work)],
+             None)])
+        for card, text in (("title.html", ("Counter and greeter",
+                                           "Proved on a fixture")),
+                           ("outro.html", ("Every recording is comparable.",))):
+            page = (self.work / card).read_text(encoding="utf-8")
+            self.assertIn("1280", page)
+            self.assertIn("720", page)
+            for part in text:
+                self.assertIn(part, page)
+        script = (self.work / "demo.mjs").read_text(encoding="utf-8")
+        for needle in ('import { chromium } from "playwright"', "recordVideo",
+                       "width: 1280", "height: 720", "process.argv[2]",
+                       "process.argv[3]", "title.html", "outro.html",
+                       "Date.now()", "marks.json", "addInitScript",
+                       "async (page) =>",
+                       BROWSER_BOARD["steps"][0]["do"],
+                       BROWSER_BOARD["steps"][1]["do"],
+                       json.dumps(BROWSER_BOARD["steps"][0]["say"]),
+                       json.dumps(BROWSER_BOARD["steps"][1]["say"])):
+            self.assertIn(needle, script, needle)
+        self.assertNotIn("process.env", script)
+
+    def test_a_failing_node(self):
+        err = subprocess.CalledProcessError(
+            1, ["node"], stderr="node:internal\nError: browserType.launch:"
+                                " Executable doesn't exist\n")
+        self.assertEqual(self.record(FakeRunners({"node": [err]})), (None, [
+            "launch-demo: browser recorder failed: Error: browserType.launch:"
+            " Executable doesn't exist"]))
+
+    def test_too_few_marks(self):
+        runners = FakeRunners({"node": [node_writes([1000, 1000, 4100])]})
+        self.assertEqual(self.record(runners), (None, [
+            "launch-demo: browser recorder failed: marks.json has 3 marks"
+            " for 4 scenes"]))
+
+
+class TestRenderBrowser(RenderMixin, unittest.TestCase):
+    AGAINST = "http://127.0.0.1:8765"
+
+    def setUp(self):
+        super().setUp()
+        self.config = {**self.config, "recorder": "browser",
+                       "against": self.AGAINST}
+        write_config(self.root, self.config)
+        board = storyboard()
+        board["steps"][0]["do"] = "await page.click('#count');"
+        board["steps"][1]["do"] = ""
+        (self.slug_dir / "storyboard.json").write_text(json.dumps(board),
+                                                       encoding="utf-8")
+        script = produced_script()
+        script["ffprobe"] = ["2.0\n", "3.0\n", "1.0\n", "1.0\n",
+                             PROBE_LINES]
+        # The probe resolves playwright through node first; the
+        # recorder's run is the second node answer.
+        self.runners = FakeRunners({**script, "node": ["", node_writes()]})
+
+    def render(self, head):
+        return launch_demo.render(self.root, self.config, "demo", self.which,
+                                  self.runners, head=head,
+                                  scratch=self.scratch)
+
+    def test_an_unreachable_url_is_copy_only_before_narration(self):
+        import urllib.error
+
+        def head(url, timeout):
+            raise urllib.error.URLError("Connection refused")
+        self.assertEqual(self.render(head), ("COPY-ONLY", [
+            f"launch-demo: against {self.AGAINST} is unreachable:"
+            " Connection refused"], []))
+        self.assertEqual(self.runners.binaries(), ["node"])  # the probe
+        self.assertEqual(self.published(), ["launch.md", "storyboard.json"])
+
+    def test_a_reachable_url_records_with_measured_offsets(self):
+        verdict, lines, problems = self.render(lambda url, t: 200)
+        self.assertEqual((verdict, problems), ("PRODUCED", []))
+        self.assertEqual(lines[1], "launch-demo: wrote out/demo/demo.mjs")
+        self.assertEqual(self.published(), ["demo.mjs", "launch.md",
+                                            "launch.mp4", "storyboard.json"])
+        self.assertEqual(self.runners.binaries(), [
+            "node", "say", "ffprobe", "say", "ffprobe", "say", "ffprobe",
+            "say", "ffprobe", "node", "ffmpeg", "ffprobe"])
+        ffmpeg = [call for call in self.runners.calls
+                  if call[0] == "ffmpeg"][0]
+        self.assertIn(str(self.scratch / "raw.webm"), ffmpeg[2])
+        graph = ffmpeg[2][ffmpeg[2].index("-filter_complex") + 1]
+        self.assertIn("adelay=3100|3100", graph)
+        self.assertIn("adelay=11000|11000", graph)
+
+
 if __name__ == "__main__":
     unittest.main()
