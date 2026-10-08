@@ -303,5 +303,128 @@ class TestProbeLeg(CliMixin, unittest.TestCase):
             "launch-demo: 1 problem(s)"])
 
 
+COPY = """## What it is
+
+The board is one picture of every run. It needs no commands
+to read.
+
+## What it does
+
+It places each run on its stage. It counts the boxes that are
+checked. It marks the runs that cannot be oriented.
+
+## How it helps
+
+You see where everything is at a glance. Nothing is guessed.
+"""
+STORYBOARD = {
+    "title": "Pipeline board",
+    "tagline": "Every run, one picture",
+    "intro": "The board is one picture of every run.",
+    "steps": [{"say": "It places each run on its stage.",
+               "do": ["python3 board.py"]},
+              {"say": "It counts the boxes that are checked.",
+               "do": []}],
+    "outro": "You see where everything is at a glance.",
+}
+SB = "launch-demo: storyboard"
+
+
+def storyboard(**changes):
+    board = {k: v for k, v in STORYBOARD.items()}
+    board["steps"] = [dict(step) for step in STORYBOARD["steps"]]
+    board.update(changes)
+    return board
+
+
+class TestCheckStoryboard(unittest.TestCase):
+    def check(self, board, recorder="terminal"):
+        return launch_demo.check_storyboard(board, COPY, recorder)
+
+    def test_a_conformant_terminal_storyboard(self):
+        self.assertEqual(self.check(STORYBOARD), [])
+
+    def test_a_conformant_browser_storyboard_takes_string_dos(self):
+        board = storyboard()
+        board["steps"][0]["do"] = "await page.click('#count');"
+        board["steps"][1]["do"] = ""
+        self.assertEqual(self.check(board, "browser"), [])
+
+    def test_each_missing_field_is_named(self):
+        for field in ("title", "tagline", "intro", "steps", "outro"):
+            with self.subTest(field=field):
+                board = storyboard()
+                del board[field]
+                self.assertEqual(self.check(board),
+                                 [f"{SB} has no {field}"])
+
+    def test_several_missing_fields_come_in_field_order(self):
+        board = storyboard()
+        del board["outro"], board["title"], board["steps"]
+        self.assertEqual(self.check(board), [f"{SB} has no title",
+                                             f"{SB} has no steps",
+                                             f"{SB} has no outro"])
+
+    def test_steps_must_be_a_non_empty_list(self):
+        for bad in ([], "x"):
+            with self.subTest(steps=bad):
+                self.assertEqual(self.check(storyboard(steps=bad)),
+                                 [f"{SB} steps must be a non-empty list"])
+
+    def test_a_step_without_say(self):
+        board = storyboard()
+        del board["steps"][0]["say"]
+        self.assertEqual(self.check(board), [f"{SB} step 1 has no say"])
+
+    def test_a_terminal_do_must_be_a_list(self):
+        board = storyboard()
+        board["steps"][0]["do"] = "python3 board.py"
+        self.assertEqual(self.check(board),
+                         [f"{SB} step 1 do must be a list of commands"])
+
+    def test_a_browser_do_must_be_a_string(self):
+        board = storyboard()
+        del board["steps"][1]["do"]
+        self.assertEqual(self.check(board, "browser"),
+                         [f"{SB} step 1 do must be a string"])
+
+    def test_a_step_without_do_is_conformant_for_both(self):
+        board = storyboard()
+        for step in board["steps"]:
+            del step["do"]
+        self.assertEqual(self.check(board, "terminal"), [])
+        self.assertEqual(self.check(board, "browser"), [])
+
+    def test_an_intro_not_in_the_copy(self):
+        board = storyboard(intro="The board is one picture of every repo.")
+        self.assertEqual(self.check(board),
+                         [f"{SB} intro is not a sentence of launch.md"])
+
+    def test_a_narration_line_not_in_the_copy(self):
+        board = storyboard()
+        board["steps"][1]["say"] = "It counts the boxes that are ticked."
+        self.assertEqual(
+            self.check(board),
+            [f"{SB} step 2 narration is not a sentence of launch.md"])
+
+    def test_an_outro_not_in_the_copy(self):
+        board = storyboard(outro="Something is guessed.")
+        self.assertEqual(self.check(board),
+                         [f"{SB} outro is not a sentence of launch.md"])
+
+    def test_the_comparison_is_whitespace_normalised(self):
+        # "It needs no commands\nto read." wraps in the copy.
+        board = storyboard(intro="It needs no commands to read.")
+        self.assertEqual(self.check(board), [])
+        board = storyboard(intro="It  needs no\ncommands to read.")
+        self.assertEqual(self.check(board), [])
+
+    def test_a_non_object_storyboard(self):
+        for bad in ([], "x", None):
+            with self.subTest(storyboard=bad):
+                self.assertEqual(self.check(bad),
+                                 [f"{SB} is not a JSON object"])
+
+
 if __name__ == "__main__":
     unittest.main()

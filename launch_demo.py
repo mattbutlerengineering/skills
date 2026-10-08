@@ -145,6 +145,65 @@ def load(root, platform=sys.platform):
     return config, []
 
 
+STORYBOARD_FIELDS = ("title", "tagline", "intro", "steps", "outro")
+
+
+def _normalised(text):
+    return " ".join(text.split())
+
+
+def _in_copy(line, copy):
+    return isinstance(line, str) and _normalised(line) in copy
+
+
+def _check_steps(steps, copy, recorder):
+    """The per-step problems: each step's say present and cut from the
+    copy, its do in the recorder's shape — a list of commands for the
+    terminal, one string of statements for the browser, or absent."""
+    problems = []
+    for number, step in enumerate(steps, 1):
+        label = f"{LABEL}: storyboard step {number}"
+        if not isinstance(step, dict) or "say" not in step:
+            problems.append(f"{label} has no say")
+        elif not _in_copy(step["say"], copy):
+            problems.append(f"{label} narration is not a sentence of"
+                            " launch.md")
+        if not isinstance(step, dict) or "do" not in step:
+            continue
+        if recorder == "terminal" and not isinstance(step["do"], list):
+            problems.append(f"{label} do must be a list of commands")
+        if recorder == "browser" and not isinstance(step["do"], str):
+            problems.append(f"{label} do must be a string")
+    return problems
+
+
+def check_storyboard(storyboard, copy_text, recorder):
+    """The storyboard held to its grammar and to the copy: problems, []
+    when conformant. Every intro, say and outro must be a verbatim
+    sentence of launch.md's body, compared whitespace-normalised on
+    both sides, so "every narration line is cut from the copy" is a
+    check rather than a hope. Pure: reads no file, runs nothing."""
+    label = f"{LABEL}: storyboard"
+    if not isinstance(storyboard, dict):
+        return [f"{label} is not a JSON object"]
+    copy = _normalised(copy_text)
+    problems = []
+    for field in STORYBOARD_FIELDS:
+        if field not in storyboard:
+            problems.append(f"{label} has no {field}")
+        elif field in ("intro", "outro"):
+            if not _in_copy(storyboard[field], copy):
+                problems.append(f"{label} {field} is not a sentence of"
+                                " launch.md")
+        elif field == "steps":
+            steps = storyboard["steps"]
+            if not isinstance(steps, list) or not steps:
+                problems.append(f"{label} steps must be a non-empty list")
+            else:
+                problems.extend(_check_steps(steps, copy, recorder))
+    return problems
+
+
 def _entry(name):
     purpose, hint = TOOLS[name]
     return (name, purpose, hint)
