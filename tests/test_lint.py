@@ -124,8 +124,15 @@ def make_clean_tree(root):
     # check_readme_no_orphans, which reads only that section (see
     # lint.readme_stage_mentions) — without it, the smallest tree would
     # fail the one checker whose whole job is reading that heading.
+    # check_readme_figure holds the README to embedding the skill-map
+    # figure, so the clean README carries the image line above the
+    # section (outside it, with no backtick token, so the orphan scan
+    # never sees it) — and the figure itself names every skill as one
+    # `<text>` element per line, so a test can drop one by string
+    # replacement the way the README fixture's one-slug-per-line form
+    # already allows.
     (root / "README.md").write_text(
-        "# t\n\n## Stages\n\n"
+        "# t\n\n![map](docs/assets/skill-map.svg)\n\n## Stages\n\n"
         + "".join(f"- `{slug}`\n" for slug in ALL_SKILLS),
         encoding="utf-8")
 
@@ -140,6 +147,14 @@ def make_clean_tree(root):
         + "\n### Maintenance-run orientation\n\n"
         + protocol_table(protocol.MAINTENANCE_STAGE_ARTIFACTS),
         encoding="utf-8")
+
+    figure = root / "docs" / "assets" / "skill-map.svg"
+    figure.parent.mkdir(parents=True)
+    figure.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">\n'
+        + "".join(f'<text x="0" y="0">{slug}</text>\n'
+                  for slug in ALL_SKILLS)
+        + "</svg>\n", encoding="utf-8")
 
     cases = [{"id": f"{slug}-{n}", "kind": "direct",
               "expected": slug, "query": "q"}
@@ -826,6 +841,126 @@ class TestReadmeNoOrphans(CheckerTreeTest):
         # second checker reporting the same absence would double it.
         (self.root / "README.md").unlink()
         self.assertEqual(lint.check_readme_no_orphans(self.root), [])
+
+
+class TestReadmeFigure(CheckerTreeTest):
+    """The README's first figure is a hand-placed roster
+    (docs/features/readme-skill-map/architecture.md): every skill is a
+    `<text>` element in docs/assets/skill-map.svg, and README.md embeds
+    that file. Same roster as check_readme_skills (ALL_SKILLS plus
+    extra_skills, whole slugs via names_slug) read off the figure's
+    visible text — never its raw bytes, so a slug that survives only in
+    an `id`, a comment or a `<style>` rule is still a missing name."""
+
+    def figure(self):
+        return self.root / "docs" / "assets" / "skill-map.svg"
+
+    def drop(self, slug):
+        path = self.figure()
+        path.write_text(path.read_text(encoding="utf-8")
+                        .replace(f'<text x="0" y="0">{slug}</text>\n', ""),
+                        encoding="utf-8")
+
+    def test_the_clean_fixture_is_clean(self):
+        self.assertEqual(lint.check_readme_figure(self.root), [])
+
+    def test_a_skill_the_figure_never_names_is_reported(self):
+        self.drop("ship")
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'ship'"])
+
+    def test_a_slug_a_reader_cannot_see_is_not_a_name(self):
+        """The visible-text rule: an `id` attribute, an XML comment and a
+        `<style>` rule all carry the slug, and none of them is a label a
+        reader (or a screen reader) can see — so a figure whose box says
+        "Ship" and whose id says `ship` is the rotted figure the checker
+        exists to catch, not a clean one."""
+        self.drop("ship")
+        path = self.figure()
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            "</svg>",
+            '<!-- ship -->\n<style>.ship { fill: red; }</style>\n'
+            '<rect id="ship" x="0" y="0" width="1" height="1"/>\n</svg>'),
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'ship'"])
+
+    def test_a_slug_nested_in_a_longer_one_is_still_required(self):
+        """`architect` sits inside `architecture-diagram` and inside
+        `interactive-architecture-diagram`, both still drawn; a substring
+        test would call the figure complete without it."""
+        self.drop("architect")
+        text = self.figure().read_text(encoding="utf-8")
+        self.assertIn(">architecture-diagram<", text)
+        self.assertIn(">interactive-architecture-diagram<", text)
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'architect'"])
+
+    def test_a_slug_split_across_tspans_is_still_a_name(self):
+        """Tspans are how an SVG label wraps or shifts part of a word;
+        the checker reads the whole text content of the element, so a
+        slug split across one `<text>`'s tspans is not reported."""
+        path = self.figure()
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            '<text x="0" y="0">ship</text>',
+            '<text x="0" y="0"><tspan>sh</tspan><tspan>ip</tspan></text>'),
+            encoding="utf-8")
+        self.assertEqual(lint.check_readme_figure(self.root), [])
+
+    def test_a_discovered_dir_outside_the_taxonomy_is_held_to_it_too(self):
+        rogue = self.root / "skills" / "rogue"
+        rogue.mkdir()
+        (rogue / "SKILL.md").write_text(
+            "---\nname: rogue\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'rogue'"])
+
+    def test_roster_problems_come_first_in_roster_order_then_the_embed(
+            self):
+        self.drop("ship")
+        self.drop("audit")
+        readme = self.root / "README.md"
+        readme.write_text(readme.read_text(encoding="utf-8").replace(
+            "![map](docs/assets/skill-map.svg)\n\n", ""), encoding="utf-8")
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'ship'",
+             "docs/assets/skill-map.svg never names skill 'audit'",
+             "README.md never embeds 'docs/assets/skill-map.svg'"])
+
+    def test_a_missing_figure_is_one_problem_not_one_per_skill(self):
+        self.figure().unlink()
+        self.assertEqual(lint.check_readme_figure(self.root),
+                         ["missing docs/assets/skill-map.svg"])
+
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        self.figure().write_bytes(
+            '<svg xmlns="http://www.w3.org/2000/svg">caf\u00e9</svg>'
+            .encode("latin-1"))
+        problems = lint.check_readme_figure(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "cannot read docs/assets/skill-map.svg:"), problems)
+
+    def test_a_figure_that_is_not_well_formed_is_one_problem(self):
+        self.figure().write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg"><text>idea</text>',
+            encoding="utf-8")
+        problems = lint.check_readme_figure(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "docs/assets/skill-map.svg is not valid SVG:"), problems)
+
+    def test_missing_readme_yields_no_problem_here(self):
+        # check_readme_skills already reports "missing README.md"; the
+        # embed line can only be judged on a README that exists.
+        (self.root / "README.md").unlink()
+        self.assertEqual(lint.check_readme_figure(self.root), [])
 
 
 class TestPluginSkills(CheckerTreeTest):
