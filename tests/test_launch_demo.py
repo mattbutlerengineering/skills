@@ -573,8 +573,10 @@ class TestRecordTerminal(WorkdirMixin, unittest.TestCase):
             ("ffprobe", launch_demo.PROBE_TIMEOUT, duration_argv(self.raw),
              None)])
         lines = self.tape.read_text(encoding="utf-8").splitlines()
+        # vhs 0.11.0 parses only a quoted Output path (an unquoted
+        # absolute one is `Expected file path after output`).
         self.assertEqual(lines[:6], [
-            f"Output {self.raw.resolve()}", "Set Shell bash",
+            f'Output "{self.raw.resolve()}"', "Set Shell bash",
             "Set Width 1280", "Set Height 720", "Set FontSize 18",
             "Set TypingSpeed 50ms"])
         body = lines[6:]

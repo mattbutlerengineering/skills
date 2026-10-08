@@ -317,8 +317,9 @@ def _screen(plan, scene):
 def _tape(plan, raw, against):
     """The vhs tape realised from the plan: a header carrying no timing,
     then per scene the hidden screen print, the step's commands typed
-    and entered, and the scene's hold."""
-    lines = [f"Output {raw.resolve()}", f"Set Shell {against}",
+    and entered, and the scene's hold. vhs parses an absolute Output
+    path only when quoted (a mkdtemp path never holds a double quote)."""
+    lines = [f'Output "{raw.resolve()}"', f"Set Shell {against}",
              f"Set Width {WIDTH}", f"Set Height {HEIGHT}",
              f"Set FontSize {FONT_SIZE}",
              f"Set TypingSpeed {round(TYPING_SPEED * 1000)}ms"]
