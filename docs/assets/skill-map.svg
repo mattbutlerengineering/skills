@@ -216,10 +216,11 @@ the utility skills by the moment a person reaches for them.</desc>
   <text class="row mono" x="60" y="310">deepen</text>
 </g>
 <g>
-  <rect class="mask" x="48" y="380" width="168" height="48" rx="6"/>
-  <rect class="node-ext" x="48" y="380" width="168" height="48" rx="6"/>
+  <rect class="mask" x="48" y="380" width="168" height="64" rx="6"/>
+  <rect class="node-ext" x="48" y="380" width="168" height="64" rx="6"/>
   <text class="name" x="60" y="400">Around a pull request</text>
   <text class="row mono" x="60" y="418">address-pr-review</text>
+  <text class="row mono" x="60" y="434">launch-demo</text>
 </g>
 <g>
   <rect class="mask" x="48" y="496" width="256" height="112" rx="6"/>

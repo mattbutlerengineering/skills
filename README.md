@@ -84,6 +84,7 @@ table's Moment column.
 | `autorun` | Driving a run | Drives a whole run end to end from a one-time brief, one fresh subagent per stage, logging an assumption wherever the brief runs out. |
 | `work-queue` | Driving a run | Works several ready work orders at once, one worktree-isolated agent each, bounded and priced by the factory's caps; stops at merge-ready PRs. |
 | `address-pr-review` | Around a pull request | Acts on the feedback reviewers left on your PR: fixes what the comments ask, pushes, replies to and resolves every thread, and merges the base branch when behind. |
+| `launch-demo` | Around a pull request | Writes a shipped feature's launch copy in plain words and records a short narrated video whose every line is a sentence of it, from the run's artifacts or the pull request; copy only, with the reason, when a recorder is missing. |
 | `mermaid` | Drawing pictures | Turns a process or system into a digestible mermaid diagram, styled with explicit colors that hold contrast in light and dark renderers. |
 | `architecture-diagram` | Drawing pictures | A still, theme-aware SVG system figure on light editorial paper that embeds in READMEs and docs as a plain image; the figure above is one. |
 | `animated-diagram` | Drawing pictures | A diagram that moves on its own, connectors streaming in execution order, as a pause-able HTML page or a pure SVG a README plays inline. |
