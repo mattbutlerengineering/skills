@@ -4,32 +4,7 @@ A Claude Code plugin of lifecycle-pipeline skills that guide work from a raw
 idea all the way to production. Each stage produces an artifact the next stage
 consumes; the artifacts themselves are the pipeline state.
 
-```mermaid
-flowchart LR
-    next{{"🧭 /next<br>the router"}} -. "reads artifact state,<br>hands off to the right stage" .-> idea
-
-    idea("💡 /idea<br>idea.md") --> prd("📝 /prd<br>prd.md")
-    prd --> ux("🎨 /ux-design<br>ux.md")
-    ux --> architect("📐 /architect<br>architecture.md")
-    prd -. "no UI surface" .-> architect
-    architect --> decompose("🧩 /decompose<br>breakdown.md")
-    decompose --> implement("⚙️ /implement<br>code + tests")
-    implement --> verify("✅ /verify<br>verification.md")
-    verify --> review("🔍 /review<br>review.md")
-    review --> ship("🚀 /ship<br>release.md")
-    ship --> operate("📡 /operate<br>retro.md")
-    operate == "retro seeds<br>the next idea" ==> idea
-
-    classDef stage fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
-    classDef conditional fill:#fef3c7,stroke:#d97706,color:#7c2d12,stroke-dasharray:5 4
-    classDef router fill:#e9d5ff,stroke:#9333ea,color:#3b0764
-    classDef closer fill:#dcfce7,stroke:#16a34a,color:#14532d
-
-    class idea,prd,architect,decompose,implement,verify,review,ship stage
-    class ux conditional
-    class next router
-    class operate closer
-```
+![The skill map: the pipeline stages as a closed loop with the router inside it, a maintenance run entering from outside, and the utility skills grouped in cards by the moment you reach for them.](docs/assets/skill-map.svg)
 
 ## Install
 
@@ -97,60 +72,25 @@ and re-entering the pipeline at the depth recorded in its brief).
 
 Beside the stages, the plugin ships utility skills
 ([ADR-0023](docs/adr/0023-utility-skills.md)) that act on the work
-surrounding the pipeline rather than a run's artifacts: `address-pr-review`
-works reviewer feedback on a PR you authored — fix, push, reply, resolve,
-and reconcile with the base branch. `autorun` drives a whole run end to end
-from a one-time brief — one fresh subagent per stage, every brief gap logged
-as an assumption, and, unless the brief explicitly authorizes the release,
-it prepares the release and stops rather than executing it. `mermaid` turns a process or system
-into a digestible mermaid diagram with explicit, contrast-safe colors that
-read in both light and dark renderers, and
-`interactive-architecture-diagram` goes further for the cases that want
-showing rather than telling — one self-contained dark-mode HTML file with an
-inline-SVG system diagram, a narrated step-through presenter mode, and
-PNG/SVG export, with no build step and no external requests.
-`animated-diagram` is its ambient cousin — the same dark inline-SVG
-language, but always moving on its own: dashed connectors streaming in the
-direction of execution and dots traveling the request path, built from a
-description or an existing mermaid source, as a pause-able HTML page or a
-pure `.svg` whose motion GitHub plays right inside a README.
-`architecture-diagram` is the still member of the family — a designed,
-theme-aware `.svg` system figure on light editorial paper that flips to
-the shared dark palette with the reader's color-scheme preference and
-embeds in READMEs, docs pages, and design docs as a plain image.
-`pipeline-board` turns that same editorial language on the pipeline
-itself — one self-contained `.svg` swimlane board placing every active
-run on its current stage, with placement stated by the shipped
-`board.py` tool rather than re-derived (ADR-0062), generated on demand
-and never committed.
-`factory-init` stamps a product repo
-with the factory scaffold — offline gates, dispatch workflows, and the cost
-ledger — so promoted work orders can run there unattended. `doctor` is the
-read-only counterpart to that stamp: run in the repo that *uses* these
-skills, it answers whether the install is actually wired up, tier by tier —
-the plugin side in any repo, the stamped detectors and targets when the
-factory is present, label drift only when asked — and reports each problem
-with the fix rather than applying it. `work-queue` runs several
-already-approved work orders at once — one worktree-isolated agent per
-order, bounded by the factory's WIP cap and priced against the monthly cap
-before anything is spent — and stops at merge-ready PRs, because the merge
-is a human gate. `audit` is the way in when there is no run yet and no
-defect named: it surveys the codebase read-only, reproduces every finding
-before reporting it, and routes each one to a carrier that already exists —
-a backlog seed, a maintenance run via `capture`, a feature run via `idea` —
-rather than opening a parallel plan tree of its own. `deepen` asks the
-narrower architectural question instead: where is the codebase **shallow**,
-its interfaces nearly as costly to learn as the implementations behind them?
-It confirms each candidate against real call sites rather than a feeling of
-friction, presents the deepenings as a self-contained before/after report
-outside the repo, and designs the chosen interface with you. `automate`
-turns the same evidence discipline on the tooling instead of the code:
-what Claude Code automation is this repo missing — hooks, subagents,
-skills, plugins, MCP servers, or a drift detector for a rule nothing
-checks — where every recommendation has to name the friction it removes,
-the thing that would construct it, and what it costs. File presence never
-justifies a recommendation; a repeated manual step written down in the
-repo's own artifacts does.
+surrounding the pipeline rather than a run's artifacts. The figure above
+places each one at the moment you reach for it; the same moments fill the
+table's Moment column.
+
+| Skill | Moment | Why it matters |
+|-------|--------|----------------|
+| `audit` | Before a run exists | Finds what to improve when no defect is named: read-only, every finding reproduced before it is reported, each routed to a backlog seed or a run. |
+| `automate` | Before a run exists | Recommends the hooks, subagents, skills and MCP servers a repo is missing, each priced and tied to a friction it removes; never scaffolds them. |
+| `deepen` | Reshaping what's built | Finds shallow modules whose interfaces cost nearly as much to learn as their implementations, confirms each at its real call sites, and designs the deeper interface with you. |
+| `autorun` | Driving a run | Drives a whole run end to end from a one-time brief, one fresh subagent per stage, logging an assumption wherever the brief runs out. |
+| `work-queue` | Driving a run | Works several ready work orders at once, one worktree-isolated agent each, bounded and priced by the factory's caps; stops at merge-ready PRs. |
+| `address-pr-review` | Around a pull request | Acts on the feedback reviewers left on your PR: fixes what the comments ask, pushes, replies to and resolves every thread, and merges the base branch when behind. |
+| `mermaid` | Drawing pictures | Turns a process or system into a digestible mermaid diagram, styled with explicit colors that hold contrast in light and dark renderers. |
+| `architecture-diagram` | Drawing pictures | A still, theme-aware SVG system figure on light editorial paper that embeds in READMEs and docs as a plain image; the figure above is one. |
+| `animated-diagram` | Drawing pictures | A diagram that moves on its own, connectors streaming in execution order, as a pause-able HTML page or a pure SVG a README plays inline. |
+| `interactive-architecture-diagram` | Drawing pictures | A self-contained HTML demo with a narrated step-through presenter, click-to-inspect panels and PNG/SVG export, for showing how a system works. |
+| `pipeline-board` | Drawing pictures | Places every active run on its current stage as a swimlane SVG, with placement stated by the shipped board.py tool rather than re-derived. |
+| `factory-init` | Installing the factory | Stamps the factory scaffold (offline gates, dispatch workflows, the cost ledger) into a product repo, and regenerates the template manifest after an edit. |
+| `doctor` | Installing the factory | Answers whether the install is actually wired up, tier by tier and read-only, reporting each problem with the fix rather than applying it. |
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).

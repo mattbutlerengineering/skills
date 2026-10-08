@@ -108,3 +108,9 @@
 {"wo": "WO-0088", "run_id": "session-2026-10-06-wo-0088", "model": "claude-fable-5-1", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-06"}
 {"wo": "WO-0089", "run_id": "session-2026-10-06-wo-0089", "model": "claude-fable-5-1", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-06"}
 {"wo": "WO-0090", "run_id": "session-2026-10-06-wo-0090", "model": "claude-fable-5-1", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-06"}
+{"wo": "WO-0091", "run_id": "session-2026-10-07-wo-0091", "model": "claude-fable-5-1", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-08"}
+{"wo": "WO-0092", "run_id": "session-2026-10-07-wo-0092", "model": "claude-fable-5-1", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-08"}
+{"wo": "WO-0093", "run_id": "session-2026-10-07-wo-0093", "model": "claude-fable-5-1", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-08"}
+{"wo": "WO-0094", "run_id": "session-2026-10-07-wo-0094", "model": "claude-fable-5-1", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-08"}
+{"wo": "WO-0095", "run_id": "session-2026-10-07-wo-0095", "model": "claude-fable-5-1", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-08"}
+{"wo": "WO-0096", "run_id": "session-2026-10-07-wo-0096", "model": "claude-fable-5-1", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-08"}
