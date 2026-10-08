@@ -14,6 +14,7 @@ import json
 import re
 import sys
 import textwrap
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import eval_schema
@@ -578,6 +579,12 @@ STAGES_HEADING = "## Stages"
 STAGES_SECTION = re.compile(
     rf"^{re.escape(STAGES_HEADING)}\n(.*?)(?=^## |\Z)", re.M | re.S)
 
+# The README's first figure — the other README structural fact lint owns
+# (docs/features/readme-skill-map/architecture.md): a committed SVG whose
+# visible text is a hand-placed copy of the roster, so check_readme_figure
+# holds it to the same taxonomy check_readme_skills holds the prose to.
+README_FIGURE = "docs/assets/skill-map.svg"
+
 # A slug-shaped backtick token — same character class names_slug and
 # extra_skills use. A filename (`idea.md`) or a doc path
 # (`docs/pipeline-protocol.md`) has a dot or a slash in it and never
@@ -651,6 +658,50 @@ def check_readme_no_orphans(root):
     return [f"README.md's {STAGES_HEADING!r} section names {slug!r}, "
             "which the taxonomy no longer registers"
             for slug in sorted(mentions - known)]
+
+
+def check_readme_figure(root):
+    """Every skill in the taxonomy is named in README.md's first figure,
+    and README.md still embeds that figure. The figure is a committed
+    SVG (README_FIGURE) hand-placed by a person, so it is a second copy
+    of the roster that nothing else would notice drifting — the way
+    plugin.json's utility list once did (check_plugin_skills). Same
+    roster as check_readme_skills, same two functions: ALL_SKILLS plus
+    extra_skills, whole slugs through names_slug, no list of its own.
+
+    Read off the figure's visible text, never its raw bytes: the joined
+    content of every `<text>` element (tspans included — a label that
+    wraps is still one label), elements separated so no two fuse into a
+    token. An `id` attribute, a comment or a `<style>` rule that carries
+    a slug is not a name a reader can see, and a box whose label says
+    "Ship" while its id says `ship` is exactly the rotted figure this
+    exists to catch.
+
+    One string and an early return for a figure that is missing,
+    unreadable or not well-formed XML, so a broken file never fans out
+    into one line per skill. A missing or unreadable README.md is left
+    to check_readme_skills, as check_readme_no_orphans leaves it; the
+    embed line can only be judged on a README that reads.
+    """
+    text, problem = read_file(root / README_FIGURE, README_FIGURE, str)
+    if problem:
+        return [problem]
+    if text is None:
+        return [f"missing {README_FIGURE}"]
+    try:
+        tree = ET.fromstring(text)
+    except ET.ParseError as err:
+        return [f"{README_FIGURE} is not valid SVG: {err}"]
+    visible = " ".join("".join(element.itertext())
+                       for element in tree.iter()
+                       if element.tag.rpartition("}")[2] == "text")
+    problems = [f"{README_FIGURE} never names skill {slug!r}"
+                for slug in ALL_SKILLS + extra_skills(root)
+                if not names_slug(visible, slug)]
+    readme, _ = read_file(root / "README.md", "README.md", str)
+    if readme is not None and README_FIGURE not in readme:
+        problems.append(f"README.md never embeds {README_FIGURE!r}")
+    return problems
 
 
 def check_protocol(root):
