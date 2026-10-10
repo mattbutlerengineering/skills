@@ -21,6 +21,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -487,6 +488,17 @@ def pid_alive(pid):
     return state is not None and not state.startswith("Z")
 
 
+# How long a SIGKILLed grandchild gets to be seen dead. The window only
+# has to tell a signalled grandchild from an unsignalled one, and the
+# fakes' grandchild is `sleep 300`, so it is sized well under that and
+# far over any plausible death latency; a pass still returns at the first
+# poll that sees the death. Measured on time.monotonic(), which a
+# wall-clock step cannot shrink. 2 s of time.time() flaked on CI (beads
+# wo-0wu). The test_cli_process_reaping.py and test_charter_replay.py
+# grace loops import this window rather than restate it.
+REAP_GRACE = 30
+
+
 class ReadinessGatedClock:
     """Stands in for cli's `time` module so a harness timeout counts
     from the fake's readiness, not from its spawn.
@@ -573,16 +585,32 @@ class TestHarnessRun(unittest.TestCase):
         return {**cli.child_env(), "PID_FILE": str(self.pid_file)}
 
     def assert_grandchild_reaped(self):
-        deadline = time.time() + 2
-        while time.time() < deadline and not self.pid_file.is_file():
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and not self.pid_file.is_file():
             time.sleep(0.05)
         self.assertTrue(self.pid_file.is_file(),
                         "fake harness never started")
         pid = int(self.pid_file.read_text())
-        deadline = time.time() + 2
-        while time.time() < deadline and pid_alive(pid):
+        deadline = time.monotonic() + REAP_GRACE
+        while time.monotonic() < deadline and pid_alive(pid):
             time.sleep(0.05)
         self.assertFalse(pid_alive(pid), "grandchild survived harness_run")
+
+    def test_a_grandchild_that_dies_late_is_not_a_survivor(self):
+        """The grace loop's job is to tell a signalled grandchild from an
+        unsignalled one (`sleep 300`), not to time how fast a signalled
+        one dies. On a loaded runner — or across a wall-clock step — a
+        correctly killed grandchild was observed alive past a 2 s window
+        and failed as a survivor (beads wo-0wu). Here a real process is
+        SIGKILLed 2.5 s after the helper starts looking."""
+        victim = subprocess.Popen(["sleep", "300"])
+        self.addCleanup(victim.wait)
+        self.addCleanup(victim.kill)  # LIFO: kill, then collect
+        killer = threading.Timer(2.5, victim.kill)
+        self.addCleanup(killer.cancel)
+        self.pid_file.write_text(str(victim.pid))
+        killer.start()
+        self.assert_grandchild_reaped()
 
     def test_events_stream_decoded_with_junk_lines_skipped(self):
         cmd = [self.script(FAKE_EMITTER)]

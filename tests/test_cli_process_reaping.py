@@ -26,6 +26,9 @@ sys.path.insert(0, str(ROOT))
 
 import cli  # noqa: E402
 from trigger_eval import run_single_query  # noqa: E402
+# The reap window has one owner, test_cli (beads wo-0wu).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from test_cli import REAP_GRACE  # noqa: E402
 
 # The fakes publish the PID file by rename, never by writing it in
 # place: `>` creates the file before echo fills it, so a poller can find
@@ -177,9 +180,9 @@ class TestProcessTreeReaping(unittest.TestCase):
         thread.join(timeout=2)
         self.assertIn("pid", found, "fake claude never started")
         pid = found["pid"]
-        # brief grace for the kill to land
-        deadline = time.time() + 2
-        while time.time() < deadline and pid_alive(pid):
+        # grace for the kill to land: REAP_GRACE explains the window
+        deadline = time.monotonic() + REAP_GRACE
+        while time.monotonic() < deadline and pid_alive(pid):
             time.sleep(0.05)
         self.assertFalse(pid_alive(pid),
                          "grandchild survived run_single_query")

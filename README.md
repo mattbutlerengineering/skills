@@ -15,6 +15,17 @@ consumes; the artifacts themselves are the pipeline state.
 /plugin install idea-to-prod@skills
 ```
 
+**Grok:** the same marketplace. Grok reads `.claude-plugin/` directly
+([ADR-0076](docs/adr/0076-grok-supported-harness.md)).
+
+```
+grok plugin marketplace add mattbutlerengineering/skills
+grok plugin install idea-to-prod --trust
+```
+
+Invoke `/next`, or `/idea-to-prod:next` when that name collides with a
+built-in.
+
 **oh-my-pi (omp):** the skills also run under [omp](https://omp.sh). The root
 `package.json` declares them as a Pi package (`pi.skills`), so omp discovers all
 of them once the repo is on its package path:
@@ -27,8 +38,8 @@ omp --skill ./skills/next          # or add the cloned dir as a Pi package
 Fallbacks: omp inherits `.claude` skills on first run, or copy `skills/*` into
 `~/.pi/agent/skills/`.
 
-Every skill works on a bare install of either harness — no third-party tools,
-MCP servers, or other plugins required.
+Every skill works on a bare install of any of these harnesses — no
+third-party tools, MCP servers, or other plugins required.
 
 That is the whole setup for the skills. To also stamp the factory into a repo
 — offline gates, dispatch workflows, cost ledger — and confirm the install
@@ -39,12 +50,14 @@ mechanically, at whichever tier the repo has reached.
 
 Two ways in:
 
-- **Guided:** invoke `/next` (Claude Code) or `/skill:next` (omp). It reads your
-  repo's artifact state, tells you where the run stands, and hands off to the
-  right stage skill.
-- **Direct:** invoke any stage skill (`/prd`, `/architect`, … — `/skill:prd` on
-  omp) to enter mid-stream. If a predecessor artifact is missing, the skill
-  offers a quick backfill — it never blocks.
+- **Guided:** invoke `/next` (Claude Code and Grok) or `/skill:next` (omp).
+  On Grok, a name that collides with a built-in stays available as
+  `/idea-to-prod:next`. It reads your repo's artifact state, tells you where
+  the run stands, and hands off to the right stage skill.
+- **Direct:** invoke any stage skill (`/prd`, `/architect`, … — `/skill:prd`
+  on omp, `/idea-to-prod:prd` on Grok when the bare name collides) to enter
+  mid-stream. If a predecessor artifact is missing, the skill offers a quick
+  backfill — it never blocks.
 
 The pipeline runs at three scales: a **product run** (greenfield; artifacts
 at your repo's `docs/` root), a **feature run** (artifacts under
