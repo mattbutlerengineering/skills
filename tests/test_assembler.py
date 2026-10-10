@@ -790,6 +790,20 @@ class TestAgentCredentialBoundary(unittest.TestCase):
             if "\n    env:\n" in job else ""
         self.assertNotIn("secrets.", job_env)
 
+    def test_the_agent_job_names_no_secret_but_the_action_inputs(self):
+        """Re-review (2026-10-10): the test above looked at the job env and
+        GH_TOKEN only, so a secret in any packaging step's own env passed
+        it. Every secret this job names is one of the action's three
+        inputs, on that step, and nothing else."""
+        named = [line.strip() for line in self.agent_job().splitlines()
+                 if "secrets." in line and not line.strip().startswith("#")]
+        self.assertEqual(sorted(named), [
+            "anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}",
+            "claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
+            "github_token: ${{ secrets.GITHUB_TOKEN }}",
+        ])
+        self.assertNotIn("github.token", self.agent_job())
+
     def test_the_agent_job_runs_no_repo_code(self):
         """After the agent step the workspace is the agent's — a Makefile
         or a module it edited is not the repo's code any more. The repo's

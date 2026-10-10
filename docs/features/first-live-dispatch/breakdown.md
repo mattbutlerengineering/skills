@@ -82,6 +82,8 @@ Notes).
   - Accept: the deliver job fetches the order's ref from the bundle with `--no-tags`, and the spend-row step names main as `refs/remotes/origin/main`, so a bundle tag named `origin/main` (auto-followed by a default fetch, and ahead of the remote-tracking ref in ref resolution) can no longer put the agent's commits under the spend row on `main`. `tests/test_assembler.py::TestBundleCannotReachMain` replays the deliver job's own fetch line and spend-row step against such a bundle and fails without either guard. ADR-0077 records the guard and the residual one hop later (review finding 4). The mirror and manifest are regenerated, and the battery is green.
 - [x] **WO-0131** find-pr never hands a fork PR to the validator — size:S, blocked by: WO-0128 (PRD-0003 §Success criteria)
   - Accept: `assembler.pr_for_issue` lists `isCrossRepository` and skips any PR that is not stated to be same-repo, so an outsider's fork PR citing the order (`Closes #N`, newest first) can no longer be the number the deliver job dispatches the validator on — whose `review` job runs the PR's own code with the reviewer PAT and has no fork guard on its dispatch arm. A test pins the skip and the fail-closed case. The mirror and manifest are regenerated, and the battery is green.
+- [x] **WO-0132** the agent job's secrets are pinned step-wide, not only job-wide — size:S, blocked by: WO-0128 (PRD-0003 §Success criteria)
+  - Accept: `TestAgentCredentialBoundary` fails if the agent job names any secret other than the action step's three inputs, or `github.token`, anywhere — a secret in a packaging step's own env passed the earlier boundary tests (re-review mutation). Test-only; the battery is green.
 
 ## Design gaps found
 
