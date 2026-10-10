@@ -150,8 +150,26 @@ gh run cancel <run-id>
 
 Each outward action is logged with its result as it happens.
 
-1. Pre-flight above → green; origin/main is an ancestor; the pairwise
-   conflicts are append-only unions (#621, #623).
+1. Pre-flight above → green. origin/main is an ancestor, and the
+   pairwise conflicts are append-only unions (#621, #623).
+2. `git commit` of this file (intent) → `7985c01`.
+3. `gh issue create --label type:chore` (plain anchor, as #605 was for
+   PR #606) → issue #628. It carries no `wo:` label.
+4. `git push -u origin fix/fld-allowlist-boundary` → new branch,
+   tracking set, head `7985c01`.
+5. `gh pr create --base main --body-file ...` → PR #629, non-draft.
+   The body has `Closes #628`, a `No work order:` line, zero
+   work-order tokens, the three-job credential diagram, the R1 replay
+   and find-pr and mutation evidence, and `## Merge danger`.
+6. CI on `7985c01`, via `gh pr checks 629 --watch` → validator
+   `pull_request` run 38083234046: `check` pass (25s), `review` pass
+   (31s), `needs-review-label` pass (8s), `merged-label` skipping.
+   Validator `push` run 38083230035: `check` pass (27s), the rest
+   skipping. No failing check. The `review` job ran this branch's own
+   `Makefile` under the reviewer PAT, which is R3's path. Here the
+   branch's author is the owner session, not a dispatched agent.
+7. This release log and outcome committed and pushed to the same
+   branch. That push re-runs CI on the new head.
 
 ## Post-release checks
 
@@ -182,4 +200,11 @@ must show:
 
 ## Outcome
 
-Prepared, not shipped. See the release log for the PR and CI.
+Prepared, not shipped: PR #629 is open and green, waiting for the
+owner's human code-owner merge (gate 3, and ADR-0036 because it touches
+`docs/adr/**`). Nothing was merged, tagged, deployed, labelled with a
+`wo:` label or dispatched. After merge, the owner's combined live
+dispatch (owner decision 3) is the post-release check. Until it runs,
+the new assembler is unproven on a runner. R3 and Major 2 go to their
+own runs (owner decisions 1 and 2). Next stage: Operate, after that
+dispatch.
