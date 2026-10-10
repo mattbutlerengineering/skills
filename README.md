@@ -151,6 +151,24 @@ checks — where every recommendation has to name the friction it removes,
 the thing that would construct it, and what it costs. File presence never
 justifies a recommendation; a repeated manual step written down in the
 repo's own artifacts does.
+`lean` is the standing argument for less. Asked to build, it climbs a
+fixed ladder before writing anything — does this need to exist, is it
+already in the repo, the standard library, the platform, an installed
+dependency — and stops at the first rung that holds; pointed at a diff
+or a whole tree it hands back a numbered cut-list instead, every
+deletion backed by a reference search rather than a hunch. It never
+cuts validation at a trust boundary, data-loss handling, security, or
+accessibility. `polish` is its counterpart for what the user sees: it
+takes a built interface from working to considered, first establishing
+who the surface is for and what the existing design system already
+decided, then applying one named move (critique, inspect, refine, pare,
+amplify, calm, states, copy, motion) and looking at the rendered result
+rather than reasoning about the code. It starts where `ux-design`
+deliberately stops, at the pixels. Both restate, in this pipeline's
+terms, ideas from two open-source skills —
+[Ponytail](https://github.com/DietrichGebert/ponytail) and
+[Impeccable](https://github.com/pbakaus/impeccable) — and each skill's
+references say what it borrowed.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
