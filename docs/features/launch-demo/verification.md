@@ -11,13 +11,31 @@ assumptions:
   - "Two new PNGs are committed beside this artifact, both frames of tool-produced mp4s and both under 75 KB: title-card.png (the terminal launch.mp4 at 0.5 s) and browser-fixture-step.png (the smoke test's mp4 at 12 s). The first pass's two -diagnostic PNGs stay, as the Prior verification section cites them."
   - "The pull-request copy (#598) is carried forward from the first pass rather than rewritten: its inputs were re-read today and are unchanged (same title, state MERGED, body 1,995 characters), and the copy was re-swept for identifiers."
   - "The macOS voice (/usr/bin/say) is the only voice exercised, as the PRD says."
+  - "Second re-verification, 2026-10-10, at `6d550c7` (WO-0125, Failure 5's fix). Not every criterion was re-demonstrated: `git diff 7b868ec..HEAD --stat` shows only launch_demo.py (NODE_ERROR_LINE and a docstring), tests/test_launch_demo.py, breakdown.md and costs.jsonl changed, so evidence for criteria that do not run that code is carried forward by that reasoning (stated under Re-verification at 6d550c7), and the code the change touches — the browser failure path, plus one successful render per recorder as a regression check — was re-run for real."
+  - "The regression terminal render rewrote the committed launch.mp4 and demo.tape (different bytes, as any re-recording does: 32.27 s against the committed 33.27 s, and the tape's scratch path); both were restored to HEAD with git checkout, so the committed mp4 remains the one verified at 7b868ec. The browser regression render and the two failures used the same throwaway config, served fixture and npm install --no-save playwright as before, all removed afterwards."
+  - "The ESM import failure cannot reach node through `render`, because probe reports playwright missing and degrades to COPY-ONLY first; it was provoked instead by calling launch_demo.record_browser with the real cli.runner from a scratch directory with no node_modules on its path."
 ---
 
 # Verification: Launch demo
 
 ## Summary
 
-**Re-verified 2026-10-10 at `65ba8f7`: 10 PASS, 0 FAIL across
+**Re-verified 2026-10-10 at `6d550c7`: 10 PASS, 0 FAIL across
+PRD-0009's ten success criteria, and both breakdown acceptances no PRD
+criterion covers now pass — Failure 5 is resolved by `6d550c7`
+(WO-0125).** The same real missing-browser failure that read
+`launch-demo: browser recorder failed: Node.js v22.22.3` through
+`7b868ec`'s tool now reads `launch-demo: browser recorder failed:
+browserType.launch: Executable doesn't exist at …`, and a real ESM
+import failure still names `Error [ERR_MODULE_NOT_FOUND]`. One
+successful render per recorder after the change: browser 27.53 s,
+terminal 32.27 s, both h264+aac 1280x720, `PRODUCED`. The battery is
+green. One gap for Review: no test now reaches `_node_reason`'s
+`cli.detail` fallback (a mutant of that branch survives the whole
+suite). Next stage: Review. The 2026-10-10 pass at `65ba8f7`, below,
+holds the full per-criterion evidence.
+
+*Earlier pass, same day:* **Re-verified 2026-10-10 at `65ba8f7`: 10 PASS, 0 FAIL across
 PRD-0009's ten success criteria; of the two breakdown acceptances no PRD
 criterion covers, the close-out passes and WO-0113's reason line FAILS
 on a real Playwright failure.** Both recorders now work end to end as
@@ -40,7 +58,181 @@ interpreter `Python 3.14.6`; vhs 0.11.0 with ttyd, ffmpeg 8.1, ffprobe,
 `/usr/bin/say`, node v22.22.3, Playwright 1.64.0 (installed for the
 smoke test, removed after), gh authenticated.
 
-## Criteria & evidence
+## Re-verification at `6d550c7` (2026-10-10)
+
+### What changed, and which evidence still holds
+
+- Check: the diff since the last full pass (`7b868ec`, which recorded
+  the evidence below against code at `65ba8f7`).
+- Evidence:
+  ```
+  $ git diff 7b868ec..HEAD --stat
+   docs/factory/costs.jsonl               |  1 +
+   docs/features/launch-demo/breakdown.md | 35 ++++++++++++++++++++++++++++++++
+   launch_demo.py                         | 10 +++++----
+   tests/test_launch_demo.py              | 37 +++++++++++++++++++++++++++++-----
+   4 files changed, 74 insertions(+), 9 deletions(-)
+  $ git diff 7b868ec..HEAD -- cli.py factory | wc -l
+         0
+  ```
+  The `launch_demo.py` change is the `NODE_ERROR_LINE` regex (from
+  `(?:[A-Z]\w*)?Error\b` to `[A-Za-z_$][\w$.]*(?: \[\w+\])?: \S`) and
+  `_node_reason`'s docstring; `_node_reason` is its one caller, and it
+  runs only when the browser driver's `node` run raises.
+- Reasoning, stated rather than silently carried forward: no skill
+  text, config schema, copy, storyboard, terminal-recorder, voice,
+  mux, Ship-hook, lint, gate or payload file changed, so the evidence
+  for *Copy from artifacts*, *Copy-only degradation*, *A free voice*,
+  *Per-repo config*, *Two triggers*, *A utility skill* and *Stdlib
+  only* holds as recorded at `65ba8f7`. The two recorder criteria share
+  the changed module, so each got one fresh successful render below
+  (the regex is on the browser failure path only, but the widening is
+  the kind of change whose blast radius is cheaper to observe than to
+  argue). The battery and close-out were re-run.
+
+### Failure 5, re-demonstrated: the missing-browser reason line
+
+- Check: Playwright 1.64.0 installed (`npm install --no-save
+  playwright`), the fixture served on 8765, the throwaway browser config
+  (publish `.verify-smoke/launches`, fixture copy and storyboard copied
+  to `fixture/` and `fail/`), `PLAYWRIGHT_BROWSERS_PATH` at an empty
+  scratch directory; `render fail` through the tip's tool, then the same
+  render through `7b868ec`'s `launch_demo.py` (written to an untracked
+  `launch_demo_before.py` at the repo root, removed after).
+- Evidence, after (`6d550c7`):
+  ```
+  $ python3 launch_demo.py config
+  launch-demo: 0 problem(s)
+  $ python3 launch_demo.py probe
+  READY
+  launch-demo: 0 problem(s)
+  $ env PLAYWRIGHT_BROWSERS_PATH=<scratch>/emptybrowsers python3 launch_demo.py render fail
+  launch-demo: scratch /var/folders/gg/64y63jcn16z3gtn6131f3tfc0000gn/T/launch-demo-p4gei9jt
+  launch-demo: browser recorder failed: browserType.launch: Executable doesn't exist at /private/tmp/claude-501/-Users-mbutler-github-skills/7b6c638e-1174-4638-8f1b-d6e10c607be7/scratchpad/emptybrowsers/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  launch-demo: 1 problem(s)
+  exit=1
+  $ ls -A .verify-smoke/launches/fail/
+  launch.md
+  storyboard.json
+  $ ls -d launch-demo-* 2>/dev/null || echo "no launch-demo-* directory at the repo root"
+  no launch-demo-* directory at the repo root
+  ```
+- Evidence, before (`7b868ec`'s tool, same environment, same minute):
+  ```
+  $ env PLAYWRIGHT_BROWSERS_PATH=<scratch>/emptybrowsers python3 launch_demo_before.py render fail
+  launch-demo: scratch /var/folders/gg/64y63jcn16z3gtn6131f3tfc0000gn/T/launch-demo-ujrm_lmd
+  launch-demo: browser recorder failed: Node.js v22.22.3
+  launch-demo: 1 problem(s)
+  exit=1
+  ```
+- Evidence, the ESM import failure (a real `node` run via
+  `record_browser` and the real `cli.runner`, from a scratch directory
+  with no `node_modules` in it or its two parents; `render` cannot reach
+  this case because `probe` degrades to COPY-ONLY first — shown):
+  ```
+  $ cd <scratch>/esm && python3 <repo>/launch_demo.py render fail
+  launch-demo: missing playwright — records the browser; install: npm install playwright && npx playwright install chromium, from the repo root
+  COPY-ONLY
+  launch-demo: 0 problem(s)
+  $ cd <scratch>/esm && python3 -c "... launch_demo.record_browser(launch_demo.plan(board, [2.0]*n), '<scratch>/esm-work', 'http://127.0.0.1:8765')"
+  (None, ["launch-demo: browser recorder failed: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from /private/tmp/claude-501/-Users-mbutler-github-skills/7b6c638e-1174-4638-8f1b-d6e10c607be7/scratchpad/esm/launch-demo-_t5x5nrv/demo.mjs"])
+  no launch-demo-* left in cwd
+  ```
+- Result: PASS — both real failure classes now name their error; the
+  driver's directory is removed after each.
+
+### Regression: one successful render per recorder
+
+- Evidence, browser (chromium headless shell v1248 already cached;
+  `npx playwright install chromium` printed nothing):
+  ```
+  $ python3 launch_demo.py render fixture
+  launch-demo: scratch /var/folders/gg/64y63jcn16z3gtn6131f3tfc0000gn/T/launch-demo-3u_vqe0a
+  launch-demo: wrote .verify-smoke/launches/fixture/demo.mjs
+  launch-demo: wrote .verify-smoke/launches/fixture/launch.mp4
+  ...
+  PRODUCED
+  launch-demo: 0 problem(s)
+  exit=0 (34s wall)
+  no launch-demo-* directory at the repo root
+  $ ffprobe -v error -show_entries stream=codec_type,codec_name,width,height,r_frame_rate,pix_fmt:format=duration,size .verify-smoke/launches/fixture/launch.mp4
+  codec_name=h264 codec_type=video width=1280 height=720 pix_fmt=yuv420p r_frame_rate=30/1
+  codec_name=aac codec_type=audio
+  duration=27.533333 size=347828
+  ```
+- Evidence, terminal (committed config restored first:
+  `{"when": "ship", "recorder": "terminal", "against": "bash",
+  "publish": "docs/launches"}`):
+  ```
+  $ python3 launch_demo.py probe
+  READY
+  $ python3 launch_demo.py render pipeline-board
+  launch-demo: scratch /var/folders/gg/64y63jcn16z3gtn6131f3tfc0000gn/T/launch-demo-g62hfgv8
+  launch-demo: wrote docs/launches/pipeline-board/demo.tape
+  launch-demo: wrote docs/launches/pipeline-board/launch.mp4
+  ...
+  PRODUCED
+  launch-demo: 0 problem(s)
+  exit=0 (81s wall)
+  $ ffprobe -v error -show_entries stream=codec_type,codec_name,width,height,r_frame_rate,pix_fmt:format=duration,size docs/launches/pipeline-board/launch.mp4
+  codec_name=h264 codec_type=video width=1280 height=720 pix_fmt=yuv420p r_frame_rate=30/1
+  codec_name=aac codec_type=audio
+  duration=32.266667 size=428186
+  $ git diff docs/launches/pipeline-board/demo.tape   (the scratch path only)
+  -Output "/private/var/folders/.../launch-demo-5gf98v7d/raw.mp4"
+  +Output "/private/var/folders/.../launch-demo-g62hfgv8/raw.mp4"
+  $ git checkout -- docs/launches/pipeline-board/demo.tape docs/launches/pipeline-board/launch.mp4
+  $ shasum -a 256 docs/launches/pipeline-board/launch.mp4
+  c6584773a9ae46cac8f6a7b519448c83e0f659575fa44444b8dec7d73f988a49   (HEAD's, as before the render)
+  ```
+  The re-recording is 1.0 s shorter than the committed 33.27 s one; the
+  drift scaling of WO-0112 absorbs run-to-run vhs timing, so this is
+  ordinary recording variance, not a change in the tool. The committed
+  mp4 was kept — the one verified frame by frame at `7b868ec`.
+- Result: PASS — neither recorder regressed.
+
+### Battery and close-out at `6d550c7`
+
+- Evidence:
+  ```
+  $ python3 -m unittest discover tests 2>&1 | grep -E "^(Ran|OK|FAILED)"
+  Ran 2035 tests in 24.401s
+  OK
+  $ python3 lint.py | tail -1
+  lint: 0 problem(s) across 26 skills
+  $ python3 gates.py && python3 gates.py --selftest
+  gates: 0 problem(s)
+  selftest: ok
+  $ wc -l launch_demo.py
+       794 launch_demo.py
+  $ grep -c "^- \[x\] \*\*WO-" docs/features/launch-demo/breakdown.md; grep -c "^- \[ \] \*\*WO-" docs/features/launch-demo/breakdown.md
+  18
+  0
+  $ tail -1 docs/factory/costs.jsonl
+  {"wo": "WO-0125", "run_id": "session-2026-10-10-wo-0125", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
+  ```
+- Result: PASS
+
+### Gap for Review: `_node_reason`'s `cli.detail` fallback is untested
+
+- Check: Implement's breakdown assumption says the widened rule now
+  sends `test_a_node_failure_with_no_error_line_keeps_the_last_line`'s
+  stderr (`node: bad option: --nope`) through the error-line branch, so
+  no test asserts the fallback. Shown by mutating that branch and
+  running the whole suite (restored with `git checkout` after):
+  ```
+  $ sed -i '' 's/... else cli.detail(err)/... else "MUTANT"/' launch_demo.py
+  $ python3 -m unittest discover tests 2>&1 | grep -E "^(Ran|OK|FAILED)"
+  Ran 2035 tests in 24.480s
+  OK
+  $ python3 -c "... launch_demo._node_reason(subprocess.CalledProcessError(1, ['node'], stderr='boom\n'))"
+  'boom'
+  ```
+  The branch works when reached (`boom` → `boom`), but a mutant of it
+  survives every test. Not a criterion failure; a test gap for Review
+  (a stderr like `boom` would pin it).
+
+## Criteria & evidence (full pass at `65ba8f7`)
 
 ### Terminal recorder, end to end
 
@@ -745,6 +937,8 @@ smoke test, removed after), gh authenticated.
   shape as the first pass's Failure 1, a test green on a value the real
   tool never produces.
 - Result: FAIL — routed to Implement under Failures (5).
+  Since resolved by `6d550c7` (WO-0125) — see Re-verification at
+  `6d550c7` above.
 
 ## Failures
 
@@ -766,7 +960,11 @@ smoke test, removed after), gh authenticated.
 4. **Partly resolved by `65ba8f7` (WO-0113); the remainder is Failure
    5.** *Browser recorder — the reason line.* The ESM import failure's
    reason now names the error.
-5. **Open — WO-0113's reason line on a real Playwright failure.** When
+5. **Resolved by `6d550c7` (WO-0125)** — the same real failure now
+   reads `browserType.launch: Executable doesn't exist at …` (before:
+   `Node.js v22.22.3`), quoted under Re-verification at `6d550c7`.
+   The record as filed: *WO-0113's reason line on a real Playwright
+   failure.* When
    Playwright cannot launch its browser — the expected failure on any
    machine that installed the package but not the browser — the problem
    string and so the brief's `video:` line read `launch-demo: browser
