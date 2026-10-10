@@ -2617,9 +2617,15 @@ class TestLockstep(unittest.TestCase):
         # transitioned output is the dispatch idempotency verdict — the
         # paid agent step runs only on a true claim (the concurrency
         # group only queues repeat label events, it cannot dedupe them).
+        # ADR-0077 moved the claim and the agent into separate jobs, so
+        # the verdict crosses as the dispatch job's output.
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("make wo-in-progress", text)
-        self.assertIn("steps.claim.outputs.transitioned == 'true'", text)
+        self.assertIn("transitioned: ${{ steps.claim.outputs.transitioned }}",
+                      text)
+        agent = text.split("\n  agent:\n", 1)[1].split("\n  deliver:\n")[0]
+        self.assertIn("if: needs.dispatch.outputs.transitioned == 'true'",
+                      agent)
 
     def test_a_failed_dispatch_flips_the_order_it_claimed(self):
         # ADR-0045: without this step a dying agent run leaves its order on
@@ -2632,7 +2638,10 @@ class TestLockstep(unittest.TestCase):
         self.assertIn("failure()", text)
         failed = text.split("make wo-failed")[0].rsplit("- name:", 1)[1]
         self.assertIn("failure()", failed)
-        self.assertIn("steps.claim.outputs.transitioned == 'true'", failed)
+        # A failed agent JOB is not the deliver job's failure() (ADR-0077
+        # split them), so the flip names it.
+        self.assertIn("needs.agent.result != 'success'", failed)
+        self.assertIn("needs.dispatch.outputs.transitioned == 'true'", failed)
 
     def test_both_makefiles_expose_the_wo_record_target(self):
         self.assertEqual(self.recipes(self.MAKEFILE, "wo-record"),
@@ -2652,8 +2661,8 @@ class TestLockstep(unittest.TestCase):
         self.assertIn("make wo-record", text)
         record = text.split("make wo-record")[0].rsplit("- name:", 1)[1]
         self.assertIn("always()", record)
-        self.assertIn("steps.claim.outputs.transitioned == 'true'", record)
-        self.assertIn("steps.agent.outputs.execution_file != ''", record)
+        self.assertIn("needs.dispatch.outputs.transitioned == 'true'", record)
+        self.assertIn("needs.agent.outputs.execution_file != ''", record)
         self.assertIn("continue-on-error: true", record)
 
     def test_both_makefiles_expose_the_assembler_target(self):
@@ -2909,9 +2918,19 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             "gh workflow run validator.yml -f pr=${{ steps.find.outputs.pr }}",
             # git mutation glue (WO-0031): pushes the spend row `make
             # wo-record` just appended from a fresh origin/main worktree —
-            # the agent step may have left HEAD on its WO branch, and only
-            # the appended row may travel to main
+            # the deliver step fetched the order's branch into this repo,
+            # and only the appended row may travel to main
             'git config user.name "github-actions[bot]"',
+            # the agent job's hand-off packaging (ADR-0077): file glue
+            # with no repo tool in it, deliberately — after the agent step
+            # the workspace (Makefile included) is the agent's, so a make
+            # target here would run agent-edited code
+            'mkdir -p "$HANDOFF"',
+            # the deliver job's one push and PR (ADR-0077): git and gh
+            # mutations, which the compute/mutate boundary keeps in YAML;
+            # the branch comes from `make assembler`, the tested authority
+            'git fetch "$HANDOFF/handoff.bundle"'
+            ' "refs/heads/$BRANCH:refs/heads/$BRANCH"',
         ),
     }
 

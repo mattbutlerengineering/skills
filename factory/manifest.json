@@ -4,7 +4,7 @@
   "files": {
     "templates/.github/CODEOWNERS": "ba6ab48054414914bd38f2c82365a89c1400ca0d5e39e9d7288832b9d3834192",
     "templates/.github/labels.json": "754d2c9792c8216e5db5f4c2e9f49e14d6ca5131da8598a9caea7ecf346fd4a8",
-    "templates/.github/workflows/assembler.yml": "fe03e28b80c3d8ca45d628fb1411a9f670a6dbdfc62a4ef1e3cdbc1c0172532c",
+    "templates/.github/workflows/assembler.yml": "02c01b7511811001ee1e9a1cfa8f27e70527ab0cd45c4b0f84b184698d99c97b",
     "templates/.github/workflows/cost-report.yml": "234d724ec87f0b879bdeffcf0661f48dcaaf0325c657bbd4c7e6754f0ba23bce",
     "templates/.github/workflows/design.yml": "1d717103b2e18cc5a2c291ad5cc8cc91e8c091c2e19657e194c2645eeef107ce",
     "templates/.github/workflows/gate-digest.yml": "5abc8a86c8bcebc0ab41e217f13b32843dcb91eb0d90390ca3a5f6b892539552",
@@ -22,7 +22,7 @@
     "templates/docs/design/TEMPLATE.md": "e1f91e3f34bb0f742ca40e2390e5dfbeaaca585eddb69437b9a71b56708500a0",
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
-    "templates/tools/factory/assembler.py": "d443489c10c43e75e80a5806f538bc5dc00feff3db55b99186d912ff5d69ae46",
+    "templates/tools/factory/assembler.py": "23ede12e4ec4d0a95576a0e31fa1fe01816d32d2e37152a09bfdb7de617ced08",
     "templates/tools/factory/budget_guard.py": "f4e3abe3dfc820d3f397efc463f6d229925d33acf7625bde59fcc92bf6db20b4",
     "templates/tools/factory/cli.py": "745fcc3c2678344e4b184b9887934c4b81de9aef207ac1580f2295d3a018d396",
     "templates/tools/factory/cost_ledger.py": "eb6422ffb1b215fee3dab7235c17bfe59b191722f2cb4020ad4d9f299b76b4d1",

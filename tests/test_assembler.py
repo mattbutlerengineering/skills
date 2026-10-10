@@ -249,15 +249,6 @@ class TestAssemblePrompt(unittest.TestCase):
         self.assertIn("# Context", prompt)
         self.assertIn("Codegraph summary", prompt)
 
-    def test_the_prompt_names_the_one_branch_the_agent_may_push(self):
-        """The workflow's --allowedTools permits pushing only a wo- branch
-        (TestAgentToolAllowlist), so the prompt must name that branch and
-        the exact push form, or the agent's push is denied."""
-        with tempfile.TemporaryDirectory() as tmp:
-            prompt = assembler.assemble_prompt(
-                "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
-        self.assertIn("git push -u origin wo-0005", prompt)
-
 
 class TestRunResolve(unittest.TestCase):
     """End to end: label event -> actor check -> row substrate -> charter ->
@@ -666,61 +657,182 @@ class TestMechanicalStops(unittest.TestCase):
                       self.WORKFLOW.read_text(encoding="utf-8"))
 
 
-# The one push the agent may make: its own order's branch, exactly. Run
-# 36083668042 proved a prefix rule `wo-:*` never matches `wo-0074` (a
-# `:*` prefix ends at a word boundary), so the rule is resolved per order.
-PUSH_RULE = "Bash(git push -u origin ${{ steps.resolve.outputs.branch }})"
+JOB_HEAD = re.compile(r"^  ([\w-]+):$", re.M)
 
 
-class TestAgentToolAllowlist(unittest.TestCase):
-    """The first live dispatch (run 35956027401, issue #536) ended with
-    nine permission denials and no PR: claude-code-action denies Bash in
-    automation mode unless --allowedTools names it, so the SWE could edit
-    files but never commit, push, verify, or open its PR. The list carries
-    what the SWE charter's exit needs — and pushes only to a wo- branch,
-    never bare `git push` or `git:*`, since no branch protection guards
-    main on this plan."""
+def workflow_jobs(text):
+    """{job name: the job's own text}, sliced at the two-space job heads
+    under `jobs:` — a hand parse, like every workflow reader here (no
+    PyYAML in a stdlib-only repo). Fails loudly rather than returning {}
+    because the tests below assert inside loops over it."""
+    body = text.split("\njobs:\n", 1)[1]
+    heads = list(JOB_HEAD.finditer(body))
+    assert heads, "assembler.yml parsed into no jobs"
+    return {head.group(1): body[head.start():(heads[i + 1].start()
+                                               if i + 1 < len(heads)
+                                               else len(body))]
+            for i, head in enumerate(heads)}
+
+
+def run_lines(job_text):
+    """Every shell line a job executes: the bodies of its `run:` keys,
+    block or folded. Comments and `with:` inputs are not execution."""
+    lines, inside, indent = [], False, 0
+    for line in job_text.splitlines():
+        stripped = line.strip()
+        current = len(line) - len(line.lstrip())
+        if inside and stripped and current <= indent:
+            inside = False
+        if inside:
+            lines.append(stripped)
+        elif stripped.startswith("run:"):
+            indent, inside = current, True
+            rest = stripped[len("run:"):].strip()
+            if rest not in ("|", ">-", ">", ""):
+                lines.append(rest)
+    return lines
+
+
+def permission_block(job_text):
+    """The job's own `permissions:` scalars, comments skipped."""
+    lines = job_text.splitlines()
+    at = [i for i, line in enumerate(lines)
+          if line == "    permissions:"]
+    assert at, "the job declares no permissions block of its own"
+    got = {}
+    for line in lines[at[0] + 1:]:
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if not line.startswith("      ") or ":" not in stripped:
+            break
+        key, value = stripped.split(":", 1)
+        got[key] = value.strip()
+    return got
+
+
+class TestAgentCredentialBoundary(unittest.TestCase):
+    """Review (first-live-dispatch, Critical; ADR-0077): the tool
+    allowlist was called the push boundary, and its own `Bash(python3:*)`
+    and `Bash(make:*)` entries defeated it — any allowed interpreter can
+    run `git push origin HEAD:main`. Narrowing the list cannot close
+    that while the agent may Edit a test and run the tests: running
+    agent-authored code is the SWE's job. And claude-code-action itself
+    writes its github_token into the checkout's remote URL and the
+    agent's GH_TOKEN (configureGitAuth, run.ts), so `persist-credentials:
+    false` closes nothing either. The boundary that holds is the token:
+    the job that runs the agent holds a read-only GITHUB_TOKEN and
+    nothing else, and the write-scoped steps run in a separate job, on a
+    separate runner, from a fresh checkout — taking the agent's work
+    across as data (a git bundle and a PR body), never as code."""
 
     WORKFLOW = REPO_ROOT / ".github" / "workflows" / "assembler.yml"
+    ACTION = "anthropics/claude-code-action@"
+
+    def jobs(self):
+        return workflow_jobs(self.WORKFLOW.read_text(encoding="utf-8"))
+
+    def agent_job(self):
+        holders = [name for name, text in self.jobs().items()
+                   if self.ACTION in text]
+        self.assertEqual(len(holders), 1, "exactly one job runs the agent")
+        return self.jobs()[holders[0]]
 
     def allowlist(self):
-        text = self.WORKFLOW.read_text(encoding="utf-8")
-        found = re.search(r'--allowedTools "([^"]*)"', text)
+        found = re.search(r'--allowedTools "([^"]*)"', self.agent_job())
         self.assertIsNotNone(found, "the agent step names no --allowedTools")
         return found.group(1).split(",")
 
-    def test_the_swe_exit_is_allowed(self):
+    def test_the_job_that_runs_the_agent_holds_a_read_only_token(self):
+        self.assertEqual(permission_block(self.agent_job()),
+                         {"contents": "read"})
+
+    def test_no_write_scoped_job_runs_the_agent(self):
+        for name, text in self.jobs().items():
+            if "write" in permission_block(text).values():
+                with self.subTest(job=name):
+                    self.assertNotIn(self.ACTION, text)
+
+    def test_the_agent_job_hands_no_credential_to_its_shell(self):
+        """The subscription token reaches the action as an input and
+        nowhere else in that job: no job-level env carrying it, and no
+        GH_TOKEN for a step that runs beside the agent's leftovers."""
+        job = self.agent_job()
+        self.assertNotIn("GH_TOKEN", job)
+        self.assertEqual(job.count("secrets.CLAUDE_CODE_OAUTH_TOKEN"), 1)
+        self.assertIn("claude_code_oauth_token: "
+                      "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}", job)
+        self.assertNotIn("\n    env:\n", job)
+
+    def test_the_agent_job_runs_no_repo_code(self):
+        """After the agent step the workspace is the agent's — a Makefile
+        or a module it edited is not the repo's code any more. The repo's
+        own tools run in the jobs either side, from their own checkout."""
+        for line in run_lines(self.agent_job()):
+            with self.subTest(line=line):
+                self.assertFalse(line.startswith("make "), line)
+                self.assertNotIn("python3", line)
+
+    def test_the_one_push_is_the_order_branch_from_the_deliver_job(self):
+        pushes = {name: [line for line in run_lines(text)
+                         if line.startswith("git push")
+                         or "git -C" in line and " push " in line]
+                  for name, text in self.jobs().items()}
+        deliver = self.jobs()["deliver"]
+        self.assertIn('git push origin "refs/heads/$BRANCH:refs/heads/$BRANCH"',
+                      pushes["deliver"])
+        self.assertIn("BRANCH: ${{ needs.dispatch.outputs.branch }}", deliver)
+        self.assertEqual(pushes["agent"], [])
+        self.assertEqual(pushes["dispatch"], [])
+
+    def test_the_hand_off_crosses_as_data(self):
+        """Only the order's own ref leaves the bundle: a bundle that also
+        carried a `main` ref brings nothing else across."""
+        deliver = self.jobs()["deliver"]
+        self.assertIn('git fetch "$HANDOFF/handoff.bundle"'
+                      ' "refs/heads/$BRANCH:refs/heads/$BRANCH"', deliver)
+        self.assertIn('--body-file "$HANDOFF/' + assembler.PR_BODY_FILE
+                      + '"', deliver)
+        self.assertIn('git bundle create', self.agent_job())
+
+    def test_the_swe_exit_that_remains_is_allowed(self):
+        """What the agent still does itself: edit, commit, verify. make
+        and python3 stay prefix rules on purpose — the SWE runs the repo's
+        gates and update-manifest, and code execution in this job reaches
+        a read-only token (the tests above), not main."""
         tools = self.allowlist()
         for tool in ("Edit", "Write", "Bash(git commit:*)",
-                     PUSH_RULE, "Bash(gh pr create:*)",
                      "Bash(make:*)", "Bash(python3:*)"):
             with self.subTest(tool=tool):
                 self.assertIn(tool, tools)
 
-    def test_no_entry_can_push_anywhere_but_a_wo_branch(self):
+    def test_the_allowlist_offers_no_delivery_the_token_would_refuse(self):
+        """A push or a PR from this job can only fail now; leaving them
+        allowed buys a denied turn and an agent that thinks it shipped."""
         for tool in self.allowlist():
             with self.subTest(tool=tool):
+                self.assertFalse(tool.startswith("Bash(git push"), tool)
+                self.assertFalse(tool.startswith("Bash(gh pr"), tool)
                 self.assertNotIn(tool, ("Bash", "Bash(*)", "Bash(git:*)",
-                                        "Bash(git push:*)", "Bash(gh:*)"))
-                if tool.startswith("Bash(git push"):
-                    self.assertEqual(tool, PUSH_RULE)
+                                        "Bash(gh:*)"))
 
-    def test_the_run_keeps_its_denials_inspectable(self):
-        """Run 35956750804 reported 7 denials and the log showed only the
-        count. The execution file lists each denied call; it must survive
-        the runner as an artifact, even when the run fails."""
-        text = self.WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("actions/upload-artifact@", text)
-        self.assertIn("path: ${{ steps.agent.outputs.execution_file }}",
-                      text)
-
-    def test_the_prompts_push_is_one_the_allowlist_permits(self):
+    def test_the_prompt_hands_delivery_to_the_workflow(self):
         with tempfile.TemporaryDirectory() as tmp:
             prompt = assembler.assemble_prompt(
                 "swe", "WO-0005", "- [ ] **WO-0005** assembler.yml", tmp)
-        push = re.search(r"git push -u origin (\S+)`", prompt).group(1)
-        self.assertEqual(push, assembler.branch_for("WO-0005"))
-        self.assertIn(PUSH_RULE, self.allowlist())
+        self.assertIn(f"Work on branch {assembler.branch_for('WO-0005')}",
+                      prompt)
+        self.assertIn(assembler.PR_BODY_FILE, prompt)
+        self.assertNotIn("git push", prompt)
+
+    def test_the_run_keeps_its_denials_inspectable(self):
+        """Run 35956750804 reported 7 denials and the log showed only the
+        count. The hand-off artifact survives the runner, pass or fail."""
+        job = self.agent_job()
+        self.assertIn("actions/upload-artifact@", job)
+        upload = job.split("actions/upload-artifact@")[0].rsplit(
+            "- name:", 1)[1]
+        self.assertIn("always()", upload)
 
 
 if __name__ == "__main__":
