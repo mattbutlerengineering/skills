@@ -10,6 +10,6 @@ __pycache__/
 # under the repo root and removes it after; never track a leftover.
 /launch-demo-*/
 
-# claude plugin eval run output (ADR-0078): scratch, never committed;
+# claude plugin eval run output (ADR-0081): scratch, never committed;
 # a run cited as evidence is copied into plugin-evals/records/.
 /plugin-evals/results/

@@ -1,6 +1,6 @@
 {
   "plugin": "idea-to-prod",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "files": {
     "templates/.github/CODEOWNERS": "ba6ab48054414914bd38f2c82365a89c1400ca0d5e39e9d7288832b9d3834192",
     "templates/.github/labels.json": "754d2c9792c8216e5db5f4c2e9f49e14d6ca5131da8598a9caea7ecf346fd4a8",
@@ -35,7 +35,7 @@
     "templates/tools/factory/knowledge_plane.py": "a8efe82fee7ba6b4b9d1f9b6e8b5dbd988927d8c58ed923161971435dc582e73",
     "templates/tools/factory/label_sync.py": "5472f21671f76160bdd7faebb52fff4101d1daad4217749a015c16131de7d660",
     "templates/tools/factory/orientation_pack.py": "082cbd235b5cc9f0b0e31828260c65214c20e0453b936f35f67f6169d2d1ebbd",
-    "templates/tools/factory/protocol.py": "1fb4db93a95b452bf87fc11b7cb4f9583231a6315c7b47238b3d2677811784df",
+    "templates/tools/factory/protocol.py": "ea8c505c79d7587aebb72cee0a0f694e7653fc33824389f635a68090909f3772",
     "templates/tools/factory/rejection_mining.py": "ab0531f59126de7fe6f761846d1433827ff972cc30c4e3b7f7fa0d0dc69fc555",
     "templates/tools/factory/standards_index.py": "eca6d399fecb25e4df2d62f2291bd9e0b216f3a6421a5fd57eb7b189075232a2",
     "templates/tools/factory/validator.py": "054a9eb97ed3e45775092fcebb743072919958b84f17b8d14bc5b20374eda09a",

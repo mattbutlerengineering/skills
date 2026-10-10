@@ -57,6 +57,15 @@ contrast-safe diagrams. The living roster is `protocol.py`'s
 `UTILITY_SKILLS` (ADR-0023).
 _Avoid_: helper skill, tool skill
 
+**Project reference file**:
+A file at a target repo's docs root that a utility skill writes outside
+any run, which outlives every run and which skills read before they work.
+`docs/ux-patterns.md` is one: the `ux-patterns` skill owns its behaviour
+sections and the `ux-writing` skill owns its **Voice & terms** section;
+`polish` and `ux-design` only read it (ADR-0079). It is not a run
+artifact: no stage gates on it and the router never routes on it.
+_Avoid_: run artifact (it is not one), design doc, style guide
+
 **Work item**:
 One checkable unit of a breakdown — one sitting's work with an acceptance
 criterion.

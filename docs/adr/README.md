@@ -99,4 +99,5 @@ the canonical vocabulary.
 | [0076](0076-grok-supported-harness.md) | Grok is a supported harness (Claude primary) | accepted |
 | [0077](0077-the-dispatched-agent-holds-no-write-credential.md) | The dispatched agent holds no write credential | provisional |
 | [0078](0078-a-project-knowledge-base-indexed-inline.md) | A project knowledge base, indexed inline in the always-loaded file | accepted |
+| [0079](0079-a-utility-skill-may-own-a-project-reference-file.md) | A utility skill may own a project reference file, by section | provisional |
 | [0081](0081-plugin-eval-is-an-on-demand-harness.md) | `claude plugin eval` is an on-demand harness with its own tree | accepted |

@@ -27,7 +27,10 @@ Interview-driven: taste and intent live with the user.
      the user is meant to do there?
    - What are the empty, loading, and error states? (These are where UX
      dies; don't skip them.)
-   - What existing UI conventions must this match?
+   - What existing UI conventions must this match? If the repo has
+     `docs/ux-patterns.md`, read it first: its behaviour rules and its
+     Voice & terms answer this question, so ask only what it leaves
+     open.
    - What's deliberately NOT being designed (deferred polish)?
 
 4. **Sketch.** Wireframe each screen as an ASCII sketch or a tight textual
