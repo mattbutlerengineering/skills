@@ -424,9 +424,12 @@ class TestPrForIssue(unittest.TestCase):
     CLOSES_TOKEN join the mirror uses — never by branch-name convention."""
 
     LISTING = json.dumps([
-        {"number": 7, "body": "chore: tidy\n\nNo work order: housekeeping"},
-        {"number": 6, "body": "feat: mining\n\nCloses #110 (WO-0005)"},
-        {"number": 5, "body": "stale attempt\n\nCloses #110"},
+        {"number": 7, "isCrossRepository": False,
+         "body": "chore: tidy\n\nNo work order: housekeeping"},
+        {"number": 6, "isCrossRepository": False,
+         "body": "feat: mining\n\nCloses #110 (WO-0005)"},
+        {"number": 5, "isCrossRepository": False,
+         "body": "stale attempt\n\nCloses #110"},
     ])
 
     def gh(self, **kwargs):
@@ -436,6 +439,24 @@ class TestPrForIssue(unittest.TestCase):
         gh = self.gh()
         self.assertEqual(assembler.pr_for_issue(110, run=gh),
                          (6, True, []))
+
+    def test_a_fork_pr_citing_the_order_is_never_the_agent_s(self):
+        """Re-review (first-live-dispatch, 2026-10-10, Major): the agent's
+        PR is opened by the deliver job from a branch of THIS repo. A
+        fork PR anyone can open with `Closes #N` in its body, newest
+        first, and the validator dispatch this number drives checks the
+        PR's head out and runs its Makefile with the reviewer's PAT
+        (review finding 4) — with no fork guard on the dispatch arm. So
+        a cross-repo PR, or one whose origin the listing does not state,
+        is skipped: fails closed."""
+        listing = json.dumps([
+            {"number": 9, "isCrossRepository": True, "body": "Closes #110"},
+            {"number": 8, "body": "Closes #110"},
+            {"number": 6, "isCrossRepository": False, "body": "Closes #110"},
+        ])
+        gh = FakeGh(answers={("pr", "list"): listing})
+        self.assertEqual(assembler.pr_for_issue(110, run=gh), (6, True, []))
+        self.assertIn("isCrossRepository", assembler.PR_ARGS[-1])
 
     def test_a_pr_closing_another_issue_is_not_matched(self):
         """Absence PROVEN: the listing was read in full and holds no

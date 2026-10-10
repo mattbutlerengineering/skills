@@ -58,7 +58,8 @@ READY_LABEL = "wo:ready-for-agent"
 # the limit it sends gh and the truncation it reports are the same
 # number, so the two can no longer drift apart.
 LIST_WINDOW = 1000
-PR_ARGS = ("pr", "list", "--state", "open", "--json", "number,body")
+PR_ARGS = ("pr", "list", "--state", "open", "--json",
+           "number,body,isCrossRepository")
 
 # What find-pr learned. `looked` is False when this run could not observe
 # the agent's delivery at all — an unusable listing, or a full window the
@@ -285,7 +286,11 @@ def pr_for_issue(issue_number, run=gh_runner):
     the PR the dispatched agent delivered is exactly the one that cites
     its order, and an agent that delivered no such PR is a problem, not
     a silent miss. gh answers newest-first, so the first match is the
-    agent's latest attempt.
+    agent's latest attempt. Only a same-repo PR can be the agent's — the
+    deliver job pushes the order's branch here — so a fork PR citing the
+    order is skipped, and so is one whose origin the listing does not
+    state: the number found here is dispatched to the validator, which
+    runs the PR's own code (fails closed).
 
     `looked` separates "no such PR exists" from "I could not see" —
     an unusable listing or a full window. Both answer pr=None, and only
@@ -298,6 +303,8 @@ def pr_for_issue(issue_number, run=gh_runner):
     for entry in listing:
         number = entry.get("number")
         refs = CLOSES_TOKEN.findall(entry.get("body") or "")
+        if entry.get("isCrossRepository") is not False:
+            continue
         if isinstance(number, int) and issue_number in map(int, refs):
             return Find(number, True, problems)
     if read.truncated:
