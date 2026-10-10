@@ -53,7 +53,7 @@ pre-existing gap the architecture assigns to Review to seed in
 - 2026-10-10: the merge is the owner's (brief: no merge, no tag). The
   routing eval (`trigger_eval.py`) and `charter_replay.py` are owed, not
   run (paid).
-- 2026-10-10: WO-0152 deviation — the row said no manifest regeneration,
+- 2026-10-10: a deviation on the packaging row (WO-0152, PRD-0012) — it said no manifest regeneration,
   but `factory/manifest.json` carries the plugin version, and every recent
   version bump on main (#611, #623, #632) regenerated it in the same
   change. Ran `python3 factory_init.py update-manifest`; the only change
