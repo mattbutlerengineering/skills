@@ -833,6 +833,145 @@
       "expected": "ship",
       "query": "Everything is reviewed — ship it, with the pre-flight checks and a rollback plan",
       "notes": "adjacency: ship vs launch-demo — a release with pre-flight and rollback is ship's; nothing here asks for copy or a recording"
+    },
+    {
+      "id": "lean-1",
+      "kind": "direct",
+      "expected": "lean",
+      "query": "I need to remember a user's theme choice between visits. Give me the simplest thing that works, with no new dependency and no abstraction I don't need yet"
+    },
+    {
+      "id": "lean-2",
+      "kind": "situational",
+      "expected": "lean",
+      "query": "I asked for a date field and got a four-hundred-line picker component with its own stylesheet and a new package. Redo it with the least code that actually does the job"
+    },
+    {
+      "id": "lean-3",
+      "kind": "situational",
+      "expected": "lean",
+      "query": "Before I merge this branch, go through the diff and tell me what could simply be deleted or swapped for something the language already ships"
+    },
+    {
+      "id": "lean-4",
+      "kind": "situational",
+      "expected": "lean",
+      "query": "We left deliberate shortcuts all over this code with comments promising to come back. Collect them into one list so later doesn't quietly become never"
+    },
+    {
+      "id": "lean-vs-review-1",
+      "kind": "near-miss",
+      "expected": "lean",
+      "query": "Look over my changes. I'm not worried about bugs, I think I over-built it. What in here is unnecessary?",
+      "notes": "adjacency: lean vs review — complexity only, a cut-list of what to delete; review is the run's quality pass for defects, design decay and security"
+    },
+    {
+      "id": "review-vs-lean-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "The change is verified. Give it a proper quality pass for logic errors, missed edge cases and security problems before it ships",
+      "notes": "adjacency: review vs lean — hunting defects in a verified change, not hunting code to delete"
+    },
+    {
+      "id": "lean-vs-deepen-1",
+      "kind": "near-miss",
+      "expected": "lean",
+      "query": "This service has an interface with exactly one implementation, a factory that builds one thing, and settings nobody sets. What can just go?",
+      "notes": "adjacency: lean vs deepen — deleting speculative structure with no second user; deepen consolidates shallow modules and designs the interface that results"
+    },
+    {
+      "id": "deepen-vs-lean-1",
+      "kind": "near-miss",
+      "expected": "deepen",
+      "query": "Following one request means reading five tiny modules that each hand it to the next. Which of them should become one module, and what should its interface promise?",
+      "notes": "adjacency: deepen vs lean — the shape and depth of modules, with an interface to design; not a list of code to delete"
+    },
+    {
+      "id": "lean-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "lean",
+      "query": "Sweep this repo for bloat: packages we don't need, hand-rolled versions of things the standard library has, code nothing calls",
+      "notes": "adjacency: lean vs audit — over-engineering only, repo-wide; audit sweeps every defect category"
+    },
+    {
+      "id": "audit-vs-lean-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "I don't have a specific problem in mind. Go looking across this codebase for whatever is wrong, bugs, security, missing tests, and tell me what deserves work",
+      "notes": "adjacency: audit vs lean — every defect category, not only what can be deleted"
+    },
+    {
+      "id": "polish-1",
+      "kind": "direct",
+      "expected": "polish",
+      "query": "Polish the settings page before we ship: spacing, alignment, hierarchy, the lot"
+    },
+    {
+      "id": "polish-2",
+      "kind": "situational",
+      "expected": "polish",
+      "query": "The dashboard works but it looks like every other generated app: purple gradient, cards inside cards, the same font as everything else. Make it look like someone chose it"
+    },
+    {
+      "id": "polish-3",
+      "kind": "situational",
+      "expected": "polish",
+      "query": "Give me a design critique of the checkout screen. What does the eye land on first, and what is getting in the way?"
+    },
+    {
+      "id": "polish-4",
+      "kind": "situational",
+      "expected": "polish",
+      "query": "The empty state and the error messages on this form are an afterthought. Sort them out, and check the page holds up on a phone and with only a keyboard"
+    },
+    {
+      "id": "polish-vs-ux-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "The onboarding screens are built and the flow through them is right. They just feel flat and generic. Improve how they look and read",
+      "notes": "adjacency: polish vs ux-design — the flow exists and is settled; the ask is the visual and verbal quality of built screens"
+    },
+    {
+      "id": "ux-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "ux-design",
+      "query": "The PRD says this feature has a user interface. Work out the screens and the path through them with me before anyone designs the technical side",
+      "notes": "adjacency: ux-design vs polish — deciding flows and screens for a run before anything is built, not refining a built interface"
+    },
+    {
+      "id": "polish-vs-review-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "Review the new pricing page for me. Not the code, the page itself: does it read well and does the layout hold together?",
+      "notes": "adjacency: polish vs review — judging the rendered interface; review examines the run's code changes for defects"
+    },
+    {
+      "id": "review-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Review the code behind the new pricing page for bugs and anything that would bite us in production",
+      "notes": "adjacency: review vs polish — defects in the code, not the look and feel of the page"
+    },
+    {
+      "id": "polish-vs-lean-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "This screen is too busy. Strip it back to what the user actually needs to see",
+      "notes": "adjacency: polish vs lean — removing elements from an interface, not code from a codebase"
+    },
+    {
+      "id": "lean-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "lean",
+      "query": "This toggle is three wrapper components and a context provider. Strip the code back to something sane",
+      "notes": "adjacency: lean vs polish — removing code, not interface elements"
+    },
+    {
+      "id": "polish-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "Check this page for accessibility problems: contrast, focus order, missing labels",
+      "notes": "adjacency: polish vs audit — measured quality of one interface; audit sweeps a whole codebase across defect categories"
     }
   ]
 }

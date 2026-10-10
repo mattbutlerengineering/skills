@@ -28,7 +28,8 @@ UTILITY_SKILLS = ["address-pr-review", "animated-diagram",
                   "architecture-diagram", "audit", "automate", "autorun",
                   "deepen", "doctor", "factory-init",
                   "interactive-architecture-diagram", "launch-demo",
-                  "mermaid", "pipeline-board", "work-queue"]
+                  "lean", "mermaid", "pipeline-board", "polish",
+                  "work-queue"]
 ALL_SKILLS = ["next"] + STAGES + MAINTENANCE_STAGES + UTILITY_SKILLS
 
 # (stage, artifact) rows in pipeline order; implement and the UX

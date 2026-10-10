@@ -37,6 +37,8 @@ Trigger-eval results inform description quality but never graduate maturity
 | deepen | draft | — | — |
 | automate | draft | — | — |
 | launch-demo | draft | — | — |
+| lean | draft | — | — |
+| polish | draft | — | — |
 
 Reading of the 2026-07-01 run: all failures are under-triggering (no skill
 fired); zero cases fired the wrong skill. Distractors 5/5 stayed silent.

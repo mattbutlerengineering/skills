@@ -94,6 +94,8 @@ table's Moment column.
 | `audit` | Before a run exists | Finds what to improve when no defect is named: read-only, every finding reproduced before it is reported, each routed to a backlog seed or a run. |
 | `automate` | Before a run exists | Recommends the hooks, subagents, skills and MCP servers a repo is missing, each priced and tied to a friction it removes; never scaffolds them. |
 | `deepen` | Reshaping what's built | Finds shallow modules whose interfaces cost nearly as much to learn as their implementations, confirms each at its real call sites, and designs the deeper interface with you. |
+| `lean` | Reshaping what's built | Argues for less: climbs a fixed ladder (does this need to exist, is it already in the repo, the standard library, the platform) before building, or hands back a numbered cut-list for a diff or tree, each deletion backed by a reference search; never cuts trust-boundary validation, data-loss handling, security or accessibility. |
+| `polish` | Reshaping what's built | Takes a built interface from working to considered: establishes who it is for and what the design system already decided, applies one named move, and judges the rendered result rather than the code; it starts where `ux-design` stops. |
 | `autorun` | Driving a run | Drives a whole run end to end from a one-time brief, one fresh subagent per stage, logging an assumption wherever the brief runs out. |
 | `work-queue` | Driving a run | Works several ready work orders at once, one worktree-isolated agent each, bounded and priced by the factory's caps; stops at merge-ready PRs. |
 | `address-pr-review` | Around a pull request | Acts on the feedback reviewers left on your PR: fixes what the comments ask, pushes, replies to and resolves every thread, and merges the base branch when behind. |
@@ -105,6 +107,11 @@ table's Moment column.
 | `pipeline-board` | Drawing pictures | Places every active run on its current stage as a swimlane SVG, with placement stated by the shipped board.py tool rather than re-derived. |
 | `factory-init` | Installing the factory | Stamps the factory scaffold (offline gates, dispatch workflows, the cost ledger) into a product repo, and regenerates the template manifest after an edit. |
 | `doctor` | Installing the factory | Answers whether the install is actually wired up, tier by tier and read-only, reporting each problem with the fix rather than applying it. |
+
+`lean` and `polish` restate, in this pipeline's terms, ideas from two
+open-source skills — [Ponytail](https://github.com/DietrichGebert/ponytail)
+and [Impeccable](https://github.com/pbakaus/impeccable) — and each skill's
+references say what it borrowed.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
 conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
