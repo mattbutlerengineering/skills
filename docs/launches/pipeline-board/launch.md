@@ -2,7 +2,7 @@
 launch: pipeline-board
 date: 2026-10-08
 sources: [docs/features/pipeline-board/prd.md, docs/features/pipeline-board/verification.md, docs/features/pipeline-board/release.md]
-video: none — launch-demo: terminal recorder failed: parser: 3 error(s)
+video: launch.mp4
 ---
 
 # Launch: The pipeline board
