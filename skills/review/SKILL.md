@@ -21,7 +21,7 @@ arbitrate severity.
 3. **Scope the diff.** The review covers what this run changed — the diff
    since the run began, not the whole repo.
 
-4. **Review in three passes:**
+4. **Review in four passes:**
    - **Correctness** — logic errors, unhandled failure modes, edge cases the
      tests missed. For each suspected bug, state the concrete failure
      scenario (inputs → wrong behavior); a bug you can't scenario-ize is a
@@ -30,6 +30,14 @@ arbitrate severity.
      codebase's existing patterns? Undocumented deviations are findings.
    - **Security** — inputs validated at boundaries, no secrets in code,
      injection surfaces parameterized, errors don't leak internals.
+   - **Complexity** — apply `lean`'s cut-list in
+     `../lean/references/cut-list.md` to the run's diff. Each confirmed cut
+     is a finding: its cut-list line and the evidence its tag owes stand in
+     for the failure scenario. A cut whose references you could not
+     enumerate is a suspicion, not a finding. Every `lean:` marker the diff
+     adds must name its ceiling and its trigger; one that names no trigger
+     is a finding. A concern about a module's shape rather than its size is
+     handed to `deepen` in one line — never refactored here.
 
 5. **Load applicable standards.** Read `../../docs/standards.json` if
    present (an unbootstrapped repo has none yet — proceed). Filter to
