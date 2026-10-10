@@ -53,6 +53,8 @@ plus this artifact's own commit.
 3. `gh pr create --base main --head fix/reaping-test-flake --body-file ...`,
    non-draft. The body carries `Closes #619`, a `No work order:` line, the
    diff as its visual, before/after output, and `## Merge danger`.
+   Result: PR #620,
+   https://github.com/mattbutlerengineering/skills/pull/620.
 
 Not executed: merge, tag, publish. There is no version bump — the change
 is test-only and ships no user-facing surface.
