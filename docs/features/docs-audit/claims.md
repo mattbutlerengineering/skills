@@ -643,4 +643,99 @@ Exit code 0.
 
 ## Verify re-run
 
-<!-- Verify appends here. -->
+Run by Verify on 2026-10-10 against the branch tip `d03a0ba` (base
+`feat/grok-harness` at `a0f7553`, unmoved since the Preamble), from the
+worktree root, Python 3.14.6. The extractor below reads every per-doc row
+(id shaped `PREFIX-n`), and runs, each as its own `zsh -c` process: the
+Check cell of every `true` row, and the new Check named in the Disposition
+(`; check <command> (exit`) of every `corrected` row. Rows whose
+disposition is `follow-up F-n` leave a false claim in place by design and
+are excluded (architecture.md, fourth assumption); no row is `removed`.
+The four `F-n: 6 cells` parse notes are the Follow-ups table's own rows,
+which the id pattern also matches; they are not per-doc rows.
+
+```python
+"""Extract every Check from claims.md's per-doc tables and run it via zsh from cwd."""
+import re, subprocess, sys, json, pathlib
+
+text = pathlib.Path("docs/features/docs-audit/claims.md").read_text(encoding="utf-8")
+ROW = re.compile(r"^\| ([A-Z]+(?:-[A-Z]+)?-\d+) \|")
+SPLIT = re.compile(r"(?<!\\)\|")
+CORR = re.compile(r"; check `(.+?)` \(exit")
+rows, excluded, problems = [], [], []
+for line in text.splitlines():
+    m = ROW.match(line)
+    if not m:
+        continue
+    cells = [c.strip() for c in SPLIT.split(line)[1:-1]]
+    if len(cells) != 8:
+        problems.append(f"{m.group(1)}: {len(cells)} cells")
+        continue
+    rid, _, _, _, check, _, verdict, disp = cells
+    if not (check.startswith("`") and check.endswith("`")):
+        problems.append(f"{rid}: check not backticked")
+        continue
+    if verdict == "true":
+        if disp:
+            problems.append(f"{rid}: true row has disposition")
+        rows.append((rid, check[1:-1], "true"))
+    elif verdict in ("false", "stale"):
+        if disp.startswith("follow-up F-"):
+            excluded.append((rid, disp))
+        elif disp.startswith("corrected"):
+            c = CORR.search(disp)
+            if not c:
+                problems.append(f"{rid}: corrected without parsable check")
+                continue
+            rows.append((rid, c.group(1), "corrected"))
+        elif disp == "removed":
+            excluded.append((rid, "removed"))
+        else:
+            problems.append(f"{rid}: bad disposition {disp[:40]}")
+    else:
+        problems.append(f"{rid}: bad verdict {verdict}")
+
+fails = []
+for rid, cmd, kind in rows:
+    p = subprocess.run(["zsh", "-c", cmd], capture_output=True, text=True, timeout=300)
+    last = [l for l in (p.stdout + p.stderr).splitlines() if l.strip()]
+    if p.returncode != 0:
+        fails.append((rid, kind, p.returncode, last[-1] if last else ""))
+ids = [r[0] for r in rows]
+print("parse problems:", problems)
+print("duplicate ids:", sorted({i for i in ids if ids.count(i) > 1}))
+print("rows parsed:", len(rows) + len(excluded))
+print("re-checked:", len(rows), "(true:", sum(1 for r in rows if r[2] == "true"), "corrected:", sum(1 for r in rows if r[2] == "corrected"), ")")
+print("passed:", len(rows) - len(fails), "failed:", len(fails))
+for f in fails:
+    print("FAIL", f)
+print("excluded:", excluded)
+per = {}
+for rid, _, _ in rows:
+    k = rid.rsplit("-", 1)[0]; per[k] = per.get(k, 0) + 1
+print("per prefix:", per)
+```
+
+Output (16.8 s wall clock):
+
+```text
+parse problems: ['F-1: 6 cells', 'F-2: 6 cells', 'F-3: 6 cells', 'F-4: 6 cells']
+duplicate ids: []
+rows parsed: 449
+re-checked: 444 (true: 432 corrected: 12 )
+passed: 444 failed: 0
+excluded: [('LEDGER-32', 'follow-up F-3'), ('LEDGER-33', 'follow-up F-3'), ('LEDGER-34', 'follow-up F-3'), ('PROTO-34', 'follow-up F-4'), ('PROTO-37', 'follow-up F-4')]
+per prefix: {'README': 37, 'CONTEXT': 30, 'LEDGER': 31, 'AGENTS': 45, 'CLAUDE': 58, 'SETUP': 53, 'PROTO': 46, 'OEVAL': 18, 'ROUT-GARD': 26, 'ROUT-IMPR': 35, 'ROUT-GROOM': 24, 'ROUT-RETRO': 23, 'EVALS': 18}
+```
+
+- **Re-checked:** 444 claims (432 `true`, 12 `corrected`) — **444 passed,
+  0 failed.**
+- **Excluded (follow-up rows, false claim left in place):** LEDGER-32,
+  LEDGER-33, LEDGER-34 (F-3), PROTO-34, PROTO-37 (F-4). Each still fails
+  its Check on the tip, as its verdict says it should.
+- **Rows in the record:** 449 = 444 re-checked + 5 excluded; no
+  duplicate id, no malformed row (every row has eight cells, a backticked
+  Check, an `exit N` Result and a verdict in the vocabulary).
+- **Spot-checks** (independent of the Check column, to catch a Check
+  that passes for the wrong reason): seventeen rows, recorded in
+  `verification.md`; none vacuous.
