@@ -81,7 +81,7 @@ read; no two job cells are the same.
 | README-7 | 26 | `/next` is a skill | path | `ls skills/next/SKILL.md` | exit 0: skills/next/SKILL.md | true |  |
 | README-8 | 26, 54-55, 58 | On Grok a colliding name is reachable as `/idea-to-prod:next` (`/idea-to-prod:<skill>`) | name | `grep -n "idea-to-prod:<skill>" docs/adr/0076-grok-supported-harness.md` | exit 0: 33:  '/idea-to-prod:<skill>'. | true |  |
 | README-9 | 29-30 | Root `package.json` declares the skills as a Pi package (`pi.skills`) | name | `python3 -c "import json, sys; d = json.load(open('package.json')); print(d.get('keywords'), d.get('pi')); sys.exit(0 if './skills' in d['pi']['skills'] and 'pi-package' in d['keywords'] else 1)"` | exit 0: ['pi-package'] {'skills': ['./skills']} | true |  |
-| README-10 | 35 | `omp --skill ./skills/next` names a skill directory | path | `ls -d skills/next` | exit 0: skills/next | true |  |
+| README-10 | 35 | `omp --skill ./skills/next` names a skill directory | path | `python3 -c "import pathlib, re, sys; t = pathlib.Path('README.md').read_text(); m = re.search(r'omp --skill \./skills/(\S+)', t); rel = m.group(1); ok = pathlib.Path(rel).is_dir() and pathlib.Path(rel, 'SKILL.md').is_file(); print('path inside the clone:', rel, ok); sys.exit(0 if ok else 1)"` | exit 1: path inside the clone: next False (on the base text; review re-check, 2026-10-10 — the original Check `ls -d skills/next` ran from inside the repo, but after the README's `git clone` with no `cd` the cwd is the clone's parent, so `./skills/` is the clone root and `./skills/next` is `<clone>/next`, which does not exist) | false | corrected → `omp --skill ./skills/skills/next` (review); check `python3 -c "import pathlib, re, sys; t = pathlib.Path('README.md').read_text(); m = re.search(r'omp --skill \./skills/(\S+)', t); rel = m.group(1); ok = pathlib.Path(rel).is_dir() and pathlib.Path(rel, 'SKILL.md').is_file(); print('path inside the clone:', rel, ok); sys.exit(0 if ok else 1)"` (exit 0: path inside the clone: skills/next True) |
 | README-11 | 38 | Fallback copies `skills/*` | path | `ls -d skills` | exit 0: skills | true |  |
 | README-12 | 46 | Link to `docs/setup.md` | path | `ls docs/setup.md` | exit 0: docs/setup.md | true |  |
 | README-13 | 46 | `/doctor` checks the install | name | `ls skills/doctor/SKILL.md` | exit 0: skills/doctor/SKILL.md | true |  |
@@ -109,6 +109,7 @@ read; no two job cells are the same.
 | README-35 | 123-124 | `trigger_eval.py` is derived from Apache-2.0 skill-creator code, per `NOTICE` | name | `grep -n "trigger_eval.py contains code derived from the skill-creator plugin" NOTICE` | exit 0: 7:trigger_eval.py contains code derived from the skill-creator plugin | true |  |
 | README-36 | 125 | `licenses/Apache-2.0.txt` | path | `ls licenses/Apache-2.0.txt` | exit 0: licenses/Apache-2.0.txt | true |  |
 | README-37 | 41-42 | No skill requires an MCP server (no `SKILL.md` names an `mcp__` tool) | name | `python3 -c "import pathlib, sys; hits = [str(p) for p in pathlib.Path('skills').rglob('*.md') if 'mcp__' in p.read_text(encoding='utf-8')]; print('skill files naming mcp__ tools:', len(hits)); sys.exit(1 if hits else 0)"` | exit 0: skill files naming mcp__ tools: 0 | true |  |
+| README-38 | 117 | The unittest suite runs "all against fixture trees" | name | `python3 -c "import pathlib, sys; pin = 'lint.check_router(ROOT)' in pathlib.Path('tests/test_lint.py').read_text(encoding='utf-8'); print('test_lint pins check_router on the real ROOT:', pin); sys.exit(1 if pin else 0)"` | exit 1: test_lint pins check_router on the real ROOT: True (review, 2026-10-10; also `tests/test_budget_guard.py` real-config test and `tests/test_factory_init.py` root Makefile/CODEOWNERS pins) | false | corrected → "mostly against fixture trees plus pins on the real repo" (review); check `python3 -c "import pathlib, sys; pin = 'lint.check_router(ROOT)' in pathlib.Path('tests/test_lint.py').read_text(encoding='utf-8'); doc = 'mostly against fixture trees plus pins on the real repo' in pathlib.Path('README.md').read_text(); print('test_lint pins check_router on the real ROOT:', pin, 'README says mostly:', doc); sys.exit(0 if pin and doc else 1)"` (exit 0: test_lint pins check_router on the real ROOT: True README says mostly: True) |
 
 ## CONTEXT.md
 
@@ -430,6 +431,7 @@ read; no two job cells are the same.
 | OEVAL-16 | 95-97 | decompose has a 'review the cut' step | name | `grep -n 'Review the cut' skills/decompose/SKILL.md` | exit 0: 57:5. **Review the cut.** Present the draft; the user's judgment calls are the | true |  |
 | OEVAL-17 | 104-105 | A same-day second run got `decompose-2026-07-01-2/` | path | `ls -d evals/results/output/decompose-2026-07-01-2` | exit 0: evals/results/output/decompose-2026-07-01-2 | true |  |
 | OEVAL-18 | 108-112 | The soft-gate expectation was amended to grade naming both paths with backfill left open | name | `grep -n 'names both soft-gate options' evals/output/decompose.json` | exit 0: 28:        "the response names both soft-gate options — backfill via a short interview, or proceed while logg… | true |  |
+| OEVAL-19 | 52-53 | `eval_schema.results_path` owns the collision grammar "for both results kinds" | count | `python3 -c "import eval_schema, inspect, re, sys; kinds = sorted(set(re.findall(r'kind == .(\w+).', inspect.getsource(eval_schema.results_path)))); print('results_path kinds:', kinds); sys.exit(0 if len(kinds) == 2 else 1)"` | exit 1: results_path kinds: ['charter', 'output', 'trigger'] (review, 2026-10-10) | stale | corrected → "for every results kind (trigger, output, charter)" (review); check `python3 -c "import eval_schema, inspect, pathlib, re, sys; kinds = sorted(set(re.findall(r'kind == .(\w+).', inspect.getsource(eval_schema.results_path)))); t = pathlib.Path('docs/output-evals.md').read_text(); ok = 'for every results kind (trigger, output,' in t and kinds == ['charter', 'output', 'trigger']; print('results_path kinds:', kinds, 'doc says every kind:', ok); sys.exit(0 if ok else 1)"` (exit 0: results_path kinds: ['charter', 'output', 'trigger'] doc says every kind: True) |
 
 ## docs/factory/doc-gardener-routine.md
 
@@ -501,6 +503,7 @@ read; no two job cells are the same.
 | ROUT-IMPR-33 | 235 | `trigger_eval.py`, `charter_replay.py` | path | `ls trigger_eval.py charter_replay.py` | exit 0: trigger_eval.py | true |  |
 | ROUT-IMPR-34 | 238 | ADR-0012 and ADR-0019 (standing) | adr-status | `python3 -c "import gates, pathlib, sys; ns = ['0012', '0019']; st = {n: gates._adr_status(next(pathlib.Path('docs/adr').glob(n + '-*.md')))[1] for n in ns}; print(st); sys.exit(1 if any(gates.ADR_STATUS.match(s or '') is None or gates.ADR_STATUS.match(s).group('retired') for s in st.values()) else 0)"` | exit 0: {'0012': 'accepted', '0019': 'accepted'} | true |  |
 | ROUT-IMPR-35 | 240 | Detectors B and C enforce work-order ids | name | `python3 -c "import sys; t = open('gates.py').read(); ok = 'B PR-TRACEABILITY' in t and 'C LINK-INTEGRITY' in t; print(ok); sys.exit(0 if ok else 1)"` | exit 0: True | true |  |
+| ROUT-IMPR-36 | 147-148 | The PR body skeleton's first two lines satisfy detector B's traceability contract | name | `python3 -c "import pathlib, sys, gates; t = pathlib.Path('docs/factory/improvement-routine.md').read_text(); body = t.split('PR body skeleton', 1)[1].split(chr(96)*3)[1]; two = chr(10).join(body.strip().splitlines()[:2]); named = gates.CLOSES_TOKEN.search(two.replace('<the improvement issue>', '1')) is not None; print('first two lines carry Closes #N:', named); sys.exit(0 if named else 1)"` | exit 1: first two lines carry Closes #N: False (review, 2026-10-10; `gates.check_pr_traceability` requires the Closes-#N link regardless of the `No work order:` waiver) | false | corrected → "the 'No work order:' line and the 'Closes #' line together satisfy detector B's traceability contract" (review); check `python3 -c "import pathlib, sys, gates; t = pathlib.Path('docs/factory/improvement-routine.md').read_text(); body = t.split('PR body skeleton', 1)[1].split(chr(96)*3)[1]; two = chr(10).join(body.strip().splitlines()[:2]); named = gates.CLOSES_TOKEN.search(two.replace('<the improvement issue>', '1')) is not None; claim = 'the ' + chr(96) + 'No work order:' + chr(96) + ' line and the ' + chr(96) + 'Closes #' + chr(96) + ' line' in t; print('first two lines carry Closes #N:', named, 'doc names both lines:', claim); sys.exit(0 if claim and not named else 1)"` (exit 0: first two lines carry Closes #N: False doc names both lines: True) |
 
 ## docs/factory/queue-groomer-routine.md
 
@@ -739,3 +742,26 @@ per prefix: {'README': 37, 'CONTEXT': 30, 'LEDGER': 31, 'AGENTS': 45, 'CLAUDE': 
 - **Spot-checks** (independent of the Check column, to catch a Check
   that passes for the wrong reason): seventeen rows, recorded in
   `verification.md`; none vacuous.
+
+## Review additions
+
+Review (2026-10-10) sampled the docs the run declared clean and found four
+false or stale claims the inventory missed or mis-checked; each is now a
+row in its doc's section with a `corrected` disposition: README-10
+(re-verdicted — its original Check ran from inside the repo, not from
+where the README's `git clone` leaves the reader), README-38, OEVAL-19,
+ROUT-IMPR-36. The Verify re-run script above, run unchanged on the review
+tip:
+
+```text
+parse problems: ['F-1: 6 cells', 'F-2: 6 cells', 'F-3: 6 cells', 'F-4: 6 cells']
+duplicate ids: []
+rows parsed: 452
+re-checked: 447 (true: 431 corrected: 16 )
+passed: 447 failed: 0
+excluded: [('LEDGER-32', 'follow-up F-3'), ('LEDGER-33', 'follow-up F-3'), ('LEDGER-34', 'follow-up F-3'), ('PROTO-34', 'follow-up F-4'), ('PROTO-37', 'follow-up F-4')]
+per prefix: {'README': 38, 'CONTEXT': 30, 'LEDGER': 31, 'AGENTS': 45, 'CLAUDE': 58, 'SETUP': 53, 'PROTO': 46, 'OEVAL': 19, 'ROUT-GARD': 26, 'ROUT-IMPR': 36, 'ROUT-GROOM': 24, 'ROUT-RETRO': 23, 'EVALS': 18}
+```
+
+Findings Review deferred rather than corrected are recorded in
+`review.md`, not here.
