@@ -14,8 +14,8 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
   without a PR event payload, but the selftest exercises it), output
   matching `gates: 0 problem(s)`
 
-On demand only (real model runs, costs money, never CI; both need the
-`claude` CLI):
+On demand only (real model runs, costs money, never CI; all three need
+the `claude` CLI):
 
 - `python3 trigger_eval.py` — routing eval
 - `python3 charter_replay.py` — charter regression suite: golden fixture
@@ -25,6 +25,15 @@ On demand only (real model runs, costs money, never CI; both need the
   each case with its charter's `## Must never` section deleted and fails
   any case whose stripped run never fires a forbidden pattern (a trap the
   model never takes guards nothing); it doubles the cost.
+- `claude plugin eval . --scaffold --model claude-sonnet-5
+  --judge-model claude-haiku-4-5 --max-cost-usd 15 --no-publish
+  --allow-tools Write Edit "Bash(python3 *)" "Bash(git *)"` — per-skill
+  with/without-plugin delta over `plugin-evals/` (the manifest's
+  `experimental.evals`, so `evals/results/` is never written; ADR-0081).
+  `--tag <skill>` runs one suite. Output lands in gitignored
+  `plugin-evals/results/`. A cited run's `aggregate-result.json` is
+  copied unedited to append-only `plugin-evals/records/<date>[-N].json`.
+  It is eval evidence and never graduates LEDGER maturity.
 
 Also on demand, but free and needing nothing installed — a review
 pre-pass, deliberately **not** a gate:
