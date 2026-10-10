@@ -19,9 +19,12 @@ Both cost real model runs and run on demand — CI never invokes them.
 - [`results/`](results/) — dated, append-only run records: trigger runs as
   `trigger-<date>[-N].json` (claude harness, the default) or
   `trigger-omp-<date>[-N].json` (`--harness omp`, ADR-0031), output gradings
-  under `output/<slug>-<date>[-N]/`; `-2`, `-3`… suffixes distinguish
-  same-day runs. LEDGER.md links these as evidence (maturity stays keyed
-  to claude runs; omp snapshots are supplementary harness evidence).
+  under `output/<slug>-<date>[-N]/`, and charter-regression replays
+  (`charter_replay.py`) as `charter-<date>[-N].json`; `-2`, `-3`… suffixes
+  distinguish same-day runs. LEDGER.md links the trigger and output records
+  as evidence (maturity stays keyed to claude runs; omp snapshots are
+  supplementary harness evidence); charter replays are factory evidence,
+  never LEDGER evidence.
 
 ## Honesty policy
 

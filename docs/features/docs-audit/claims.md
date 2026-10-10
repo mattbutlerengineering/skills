@@ -409,6 +409,24 @@ writes it doc by doc; Verify appends the last section.
 
 | Id | Line | Claim | Kind | Check | Result | Verdict | Disposition |
 |---|---|---|---|---|---|---|---|
+| OEVAL-1 | 5-6 | Output evals run on demand; no always-on gate invokes them | command | `python3 -c "import pathlib, sys; hits = [p.name for p in pathlib.Path('.github/workflows').glob('*.yml') if any(x in p.read_text() for x in ('trigger_eval', 'evals/output', 'charter_replay')) and any(x in p.read_text() for x in (chr(10) + '  push:', chr(10) + '  pull_request:'))]; print('push/PR workflows invoking an eval:', hits); sys.exit(1 if hits else 0)"` | exit 0: push/PR workflows invoking an eval: [] | true |  |
+| OEVAL-2 | 6-7 | Trigger evals are `trigger_eval.py` | path | `ls trigger_eval.py` | exit 0: trigger_eval.py | true |  |
+| OEVAL-3 | 7 | ADR-0019, standing | adr-status | `python3 -c "import gates, pathlib, sys; ns = ['0019']; st = {n: gates._adr_status(next(pathlib.Path('docs/adr').glob(n + '-*.md')))[1] for n in ns}; print(st); sys.exit(1 if any(gates.ADR_STATUS.match(s or '') is None or gates.ADR_STATUS.match(s).group('retired') for s in st.values()) else 0)"` | exit 0: {'0019': 'accepted'} | true |  |
+| OEVAL-4 | 11-12 | `evals/output/<slug>.json` is `{"skill_name": "<slug>", "evals": [...]}` | name | `python3 -c "import json, sys; d = json.load(open('evals/output/decompose.json')); print(sorted(d), d['skill_name']); sys.exit(0 if sorted(d) == ['evals', 'skill_name'] and d['skill_name'] == 'decompose' else 1)"` | exit 0: ['evals', 'skill_name'] decompose | true |  |
+| OEVAL-5 | 13-14 | Required per-record fields are owned by `eval_schema.py` (`OUTPUT_FIELDS`) | name | `grep -n '^OUTPUT_FIELDS = ' eval_schema.py` | exit 0: 47:OUTPUT_FIELDS = ("id", "prompt", "run_fixture", "run_scale", | true |  |
+| OEVAL-6 | 14 | The structural lint validates every set through it | name | `grep -n 'eval_schema.validate_output(data, slug, label)' lint.py` | exit 0: 910:            + eval_schema.validate_output(data, slug, label) | true |  |
+| OEVAL-7 | 17-18 | `evals/fixtures/<name>/` seed docs trees | path | `ls -d evals/fixtures/decompose-feature/docs` | exit 0: evals/fixtures/decompose-feature/docs | true |  |
+| OEVAL-8 | 19 | The eval `prompt` field pre-supplies answers | name | `python3 -c "import eval_schema, sys; print(eval_schema.OUTPUT_FIELDS); sys.exit(0 if 'prompt' in eval_schema.OUTPUT_FIELDS else 1)"` | exit 0: ('id', 'prompt', 'run_fixture', 'run_scale', 'expected_output', 'expectations') | true |  |
+| OEVAL-9 | 21-22 | `evals/results/output/<slug>-<date>[-N]/grading.json`, `-2`… for same-day runs | path | `ls evals/results/output/decompose-2026-07-01/grading.json evals/results/output/decompose-2026-07-01-2/grading.json` | exit 0: evals/results/output/decompose-2026-07-01/grading.json | true |  |
+| OEVAL-10 | 30-33 | The seed commands copy `evals/fixtures/<fixture>/`, `skills/<slug>`, `docs/pipeline-protocol.md` | path | `ls -d evals/fixtures skills/decompose docs/pipeline-protocol.md` | exit 0: skills/decompose | true |  |
+| OEVAL-11 | 36-37 | Skills reference the protocol as `../../docs/pipeline-protocol.md` | path | `grep -n 'Read .../../docs/pipeline-protocol.md.' skills/decompose/SKILL.md` | exit 0: 14:1. Read '../../docs/pipeline-protocol.md' for run discovery, gating, and | true |  |
+| OEVAL-12 | 43-44 | Headless execute uses `claude -p … --output-format stream-json --verbose` (the flags the repo's own runner passes) | command | `python3 -c "import sys; t = open('trigger_eval.py').read(); ok = '\"--output-format\", \"stream-json\"' in t and '\"--verbose\"' in t; print('stream-json + verbose in trigger_eval:', ok); sys.exit(0 if ok else 1)"` | exit 0: stream-json + verbose in trigger_eval: True | true |  |
+| OEVAL-13 | 52-59 | `eval_schema.results_path(results_dir, 'output', date, slug=...)` owns the date-suffix grammar and returns the next free path | name | `python3 -c "import eval_schema, pathlib, sys; p = eval_schema.results_path(pathlib.Path('evals/results'), 'output', '2026-07-01', slug='decompose'); print(p); sys.exit(0 if p.as_posix() == 'evals/results/output/decompose-2026-07-01-3' else 1)"` | exit 0: evals/results/output/decompose-2026-07-01-3 | true |  |
+| OEVAL-14 | 82-86 | grading.json shape: expectations[{text, passed, evidence}], summary {passed, failed, total, pass_rate} (the recorded gradings) | name | `python3 -c "import glob, json, sys; bad = [f for f in glob.glob('evals/results/output/*/grading.json') if sorted(json.load(open(f))['expectations'][0]) != ['evidence', 'passed', 'text'] or sorted(json.load(open(f))['summary']) != ['failed', 'pass_rate', 'passed', 'total']]; print('gradings off-shape:', bad); sys.exit(1 if bad else 0)"` | exit 0: gradings off-shape: [] | true |  |
+| OEVAL-15 | 93 | The pilot was decompose, 2026-07-01 | path | `ls -d evals/results/output/decompose-2026-07-01` | exit 0: evals/results/output/decompose-2026-07-01 | true |  |
+| OEVAL-16 | 95-97 | decompose has a 'review the cut' step | name | `grep -n 'Review the cut' skills/decompose/SKILL.md` | exit 0: 57:5. **Review the cut.** Present the draft; the user's judgment calls are the | true |  |
+| OEVAL-17 | 104-105 | A same-day second run got `decompose-2026-07-01-2/` | path | `ls -d evals/results/output/decompose-2026-07-01-2` | exit 0: evals/results/output/decompose-2026-07-01-2 | true |  |
+| OEVAL-18 | 108-112 | The soft-gate expectation was amended to grade naming both paths with backfill left open | name | `grep -n 'names both soft-gate options' evals/output/decompose.json` | exit 0: 28:        "the response names both soft-gate options — backfill via a short interview, or proceed while logg… | true |  |
 
 ## docs/factory/doc-gardener-routine.md
 
@@ -434,6 +452,24 @@ writes it doc by doc; Verify appends the last section.
 
 | Id | Line | Claim | Kind | Check | Result | Verdict | Disposition |
 |---|---|---|---|---|---|---|---|
+| EVALS-1 | 3 | Two eval kinds per ADR-0019 (linked), standing | adr-status | `python3 -c "import gates, pathlib, sys; ns = ['0019']; st = {n: gates._adr_status(next(pathlib.Path('docs/adr').glob(n + '-*.md')))[1] for n in ns}; print(st); sys.exit(1 if any(gates.ADR_STATUS.match(s or '') is None or gates.ADR_STATUS.match(s).group('retired') for s in st.values()) else 0)"` | exit 0: {'0019': 'accepted'} | true |  |
+| EVALS-2 | 3 | Two eval kinds' definitions live here: `routing.json` (trigger) and `output/` (output) | count | `python3 -c "import pathlib, sys; defs = sorted(p.name for p in pathlib.Path('evals').iterdir() if p.name in ('routing.json', 'output')); print(defs); sys.exit(0 if defs == ['output', 'routing.json'] else 1)"` | exit 0: ['output', 'routing.json'] | true |  |
+| EVALS-3 | 4 | CI never invokes them | command | `python3 -c "import pathlib, sys; hits = [p.name for p in pathlib.Path('.github/workflows').glob('*.yml') if any(x in p.read_text() for x in ('trigger_eval', 'evals/output', 'charter_replay')) and any(x in p.read_text() for x in (chr(10) + '  push:', chr(10) + '  pull_request:'))]; print('push/PR workflows invoking an eval:', hits); sys.exit(1 if hits else 0)"` | exit 0: push/PR workflows invoking an eval: [] | true |  |
+| EVALS-4 | 8-9 | `routing.json` run by `trigger_eval.py` | path | `grep -n 'parser.add_argument("--eval-set", default=str(ROOT / "evals" / "routing.json"))' trigger_eval.py` | exit 0: 525:    parser.add_argument("--eval-set", default=str(ROOT / "evals" / "routing.json")) | true |  |
+| EVALS-5 | 9-10 | Every skill description installed at once (as command files) | name | `grep -n 'commands_dir = project_dir / ".claude" / "commands"' trigger_eval.py` | exit 0: 66:    commands_dir = project_dir / ".claude" / "commands" | true |  |
+| EVALS-6 | 11-12 | Case shape `{id, kind, expected, query}`, kind vocabulary and coverage policy owned by `eval_schema.py` | name | `python3 -c "import inspect, eval_schema, sys; s = inspect.getsource(eval_schema.validate); ok = all(k in s for k in ('has no id', 'kind', 'expected', 'has no query', 'KINDS', 'need >= 3')); print('validate covers shape, kinds, coverage:', ok); sys.exit(0 if ok else 1)"` | exit 0: validate covers shape, kinds, coverage: True | true |  |
+| EVALS-7 | 12 | ADR-0022, standing | adr-status | `python3 -c "import gates, pathlib, sys; ns = ['0022']; st = {n: gates._adr_status(next(pathlib.Path('docs/adr').glob(n + '-*.md')))[1] for n in ns}; print(st); sys.exit(1 if any(gates.ADR_STATUS.match(s or '') is None or gates.ADR_STATUS.match(s).group('retired') for s in st.values()) else 0)"` | exit 0: {'0022': 'accepted'} | true |  |
+| EVALS-8 | 12-13 | Lint and the runner both validate through it | name | `python3 -c "import sys; ok = 'eval_schema.load(root / \"evals\" / \"routing.json\"' in open('lint.py').read() and 'eval_schema.load(Path(args.eval_set)' in open('trigger_eval.py').read(); print('lint + runner call eval_schema.load:', ok); sys.exit(0 if ok else 1)"` | exit 0: lint + runner call eval_schema.load: True | true |  |
+| EVALS-9 | 14-15 | `output/` holds per-skill sets, graded per `docs/output-evals.md` | path | `ls evals/output/decompose.json docs/output-evals.md` | exit 0: evals/output/decompose.json | true |  |
+| EVALS-10 | 16-18 | `fixtures/` holds seed docs trees | path | `ls -d evals/fixtures/decompose-feature/docs` | exit 0: evals/fixtures/decompose-feature/docs | true |  |
+| EVALS-11 | 19-23 | `results/` holds trigger runs (`trigger-<date>[-N].json`, `trigger-omp-<date>[-N].json`) and output gradings (`output/<slug>-<date>[-N]/`) — nothing else | roster | `python3 -c "import pathlib, re, sys; pat = re.compile(r'(trigger(-omp)?-\d{4}-\d{2}-\d{2}(-\d+)?\.json' + chr(124) + r'output)$'); other = sorted(p.name for p in pathlib.Path('evals/results').iterdir() if not pat.match(p.name)); print('results outside the listed kinds:', other); sys.exit(1 if other else 0)"` | exit 1: results outside the listed kinds: ['charter-2026-09-28-2.json', 'charter-2026-09-28.json'] | stale | corrected → the bullet now also lists charter-regression replays as `charter-<date>[-N].json` (`charter_replay.py`; factory evidence, never LEDGER evidence), as `eval_schema.results_path` names them, and says LEDGER links only trigger and output records (`eval_schema.valid_results_link` refuses a charter path); check `python3 -c "import pathlib, re, sys; pat = re.compile(r'((trigger(-omp)?' + chr(124) + r'charter)-\d{4}-\d{2}-\d{2}(-\d+)?\.json' + chr(124) + r'output)$'); other = sorted(p.name for p in pathlib.Path('evals/results').iterdir() if not pat.match(p.name)); import eval_schema; ledger = eval_schema.valid_results_link('evals/results/charter-2026-09-28.json'); print('results outside the listed kinds:', other, 'charter LEDGER-linkable:', ledger); sys.exit(1 if other or ledger else 0)"` (exit 0: results outside the listed kinds: [] charter LEDGER-linkable: False) |
+| EVALS-12 | 21 | `--harness omp` selects the omp harness | command | `grep -n 'parser.add_argument("--harness", choices=eval_schema.HARNESSES' trigger_eval.py` | exit 0: 522:    parser.add_argument("--harness", choices=eval_schema.HARNESSES, | true |  |
+| EVALS-13 | 21 | ADR-0031, standing | adr-status | `python3 -c "import gates, pathlib, sys; ns = ['0031']; st = {n: gates._adr_status(next(pathlib.Path('docs/adr').glob(n + '-*.md')))[1] for n in ns}; print(st); sys.exit(1 if any(gates.ADR_STATUS.match(s or '') is None or gates.ADR_STATUS.match(s).group('retired') for s in st.values()) else 0)"` | exit 0: {'0031': 'accepted'} | true |  |
+| EVALS-14 | 22-23 | `-2`, `-3`… suffixes distinguish same-day runs | name | `grep -n '\-N starts at 2 and counts past existing same-day results' eval_schema.py` | exit 0: 62:    -N starts at 2 and counts past existing same-day results. The path is | true |  |
+| EVALS-15 | 23-24 | LEDGER.md links these as evidence | name | `python3 -c "import lint, pathlib, sys; p = lint.check_ledger_links(pathlib.Path('.')); print('ledger link problems:', p); sys.exit(1 if p else 0)"` | exit 0: ledger link problems: [] | true |  |
+| EVALS-16 | 30-31 | A failing case's rerun uses `--only <id> --runs-per-query 5` | command | `python3 -c "import sys; t = open('trigger_eval.py').read(); ok = 'add_argument(\"--only\"' in t and 'add_argument(\"--runs-per-query\"' in t; print('--only and --runs-per-query flags:', ok); sys.exit(0 if ok else 1)"` | exit 0: --only and --runs-per-query flags: True | true |  |
+| EVALS-17 | 38 | ADR-0012 and ADR-0019, standing | adr-status | `python3 -c "import gates, pathlib, sys; ns = ['0012', '0019']; st = {n: gates._adr_status(next(pathlib.Path('docs/adr').glob(n + '-*.md')))[1] for n in ns}; print(st); sys.exit(1 if any(gates.ADR_STATUS.match(s or '') is None or gates.ADR_STATUS.match(s).group('retired') for s in st.values()) else 0)"` | exit 0: {'0012': 'accepted', '0019': 'accepted'} | true |  |
+| EVALS-18 | 42 | Trigger evals install descriptions as command files | name | `grep -n '(commands_dir / f"{slug}-skill-{run_id}.md").write_text(' trigger_eval.py` | exit 0: 70:        (commands_dir / f"{slug}-skill-{run_id}.md").write_text( | true |  |
 
 ## Duplicates
 
@@ -443,6 +479,8 @@ writes it doc by doc; Verify appends the last section.
 | The development commands (lint, unittest, trigger eval) | `README.md` (Development), `CLAUDE.md`/`AGENTS.md` (Verify) | (row 0123) |
 | The three harnesses and how each finds the skills | `CONTEXT.md` (Harness), `docs/pipeline-protocol.md` (Harness neutrality), `README.md` (Install) | (row 0123) |
 | The agent notes (everything above the Beads blocks) | `CLAUDE.md`, `AGENTS.md` | (row 0123) |
+| The eval honesty rules (append-only results, never edit a definition to pass, maturity only via a real run) | `CLAUDE.md`/`AGENTS.md` (Eval honesty), `evals/README.md` (Honesty policy), `LEDGER.md` (intro) | (row 0123) |
+| The `evals/` layout (output sets, fixtures, results naming) | `evals/README.md` (Layout), `docs/output-evals.md` (Anatomy) | (row 0123) |
 
 ## Follow-ups
 
@@ -464,6 +502,14 @@ python3 -c "import gates, pathlib, sys; r = pathlib.Path('.').resolve(); fs = 'R
 ```
 
 Baseline, 2026-10-10 (row 0114, before any doc edit):
+
+```text
+links: 59 relative across 13 files, 0 missing
+```
+
+Exit code 0.
+
+Re-run 2026-10-10 after row 0121 (the `evals/README.md` and `docs/output-evals.md` edits; detector I does not walk `evals/`):
 
 ```text
 links: 59 relative across 13 files, 0 missing
