@@ -38,11 +38,11 @@ directory.
 _Avoid_: bugfix run, hotfix run
 
 **Harness**:
-The agent runtime a skill runs inside. The skills are dual-target: **Claude
-Code** (primary — marketplace plugin, `claude`-CLI evals, LEDGER maturity) and
-**oh-my-pi / omp** (a supported second harness; ADR-0027). Skill bodies name no
-harness; each harness has its own packaging (`.claude-plugin/` manifests vs the
-root `package.json` `pi.skills` entry).
+The agent runtime a skill runs inside. The skills run on three harnesses:
+**Claude Code** (primary — marketplace plugin, `claude`-CLI evals, LEDGER
+maturity), **oh-my-pi / omp** (ADR-0027), and **Grok** (ADR-0076). Skill
+bodies name no harness. Claude Code and Grok share the `.claude-plugin/`
+manifests; omp has the root `package.json` `pi.skills` entry.
 _Avoid_: platform, runtime, agent (bare)
 
 **Utility skill**:

@@ -12,11 +12,13 @@ Unattended dispatch is deliberately left off. See the last section.
 
 ## 1. Install the plugin
 
-Both harnesses are covered in the [README](../README.md#install). Either works
-on a bare install — no third-party tools, MCP servers, or other plugins.
+The three harnesses are covered in the [README](../README.md#install). Any of
+them works on a bare install — no third-party tools, MCP servers, or other
+plugins.
 
 - [ ] Plugin installed
-- [ ] `/next` resolves (Claude Code) or `/skill:next` (omp)
+- [ ] `/next` resolves (Claude Code or Grok) or `/skill:next` (omp). On Grok
+      a colliding name is `/idea-to-prod:next`.
 
 ## 2. Verify the skills before touching CI
 
