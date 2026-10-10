@@ -2929,7 +2929,7 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # the deliver job's one push and PR (ADR-0077): git and gh
             # mutations, which the compute/mutate boundary keeps in YAML;
             # the branch comes from `make assembler`, the tested authority
-            'git fetch "$HANDOFF/handoff.bundle"'
+            'git fetch --no-tags "$HANDOFF/handoff.bundle"'
             ' "refs/heads/$BRANCH:refs/heads/$BRANCH"',
         ),
     }

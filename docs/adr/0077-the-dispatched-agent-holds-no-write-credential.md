@@ -55,9 +55,17 @@ trusted with a write token either.
    agent left in `pr-body.md` (`assembler.PR_BODY_FILE`), and the
    execution record. The deliver job fetches exactly
    `refs/heads/<branch>` from the bundle, where the branch is
-   `assembler.branch_for` from the dispatch job. It pushes that ref to
-   its own name and opens the PR with the agent's body. A bundle that
-   carries other refs brings nothing else across.
+   `assembler.branch_for` from the dispatch job, with `--no-tags`. It
+   pushes that ref to its own name and opens the PR with the agent's
+   body. A bundle that carries other refs brings nothing else across.
+   The no-tags fetch is load-bearing: by default a fetch auto-follows
+   any tag pointing into the fetched history, and a bundle tag named
+   `origin/main` outranks the remote-tracking ref in ref resolution.
+   The re-review (2026-10-10) replayed exactly that: the spend-row
+   step's worktree of `origin/main` checked out the agent's commit and
+   pushed it to `main`. Every later reference to main in that job is
+   spelled `refs/remotes/origin/main` as well, so either guard alone
+   holds.
 3. **The agent job runs no repo tool.** After the agent step the
    workspace belongs to the agent, Makefile and modules included. The
    packaging step is plain file and git glue for that reason.
@@ -87,11 +95,24 @@ trusted with a write token either.
 - Not closed: anything the agent's code can do with what the agent job
   does hold. That includes reading the repo, sending the model
   credential out over the network on purpose, and writing to this
-  run's artifact and cache scopes. It also includes misstating its own
+  run's artifacts and, if the agent's code can reach the runner's
+  Actions runtime token, to the Actions cache. An `issues` run's cache
+  scope is the default branch, which every workflow can restore from;
+  today no workflow here restores a cache. It also includes misstating its own
   spend in the execution record it hands over, which was already
   possible before this change. These are limits on a deliberately
   hostile agent. The defect fixed here is an ordinary agent's reflex
   reaching `main`.
+- Not closed, and outside this job: the agent's code reaches a write
+  credential one hop later. The deliver job pushes the agent's branch
+  and dispatches the validator on its PR, and the validator's `review`
+  job checks that branch out and runs its own `Makefile` and modules —
+  `make check` beside a `pull-requests: write` token that checkout
+  persists, and `make review` with `FACTORY_REVIEW_TOKEN`, the reviewer
+  account's PAT (that account holds the `write` role). That is the
+  first-live-dispatch review's finding 4, an owner decision; this ADR
+  moves the boundary for the assembler only, and what the PAT can reach
+  turns on its scopes.
 - Unverified until a live dispatch:
   - the action's write-permission check on the labeler passes with a
     read-only token, through the collaborator-permission endpoint

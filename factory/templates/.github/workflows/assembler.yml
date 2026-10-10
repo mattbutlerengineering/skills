@@ -249,9 +249,11 @@ jobs:
       # The order's one push, from the trusted side. Only the order's own
       # ref leaves the bundle — a bundle that also carried `main` brings
       # nothing else across — and it is pushed to its own name, exactly
-      # (assembler.branch_for). The title is the branch tip's subject; the
-      # body is the agent's, which must cite its order (`Closes #N`) or
-      # find-pr below fails the run.
+      # (assembler.branch_for). --no-tags: a fetch auto-follows any tag
+      # pointing into the fetched history, and a bundle tag named
+      # `origin/main` outranks the remote-tracking ref of that name. The
+      # title is the branch tip's subject; the body is the agent's, which
+      # must cite its order (`Closes #N`) or find-pr below fails the run.
       - name: Push the order's branch and open its PR
         id: deliver
         if: needs.agent.outputs.outcome == 'success'
@@ -260,7 +262,7 @@ jobs:
           BRANCH: ${{ needs.dispatch.outputs.branch }}
           HANDOFF: ${{ runner.temp }}/handoff
         run: |
-          git fetch "$HANDOFF/handoff.bundle" "refs/heads/$BRANCH:refs/heads/$BRANCH"
+          git fetch --no-tags "$HANDOFF/handoff.bundle" "refs/heads/$BRANCH:refs/heads/$BRANCH"
           git push origin "refs/heads/$BRANCH:refs/heads/$BRANCH"
           gh pr create --base main --head "$BRANCH" --title "$(git log -1 --format=%s "refs/heads/$BRANCH")" --body-file "$HANDOFF/pr-body.md"
       # The run's own spend, machine-written to the append-only cost ledger
@@ -287,9 +289,11 @@ jobs:
       # no push, every dispatched run's spend is discarded with the
       # checkout and the monthly circuit breaker never sees it (WO-0031;
       # review.md major: the #222 gap surviving its own fix). The deliver
-      # step fetched the order's branch into this repo, so the row is
-      # re-applied to a fresh origin/main worktree and pushed from there —
+      # step fetched the agent's refs into this repo, so the row is
+      # re-applied to a fresh worktree of main and pushed from there —
       # never from HEAD, which must never carry agent commits onto main.
+      # Main is named in full: a bare `origin/main` resolves a tag of that
+      # name first (git rev-parse's lookup order).
       # tail -1 IS the appended row: wo-record appends exactly one line
       # and runs after every other writer in this job. continue-on-error
       # mirrors the record step — a lost row shows red here, and detector
@@ -303,7 +307,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
-          git worktree add "$RUNNER_TEMP/spend" origin/main
+          git worktree add "$RUNNER_TEMP/spend" refs/remotes/origin/main
           tail -n 1 docs/factory/costs.jsonl >> "$RUNNER_TEMP/spend/docs/factory/costs.jsonl"
           git -C "$RUNNER_TEMP/spend" add docs/factory/costs.jsonl
           git -C "$RUNNER_TEMP/spend" commit -m "chore(factory): run-spend row (assembler)"

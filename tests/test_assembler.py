@@ -794,7 +794,7 @@ class TestAgentCredentialBoundary(unittest.TestCase):
         """Only the order's own ref leaves the bundle: a bundle that also
         carried a `main` ref brings nothing else across."""
         deliver = self.jobs()["deliver"]
-        self.assertIn('git fetch "$HANDOFF/handoff.bundle"'
+        self.assertIn('git fetch --no-tags "$HANDOFF/handoff.bundle"'
                       ' "refs/heads/$BRANCH:refs/heads/$BRANCH"', deliver)
         self.assertIn('--body-file "$HANDOFF/' + assembler.PR_BODY_FILE
                       + '"', deliver)
@@ -901,6 +901,99 @@ class TestHandOffKeepsNoToolOutput(unittest.TestCase):
         self.assertEqual(spend, (120, 0.42))
         self.assertNotIn("LEAKED", kept)
         self.assertIn('"git push"', kept)
+
+
+def step_script(job_text, name):
+    """The shell script of the job's step called `name`: its `run:` lines,
+    newline-joined, exactly as the runner would hand them to bash."""
+    start = job_text.index(f"- name: {name}\n")
+    end = job_text.find("\n      - ", start)
+    return "\n".join(run_lines(job_text[start:end if end != -1 else None]))
+
+
+@unittest.skipUnless(shutil.which("git") and shutil.which("bash"),
+                     "git and bash are needed to replay the deliver job")
+class TestBundleCannotReachMain(unittest.TestCase):
+    """Review (first-live-dispatch, 2026-10-10 re-review, Critical): the
+    bundle is agent-made, and `git fetch <bundle> <refspec>` auto-follows
+    any TAG pointing into the fetched history. A tag named `origin/main`
+    then outranks refs/remotes/origin/main in ref resolution, so the
+    spend-row step's `git worktree add ... origin/main` checked out the
+    agent's commit and pushed it to main under the spend row. This
+    replays the deliver job's own fetch line and its whole spend-row
+    step, read out of the workflow, against such a bundle."""
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "assembler.yml"
+
+    def deliver(self):
+        return workflow_jobs(self.WORKFLOW.read_text(encoding="utf-8"))[
+            "deliver"]
+
+    def git(self, cwd, *args):
+        return subprocess.run(["git", *args], cwd=cwd, check=True,
+                              capture_output=True, text=True,
+                              env=self.env).stdout.strip()
+
+    def bash(self, cwd, script, **extra):
+        subprocess.run(["bash", "-eo", "pipefail", "-c", script], cwd=cwd,
+                       check=True, capture_output=True, text=True,
+                       env={**self.env, **extra})
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+        self.env = {"PATH": __import__("os").environ["PATH"],
+                    "HOME": str(self.tmp), "GIT_CONFIG_NOSYSTEM": "1",
+                    "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+
+    def test_a_tag_in_the_bundle_cannot_carry_agent_commits_onto_main(self):
+        origin = self.tmp / "origin.git"
+        self.git(self.tmp, "init", "-q", "--bare", "-b", "main", str(origin))
+        agent = self.tmp / "agent"
+        self.git(self.tmp, "clone", "-q", str(origin), str(agent))
+        ledger = agent / "docs" / "factory" / "costs.jsonl"
+        ledger.parent.mkdir(parents=True)
+        ledger.write_text('{"row": "old"}\n', encoding="utf-8")
+        self.git(agent, "add", ".")
+        self.git(agent, "commit", "-q", "-m", "base")
+        self.git(agent, "push", "-q", "origin", "HEAD:main")
+        base = self.git(agent, "rev-parse", "HEAD")
+        self.git(agent, "switch", "-q", "-c", "wo-0001")
+        self.git(agent, "commit", "-q", "--allow-empty", "-m", "agent work")
+        self.git(agent, "tag", "origin/main")
+        handoff = self.tmp / "handoff"
+        handoff.mkdir()
+        self.git(agent, "bundle", "create", str(handoff / "handoff.bundle"),
+                 "refs/heads/wo-0001", "refs/tags/origin/main", "^" + base)
+
+        deliver = self.tmp / "deliver"
+        self.git(self.tmp, "clone", "-q", str(origin), str(deliver))
+        fetch = [line for line in step_script(
+            self.deliver(), "Push the order's branch and open its PR"
+        ).splitlines() if line.startswith("git fetch")]
+        self.assertEqual(len(fetch), 1, fetch)
+        self.bash(deliver, fetch[0], HANDOFF=str(handoff), BRANCH="wo-0001")
+        with (deliver / "docs" / "factory" / "costs.jsonl").open(
+                "a", encoding="utf-8") as rows:
+            rows.write('{"row": "new"}\n')
+        runner_temp = self.tmp / "runner"
+        runner_temp.mkdir()
+        self.bash(deliver, step_script(self.deliver(),
+                                       "Commit the run's spend row"),
+                  RUNNER_TEMP=str(runner_temp))
+
+        self.assertEqual(self.git(origin, "rev-parse", "main~1"), base)
+        self.assertNotIn("agent work",
+                         self.git(origin, "log", "--format=%s", "main"))
+
+    def test_the_fetch_takes_no_tags_and_main_is_named_unambiguously(self):
+        """Either alone closes the replay above; both are pinned, so one
+        regressing does not reopen it."""
+        deliver = self.deliver()
+        self.assertIn('git fetch --no-tags "$HANDOFF/handoff.bundle"', deliver)
+        self.assertIn('git worktree add "$RUNNER_TEMP/spend"'
+                      " refs/remotes/origin/main", deliver)
 
 
 if __name__ == "__main__":
