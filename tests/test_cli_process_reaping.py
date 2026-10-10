@@ -10,6 +10,7 @@ Fake `claude` shell scripts on PATH stand in for the real CLI; no API
 calls are made. setUp installs a poison fake so even a test that
 forgets install_fake can never reach a real `claude`.
 """
+import itertools
 import os
 import stat
 import subprocess
@@ -88,9 +89,14 @@ def pid_alive(pid):
     loops below poll this predicate to decide whether a killed
     grandchild is gone, so counting a zombie as alive reports a
     grandchild that is already dead as a survivor.
+
+    Nor is a process its reaper is already collecting: Linux reports it
+    as X (EXIT_DEAD, `x` on 2.6.33-3.13 kernels) between the reaper
+    claiming the zombie and release_task unhashing it, so a grandchild
+    seen as Z can read X a moment later (beads wo-cha).
     """
     state = process_state(pid)
-    return state is not None and not state.startswith("Z")
+    return state is not None and state[0] not in "ZXx"
 
 
 class ReadinessGatedClock:
@@ -182,10 +188,26 @@ class TestProcessTreeReaping(unittest.TestCase):
         pid = found["pid"]
         # grace for the kill to land: REAP_GRACE explains the window
         deadline = time.monotonic() + REAP_GRACE
-        while time.monotonic() < deadline and pid_alive(pid):
+        # Decide on the observation the loop exited on: asking again
+        # can disagree with it (beads wo-cha), and dead stays dead.
+        alive = pid_alive(pid)
+        while alive and time.monotonic() < deadline:
             time.sleep(0.05)
-        self.assertFalse(pid_alive(pid),
+            alive = pid_alive(pid)
+        self.assertFalse(alive,
                          "grandchild survived run_single_query")
+
+    def test_a_death_the_grace_loop_saw_is_not_asked_again(self):
+        """The grace loop decides on the observation it exited on. Asking
+        again after the loop turned a dead grandchild into a survivor
+        whenever the second look disagreed with the first (a Z read as X
+        mid-collection, beads wo-cha); a process seen dead stays dead."""
+        watcher = (threading.Thread(target=lambda: None), {"pid": 424242})
+        watcher[0].start()
+        states = itertools.chain(["Z"], itertools.repeat("S"))
+        with mock.patch.object(sys.modules[__name__], "process_state",
+                               side_effect=lambda pid: next(states)):
+            self.assert_grandchild_reaped(watcher)
 
     def test_grandchild_is_dead_after_timeout_return(self):
         self.install_fake(FAKE_CLAUDE)
@@ -271,3 +293,13 @@ class TestPidAlivePredicate(unittest.TestCase):
         os.kill(pid, 0)
         self.assertFalse(pid_alive(pid),
                          "a terminated process must read as dead")
+
+    def test_a_process_its_reaper_is_collecting_is_not_alive(self):
+        """Linux reports a zombie its reaper has claimed as X (EXIT_DEAD)
+        until release_task unhashes it, so a grandchild seen as Z can read
+        X a moment later. Counting X as alive turned that Z->X step into
+        "grandchild survived" on CI (beads wo-cha)."""
+        with mock.patch.object(sys.modules[__name__], "process_state",
+                               return_value="X"):
+            self.assertFalse(pid_alive(424242),
+                             "a process being collected must read as dead")
