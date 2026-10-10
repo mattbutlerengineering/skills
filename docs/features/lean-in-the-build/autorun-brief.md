@@ -103,3 +103,36 @@ from the highest across ALL local branches and origin (PRD-0011 and row
 0148 are used on #632's branch; the reviewer-token branch uses rows to
 0145 and may add 0149+ — re-check at the time). Shell is zsh — never
 name a variable `status`.
+
+## Amendment 2026-10-10 (owner, relayed by the orchestrating session; issue #626 option A)
+
+The owner chose option A from the #626 research. It narrows the scope
+above; where the two disagree, this amendment wins.
+
+- **Implement:** before writing code for each work item, climb lean's
+  "does this need to exist" ladder — reference
+  `skills/lean/references/ladder.md`, never duplicate it. Keep lean's
+  never-cut floor (validation, error handling, security, accessibility).
+  Deliberate shortcuts carry a `lean:` marker in the code. Do NOT add a
+  per-row "rung reached" record to breakdown.md (the idea's own
+  "bloat in the record" risk); the marker is the record.
+- **Review:** add a fourth pass, **Complexity**, that applies lean's
+  cut-list (`skills/lean/references/cut-list.md`) to the run's diff,
+  files cuts as findings, audits the `lean:` markers the diff added
+  (each needs its trigger), and routes module-shape concerns to `deepen`
+  as a hand-off — never an inline refactor.
+- Keep it small and surgical: no new skill, no hook, no CI gate. A
+  lint pin is allowed only if a stage-to-utility file reference needs one
+  to stay legal; check lint/protocol for the sanctioned cross-skill
+  reference pattern (ADR-0023). Write a new ADR if adding a
+  stage-to-utility dependency is the kind of decision the repo records.
+- Bump `.claude-plugin/plugin.json` (patch).
+- Do not run paid evals; never edit an eval definition to make a case
+  pass.
+- **Base and release:** PR #632 is merged (origin/main 6aacc5c). This run
+  now lives on branch `feat/lean-in-the-loop` in worktree
+  `.claude/worktrees/agent-a17bfa9ae4fb94037`, cut fresh from origin/main
+  with the idea commits cherry-picked; the old `lean-in-build` worktree is
+  superseded. Ship IS authorized to push the branch and open ONE ready
+  (non-draft) PR to main with `Closes #626` and a `No work order:` waiver
+  line, then STOP — no merge, no tag.
