@@ -14,7 +14,16 @@
 #     re-checks it as the tested authority, failing closed;
 #   - the dispatched agent's prompt substrate is the repo-controlled breakdown
 #     ROW, never the raw issue body (the prompt-injection boundary). The issue
-#     body never leaves this workflow — assembler.py resolves the row instead.
+#     body never leaves this workflow — assembler.py resolves the row instead;
+#   - the job that runs the agent holds no write credential (ADR-0077). The
+#     agent runs code it wrote — that is the SWE's job — so no tool allowlist
+#     can stop that code reaching whatever token its job holds, and with no
+#     branch protection on this plan a write token is a push to main. So the
+#     work crosses three jobs on three runners: `dispatch` (trusted code,
+#     before the agent) claims the order; `agent` holds a read-only token and
+#     the agent; `deliver` (trusted code, a fresh checkout) takes the agent's
+#     work across as DATA — a git bundle of the order's branch and a PR body
+#     — and does every write: the push, the PR, the ledger, the labels.
 name: assembler
 
 on:
@@ -44,32 +53,32 @@ jobs:
       && github.event.sender.login == github.repository_owner
       && vars.FACTORY_PAUSED != 'true'
     runs-on: ubuntu-latest
-    # ADR-0034's wall-clock stop (WO-0034): a generous outer bound, not
-    # the budget — the dollar budget is the routing band's job. A size-L
-    # order's agent run fits comfortably; a hung run cannot outlive it.
-    timeout-minutes: 60
-    # The chartered agent branches, pushes, and opens a PR; it never merges
-    # its own PR — gate 3 requires an independent, non-authoring reviewer
-    # (ADR-0033, amended by ADR-0036). No merge permission is granted here.
+    # The claim is the one write this job makes; no agent code has run yet.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
       issues: write
-      # For the validator hand-off only (gh workflow run, WO-0030) — the
-      # agent's PR is GITHUB_TOKEN-authored, so its pull_request events
-      # are suppressed and gate 3 must be dispatched by name.
-      actions: write
     env:
       # Job-level so a step if: can gate on the secrets' PRESENCE — secrets are
       # not readable in an if:, but an env sourced from one is. This is our
       # equivalent of the sweeps sentry job's `vars.* != ''` graceful skip:
-      # no credential configured -> the agent step is skipped, never a
-      # fabricated run. Two credentials, either satisfies: an API key, or the
-      # subscription OAuth token `claude setup-token` mints (the operator's
-      # Max plan issues no API key — the action accepts both inputs and an
-      # empty string reads as not-provided).
+      # no credential configured -> nothing is claimed, so the agent and
+      # deliver jobs never run, never a fabricated run. Two credentials,
+      # either satisfies: an API key, or the subscription OAuth token
+      # `claude setup-token` mints (the operator's Max plan issues no API key
+      # — the action accepts both inputs and an empty string reads as
+      # not-provided). Here, not in the agent job: this job runs only the
+      # repo's own code, before the agent exists (ADR-0077).
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    # The resolved dispatch, for the jobs that follow. transitioned is the
+    # claim's verdict: '' or 'false' and nothing downstream runs.
+    outputs:
+      dispatch: ${{ steps.resolve.outputs.dispatch }}
+      wo: ${{ steps.resolve.outputs.wo }}
+      branch: ${{ steps.resolve.outputs.branch }}
+      model: ${{ steps.resolve.outputs.model }}
+      prompt: ${{ steps.resolve.outputs.prompt }}
+      transitioned: ${{ steps.claim.outputs.transitioned }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -87,11 +96,11 @@ jobs:
         run: make assembler
       # Claim the order: ready -> in-progress (ADR-0032's state machine,
       # advanced by machinery, not memory). transitioned=false means a
-      # repeat/stale event — the agent step is skipped, no second paid run.
+      # repeat/stale event — the agent job is skipped, no second paid run.
       # A benign no-op exits 0; only a flip that cannot verify the order's
-      # state fails the step. Gated on the API key exactly like the agent
-      # step: a repo that can never dispatch must not mark orders
-      # in-progress, or the graceful skip would fake a working agent.
+      # state fails the step. Gated on a credential existing: a repo that
+      # can never dispatch must not mark orders in-progress, or the
+      # graceful skip would fake a working agent.
       - name: Claim the work order
         id: claim
         if: >-
@@ -100,41 +109,162 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make wo-in-progress ISSUE=${{ github.event.issue.number }}
-      # The chartered agent, on the model its charter's band routes to. Skips
-      # gracefully when no credential is configured (the graceful-skip
-      # pattern): nothing is dispatched, nothing is labelled, nothing is
-      # faked. Both auth inputs are passed; the action treats an empty one
-      # as absent, so whichever secret exists wins.
+
+  agent:
+    needs: dispatch
+    # Runs only on a true claim — which already required a credential.
+    if: needs.dispatch.outputs.transitioned == 'true'
+    runs-on: ubuntu-latest
+    # ADR-0034's wall-clock stop (WO-0034): a generous outer bound, not
+    # the budget — the dollar budget is the routing band's job. A size-L
+    # order's agent run fits comfortably; a hung run cannot outlive it.
+    timeout-minutes: 60
+    # THE PUSH BOUNDARY (ADR-0077). Read-only, and nothing else: the agent
+    # executes code it wrote, and the action itself puts this token in the
+    # checkout's remote URL and in the agent's environment — so whatever
+    # this grant allows, the agent's code can do. It allows reading the
+    # repo.
+    # The chartered agent branches and commits; the deliver job pushes and
+    # opens its PR; nobody merges it but the gate-3 reviewer (ADR-0033,
+    # amended by ADR-0036).
+    permissions:
+      contents: read
+    env:
+      # The action's best-effort scrub of Anthropic, cloud and Actions
+      # secrets from the agent's subprocess environments (its
+      # docs/security.md), read from the job env. Without it the agent's
+      # own `python3 -c 'print(os.environ[...])'` printed the model
+      # credential. Best-effort: with no bubblewrap on the runner there is
+      # no PID isolation, so a determined process can still read its
+      # parent's environment — this stops the reflex, not an adversary.
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
+    outputs:
+      outcome: ${{ steps.agent.outcome }}
+      execution_file: ${{ steps.agent.outputs.execution_file }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The chartered agent, on the model its charter's band routes to. Both
+      # auth inputs are passed; the action treats an empty one as absent,
+      # so whichever secret exists wins. The secrets go in as inputs to this
+      # one step and nowhere else in the job.
       - name: Run the chartered agent
         id: agent
-        if: >-
-          steps.resolve.outputs.dispatch == 'true'
-          && steps.claim.outputs.transitioned == 'true'
-          && (env.ANTHROPIC_API_KEY != '' || env.CLAUDE_CODE_OAUTH_TOKEN != '')
-        # Pinned by SHA: this job holds write scopes + the API key, so its
+        # Pinned by SHA: this step holds the model credential, so its
         # third-party code must change only by reviewed commit, never by a
         # re-pointed tag. Bump deliberately: re-resolve the tag, update the
-        # SHA and the comment.
+        # SHA and the comment — and re-read how it hands github_token to the
+        # agent (ADR-0077 rests on that token being this job's read grant).
         uses: anthropics/claude-code-action@86180fa9e4d311eed10c9cc49854c53dab5d517a  # v1 as of 2026-08-04
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: ${{ steps.resolve.outputs.prompt }}
+          prompt: ${{ needs.dispatch.outputs.prompt }}
           # --max-turns is ADR-0034's second mechanical stop (WO-0034):
           # like the job timeout, a backstop a runaway loop cannot argue
           # with — generous enough that no honest size-L run meets it.
-          # --allowedTools: automation mode denies Bash unless named here,
-          # and the SWE's exit (branch, commit, push, verify, open the PR)
-          # is all Bash — the first live dispatch (issue #536) was denied
-          # nine times and delivered no PR. The one allowed push is this
-          # order's own branch, exactly (assembler.branch_for): no branch
-          # protection guards main on this plan, so this list is the push
-          # boundary. A `wo-:*` prefix rule never matched `wo-0074` (run
-          # 36083668042) — a `:*` prefix ends at a word boundary.
+          # --allowedTools: automation mode denies Bash unless named here
+          # — the first live dispatch (issue #536) was denied nine times
+          # and delivered no PR. This list is NOT the push boundary (the
+          # job's grant above is): make:* and python3:* run arbitrary code
+          # by design, since the SWE runs the repo's gates, its tests and
+          # update-manifest. It names no push and no `gh pr`: from this
+          # job either could only fail.
           claude_args: >-
-            --model ${{ steps.resolve.outputs.model }} --max-turns 100
-            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git checkout:*),Bash(git switch:*),Bash(git add:*),Bash(git commit:*),Bash(git push -u origin ${{ steps.resolve.outputs.branch }}),Bash(gh pr create:*),Bash(gh issue view:*),Bash(make:*),Bash(python3:*)"
+            --model ${{ needs.dispatch.outputs.model }} --max-turns 100
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(git checkout:*),Bash(git switch:*),Bash(git add:*),Bash(git commit:*),Bash(gh issue view:*),Bash(make:*),Bash(python3:*)"
+      # The hand-off, as data. A bundle of exactly the order's branch above
+      # the commit this run checked out, and the PR body the prompt told the
+      # agent to leave at the repo root. No repo tool runs here: after the
+      # agent step the workspace is the agent's. Either piece missing is
+      # not this step's verdict — deliver fails on it, and the order flips.
+      # Of the execution file, only the final result entry travels: cost
+      # and usage (what wo-record reads), turns, and the denied calls. The
+      # turn-by-turn tool output stays on this runner — it is kept as an
+      # artifact, and GitHub masks secrets in logs, not in artifacts.
+      - name: Package the agent's hand-off
+        if: always() && steps.agent.outputs.execution_file != ''
+        env:
+          BRANCH: ${{ needs.dispatch.outputs.branch }}
+          EXECUTION_FILE: ${{ steps.agent.outputs.execution_file }}
+          HANDOFF: ${{ runner.temp }}/handoff
+          KEEP: >-
+            (if type == "array" then . else [.] end)
+            | map(select(type == "object" and .type == "result")) | last
+            | [{type, subtype, is_error, num_turns, total_cost_usd, usage,
+            permission_denials}]
+        run: |
+          mkdir -p "$HANDOFF"
+          jq "$KEEP" "$EXECUTION_FILE" > "$HANDOFF/execution.json"
+          git bundle create "$HANDOFF/handoff.bundle" "refs/heads/$BRANCH" "^$GITHUB_SHA" || echo "no commits on $BRANCH to hand off"
+          cp pr-body.md "$HANDOFF/pr-body.md" || echo "no pr-body.md to hand off"
+      # The kept result entry lists every denied tool call; the log shows
+      # only the count. Run 35956750804 reported 7 denials and left nothing
+      # to read them from — keep the hand-off as an artifact, pass or fail.
+      - name: Keep the agent's hand-off
+        if: always() && steps.agent.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-handoff-${{ needs.dispatch.outputs.wo }}
+          path: ${{ runner.temp }}/handoff/
+          retention-days: 14
+
+  deliver:
+    needs: [dispatch, agent]
+    # always(): a failed agent still spent money and still owes its order a
+    # terminal label. Only an order THIS run claimed is touched.
+    if: always() && needs.dispatch.outputs.transitioned == 'true'
+    runs-on: ubuntu-latest
+    # Every write the dispatch makes lives here, in a job no agent code has
+    # touched: this runner's checkout is the repo's, and the agent's work
+    # arrives only as the bundle and the body, read as data.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      # For the validator hand-off only (gh workflow run, WO-0030) — the
+      # agent's PR is GITHUB_TOKEN-authored, so its pull_request events
+      # are suppressed and gate 3 must be dispatched by name.
+      actions: write
+    steps:
+      # Full history: the bundle's prerequisites are whatever the agent's
+      # branch was cut from — this run's commit, or a newer main the agent
+      # fetched — and a fetch from a bundle refuses one it lacks.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch the agent's hand-off
+        if: needs.agent.outputs.execution_file != ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-handoff-${{ needs.dispatch.outputs.wo }}
+          path: ${{ runner.temp }}/handoff
+      # The order's one push, from the trusted side. Only the order's own
+      # ref leaves the bundle — a bundle that also carried `main` brings
+      # nothing else across — and it is pushed to its own name, exactly
+      # (assembler.branch_for). --no-tags: a fetch auto-follows any tag
+      # pointing into the fetched history, and a bundle tag named
+      # `origin/main` outranks the remote-tracking ref of that name. The
+      # title is the branch tip's subject; the body is the agent's, which
+      # must cite its order (`Closes #N`) or find-pr below fails the run.
+      - name: Push the order's branch and open its PR
+        id: deliver
+        if: needs.agent.outputs.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ needs.dispatch.outputs.branch }}
+          HANDOFF: ${{ runner.temp }}/handoff
+        run: |
+          git fetch --no-tags "$HANDOFF/handoff.bundle" "refs/heads/$BRANCH:refs/heads/$BRANCH"
+          git push origin "refs/heads/$BRANCH:refs/heads/$BRANCH"
+          gh pr create --base main --head "$BRANCH" --title "$(git log -1 --format=%s "refs/heads/$BRANCH")" --body-file "$HANDOFF/pr-body.md"
       # The run's own spend, machine-written to the append-only cost ledger
       # (issue #222; ADR-0034): tokens and cost come from the action's
       # execution file — the harness's record, never a hand-typed figure.
@@ -142,36 +272,28 @@ jobs:
       # continue-on-error: a ledger refusal must not flip a finished order
       # to wo:failed — the miss shows red on this step, and detector G reds
       # the merge if the line truly never lands (the gating backstop).
-      # The execution file lists every denied tool call; the log shows only
-      # the count. Run 35956750804 reported 7 denials and left nothing to
-      # read them from — keep the file as an artifact, pass or fail.
-      - name: Keep the agent's execution file
-        if: always() && steps.agent.outputs.execution_file != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-execution-${{ steps.resolve.outputs.wo }}
-          path: ${{ steps.agent.outputs.execution_file }}
-          retention-days: 14
       - name: Record the run's spend in the cost ledger
         id: record
         if: >-
           always()
-          && steps.claim.outputs.transitioned == 'true'
-          && steps.agent.outputs.execution_file != ''
+          && needs.dispatch.outputs.transitioned == 'true'
+          && needs.agent.outputs.execution_file != ''
         continue-on-error: true
         run: >-
-          make wo-record WO=${{ steps.resolve.outputs.wo }}
+          make wo-record WO=${{ needs.dispatch.outputs.wo }}
           RUN_ID=${{ github.run_id }}
-          MODEL=${{ steps.resolve.outputs.model }}
-          FILE=${{ steps.agent.outputs.execution_file }}
-          OUTCOME=${{ steps.agent.outcome == 'success' && 'completed' || 'agent-failed' }}
+          MODEL=${{ needs.dispatch.outputs.model }}
+          FILE=${{ runner.temp }}/handoff/execution.json
+          OUTCOME=${{ needs.agent.outputs.outcome == 'success' && 'completed' || 'agent-failed' }}
       # The row wo-record just appended exists only on this runner — with
       # no push, every dispatched run's spend is discarded with the
       # checkout and the monthly circuit breaker never sees it (WO-0031;
-      # review.md major: the #222 gap surviving its own fix). The agent
-      # step may have left the workspace on its WO branch, so the row is
-      # re-applied to a fresh origin/main worktree and pushed from there —
-      # never from HEAD, which could smuggle agent commits onto main.
+      # review.md major: the #222 gap surviving its own fix). The deliver
+      # step fetched the agent's refs into this repo, so the row is
+      # re-applied to a fresh worktree of main and pushed from there —
+      # never from HEAD, which must never carry agent commits onto main.
+      # Main is named in full: a bare `origin/main` resolves a tag of that
+      # name first (git rev-parse's lookup order).
       # tail -1 IS the appended row: wo-record appends exactly one line
       # and runs after every other writer in this job. continue-on-error
       # mirrors the record step — a lost row shows red here, and detector
@@ -185,7 +307,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
-          git worktree add "$RUNNER_TEMP/spend" origin/main
+          git worktree add "$RUNNER_TEMP/spend" refs/remotes/origin/main
           tail -n 1 docs/factory/costs.jsonl >> "$RUNNER_TEMP/spend/docs/factory/costs.jsonl"
           git -C "$RUNNER_TEMP/spend" add docs/factory/costs.jsonl
           git -C "$RUNNER_TEMP/spend" commit -m "chore(factory): run-spend row (assembler)"
@@ -198,13 +320,10 @@ jobs:
       # hand-off uses workflow_dispatch, the one event GitHub exempts
       # from the suppression. An agent that ran but delivered no
       # traceable PR fails the find step — the owner must see that, and
-      # the failure() step below flips the order to wo:failed.
+      # the step below flips the order to wo:failed.
       - name: Find the agent's PR
         id: find
-        if: >-
-          steps.resolve.outputs.dispatch == 'true'
-          && steps.claim.outputs.transitioned == 'true'
-          && (env.ANTHROPIC_API_KEY != '' || env.CLAUDE_CODE_OAUTH_TOKEN != '')
+        if: needs.agent.outputs.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make find-pr ISSUE=${{ github.event.issue.number }}
@@ -217,9 +336,10 @@ jobs:
       # ADR-0045's writer): without this the dispatched agent's failure
       # leaves the order on wo:in-progress forever, where the gate digest
       # and the improvement routine both read it as work still in flight.
-      # Gated on the claim's own verdict, not just failure(): only an order
-      # THIS run took out of ready may be flipped — a run that died before
-      # or during the claim leaves the order's state exactly as it found it.
+      # The run died if a step here failed OR the agent job did not
+      # succeed — a failed job upstream is not this job's failure(), so
+      # it is named. Gated on the claim's own verdict: only an order THIS
+      # run took out of ready may be flipped.
       # ADR-0063: a terminal verdict requires having looked. find-pr
       # writes looked=false when it could not observe the agent's
       # delivery at all (an unusable gh, or a full window). `!=` not
@@ -227,8 +347,8 @@ jobs:
       # that died before it must still flip.
       - name: Mark the work order failed
         if: >-
-          failure()
-          && steps.claim.outputs.transitioned == 'true'
+          (failure() || needs.agent.result != 'success')
+          && needs.dispatch.outputs.transitioned == 'true'
           && steps.find.outputs.looked != 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
