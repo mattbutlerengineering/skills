@@ -69,4 +69,13 @@ catches it. Rollback: revert the merge commit and release 0.5.1.
 
 ## Release log
 
-(Filled after the pull request's checks complete.)
+- 2026-10-10: branch pushed; anchor issue #631 opened; pull request
+  #632 opened non-draft against `main`. Checks on the first push:
+  ```
+  check	pass	24s
+  needs-review-label	pass	5s
+  review	pass	26s
+  merged-label	skipping	0
+  check	pass	28s
+  ```
+  Stopped here: the merge is the owner's.
