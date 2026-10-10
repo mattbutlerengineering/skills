@@ -2,6 +2,11 @@
 stage: decompose
 run: feature:first-live-dispatch
 date: 2026-08-17
+assumptions:
+  - "Milestone E (2026-10-10, route-back from Review's Critical finding): the fix is the job split ADR-0077 records, not a narrower allowlist. Review listed narrowing make:* and python3:* as a candidate; it was weighed and rejected as the boundary, because the SWE may Edit a test and run the tests, so any test-runner entry runs agent-authored code, and the pinned claude-code-action writes its github_token into the checkout remote and the agent env (configureGitAuth, run.ts), so persist-credentials: false would close nothing. The entries stay, documented as not the boundary; narrowing them would only risk denials on update-manifest and gate runs a real payload needs (the vocabulary-sweep payload needed update-manifest)."
+  - "The SWE charter (factory/charters/swe/CHARTER.md) still grants push and PR-open. Under dispatch the workflow now carries those out for the agent, and the prompt says so; the charter text is left unchanged because it also governs owner sessions, and a charter edit is a charter_replay concern (paid, on demand) outside this Critical fix. Logged rather than fixed."
+  - "The PR title is the branch tip commit subject and the body is pr-body.md at the repo root, uncommitted. No brief or artifact names a hand-off format; this is the smallest one that keeps find-pr's Closes join unchanged."
+  - "Ledger rows for this milestone follow the owner-session policy (docs/features/readme-skill-map/breakdown.md assumptions; ADR-0069): worked interactively, no dispatched agent, one honest zero-cost row per checked order via budget_guard record."
 ---
 
 # Breakdown: first live dispatch
@@ -59,6 +64,26 @@ the gate-history criterion is proven too.
   - Accept: a new issue exists, labeled `type:chore` + `wo:draft` + `size:S`, body in the #536 grammar; created only after this row is on `main` (ADR-0032 one-way order); its number is appended to the row below as `(tracker: #NNN)`; the `FACTORY_REVIEW_TOKEN` secret exists (`gh secret list`) before any gate label is applied.
 - [x] **WO-0076** resolve the duplicated `ROOT` one-owner finding — the dispatched payload — size:S, blocked by: WO-0075 (PRD-0003 §Success criteria) (tracker: #574)
   - Accept: `python3 one_owner.py` no longer reports `charter_replay.py` and `trigger_eval.py` stating the same `ROOT`, resolved EITHER by `charter_replay.py` importing `ROOT` from `trigger_eval` (it already imports `HARNESSES` from there) OR by a `# one-owner:` marker at the second definition stating why each module keeps its own (ADR-0061), with the choice argued in the PR body; no file under `.github/workflows/` is touched; the full battery stays green. Delivered by the dispatched agent as a PR closing the mirror issue, never by hand. Proof obligations carried by this dispatch: the owner applies the three gate labels by hand, the automatic validator hand-off runs with no hand re-fire, and the review job posts under the reviewer identity.
+
+## Milestone E: the push boundary holds (route-back from Review, 2026-10-10)
+
+review.md's Critical finding: the allowlist the workflow called the push
+boundary carried `Bash(python3:*)` and `Bash(make:*)`, and arbitrary
+code in the dispatch job reached a write-scoped `GITHUB_TOKEN` (no
+branch protection on this plan). These rows move the boundary to the
+token (ADR-0077). A live dispatch is still needed to prove them (see
+Notes).
+
+- [x] **WO-0128** the agent's job holds no write credential — size:M, blocked by: WO-0076 (PRD-0003 §Success criteria)
+  - Accept: assembler.yml is three jobs: `dispatch` (contents read, issues write: resolve and claim), `agent` (contents read only: the agent, then hand-off packaging that runs no repo tool), and `deliver` (the write grants, from a fresh checkout: fetches exactly the order's ref from the agent's bundle, pushes it to its own name, opens the PR with the agent's `pr-body.md`, then records spend, commits the spend row, runs find-pr, the validator hand-off and wo:failed). The allowlist names no push and no `gh pr`. The prompt names the branch and the body file and no push. `tests/test_assembler.py::TestAgentCredentialBoundary` and the recorded grants in `tests/test_workflow_permissions.py` pin all of this. ADR-0077 records the decision. The mirror and manifest are regenerated, and the battery is green.
+- [x] **WO-0129** the kept artifact carries no tool output and the agent's shell no model credential — size:S, blocked by: WO-0128 (PRD-0003 §Success criteria)
+  - Accept: the agent job's hand-off keeps only the execution file's final result entry (cost, usage, turns, denials), never the turn-by-turn tool output, and `make wo-record` still reads it. The agent step runs with `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`, so a Bash subprocess's environment carries no Anthropic credential. Tests pin both. The mirror and manifest are regenerated, and the battery is green.
+- [x] **WO-0130** a tag in the agent's bundle cannot reach `main` — size:S, blocked by: WO-0128 (PRD-0003 §Success criteria)
+  - Accept: the deliver job fetches the order's ref from the bundle with `--no-tags`, and the spend-row step names main as `refs/remotes/origin/main`, so a bundle tag named `origin/main` (auto-followed by a default fetch, and ahead of the remote-tracking ref in ref resolution) can no longer put the agent's commits under the spend row on `main`. `tests/test_assembler.py::TestBundleCannotReachMain` replays the deliver job's own fetch line and spend-row step against such a bundle and fails without either guard. ADR-0077 records the guard and the residual one hop later (review finding 4). The mirror and manifest are regenerated, and the battery is green.
+- [x] **WO-0131** find-pr never hands a fork PR to the validator — size:S, blocked by: WO-0128 (PRD-0003 §Success criteria)
+  - Accept: `assembler.pr_for_issue` lists `isCrossRepository` and skips any PR that is not stated to be same-repo, so an outsider's fork PR citing the order (`Closes #N`, newest first) can no longer be the number the deliver job dispatches the validator on — whose `review` job runs the PR's own code with the reviewer PAT and has no fork guard on its dispatch arm. A test pins the skip and the fail-closed case. The mirror and manifest are regenerated, and the battery is green.
+- [x] **WO-0132** the agent job's secrets are pinned step-wide, not only job-wide — size:S, blocked by: WO-0128 (PRD-0003 §Success criteria)
+  - Accept: `TestAgentCredentialBoundary` fails if the agent job names any secret other than the action step's three inputs, or `github.token`, anywhere — a secret in a packaging step's own env passed the earlier boundary tests (re-review mutation). Test-only; the battery is green.
 
 ## Design gaps found
 
@@ -262,6 +287,21 @@ success criterion is covered by an Accept line above.
   not post on #545: its branch predates #547, and with no
   `FACTORY_REVIEW_TOKEN` the reviewer would share the author's identity,
   which PRD-0001 forbids.
+- 2026-10-10: **Milestone E (route-back from Review's Critical
+  finding).** Offline tests prove the workflow's shape. They cannot prove
+  how it behaves on a runner, so a live dispatch must still show five
+  things. (1) claude-code-action's write-permission check on the owner
+  passes with a read-only token. (2) The deliver job's default-condition
+  steps run after a failed agent job under its `if: always()`. (3) The
+  bundle cut in the agent's shallow checkout fetches into deliver's full
+  clone. This was checked locally with two depth-1 clones, not on a
+  runner. (4) The subprocess scrub reaches the agent's Bash from the job
+  env, so a Bash `env` shows no Anthropic credential. (5) The pushed
+  branch, the opened PR, find-pr, the validator
+  hand-off and the spend row all land as they did for #545. Review's
+  three Major findings stay owner decisions and are not touched here.
+  Finding 4 (the reviewer PAT runs PR code) is in validator.yml, which
+  this milestone does not edit; the same reasoning applies to it.
 
 ## Evidence for Verify (2026-09-25)
 
