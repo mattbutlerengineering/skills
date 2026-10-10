@@ -10,6 +10,8 @@ tests/test_fake_gh.py's one-gh-fake rule does not read them as gh fakes.
 """
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -383,6 +385,18 @@ class TestCheckStoryboard(unittest.TestCase):
         self.assertEqual(self.check(board),
                          [f"{SB} step 1 do must be a list of commands"])
 
+    def test_a_terminal_command_vhs_cannot_type_is_a_problem(self):
+        # A vhs string literal has no escapes: a command holding a line
+        # break, or all three of its delimiters, cannot be typed as
+        # written, and rewriting it would type a different command.
+        for command in ("echo a\necho b", "echo `a` \"b\" 'c'", 7):
+            with self.subTest(command=command):
+                board = storyboard()
+                board["steps"][0]["do"] = ["python3 board.py", command]
+                self.assertEqual(self.check(board), [
+                    f"{SB} step 1 do holds a command vhs cannot type (a"
+                    " line break, or all of ` \" ')"])
+
     def test_a_browser_do_must_be_a_string(self):
         board = storyboard()
         del board["steps"][1]["do"]
@@ -628,6 +642,34 @@ class TestRecordTerminal(WorkdirMixin, unittest.TestCase):
                     f" expected 8.8 s — a ratio of {ratio}, outside"
                     " 0.75–1.25; narration would drift"]))
         self.assertEqual(launch_demo.DRIFT_BAND, (0.75, 1.25))
+
+    @unittest.skipUnless(shutil.which("bash"), "needs bash")
+    def test_narration_is_printed_verbatim_and_never_run(self):
+        # Narration is prose, often markdown: a backtick, an apostrophe
+        # and a double quote together, with shell syntax between them.
+        # The screen line must type as one vhs string and print the
+        # sentence exactly in the recorder's shell, running none of it.
+        say = ("Run `make; touch ran-1` and it's \"$(touch ran-2)\""
+               " at 100% \\ done.")
+        board = {**PLAN_BOARD, "steps": [{"say": say, "do": []}]}
+        self.plan = launch_demo.plan(board, [2.0, 3.0, 1.0])
+        runners = FakeRunners({"vhs": [lambda args, input:
+                                       self.raw.write_text("v") and ""],
+                               "ffprobe": ["7.3\n"]})
+        self.assertEqual(self.record(runners)[1], [])
+        typed = [line for line in self.tape.read_text(
+            encoding="utf-8").splitlines() if "clear; printf" in line][1]
+        quote, literal = typed[5], typed[6:-1]
+        self.assertEqual((typed[:5], typed[-1]), ("Type ", quote))
+        self.assertNotIn(quote, literal)
+        shell = Path(self.tmp.name) / "shell"
+        shell.mkdir()
+        printed = subprocess.run(
+            ["bash", "-c", literal.removeprefix("clear; ")], cwd=shell,
+            capture_output=True, text=True, check=True).stdout
+        self.assertEqual(re.sub(r"\x1b\[[0-9;]*m", "", printed),
+                         say + "\n\n")
+        self.assertEqual(list(shell.iterdir()), [])
 
     def test_a_failing_vhs(self):
         err = subprocess.CalledProcessError(

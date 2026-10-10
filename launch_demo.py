@@ -168,6 +168,13 @@ def _in_copy(line, copy):
     return isinstance(line, str) and _normalised(line) in copy
 
 
+def _typeable(command):
+    """One line holding at most two of vhs's three string delimiters, so
+    a free one can wrap it: vhs strings carry no escapes."""
+    return (isinstance(command, str) and "\n" not in command
+            and any(quote not in command for quote in "`\"'"))
+
+
 def _check_steps(steps, copy, recorder):
     """The per-step problems: each step's say present and cut from the
     copy, its do in the recorder's shape — a list of commands for the
@@ -184,6 +191,9 @@ def _check_steps(steps, copy, recorder):
             continue
         if recorder == "terminal" and not isinstance(step["do"], list):
             problems.append(f"{label} do must be a list of commands")
+        elif recorder == "terminal" and not all(map(_typeable, step["do"])):
+            problems.append(f"{label} do holds a command vhs cannot type"
+                            " (a line break, or all of ` \" ')")
         if recorder == "browser" and not isinstance(step["do"], str):
             problems.append(f"{label} do must be a string")
     return problems
@@ -225,8 +235,7 @@ def plan(storyboard, seconds):
     narration starts — and `planned`, the whole recording's expected
     length. `seconds` is one narration duration per scene. A count that
     does not fit is a caller slip, so a ValueError, never a problem
-    string. Pure: the same plan feeds the driver and the mux, so the
-    two cannot disagree."""
+    string. Pure: one plan feeds the driver and the mux alike."""
     steps = storyboard["steps"]
     if len(seconds) != len(steps) + 2:
         raise ValueError(f"plan needs {len(steps) + 2} narration durations"
@@ -294,19 +303,23 @@ FONT_SIZE = 18
 # What each scene kind prints before its hold: a bold title over its
 # tagline, a dim caption line, the bold closing line. The recorder
 # draws every word; ffmpeg draws nothing.
-SCREEN_FORMATS = {"title": r"\033[1m%s\033[0m\n\n%s\n",
-                  "step": r"\033[2m%s\033[0m\n\n",
-                  "outro": r"\033[1m%s\033[0m\n"}
+SCREEN_FORMATS = {"title": r"\033[1m%b\033[0m\n\n%b\n",
+                  "step": r"\033[2m%b\033[0m\n\n",
+                  "outro": r"\033[1m%b\033[0m\n"}
 
 
 def _tape_string(text):
-    """A vhs string literal. vhs strings carry no escape processing, so
-    the delimiter is one the text does not contain; a text holding all
-    three loses its backticks."""
-    for quote in ("`", '"', "'"):
-        if quote not in text:
-            return f"{quote}{text}{quote}"
-    return "`" + text.replace("`", "'") + "`"
+    """A vhs string literal in a delimiter the text lacks (_typeable's
+    guarantee for a command, _printf_word's for a screen line)."""
+    quote = next(quote for quote in "`\"'" if quote not in text)
+    return f"{quote}{text}{quote}"
+
+
+def _printf_word(text):
+    """text as one single-quoted printf %b word, each quote, backslash
+    and line break octal-escaped: printed verbatim, never parsed."""
+    return "'" + "".join(f"\\0{ord(c):03o}" if c in "`'\"\\\r\n" else c
+                         for c in text) + "'"
 
 
 def _screen(plan, scene):
@@ -315,7 +328,7 @@ def _screen(plan, scene):
     words = ([plan["title"], plan["tagline"]] if scene["kind"] == "title"
              else [scene["say"]])
     return (f"clear; printf '{SCREEN_FORMATS[scene['kind']]}' "
-            + " ".join(shlex.quote(word) for word in words))
+            + " ".join(map(_printf_word, words)))
 
 
 def _tape(plan, raw, against):
@@ -561,15 +574,13 @@ def _node_reason(err):
 
 def record_browser(plan, workdir, against, runner=cli.runner):
     """The browser adapter: ((raw video path, offsets), []) or (None,
-    [one problem]). Writes the title and outro cards and demo.mjs from
-    the plan, runs a copy of the driver under node with RECORD_TIMEOUT
-    (the URL and the scratch directory as arguments) from a launch-demo-
-    directory made under the working directory and removed after — Node
-    resolves an ES module's imports from the importing file, so only a
-    driver inside the repo finds the repo's playwright, the one probe
-    resolved — and reads the marks the driver
-    recorded — page creation, then each scene start — so offsets are
-    measured, not the plan's. Knows no publish path."""
+    [one problem]). Writes the cards and demo.mjs from the plan; runs a
+    copy of the driver under node (RECORD_TIMEOUT; the URL and scratch
+    directory as argv) from a launch-demo- directory under the working
+    directory, removed after — Node resolves an ES module's imports from
+    its own file, so only a driver in the repo finds the playwright the
+    probe resolved — then measures offsets from the marks it recorded
+    (page creation, then each scene start). Knows no publish path."""
     workdir = Path(workdir)
     outro = plan["scenes"][-1]
     (workdir / "title.html").write_text(
@@ -670,16 +681,14 @@ def _read_sources(root, shown_dir, slug_dir):
 
 def render(root, config, slug, which=shutil.which, runner=cli.runner,
            head=None, scratch=None):
-    """(verdict, lines, problems) for <publish>/<slug>/: the composed
-    run and the verdict. Checks run in cost order — the copy and the
-    storyboard read and held to the grammar (problems before any tool
-    runs), the probe (COPY-ONLY before any tool runs), then narration,
-    the configured recorder and the mux. In COPY-ONLY nothing is
-    written to the publish path; on PRODUCED the slug directory gains
-    the driver and launch.mp4. Intermediates stay in the scratch
-    directory (a launch-demo- tempdir unless given), named in the
-    first line so a failed run can be inspected. Reads nothing about
-    the repo but the config and the slug directory."""
+    """(verdict, lines, problems) for <publish>/<slug>/. Checks run in
+    cost order — the copy and storyboard held to the grammar (problems)
+    and the probe (COPY-ONLY), both before any tool runs; then
+    narration, the configured recorder and the mux. COPY-ONLY writes
+    nothing to the publish path; PRODUCED adds the driver and
+    launch.mp4. Intermediates stay in the scratch directory (a
+    launch-demo- tempdir unless given), named in the first line so a
+    failed run can be inspected. Reads only the config and slug dir."""
     root = Path(root)
     shown_dir = f"{config['publish']}/{slug}"
     slug_dir = root / config["publish"] / slug
@@ -719,11 +728,6 @@ def render(root, config, slug, which=shutil.which, runner=cli.runner,
     return "PRODUCED", lines + summary, []
 
 
-def _entry(name):
-    purpose, hint = TOOLS[name]
-    return (name, purpose, hint)
-
-
 def probe(config, which=shutil.which, runner=cli.runner):
     """(missing, problems) — missing is [(name, purpose, how to
     install)] over ffmpeg and ffprobe, the configured recorder's tools
@@ -732,19 +736,19 @@ def probe(config, which=shutil.which, runner=cli.runner):
     probe cannot fail, only report, so problems is always []: a
     Playwright browser that was never installed is not probeable and
     surfaces at record time as that adapter's failure."""
-    missing = [_entry(name) for name in ("ffmpeg", "ffprobe")
+    missing = [(name, *TOOLS[name]) for name in ("ffmpeg", "ffprobe")
                if not which(name)]
     if config["recorder"] == "terminal":
         if not which("vhs"):
-            missing.append(_entry("vhs"))
+            missing.append(("vhs", *TOOLS["vhs"]))
     elif not which("node"):
-        missing.append(_entry("node"))
+        missing.append(("node", *TOOLS["node"]))
     else:
         try:
             runner("node", PROBE_TIMEOUT)(["-e",
                                            "require.resolve('playwright')"])
         except cli.CLI_FAILURES:
-            missing.append(_entry("playwright"))
+            missing.append(("playwright", *TOOLS["playwright"]))
     voice = shlex.split(config["voice"])[0]
     if not which(voice):
         missing.append((voice, VOICE_PURPOSE, VOICE_HINT))

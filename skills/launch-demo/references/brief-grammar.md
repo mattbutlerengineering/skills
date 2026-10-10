@@ -72,7 +72,10 @@ spends money unless the repo chooses a voice that does.
 - `do` is per recorder:
   - **terminal** — a list of shell commands, typed one per line into
     the configured shell, each followed by Enter. The list may be
-    empty.
+    empty. Each command is one line using at most two of the three
+    quote characters (backtick, double, single): the recorder types
+    it through a string with no escapes, so the tool refuses one it
+    could only type changed.
   - **browser** — one string of JavaScript statements that run inside
     `async (page) => { … }` with Playwright's `page`, for example
     `"await page.click('#count'); await page.fill('#name', 'Ada');"`.
