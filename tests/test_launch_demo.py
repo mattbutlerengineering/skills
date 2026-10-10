@@ -1091,6 +1091,23 @@ class TestRecordBrowser(CwdMixin, WorkdirMixin, unittest.TestCase):
             "launch-demo: browser recorder failed: node: bad option:"
             " --nope"]))
 
+    def test_no_error_message_line_falls_back_to_cli_detail(self):
+        # Neither a frame, the banner nor a hung run's empty stderr is
+        # an error-message line, so the reason is cli.detail's: the
+        # last stderr line, else the exception itself.
+        import cli
+        banner_only = subprocess.CalledProcessError(
+            1, ["node"], stderr="    at main (/x/demo.mjs:3:1)\n\n"
+                                "Node.js v22.22.3\n")
+        hung = subprocess.TimeoutExpired(["node"], 600)
+        for err, reason in ((banner_only, "Node.js v22.22.3"),
+                            (hung, cli.detail(hung))):
+            with self.subTest(reason=reason):
+                self.assertEqual(
+                    self.record(FakeRunners({"node": [err]})),
+                    (None, [f"launch-demo: browser recorder failed:"
+                            f" {reason}"]))
+
     def record(self, runners):
         return launch_demo.record_browser(self.plan, self.work, self.AGAINST,
                                           runners)
