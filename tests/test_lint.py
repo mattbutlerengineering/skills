@@ -90,6 +90,13 @@ def make_clean_tree(root):
          "description": "t — utility skills ("
                         + ", ".join(protocol.UTILITY_SKILLS) + ")"}),
         encoding="utf-8")
+    # check_grok_marketplace holds the marketplace entry to the plugin
+    # name and to a relative source whose tree contains skills/
+    # (ADR-0076). The clean tree's plugin.json name is "t".
+    (plugin_dir / "marketplace.json").write_text(json.dumps(
+        {"name": "skills",
+         "plugins": [{"name": "t", "source": "./"}]}),
+        encoding="utf-8")
 
     (root / "package.json").write_text(json.dumps(
         {"name": "t", "version": "0", "private": True,
@@ -342,6 +349,115 @@ class TestPiPackage(CheckerTreeTest):
             encoding="utf-8")
         self.assertEqual(lint.check_pi_package(self.root),
                          ["package.json pi.skills must include './skills'"])
+
+
+class TestGrokMarketplace(CheckerTreeTest):
+    """Grok installs from the Claude marketplace manifest. The checker
+    pins the entry check_manifest never sees (ADR-0076)."""
+
+    def _write(self, plugins):
+        (self.root / ".claude-plugin" / "marketplace.json").write_text(
+            json.dumps({"name": "skills", "plugins": plugins}),
+            encoding="utf-8")
+
+    def test_missing_marketplace_json(self):
+        (self.root / ".claude-plugin" / "marketplace.json").unlink()
+        self.assertEqual(lint.check_grok_marketplace(self.root),
+                         ["missing .claude-plugin/marketplace.json"])
+
+    def test_invalid_json(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.write_text("{not json", encoding="utf-8")
+        problems = lint.check_grok_marketplace(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "marketplace.json is not valid JSON:"), problems)
+
+    def test_an_empty_marketplace_json_is_one_exact_problem(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.write_text("", encoding="utf-8")
+        self.assertEqual(lint.check_grok_marketplace(self.root), [
+            "marketplace.json is not valid JSON: Expecting value:"
+            " line 1 column 1 (char 0)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_marketplace_json_the_process_may_not_read_is_a_problem(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_grok_marketplace(self.root), [
+                "cannot read marketplace.json: [Errno 13] Permission denied:"
+                f" '{path}'"])
+        finally:
+            path.chmod(0o644)
+
+    def test_a_marketplace_that_is_not_an_object_names_its_shape(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        for shape in ("null", "42", '"text"', '["a"]', "true"):
+            with self.subTest(shape=shape):
+                path.write_text(shape, encoding="utf-8")
+                self.assertEqual(lint.check_grok_marketplace(self.root),
+                                 ["marketplace.json is not a JSON object"])
+
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.write_bytes(
+            '{"name": "caf\u00e9"}'.encode("latin-1"))
+        problems = lint.check_grok_marketplace(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "marketplace.json is not valid JSON:"), problems)
+
+    def test_plugins_must_be_a_list(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.write_text(json.dumps({"name": "skills"}), encoding="utf-8")
+        self.assertEqual(lint.check_grok_marketplace(self.root),
+                         ["marketplace.json plugins must be a list"])
+
+    def test_the_plugin_json_name_must_be_listed(self):
+        self._write([{"name": "other", "source": "./"}])
+        self.assertEqual(lint.check_grok_marketplace(self.root),
+                         ["marketplace.json names no plugin 't'"])
+
+    def test_a_missing_plugin_json_is_not_a_second_problem(self):
+        """check_manifest owns a missing plugin.json. With no name to
+        match, a marketplace that still points at skills/ is clean."""
+        (self.root / ".claude-plugin" / "plugin.json").unlink()
+        self.assertEqual(lint.check_grok_marketplace(self.root), [])
+
+    def test_a_git_source_is_not_a_path_in_this_repo(self):
+        self._write([{"name": "t", "source": {
+            "source": "url", "url": "https://example.com/skills.git"}}])
+        self.assertEqual(
+            lint.check_grok_marketplace(self.root),
+            ["marketplace.json plugin source must be a relative path"
+             " inside the repo"])
+
+    def test_an_absolute_source_is_not_inside_the_repo(self):
+        self._write([{"name": "t", "source": "/tmp/skills"}])
+        self.assertEqual(
+            lint.check_grok_marketplace(self.root),
+            ["marketplace.json plugin source must be a relative path"
+             " inside the repo"])
+
+    def test_a_source_that_climbs_out_is_not_inside_the_repo(self):
+        self._write([{"name": "t", "source": "../elsewhere"}])
+        self.assertEqual(
+            lint.check_grok_marketplace(self.root),
+            ["marketplace.json plugin source must be a relative path"
+             " inside the repo"])
+
+    def test_a_source_with_no_skills_directory(self):
+        self._write([{"name": "t", "source": "./docs"}])
+        self.assertEqual(
+            lint.check_grok_marketplace(self.root),
+            ["marketplace.json plugin source './docs'"
+             " has no skills directory"])
+
+    def test_the_object_form_of_a_local_source_is_clean(self):
+        self._write([{"name": "t", "source": {
+            "type": "local", "path": "./"}}])
+        self.assertEqual(lint.check_grok_marketplace(self.root), [])
 
 
 class TestSkills(CheckerTreeTest):

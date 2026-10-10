@@ -1,6 +1,6 @@
 # oh-my-pi (omp) is a supported second harness; Claude Code stays primary
 
-- Status: accepted
+- Status: amended by ADR-0076
 - Date: 2026-07-04
 - Amends: ADR-0007
 

@@ -97,6 +97,82 @@ def check_pi_package(root):
     return problems
 
 
+def _local_marketplace_source(source):
+    """The relative path a marketplace plugin source names, or None.
+
+    Grok accepts a plain string or {"type": "local", "path": "..."}
+    (ADR-0076). A git URL source, an absolute path, and a path that
+    climbs out of the repo are not a path in this package."""
+    if isinstance(source, str):
+        raw = source
+    elif isinstance(source, dict) and source.get("type") == "local" \
+            and isinstance(source.get("path"), str):
+        raw = source["path"]
+    else:
+        return None
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return None
+    return raw
+
+
+def check_grok_marketplace(root):
+    """Grok installs this repo from the Claude marketplace manifest
+    (ADR-0076). There is no second copy: Grok reads `.claude-plugin/`
+    itself. This pins the shape `check_manifest` does not see — the
+    plugin entry's name matches plugin.json, and its source is a
+    relative path inside the repo whose tree contains `skills/`.
+
+    A missing or unreadable plugin.json contributes nothing here.
+    check_manifest already reports that file; a name this checker
+    cannot read is not a second problem about the same break.
+    """
+    data, problem = read_file(root / ".claude-plugin" / "marketplace.json",
+                              "marketplace.json", dict)
+    if problem:
+        return [problem]
+    if data is None:
+        return ["missing .claude-plugin/marketplace.json"]
+    plugins = data.get("plugins")
+    if not isinstance(plugins, list):
+        return ["marketplace.json plugins must be a list"]
+    manifest, manifest_problem = read_file(
+        root / ".claude-plugin" / "plugin.json", "plugin.json", dict)
+    plugin_name = None
+    if manifest is not None and manifest_problem is None:
+        plugin_name = manifest.get("name") or None
+    matches = [plugin for plugin in plugins
+               if isinstance(plugin, dict)
+               and (plugin_name is None or plugin.get("name") == plugin_name)]
+    if not matches:
+        if plugin_name:
+            return [f"marketplace.json names no plugin {plugin_name!r}"]
+        return ["marketplace.json names no plugin"]
+    problems = []
+    for plugin in matches:
+        source = _local_marketplace_source(plugin.get("source"))
+        if source is None:
+            problems.append(
+                "marketplace.json plugin source must be a relative path"
+                " inside the repo")
+            continue
+        skills = (root / source / "skills").resolve()
+        try:
+            skills.relative_to(root.resolve())
+        except ValueError:
+            problems.append(
+                "marketplace.json plugin source must be a relative path"
+                " inside the repo")
+            continue
+        if not skills.is_dir():
+            problems.append(
+                f"marketplace.json plugin source {source!r}"
+                " has no skills directory")
+    return problems
+
+
 def extra_skills(root):
     """Skill directories on disk that the protocol taxonomy doesn't know —
     a dir under skills/ installs as a skill, so the frontmatter and ledger
@@ -957,7 +1033,7 @@ def check_ledger_links(root):
 
 
 CHECKERS = (check_manifest, check_plugin_skills,
-            check_pi_package, check_skills,
+            check_pi_package, check_grok_marketplace, check_skills,
             check_skill_recitals, check_skill_assets, check_templates,
             check_router, check_router_conditionals,
             check_readme_skills, check_readme_no_orphans,
