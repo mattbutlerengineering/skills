@@ -95,7 +95,7 @@ request body section)
 
 ```
 # Pull request open, unmerged: nothing is published.
-gh pr close <n> --delete-branch      # #616 stays open; it closes only on merge
+gh pr close 621 --delete-branch      # #616 stays open; it closes only on merge
 
 # After the squash merge to main: revert on a branch and merge the revert at gate 3.
 git fetch origin main && git switch -c revert/docs-audit origin/main
@@ -108,13 +108,41 @@ gh issue reopen 616
 
 ## Release log
 
-1. `git push -u origin docs/docs-audit` → (pending)
-2. Pull request body written to the session scratchpad (`Closes #616`
-   first, the `No work order:` line, the smallest visual, before/after
-   evidence, `## Merge danger`, the attribution line last), then
-   `gh pr create --base feat/grok-harness --head docs/docs-audit --body-file pr-body.md`
-   → (pending)
-3. `gh pr checks` on the pull-request event → (pending)
+Steps 1 to 3 ran on 2026-10-10 under the brief's Release authorization.
+
+1. `git push -u origin docs/docs-audit` → `* [new branch] docs/docs-audit -> docs/docs-audit`,
+   head `a10987c` (the commit recording this file's intent state).
+2. Pull request body written to the session scratchpad through a quoted
+   heredoc (`Closes #616` first, the `No work order:` line, the stacking
+   note, `## What changed`, `## Before and after`, `## Merge danger`, the
+   attribution line last); checked offline before sending:
+   ```
+   WO tokens []
+   closes ['616']
+   waiver True
+   ```
+   The label-count evidence it quotes was re-run, not copied:
+   `len(gates.declared_labels(root))` printed `13`. Then
+   `gh pr create --base feat/grok-harness --head docs/docs-audit --title "docs: audit the living reference docs until every checked claim is true (PRD-0010)" --body-file pr-body.md`
+   → https://github.com/mattbutlerengineering/skills/pull/621 ;
+   `gh pr view 621` → `OPEN draft=false feat/grok-harness a10987c`.
+3. `gh pr checks 621`, polled until settled (first poll already final):
+   ```
+   pull_request run 38072771176, head a10987c, conclusion success
+     check               pass      24s
+     review              pass      28s
+     needs-review-label  pass       4s
+     merged-label        skipping   0s   (fires on merge)
+   push run 38072767232, head a10987c, conclusion success
+     check               pass      23s
+     review / needs-review-label / merged-label  skipping (push event)
+   ```
+   The pull-request `check` job's log: `lint: 0 problem(s) across 25 skills`,
+   `gates: 0 problem(s)`, `selftest: ok`, `Ran 1958 tests in 17.961s`, and
+   no `B:` line — detector B read the live event with the waiver and the
+   anchor and found nothing. The push of the commit adding this outcome
+   re-runs the checks on the new head; this file cannot quote its own
+   commit's result.
 
 ## Owner actions
 
@@ -122,7 +150,7 @@ gh issue reopen 616
    directory carries the evidence, `claims.md` row per claim).
 2. Merge #618 first.
 3. Retarget this pull request to `main` before `feat/grok-harness` is
-   deleted (REST: `gh api -X PATCH repos/mattbutlerengineering/skills/pulls/<n> -f base=main`),
+   deleted (REST: `gh api -X PATCH repos/mattbutlerengineering/skills/pulls/621 -f base=main`),
    let CI re-run, then squash-merge. The pull request carries `prd.md`
    and `architecture.md`, so it is a human code-owner merge (ADR-0036).
    Expected on merge: #616 closes.
@@ -157,4 +185,10 @@ For the owner, after the squash merge; none has run yet.
 
 ## Outcome
 
-(pending — filled after the pull request is open and its checks finish)
+Shipped to the gate, cleanly: pre-flight green on `9cc384e` (1958 tests
+`OK`; lint, gates and selftest clean; no secrets; no mirrored file; base
+unmoved at `a0f7553`; merges clean beside #620). The branch is pushed and
+pull request #621 is open, non-draft, base `feat/grok-harness`, every
+pull-request check passing. This stage stops there: no merge, no tag, no
+version bump. The owner merges #618, retargets #621 to `main`, and
+squash-merges at ADR-0033 gate 3. Next stage after the merge: Operate.
