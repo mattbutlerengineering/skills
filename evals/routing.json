@@ -807,6 +807,32 @@
       "kind": "situational",
       "expected": "pipeline-board",
       "query": "Show me all the active runs in this repo placed on their current pipeline stages, at a glance, without me running commands"
+    },
+    {
+      "id": "ld-1",
+      "kind": "direct",
+      "expected": "launch-demo",
+      "query": "Make the launch video and the launch copy for the feature we just shipped"
+    },
+    {
+      "id": "ld-2",
+      "kind": "situational",
+      "expected": "launch-demo",
+      "query": "The release went out this morning and nobody outside the team can say what it does — I want a one-minute narrated clip and a plain-words write-up of it"
+    },
+    {
+      "id": "ld-vs-ship-1",
+      "kind": "near-miss",
+      "expected": "launch-demo",
+      "query": "The dark-mode feature already shipped last week — record its launch video now",
+      "notes": "adjacency: ship vs launch-demo — the release is done; what is asked for is the brief that records what shipped, not a release"
+    },
+    {
+      "id": "ship-vs-ld-1",
+      "kind": "near-miss",
+      "expected": "ship",
+      "query": "Everything is reviewed — ship it, with the pre-flight checks and a rollback plan",
+      "notes": "adjacency: ship vs launch-demo — a release with pre-flight and rollback is ship's; nothing here asks for copy or a recording"
     }
   ]
 }
