@@ -150,3 +150,6 @@
 {"wo": "WO-0122", "run_id": "session-2026-10-10-wo-0122", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
 {"wo": "WO-0123", "run_id": "session-2026-10-10-wo-0123", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
 {"wo": "WO-0124", "run_id": "session-2026-10-10-wo-0124", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
+{"wo": "WO-0146", "run_id": "session-2026-10-10-wo-0146", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
+{"wo": "WO-0147", "run_id": "session-2026-10-10-wo-0147", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
+{"wo": "WO-0148", "run_id": "session-2026-10-10-wo-0148", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
