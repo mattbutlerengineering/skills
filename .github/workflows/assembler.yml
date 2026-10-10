@@ -129,6 +129,15 @@ jobs:
     # amended by ADR-0036).
     permissions:
       contents: read
+    env:
+      # The action's best-effort scrub of Anthropic, cloud and Actions
+      # secrets from the agent's subprocess environments (its
+      # docs/security.md), read from the job env. Without it the agent's
+      # own `python3 -c 'print(os.environ[...])'` printed the model
+      # credential. Best-effort: with no bubblewrap on the runner there is
+      # no PID isolation, so a determined process can still read its
+      # parent's environment — this stops the reflex, not an adversary.
+      CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
     outputs:
       outcome: ${{ steps.agent.outcome }}
       execution_file: ${{ steps.agent.outputs.execution_file }}
@@ -172,20 +181,29 @@ jobs:
       # agent to leave at the repo root. No repo tool runs here: after the
       # agent step the workspace is the agent's. Either piece missing is
       # not this step's verdict — deliver fails on it, and the order flips.
+      # Of the execution file, only the final result entry travels: cost
+      # and usage (what wo-record reads), turns, and the denied calls. The
+      # turn-by-turn tool output stays on this runner — it is kept as an
+      # artifact, and GitHub masks secrets in logs, not in artifacts.
       - name: Package the agent's hand-off
         if: always() && steps.agent.outputs.execution_file != ''
         env:
           BRANCH: ${{ needs.dispatch.outputs.branch }}
           EXECUTION_FILE: ${{ steps.agent.outputs.execution_file }}
           HANDOFF: ${{ runner.temp }}/handoff
+          KEEP: >-
+            (if type == "array" then . else [.] end)
+            | map(select(type == "object" and .type == "result")) | last
+            | [{type, subtype, is_error, num_turns, total_cost_usd, usage,
+            permission_denials}]
         run: |
           mkdir -p "$HANDOFF"
-          cp "$EXECUTION_FILE" "$HANDOFF/execution.json"
+          jq "$KEEP" "$EXECUTION_FILE" > "$HANDOFF/execution.json"
           git bundle create "$HANDOFF/handoff.bundle" "refs/heads/$BRANCH" "^$GITHUB_SHA" || echo "no commits on $BRANCH to hand off"
           cp pr-body.md "$HANDOFF/pr-body.md" || echo "no pr-body.md to hand off"
-      # The execution file lists every denied tool call; the log shows only
-      # the count. Run 35956750804 reported 7 denials and left nothing to
-      # read them from — keep the hand-off as an artifact, pass or fail.
+      # The kept result entry lists every denied tool call; the log shows
+      # only the count. Run 35956750804 reported 7 denials and left nothing
+      # to read them from — keep the hand-off as an artifact, pass or fail.
       - name: Keep the agent's hand-off
         if: always() && steps.agent.outputs.execution_file != ''
         uses: actions/upload-artifact@v4

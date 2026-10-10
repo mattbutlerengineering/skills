@@ -14,12 +14,15 @@ The two security-critical invariants (ADR-0032) have dedicated tests:
 """
 import json
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 import assembler
+import cli
 
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling factory_fixture import
@@ -762,7 +765,9 @@ class TestAgentCredentialBoundary(unittest.TestCase):
         self.assertEqual(job.count("secrets.CLAUDE_CODE_OAUTH_TOKEN"), 1)
         self.assertIn("claude_code_oauth_token: "
                       "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}", job)
-        self.assertNotIn("\n    env:\n", job)
+        job_env = job.split("\n    env:\n", 1)[1].split("\n    steps:", 1)[0] \
+            if "\n    env:\n" in job else ""
+        self.assertNotIn("secrets.", job_env)
 
     def test_the_agent_job_runs_no_repo_code(self):
         """After the agent step the workspace is the agent's — a Makefile
@@ -833,6 +838,69 @@ class TestAgentCredentialBoundary(unittest.TestCase):
         upload = job.split("actions/upload-artifact@")[0].rsplit(
             "- name:", 1)[1]
         self.assertIn("always()", upload)
+
+
+class TestHandOffKeepsNoToolOutput(unittest.TestCase):
+    """Review (first-live-dispatch, Critical), the artifact half: the raw
+    execution file was kept 14 days on a public repo, and GitHub masks
+    secrets in logs, not in artifacts — so anything the agent's tools
+    printed was downloadable. The hand-off keeps the final result entry
+    (cost, usage, turns, denials — what wo-record and a denial post-mortem
+    read) and drops every turn. And the agent's shell is started without
+    the model credential, so the ordinary `print(os.environ[...])` reflex
+    finds nothing to print (ADR-0077)."""
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "assembler.yml"
+    KEEP = re.compile(r"\n {10}KEEP: >-\n((?: {12}.*\n)+)")
+
+    def agent_job(self):
+        return workflow_jobs(self.WORKFLOW.read_text(encoding="utf-8"))["agent"]
+
+    def keep_filter(self):
+        found = self.KEEP.search(self.agent_job())
+        self.assertIsNotNone(found, "the packaging step names no KEEP filter")
+        return " ".join(line.strip() for line in found.group(1).splitlines())
+
+    def test_the_raw_execution_file_is_not_handed_off(self):
+        lines = run_lines(self.agent_job())
+        self.assertNotIn('cp "$EXECUTION_FILE" "$HANDOFF/execution.json"',
+                         lines)
+        self.assertIn('jq "$KEEP" "$EXECUTION_FILE" >'
+                      ' "$HANDOFF/execution.json"', lines)
+
+    def test_the_agent_shell_starts_without_the_model_credential(self):
+        """The action reads the switch from the workflow or job env
+        (its docs/security.md), so it sits in the agent job's own env."""
+        job = self.agent_job()
+        job_env = job.split("\n    env:\n", 1)[1].split("\n    steps:", 1)[0]
+        self.assertIn('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"', job_env)
+
+    @unittest.skipUnless(shutil.which("jq"), "jq is not installed")
+    def test_the_kept_record_still_records_and_carries_no_turn(self):
+        log = [
+            {"type": "system", "subtype": "init", "session_id": "s"},
+            {"type": "user", "message": {"content": [
+                {"type": "tool_result", "content": "sk-ant-oat01-LEAKED"}]}},
+            {"type": "result", "subtype": "success", "is_error": False,
+             "num_turns": 9, "result": "printed sk-ant-oat01-LEAKED",
+             "total_cost_usd": 0.42,
+             "usage": {"input_tokens": 100, "output_tokens": 20},
+             "permission_denials": [{"tool_name": "Bash",
+                                     "tool_input": {"command": "git push"}}]},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp, "execution.json")
+            source.write_text(json.dumps(log), encoding="utf-8")
+            kept = subprocess.run(["jq", self.keep_filter(), str(source)],
+                                  check=True, capture_output=True,
+                                  text=True).stdout
+            target = Path(tmp, "kept.json")
+            target.write_text(kept, encoding="utf-8")
+            spend, error = cli.read_execution(target)
+        self.assertIsNone(error)
+        self.assertEqual(spend, (120, 0.42))
+        self.assertNotIn("LEAKED", kept)
+        self.assertIn('"git push"', kept)
 
 
 if __name__ == "__main__":

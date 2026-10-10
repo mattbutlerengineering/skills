@@ -76,7 +76,7 @@ Notes).
 
 - [x] **WO-0128** the agent's job holds no write credential — size:M, blocked by: WO-0076 (PRD-0003 §Success criteria)
   - Accept: assembler.yml is three jobs: `dispatch` (contents read, issues write: resolve and claim), `agent` (contents read only: the agent, then hand-off packaging that runs no repo tool), and `deliver` (the write grants, from a fresh checkout: fetches exactly the order's ref from the agent's bundle, pushes it to its own name, opens the PR with the agent's `pr-body.md`, then records spend, commits the spend row, runs find-pr, the validator hand-off and wo:failed). The allowlist names no push and no `gh pr`. The prompt names the branch and the body file and no push. `tests/test_assembler.py::TestAgentCredentialBoundary` and the recorded grants in `tests/test_workflow_permissions.py` pin all of this. ADR-0077 records the decision. The mirror and manifest are regenerated, and the battery is green.
-- [ ] **WO-0129** the kept artifact carries no tool output and the agent's shell no model credential — size:S, blocked by: WO-0128 (PRD-0003 §Success criteria)
+- [x] **WO-0129** the kept artifact carries no tool output and the agent's shell no model credential — size:S, blocked by: WO-0128 (PRD-0003 §Success criteria)
   - Accept: the agent job's hand-off keeps only the execution file's final result entry (cost, usage, turns, denials), never the turn-by-turn tool output, and `make wo-record` still reads it. The agent step runs with `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`, so a Bash subprocess's environment carries no Anthropic credential. Tests pin both. The mirror and manifest are regenerated, and the battery is green.
 
 ## Design gaps found
@@ -283,13 +283,15 @@ success criterion is covered by an Accept line above.
   which PRD-0001 forbids.
 - 2026-10-10: **Milestone E (route-back from Review's Critical
   finding).** Offline tests prove the workflow's shape. They cannot prove
-  how it behaves on a runner, so a live dispatch must still show four
+  how it behaves on a runner, so a live dispatch must still show five
   things. (1) claude-code-action's write-permission check on the owner
   passes with a read-only token. (2) The deliver job's default-condition
   steps run after a failed agent job under its `if: always()`. (3) The
   bundle cut in the agent's shallow checkout fetches into deliver's full
   clone. This was checked locally with two depth-1 clones, not on a
-  runner. (4) The pushed branch, the opened PR, find-pr, the validator
+  runner. (4) The subprocess scrub reaches the agent's Bash from the job
+  env, so a Bash `env` shows no Anthropic credential. (5) The pushed
+  branch, the opened PR, find-pr, the validator
   hand-off and the spend row all land as they did for #545. Review's
   three Major findings stay owner decisions and are not touched here.
   Finding 4 (the reviewer PAT runs PR code) is in validator.yml, which

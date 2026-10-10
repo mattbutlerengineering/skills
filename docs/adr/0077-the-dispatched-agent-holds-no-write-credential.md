@@ -70,6 +70,13 @@ trusted with a write token either.
    subscription token and API key are inputs to that one step. The
    dispatch job keeps them in its env only for the presence check that
    gates the claim, and it runs no agent code.
+6. **What is kept is a record, not a transcript.** The agent job runs
+   with `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`, the action's best-effort
+   scrub of credentials from the agent's subprocess environments. Of
+   the execution file, only the final result entry is handed off and
+   kept as the 14-day artifact: cost, usage, turns and denied calls.
+   The turn-by-turn tool output, where anything the agent printed
+   would land, never leaves the runner.
 
 ## Consequences
 
@@ -92,4 +99,8 @@ trusted with a write token either.
   - a job with `if: always()` runs its default-condition steps after a
     failed `needs` job;
   - a bundle cut in the agent's shallow checkout fetches cleanly into
-    the deliver job's full clone (checked locally, not on a runner).
+    the deliver job's full clone (checked locally, not on a runner);
+  - the scrub reaches the agent's Bash subprocesses from the job env.
+    The action's docs say it reads the switch there, and its effect has
+    not been observed. With no bubblewrap on the runner it gives no PID
+    isolation, so it stops the reflex and not an adversary.
