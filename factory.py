@@ -47,6 +47,7 @@ VERBS = {
     "gates": ("gates", "argv"),
     "handoff": ("handoff", "argv"),
     "label-sync": ("label_sync", "argv"),
+    "launch-demo": ("launch_demo", "argv"),
     "lint": ("lint", "bare"),
     "one-owner": ("one_owner", "argv"),
     "rejection-mining": ("rejection_mining", "argv"),
