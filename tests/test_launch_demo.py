@@ -1006,6 +1006,32 @@ NODE_ESM_FAILURE = (
     "Node.js v22.22.3\n")
 
 
+# Playwright 1.64.0's real stderr under node v22.22.3 when its browser is
+# missing (absolute paths trimmed to /x): Node prints the uncaught error
+# as its bare message, with no `Error:` prefix (verification Failure 5).
+NODE_BROWSER_MISSING = (
+    "node:internal/modules/run_main:123\n"
+    "    triggerUncaughtException(\n"
+    "    ^\n"
+    "\n"
+    "browserType.launch: Executable doesn't exist at /x/browsers/"
+    "chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/"
+    "chrome-headless-shell\n"
+    "\u2554" + "\u2550" * 60 + "\u2557\n"
+    "\u2551 Looks like Playwright was just installed or updated.       \u2551\n"
+    "\u2551 Please run the following command to download new browsers: \u2551\n"
+    "\u2551                                                            \u2551\n"
+    "\u2551     npx playwright install                                 \u2551\n"
+    "\u2551                                                            \u2551\n"
+    "\u2551 <3 Playwright Team                                         \u2551\n"
+    "\u255a" + "\u2550" * 60 + "\u255d\n"
+    "    at /x/launch-demo-x/demo.mjs:29:32 {\n"
+    "  log: [],\n"
+    "  name: 'Error'\n"
+    "}\n"
+    "\n"
+    "Node.js v22.22.3\n")
+
 class TestRecordBrowser(CwdMixin, WorkdirMixin, unittest.TestCase):
     AGAINST = "http://127.0.0.1:8765"
 
@@ -1102,12 +1128,13 @@ class TestRecordBrowser(CwdMixin, WorkdirMixin, unittest.TestCase):
         self.assertNotIn("process.env", script)
 
     def test_a_failing_node(self):
-        err = subprocess.CalledProcessError(
-            1, ["node"], stderr="node:internal\nError: browserType.launch:"
-                                " Executable doesn't exist\n")
+        err = subprocess.CalledProcessError(1, ["node"],
+                                            stderr=NODE_BROWSER_MISSING)
         self.assertEqual(self.record(FakeRunners({"node": [err]})), (None, [
-            "launch-demo: browser recorder failed: Error: browserType.launch:"
-            " Executable doesn't exist"]))
+            "launch-demo: browser recorder failed: browserType.launch:"
+            " Executable doesn't exist at /x/browsers/"
+            "chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/"
+            "chrome-headless-shell"]))
 
     def test_too_few_marks(self):
         runners = FakeRunners({"node": [node_writes([1000, 1000, 4100])]})

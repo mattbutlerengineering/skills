@@ -11,6 +11,8 @@ assumptions:
   - "tests/fixtures/launch-demo/ also carries launch.md, the copy its storyboard quotes: check_storyboard holds every narration line to the copy and the architecture names no other copy for the fixture."
   - "Check-offs follow the owner-session ledger policy (readme-skill-map and pocock-1-3-takeaways breakdowns; ADR-0069): each appends one zero-cost row via python3 budget_guard.py record, run_id session-2026-10-08-wo-NNNN, model claude-fable-5-1, 0 tokens, 0.0 cost, outcome owner-session:unmetered — the rows are worked by this session, no dispatched agent."
   - "Rows 0112 and 0113 (resumed after Verify, 2026-10-10) follow the same owner-session ledger policy with run_id session-2026-10-10-wo-NNNN and model claude-opus-5-5 — the model that actually worked them, not the earlier rows' claude-fable-5-1. Taken without user input."
+  - "Row 0125 (resumed after re-verification's Failure 5, 2026-10-10) is a new row, not a reopening of row 0113: 0113's acceptance was met as written and its test was the wrong one, so the correction is tracked as its own row like 0111. Its id skips 0114–0124, which branch docs/docs-audit's breakdown already holds (ids are repo-global across branches). Same owner-session ledger policy, run_id session-2026-10-10-wo-0125, model claude-opus-5-5. Taken without user input."
+  - "Row 0125 leaves test_a_node_failure_with_no_error_line_keeps_the_last_line as it was: its stderr `node: bad option: --nope` now matches the widened rule (a flush-left name, then `: `) and so reaches the same reason through the error-line branch rather than cli.detail's fallback. The outcome is unchanged and the line is an error message; the fallback branch is still taken by a stderr with no such line (`boom`), though no test now asserts that branch's reason. Logged, not edited (surgical scope); a follow-up for Review. Taken without user input."
   - "The proposed ADR is no row: architecture.md's ADRs section has the implementer open it as its own change for the owner, so Operate seeds it."
 ---
 
@@ -85,6 +87,9 @@ detector G green as rows are checked.
   - Accept: tests first, through `launch_demo.record_terminal(plan, workdir, against, runner)` with the plan of row 0101 (planned `8.8`, offsets `[0.0, 3.0, 7.3]`): a fake `ffprobe` answering `8.272\n` (94 % of the planned length) yields `result` `(workdir / "raw.mp4", [0.0, 2.82, 6.862])` — every planned offset scaled by the ratio recorded ÷ planned, rounded to three decimals — and `problems` `[]`; an answer of `8.8\n` yields the plan's offsets unchanged; an answer of `6.0\n` (a ratio of 0.68) yields `(None, ["launch-demo: recording ran 6.0 s where the plan expected 8.8 s — a ratio of 0.68, outside 0.75–1.25; narration would drift"])` and `12.0\n` (1.36) the same shape with its numbers; through `render` with row 0105's fakes, a raw duration of `20.0\n` against the planned `10.3` yields the problem `launch-demo: recording ran 20.0 s where the plan expected 10.3 s — a ratio of 1.94, outside 0.75–1.25; narration would drift` and nothing written. `DRIFT_BAND = (0.75, 1.25)` (both ends inclusive) replaces `DRIFT_TOLERANCE`; `plan` is unchanged (its offsets stay the planned ones — the adapter scales them, so the plan remains the one owner of the arithmetic and the adapter the one owner of the measurement); the seam's output shape `((raw, offsets), [])` is unchanged; `record_browser` and its tests are untouched. Observed red: `AssertionError` with the plan's offsets where the scaled ones are expected and the old `— narration would drift` string where the band string is expected. Then every test is green with none else edited; a dated Note records the deviation from the architecture's "offsets computed for vhs" wording and why, for Review. The full battery is green.
 - [x] **WO-0113** The browser driver lives where Node can resolve Playwright, and a Node failure's reason names the error — size:M, blocked by: WO-0107 (PRD-0009 §Success criteria)
   - Accept: tests first, through `launch_demo.record_browser(plan, workdir, against, runner)` with row 0107's browser plan: the fake `node` run's first argument — the file Node ran — is a `demo.mjs` whose parent is a fresh `launch-demo-` directory directly under the current working directory (the repo root by the CLI contract, and the place `probe` resolves `playwright` from), neither under `workdir` nor under the system temp directory; its text at run time equals `workdir / "demo.mjs"` (the inspectable copy `render` publishes on success); the other two arguments are still `against` and `str(workdir)`; after the call, success or failure, that directory is gone and `workdir / "demo.mjs"`, `title.html` and `outro.html` remain; a `node` run raising `CalledProcessError` whose stderr is Node's real ESM failure (`node:internal/modules/package_json_reader:314`, the `throw new ERR_MODULE_NOT_FOUND(…)` line, `^`, a blank, `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from /x/demo.mjs`, two `    at …` lines, `  code: 'ERR_MODULE_NOT_FOUND'`, `}`, a blank, `Node.js v22.22.3`) yields `(None, ["launch-demo: browser recorder failed: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from /x/demo.mjs"])` — a string containing `ERR_MODULE_NOT_FOUND` and not `Node.js v`; the existing `Error: browserType.launch: Executable doesn't exist` case is unchanged; a stderr with no line that begins an error message (`node: bad option: --nope`) still yields `cli.detail`'s last line; `cli.detail` is not edited (`git diff -- cli.py` empty, no manifest change). Observed red: `AssertionError` on the driver's path (under `workdir`) and on the reason line (`Node.js v22.22.3`). Then every test is green with none else edited, and the resolution rule is shown on this machine with the real node against a throwaway package (an `.mjs` under the system temp directory cannot import it; the same file under the working directory can) — quoted under Notes, dated, with where the driver now lives and why. The full battery is green.
+
+- [x] **WO-0125** A Node failure's reason names Playwright's bare error line, and the test holds the real stderr — size:S, blocked by: WO-0113 (PRD-0009 §Success criteria)
+  - Accept: tests first — `test_a_failing_node` in `tests/test_launch_demo.py` is corrected to the real stderr of Playwright 1.64.0 under node v22.22.3 with its browser missing, captured on this machine and held verbatim as `NODE_BROWSER_MISSING` (absolute paths trimmed to `/x/…`): Node prints the uncaught error as its bare message, `browserType.launch: Executable doesn't exist at …`, with no `Error: ` prefix (verification.md Failure 5), and a test whose stderr invents that prefix is a wrong test, so this corrects the test rather than bending it; through `record_browser` it yields `(None, ["launch-demo: browser recorder failed: browserType.launch: Executable doesn't exist at /x/browsers/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell"])`. Observed red: `AssertionError`, `Node.js v22.22.3` where the `browserType.launch` line is expected. Then `NODE_ERROR_LINE` takes a flush-left `<name>[ [CODE]]: <message>` line, so the ESM case (`Error [ERR_MODULE_NOT_FOUND]: …`) and every other test stay green with none else edited, while `node:internal/…:123`, the `Node.js v…` banner and indented frames never match; `launch_demo.py` stays under 800 lines. Re-run for real on this machine: the missing-browser render's reason line, and a real ESM failure from a directory with no `node_modules` — quoted under Notes, dated. The full battery is green.
 
 ## Coverage
 
@@ -380,3 +385,33 @@ asks for is timeout and stdin alone.
   the working directory was expected (both path tests) and the reason
   test got `Node.js v22.22.3`. `launch_demo.py` is now 792 lines, close
   to the 800 cap; the two adapters remain the natural split.
+- 2026-10-10 (row 0125, correcting a wrong test): row 0113's
+  `test_a_failing_node` fed the reason rule `Error: browserType.launch:
+  …`, a prefix Node never prints for Playwright's error, so the suite was
+  green on a stderr the real driver does not produce (verification.md
+  Failure 5). The real one, captured here with Playwright 1.64.0
+  (`npm install --no-save`), node v22.22.3, `PLAYWRIGHT_BROWSERS_PATH`
+  at an empty scratch directory and the fixture served on 8765, is
+  `node:internal/modules/run_main:123`, the indented
+  `triggerUncaughtException(` and `^`, a blank, the flush-left
+  `browserType.launch: Executable doesn't exist at <dir>/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell`,
+  Playwright's nine-line boxed install hint, `    at <repo>/launch-demo-…/demo.mjs:29:32 {`,
+  `  log: [],`, `  name: 'Error'`, `}`, a blank and `Node.js v22.22.3`;
+  the test's `NODE_BROWSER_MISSING` equals it byte for byte once the two
+  absolute paths are replaced by `/x/…`. `NODE_ERROR_LINE` is now
+  `[A-Za-z_$][\w$.]*(?: \[\w+\])?: \S` matched at line start: a name
+  (dots allowed, so `browserType.launch`), an optional `[CODE]`, then a
+  colon and a space. Node's `node:internal/…` header has no space after
+  its colon and its banner no colon, and frames and the property dump
+  are indented. Before, through the CLI with the throwaway browser config:
+  `launch-demo: browser recorder failed: Node.js v22.22.3`; after, the
+  same run: `launch-demo: browser recorder failed: browserType.launch:
+  Executable doesn't exist at <scratch>/emptybrowsers/chromium_headless_shell-1248/chrome-headless-shell-mac-arm64/chrome-headless-shell`,
+  exit 1, no `launch-demo-*` directory left at the root. The ESM case,
+  `record_browser` with the real runner from a scratch directory with no
+  `node_modules` above it: `launch-demo: browser recorder failed: Error
+  [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from
+  <scratch>/esm/launch-demo-orrpjqcd/demo.mjs`. `node_modules`,
+  `package-lock.json`, `.verify-smoke/` and the throwaway config were
+  removed and `docs/launch-demo.json` restored with `git checkout`.
+  `launch_demo.py` is 794 lines.

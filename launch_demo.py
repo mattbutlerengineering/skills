@@ -447,9 +447,11 @@ p {{ font-size: 28px; opacity: 0.8; margin: 0; }}
 <body><h1>{title}</h1><p>{text}</p></body></html>
 """
 
-# A stderr line that begins an error message: Node prints `Error […]: `,
-# `TypeError: ` and kin flush left, its stack frames indented.
-NODE_ERROR_LINE = re.compile(r"(?:[A-Z]\w*)?Error\b")
+# A stderr line that begins an error message: flush left, a name, an
+# optional `[CODE]`, then `: ` — `Error [ERR_…]: `, `TypeError: `, or a
+# bare `browserType.launch: ` — never `node:internal/…:123`, the version
+# banner, or the indented stack frames and property dump.
+NODE_ERROR_LINE = re.compile(r"[A-Za-z_$][\w$.]*(?: \[\w+\])?: \S")
 
 # The browser driver, filled by _driver: the scene code is generated
 # per scene and spliced in at {scenes}; the two values the run needs
@@ -546,7 +548,7 @@ def _card(title, text):
 
 def _node_reason(err):
     """A failed node run's reason: the last stderr line that begins an
-    error message (`Error [ERR_MODULE_NOT_FOUND]: …`, `TypeError: …`),
+    error message (`Error [ERR_MODULE_NOT_FOUND]: …`, `browserType.…: …`),
     because Node ends a crash with its version banner and cli.detail's
     last line would be `Node.js vX`; else cli.detail's line."""
     stderr = getattr(err, "stderr", None) or ""
