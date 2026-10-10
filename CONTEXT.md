@@ -62,7 +62,7 @@ A file at a target repo's docs root that a utility skill writes outside
 any run, which outlives every run and which skills read before they work.
 `docs/ux-patterns.md` is one: the `ux-patterns` skill owns its behaviour
 sections and the `ux-writing` skill owns its **Voice & terms** section;
-`polish` and `ux-design` only read it (ADR-0078). It is not a run
+`polish` and `ux-design` only read it (ADR-0079). It is not a run
 artifact: no stage gates on it and the router never routes on it.
 _Avoid_: run artifact (it is not one), design doc, style guide
 
@@ -120,6 +120,15 @@ _Avoid_: ticket, task
 The run artifacts as source of truth (ADR-0004, restated for the factory).
 Offline detectors gate it; orientation reads only this plane.
 _Avoid_: docs, wiki
+
+**Knowledge base**:
+A target repo's durable, non-inferable project facts — invariants,
+gotchas, cross-module flows, the why behind a decision — as pages in
+`docs/kb/`, indexed inline in the always-loaded file by `kb.py` and kept
+by the knowledge-base utility skill (ADR-0078). Not the knowledge plane:
+that is the run artifacts, which belong to one run; a knowledge-base page
+outlives every run and cites the code it rests on.
+_Avoid_: knowledge plane (taken), wiki, memory bank
 
 **Dispatch plane**:
 The work queue — work-order issues plus the dependency graph — mirrored

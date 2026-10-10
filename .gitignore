@@ -9,3 +9,7 @@ __pycache__/
 # launch_demo.py runs its browser driver from a launch-demo- directory
 # under the repo root and removes it after; never track a leftover.
 /launch-demo-*/
+
+# claude plugin eval run output (ADR-0081): scratch, never committed;
+# a run cited as evidence is copied into plugin-evals/records/.
+/plugin-evals/results/

@@ -39,6 +39,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | launch-demo | draft | — | — |
 | lean | draft | — | — |
 | polish | draft | — | — |
+| knowledge-base | draft | — | — |
 | ux-writing | draft | — | — |
 | ux-patterns | draft | — | — |
 

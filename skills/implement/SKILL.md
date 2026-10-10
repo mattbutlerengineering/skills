@@ -23,6 +23,15 @@ document — the code is the artifact, and progress is the checkboxes.
    - Turn the item's acceptance criterion into a failing test at the highest
      seam the codebase offers (prefer existing test seams over new ones).
    - Watch it fail for the right reason.
+   - Before writing the implementation, climb `lean`'s ladder in
+     `../lean/references/ladder.md` and stop at the first rung that holds.
+     Lean's floor is never cut: validation where untrusted input enters,
+     error handling that prevents data loss, security controls,
+     accessibility basics, anything the user explicitly asked for. A
+     deliberate shortcut with a known ceiling carries a comment starting
+     `lean:` that names the ceiling and what would trigger the upgrade;
+     that marker is the record, so nothing about the ladder goes into
+     `breakdown.md`.
    - Write the minimum implementation that passes, matching the
      architecture's contracts and the codebase's existing style.
    - Refactor with the tests green.
