@@ -1,0 +1,10 @@
+{"title": "The pipeline board",
+ "tagline": "Every run, on its step, at a glance",
+ "intro": "The pipeline board is a one-page picture of every piece of work in flight and the step each one has reached.",
+ "steps": [
+  {"say": "You ask for the board and a small tool reads every run's notes to state which step each one is on.",
+   "do": ["python3 board.py . | jq '{generated, repo, runs: (.runs | length)}'"]},
+  {"say": "It lists every active run once, tells feature work from maintenance work, and shows how far along the building step has come.",
+   "do": ["python3 board.py . | jq -c '.runs[] | select(.slug==\"launch-demo\") | .ladder[] | [.stage, .state]'"]}
+ ],
+ "outro": "Instead of walking folders and running commands, you find where every run stands in one glance."}

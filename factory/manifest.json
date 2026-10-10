@@ -1,6 +1,6 @@
 {
   "plugin": "idea-to-prod",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "files": {
     "templates/.github/CODEOWNERS": "ba6ab48054414914bd38f2c82365a89c1400ca0d5e39e9d7288832b9d3834192",
     "templates/.github/labels.json": "754d2c9792c8216e5db5f4c2e9f49e14d6ca5131da8598a9caea7ecf346fd4a8",
@@ -24,7 +24,7 @@
     "templates/factory.json": "d8b801912125c8663b4a8eee0c85f3276b86dc1c97f7db096b65117482542c2d",
     "templates/tools/factory/assembler.py": "124ffa1b7b8e2c2bb75ea60692527d31029ee6a39572747034e89ac42a87778c",
     "templates/tools/factory/budget_guard.py": "f4e3abe3dfc820d3f397efc463f6d229925d33acf7625bde59fcc92bf6db20b4",
-    "templates/tools/factory/cli.py": "745fcc3c2678344e4b184b9887934c4b81de9aef207ac1580f2295d3a018d396",
+    "templates/tools/factory/cli.py": "aac42d644a206ca2c12de92285721131d36d4a8b084ebe5eb4a5413afe12d6c2",
     "templates/tools/factory/cost_ledger.py": "eb6422ffb1b215fee3dab7235c17bfe59b191722f2cb4020ad4d9f299b76b4d1",
     "templates/tools/factory/cost_report.py": "b5541ade4c49f9af1fdbf0e25e9cd14232b86e1104a0f540df6c98d322c0ab00",
     "templates/tools/factory/factory_config.py": "fe13b48ad8d1cfcb9cc54a3527d5789c32a085cdb733652dd54bf1926c925742",
@@ -35,7 +35,7 @@
     "templates/tools/factory/knowledge_plane.py": "a8efe82fee7ba6b4b9d1f9b6e8b5dbd988927d8c58ed923161971435dc582e73",
     "templates/tools/factory/label_sync.py": "5472f21671f76160bdd7faebb52fff4101d1daad4217749a015c16131de7d660",
     "templates/tools/factory/orientation_pack.py": "082cbd235b5cc9f0b0e31828260c65214c20e0453b936f35f67f6169d2d1ebbd",
-    "templates/tools/factory/protocol.py": "ce2226cdb31de30b6fc5c0bdba2899de61c5bb589db393b54061cc4c7098af3c",
+    "templates/tools/factory/protocol.py": "d2e332c8fdd0ba3d27707c33d5720dd0c78f8f40edd7a625b0804896b6db5b25",
     "templates/tools/factory/rejection_mining.py": "ab0531f59126de7fe6f761846d1433827ff972cc30c4e3b7f7fa0d0dc69fc555",
     "templates/tools/factory/standards_index.py": "eca6d399fecb25e4df2d62f2291bd9e0b216f3a6421a5fd57eb7b189075232a2",
     "templates/tools/factory/validator.py": "054a9eb97ed3e45775092fcebb743072919958b84f17b8d14bc5b20374eda09a",

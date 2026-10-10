@@ -27,8 +27,8 @@ TEMPLATED_STAGES = [s for s in STAGES + MAINTENANCE_STAGES
 UTILITY_SKILLS = ["address-pr-review", "animated-diagram",
                   "architecture-diagram", "audit", "automate", "autorun",
                   "deepen", "doctor", "factory-init",
-                  "interactive-architecture-diagram", "mermaid",
-                  "pipeline-board", "work-queue"]
+                  "interactive-architecture-diagram", "launch-demo",
+                  "mermaid", "pipeline-board", "work-queue"]
 ALL_SKILLS = ["next"] + STAGES + MAINTENANCE_STAGES + UTILITY_SKILLS
 
 # (stage, artifact) rows in pipeline order; implement and the UX
