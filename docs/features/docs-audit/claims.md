@@ -69,6 +69,43 @@ writes it doc by doc; Verify appends the last section.
 
 | Id | Line | Claim | Kind | Check | Result | Verdict | Disposition |
 |---|---|---|---|---|---|---|---|
+| README-1 | 3 | A Claude Code plugin (its manifest exists) | path | `ls .claude-plugin/plugin.json` | exit 0: .claude-plugin/plugin.json | true |  |
+| README-2 | 7 | The skill-map figure embed docs/assets/skill-map.svg | path | `ls docs/assets/skill-map.svg` | exit 0: docs/assets/skill-map.svg | true |  |
+| README-3 | 14-15 | Marketplace `skills` (repo mattbutlerengineering/skills) carries plugin `idea-to-prod`, installed as `idea-to-prod@skills` | name | `python3 -c "import json, sys; m = json.load(open('.claude-plugin/marketplace.json')); p = json.load(open('.claude-plugin/plugin.json')); names = [x['name'] for x in m['plugins']]; print(m['name'], p['name'], names); sys.exit(0 if m['name'] == 'skills' and p['name'] == 'idea-to-prod' and 'idea-to-prod' in names else 1)"` | exit 0: skills idea-to-prod ['idea-to-prod'] | true |  |
+| README-4 | 18 | Grok reads `.claude-plugin/` directly | path | `ls -d .claude-plugin` | exit 0: .claude-plugin | true |  |
+| README-5 | 19 | ADR-0076 (linked) decides Grok installs from the `.claude-plugin/` manifests, and stands (not superseded) | adr-status | `grep -n -e "^- Status: accepted" -e "^- Status: provisional" -e "^- Status: amended" docs/adr/0076-grok-supported-harness.md` | exit 0: 3:- Status: accepted | true |  |
+| README-6 | 23 | `grok plugin install idea-to-prod` names the plugin by its manifest name (the `--trust` flag is Grok's own CLI, not a tree claim) | name | `grep -n '"name": "idea-to-prod"' .claude-plugin/plugin.json` | exit 0: 2:  "name": "idea-to-prod", | true |  |
+| README-7 | 26 | `/next` is a skill | path | `ls skills/next/SKILL.md` | exit 0: skills/next/SKILL.md | true |  |
+| README-8 | 26, 54-55, 58 | On Grok a colliding name is reachable as `/idea-to-prod:next` (`/idea-to-prod:<skill>`) | name | `grep -n "idea-to-prod:<skill>" docs/adr/0076-grok-supported-harness.md` | exit 0: 33:  '/idea-to-prod:<skill>'. | true |  |
+| README-9 | 29-30 | Root `package.json` declares the skills as a Pi package (`pi.skills`) | name | `python3 -c "import json, sys; d = json.load(open('package.json')); print(d.get('keywords'), d.get('pi')); sys.exit(0 if './skills' in d['pi']['skills'] and 'pi-package' in d['keywords'] else 1)"` | exit 0: ['pi-package'] {'skills': ['./skills']} | true |  |
+| README-10 | 35 | `omp --skill ./skills/next` names a skill directory | path | `ls -d skills/next` | exit 0: skills/next | true |  |
+| README-11 | 38 | Fallback copies `skills/*` | path | `ls -d skills` | exit 0: skills | true |  |
+| README-12 | 46 | Link to `docs/setup.md` | path | `ls docs/setup.md` | exit 0: docs/setup.md | true |  |
+| README-13 | 46 | `/doctor` checks the install | name | `ls skills/doctor/SKILL.md` | exit 0: skills/doctor/SKILL.md | true |  |
+| README-14 | 59-60 | A missing predecessor gets a backfill offer, never a block (soft gating) | name | `grep -n "^## Soft gating" docs/pipeline-protocol.md` | exit 0: 206:## Soft gating | true |  |
+| README-15 | 62-67 | Three scales: product run at `docs/` root, feature run under `docs/features/<slug>/`, maintenance run under `docs/fixes/<slug>/` | name | `grep -n 'scale = "feature" if rel.parent.name == "features" else "maintenance"' protocol.py` | exit 0: 215:    scale = "feature" if rel.parent.name == "features" else "maintenance" | true |  |
+| README-16 | 66-67 | A maintenance run enters at capture and re-enters at the depth recorded in its brief | name | `grep -n "def _re_entry_architect" protocol.py` | exit 0: 229:def _re_entry_architect(run_dir): | true |  |
+| README-17 | 71-84 | The Stages table: `next` plus the ten stages and `capture`, each with its artifact (idea.md … retro.md, defect.md) | roster | `python3 -c "import protocol, sys; t = [('next', None), ('idea', 'idea.md'), ('prd', 'prd.md'), ('ux-design', 'ux.md'), ('architect', 'architecture.md'), ('decompose', 'breakdown.md'), ('implement', 'breakdown.md'), ('verify', 'verification.md'), ('review', 'review.md'), ('ship', 'release.md'), ('operate', 'retro.md'), ('capture', 'defect.md')]; want = [('next', None)] + protocol.STAGE_ARTIFACTS + protocol.MAINTENANCE_STAGE_ARTIFACTS[:1]; print(len(t), t == want); sys.exit(0 if t == want else 1)"` | exit 0: 12 True | true |  |
+| README-18 | 87 | Utility skills per ADR-0023 (linked) | path | `ls docs/adr/0023-utility-skills.md` | exit 0: docs/adr/0023-utility-skills.md | true |  |
+| README-19 | 92-106 | The utility table lists exactly the thirteen utility skills | roster | `python3 -c "import protocol, sys; t = ['audit', 'automate', 'deepen', 'autorun', 'work-queue', 'address-pr-review', 'mermaid', 'architecture-diagram', 'animated-diagram', 'interactive-architecture-diagram', 'pipeline-board', 'factory-init', 'doctor']; print(len(t), sorted(t) == sorted(protocol.UTILITY_SKILLS)); sys.exit(0 if sorted(t) == sorted(protocol.UTILITY_SKILLS) else 1)"` | exit 0: 13 True | true |  |
+| README-20 | 104 | pipeline-board's placement comes from the shipped `board.py` | path | `grep -n "shipped board.py tool" skills/pipeline-board/SKILL.md` | exit 0: 3:description: Generate the pipeline board — one self-contained theme-aware .svg placing every active run in … | true |  |
+| README-21 | 105 | factory-init regenerates the template manifest after an edit | command | `grep -n 'if argv == \["update-manifest"\]' factory_init.py` | exit 0: 443:    if argv == ["update-manifest"]: | true |  |
+| README-22 | 109 | Shared rules live in `docs/pipeline-protocol.md` | path | `ls docs/pipeline-protocol.md` | exit 0: docs/pipeline-protocol.md | true |  |
+| README-23 | 113 | `CONTEXT.md` — canonical vocabulary | path | `ls CONTEXT.md` | exit 0: CONTEXT.md | true |  |
+| README-24 | 114 | `docs/adr/` — ADRs and their status | path | `ls docs/adr/README.md` | exit 0: docs/adr/README.md | true |  |
+| README-25 | 115 | `LEDGER.md` uses the maturity vocabulary draft / used-once / battle-tested | name | `python3 -c "import sys; t = open('LEDGER.md').read(); w = [x for x in ('**draft**', '**used-once**', '**battle-tested**') if x not in t]; print('missing:', w); sys.exit(1 if w else 0)"` | exit 0: missing: [] | true |  |
+| README-26 | 116 | The `CHECKERS` tuple in `lint.py` is the checker list | name | `grep -n "^CHECKERS = (" lint.py` | exit 0: 1035:CHECKERS = (check_manifest, check_plugin_skills, | true |  |
+| README-27 | 116 | `python3 lint.py` runs in CI (via the Makefile check target) | command | `grep -n "python3 lint.py" Makefile` | exit 0: 42:	python3 lint.py | true |  |
+| README-28 | 117 | `python3 -m unittest discover tests` runs in CI (via the Makefile check target) | command | `grep -n "python3 -m unittest discover tests" Makefile` | exit 0: 45:	python3 -m unittest discover tests | true |  |
+| README-29 | 116-117 | CI runs on every push and pull request (validator.yml runs make check) | command | `python3 -c "import sys; t = open('.github/workflows/validator.yml').read(); ok = '\n  push:' in t and '\n  pull_request:' in t and 'run: make check' in t; print('push+pull_request+make check:', ok); sys.exit(0 if ok else 1)"` | exit 0: push+pull_request+make check: True | true |  |
+| README-30 | 118 | `python3 trigger_eval.py --record` is a flag of the routing eval | command | `grep -n 'add_argument("--record"' trigger_eval.py` | exit 0: 539:    parser.add_argument("--record", action="store_true", | true |  |
+| README-31 | 118 | `evals/routing.json` holds the routing queries | path | `ls evals/routing.json` | exit 0: evals/routing.json | true |  |
+| README-32 | 118 | The routing eval needs the `claude` CLI (its default harness) | command | `grep -n 'default="claude",' trigger_eval.py` | exit 0: 523:                        default="claude", | true |  |
+| README-33 | 119 | `docs/output-evals.md` | path | `ls docs/output-evals.md` | exit 0: docs/output-evals.md | true |  |
+| README-34 | 123 | MIT license | name | `grep -n "MIT License" LICENSE` | exit 0: 1:MIT License | true |  |
+| README-35 | 123-124 | `trigger_eval.py` is derived from Apache-2.0 skill-creator code, per `NOTICE` | name | `grep -n "trigger_eval.py contains code derived from the skill-creator plugin" NOTICE` | exit 0: 7:trigger_eval.py contains code derived from the skill-creator plugin | true |  |
+| README-36 | 125 | `licenses/Apache-2.0.txt` | path | `ls licenses/Apache-2.0.txt` | exit 0: licenses/Apache-2.0.txt | true |  |
+| README-37 | 41-42 | No skill requires an MCP server (no `SKILL.md` names an `mcp__` tool) | name | `python3 -c "import pathlib, sys; hits = [str(p) for p in pathlib.Path('skills').rglob('*.md') if 'mcp__' in p.read_text(encoding='utf-8')]; print('skill files naming mcp__ tools:', len(hits)); sys.exit(1 if hits else 0)"` | exit 0: skill files naming mcp__ tools: 0 | true |  |
 
 ## CONTEXT.md
 
@@ -134,6 +171,8 @@ writes it doc by doc; Verify appends the last section.
 
 | Passage | Docs | Disposition |
 |---|---|---|
+| The three run scales and where each run's artifacts live | `README.md` (Usage), `docs/pipeline-protocol.md` (Runs and run directories), `CONTEXT.md` | (row 0123) |
+| The development commands (lint, unittest, trigger eval) | `README.md` (Development), `CLAUDE.md`/`AGENTS.md` (Verify) | (row 0123) |
 
 ## Follow-ups
 
