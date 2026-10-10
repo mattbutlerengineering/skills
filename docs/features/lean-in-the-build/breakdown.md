@@ -24,7 +24,7 @@ citation. No tracker mirror for this run (ADR-0026).
 
 ## Milestone 2: Shipped shape, verified
 
-- [ ] **WO-0152** Packaging and battery — size:S, blocked by: WO-0150, WO-0151 (PRD-0012 §Success criteria)
+- [x] **WO-0152** Packaging and battery — size:S, blocked by: WO-0150, WO-0151 (PRD-0012 §Success criteria)
   - Accept: `.claude-plugin/plugin.json` version is `0.5.1`; `lean` is still in `protocol.py` `UTILITY_SKILLS`; `git diff origin/main --name-only` lists nothing under `factory/templates/` and no file in `factory_init.MIRRORS` (so `factory/manifest.json` is not regenerated), and no file under `evals/` other than appended results; `python3 -m unittest discover tests` prints `OK`; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 gates.py && python3 gates.py --selftest` prints `gates: 0 problem(s)` and `selftest: ok`.
 
 ## Coverage
