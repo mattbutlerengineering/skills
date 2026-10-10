@@ -49,6 +49,9 @@ writes it doc by doc; Verify appends the last section.
 
 ## Jobs
 
+Drafted in row 0114 and settled in row 0123 against the docs as they now
+read; no two job cells are the same.
+
 | Doc | Job |
 |---|---|
 | `README.md` | The front door: what the plugin is, how to install it on each harness, how to use it, and the skill roster. |
@@ -581,15 +584,19 @@ writes it doc by doc; Verify appends the last section.
 
 ## Duplicates
 
+Every passage the per-doc rows found carried by two or more in-scope
+docs. Settled in row 0123; none was collapsed, because each copy has a
+reader who meets it without the owner in hand.
+
 | Passage | Docs | Disposition |
 |---|---|---|
-| The three run scales and where each run's artifacts live | `README.md` (Usage), `docs/pipeline-protocol.md` (Runs and run directories), `CONTEXT.md` | (row 0123) |
-| The development commands (lint, unittest, trigger eval) | `README.md` (Development), `CLAUDE.md`/`AGENTS.md` (Verify) | (row 0123) |
-| The three harnesses and how each finds the skills | `CONTEXT.md` (Harness), `docs/pipeline-protocol.md` (Harness neutrality), `README.md` (Install) | (row 0123) |
-| The agent notes (everything above the Beads blocks) | `CLAUDE.md`, `AGENTS.md` | (row 0123) |
-| The eval honesty rules (append-only results, never edit a definition to pass, maturity only via a real run) | `CLAUDE.md`/`AGENTS.md` (Eval honesty), `evals/README.md` (Honesty policy), `LEDGER.md` (intro) | (row 0123) |
-| The `evals/` layout (output sets, fixtures, results naming) | `evals/README.md` (Layout), `docs/output-evals.md` (Anatomy) | (row 0123) |
-| The routine skeleton (preconditions and degrade ladder, orient, pick one, report and journal, non-negotiables, amending, trigger shape) | the four `docs/factory/*-routine.md` playbooks | (row 0123) |
+| The three run scales and where each run's artifacts live | `README.md` (Usage), `docs/pipeline-protocol.md` (Runs and run directories), `CONTEXT.md` (Product/Feature/Maintenance run) | deliberate → the protocol is the operative owner; `README.md`'s copy serves a new contributor choosing how to start before opening the protocol (it already links the protocol two paragraphs on); `CONTEXT.md`'s serves the vocabulary reader, including every dispatched work order, whose orientation pack reads `CONTEXT.md` whole (`orientation_pack.py`) and follows no link. |
+| The development commands (lint, unittest, trigger eval) | `README.md` (Development), `CLAUDE.md`/`AGENTS.md` (Verify) | deliberate → `README.md` serves a human contributor; the agent-notes copy serves the loading agent, which acts on the file it auto-loads and does not follow links (PRD-0010's loading agent). |
+| The three harnesses and how each finds the skills | `CONTEXT.md` (Harness), `docs/pipeline-protocol.md` (Harness neutrality), `README.md` (Install) | deliberate → `README.md` gives each harness's install steps; `CONTEXT.md` defines the term for the vocabulary reader; the protocol's copy serves a skill in a consuming repo, where the protocol travels alone (`docs/output-evals.md` copies only it into the scratch project), so a link to `CONTEXT.md` would not resolve there. |
+| The agent notes (everything above the Beads blocks) | `CLAUDE.md`, `AGENTS.md` | deliberate → a non-Claude harness agent that auto-loads `AGENTS.md` and does not follow links (architecture decision (e)). Resynced in row 0118: `diff <(awk '/BEGIN BEADS/{exit} {print}' CLAUDE.md) <(awk '/BEGIN BEADS/{exit} {print}' AGENTS.md)` prints nothing; F-2 proposes the check that keeps it so. |
+| The eval honesty rules (append-only results, never edit a definition to pass, maturity only via a real run) | `CLAUDE.md`/`AGENTS.md` (Eval honesty), `evals/README.md` (Honesty policy), `LEDGER.md` (intro) | deliberate → `evals/README.md` owns the details and the agent notes already point there ("details in `evals/README.md`"); the agent-notes copy serves the loading agent; `LEDGER.md`'s two sentences serve the reader about to edit a maturity cell. |
+| The `evals/` layout (output sets, fixtures, results naming) | `evals/README.md` (Layout), `docs/output-evals.md` (Anatomy) | deliberate → `evals/README.md` serves someone browsing `evals/` and links `docs/output-evals.md`; the Anatomy section serves someone following that doc's own step-by-step procedure, which needs the paths in hand; the naming grammar's one owner is `eval_schema.results_path`, which the procedure calls. |
+| The routine skeleton (preconditions and degrade ladder, orient, pick one, report and journal, non-negotiables, amending, trigger shape) | the four `docs/factory/*-routine.md` playbooks | deliberate → each cloud routine, which loads its own playbook alone (architecture decision (f)); no skeleton passage was found false, so no correction had to be made in all four (row 0122). |
 
 ## Follow-ups
 
@@ -619,6 +626,14 @@ links: 59 relative across 13 files, 0 missing
 Exit code 0.
 
 Re-run 2026-10-10 after row 0121 (the `evals/README.md` and `docs/output-evals.md` edits; detector I does not walk `evals/`):
+
+```text
+links: 59 relative across 13 files, 0 missing
+```
+
+Exit code 0.
+
+Re-run 2026-10-10 after row 0123 (duplicates settled; no collapse, so no new link):
 
 ```text
 links: 59 relative across 13 files, 0 missing
