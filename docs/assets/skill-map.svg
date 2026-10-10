@@ -203,11 +203,12 @@ the utility skills by the moment a person reaches for them.</desc>
   <text class="sublabel mono" x="780" y="538" text-anchor="middle">defect.md</text>
 </g>
 <g>
-  <rect class="mask" x="48" y="156" width="168" height="64" rx="6"/>
-  <rect class="node-ext" x="48" y="156" width="168" height="64" rx="6"/>
+  <rect class="mask" x="48" y="156" width="168" height="80" rx="6"/>
+  <rect class="node-ext" x="48" y="156" width="168" height="80" rx="6"/>
   <text class="name" x="60" y="176">Before a run exists</text>
   <text class="row mono" x="60" y="194">audit</text>
   <text class="row mono" x="60" y="210">automate</text>
+  <text class="row mono" x="60" y="226">knowledge-base</text>
 </g>
 <g>
   <rect class="mask" x="48" y="272" width="168" height="80" rx="6"/>
