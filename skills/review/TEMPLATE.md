@@ -20,7 +20,7 @@ date: YYYY-MM-DD
 
 ## Passes with no findings
 
-<Which of correctness / design / security came back clean.>
+<Which of correctness / design / security / complexity came back clean.>
 
 ## Verdict
 

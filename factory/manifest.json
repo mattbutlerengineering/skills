@@ -1,6 +1,6 @@
 {
   "plugin": "idea-to-prod",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "files": {
     "templates/.github/CODEOWNERS": "ba6ab48054414914bd38f2c82365a89c1400ca0d5e39e9d7288832b9d3834192",
     "templates/.github/labels.json": "754d2c9792c8216e5db5f4c2e9f49e14d6ca5131da8598a9caea7ecf346fd4a8",
