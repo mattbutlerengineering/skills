@@ -144,8 +144,8 @@ pipeline wants everywhere; the routine gets no exemption.
   and no work-order id: a work-order issue exists only downstream of a
   breakdown row (ADR-0032). Then open the PR.
 
-PR body skeleton (the first two lines satisfy detector B's
-traceability contract):
+PR body skeleton (the `No work order:` line and the `Closes #` line
+together satisfy detector B's traceability contract):
 
 ```
 <!-- improvement-routine -->

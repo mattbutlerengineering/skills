@@ -50,7 +50,8 @@ there is no always-on gate. Trigger/routing evals are separate: see
 
 4. **Record.** Allocate the results directory with the naming helper —
    `eval_schema.results_path` owns the date-suffix collision grammar
-   (`-2`, `-3`… on same-day runs) for both results kinds:
+   (`-2`, `-3`… on same-day runs) for every results kind (trigger, output,
+   charter):
 
    ```bash
    dest=$(python3 -c "import datetime, pathlib, eval_schema

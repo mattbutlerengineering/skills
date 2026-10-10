@@ -39,7 +39,7 @@ import cli  # noqa: E402
 # The readiness-gated clock lives in test_cli; the reaping suite already
 # carries a second copy, so this suite imports rather than add a third.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_cli import ReadinessGatedClock  # noqa: E402
+from test_cli import REAP_GRACE, ReadinessGatedClock  # noqa: E402
 
 CASES = ROOT / "factory" / "evals" / "charters.json"
 SYNTHETIC = (Path(__file__).resolve().parent / "fixtures"
@@ -727,9 +727,9 @@ class TestClaudeRunnerLiveSeam(unittest.TestCase):
         thread.join(timeout=2)
         self.assertIn("pid", found, "fake claude never started")
         pid = found["pid"]
-        # brief grace for the kill to land
-        deadline = time.time() + 2
-        while time.time() < deadline and pid_alive(pid):
+        # grace for the kill to land: REAP_GRACE explains the window
+        deadline = time.monotonic() + REAP_GRACE
+        while time.monotonic() < deadline and pid_alive(pid):
             time.sleep(0.05)
         self.assertFalse(pid_alive(pid),
                          "grandchild survived claude_runner")

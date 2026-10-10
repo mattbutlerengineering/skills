@@ -5,7 +5,7 @@ state: each stage skill reads/writes run artifacts (product runs at the
 target repo's `docs/` root, feature runs under `docs/features/<slug>/`),
 and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
-## Verify (CI runs both on every push/PR)
+## Verify (CI runs all three on every push/PR)
 
 - `python3 -m unittest discover tests`
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
