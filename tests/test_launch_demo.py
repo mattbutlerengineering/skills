@@ -8,6 +8,7 @@ CLI (say, ffprobe, vhs, ffmpeg, node) is scripted here and CI runs no
 real recorder. Neither `__call__` is `(self, args)`, so
 tests/test_fake_gh.py's one-gh-fake rule does not read them as gh fakes.
 """
+import errno
 import json
 import os
 import re
@@ -17,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
@@ -735,6 +737,29 @@ class TestAssemble(WorkdirMixin, unittest.TestCase):
         self.assertEqual(runners.calls[1],
                          ("ffprobe", launch_demo.PROBE_TIMEOUT,
                           SUMMARY_ARGV + [str(self.scratch_out)], None))
+
+    def test_a_scratch_on_another_filesystem_still_publishes(self):
+        # A tmpfs /tmp (Fedora, Arch) puts the scratch mp4 on another
+        # device than the repo: a rename across them is EXDEV, so the
+        # result is moved beside `out` first and renamed there.
+        real_rename, real_replace = os.rename, os.replace
+
+        def same_device_only(real):
+            def rename(src, dst, *args, **kwargs):
+                if Path(src).parent != Path(dst).parent:
+                    raise OSError(errno.EXDEV, "Invalid cross-device link")
+                return real(src, dst, *args, **kwargs)
+            return rename
+        runners = FakeRunners({"ffmpeg": [writes()],
+                               "ffprobe": [PROBE_LINES]})
+        with mock.patch("os.rename", same_device_only(real_rename)), \
+                mock.patch("os.replace", same_device_only(real_replace)):
+            summary, problems = self.assemble(runners)
+        self.assertEqual(problems, [])
+        self.assertEqual(self.out.read_text(encoding="utf-8"), "x")
+        self.assertEqual(sorted(p.name for p in self.out.parent.iterdir()),
+                         ["launch.mp4"])
+        self.assertFalse(self.scratch_out.exists())
 
     def test_a_failing_ffmpeg_leaves_nothing_at_out(self):
         err = subprocess.CalledProcessError(

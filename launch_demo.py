@@ -418,9 +418,9 @@ def assemble(raw, clips, offsets, out, runner=cli.runner):
     """(summary, []) or (None, [one problem]). The one ffmpeg call: the
     raw recording and every narration WAV in, one H.264 video stream
     and one AAC mix out, written beside the raw recording and probed
-    there; only a result ffprobe can read is os.replace-d into `out`
-    (its parent created), so the publish path never holds a partial
-    mp4. The summary is ffprobe's stream and duration lines, each
+    there; only a result ffprobe can read is moved beside `out` and
+    os.replace-d into it (its parent created), so `out` is never a
+    partial mp4. The summary is ffprobe's stream and duration lines, each
     prefixed, for Verify to paste. ffmpeg draws nothing: every word on
     screen is the recorder's."""
     raw, out = Path(raw), Path(out)
@@ -441,7 +441,9 @@ def assemble(raw, clips, offsets, out, runner=cli.runner):
     except cli.CLI_FAILURES as err:
         return None, [f"{failed}: {cli.detail(err)}"]
     out.parent.mkdir(parents=True, exist_ok=True)
-    os.replace(scratch_out, out)
+    staged = out.with_name(f".{out.name}.partial")  # a rename can't cross
+    shutil.move(scratch_out, staged)  # devices (a tmpfs /tmp): copy over
+    os.replace(staged, out)
     return [f"{LABEL}: {line}" for line in out_text.splitlines()
             if line.strip()], []
 
