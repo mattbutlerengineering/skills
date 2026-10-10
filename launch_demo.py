@@ -32,12 +32,15 @@ CONFIG = "docs/launch-demo.json"
 USAGE = "usage: python3 launch_demo.py config | probe | render <slug>"
 
 # The timeline's constants: the title card's floor, the pause after each
-# narration line, the recorder's typing cadence, the tolerated gap
-# between a computed and a recorded duration, and the frame.
+# narration line, the recorder's typing cadence, the band of recorded ÷
+# planned duration inside which a terminal recording is proportional
+# to its tape (vhs renders a tape uniformly shorter than its Sleeps add
+# up to, about 6 % here; a ratio outside the band is not a recording of
+# this plan), and the frame.
 TITLE_SECONDS = 3
 SETTLE = 0.5
 TYPING_SPEED = 0.05
-DRIFT_TOLERANCE = 1.5
+DRIFT_BAND = (0.75, 1.25)
 WIDTH = 1280
 HEIGHT = 720
 
@@ -332,13 +335,32 @@ def _tape(plan, raw, against):
     return "\n".join(lines) + "\n"
 
 
+def _scaled_offsets(plan, recorded):
+    """The plan's offsets scaled to the recording — (offsets, None) —
+    or (None, the problem) when recorded ÷ planned falls outside
+    DRIFT_BAND. vhs's rendered length is not its tape's wall clock: the
+    gap is proportional, so the planned offsets are measured against
+    the recording rather than trusted; a ratio outside the band is no
+    recording of this plan, and an out-of-sync video is worse than
+    none."""
+    ratio = recorded / plan["planned"]
+    low, high = DRIFT_BAND
+    if not low <= ratio <= high:
+        return None, (f"{LABEL}: recording ran {recorded:.1f} s where the"
+                      f" plan expected {plan['planned']:.1f} s — a ratio"
+                      f" of {ratio:.2f}, outside {low}–{high}; narration"
+                      " would drift")
+    return [round(scene["offset"] * ratio, 3)
+            for scene in plan["scenes"]], None
+
+
 def record_terminal(plan, workdir, against, runner=cli.runner):
     """The terminal adapter: ((raw video path, offsets), []) or (None,
     [one problem]). Writes workdir/demo.tape from the plan, runs vhs on
     it under RECORD_TIMEOUT, then measures the raw recording — offsets
-    are the plan's computed ones, so a recording further than
-    DRIFT_TOLERANCE from the planned length is refused: an out-of-sync
-    video is worse than none. Knows no publish path."""
+    are the plan's, scaled by the recorded length (_scaled_offsets),
+    the way the browser adapter's are measured from its marks. Knows
+    no publish path."""
     workdir = Path(workdir)
     raw, tape = workdir / "raw.mp4", workdir / "demo.tape"
     tape.write_text(_tape(plan, raw, against), encoding="utf-8")
@@ -352,11 +374,10 @@ def record_terminal(plan, workdir, against, runner=cli.runner):
     recorded, problem = _duration(raw, runner)
     if problem:
         return None, [f"{failed}: {problem}"]
-    if abs(recorded - plan["planned"]) > DRIFT_TOLERANCE:
-        return None, [f"{LABEL}: recording ran {recorded:.1f} s where the"
-                      f" plan expected {plan['planned']:.1f} s — narration"
-                      " would drift"]
-    return (raw, [scene["offset"] for scene in plan["scenes"]]), []
+    offsets, problem = _scaled_offsets(plan, recorded)
+    if problem:
+        return None, [problem]
+    return (raw, offsets), []
 
 
 FRAME_RATE = 30

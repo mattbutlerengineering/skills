@@ -561,10 +561,10 @@ class TestRecordTerminal(WorkdirMixin, unittest.TestCase):
         return launch_demo.record_terminal(self.plan, self.work, "bash",
                                            runners)
 
-    def test_the_tape_the_vhs_run_and_the_computed_offsets(self):
+    def test_the_tape_the_vhs_run_and_the_offsets_at_the_planned_length(self):
         runners = FakeRunners({"vhs": [lambda args, input:
                                        self.raw.write_text("v") and ""],
-                               "ffprobe": ["9.1\n"]})
+                               "ffprobe": ["8.8\n"]})
         result, problems = self.record(runners)
         self.assertEqual(problems, [])
         self.assertEqual(result, (self.raw, [0.0, 3.0, 7.3]))
@@ -604,13 +604,29 @@ class TestRecordTerminal(WorkdirMixin, unittest.TestCase):
                 self.assertEqual(typed[2 * index + 1], "Enter")
             self.assertEqual(block[-1], sleep)
 
-    def test_drift_past_the_tolerance_is_a_problem_and_no_result(self):
+    def test_offsets_scale_by_the_recorded_over_planned_ratio(self):
+        # vhs renders about 6 % shorter than its tape's Sleeps add up
+        # to, uniformly, so the planned offsets are scaled by what was
+        # recorded: 8.272 s is 94 % of the planned 8.8 s.
         runners = FakeRunners({"vhs": [lambda args, input:
                                        self.raw.write_text("v") and ""],
-                               "ffprobe": ["11.0\n"]})
-        self.assertEqual(self.record(runners), (None, [
-            "launch-demo: recording ran 11.0 s where the plan expected"
-            " 8.8 s — narration would drift"]))
+                               "ffprobe": ["8.272\n"]})
+        result, problems = self.record(runners)
+        self.assertEqual(problems, [])
+        self.assertEqual(result, (self.raw, [0.0, 2.82, 6.862]))
+
+    def test_a_ratio_outside_the_band_is_a_problem_and_no_result(self):
+        for recorded, ratio in (("6.0", "0.68"), ("12.0", "1.36")):
+            with self.subTest(recorded=recorded):
+                runners = FakeRunners({"vhs": [lambda args, input:
+                                               self.raw.write_text("v")
+                                               and ""],
+                                       "ffprobe": [f"{recorded}\n"]})
+                self.assertEqual(self.record(runners), (None, [
+                    f"launch-demo: recording ran {recorded} s where the plan"
+                    f" expected 8.8 s — a ratio of {ratio}, outside"
+                    " 0.75–1.25; narration would drift"]))
+        self.assertEqual(launch_demo.DRIFT_BAND, (0.75, 1.25))
 
     def test_a_failing_vhs(self):
         err = subprocess.CalledProcessError(
@@ -840,7 +856,8 @@ class TestRender(RenderMixin, unittest.TestCase):
         verdict, _, problems = self.render()
         self.assertEqual((verdict, problems), (None, [
             "launch-demo: recording ran 20.0 s where the plan expected"
-            " 10.3 s — narration would drift"]))
+            " 10.3 s — a ratio of 1.94, outside 0.75–1.25; narration would"
+            " drift"]))
         self.assertEqual(self.published(), ["launch.md", "storyboard.json"])
 
     def test_an_ffmpeg_failure_writes_nothing(self):
