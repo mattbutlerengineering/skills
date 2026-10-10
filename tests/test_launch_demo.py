@@ -9,6 +9,7 @@ real recorder. Neither `__call__` is `(self, args)`, so
 tests/test_fake_gh.py's one-gh-fake rule does not read them as gh fakes.
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -960,12 +961,109 @@ def node_writes(marks=MARKS):
     return answer
 
 
-class TestRecordBrowser(WorkdirMixin, unittest.TestCase):
+class CwdMixin:
+    """Run the test from a throwaway working directory: the browser
+    adapter makes its driver's directory under the current one (the
+    repo root by the CLI contract), and a test must not make it in the
+    checkout it runs from."""
+
+    def setUp(self):
+        super().setUp()
+        cwd = tempfile.TemporaryDirectory()
+        self.addCleanup(cwd.cleanup)
+        self.addCleanup(os.chdir, os.getcwd())
+        os.chdir(cwd.name)
+        self.cwd = Path.cwd()
+
+
+def node_records(seen, then):
+    """A fake node run that notes the driver it was handed — its path,
+    its text at run time — then answers as `then` does."""
+    def answer(args, input):
+        driver = Path(args[0])
+        seen.append((driver, driver.read_text(encoding="utf-8")))
+        if isinstance(then, BaseException):
+            raise then
+        return then(args, input)
+    return answer
+
+
+NODE_ESM_FAILURE = (
+    "node:internal/modules/package_json_reader:314\n"
+    "  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base),"
+    " null);\n"
+    "        ^\n"
+    "\n"
+    "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright'"
+    " imported from /x/demo.mjs\n"
+    "    at Object.getPackageJSONURL (node:internal/modules/"
+    "package_json_reader:314:9)\n"
+    "    at packageResolve (node:internal/modules/esm/resolve:767:81)"
+    " {\n"
+    "  code: 'ERR_MODULE_NOT_FOUND'\n"
+    "}\n"
+    "\n"
+    "Node.js v22.22.3\n")
+
+
+class TestRecordBrowser(CwdMixin, WorkdirMixin, unittest.TestCase):
     AGAINST = "http://127.0.0.1:8765"
 
     def setUp(self):
         super().setUp()
         self.plan = launch_demo.plan(BROWSER_BOARD, [2.0, 3.0, 3.5, 1.0])
+
+    def assert_driver_ran_from_a_cleaned_cwd_scratch(self, seen):
+        [(driver, text)] = seen
+        self.assertEqual(driver.name, "demo.mjs")
+        self.assertEqual(driver.parent.parent, self.cwd)
+        self.assertTrue(driver.parent.name.startswith("launch-demo-"),
+                        driver)
+        self.assertFalse(driver.is_relative_to(self.work.resolve()))
+        self.assertNotEqual(driver.parent.parent,
+                            Path(tempfile.gettempdir()).resolve())
+        self.assertEqual(text, (self.work / "demo.mjs").read_text(
+            encoding="utf-8"))
+        self.assertFalse(driver.parent.exists())
+        self.assertEqual(list(self.cwd.iterdir()), [])
+        for kept in ("demo.mjs", "title.html", "outro.html"):
+            self.assertTrue((self.work / kept).is_file(), kept)
+
+    def test_the_driver_runs_from_a_scratch_dir_under_the_cwd(self):
+        seen = []
+        runners = FakeRunners({"node": [node_records(seen, node_writes())]})
+        result, problems = self.record(runners)
+        self.assertEqual(problems, [])
+        self.assertEqual(runners.calls[0][2][1:],
+                         [self.AGAINST, str(self.work)])
+        self.assertEqual(runners.calls[0][2][0], str(seen[0][0]))
+        self.assert_driver_ran_from_a_cleaned_cwd_scratch(seen)
+
+    def test_the_driver_scratch_dir_is_gone_after_a_failure_too(self):
+        seen = []
+        err = subprocess.CalledProcessError(1, ["node"], stderr="boom\n")
+        runners = FakeRunners({"node": [node_records(seen, err)]})
+        result, _ = self.record(runners)
+        self.assertIsNone(result)
+        self.assert_driver_ran_from_a_cleaned_cwd_scratch(seen)
+
+    def test_a_node_failure_names_the_error_line_not_the_banner(self):
+        err = subprocess.CalledProcessError(1, ["node"],
+                                            stderr=NODE_ESM_FAILURE)
+        problems = self.record(FakeRunners({"node": [err]}))
+        self.assertEqual(problems, (None, [
+            "launch-demo: browser recorder failed: Error"
+            " [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright'"
+            " imported from /x/demo.mjs"]))
+        self.assertIn("ERR_MODULE_NOT_FOUND", problems[1][0])
+        self.assertNotIn("Node.js v", problems[1][0])
+
+    def test_a_node_failure_with_no_error_line_keeps_the_last_line(self):
+        err = subprocess.CalledProcessError(
+            9, ["node"], stderr="node: bad option: --nope\n")
+        self.assertEqual(self.record(FakeRunners({"node": [err]})), (None, [
+            "launch-demo: browser recorder failed: node: bad option:"
+            " --nope"]))
 
     def record(self, runners):
         return launch_demo.record_browser(self.plan, self.work, self.AGAINST,
@@ -977,10 +1075,11 @@ class TestRecordBrowser(WorkdirMixin, unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(result, (self.work / "raw.webm",
                                   [0.0, 3.1, 7.3, 11.0]))
-        self.assertEqual(runners.calls, [
-            ("node", launch_demo.RECORD_TIMEOUT,
-             [str(self.work / "demo.mjs"), self.AGAINST, str(self.work)],
-             None)])
+        [(binary, timeout, args, stdin)] = runners.calls
+        self.assertEqual((binary, timeout, args[1:], stdin),
+                         ("node", launch_demo.RECORD_TIMEOUT,
+                          [self.AGAINST, str(self.work)], None))
+        self.assertEqual(Path(args[0]).name, "demo.mjs")
         for card, text in (("title.html", ("Counter and greeter",
                                            "Proved on a fixture")),
                            ("outro.html", ("Every recording is comparable.",))):
@@ -1017,7 +1116,7 @@ class TestRecordBrowser(WorkdirMixin, unittest.TestCase):
             " for 4 scenes"]))
 
 
-class TestRenderBrowser(RenderMixin, unittest.TestCase):
+class TestRenderBrowser(CwdMixin, RenderMixin, unittest.TestCase):
     AGAINST = "http://127.0.0.1:8765"
 
     def setUp(self):

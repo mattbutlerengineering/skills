@@ -16,6 +16,7 @@ tests inject fake runners and CI runs no real recorder. Stdlib only.
 import html
 import json
 import os
+import re
 import shlex
 import shutil
 import sys
@@ -446,6 +447,10 @@ p {{ font-size: 28px; opacity: 0.8; margin: 0; }}
 <body><h1>{title}</h1><p>{text}</p></body></html>
 """
 
+# A stderr line that begins an error message: Node prints `Error […]: `,
+# `TypeError: ` and kin flush left, its stack frames indented.
+NODE_ERROR_LINE = re.compile(r"(?:[A-Z]\w*)?Error\b")
+
 # The browser driver, filled by _driver: the scene code is generated
 # per scene and spliced in at {scenes}; the two values the run needs
 # travel as argv, never the environment.
@@ -539,11 +544,28 @@ def _card(title, text):
                             title=html.escape(title), text=html.escape(text))
 
 
+def _node_reason(err):
+    """A failed node run's reason: the last stderr line that begins an
+    error message (`Error [ERR_MODULE_NOT_FOUND]: …`, `TypeError: …`),
+    because Node ends a crash with its version banner and cli.detail's
+    last line would be `Node.js vX`; else cli.detail's line."""
+    stderr = getattr(err, "stderr", None) or ""
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", errors="replace")
+    errors = [line.strip() for line in stderr.splitlines()
+              if NODE_ERROR_LINE.match(line)]
+    return errors[-1] if errors else cli.detail(err)
+
+
 def record_browser(plan, workdir, against, runner=cli.runner):
     """The browser adapter: ((raw video path, offsets), []) or (None,
     [one problem]). Writes the title and outro cards and demo.mjs from
-    the plan, runs it under node with RECORD_TIMEOUT (the URL and the
-    scratch directory as arguments), and reads the marks the driver
+    the plan, runs a copy of the driver under node with RECORD_TIMEOUT
+    (the URL and the scratch directory as arguments) from a launch-demo-
+    directory made under the working directory and removed after — Node
+    resolves an ES module's imports from the importing file, so only a
+    driver inside the repo finds the repo's playwright, the one probe
+    resolved — and reads the marks the driver
     recorded — page creation, then each scene start — so offsets are
     measured, not the plan's. Knows no publish path."""
     workdir = Path(workdir)
@@ -555,10 +577,15 @@ def record_browser(plan, workdir, against, runner=cli.runner):
     driver = workdir / "demo.mjs"
     driver.write_text(_driver(plan), encoding="utf-8")
     failed = f"{LABEL}: browser recorder failed"
+    home = Path(tempfile.mkdtemp(prefix="launch-demo-", dir=Path.cwd()))
     try:
-        runner("node", RECORD_TIMEOUT)([str(driver), against, str(workdir)])
+        shutil.copyfile(driver, home / driver.name)
+        runner("node", RECORD_TIMEOUT)([str(home / driver.name), against,
+                                        str(workdir)])
     except cli.CLI_FAILURES as err:
-        return None, [f"{failed}: {cli.detail(err)}"]
+        return None, [f"{failed}: {_node_reason(err)}"]
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
     raw = workdir / "raw.webm"
     if not raw.is_file():
         return None, [f"{failed}: wrote no {raw.name}"]

@@ -83,7 +83,7 @@ detector G green as rows are checked.
   - Accept: tests first — the tape test in `tests/test_launch_demo.py` (the one pinning `demo.tape`'s first six lines) is corrected to expect `Output "` followed by the absolute path of `workdir / "raw.mp4"` and a closing `"` as the first line: vhs 0.11.0 refuses the unquoted form the first pass pinned (`Expected file path after output`, `parser: 3 error(s)`, verification.md Failure 1), and a test asserting a value the real recorder refuses is a wrong test, so this corrects the test rather than bending it; observed red: `AssertionError` on line 1, `Output /…/raw.mp4` against `Output "/…/raw.mp4"`. Then `_tape` writes the quoted form, every test is green with none else edited, and a tape `_tape` produces for the committed `docs/launches/pipeline-board/storyboard.json`'s plan parses under the real vhs on this machine (`vhs validate <tape>` exits 0 with no parser line; the output quoted under Notes, dated). The full battery is green.
 - [x] **WO-0112** Terminal offsets are measured from the recording, not read from the plan — size:M, blocked by: WO-0111 (PRD-0009 §Success criteria)
   - Accept: tests first, through `launch_demo.record_terminal(plan, workdir, against, runner)` with the plan of row 0101 (planned `8.8`, offsets `[0.0, 3.0, 7.3]`): a fake `ffprobe` answering `8.272\n` (94 % of the planned length) yields `result` `(workdir / "raw.mp4", [0.0, 2.82, 6.862])` — every planned offset scaled by the ratio recorded ÷ planned, rounded to three decimals — and `problems` `[]`; an answer of `8.8\n` yields the plan's offsets unchanged; an answer of `6.0\n` (a ratio of 0.68) yields `(None, ["launch-demo: recording ran 6.0 s where the plan expected 8.8 s — a ratio of 0.68, outside 0.75–1.25; narration would drift"])` and `12.0\n` (1.36) the same shape with its numbers; through `render` with row 0105's fakes, a raw duration of `20.0\n` against the planned `10.3` yields the problem `launch-demo: recording ran 20.0 s where the plan expected 10.3 s — a ratio of 1.94, outside 0.75–1.25; narration would drift` and nothing written. `DRIFT_BAND = (0.75, 1.25)` (both ends inclusive) replaces `DRIFT_TOLERANCE`; `plan` is unchanged (its offsets stay the planned ones — the adapter scales them, so the plan remains the one owner of the arithmetic and the adapter the one owner of the measurement); the seam's output shape `((raw, offsets), [])` is unchanged; `record_browser` and its tests are untouched. Observed red: `AssertionError` with the plan's offsets where the scaled ones are expected and the old `— narration would drift` string where the band string is expected. Then every test is green with none else edited; a dated Note records the deviation from the architecture's "offsets computed for vhs" wording and why, for Review. The full battery is green.
-- [ ] **WO-0113** The browser driver lives where Node can resolve Playwright, and a Node failure's reason names the error — size:M, blocked by: WO-0107 (PRD-0009 §Success criteria)
+- [x] **WO-0113** The browser driver lives where Node can resolve Playwright, and a Node failure's reason names the error — size:M, blocked by: WO-0107 (PRD-0009 §Success criteria)
   - Accept: tests first, through `launch_demo.record_browser(plan, workdir, against, runner)` with row 0107's browser plan: the fake `node` run's first argument — the file Node ran — is a `demo.mjs` whose parent is a fresh `launch-demo-` directory directly under the current working directory (the repo root by the CLI contract, and the place `probe` resolves `playwright` from), neither under `workdir` nor under the system temp directory; its text at run time equals `workdir / "demo.mjs"` (the inspectable copy `render` publishes on success); the other two arguments are still `against` and `str(workdir)`; after the call, success or failure, that directory is gone and `workdir / "demo.mjs"`, `title.html` and `outro.html` remain; a `node` run raising `CalledProcessError` whose stderr is Node's real ESM failure (`node:internal/modules/package_json_reader:314`, the `throw new ERR_MODULE_NOT_FOUND(…)` line, `^`, a blank, `Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from /x/demo.mjs`, two `    at …` lines, `  code: 'ERR_MODULE_NOT_FOUND'`, `}`, a blank, `Node.js v22.22.3`) yields `(None, ["launch-demo: browser recorder failed: Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from /x/demo.mjs"])` — a string containing `ERR_MODULE_NOT_FOUND` and not `Node.js v`; the existing `Error: browserType.launch: Executable doesn't exist` case is unchanged; a stderr with no line that begins an error message (`node: bad option: --nope`) still yields `cli.detail`'s last line; `cli.detail` is not edited (`git diff -- cli.py` empty, no manifest change). Observed red: `AssertionError` on the driver's path (under `workdir`) and on the reason line (`Node.js v22.22.3`). Then every test is green with none else edited, and the resolution rule is shown on this machine with the real node against a throwaway package (an `.mjs` under the system temp directory cannot import it; the same file under the working directory can) — quoted under Notes, dated, with where the driver now lives and why. The full battery is green.
 
 ## Coverage
@@ -346,3 +346,37 @@ asks for is timeout and stdin alone.
   where `[0.0, 2.82, 6.862]` was expected, both band cases and the
   render case got the old `— narration would drift` string, and the
   constant test raised `AttributeError` on `DRIFT_BAND`.
+- 2026-10-10 (row 0113): `record_browser` still writes the inspectable
+  `workdir/demo.mjs` (the copy `render` publishes), then copies it into
+  a fresh `tempfile.mkdtemp(prefix="launch-demo-", dir=Path.cwd())` and
+  runs node on that copy, removing the directory in a `finally` on
+  success and failure alike. The working directory is the repo root by
+  the CLI contract and the place `probe` resolves `playwright` from;
+  Node resolves an ES module's bare imports by walking up from the
+  importing file, never from the working directory, so a driver under
+  the system temp directory cannot see the repo's `node_modules`
+  (verification.md Failure 3). Shown here with node v22.22.3 and a
+  throwaway package `throwaway` in a scratch directory's
+  `node_modules`: `node launch-demo-x/probe.mjs` run from that
+  directory printed `resolved` and exited 0; the same file copied into
+  a `tempfile.mkdtemp(prefix='launch-demo-')` directory printed `Error
+  [ERR_MODULE_NOT_FOUND]: Cannot find package 'throwaway' imported from
+  /private/var/folders/…/launch-demo-lv1t8hd2/probe.mjs` then `Node.js
+  v22.22.3` and exited 1. This repo's `.gitignore` gains
+  `/launch-demo-*/` so a directory left by a killed run is never
+  tracked (a consuming repo's ignore file is not the tool's to edit; the
+  `finally` is the guarantee there). A failed node run's reason is now
+  the last stderr line that begins an error message (`NODE_ERROR_LINE`,
+  flush-left `Error`/`TypeError`-style, so indented stack frames never
+  match), falling back to `cli.detail`'s last line; `cli.py` is not
+  edited (Failure 4's question about the convention stays Review's).
+  Test reading: the tests run from a throwaway working directory
+  (`CwdMixin`) so no scratch directory is made in the checkout, which
+  puts that directory under the system temp directory too — so the
+  test pins the driver's grandparent as the working directory and not
+  as `tempfile.gettempdir()` itself (the old `mkdtemp` home), rather
+  than "not under the system temp directory" literally. Observed red:
+  the driver path assertion got `/var/folders/…/work`'s parent where
+  the working directory was expected (both path tests) and the reason
+  test got `Node.js v22.22.3`. `launch_demo.py` is now 792 lines, close
+  to the 800 cap; the two adapters remain the natural split.
