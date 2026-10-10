@@ -125,8 +125,8 @@ request body section)
 
 ```
 # Pull request open, unmerged: nothing is published.
-gh pr close <pr> --delete-branch
-gh issue close <anchor> --comment "PR closed without merge; run parked at docs/features/launch-demo/"
+gh pr close 623 --delete-branch
+gh issue close 622 --comment "PR closed without merge; run parked at docs/features/launch-demo/"
 
 # After the squash merge: revert on a branch, bump past the published
 # version so installed caches re-copy, re-check, merge at gate 3.
@@ -138,7 +138,7 @@ python3 factory_init.py update-manifest      # the revert touches mirrored cli.p
 make check
 git push -u origin revert/launch-demo
 gh pr create --base main --title "revert: back out launch-demo" --body-file <body>   # fresh plain anchor; No work order: a revert
-gh issue reopen <anchor>
+gh issue reopen 622
 ```
 
 ## Release log
@@ -149,9 +149,33 @@ is the operator's.
 1. Re-render, battery, pairwise, secret scan — above; re-render committed
    as `60d7cea`; this file and the frame committed before any outward
    action.
-2. `git push -u origin feat/launch-demo` → pending.
-3. Anchor issue → pending.
-4. Pull request (non-draft, base `main`) and `gh pr checks` → pending.
+2. `git push -u origin feat/launch-demo` → `* [new branch] feat/launch-demo -> feat/launch-demo`;
+   `git ls-remote --heads origin feat/launch-demo` → `be13efd`.
+3. `gh issue create --title "Ship launch-demo (PRD-0009): a narrated launch brief for any shipped feature" --body "Audit anchor for the run's PR, closed by that PR's merge (detector B's Closes link; the run's rows have no tracker mirror, ADR-0026). Run: docs/features/launch-demo/."`
+   → https://github.com/mattbutlerengineering/skills/issues/622 , no label.
+   Not #178, not #181.
+4. Body written to the session scratchpad (`Closes #622` first; the
+   `No work order:` line; `## What changed` with the render pipeline as
+   pseudocode and a file tree; `## Before and after` with the re-render
+   output, the mp4/copy/frame blob links, and the real bash run of the
+   old and new screen-line encodings; pairwise results; `## Merge
+   danger`; the attribution line last), checked for work-order id
+   tokens (0), then
+   `gh pr create --base main --head feat/launch-demo --title "feat(launch-demo): a narrated launch brief for any shipped feature (PRD-0009)" --body-file pr-body.md`
+   → https://github.com/mattbutlerengineering/skills/pull/623 ;
+   `gh pr view 623` → `OPEN draft=false base=main head=be13efd`; body
+   as landed holds 0 work-order id tokens. `gh pr checks 623` on the
+   pull-request event (run `38077618954`, `pull_request success
+   be13efd`):
+   ```
+   check               pass      34s
+   review              pass      27s
+   needs-review-label  pass       6s
+   merged-label        skipping   0s   (fires on merge)
+   ```
+   The check job's log: `lint: 0 problem(s) across 26 skills`,
+   `gates: 0 problem(s)`, `selftest: ok`, `Ran 2039 tests`, and no `B:`
+   line. The push event's own run (`38077579366`): `check` pass.
 5. **Operator — the merge, ADR-0033 gate 3.** Watch
    `docs/launches/pipeline-board/launch.mp4` on the branch, then
    squash-merge and delete the branch. Squash only.
@@ -174,4 +198,14 @@ For the operator, after the squash merge; none has run yet.
 
 ## Outcome
 
-Pending the outward steps; filled in after them.
+Shipped to the gate, cleanly: the re-render at the tip produced
+(h264+aac 1280x720, 32.23 s, 429,720 bytes; frames read correctly) and
+was committed; the battery is green; #618 and #620 merge clean and stay
+green merged; #621 conflicts only on the ledger append. The branch is
+pushed, the anchor is #622, the pull request is #623 — non-draft, base
+`main`, CI green at `be13efd`. The commit adding these lines re-runs the
+pull-request event; this file cannot quote its own commit's result. The
+merge is the owner's at ADR-0033 gate 3, squash only. Next stage after
+the merge and the post-release checks: Operate (`retro.md`), where the
+drift-band, render-slug and config-grammar minors should be seeded, and
+the owner may run `launch-demo` for this run itself.
