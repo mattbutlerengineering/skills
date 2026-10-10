@@ -495,7 +495,7 @@ def pid_alive(pid):
 # poll that sees the death. Measured on time.monotonic(), which a
 # wall-clock step cannot shrink. 2 s of time.time() flaked on CI (beads
 # wo-0wu). The test_cli_process_reaping.py and test_charter_replay.py
-# grace loops use the same window.
+# grace loops import this window rather than restate it.
 REAP_GRACE = 30
 
 
