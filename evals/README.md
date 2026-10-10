@@ -26,6 +26,31 @@ Both cost real model runs and run on demand — CI never invokes them.
   supplementary harness evidence); charter replays are factory evidence,
   never LEDGER evidence.
 
+## Plugin evals (not in this directory)
+
+A third harness, `claude plugin eval` (Claude Code v2.1.269+), keeps its
+suite in [`plugin-evals/`](../plugin-evals/) (ADR-0081). It measures what
+the plugin adds: each case runs with the plugin and again without it, and
+the report gives `WITH`, `W/OUT` and their difference, `Δ`. Run it on
+demand from the repo root:
+
+```
+claude plugin eval . --scaffold --model claude-sonnet-5 \
+  --judge-model claude-haiku-4-5 --max-cost-usd 15 --no-publish \
+  --allow-tools Write Edit "Bash(python3 *)" "Bash(git *)"
+```
+
+Add `--tag lean`, `--tag next` or `--tag implement` to run one suite.
+The CLI defaults to this directory, `evals/`. `.claude-plugin/plugin.json`
+points it at `plugin-evals/` instead (`experimental.evals`), so a bare run
+cannot write timestamp directories into `results/` here, whose names
+`eval_schema.py` owns. Run output goes to gitignored
+`plugin-evals/results/`. A run that is cited anywhere has its
+`aggregate-result.json` copied unedited to
+`plugin-evals/records/<YYYY-MM-DD>[-N].json`, which is append-only under
+the policy below. A partial run (the cost ceiling hit, exit 2) or a run
+with skipped judge graders is never cited.
+
 ## Honesty policy
 
 - Results files are snapshots pinned to a model and CLI version — dated,
@@ -38,7 +63,9 @@ Both cost real model runs and run on demand — CI never invokes them.
   proves ambiguous or non-discriminating — say so in the commit message.
 - Evals inform description and skill quality but never graduate LEDGER
   maturity: a skill graduates past draft only via a real run
-  (ADR-0012, ADR-0019).
+  (ADR-0012, ADR-0019). That holds for plugin-eval records too: one may
+  be cited beside a skill's LEDGER row only as the figures its committed
+  file holds (ADR-0081).
 
 ## Known limitation
 

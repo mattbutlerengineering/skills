@@ -4,5 +4,8 @@
   "version": "0.5.1",
   "author": {
     "name": "Matt Butler"
+  },
+  "experimental": {
+    "evals": "plugin-evals"
   }
 }

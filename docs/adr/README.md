@@ -98,3 +98,4 @@ the canonical vocabulary.
 | [0075](0075-the-guarded-file-read-joins-the-cli-seam.md) | The guarded local-file read joins the cli seam | provisional |
 | [0076](0076-grok-supported-harness.md) | Grok is a supported harness (Claude primary) | accepted |
 | [0077](0077-the-dispatched-agent-holds-no-write-credential.md) | The dispatched agent holds no write credential | provisional |
+| [0081](0081-plugin-eval-is-an-on-demand-harness.md) | `claude plugin eval` is an on-demand harness with its own tree | accepted |
