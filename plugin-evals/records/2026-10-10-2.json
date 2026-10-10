@@ -1,0 +1,449 @@
+{
+  "schemaVersion": 1,
+  "claudeVersion": "2.1.296",
+  "startedAt": "2026-10-10T23:22:11.618Z",
+  "durationSeconds": 116,
+  "costUsd": 0.5771082,
+  "partial": false,
+  "suite": {
+    "root": "/Users/mbutler/github/skills/.claude/worktrees/close-out",
+    "ablation": "none",
+    "modelOverride": "claude-sonnet-5",
+    "judgeModel": "claude-haiku-4-5",
+    "tagFilters": [
+      "lean",
+      "implement"
+    ],
+    "threshold": 1,
+    "concurrency": 1,
+    "plugins": [
+      {
+        "name": "idea-to-prod",
+        "version": "0.7.0",
+        "path": "/Users/mbutler/github/skills/.claude/worktrees/close-out"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "one-item-test-first",
+      "dir": "plugin-evals/implement/one-item-test-first",
+      "source": "mixed",
+      "promptMarkdown": "Start building. Work through the breakdown.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 900,
+      "maxTurns": 40,
+      "graders": [
+        {
+          "name": "function-lands",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "textutil.py"
+            },
+            "pattern": "^def slugify\\(",
+            "flags": "m",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "item-checked",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "docs/features/slugify/breakdown.md"
+            },
+            "pattern": "^- \\[x\\] \\*\\*Item 1\\*\\*",
+            "flags": "m",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "red-before-green",
+          "type": "tool_order",
+          "weight": 1,
+          "config": {
+            "before": {
+              "tool": "Bash",
+              "input_match": "unittest"
+            },
+            "after": {
+              "tool": "Edit",
+              "input_match": "/textutil\\.py\""
+            }
+          }
+        },
+        {
+          "name": "skill-fired",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Skill",
+            "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?implement\""
+          }
+        },
+        {
+          "name": "test-written",
+          "type": "file_exists",
+          "weight": 1,
+          "config": {
+            "path": "tests/test_*.py",
+            "exists": true
+          }
+        },
+        {
+          "name": "tests-run-twice",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Bash",
+            "input_match": "unittest",
+            "min": 2
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 20,
+            "costUsd": 0.31401219999999996,
+            "judgeCostUsd": 0,
+            "durationSeconds": 74,
+            "startedAt": "2026-10-10T23:22:11.999Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-DWvzC7/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "function-lands",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^def slugify\\(",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "item-checked",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^- \\[x\\] \\*\\*Item 1\\*\\*",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "red-before-green",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Bash@10 precedes Edit@11",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "test-written",
+                "passed": true,
+                "weight": 1,
+                "explanation": "tests/test_*.py exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "tests-run-twice",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Bash called 2x (expected 2..∞)",
+                "withOnly": false,
+                "scored": true
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 1,
+        "passRate": 1
+      }
+    },
+    {
+      "name": "cut-list",
+      "dir": "plugin-evals/lean/cut-list",
+      "source": "mixed",
+      "promptMarkdown": "Is report.py over-engineered? Tell me what we can delete. Don't change any files yet.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 300,
+      "maxTurns": 15,
+      "graders": [
+        {
+          "name": "cuts-are-sound",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the reply gives concrete cuts that include both of these: deleting `legacy_total` because nothing references it, and replacing the `Formatter` / `CurrencyFormatter` / `FormatterFactory` classes with a direct formatting expression (for example an f-string inside `order_total`).\nFAIL if it recommends deleting `order_total` or anything `main.py` imports, if it gives only general advice with no specific cut, or if it says it changed a file.",
+          "config": {
+            "criteria": "PASS if the reply gives concrete cuts that include both of these: deleting `legacy_total` because nothing references it, and replacing the `Formatter` / `CurrencyFormatter` / `FormatterFactory` classes with a direct formatting expression (for example an f-string inside `order_total`).\nFAIL if it recommends deleting `order_total` or anything `main.py` imports, if it gives only general advice with no specific cut, or if it says it changed a file.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "names-dead-helper",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": "last_message",
+            "pattern": "legacy_total",
+            "flags": "",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "no-edit",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Edit",
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "no-write",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Write",
+            "min": 0,
+            "max": 0
+          }
+        },
+        {
+          "name": "read-the-caller",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Read",
+            "input_match": "main\\.py"
+          }
+        },
+        {
+          "name": "skill-fired",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Skill",
+            "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?lean\""
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 8,
+            "costUsd": 0.1573492,
+            "judgeCostUsd": 0.0017459999999999997,
+            "durationSeconds": 33,
+            "startedAt": "2026-10-10T23:23:25.648Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-2A88jm/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "cuts-are-sound",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Yes — it's over-engineered for what it does. The whole repo is `main.py` + `report.py`; only `order_total` is ever imported or called.\n\nCut-list (report.py, 34 lines):\n\n1. **`legacy_total` (lines 24-28)** — delete. No caller anywhere in the tree (checked by grep for the whole repo). Dead code.\n2. **`Formatter` ABC + `CurrencyFormatter` + `FormatterFactory` (lines 5-21)** — delete. This is a plugin/strategy abstraction (abstract base class, subclass, registry-backed factory) for a single formatting rule that's called in exactly one place with a hardcoded `\"currency\"` key. There's no second formatter, no runtime-selected `kind`, nothing registering into `_registry` from outside this file. It's an extension point nobody uses — ladder rung 1 fails (no requirement for pluggable formatters).\n3. **Replacement for `order_total`** — a single function:\n\n```python\ndef order_total(orders):\n    return f\"${sum(order['amount'] for order in orders):,.2f}\"\n```\n\nThat's the whole file: 1 function, ~3 lines, no imports beyond nothing (drop `abc` entirely).\n\nNet: 34 lines → ~4 lines, removing the ABC import, 3 classes, and a dead function. Nothing here hits the floor (no validation/security/accessibility concern) — it's pure structure built for a flexibility requirement that was never asked for.\n\nWant me to apply this cut?"
+              },
+              {
+                "name": "names-dead-helper",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched legacy_total",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "no-edit",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Edit called 0x (expected 0..0)",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "no-write",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Write called 0x (expected 0..0)",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "read-the-caller",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Read called 1x (expected 1..∞)",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": false,
+                "scored": true
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 1,
+        "passRate": 1
+      }
+    },
+    {
+      "name": "stdlib-first",
+      "dir": "plugin-evals/lean/stdlib-first",
+      "source": "mixed",
+      "promptMarkdown": "Keep it minimal: in dates.py, add a function `parse_day(text)` that turns an ISO date string like \"2026-10-10\" into a `datetime.date`. Don't add anything I didn't ask for.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 300,
+      "maxTurns": 15,
+      "graders": [
+        {
+          "name": "no-parsing-dependency",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "dates.py"
+            },
+            "pattern": "^\\s*(?:import|from)\\s+(?:re|dateutil|pendulum|arrow)\\b",
+            "flags": "m",
+            "match": "not_contains"
+          }
+        },
+        {
+          "name": "one-function",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "dates.py"
+            },
+            "pattern": "^def ",
+            "flags": "m",
+            "match": "count:1"
+          }
+        },
+        {
+          "name": "skill-fired",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Skill",
+            "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?lean\""
+          }
+        },
+        {
+          "name": "uses-stdlib",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "dates.py"
+            },
+            "pattern": "fromisoformat|strptime",
+            "flags": "",
+            "match": "contains"
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 0.75,
+            "passed": false,
+            "turns": 4,
+            "costUsd": 0.1057468,
+            "judgeCostUsd": 0,
+            "durationSeconds": 9,
+            "startedAt": "2026-10-10T23:23:58.491Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-07R7nd/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "no-parsing-dependency",
+                "passed": true,
+                "weight": 1,
+                "explanation": "pattern absent as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "one-function",
+                "passed": true,
+                "weight": 1,
+                "explanation": "found 1 matches (expected 1)",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "skill-fired",
+                "passed": false,
+                "weight": 1,
+                "explanation": "Skill called 0x (expected 1..∞)",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "uses-stdlib",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched fromisoformat|strptime",
+                "withOnly": false,
+                "scored": true
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 0.75,
+        "passRate": 0
+      }
+    }
+  ],
+  "aggregates": {
+    "casesTotal": 3,
+    "casesPassed": 2,
+    "overallScore": 0.9166666666666666,
+    "overallPassRate": 0.6666666666666666
+  }
+}

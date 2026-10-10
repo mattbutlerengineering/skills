@@ -37,11 +37,11 @@ Trigger-eval results inform description quality but never graduate maturity
 | deepen | draft | — | — |
 | automate | draft | — | — |
 | launch-demo | draft | — | — |
-| lean | draft | — | — |
-| polish | draft | — | — |
-| knowledge-base | draft | — | — |
-| ux-writing | draft | — | — |
-| ux-patterns | draft | — | — |
+| lean | draft | — | 8/8 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| polish | draft | — | 10/10 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| knowledge-base | draft | — | 7/8 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| ux-writing | draft | — | 9/9 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| ux-patterns | draft | — | 8/8 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 
 Reading of the 2026-07-01 run: all failures are under-triggering (no skill
 fired); zero cases fired the wrong skill. Distractors 5/5 stayed silent.

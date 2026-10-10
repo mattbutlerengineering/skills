@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "claudeVersion": "2.1.296",
+  "startedAt": "2026-10-10T23:20:36.191Z",
+  "durationSeconds": 80,
+  "costUsd": 0.396852,
+  "partial": false,
+  "suite": {
+    "root": "/Users/mbutler/github/skills/.claude/worktrees/close-out",
+    "ablation": "none",
+    "modelOverride": "claude-sonnet-5",
+    "judgeModel": "claude-haiku-4-5",
+    "tagFilters": [
+      "next"
+    ],
+    "threshold": 1,
+    "concurrency": 1,
+    "plugins": [
+      {
+        "name": "idea-to-prod",
+        "version": "0.7.0",
+        "path": "/Users/mbutler/github/skills/.claude/worktrees/close-out"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "idea-exists",
+      "dir": "plugin-evals/next/idea-exists",
+      "source": "mixed",
+      "promptMarkdown": "What's next?",
+      "runsPerCase": 3,
+      "timeoutSeconds": 300,
+      "maxTurns": 15,
+      "graders": [
+        {
+          "name": "names-prd",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": "last_message",
+            "pattern": "\\bPRD\\b|requirements",
+            "flags": "i",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "orients-correctly",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the reply identifies the `csv-export` feature run, says its idea brief exists, and names the PRD (requirements) stage as what comes next.\nFAIL if it treats the Idea stage as still to do, if it names architecture, a breakdown or implementation as next, or if it never mentions the csv-export run.",
+          "config": {
+            "criteria": "PASS if the reply identifies the `csv-export` feature run, says its idea brief exists, and names the PRD (requirements) stage as what comes next.\nFAIL if it treats the Idea stage as still to do, if it names architecture, a breakdown or implementation as next, or if it never mentions the csv-export run.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "skill-fired",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Skill",
+            "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?next\""
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 14,
+            "costUsd": 0.2100336,
+            "judgeCostUsd": 0.001562,
+            "durationSeconds": 46,
+            "startedAt": "2026-10-10T23:20:36.491Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-VCjKEp/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "names-prd",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched \\bPRD\\b|requirements",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "orients-correctly",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  false
+                ],
+                "evidence": "Picking up the PRD interview for the `feature:csv-export` run. I'll go one question at a time with a recommended answer where I have one — correct me whenever my guess is off.\n\n**1. Who are the actors?**\n\nFrom the idea brief, I see two candidates: **Workspace Admin** (configures the schedule and destination) and **Data Analyst** (consumes the exported CSV, but doesn't configure anything). Does that split match your mental model, or is there a third actor — e.g. someone at your company who monitors export health/failures?"
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": false,
+                "scored": true
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 1,
+        "passRate": 1
+      }
+    },
+    {
+      "name": "no-run",
+      "dir": "plugin-evals/next/no-run",
+      "source": "prose",
+      "promptMarkdown": "Let's get going on the pipeline for this repo. What's next?",
+      "runsPerCase": 3,
+      "timeoutSeconds": 300,
+      "maxTurns": 15,
+      "graders": [
+        {
+          "name": "routes-to-idea",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the reply says no run has started yet and that the next step is the Idea stage (capturing the idea as a brief), for example by asking what the idea is or whether it is a product or a feature.\nFAIL if it claims a run or an artifact already exists, if it starts on requirements, architecture or code, or if it names no next step.",
+          "config": {
+            "criteria": "PASS if the reply says no run has started yet and that the next step is the Idea stage (capturing the idea as a brief), for example by asking what the idea is or whether it is a product or a feature.\nFAIL if it claims a run or an artifact already exists, if it starts on requirements, architecture or code, or if it names no next step.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "skill-fired",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Skill",
+            "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?next\""
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 11,
+            "costUsd": 0.18681839999999997,
+            "judgeCostUsd": 0.0010439999999999998,
+            "durationSeconds": 34,
+            "startedAt": "2026-10-10T23:21:22.069Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-q55DxC/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "routes-to-idea",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "This repo is empty — no `docs/` directory, no run artifacts, nothing committed yet. There's no run in flight, so the pipeline's next stage is **Idea**.\n\nBefore we start: is this a new product (full pipeline, artifacts at `docs/`) or a feature for an existing codebase (scaled-down pass at `docs/features/<slug>/`)? Since there's no existing codebase here, I'd guess product — but let me know if that's wrong.\n\nOnce you confirm, I'll hand off to the `idea` skill to interview you and produce `idea.md`. (You can also jump straight to any other stage skill directly if you already know what you want, e.g. `prd` or `architect`.)"
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": false,
+                "scored": true
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 1,
+        "passRate": 1
+      }
+    }
+  ],
+  "aggregates": {
+    "casesTotal": 2,
+    "casesPassed": 2,
+    "overallScore": 1,
+    "overallPassRate": 1
+  }
+}

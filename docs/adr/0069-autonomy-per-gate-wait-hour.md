@@ -1,6 +1,6 @@
 # Autonomy per human-hour: accepted orders per gate-wait hour
 
-- Status: accepted
+- Status: superseded in part by ADR-0080
 - Date: 2026-09-21
 
 ## Context
