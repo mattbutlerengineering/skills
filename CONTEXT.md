@@ -112,6 +112,15 @@ The run artifacts as source of truth (ADR-0004, restated for the factory).
 Offline detectors gate it; orientation reads only this plane.
 _Avoid_: docs, wiki
 
+**Knowledge base**:
+A target repo's durable, non-inferable project facts — invariants,
+gotchas, cross-module flows, the why behind a decision — as pages in
+`docs/kb/`, indexed inline in the always-loaded file by `kb.py` and kept
+by the knowledge-base utility skill (ADR-0078). Not the knowledge plane:
+that is the run artifacts, which belong to one run; a knowledge-base page
+outlives every run and cites the code it rests on.
+_Avoid_: knowledge plane (taken), wiki, memory bank
+
 **Dispatch plane**:
 The work queue — work-order issues plus the dependency graph — mirrored
 one-way from breakdown rows and never authoritative over the knowledge

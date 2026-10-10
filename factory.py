@@ -46,6 +46,7 @@ VERBS = {
     "gate-digest": ("gate_digest", "argv"),
     "gates": ("gates", "argv"),
     "handoff": ("handoff", "argv"),
+    "kb": ("kb", "argv"),
     "label-sync": ("label_sync", "argv"),
     "launch-demo": ("launch_demo", "argv"),
     "lint": ("lint", "bare"),
