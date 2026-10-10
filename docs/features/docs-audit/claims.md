@@ -633,7 +633,7 @@ links: 59 relative across 13 files, 0 missing
 
 Exit code 0.
 
-Re-run 2026-10-10 after row 0123 (duplicates settled; no collapse, so no new link):
+Last run, 2026-10-10, on the branch tip at row 0124's close-out (after row 0123 settled the duplicates with no collapse, so no new link):
 
 ```text
 links: 59 relative across 13 files, 0 missing
