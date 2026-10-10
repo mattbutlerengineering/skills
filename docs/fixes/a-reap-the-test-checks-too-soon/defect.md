@@ -129,23 +129,23 @@ grace loops and the `test_cli.py` PID-file wait.
 
 ## Work items
 
-- [ ] **Reproduce and pin the late death** — add a regression test to
+- [x] **Reproduce and pin the late death** — add a regression test to
   `tests/test_cli.py` that hands `assert_grandchild_reaped` a real
   process SIGKILLed 2.5 s after it starts looking.
   - Accept: the test fails against the current helper with
     `grandchild survived harness_run`, and passes after the fix.
-- [ ] **Widen and de-step the window in `tests/test_cli.py`** — grace
+- [x] **Widen and de-step the window in `tests/test_cli.py`** — grace
   budget sized to the 300 s survival it detects, measured on
   `time.monotonic()`.
   - Accept: `tests.test_cli` green; with the group kill mutated out of
     `harness_run`, the two reaping tests still fail with
     `grandchild survived harness_run` (mutation reverted afterwards).
-- [ ] **Same fix in the two sibling copies** —
+- [x] **Same fix in the two sibling copies** —
   `tests/test_cli_process_reaping.py`, `tests/test_charter_replay.py`.
   - Accept: a one-off late-death probe fails each unmodified helper and
     passes each fixed one; both modules green (charter replay offline
     half only — never the live replay).
-- [ ] **Battery green, and the flake loop** — the repo's verification
+- [x] **Battery green, and the flake loop** — the repo's verification
   set, plus the target test looped 50x under CPU load before and after.
   - Accept: suite OK, `lint: 0 problem(s)`, `gates: 0 problem(s)`,
     `selftest: ok`, quoted in `verification.md`.
@@ -157,3 +157,18 @@ grace loops and the `test_cli.py` PID-file wait.
   defect has had to be fixed three times. Logged, not fixed: extracting a
   shared test helper is a design change outside `re-entry: implement`,
   and `one_owner.py` excludes `tests/**`.
+- 2026-10-10 (deviation, Implement): the window's *number* got one owner
+  even though the helpers did not. `REAP_GRACE` lives in
+  `tests/test_cli.py`; the two siblings import it, as
+  `test_charter_replay.py` already imports `ReadinessGatedClock`. Three
+  restated `2`s are how this defect needed three edits; a shared
+  constant is the smallest change that stops that recurring, and it is
+  not the helper extraction the note above declines.
+- 2026-10-10 (deviation, Implement): the PID-file wait in
+  `tests/test_cli.py`'s helper moved to `time.monotonic()` too, keeping
+  its 2 s budget. Same function, same step hazard; the budget is
+  untouched because that wait is already satisfied by the time the helper
+  runs (both callers gate their timeout on the PID file).
+- 2026-10-10: CPU load alone does not reproduce the flake here: 50/50
+  passes at load average 74.86 with 16 `yes` burners on 8 cores. That is
+  why the reproduction injects the late death instead.
