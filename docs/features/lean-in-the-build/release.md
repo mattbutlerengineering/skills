@@ -128,12 +128,15 @@ gh pr close <pr-number> --comment "withdrawn; see docs/features/lean-in-the-buil
 3. Pairwise merge test against #635 -> conflicts on the two version
    lines only (output under Pre-flight).
 4. Pull request body drafted for the orchestrator.
-5. Push and pull request: pending, made by the orchestrating session.
+5. Push and pull request: the orchestrating session pushed
+   `feat/lean-in-the-loop` and opened PR #637 (ready, not draft)
+   against `main`. Stopped there: no merge, no tag.
 
 ## Post-release checks
 
-- Pending the orchestrator: `gh pr checks <pr-number>` all pass or skip
-  on the first push.
+- `gh pr checks 637` on the first push: check pass (x2),
+  needs-review-label pass, review pass; merged-label and the
+  push-event duplicates skipping.
 - After the owner merges: a plugin reinstall shows version 0.5.1 and
   `skills/implement/SKILL.md` names `../lean/references/ladder.md`.
 
