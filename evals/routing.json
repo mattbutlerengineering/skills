@@ -972,6 +972,144 @@
       "expected": "polish",
       "query": "Check this page for accessibility problems: contrast, focus order, missing labels",
       "notes": "adjacency: polish vs audit — measured quality of one interface; audit sweeps a whole codebase across defect categories"
+    },
+    {
+      "id": "ux-writing-1",
+      "kind": "direct",
+      "expected": "ux-writing",
+      "query": "Audit the UX copy across our app: buttons, labels, error messages, empty states. Tell me what is unclear or inconsistent"
+    },
+    {
+      "id": "ux-writing-2",
+      "kind": "situational",
+      "expected": "ux-writing",
+      "query": "Our error messages just say 'Something went wrong' or show a raw error code. Rewrite them so people know what happened and what to do next"
+    },
+    {
+      "id": "ux-writing-3",
+      "kind": "situational",
+      "expected": "ux-writing",
+      "query": "Half the app calls it a workspace and the other half calls it a project, and the buttons switch between Title Case and sentence case. Pick one and make every string agree"
+    },
+    {
+      "id": "ux-writing-4",
+      "kind": "situational",
+      "expected": "ux-writing",
+      "query": "We're about to send our strings to translators. Check the message catalogue first for glued-together sentences, hand-rolled plurals and anything that won't survive translation"
+    },
+    {
+      "id": "ux-writing-5",
+      "kind": "situational",
+      "expected": "ux-writing",
+      "query": "We have no written voice and tone. Draft one from the copy we already ship, with a glossary of the terms we use"
+    },
+    {
+      "id": "ux-patterns-1",
+      "kind": "direct",
+      "expected": "ux-patterns",
+      "query": "Write down the UX patterns for this app, how we handle loading, errors, empty states, deletes and form validation, so every new screen behaves the same way"
+    },
+    {
+      "id": "ux-patterns-2",
+      "kind": "situational",
+      "expected": "ux-patterns",
+      "query": "Deleting a file asks 'Are you sure?', deleting a folder just happens with an undo toast, and deleting a user does neither. Decide how destructive actions should work everywhere and write it down"
+    },
+    {
+      "id": "ux-patterns-3",
+      "kind": "situational",
+      "expected": "ux-patterns",
+      "query": "Some forms validate on every keystroke, some only on submit, and some disable the submit button until everything is valid. I want one rule for the whole product"
+    },
+    {
+      "id": "ux-patterns-4",
+      "kind": "situational",
+      "expected": "ux-patterns",
+      "query": "We already have interaction guidelines in docs/ux-patterns.md. Sweep the admin screens and tell me where they don't follow them"
+    },
+    {
+      "id": "ux-writing-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "ux-writing",
+      "query": "Go through every string in the product, not just this page, and make the wording consistent with one voice",
+      "notes": "adjacency: ux-writing vs polish — product-wide copy with an inventory and a voice; polish's copy move is one surface in one pass"
+    },
+    {
+      "id": "polish-vs-ux-writing-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "This settings page feels cluttered and the spacing is off. Clean it up visually",
+      "notes": "adjacency: polish vs ux-writing — the look of one screen, not the words across the product"
+    },
+    {
+      "id": "ux-writing-vs-ux-1",
+      "kind": "near-miss",
+      "expected": "ux-writing",
+      "query": "The signup flow is built and the steps are right. The words on each step are clumsy, so rewrite the headings, helper text and button labels",
+      "notes": "adjacency: ux-writing vs ux-design — the flow is settled; the ask is the wording of built strings"
+    },
+    {
+      "id": "ux-writing-vs-review-1",
+      "kind": "near-miss",
+      "expected": "ux-writing",
+      "query": "Review the text in the new billing screens. Not the code, the words: are the messages clear and do they use our terms?",
+      "notes": "adjacency: ux-writing vs review — judging interface wording; review examines the run's code for defects"
+    },
+    {
+      "id": "ux-patterns-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "ux-patterns",
+      "query": "Every screen shows loading differently, some spinners, some skeletons, some nothing. Define the rule once for the whole app",
+      "notes": "adjacency: ux-patterns vs polish — a product-wide behaviour rule persisted for the project; polish's states move fixes one surface"
+    },
+    {
+      "id": "polish-vs-ux-patterns-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "Design the empty, loading and error states for this one dashboard screen and make them look considered",
+      "notes": "adjacency: polish vs ux-patterns — the states of one surface, designed and rendered; not a project-wide pattern file"
+    },
+    {
+      "id": "ux-patterns-vs-ux-1",
+      "kind": "near-miss",
+      "expected": "ux-patterns",
+      "query": "Before anyone designs another screen, I want our existing conventions for confirmations, toasts and keyboard focus pulled out of the code into one document",
+      "notes": "adjacency: ux-patterns vs ux-design — project-wide conventions derived from code; ux-design designs one run's flows and screens from a PRD"
+    },
+    {
+      "id": "ux-vs-ux-patterns-1",
+      "kind": "near-miss",
+      "expected": "ux-design",
+      "query": "The PRD for team invites says it has a UI. Walk me through designing the invite flow and its screens",
+      "notes": "adjacency: ux-design vs ux-patterns — a run's flow and screens, not the product's behaviour rules"
+    },
+    {
+      "id": "ux-patterns-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "ux-patterns",
+      "query": "Check our screens for inconsistent interaction behaviour: how they confirm, undo, paginate and notify",
+      "notes": "adjacency: ux-patterns vs audit — behavioural consistency against a pattern file; audit sweeps code for defects"
+    },
+    {
+      "id": "audit-vs-ux-patterns-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Sweep the frontend code for bugs, missing tests and security issues and rank what needs work",
+      "notes": "adjacency: audit vs ux-patterns — code defects across categories, not interface behaviour rules"
+    },
+    {
+      "id": "ux-writing-vs-ux-patterns-1",
+      "kind": "near-miss",
+      "expected": "ux-writing",
+      "query": "Our delete confirmations all behave the same, but the wording is all over the place. Make the dialog text consistent",
+      "notes": "adjacency: ux-writing vs ux-patterns — behaviour is already consistent; the ask is the words"
+    },
+    {
+      "id": "ux-patterns-vs-ux-writing-1",
+      "kind": "near-miss",
+      "expected": "ux-patterns",
+      "query": "The words are fine. The problem is that some deletes confirm and some undo. Settle the behaviour for the whole app",
+      "notes": "adjacency: ux-patterns vs ux-writing — behaviour, not wording"
     }
   ]
 }

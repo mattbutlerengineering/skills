@@ -38,6 +38,49 @@ which move would fix it. Then what to keep.
 **Done when.** Every finding names an element and its effect on the
 user, and none is a preference in disguise. Nothing was edited.
 
+### Heuristic score
+
+When the ask wants a number, or the surface is a whole flow, score it
+against Nielsen's ten usability heuristics (Nielsen Norman Group, 1994,
+reviewed 2024), 0 to 4 each:
+
+1. Visibility of system status
+2. Match between the system and the real world
+3. User control and freedom
+4. Consistency and standards
+5. Error prevention
+6. Recognition rather than recall
+7. Flexibility and efficiency of use
+8. Aesthetic and minimalist design
+9. Help users recognise, diagnose, and recover from errors
+10. Help and documentation
+
+0 is absent or broken, 2 is present with real gaps, 4 is nothing to
+fix. A heuristic the surface gives no chance to judge is marked n/a,
+and the total is scaled to the maximum that remains. **Calibrate:** most
+working interfaces land between 20 and 32 of 40 (Impeccable's
+calibration note); a 4 needs evidence you looked for a failure and found
+none, and a total near 40 means the scoring was not strict. Every score
+below 4 points at a finding above it. With `docs/ux-patterns.md` in the
+project, heuristic 4 is scored against its rules.
+
+### Persona red flags
+
+Walk the primary task twice more, as two people the surface fails
+first:
+
+- **The first-timer** — never seen it, came for one thing. Red flags:
+  a term they must already know, an action they must remember from a
+  previous screen, a blank state with no way in, a choice with no
+  default.
+- **The expert** — here daily, in a hurry. Red flags: no keyboard path,
+  a confirmation on every routine action, a setting reset on each
+  visit, a common task three levels deep.
+
+Add one persona from the product's own audience when `prd.md` or the
+README names one. A red flag is a finding like any other: element,
+effect, move.
+
 ## inspect — measure the technical quality
 
 **When.** The ask is whether it holds up: accessibility, small screens,
@@ -197,6 +240,10 @@ like a brochure.
 
 **Done when.** Each string could be read aloud to the user without
 embarrassment, and each action says what it will do.
+
+This move is one surface, one pass. Copy across the whole product — an
+inventory of every string, a glossary, a written voice — is the
+`ux-writing` skill.
 
 ## motion — explain a change
 

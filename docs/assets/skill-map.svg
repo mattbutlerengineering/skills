@@ -210,12 +210,14 @@ the utility skills by the moment a person reaches for them.</desc>
   <text class="row mono" x="60" y="210">automate</text>
 </g>
 <g>
-  <rect class="mask" x="48" y="272" width="168" height="80" rx="6"/>
-  <rect class="node-ext" x="48" y="272" width="168" height="80" rx="6"/>
+  <rect class="mask" x="48" y="272" width="184" height="80" rx="6"/>
+  <rect class="node-ext" x="48" y="272" width="184" height="80" rx="6"/>
   <text class="name" x="60" y="292">Reshaping what's built</text>
   <text class="row mono" x="60" y="310">deepen</text>
   <text class="row mono" x="60" y="326">lean</text>
   <text class="row mono" x="60" y="342">polish</text>
+  <text class="row mono" x="140" y="310">ux-writing</text>
+  <text class="row mono" x="140" y="326">ux-patterns</text>
 </g>
 <g>
   <rect class="mask" x="48" y="380" width="168" height="64" rx="6"/>

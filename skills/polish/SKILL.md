@@ -23,7 +23,7 @@ of the pipeline.
 
 ### 1. Find out what is already decided
 
-Three things outrank this skill's taste. Read them before forming an
+Four things outrank this skill's taste. Read them before forming an
 opinion.
 
 - **Who the surface is for.** The people using it, what they came to do,
@@ -36,6 +36,11 @@ opinion.
   the screens beside this one. Read the code and look at the neighbours.
   A project with no design document is not a blank canvas: its existing
   screens are the system, written down or not.
+- **The project's UX patterns.** If `docs/ux-patterns.md` exists, read
+  it: its behaviour rules and its Voice & terms are decisions already
+  made, and a move that breaks one is a finding, not a refinement. This
+  skill reads that file and never writes it — behaviour rules belong to
+  `ux-patterns`, wording to `ux-writing`.
 - **The direction the user gave.** A stated aesthetic, era, palette, or
   typeface is honoured even where
   [`references/tells.md`](references/tells.md) would warn against it.
