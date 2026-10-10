@@ -32,7 +32,7 @@ of them once the repo is on its package path:
 
 ```
 git clone https://github.com/mattbutlerengineering/skills
-omp --skill ./skills/next          # or add the cloned dir as a Pi package
+omp --skill ./skills/skills/next   # or add the cloned dir as a Pi package
 ```
 
 Fallbacks: omp inherits `.claude` skills on first run, or copy `skills/*` into
@@ -115,7 +115,7 @@ conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
 - [`docs/adr/`](docs/adr/) — architecture decision records and their status
 - [`LEDGER.md`](LEDGER.md) — per-skill maturity (draft / used-once / battle-tested)
 - `python3 lint.py` — structural lint of the install, router, and eval surface (the `CHECKERS` tuple in [`lint.py`](lint.py) is the authoritative list); runs in CI on every push/PR
-- `python3 -m unittest discover tests` — the full offline suite: pipeline protocol, eval seams, and the factory tools, all against fixture trees; runs in CI on every push/PR
+- `python3 -m unittest discover tests` — the full offline suite: pipeline protocol, eval seams, and the factory tools, mostly against fixture trees plus pins on the real repo; runs in CI on every push/PR
 - `python3 trigger_eval.py --record` — routing eval: which skill fires for each query in [`evals/routing.json`](evals/routing.json) (needs the `claude` CLI; costs real runs)
 - [`docs/output-evals.md`](docs/output-evals.md) — on-demand output evals grading skill artifacts against expectations
 

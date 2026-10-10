@@ -40,9 +40,10 @@ _Avoid_: bugfix run, hotfix run
 **Harness**:
 The agent runtime a skill runs inside. The skills run on three harnesses:
 **Claude Code** (primary — marketplace plugin, `claude`-CLI evals, LEDGER
-maturity), **oh-my-pi / omp** (ADR-0027), and **Grok** (ADR-0076). Skill
-bodies name no harness. Claude Code and Grok share the `.claude-plugin/`
-manifests; omp has the root `package.json` `pi.skills` entry.
+maturity), **oh-my-pi / omp** (ADR-0027), and **Grok** (ADR-0076). Stage
+and router skill bodies name no harness. Claude Code and Grok share the
+`.claude-plugin/` manifests; omp has the root `package.json` `pi.skills`
+entry.
 _Avoid_: platform, runtime, agent (bare)
 
 **Utility skill**:
@@ -132,6 +133,7 @@ _Avoid_: checkpoint, sign-off, approval step
 
 **Charter**:
 The definition of one agent role: mission, owned stages, entry/exit
-criteria, actions, tool grants, escalation rules. Encoded as a skill plus
-a subagent definition.
+criteria, actions, tool grants, escalation rules. Encoded as a charter
+(`factory/charters/<role>/CHARTER.md`) plus a subagent stub
+(`factory/agents/factory-<role>.md`); the roster is `factory/CHARTERS.md`.
 _Avoid_: persona, job description
