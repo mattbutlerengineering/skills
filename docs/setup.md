@@ -12,11 +12,13 @@ Unattended dispatch is deliberately left off. See the last section.
 
 ## 1. Install the plugin
 
-Both harnesses are covered in the [README](../README.md#install). Either works
-on a bare install — no third-party tools, MCP servers, or other plugins.
+The three harnesses are covered in the [README](../README.md#install). Any of
+them works on a bare install — no third-party tools, MCP servers, or other
+plugins.
 
 - [ ] Plugin installed
-- [ ] `/next` resolves (Claude Code) or `/skill:next` (omp)
+- [ ] `/next` resolves (Claude Code or Grok) or `/skill:next` (omp). On Grok
+      a colliding name is `/idea-to-prod:next`.
 
 ## 2. Verify the skills before touching CI
 
@@ -107,12 +109,12 @@ python3 tools/factory/label_sync.py --apply    # create/update drifted labels
 Never deletes: labels the taxonomy doesn't name are left alone.
 
 `.github/labels.json` is yours to curate, and the one edit to make carefully is
-a **deletion**. The tools name 15 of these labels between them — `assembler`
-reads `wo:ready-for-agent` and `budget-exhausted`, the digest counts the six
-gate labels, each Makefile lifecycle target flips one — and a pruned label
-fails when CI goes to flip it, at dispatch or merge time. Detector J catches
-that offline instead, in `make check`. Adding labels is always safe; a label
-nothing names is never a finding.
+a **deletion**. The tools name 13 of these labels between them — `assembler`
+reads `wo:ready-for-agent`, `budget-exhausted` and the four `type:` labels,
+the three human gates name five `wo:` labels, each Makefile lifecycle target
+flips one — and a pruned label fails when CI goes to flip it, at dispatch or
+merge time. Detector J catches that offline instead, in `make check`.
+Adding labels is always safe; a label nothing names is never a finding.
 
 - [ ] Labels present on the remote
 - [ ] Detector L reports no drift
@@ -140,7 +142,8 @@ software that already shipped.
 
 Unattended dispatch stays off until explicitly opted into:
 
-- `ANTHROPIC_API_KEY` unset → the assembler's agent step skips gracefully;
+- `ANTHROPIC_API_KEY` and `CLAUDE_CODE_OAUTH_TOKEN` both unset → the
+  assembler's agent step skips gracefully (either credential runs it);
   nothing is dispatched and nothing is faked.
 - `wo:ready-for-agent` is inert unless applied by the repo owner — enforced by
   an actor check, not by convention.

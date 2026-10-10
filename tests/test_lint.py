@@ -8,6 +8,7 @@ test seeds the clean tree, breaks one aspect, and asserts the checker's
 exact problem strings through its public interface.
 """
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -89,6 +90,13 @@ def make_clean_tree(root):
          "description": "t — utility skills ("
                         + ", ".join(protocol.UTILITY_SKILLS) + ")"}),
         encoding="utf-8")
+    # check_grok_marketplace holds the marketplace entry to the plugin
+    # name and to a relative source whose tree contains skills/
+    # (ADR-0076). The clean tree's plugin.json name is "t".
+    (plugin_dir / "marketplace.json").write_text(json.dumps(
+        {"name": "skills",
+         "plugins": [{"name": "t", "source": "./"}]}),
+        encoding="utf-8")
 
     (root / "package.json").write_text(json.dumps(
         {"name": "t", "version": "0", "private": True,
@@ -123,8 +131,15 @@ def make_clean_tree(root):
     # check_readme_no_orphans, which reads only that section (see
     # lint.readme_stage_mentions) — without it, the smallest tree would
     # fail the one checker whose whole job is reading that heading.
+    # check_readme_figure holds the README to embedding the skill-map
+    # figure, so the clean README carries the image line above the
+    # section (outside it, with no backtick token, so the orphan scan
+    # never sees it) — and the figure itself names every skill as one
+    # `<text>` element per line, so a test can drop one by string
+    # replacement the way the README fixture's one-slug-per-line form
+    # already allows.
     (root / "README.md").write_text(
-        "# t\n\n## Stages\n\n"
+        "# t\n\n![map](docs/assets/skill-map.svg)\n\n## Stages\n\n"
         + "".join(f"- `{slug}`\n" for slug in ALL_SKILLS),
         encoding="utf-8")
 
@@ -139,6 +154,14 @@ def make_clean_tree(root):
         + "\n### Maintenance-run orientation\n\n"
         + protocol_table(protocol.MAINTENANCE_STAGE_ARTIFACTS),
         encoding="utf-8")
+
+    figure = root / "docs" / "assets" / "skill-map.svg"
+    figure.parent.mkdir(parents=True)
+    figure.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8">\n'
+        + "".join(f'<text x="0" y="0">{slug}</text>\n'
+                  for slug in ALL_SKILLS)
+        + "</svg>\n", encoding="utf-8")
 
     cases = [{"id": f"{slug}-{n}", "kind": "direct",
               "expected": slug, "query": "q"}
@@ -224,6 +247,33 @@ class TestManifest(CheckerTreeTest):
                 problems += checker(self.root)
         self.assertEqual(problems, ["plugin.json is not a JSON object"])
 
+    def test_a_manifest_that_is_not_json_is_one_exact_problem(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "{not json", encoding="utf-8")
+        self.assertEqual(lint.check_manifest(self.root), [
+            "plugin.json is not valid JSON: Expecting property name"
+            " enclosed in double quotes: line 1 column 2 (char 1)"])
+
+    def test_an_empty_manifest_is_one_exact_problem(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_text(
+            "", encoding="utf-8")
+        self.assertEqual(lint.check_manifest(self.root), [
+            "plugin.json is not valid JSON: Expecting value: line 1 column 1"
+            " (char 0)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_manifest_the_process_may_not_read_is_a_problem(self):
+        # check_manifest is CHECKERS[0]: a PermissionError here hid every
+        # other finding in the repo behind a traceback
+        path = self.root / ".claude-plugin" / "plugin.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_manifest(self.root), [
+                "cannot read plugin.json: [Errno 13] Permission denied:"
+                f" '{path}'"])
+        finally:
+            path.chmod(0o644)
+
 
 class TestPiPackage(CheckerTreeTest):
     """The Pi (oh-my-pi) discovery manifest, guarded like the Claude one so
@@ -240,6 +290,25 @@ class TestPiPackage(CheckerTreeTest):
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "package.json is not valid JSON:"))
+
+    def test_an_empty_package_json_is_one_exact_problem(self):
+        (self.root / "package.json").write_text("", encoding="utf-8")
+        self.assertEqual(lint.check_pi_package(self.root), [
+            "package.json is not valid JSON: Expecting value: line 1 column 1"
+            " (char 0)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_package_json_the_process_may_not_read_is_a_problem(self):
+        """Guarded like check_manifest (ADR-0027) — and that has to
+        include the read itself, not only the parse."""
+        path = self.root / "package.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_pi_package(self.root), [
+                "cannot read package.json: [Errno 13] Permission denied:"
+                f" '{path}'"])
+        finally:
+            path.chmod(0o644)
 
 
     def test_a_package_that_is_not_an_object_names_its_shape(self):
@@ -280,6 +349,115 @@ class TestPiPackage(CheckerTreeTest):
             encoding="utf-8")
         self.assertEqual(lint.check_pi_package(self.root),
                          ["package.json pi.skills must include './skills'"])
+
+
+class TestGrokMarketplace(CheckerTreeTest):
+    """Grok installs from the Claude marketplace manifest. The checker
+    pins the entry check_manifest never sees (ADR-0076)."""
+
+    def _write(self, plugins):
+        (self.root / ".claude-plugin" / "marketplace.json").write_text(
+            json.dumps({"name": "skills", "plugins": plugins}),
+            encoding="utf-8")
+
+    def test_missing_marketplace_json(self):
+        (self.root / ".claude-plugin" / "marketplace.json").unlink()
+        self.assertEqual(lint.check_grok_marketplace(self.root),
+                         ["missing .claude-plugin/marketplace.json"])
+
+    def test_invalid_json(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.write_text("{not json", encoding="utf-8")
+        problems = lint.check_grok_marketplace(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "marketplace.json is not valid JSON:"), problems)
+
+    def test_an_empty_marketplace_json_is_one_exact_problem(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.write_text("", encoding="utf-8")
+        self.assertEqual(lint.check_grok_marketplace(self.root), [
+            "marketplace.json is not valid JSON: Expecting value:"
+            " line 1 column 1 (char 0)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_marketplace_json_the_process_may_not_read_is_a_problem(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_grok_marketplace(self.root), [
+                "cannot read marketplace.json: [Errno 13] Permission denied:"
+                f" '{path}'"])
+        finally:
+            path.chmod(0o644)
+
+    def test_a_marketplace_that_is_not_an_object_names_its_shape(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        for shape in ("null", "42", '"text"', '["a"]', "true"):
+            with self.subTest(shape=shape):
+                path.write_text(shape, encoding="utf-8")
+                self.assertEqual(lint.check_grok_marketplace(self.root),
+                                 ["marketplace.json is not a JSON object"])
+
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.write_bytes(
+            '{"name": "caf\u00e9"}'.encode("latin-1"))
+        problems = lint.check_grok_marketplace(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "marketplace.json is not valid JSON:"), problems)
+
+    def test_plugins_must_be_a_list(self):
+        path = self.root / ".claude-plugin" / "marketplace.json"
+        path.write_text(json.dumps({"name": "skills"}), encoding="utf-8")
+        self.assertEqual(lint.check_grok_marketplace(self.root),
+                         ["marketplace.json plugins must be a list"])
+
+    def test_the_plugin_json_name_must_be_listed(self):
+        self._write([{"name": "other", "source": "./"}])
+        self.assertEqual(lint.check_grok_marketplace(self.root),
+                         ["marketplace.json names no plugin 't'"])
+
+    def test_a_missing_plugin_json_is_not_a_second_problem(self):
+        """check_manifest owns a missing plugin.json. With no name to
+        match, a marketplace that still points at skills/ is clean."""
+        (self.root / ".claude-plugin" / "plugin.json").unlink()
+        self.assertEqual(lint.check_grok_marketplace(self.root), [])
+
+    def test_a_git_source_is_not_a_path_in_this_repo(self):
+        self._write([{"name": "t", "source": {
+            "source": "url", "url": "https://example.com/skills.git"}}])
+        self.assertEqual(
+            lint.check_grok_marketplace(self.root),
+            ["marketplace.json plugin source must be a relative path"
+             " inside the repo"])
+
+    def test_an_absolute_source_is_not_inside_the_repo(self):
+        self._write([{"name": "t", "source": "/tmp/skills"}])
+        self.assertEqual(
+            lint.check_grok_marketplace(self.root),
+            ["marketplace.json plugin source must be a relative path"
+             " inside the repo"])
+
+    def test_a_source_that_climbs_out_is_not_inside_the_repo(self):
+        self._write([{"name": "t", "source": "../elsewhere"}])
+        self.assertEqual(
+            lint.check_grok_marketplace(self.root),
+            ["marketplace.json plugin source must be a relative path"
+             " inside the repo"])
+
+    def test_a_source_with_no_skills_directory(self):
+        self._write([{"name": "t", "source": "./docs"}])
+        self.assertEqual(
+            lint.check_grok_marketplace(self.root),
+            ["marketplace.json plugin source './docs'"
+             " has no skills directory"])
+
+    def test_the_object_form_of_a_local_source_is_clean(self):
+        self._write([{"name": "t", "source": {
+            "type": "local", "path": "./"}}])
+        self.assertEqual(lint.check_grok_marketplace(self.root), [])
 
 
 class TestSkills(CheckerTreeTest):
@@ -781,6 +959,126 @@ class TestReadmeNoOrphans(CheckerTreeTest):
         self.assertEqual(lint.check_readme_no_orphans(self.root), [])
 
 
+class TestReadmeFigure(CheckerTreeTest):
+    """The README's first figure is a hand-placed roster
+    (docs/features/readme-skill-map/architecture.md): every skill is a
+    `<text>` element in docs/assets/skill-map.svg, and README.md embeds
+    that file. Same roster as check_readme_skills (ALL_SKILLS plus
+    extra_skills, whole slugs via names_slug) read off the figure's
+    visible text — never its raw bytes, so a slug that survives only in
+    an `id`, a comment or a `<style>` rule is still a missing name."""
+
+    def figure(self):
+        return self.root / "docs" / "assets" / "skill-map.svg"
+
+    def drop(self, slug):
+        path = self.figure()
+        path.write_text(path.read_text(encoding="utf-8")
+                        .replace(f'<text x="0" y="0">{slug}</text>\n', ""),
+                        encoding="utf-8")
+
+    def test_the_clean_fixture_is_clean(self):
+        self.assertEqual(lint.check_readme_figure(self.root), [])
+
+    def test_a_skill_the_figure_never_names_is_reported(self):
+        self.drop("ship")
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'ship'"])
+
+    def test_a_slug_a_reader_cannot_see_is_not_a_name(self):
+        """The visible-text rule: an `id` attribute, an XML comment and a
+        `<style>` rule all carry the slug, and none of them is a label a
+        reader (or a screen reader) can see — so a figure whose box says
+        "Ship" and whose id says `ship` is the rotted figure the checker
+        exists to catch, not a clean one."""
+        self.drop("ship")
+        path = self.figure()
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            "</svg>",
+            '<!-- ship -->\n<style>.ship { fill: red; }</style>\n'
+            '<rect id="ship" x="0" y="0" width="1" height="1"/>\n</svg>'),
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'ship'"])
+
+    def test_a_slug_nested_in_a_longer_one_is_still_required(self):
+        """`architect` sits inside `architecture-diagram` and inside
+        `interactive-architecture-diagram`, both still drawn; a substring
+        test would call the figure complete without it."""
+        self.drop("architect")
+        text = self.figure().read_text(encoding="utf-8")
+        self.assertIn(">architecture-diagram<", text)
+        self.assertIn(">interactive-architecture-diagram<", text)
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'architect'"])
+
+    def test_a_slug_split_across_tspans_is_still_a_name(self):
+        """Tspans are how an SVG label wraps or shifts part of a word;
+        the checker reads the whole text content of the element, so a
+        slug split across one `<text>`'s tspans is not reported."""
+        path = self.figure()
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            '<text x="0" y="0">ship</text>',
+            '<text x="0" y="0"><tspan>sh</tspan><tspan>ip</tspan></text>'),
+            encoding="utf-8")
+        self.assertEqual(lint.check_readme_figure(self.root), [])
+
+    def test_a_discovered_dir_outside_the_taxonomy_is_held_to_it_too(self):
+        rogue = self.root / "skills" / "rogue"
+        rogue.mkdir()
+        (rogue / "SKILL.md").write_text(
+            "---\nname: rogue\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'rogue'"])
+
+    def test_roster_problems_come_first_in_roster_order_then_the_embed(
+            self):
+        self.drop("ship")
+        self.drop("audit")
+        readme = self.root / "README.md"
+        readme.write_text(readme.read_text(encoding="utf-8").replace(
+            "![map](docs/assets/skill-map.svg)\n\n", ""), encoding="utf-8")
+        self.assertEqual(
+            lint.check_readme_figure(self.root),
+            ["docs/assets/skill-map.svg never names skill 'ship'",
+             "docs/assets/skill-map.svg never names skill 'audit'",
+             "README.md never embeds 'docs/assets/skill-map.svg'"])
+
+    def test_a_missing_figure_is_one_problem_not_one_per_skill(self):
+        self.figure().unlink()
+        self.assertEqual(lint.check_readme_figure(self.root),
+                         ["missing docs/assets/skill-map.svg"])
+
+    def test_bytes_that_are_not_utf8_are_a_problem_not_a_crash(self):
+        self.figure().write_bytes(
+            '<svg xmlns="http://www.w3.org/2000/svg">caf\u00e9</svg>'
+            .encode("latin-1"))
+        problems = lint.check_readme_figure(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "cannot read docs/assets/skill-map.svg:"), problems)
+
+    def test_a_figure_that_is_not_well_formed_is_one_problem(self):
+        self.figure().write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg"><text>idea</text>',
+            encoding="utf-8")
+        problems = lint.check_readme_figure(self.root)
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "docs/assets/skill-map.svg is not valid SVG:"), problems)
+
+    def test_missing_readme_yields_no_problem_here(self):
+        # check_readme_skills already reports "missing README.md"; the
+        # embed line can only be judged on a README that exists.
+        (self.root / "README.md").unlink()
+        self.assertEqual(lint.check_readme_figure(self.root), [])
+
+
 class TestPluginSkills(CheckerTreeTest):
     """The plugin description enumerates the utility skills, and it is the
     string a user reads first when deciding whether to install. Nothing
@@ -847,6 +1145,28 @@ class TestPluginSkills(CheckerTreeTest):
     def test_an_unparseable_manifest_is_left_to_check_manifest(self):
         (self.root / ".claude-plugin" / "plugin.json").write_text(
             "{not json", encoding="utf-8")
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+        self.assertEqual(len(lint.check_manifest(self.root)), 1)
+
+    def test_a_non_object_manifest_is_left_to_check_manifest(self):
+        path = self.root / ".claude-plugin" / "plugin.json"
+        for shape in ('["a"]', '"text"'):
+            with self.subTest(shape=shape):
+                path.write_text(shape, encoding="utf-8")
+                self.assertEqual(lint.check_plugin_skills(self.root), [])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_an_unreadable_manifest_is_left_to_check_manifest(self):
+        path = self.root / ".claude-plugin" / "plugin.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_plugin_skills(self.root), [])
+        finally:
+            path.chmod(0o644)
+
+    def test_a_manifest_that_is_not_utf8_is_left_to_check_manifest(self):
+        (self.root / ".claude-plugin" / "plugin.json").write_bytes(
+            b"\xff\xfe")
         self.assertEqual(lint.check_plugin_skills(self.root), [])
         self.assertEqual(len(lint.check_manifest(self.root)), 1)
 
@@ -1247,6 +1567,45 @@ class TestOutputEvals(CheckerTreeTest):
         self.assertTrue(problems[0].startswith(
             "evals/output/idea.json is not valid JSON:"), problems)
 
+    def test_a_record_file_that_is_not_json_is_one_exact_problem(self):
+        (self.root / "evals" / "output" / "idea.json").write_text(
+            "{nope", encoding="utf-8")
+        self.assertEqual(lint.check_output_evals(self.root), [
+            "evals/output/idea.json is not valid JSON: Expecting property"
+            " name enclosed in double quotes: line 1 column 2 (char 1)"])
+
+    def test_a_null_record_file_is_not_a_json_object(self):
+        """A null record file reads eval_schema.validate_output's shape
+        wording: the one problem it gives any top level that is not a
+        JSON object."""
+        (self.root / "evals" / "output" / "idea.json").write_text(
+            "null", encoding="utf-8")
+        self.assertEqual(lint.check_output_evals(self.root),
+                         ["evals/output/idea.json is not a JSON object"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_record_file_the_process_may_not_read_is_a_problem(self):
+        """The glob only says the name is there. A file the walk may not
+        open is one problem for that file, never a PermissionError that
+        takes the rest of the walk — and lint's whole report — with it."""
+        path = self.root / "evals" / "output" / "idea.json"
+        path.chmod(0)
+        try:
+            self.assertEqual(lint.check_output_evals(self.root), [
+                "cannot read evals/output/idea.json: [Errno 13] Permission"
+                f" denied: '{path}'"])
+        finally:
+            path.chmod(0o644)
+
+    def test_a_directory_named_like_a_record_file_is_a_problem(self):
+        # the glob matches names, not kinds: a directory called prd.json
+        # is walked like a file and cannot be read as one
+        path = self.root / "evals" / "output" / "prd.json"
+        path.mkdir()
+        self.assertEqual(lint.check_output_evals(self.root), [
+            "cannot read evals/output/prd.json: [Errno 21] Is a directory:"
+            f" '{path}'"])
+
 
 class TestBacklog(CheckerTreeTest):
     """The seed backlog is strictly opt-in (ADR-0029): the clean tree has
@@ -1280,6 +1639,18 @@ class TestBacklog(CheckerTreeTest):
         self.assertEqual(len(problems), 1)
         self.assertTrue(problems[0].startswith(
             "backlog: docs/backlog.md is unreadable:"))
+
+    def test_an_empty_backlog_yields_no_problems(self):
+        (self.root / "docs" / "backlog.md").write_text("", encoding="utf-8")
+        self.assertEqual(lint.check_backlog(self.root), [])
+
+    def test_a_backlog_that_is_not_utf8_yields_one_problem_string(self):
+        """The backlog is text, so bytes that will not decode are a read
+        failure — this checker's own phrase for one is "is unreadable"."""
+        (self.root / "docs" / "backlog.md").write_bytes(b"\xff\xfe")
+        self.assertEqual(lint.check_backlog(self.root), [
+            "backlog: docs/backlog.md is unreadable: 'utf-8' codec can't"
+            " decode byte 0xff in position 0: invalid start byte"])
 
 
 class TestLedger(CheckerTreeTest):

@@ -130,6 +130,81 @@ class TestSkillFrontmatterProblems(unittest.TestCase):
             ["skills/idea/SKILL.md description exceeds Pi's "
              "1024-char limit"])
 
+    # Bare-scalar rule (PRD-0007): the value read_frontmatter's plain
+    # `key: value` split hands back must be the value a strict YAML
+    # loader would read. Three shapes, one exact string each, in the
+    # fixed order contains-': ', contains-' #', starts-with. Pocock's
+    # v1.3.1 lost six skills to the first shape; this repo had six too.
+
+    def test_description_containing_colon_space(self):
+        self.seed("idea", "---\nname: idea\n"
+                  "description: Read-only: it proposes and hands off\n"
+                  "---\n\nbody\n")
+        self.assertEqual(
+            skill_frontmatter_problems(self.root, "idea"),
+            ["skills/idea/SKILL.md description is not a bare YAML scalar:"
+             " contains ': '"])
+
+    def test_description_containing_space_hash(self):
+        self.seed("idea", "---\nname: idea\n"
+                  "description: Use when closing #12 or #34\n"
+                  "---\n\nbody\n")
+        self.assertEqual(
+            skill_frontmatter_problems(self.root, "idea"),
+            ["skills/idea/SKILL.md description is not a bare YAML scalar:"
+             " contains ' #'"])
+
+    def test_description_with_both_substrings_yields_both_in_order(self):
+        self.seed("idea", "---\nname: idea\n"
+                  "description: Read-only: it never closes #12\n"
+                  "---\n\nbody\n")
+        self.assertEqual(
+            skill_frontmatter_problems(self.root, "idea"),
+            ["skills/idea/SKILL.md description is not a bare YAML scalar:"
+             " contains ': '",
+             "skills/idea/SKILL.md description is not a bare YAML scalar:"
+             " contains ' #'"])
+
+    def test_double_quoted_description_is_rejected(self):
+        # Quoting is not the fix: read_frontmatter is a plain splitter
+        # and does not strip quotes, so the quotes would ship to the
+        # harness as part of the description. The first character is
+        # rendered with !r, so '"' here.
+        self.seed("idea", "---\nname: idea\n"
+                  'description: "Use when the ask is quoted"\n'
+                  "---\n\nbody\n")
+        self.assertEqual(
+            skill_frontmatter_problems(self.root, "idea"),
+            ["skills/idea/SKILL.md description is not a bare YAML scalar:"
+             " starts with '\"'"])
+
+    def test_description_starting_with_other_yaml_indicators(self):
+        cases = (("brack", "[flow] sequence start", "'['"),
+                 ("pipe", "|not a block scalar", "'|'"),
+                 ("squote", "'single quoted'", "\"'\""))
+        for slug, description, rendered in cases:
+            with self.subTest(indicator=description[0]):
+                self.seed(slug, f"---\nname: {slug}\n"
+                          f"description: {description}\n---\n\nbody\n")
+                self.assertEqual(
+                    skill_frontmatter_problems(self.root, slug),
+                    [f"skills/{slug}/SKILL.md description is not a bare"
+                     f" YAML scalar: starts with {rendered}"])
+
+    def test_clean_description_with_bare_colon_and_hash_passes(self):
+        # A colon not followed by a space and a hash not preceded by one
+        # are fine YAML plain scalars; only the two-char forms end one.
+        self.seed("idea", "---\nname: idea\n"
+                  "description: Use on wo:ready-for-agent rows (ADR-0033);"
+                  " see docs/pipeline-protocol.md#gates.\n---\n\nbody\n")
+        self.assertEqual(skill_frontmatter_problems(self.root, "idea"), [])
+
+    def test_missing_description_skips_the_scalar_checks(self):
+        self.seed("idea", "---\nname: idea\n---\n\nbody\n")
+        self.assertEqual(
+            skill_frontmatter_problems(self.root, "idea"),
+            ["skills/idea/SKILL.md frontmatter has no description"])
+
 
 if __name__ == "__main__":
     unittest.main()

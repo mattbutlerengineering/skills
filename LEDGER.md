@@ -36,6 +36,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | audit | draft | — | — |
 | deepen | draft | — | — |
 | automate | draft | — | — |
+| launch-demo | draft | — | — |
 | lean | draft | — | — |
 | polish | draft | — | — |
 

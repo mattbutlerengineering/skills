@@ -25,7 +25,12 @@ pipes, os.killpg), the stance trigger_eval.py has always documented.
 report is the caller half of the problem-string contract — print the
 problems, print the `<label>: N problem(s)` summary with a computed
 count, return the exit code — retyped in ten mains before it moved here
-(ADR-0051).
+(ADR-0051). read_file is the guarded local-file read — unreadable,
+undecodable, unparsable, or the wrong top-level shape, each an
+unlabelled problem string where every reader had typed its own guard,
+and absence left to the caller (ADR-0075). runner takes an optional
+timeout and its run an optional stdin input, so a tool driving a
+recorder or a voice (launch_demo.py) needs no private runner.
 
 gh_runner, the stdout port over runner("gh"), lives beside runner for the
 same reason write_outputs moved here (ADR-0040): it had grown four real
@@ -46,9 +51,11 @@ import time
 from collections import namedtuple
 from pathlib import Path
 
-# A failed or missing binary raises one of these; callers turn that into
-# a label-prefixed problem string instead of a traceback.
-CLI_FAILURES = (subprocess.CalledProcessError, OSError)
+# A failed or missing binary raises one of these, as does one that
+# outlives its runner's timeout; callers turn that into a label-prefixed
+# problem string instead of a traceback.
+CLI_FAILURES = (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+                OSError)
 
 
 def child_env():
@@ -64,7 +71,12 @@ def detail(err):
     """One-line detail for a failed CLI call's problem string: the
     command's own stderr when it ran, else the OS error (e.g. the binary
     not installed)."""
-    stderr = (getattr(err, "stderr", None) or "").strip()
+    stderr = getattr(err, "stderr", None) or ""
+    if isinstance(stderr, bytes):
+        # subprocess.run attaches a timed-out child's output undecoded,
+        # even in text mode.
+        stderr = stderr.decode("utf-8", errors="replace")
+    stderr = stderr.strip()
     return stderr.splitlines()[-1] if stderr else str(err)
 
 
@@ -269,6 +281,62 @@ def read_event(env):
     return event, None
 
 
+def read_file(path, shown, kind):
+    """(value, problem) for one local file — the guarded read every
+    reader of a repo file shares (ADR-0075). kind is what the caller
+    needs back: str (the text), dict (a JSON object) or list (a JSON
+    array). Any other kind is a ValueError at the call, before the file
+    is touched: a slip in the caller, never a failure of the file.
+
+    (None, None) when no regular file is at path: absence is a fact, not
+    an error, and each caller keeps its own meaning for it (a "missing"
+    problem, an empty result, a skip) — read_event's convention.
+    Otherwise exactly one of the pair is None: value is an instance of
+    kind, or problem is one unlabelled string naming the file as
+    `shown`, which the caller prefixes with its own label (ADR-0051):
+
+      cannot read <shown>: <err>        any OSError; bytes that are not
+                                        UTF-8, when kind is str
+      <shown> is not valid JSON: <err>  a parse failure; bytes that are
+                                        not UTF-8, when kind is JSON
+      <shown> is not a JSON object      kind dict, any other top level
+      <shown> is not a JSON array       kind list, any other top level
+
+    Never raises for a local-file failure: the existence check sits
+    inside the guard because Path.is_file raises PermissionError under
+    an unsearchable parent before Python 3.14, and the parse guard takes
+    ValueError and RecursionError, not JSONDecodeError alone, because an
+    integer literal past the interpreter's digit limit and nesting past
+    its recursion limit raise those. A reader whose shape wording or
+    null wording is its own does not adopt: it gets its missing arm by
+    hand (ADR-0075 decision 5)."""
+    if kind not in (str, dict, list):
+        raise ValueError(
+            f"read_file kind must be str, dict or list, not {kind!r}")
+    path = Path(path)
+    try:
+        if not path.is_file():
+            return None, None
+        text = path.read_text(encoding="utf-8")
+    except OSError as err:
+        return None, f"cannot read {shown}: {err}"
+    except UnicodeDecodeError as err:
+        if kind is str:
+            return None, f"cannot read {shown}: {err}"
+        return None, f"{shown} is not valid JSON: {err}"
+    if kind is str:
+        return text, None
+    try:
+        value = json.loads(text)
+    except (ValueError, RecursionError) as err:
+        return None, f"{shown} is not valid JSON: {err}"
+    if kind is dict and not isinstance(value, dict):
+        return None, f"{shown} is not a JSON object"
+    if kind is list and not isinstance(value, list):
+        return None, f"{shown} is not a JSON array"
+    return value, None
+
+
 # The usage counts a result entry may carry; absent fields count zero
 # (the CLI omits cache fields on cache-less runs), present fields must be
 # non-negative integers.
@@ -286,10 +354,15 @@ def read_execution(path):
     (None, error) — the caller (budget_guard record-run) refuses to write
     rather than inventing a ledger row, the same fail-closed direction as
     the ledger itself."""
+    # Hand-written rather than read_file (ADR-0075): an absent file is
+    # an OSError message here, where read_file gives (None, None), and
+    # the log may be an array or one object, so neither JSON kind fits.
     try:
         text = Path(path).read_text(encoding="utf-8")
     except OSError as err:
         return None, f"cannot read execution file {path}: {err}"
+    except UnicodeDecodeError as err:
+        return None, f"execution file {path} is not valid JSON: {err}"
     try:
         log = json.loads(text)
     except json.JSONDecodeError as err:
@@ -320,13 +393,17 @@ def read_execution(path):
     return (tokens, float(cost)), None
 
 
-def runner(binary):
-    """A run(args) callable shelling out to `binary`, returning the
-    CompletedProcess. A failed or missing binary raises CLI_FAILURES —
-    the caller's concern, not this adapter's."""
-    def run(args):
+def runner(binary, timeout=None):
+    """A run(args, input=None) callable shelling out to `binary`,
+    returning the CompletedProcess. A failed or missing binary raises
+    CLI_FAILURES — the caller's concern, not this adapter's — as does
+    one still running after `timeout` seconds (None: wait forever).
+    `input` is the child's stdin text; both defaults leave every
+    earlier caller byte-for-byte unchanged."""
+    def run(args, input=None):
         return subprocess.run([binary, *args], check=True,
-                              capture_output=True, text=True)
+                              capture_output=True, text=True,
+                              timeout=timeout, input=input)
     return run
 
 

@@ -45,14 +45,23 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 # new workflow or a new job cannot land unrecorded.
 EXPECTED = {
     "assembler.yml": {
-        "dispatch": ({"contents": "write", "pull-requests": "write",
-                      "issues": "write", "actions": "write"},
-                     "pushes the agent branch, opens the PR, flips"
-                     " wo:in-progress / wo:failed on the work order's issue,"
-                     " and hands off to the validator with `gh workflow run`"
-                     " (WO-0030) -- GitHub suppresses the pull_request event"
-                     " for a PR the GITHUB_TOKEN opened, so the dispatch is"
-                     " the only way the validator ever runs"),
+        "dispatch": ({"contents": "read", "issues": "write"},
+                     "resolves the order and flips wo:ready-for-agent ->"
+                     " wo:in-progress (the claim) before any agent code runs"),
+        "agent": ({"contents": "read"},
+                  "runs the chartered agent, and nothing else -- the agent"
+                  " executes code it wrote, so its job holds no write grant"
+                  " (ADR-0077: the token is the push boundary, not the tool"
+                  " allowlist)"),
+        "deliver": ({"contents": "write", "pull-requests": "write",
+                     "issues": "write", "actions": "write"},
+                    "from a fresh checkout, pushes the order's branch out of"
+                    " the agent's bundle, opens its PR, commits the spend"
+                    " row, flips wo:failed, and hands off to the validator"
+                    " with `gh workflow run` (WO-0030) -- GitHub suppresses"
+                    " the pull_request event for a PR the GITHUB_TOKEN"
+                    " opened, so the dispatch is the only way the validator"
+                    " ever runs"),
     },
     "charter-replay.yml": {
         "replay": ({"contents": "read"}, "runs `make check` and nothing else"),

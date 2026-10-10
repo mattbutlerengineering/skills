@@ -8,6 +8,7 @@ exact problem strings callers will print.
 """
 import hashlib
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -691,6 +692,53 @@ class TestStandardsDrift(unittest.TestCase):
             self.assertEqual(gates.check_standards_drift(tree.root),
                              ["K: docs/standards.json must be a JSON array"])
 
+    def test_a_string_or_null_committed_index_is_the_same_problem(self):
+        """K's shape wording is its own and covers null too — which is
+        why K keeps its own check rather than asking cli.read_file for a
+        shape."""
+        for text in ('"standards"', "null"):
+            with self.subTest(text=text), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                tree.write("docs/standards.json", text)
+                self.assertEqual(
+                    gates.check_standards_drift(tree.root),
+                    ["K: docs/standards.json must be a JSON array"])
+
+    def test_an_empty_committed_index_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/standards.json", "")
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: docs/standards.json is not valid JSON: Expecting value:"
+                " line 1 column 1 (char 0)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_committed_index_the_process_may_not_read_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = tree.write("docs/standards.json", "[]")
+            path.chmod(0)
+            try:
+                self.assertEqual(gates.check_standards_drift(tree.root), [
+                    "K: cannot read docs/standards.json: [Errno 13]"
+                    f" Permission denied: '{path}'"])
+            finally:
+                path.chmod(0o644)
+
+    def test_a_committed_index_that_is_not_utf8_is_a_problem(self):
+        """A JSON document must be UTF-8 (RFC 8259 §8.1), so bytes that
+        will not decode join the not-valid-JSON problem — where the
+        decode used to escape K's OSError guard and take the whole gate
+        run down with it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/standards.json", "").write_bytes(b"\xff\xfe")
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: docs/standards.json is not valid JSON: 'utf-8' codec"
+                " can't decode byte 0xff in position 0: invalid start"
+                " byte"])
+
     def test_a_malformed_source_adr_bullet_is_propagated(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
@@ -1016,6 +1064,48 @@ class TestScaffoldSync(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
                 "E: factory/manifest.json is not valid JSON:"), problems)
+
+    def test_an_empty_manifest_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/manifest.json", "")
+            self.assertEqual(gates.check_scaffold_sync(tree.root), [
+                "E: factory/manifest.json is not valid JSON: Expecting"
+                " value: line 1 column 1 (char 0)"])
+
+    def test_an_object_with_no_files_map_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/manifest.json", "{}")
+            self.assertEqual(gates.check_scaffold_sync(tree.root),
+                             ["E: factory/manifest.json has no files map"])
+
+    def test_a_manifest_that_is_not_an_object_is_one_problem(self):
+        """A JSON top level is legally any of these and none of them has
+        .get — E asked for the files map anyway and raised
+        AttributeError, so the manifest's own detector was the thing a
+        malformed manifest took down."""
+        for text in ('["x"]', '"x"', "null", "5", "true"):
+            with self.subTest(text=text), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                tree.write("factory/manifest.json", text)
+                self.assertEqual(
+                    gates.check_scaffold_sync(tree.root),
+                    ["E: factory/manifest.json is not a JSON object"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_manifest_the_process_may_not_read_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = tree.write("factory/manifest.json", '{"files": {}}')
+            path.chmod(0)
+            try:
+                self.assertEqual(gates.check_scaffold_sync(tree.root), [
+                    "E: cannot read factory/manifest.json: [Errno 13]"
+                    f" Permission denied: '{path}'"])
+            finally:
+                path.chmod(0o644)
 
 
 class TestManifestFiles(unittest.TestCase):
@@ -1464,6 +1554,65 @@ class TestConfigShape(unittest.TestCase):
                 "F: factory/templates/factory.json is not a JSON object",
                 "F: .github/factory.json wip_cap must be a positive"
                 " integer"])
+
+    def test_no_config_in_either_home_is_silent(self):
+        # an unstamped, payload-less tree has nothing for F to police;
+        # factory_config.load is the one that calls absence a problem
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(gates.check_config_shape(Path(tmp)), [])
+
+    def test_a_config_that_is_not_json_is_one_exact_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", "{nope")
+            self.assertEqual(gates.check_config_shape(tree.root), [
+                "F: factory/templates/factory.json is not valid JSON:"
+                " Expecting property name enclosed in double quotes:"
+                " line 1 column 2 (char 1)"])
+
+    def test_an_empty_config_is_one_exact_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", "")
+            self.assertEqual(gates.check_config_shape(tree.root), [
+                "F: factory/templates/factory.json is not valid JSON:"
+                " Expecting value: line 1 column 1 (char 0)"])
+
+    def test_a_broken_installed_home_is_reported_beside_a_clean_payload(self):
+        """Every home, not the first hit: a clean payload copy does not
+        excuse an installed copy that will not parse."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("factory/templates/factory.json", json.dumps(CONFIG))
+            tree.write(".github/factory.json", "{nope")
+            self.assertEqual(gates.check_config_shape(tree.root), [
+                "F: .github/factory.json is not valid JSON: Expecting"
+                " property name enclosed in double quotes: line 1 column 2"
+                " (char 1)"])
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_config_the_process_may_not_read_is_a_problem_per_home(self):
+        """Each home that exists is read and reported on its own, in
+        F's payload-first order — an unreadable one is a problem string
+        and the walk goes on, where the read used to raise
+        PermissionError out of the gate."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            payload = tree.write("factory/templates/factory.json",
+                                 json.dumps(CONFIG))
+            installed = tree.write(".github/factory.json",
+                                   json.dumps(CONFIG))
+            payload.chmod(0)
+            installed.chmod(0)
+            try:
+                self.assertEqual(gates.check_config_shape(tree.root), [
+                    "F: cannot read factory/templates/factory.json: [Errno"
+                    f" 13] Permission denied: '{payload}'",
+                    "F: cannot read .github/factory.json: [Errno 13]"
+                    f" Permission denied: '{installed}'"])
+            finally:
+                payload.chmod(0o644)
+                installed.chmod(0o644)
 
 
 class TestPrTraceability(unittest.TestCase):
@@ -2468,9 +2617,15 @@ class TestLockstep(unittest.TestCase):
         # transitioned output is the dispatch idempotency verdict — the
         # paid agent step runs only on a true claim (the concurrency
         # group only queues repeat label events, it cannot dedupe them).
+        # ADR-0077 moved the claim and the agent into separate jobs, so
+        # the verdict crosses as the dispatch job's output.
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("make wo-in-progress", text)
-        self.assertIn("steps.claim.outputs.transitioned == 'true'", text)
+        self.assertIn("transitioned: ${{ steps.claim.outputs.transitioned }}",
+                      text)
+        agent = text.split("\n  agent:\n", 1)[1].split("\n  deliver:\n")[0]
+        self.assertIn("if: needs.dispatch.outputs.transitioned == 'true'",
+                      agent)
 
     def test_a_failed_dispatch_flips_the_order_it_claimed(self):
         # ADR-0045: without this step a dying agent run leaves its order on
@@ -2483,7 +2638,10 @@ class TestLockstep(unittest.TestCase):
         self.assertIn("failure()", text)
         failed = text.split("make wo-failed")[0].rsplit("- name:", 1)[1]
         self.assertIn("failure()", failed)
-        self.assertIn("steps.claim.outputs.transitioned == 'true'", failed)
+        # A failed agent JOB is not the deliver job's failure() (ADR-0077
+        # split them), so the flip names it.
+        self.assertIn("needs.agent.result != 'success'", failed)
+        self.assertIn("needs.dispatch.outputs.transitioned == 'true'", failed)
 
     def test_both_makefiles_expose_the_wo_record_target(self):
         self.assertEqual(self.recipes(self.MAKEFILE, "wo-record"),
@@ -2503,8 +2661,8 @@ class TestLockstep(unittest.TestCase):
         self.assertIn("make wo-record", text)
         record = text.split("make wo-record")[0].rsplit("- name:", 1)[1]
         self.assertIn("always()", record)
-        self.assertIn("steps.claim.outputs.transitioned == 'true'", record)
-        self.assertIn("steps.agent.outputs.execution_file != ''", record)
+        self.assertIn("needs.dispatch.outputs.transitioned == 'true'", record)
+        self.assertIn("needs.agent.outputs.execution_file != ''", record)
         self.assertIn("continue-on-error: true", record)
 
     def test_both_makefiles_expose_the_assembler_target(self):
@@ -2760,9 +2918,19 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             "gh workflow run validator.yml -f pr=${{ steps.find.outputs.pr }}",
             # git mutation glue (WO-0031): pushes the spend row `make
             # wo-record` just appended from a fresh origin/main worktree —
-            # the agent step may have left HEAD on its WO branch, and only
-            # the appended row may travel to main
+            # the deliver step fetched the order's branch into this repo,
+            # and only the appended row may travel to main
             'git config user.name "github-actions[bot]"',
+            # the agent job's hand-off packaging (ADR-0077): file glue
+            # with no repo tool in it, deliberately — after the agent step
+            # the workspace (Makefile included) is the agent's, so a make
+            # target here would run agent-edited code
+            'mkdir -p "$HANDOFF"',
+            # the deliver job's one push and PR (ADR-0077): git and gh
+            # mutations, which the compute/mutate boundary keeps in YAML;
+            # the branch comes from `make assembler`, the tested authority
+            'git fetch --no-tags "$HANDOFF/handoff.bundle"'
+            ' "refs/heads/$BRANCH:refs/heads/$BRANCH"',
         ),
     }
 

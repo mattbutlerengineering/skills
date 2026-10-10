@@ -21,6 +21,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -181,6 +182,14 @@ class TestDetail(unittest.TestCase):
     def test_empty_stderr_falls_back_to_the_error(self):
         err = subprocess.CalledProcessError(1, ["git", "push"], stderr="  \n")
         self.assertEqual(cli.detail(err), str(err))
+
+    def test_a_timed_out_childs_bytes_stderr_is_decoded(self):
+        # subprocess.run attaches the child's UNDECODED stderr to a
+        # TimeoutExpired even in text mode, so a hung vhs that wrote a
+        # line would otherwise surface as a bytes repr in the problem.
+        err = subprocess.TimeoutExpired(["vhs"], 600,
+                                        stderr=b"ttyd: not found\n")
+        self.assertEqual(cli.detail(err), "ttyd: not found")
 
 
 class TestFailureVocabulary(unittest.TestCase):
@@ -393,6 +402,21 @@ class TestRunner(unittest.TestCase):
         run = cli.runner("true")
         self.assertEqual(run([]).returncode, 0)
 
+    def test_a_timeout_raises_into_the_vocabulary(self):
+        run = cli.runner("bash", timeout=0.5)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            run(["-c", "sleep 5"])
+        try:
+            run(["-c", "sleep 5"])
+        except cli.CLI_FAILURES:
+            pass
+        else:
+            self.fail("TimeoutExpired is not in CLI_FAILURES")
+
+    def test_stdin_input_reaches_the_child(self):
+        run = cli.runner("cat")
+        self.assertEqual(run([], input="hello\n").stdout, "hello\n")
+
 
 class TestGhRunner(unittest.TestCase):
     def test_the_gh_port_returns_stdout_and_forwards_args(self):
@@ -487,6 +511,17 @@ def pid_alive(pid):
     return state is not None and not state.startswith("Z")
 
 
+# How long a SIGKILLed grandchild gets to be seen dead. The window only
+# has to tell a signalled grandchild from an unsignalled one, and the
+# fakes' grandchild is `sleep 300`, so it is sized well under that and
+# far over any plausible death latency; a pass still returns at the first
+# poll that sees the death. Measured on time.monotonic(), which a
+# wall-clock step cannot shrink. 2 s of time.time() flaked on CI (beads
+# wo-0wu). The test_cli_process_reaping.py and test_charter_replay.py
+# grace loops import this window rather than restate it.
+REAP_GRACE = 30
+
+
 class ReadinessGatedClock:
     """Stands in for cli's `time` module so a harness timeout counts
     from the fake's readiness, not from its spawn.
@@ -573,16 +608,32 @@ class TestHarnessRun(unittest.TestCase):
         return {**cli.child_env(), "PID_FILE": str(self.pid_file)}
 
     def assert_grandchild_reaped(self):
-        deadline = time.time() + 2
-        while time.time() < deadline and not self.pid_file.is_file():
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline and not self.pid_file.is_file():
             time.sleep(0.05)
         self.assertTrue(self.pid_file.is_file(),
                         "fake harness never started")
         pid = int(self.pid_file.read_text())
-        deadline = time.time() + 2
-        while time.time() < deadline and pid_alive(pid):
+        deadline = time.monotonic() + REAP_GRACE
+        while time.monotonic() < deadline and pid_alive(pid):
             time.sleep(0.05)
         self.assertFalse(pid_alive(pid), "grandchild survived harness_run")
+
+    def test_a_grandchild_that_dies_late_is_not_a_survivor(self):
+        """The grace loop's job is to tell a signalled grandchild from an
+        unsignalled one (`sleep 300`), not to time how fast a signalled
+        one dies. On a loaded runner — or across a wall-clock step — a
+        correctly killed grandchild was observed alive past a 2 s window
+        and failed as a survivor (beads wo-0wu). Here a real process is
+        SIGKILLed 2.5 s after the helper starts looking."""
+        victim = subprocess.Popen(["sleep", "300"])
+        self.addCleanup(victim.wait)
+        self.addCleanup(victim.kill)  # LIFO: kill, then collect
+        killer = threading.Timer(2.5, victim.kill)
+        self.addCleanup(killer.cancel)
+        self.pid_file.write_text(str(victim.pid))
+        killer.start()
+        self.assert_grandchild_reaped()
 
     def test_events_stream_decoded_with_junk_lines_skipped(self):
         cmd = [self.script(FAKE_EMITTER)]
@@ -744,6 +795,241 @@ class TestReadEvent(unittest.TestCase):
                 (None, f"GITHUB_EVENT_PATH {path} is not a JSON object"))
 
 
+class TestReadFile(unittest.TestCase):
+    """read_file — the guarded local-file read (ADR-0075), asserted as
+    the exact (value, problem) pair for every kind against real temp
+    files. The readers that adopt it keep testing their own half — the
+    label they prefix and what absence means to them — without each
+    re-proving the failure vocabulary."""
+
+    SHOWN = "docs/thing.json"
+    KINDS = (str, dict, list)
+    NOT_UTF8 = ("'utf-8' codec can't decode byte 0xff in position 0:"
+                " invalid start byte")
+    NOT_JSON = ("Expecting property name enclosed in double quotes:"
+                " line 1 column 2 (char 1)")
+    EMPTY = "Expecting value: line 1 column 1 (char 0)"
+    TOO_MANY_DIGITS = ("Exceeds the limit (4300 digits) for integer string"
+                       " conversion: value has 5000 digits; use"
+                       " sys.set_int_max_str_digits() to increase the limit")
+
+    def read(self, data, kind):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "thing.json"
+            path.write_bytes(data)
+            return cli.read_file(path, self.SHOWN, kind)
+
+    def assert_pairs(self, data, expected):
+        """expected maps each kind to its exact pair; a value must also
+        be the expected TYPE, because True == 1 would let a bool pass
+        for a number."""
+        self.assertEqual(set(expected), set(self.KINDS))
+        for kind, pair in expected.items():
+            with self.subTest(kind=kind.__name__):
+                got = self.read(data, kind)
+                self.assertEqual(got, pair)
+                self.assertIs(type(got[0]), type(pair[0]))
+
+    def test_an_unknown_kind_is_a_value_error_at_the_call(self):
+        """A kind that is not str, dict or list is a slip in the caller,
+        never a failure of the file: it raises whether the file is
+        there or not, and before the path is touched at all — a wrong
+        kind must not pass for a read that found nothing wrong."""
+        class Touched:
+            def __fspath__(self):
+                raise AssertionError("the path was touched")
+
+        must = "read_file kind must be str, dict or list, not "
+        with tempfile.TemporaryDirectory() as tmp:
+            present = Path(tmp) / "thing.json"
+            present.write_text('{"a": 1}', encoding="utf-8")
+            paths = (("present", present),
+                     ("absent", Path(tmp) / "nope.json"),
+                     ("raises if touched", Touched()))
+            for kind, message in ((object, must + "<class 'object'>"),
+                                  ("dict", must + "'dict'"),
+                                  (int, must + "<class 'int'>")):
+                for name, path in paths:
+                    with self.subTest(kind=kind, path=name):
+                        with self.assertRaises(ValueError) as caught:
+                            cli.read_file(path, self.SHOWN, kind)
+                        self.assertEqual(str(caught.exception), message)
+
+    def test_an_absent_file_is_none_none_for_every_kind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for kind in self.KINDS:
+                with self.subTest(kind=kind.__name__):
+                    self.assertEqual(
+                        cli.read_file(Path(tmp) / "nope.json", self.SHOWN,
+                                      kind),
+                        (None, None))
+
+    def test_a_directory_in_its_place_counts_as_absent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "thing.json").mkdir()
+            for kind in self.KINDS:
+                with self.subTest(kind=kind.__name__):
+                    self.assertEqual(
+                        cli.read_file(Path(tmp) / "thing.json", self.SHOWN,
+                                      kind),
+                        (None, None))
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_an_unreadable_file_is_cannot_read_for_every_kind(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "thing.json"
+            path.write_text('{"a": 1}', encoding="utf-8")
+            path.chmod(0)
+            try:
+                for kind in self.KINDS:
+                    with self.subTest(kind=kind.__name__):
+                        self.assertEqual(
+                            cli.read_file(path, self.SHOWN, kind),
+                            (None, f"cannot read {self.SHOWN}: [Errno 13]"
+                                   f" Permission denied: '{path}'"))
+            finally:
+                path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+    def test_bytes_that_are_not_utf8(self):
+        """The ADR-0075 wording rule: a text reader has no grammar to
+        blame, so the bytes are a read failure; a JSON reader's document
+        must be UTF-8 (RFC 8259 §8.1), so they are a defect in it."""
+        not_json = (None, f"{self.SHOWN} is not valid JSON: {self.NOT_UTF8}")
+        self.assert_pairs(b"\xff\xfe", {
+            str: (None, f"cannot read {self.SHOWN}: {self.NOT_UTF8}"),
+            dict: not_json, list: not_json})
+
+    def test_text_that_is_not_json(self):
+        not_json = (None, f"{self.SHOWN} is not valid JSON: {self.NOT_JSON}")
+        self.assert_pairs(b"{nope", {
+            str: ("{nope", None),
+            dict: not_json, list: not_json})
+
+    def test_an_empty_file(self):
+        not_json = (None, f"{self.SHOWN} is not valid JSON: {self.EMPTY}")
+        self.assert_pairs(b"", {
+            str: ("", None),
+            dict: not_json, list: not_json})
+
+    def test_an_integer_literal_past_the_digit_limit(self):
+        """json.loads raises a plain ValueError, not a JSONDecodeError,
+        for an integer literal longer than the interpreter's digit
+        limit. It is a parse failure like any other. The text embeds
+        the default limit, so PYTHONINTMAXSTRDIGITS must be unset."""
+        not_json = (None, f"{self.SHOWN} is not valid JSON:"
+                          f" {self.TOO_MANY_DIGITS}")
+        self.assert_pairs(b"1" * 5000, {
+            str: ("1" * 5000, None),
+            dict: not_json, list: not_json})
+
+    def test_arrays_nested_past_the_recursion_limit(self):
+        """json.loads raises RecursionError for nesting it cannot
+        follow. Only the prefix is pinned: the rest is the interpreter's
+        and differs by version (a recursion depth on 3.12, the C stack
+        from 3.14 on, which is why the document is a million arrays
+        deep). The last read pins that the interpreter is usable
+        afterwards."""
+        depth = 1_000_000
+        data = b"[" * depth + b"]" * depth
+        for kind in (dict, list):
+            with self.subTest(kind=kind.__name__):
+                value, problem = self.read(data, kind)
+                self.assertIsNone(value)
+                self.assertTrue(problem.startswith(
+                    f"{self.SHOWN} is not valid JSON: "), problem)
+        text, problem = self.read(data, str)
+        self.assertIsNone(problem)
+        self.assertEqual(text, data.decode("ascii"))
+        self.assertEqual(self.read(b'{"a": 1}', dict), ({"a": 1}, None))
+
+    def test_a_json_object(self):
+        self.assert_pairs(b'{"a": 1}', {
+            str: ('{"a": 1}', None),
+            dict: ({"a": 1}, None),
+            list: (None, f"{self.SHOWN} is not a JSON array")})
+
+    def test_a_json_array(self):
+        self.assert_pairs(b'["a"]', {
+            str: ('["a"]', None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (["a"], None)})
+
+    def test_a_json_string(self):
+        self.assert_pairs(b'"a"', {
+            str: ('"a"', None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array")})
+
+    def test_a_json_null(self):
+        self.assert_pairs(b"null", {
+            str: ("null", None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array")})
+
+    def test_a_json_number(self):
+        self.assert_pairs(b"5", {
+            str: ("5", None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array")})
+
+    def test_json_true(self):
+        self.assert_pairs(b"true", {
+            str: ("true", None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array")})
+
+    def test_json_false(self):
+        self.assert_pairs(b"false", {
+            str: ("false", None),
+            dict: (None, f"{self.SHOWN} is not a JSON object"),
+            list: (None, f"{self.SHOWN} is not a JSON array")})
+
+    def test_every_non_object_top_level_is_one_problem_under_dict(self):
+        """The object rule both config readers shared before it moved
+        here (factory_config.object_problems' cells): every JSON top
+        level that is not an object is the same one problem."""
+        for value in (None, [], ["a"], "factory", 5, 0.5, True, False):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self.read(json.dumps(value).encode("utf-8"), dict),
+                    (None, f"{self.SHOWN} is not a JSON object"))
+
+    def test_shown_is_echoed_verbatim(self):
+        """The problem names the file as the caller's `shown`, never as
+        the path it read — and a Path formats as its own text."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "thing.json"
+            path.write_text("[]", encoding="utf-8")
+            for shown in ("any name at all", Path("docs") / "thing.json"):
+                with self.subTest(shown=shown):
+                    self.assertEqual(
+                        cli.read_file(path, shown, dict),
+                        (None, f"{shown} is not a JSON object"))
+            self.assertEqual(
+                cli.read_file(str(path), Path("docs") / "thing.json", dict),
+                (None, "docs/thing.json is not a JSON object"))
+
+    @unittest.skipIf(os.geteuid() == 0, "root searches a mode-000 directory")
+    def test_an_unsearchable_parent_never_raises(self):
+        """Path.is_file raises PermissionError under an unsearchable
+        parent before Python 3.14 and answers False from 3.14 on, so the
+        outcome is a problem on one and absence on the other. Only the
+        promise is pinned: nothing raises, and no value comes back."""
+        with tempfile.TemporaryDirectory() as tmp:
+            parent = Path(tmp) / "locked"
+            parent.mkdir()
+            (parent / "thing.json").write_text('{"a": 1}', encoding="utf-8")
+            parent.chmod(0)
+            try:
+                for kind in self.KINDS:
+                    with self.subTest(kind=kind.__name__):
+                        value, _ = cli.read_file(
+                            parent / "thing.json", self.SHOWN, kind)
+                        self.assertIsNone(value)
+            finally:
+                parent.chmod(stat.S_IRWXU)
+
+
 class TestReadExecution(unittest.TestCase):
     """read_execution — the claude-code-action execution file's (tokens,
     cost), issue #222's harness-side spend record. Every shape it cannot
@@ -788,6 +1074,59 @@ class TestReadExecution(unittest.TestCase):
             self.assertIsNone(spend)
             self.assertTrue(error.startswith(
                 f"execution file {path} is not valid JSON:"), error)
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_file_the_process_may_not_read_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, [self.RESULT])
+            os.chmod(path, 0)
+            try:
+                self.assertEqual(cli.read_execution(path), (
+                    None, f"cannot read execution file {path}: [Errno 13]"
+                    f" Permission denied: '{path}'"))
+            finally:
+                os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+    def test_a_directory_in_its_place_is_an_error(self):
+        # not absence: the caller named a path, and what is there cannot
+        # be read as a file — the OS's own message says so
+        with tempfile.TemporaryDirectory() as tmp:
+            path = str(Path(tmp) / "execution.json")
+            os.mkdir(path)
+            self.assertEqual(cli.read_execution(path), (
+                None, f"cannot read execution file {path}: [Errno 21] Is a"
+                f" directory: '{path}'"))
+
+    def test_an_empty_file_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "execution.json"
+            path.write_text("", encoding="utf-8")
+            self.assertEqual(cli.read_execution(str(path)), (
+                None, f"execution file {path} is not valid JSON: Expecting"
+                " value: line 1 column 1 (char 0)"))
+
+    def test_bytes_that_are_not_utf8_are_an_error(self):
+        """The execution file is one JSON document, and JSON must be
+        UTF-8 (RFC 8259 §8.1): bytes that will not decode are the same
+        refusal as text that will not parse. The decode used to escape
+        the OSError guard, so record-run died instead of refusing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "execution.json"
+            path.write_bytes(b"\xff\xfe")
+            self.assertEqual(cli.read_execution(str(path)), (
+                None, f"execution file {path} is not valid JSON: 'utf-8'"
+                " codec can't decode byte 0xff in position 0: invalid start"
+                " byte"))
+
+    def test_a_null_log_has_no_result_entry(self):
+        """null parses, so it is a shape this cannot account for rather
+        than a read failure: no entry, no spend, the same refusal as a
+        log that simply lacks its result."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, None)
+            self.assertEqual(
+                cli.read_execution(path),
+                (None, f"execution file {path} has no result entry"))
 
     def test_a_log_with_no_result_entry_is_an_error(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,6 +1,6 @@
 ---
 name: pipeline-board
-description: Generate the pipeline board — one self-contained theme-aware .svg placing every active run in the current repo on its current pipeline stage: swimlane rows per run, stage columns, done/current/ahead/skipped marks, Implement progress counts, in the family's light editorial style with a dark variant. Use when the user wants to see which tasks or runs are on which step, visualize pipeline progress across runs, or get oriented at a glance without running commands. Placement facts come from the shipped board.py tool, never re-derived. Not the process-dashboard console (a live server) and not a stage skill — directly invoked, owns no run artifact, changes nothing.
+description: Generate the pipeline board — one self-contained theme-aware .svg placing every active run in the current repo on its current pipeline stage; swimlane rows per run, stage columns, done/current/ahead/skipped marks, Implement progress counts, in the family's light editorial style with a dark variant. Use when the user wants to see which tasks or runs are on which step, visualize pipeline progress across runs, or get oriented at a glance without running commands. Placement facts come from the shipped board.py tool, never re-derived. Not the process-dashboard console (a live server) and not a stage skill — directly invoked, owns no run artifact, changes nothing.
 ---
 
 # Pipeline Board

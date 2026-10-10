@@ -14,6 +14,7 @@ from gates import (_clean_repo_fixture, _evidence_honesty_defect_fixture,
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              PRD_TOKEN, ROW, WO_TOKEN, breakdown_files,
                              mirror_map, parse_run, repo_root, row_done,
+                             row_blockers, row_unreadable_blockers,
                              row_work_order, run_dirs, sanitize)
 
 
@@ -80,6 +81,44 @@ class TestRowGrammar(unittest.TestCase):
             with self.subTest(line=line, expect=False):
                 self.assertFalse(ROW.match(line))
                 self.assertFalse(protocol._CHECKBOX.search(line))
+
+
+class TestRowUnreadableBlockers(unittest.TestCase):
+    """row_blockers reads only WO tokens, so a blocked-by clause that
+    names a title or a mistyped id used to read as "no blockers", and the
+    planner could dispatch the row before its dependency (beads wo-o3l).
+    The seam now names what it could not read, so a caller can refuse to
+    guess."""
+
+    def line(self, clause):
+        return (f"- [ ] **WO-0002** thing — size:S, blocked by: {clause}"
+                " (PRD-0001 §2) (tracker: #7)")
+
+    def test_work_order_lists_and_nothing_read_cleanly(self):
+        for clause in ("WO-0001", "WO-0001, WO-0003", "WO-0001 and WO-0003",
+                       "WO-0001; WO-0003", "—", "-", ""):
+            with self.subTest(clause=clause):
+                self.assertIsNone(row_unreadable_blockers(self.line(clause)))
+
+    def test_a_title_is_unreadable(self):
+        line = self.line("Export API")
+        self.assertEqual(row_unreadable_blockers(line), "Export API")
+        self.assertEqual(row_blockers(line), [])
+
+    def test_a_mistyped_id_is_unreadable(self):
+        self.assertEqual(row_unreadable_blockers(self.line("WO-001")),
+                         "WO-001")
+
+    def test_the_readable_half_of_a_mixed_clause_still_counts(self):
+        line = self.line("WO-0001, Export API")
+        self.assertEqual(row_unreadable_blockers(line), "Export API")
+        self.assertEqual(row_blockers(line), ["WO-0001"])
+
+    def test_no_clause_and_non_rows_are_not_its_business(self):
+        self.assertIsNone(row_unreadable_blockers(
+            "- [ ] **WO-0002** thing (PRD-0001 §2)"))
+        self.assertIsNone(row_unreadable_blockers(
+            "  - Accept: blocked by: Export API"))
 
 
 class TestRowDone(unittest.TestCase):

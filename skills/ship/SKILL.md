@@ -27,13 +27,26 @@ branch.
      environment.
    - Migrations/data changes have a tested forward path.
    - The rollback plan exists and is concrete: the actual commands or steps
-     to undo this release, not "revert if needed".
+     to undo this release, not "revert if needed". Beside the steps it
+     records the door (one-way or two-way) and the blast radius in the
+     words of the protocol's Pull request body section, so `release.md`
+     and the PR body make the same call.
 
-4. **Release.** Execute the project's release mechanism step by step,
+4. **Launch brief.** If `docs/launch-demo.json` exists in the repo and
+   its `when` field is `ship`, load the `launch-demo` skill through the
+   harness's skill-loading mechanism (a skill tool where one exists,
+   otherwise a read of the skill file), run it for this run, commit what
+   it wrote on the branch, and add one numbered Release-log entry
+   quoting the tool's reason line(s) and its verdict verbatim. With no
+   config file, or any other `when`, do nothing and write nothing. The
+   hook never blocks a release: a COPY-ONLY verdict and a problem exit
+   are each one log line, and the release proceeds.
+
+5. **Release.** Execute the project's release mechanism step by step,
    recording each command/action and its result as it happens. Version and
    tag according to the project's convention.
 
-5. **Post-release.** Check the shipped thing actually works where users get
+6. **Post-release.** Check the shipped thing actually works where users get
    it (smoke check the deployed surface, install the published package).
    Record the evidence.
    - A maintenance run seeded from a tracker intake issue (`intake:` in
@@ -42,10 +55,10 @@ branch.
      "Closed" on the tracker means fixed in a release, not "a run
      started" (the protocol's tracker-mirror section).
 
-6. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
+7. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `release.md` with protocol frontmatter.
 
-7. **Hand off.** Next stage is Operate.
+8. **Hand off.** Next stage is Operate.
 
 ## Rules
 

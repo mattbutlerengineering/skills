@@ -47,7 +47,7 @@ the canonical vocabulary.
 | [0024](0024-eval-schema-charter.md) | eval_schema's charter covers all eval knowledge, not one file's schema | accepted |
 | [0025](0025-maintenance-run-scale.md) | A third run scale: the maintenance run | accepted |
 | [0026](0026-tracker-mirror-one-way.md) | The issue-tracker bridge is an opt-in one-way mirror | accepted |
-| [0027](0027-oh-my-pi-second-harness.md) | oh-my-pi is a supported second harness (Claude primary) | accepted |
+| [0027](0027-oh-my-pi-second-harness.md) | oh-my-pi is a supported second harness (Claude primary) | amended by ADR-0076 |
 | [0028](0028-brownfield-adoption-onramp.md) | Brownfield adoption on-ramp (adopt/onboard entry) | provisional |
 | [0029](0029-backlog-seed-inbox.md) | A derived, advisory backlog (seed inbox) | accepted |
 | [0030](0030-incident-fastlane-and-tracker-intake.md) | Incident fast lane and tracker intake | accepted (Decision 2; Decision 1 remains provisional) |
@@ -95,3 +95,6 @@ the canonical vocabulary.
 | [0072](0072-prd-coverage-check.md) | Bidirectional PRD-requirement <-> work-item coverage check | accepted |
 | [0073](0073-standards-index-seam-and-detector-letters-k-m.md) | Standards index as a seam module; detector letters K and M | accepted |
 | [0074](0074-a-gate-stay-ends-at-its-pass-label.md) | A gate stay ends at its pass label | accepted |
+| [0075](0075-the-guarded-file-read-joins-the-cli-seam.md) | The guarded local-file read joins the cli seam | provisional |
+| [0076](0076-grok-supported-harness.md) | Grok is a supported harness (Claude primary) | accepted |
+| [0077](0077-the-dispatched-agent-holds-no-write-credential.md) | The dispatched agent holds no write credential | provisional |

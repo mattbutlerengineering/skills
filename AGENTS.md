@@ -5,13 +5,14 @@ state: each stage skill reads/writes run artifacts (product runs at the
 target repo's `docs/` root, feature runs under `docs/features/<slug>/`),
 and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
-## Verify (CI runs both on every push/PR)
+## Verify (CI runs all three on every push/PR)
 
 - `python3 -m unittest discover tests`
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
 - `python3 gates.py && python3 gates.py --selftest` — factory drift
-  detectors (A–I; B skips locally without a PR event payload, but the
-  selftest exercises it), output matching `gates: 0 problem(s)`
+  detectors (roster in `gates.py`'s module docstring; B skips locally
+  without a PR event payload, but the selftest exercises it), output
+  matching `gates: 0 problem(s)`
 
 On demand only (real model runs, costs money, never CI; both need the
 `claude` CLI):
@@ -20,7 +21,22 @@ On demand only (real model runs, costs money, never CI; both need the
 - `python3 charter_replay.py` — charter regression suite: golden fixture
   work orders replayed against the role charters. Its scoring seam is pure
   and injected, so CI covers degradation detection offline with recorded
-  transcripts; only the live replay costs money.
+  transcripts; only the live replay costs money. `--control` also replays
+  each case with its charter's `## Must never` section deleted and fails
+  any case whose stripped run never fires a forbidden pattern (a trap the
+  model never takes guards nothing); it doubles the cost.
+
+Also on demand, but free and needing nothing installed — a review
+pre-pass, deliberately **not** a gate:
+
+- `python3 one_owner.py` — which facts this repo's own Python modules
+  state twice (the same value in two modules, or two functions reading
+  the same payload keys), as `one-owner:` problem strings. It is outside
+  `make check` and outside every workflow, so a finding never colours
+  main red — it is a question for a human. A deliberate second owner is
+  recorded with a `# one-owner:` marker at the definition it excuses
+  (ADR-0061), and the pass re-derives that carve-out in both directions
+  on every run.
 
 ## Hard conventions
 
@@ -32,10 +48,19 @@ On demand only (real model runs, costs money, never CI; both need the
   eval-set shape/kinds/validation, output-eval record shape, results
   naming grammar), and the four factory seams (ADR-0037, ADR-0039,
   ADR-0040 — `knowledge_plane.py` typed-ID grammar + run walk, `cli.py`
-  external-CLI + harness-IO conventions, `factory_config.py` factory.json
-  reader/resolvers, `cost_ledger.py` cost-ledger shape). A new shared module needs multiple
-  real callers AND observed divergence between their copies — anticipated
-  reuse doesn't qualify.
+  external-CLI + harness-IO conventions and the guarded local-file read
+  (`read_file`, ADR-0075), `factory_config.py` factory.json
+  reader/resolvers, `cost_ledger.py` cost-ledger shape), plus
+  `human_gates.py` (ADR-0056 — what a gate is: its ledger name, its
+  queue and passed labels, its digest heading, the label-event walk, and
+  the stay partition the digest and the miner divide between them) and
+  `plane_drift.py` (ADR-0060 — the ADR-0032 cross-plane drift rule the
+  reconcile sweep files and the dashboard renders; `absent_is_drift` is
+  the caller's claim about its own listing). A new shared module needs
+  multiple real callers AND observed divergence between their copies —
+  anticipated reuse doesn't qualify. It is mirrored into the payload iff
+  a payload tool imports it: `plane_drift.py` is root-only because
+  neither of its callers ships (ADR-0060).
 - **Three skill kinds**: stage skills (own a run artifact, routed to by
   `next`), the `next` router, and utility skills (ADR-0023 —
   directly-invoked, own no artifact, never routed to; `protocol.py`
@@ -73,7 +98,9 @@ On demand only (real model runs, costs money, never CI; both need the
 - `docs/factory/retro-reflect-routine.md`,
   `docs/factory/queue-groomer-routine.md`,
   `docs/factory/doc-gardener-routine.md` — the weekly roster routines'
-  protocols (ADR-0044's pattern); triggers not yet created
+  protocols (ADR-0044's pattern); only the queue groomer's trigger
+  exists (created 2026-09-29 as the pilot), and the retro/reflect and
+  doc-gardener triggers are deferred by owner decision
 
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->

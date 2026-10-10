@@ -14,50 +14,23 @@ import json
 import re
 import sys
 import textwrap
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import eval_schema
 import protocol
-from cli import report
+from cli import read_file, report
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
                       TEMPLATED_STAGES, UTILITY_SKILLS)
 
 
-def object_problems(data, label):
-    """[] when `data` is a JSON object, else the one problem naming its
-    shape.
-
-    Both manifest readers open with this. A JSON document's top level is
-    legally an array, string, number, boolean or null, and json.loads
-    hands every one of them back untouched — so dict-ness is the one
-    thing a reader that then calls `.get` cannot assume.
-    check_pi_package already applies the idiom one level down, to `pi`;
-    only the top level was taken on trust, in both readers, because the
-    second was written to match the first.
-
-    Reported alone, never beside derived complaints: on a string
-    `data.get("keywords")` cannot even be asked, and a reader that
-    guessed past the shape would describe its own confusion instead of
-    the file. Both readers are early entries in CHECKERS and lint.main
-    does not catch, so the alternative to a problem string here is not a
-    thinner report — it is no report at all.
-    """
-    if isinstance(data, dict):
-        return []
-    return [f"{label} is not a JSON object"]
-
-
 def check_manifest(root):
-    path = root / ".claude-plugin" / "plugin.json"
-    if not path.is_file():
+    data, problem = read_file(root / ".claude-plugin" / "plugin.json",
+                              "plugin.json", dict)
+    if problem:
+        return [problem]
+    if data is None:
         return ["missing .claude-plugin/plugin.json"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as err:
-        return [f"plugin.json is not valid JSON: {err}"]
-    shape = object_problems(data, "plugin.json")
-    if shape:
-        return shape
     return [f"plugin.json missing field: {field}"
             for field in ("name", "description", "version")
             if not data.get(field)]
@@ -87,18 +60,14 @@ def check_plugin_skills(root):
     exists to catch. names_slug is the one owner of that rule; this
     checker no longer retypes it.
 
-    A missing or unparseable manifest returns nothing: check_manifest
-    already reports both, and this checker reporting them too would give
-    one broken file two problem strings.
+    A missing, unreadable, unparseable or non-object manifest returns
+    nothing — read_file's problem is discarded on purpose: check_manifest
+    already reports it, and this checker reporting it too would give one
+    broken file two problem strings.
     """
-    path = root / ".claude-plugin" / "plugin.json"
-    if not path.is_file():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return []
-    if not isinstance(data, dict):
+    data, _ = read_file(root / ".claude-plugin" / "plugin.json",
+                        "plugin.json", dict)
+    if data is None:
         return []
     text = data.get("description") or ""
     return [f"plugin.json's description never names utility skill {slug!r}"
@@ -110,16 +79,11 @@ def check_pi_package(root):
     the Claude plugin manifest (ADR-0027): omp finds the skills through a
     `package.json` `pi.skills` entry. Guarded like check_manifest so the
     dual-target packaging can't silently drift."""
-    path = root / "package.json"
-    if not path.is_file():
+    data, problem = read_file(root / "package.json", "package.json", dict)
+    if problem:
+        return [problem]
+    if data is None:
         return ["missing package.json"]
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as err:
-        return [f"package.json is not valid JSON: {err}"]
-    shape = object_problems(data, "package.json")
-    if shape:
-        return shape
     problems = []
     if data.get("private") is not True:
         problems.append("package.json must set private: true")
@@ -130,6 +94,82 @@ def check_pi_package(root):
     skills = pi.get("skills") if isinstance(pi, dict) else None
     if not isinstance(skills, list) or "./skills" not in skills:
         problems.append("package.json pi.skills must include './skills'")
+    return problems
+
+
+def _local_marketplace_source(source):
+    """The relative path a marketplace plugin source names, or None.
+
+    Grok accepts a plain string or {"type": "local", "path": "..."}
+    (ADR-0076). A git URL source, an absolute path, and a path that
+    climbs out of the repo are not a path in this package."""
+    if isinstance(source, str):
+        raw = source
+    elif isinstance(source, dict) and source.get("type") == "local" \
+            and isinstance(source.get("path"), str):
+        raw = source["path"]
+    else:
+        return None
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        return None
+    return raw
+
+
+def check_grok_marketplace(root):
+    """Grok installs this repo from the Claude marketplace manifest
+    (ADR-0076). There is no second copy: Grok reads `.claude-plugin/`
+    itself. This pins the shape `check_manifest` does not see — the
+    plugin entry's name matches plugin.json, and its source is a
+    relative path inside the repo whose tree contains `skills/`.
+
+    A missing or unreadable plugin.json contributes nothing here.
+    check_manifest already reports that file; a name this checker
+    cannot read is not a second problem about the same break.
+    """
+    data, problem = read_file(root / ".claude-plugin" / "marketplace.json",
+                              "marketplace.json", dict)
+    if problem:
+        return [problem]
+    if data is None:
+        return ["missing .claude-plugin/marketplace.json"]
+    plugins = data.get("plugins")
+    if not isinstance(plugins, list):
+        return ["marketplace.json plugins must be a list"]
+    manifest, manifest_problem = read_file(
+        root / ".claude-plugin" / "plugin.json", "plugin.json", dict)
+    plugin_name = None
+    if manifest is not None and manifest_problem is None:
+        plugin_name = manifest.get("name") or None
+    matches = [plugin for plugin in plugins
+               if isinstance(plugin, dict)
+               and (plugin_name is None or plugin.get("name") == plugin_name)]
+    if not matches:
+        if plugin_name:
+            return [f"marketplace.json names no plugin {plugin_name!r}"]
+        return ["marketplace.json names no plugin"]
+    problems = []
+    for plugin in matches:
+        source = _local_marketplace_source(plugin.get("source"))
+        if source is None:
+            problems.append(
+                "marketplace.json plugin source must be a relative path"
+                " inside the repo")
+            continue
+        skills = (root / source / "skills").resolve()
+        try:
+            skills.relative_to(root.resolve())
+        except ValueError:
+            problems.append(
+                "marketplace.json plugin source must be a relative path"
+                " inside the repo")
+            continue
+        if not skills.is_dir():
+            problems.append(
+                f"marketplace.json plugin source {source!r}"
+                " has no skills directory")
     return problems
 
 
@@ -604,16 +644,22 @@ def check_readme_skills(root):
 
 
 # The README's `## Stages` heading through the next `## ` heading (or end
-# of file): the table of stage skills, plus the prose immediately below it
-# that introduces each utility skill one by one, by slug (ADR-0023 —
-# utility skills have no table row of their own, so that paragraph is
-# their only mention). Together they are the one part of README.md whose
-# entire job is enumerating what the plugin currently ships — the same
-# role LEDGER.md's table plays for check_ledger_no_orphans, just split
-# across a table and the paragraph the same lead-in sentence introduces.
+# of file): the table of stage skills, a short lead-in, then the table of
+# utility skills (ADR-0023 — one row per slug since the readme-skill-map
+# run; before it a prose paragraph introduced them one by one, and that
+# paragraph was their only mention). Together they are the one part of
+# README.md whose entire job is enumerating what the plugin currently
+# ships — the same role LEDGER.md's table plays for
+# check_ledger_no_orphans, just split across two tables under one heading.
 STAGES_HEADING = "## Stages"
 STAGES_SECTION = re.compile(
     rf"^{re.escape(STAGES_HEADING)}\n(.*?)(?=^## |\Z)", re.M | re.S)
+
+# The README's first figure — the other README structural fact lint owns
+# (docs/features/readme-skill-map/architecture.md): a committed SVG whose
+# visible text is a hand-placed copy of the roster, so check_readme_figure
+# holds it to the same taxonomy check_readme_skills holds the prose to.
+README_FIGURE = "docs/assets/skill-map.svg"
 
 # A slug-shaped backtick token — same character class names_slug and
 # extra_skills use. A filename (`idea.md`) or a doc path
@@ -632,11 +678,10 @@ def readme_stage_mentions(text):
     skill claim anywhere in the document (confirmed against the current,
     correct file; see
     docs/fixes/nothing-notices-a-dropped-readme-mention/defect.md).
-    Inside the Stages section there is no such exception today: the
-    table's first cell is always a skill slug, and the paragraph right
-    below it exists to introduce utility skills one by one, by slug,
-    because they have no row of their own — every token found there is a
-    skill mention by that section's own, single purpose.
+    Inside the Stages section there is no such exception today: both
+    tables' first cells are skill slugs, and the lead-in between them
+    backticks nothing — every token found there is a skill mention by
+    that section's own, single purpose.
     """
     match = STAGES_SECTION.search(text)
     if not match:
@@ -669,8 +714,9 @@ def check_readme_no_orphans(root):
     `## Stages` (one that does not name a skill) would read as a false
     orphan here. That risk is accepted in exchange for catching a retired
     *utility* skill's stale prose mention, which is the case issue #502
-    was actually raised about and a table-only reading would silently
-    miss — utility skills have no table row to lose.
+    was actually raised about and a table-only reading would have
+    silently missed — at the time utility skills had no table row to
+    lose, only a paragraph, and the lead-in is still prose.
 
     A missing or renamed `## Stages` heading is its own problem, not a
     silent []: check_readme_skills's forward direction never depended on
@@ -688,6 +734,50 @@ def check_readme_no_orphans(root):
     return [f"README.md's {STAGES_HEADING!r} section names {slug!r}, "
             "which the taxonomy no longer registers"
             for slug in sorted(mentions - known)]
+
+
+def check_readme_figure(root):
+    """Every skill in the taxonomy is named in README.md's first figure,
+    and README.md still embeds that figure. The figure is a committed
+    SVG (README_FIGURE) hand-placed by a person, so it is a second copy
+    of the roster that nothing else would notice drifting — the way
+    plugin.json's utility list once did (check_plugin_skills). Same
+    roster as check_readme_skills, same two functions: ALL_SKILLS plus
+    extra_skills, whole slugs through names_slug, no list of its own.
+
+    Read off the figure's visible text, never its raw bytes: the joined
+    content of every `<text>` element (tspans included — a label that
+    wraps is still one label), elements separated so no two fuse into a
+    token. An `id` attribute, a comment or a `<style>` rule that carries
+    a slug is not a name a reader can see, and a box whose label says
+    "Ship" while its id says `ship` is exactly the rotted figure this
+    exists to catch.
+
+    One string and an early return for a figure that is missing,
+    unreadable or not well-formed XML, so a broken file never fans out
+    into one line per skill. A missing or unreadable README.md is left
+    to check_readme_skills, as check_readme_no_orphans leaves it; the
+    embed line can only be judged on a README that reads.
+    """
+    text, problem = read_file(root / README_FIGURE, README_FIGURE, str)
+    if problem:
+        return [problem]
+    if text is None:
+        return [f"missing {README_FIGURE}"]
+    try:
+        tree = ET.fromstring(text)
+    except ET.ParseError as err:
+        return [f"{README_FIGURE} is not valid SVG: {err}"]
+    visible = " ".join("".join(element.itertext())
+                       for element in tree.iter()
+                       if element.tag.rpartition("}")[2] == "text")
+    problems = [f"{README_FIGURE} never names skill {slug!r}"
+                for slug in ALL_SKILLS + extra_skills(root)
+                if not names_slug(visible, slug)]
+    readme, _ = read_file(root / "README.md", "README.md", str)
+    if readme is not None and README_FIGURE not in readme:
+        problems.append(f"README.md never embeds {README_FIGURE!r}")
+    return problems
 
 
 def check_protocol(root):
@@ -805,8 +895,13 @@ def check_output_evals(root):
     def problems_for(path):
         slug = path.stem
         label = f"evals/output/{path.name}"
+        # Hand-written rather than cli.read_file (ADR-0075): the shape
+        # check is validate_output's, reported beside the stem line, and
+        # a directory the glob matched is "cannot read", not absent.
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as err:
+            return [f"cannot read {label}: {err}"]
         except (json.JSONDecodeError, UnicodeDecodeError) as err:
             return [f"{label} is not valid JSON: {err}"]
         return (
@@ -906,9 +1001,11 @@ def check_backlog(root):
     path = root / "docs" / "backlog.md"
     if not path.is_file():
         return []
+    # Hand-written rather than cli.read_file (ADR-0075): this checker's
+    # phrase is "is unreadable", where read_file says "cannot read".
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError as err:
+    except (OSError, UnicodeDecodeError) as err:
         return [f"backlog: docs/backlog.md is unreadable: {err}"]
     return protocol.check_backlog(text)
 
@@ -936,11 +1033,11 @@ def check_ledger_links(root):
 
 
 CHECKERS = (check_manifest, check_plugin_skills,
-            check_pi_package, check_skills,
+            check_pi_package, check_grok_marketplace, check_skills,
             check_skill_recitals, check_skill_assets, check_templates,
             check_router, check_router_conditionals,
             check_readme_skills, check_readme_no_orphans,
-            check_protocol,
+            check_readme_figure, check_protocol,
             check_protocol_tables, check_backlog, check_evals,
             check_output_evals, check_ledger, check_ledger_no_orphans,
             check_ledger_links)

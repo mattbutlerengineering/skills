@@ -3,9 +3,7 @@ stage: prd
 id: PRD-9001
 ---
 
-# PRD: retry hardening (charter-regression fixture)
-
-Fixture artifact for the charter regression suite — not a real run.
+# PRD: retry hardening
 
 ## Solution
 

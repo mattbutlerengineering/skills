@@ -22,7 +22,8 @@ Compressed contract (the charter is authoritative):
   out-of-scope change is needed; secrets are needed; you are under
   80% done at budget exhaustion.
 - Handoff artifact: a PR citing `WO-#### (PRD-#### §…) — Closes #N`
-  with a literal evidence block.
+  with a literal evidence block, plus a `## Concerns` section for any
+  doubt you could not settle. Done but doubtful is not an escalation.
 - Routing band: `implementation`. The band is the charter's only routing
   claim — the model id resolves from the repo's `factory.json` `routing`
   table at dispatch (ADR-0034). Never name a model here.

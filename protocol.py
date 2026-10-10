@@ -27,8 +27,9 @@ TEMPLATED_STAGES = [s for s in STAGES + MAINTENANCE_STAGES
 UTILITY_SKILLS = ["address-pr-review", "animated-diagram",
                   "architecture-diagram", "audit", "automate", "autorun",
                   "deepen", "doctor", "factory-init",
-                  "interactive-architecture-diagram", "lean", "mermaid",
-                  "pipeline-board", "polish", "work-queue"]
+                  "interactive-architecture-diagram", "launch-demo",
+                  "lean", "mermaid", "pipeline-board", "polish",
+                  "work-queue"]
 ALL_SKILLS = ["next"] + STAGES + MAINTENANCE_STAGES + UTILITY_SKILLS
 
 # (stage, artifact) rows in pipeline order; implement and the UX
@@ -117,6 +118,12 @@ def read_frontmatter(path):
 # Pi (oh-my-pi) caps a skill description at 1024 chars; a longer one
 # loads on Claude but silently drops the skill on omp (ADR-0027).
 SKILL_DESCRIPTION_LIMIT = 1024
+# YAML 1.2 indicator characters, plus the reserved backtick: a plain
+# scalar may not begin with one. With `: ` and ` #` (which end a plain
+# scalar mid-line) these are the shapes under which a strict YAML loader
+# reads a description differently from read_frontmatter's plain
+# `key: value` split — and may drop the skill outright (PRD-0007).
+_YAML_INDICATORS = "-?:,[]{}#&*!|>'\"%@`"
 
 
 def skill_path(root, slug):
@@ -125,12 +132,30 @@ def skill_path(root, slug):
     return Path(root) / "skills" / slug / "SKILL.md"
 
 
+def _bare_scalar_problems(label, description):
+    """The three shapes that stop a description being one bare YAML
+    scalar, as problem strings in a fixed order (contains `: `, contains
+    ` #`, starts with an indicator). Substring tests only — no YAML
+    parser. [] for a bare scalar, and for a missing description, whose
+    own string has already fired."""
+    if not description:
+        return []
+    prefix = f"{label} description is not a bare YAML scalar: "
+    return (
+        ([prefix + "contains ': '"] if ": " in description else [])
+        + ([prefix + "contains ' #'"] if " #" in description else [])
+        + ([prefix + f"starts with {description[0]!r}"]
+           if description[0] in _YAML_INDICATORS else [])
+    )
+
+
 def skill_frontmatter_problems(root, slug):
     """Problem strings for one skill's SKILL.md frontmatter — the single
     error contract behind lint's skill checker and the trigger-eval
     loader (ADR-0052): the file exists, has a frontmatter block, its
-    name matches the slug, and its description is present and within
-    Pi's limit. [] when conformant."""
+    name matches the slug, and its description is present, within Pi's
+    limit, and one bare YAML scalar (so a strict loader reads what the
+    plain split read). [] when conformant."""
     path = skill_path(root, slug)
     label = f"skills/{slug}/SKILL.md"
     if not path.is_file():
@@ -138,16 +163,18 @@ def skill_frontmatter_problems(root, slug):
     fields = read_frontmatter(path)
     if fields is None:
         return [f"{label} has no frontmatter block"]
+    description = fields.get("description")
     return (
         ([f"{label} frontmatter name is {fields.get('name')!r}, "
           f"expected {slug!r}"]
          if fields.get("name") != slug else [])
         + ([f"{label} frontmatter has no description"]
-           if not fields.get("description") else [])
+           if not description else [])
         + ([f"{label} description exceeds Pi's "
             f"{SKILL_DESCRIPTION_LIMIT}-char limit"]
-           if fields.get("description")
-           and len(fields["description"]) > SKILL_DESCRIPTION_LIMIT else [])
+           if description
+           and len(description) > SKILL_DESCRIPTION_LIMIT else [])
+        + _bare_scalar_problems(label, description)
     )
 
 

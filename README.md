@@ -4,32 +4,7 @@ A Claude Code plugin of lifecycle-pipeline skills that guide work from a raw
 idea all the way to production. Each stage produces an artifact the next stage
 consumes; the artifacts themselves are the pipeline state.
 
-```mermaid
-flowchart LR
-    next{{"🧭 /next<br>the router"}} -. "reads artifact state,<br>hands off to the right stage" .-> idea
-
-    idea("💡 /idea<br>idea.md") --> prd("📝 /prd<br>prd.md")
-    prd --> ux("🎨 /ux-design<br>ux.md")
-    ux --> architect("📐 /architect<br>architecture.md")
-    prd -. "no UI surface" .-> architect
-    architect --> decompose("🧩 /decompose<br>breakdown.md")
-    decompose --> implement("⚙️ /implement<br>code + tests")
-    implement --> verify("✅ /verify<br>verification.md")
-    verify --> review("🔍 /review<br>review.md")
-    review --> ship("🚀 /ship<br>release.md")
-    ship --> operate("📡 /operate<br>retro.md")
-    operate == "retro seeds<br>the next idea" ==> idea
-
-    classDef stage fill:#dbeafe,stroke:#2563eb,color:#1e3a5f
-    classDef conditional fill:#fef3c7,stroke:#d97706,color:#7c2d12,stroke-dasharray:5 4
-    classDef router fill:#e9d5ff,stroke:#9333ea,color:#3b0764
-    classDef closer fill:#dcfce7,stroke:#16a34a,color:#14532d
-
-    class idea,prd,architect,decompose,implement,verify,review,ship stage
-    class ux conditional
-    class next router
-    class operate closer
-```
+![The skill map: the pipeline stages as a closed loop with the router inside it, a maintenance run entering from outside, and the utility skills grouped in cards by the moment you reach for them.](docs/assets/skill-map.svg)
 
 ## Install
 
@@ -40,20 +15,31 @@ flowchart LR
 /plugin install idea-to-prod@skills
 ```
 
+**Grok:** the same marketplace. Grok reads `.claude-plugin/` directly
+([ADR-0076](docs/adr/0076-grok-supported-harness.md)).
+
+```
+grok plugin marketplace add mattbutlerengineering/skills
+grok plugin install idea-to-prod --trust
+```
+
+Invoke `/next`, or `/idea-to-prod:next` when that name collides with a
+built-in.
+
 **oh-my-pi (omp):** the skills also run under [omp](https://omp.sh). The root
 `package.json` declares them as a Pi package (`pi.skills`), so omp discovers all
 of them once the repo is on its package path:
 
 ```
 git clone https://github.com/mattbutlerengineering/skills
-omp --skill ./skills/next          # or add the cloned dir as a Pi package
+omp --skill ./skills/skills/next   # or add the cloned dir as a Pi package
 ```
 
 Fallbacks: omp inherits `.claude` skills on first run, or copy `skills/*` into
 `~/.pi/agent/skills/`.
 
-Every skill works on a bare install of either harness — no third-party tools,
-MCP servers, or other plugins required.
+Every skill works on a bare install of any of these harnesses — no
+third-party tools, MCP servers, or other plugins required.
 
 That is the whole setup for the skills. To also stamp the factory into a repo
 — offline gates, dispatch workflows, cost ledger — and confirm the install
@@ -64,12 +50,14 @@ mechanically, at whichever tier the repo has reached.
 
 Two ways in:
 
-- **Guided:** invoke `/next` (Claude Code) or `/skill:next` (omp). It reads your
-  repo's artifact state, tells you where the run stands, and hands off to the
-  right stage skill.
-- **Direct:** invoke any stage skill (`/prd`, `/architect`, … — `/skill:prd` on
-  omp) to enter mid-stream. If a predecessor artifact is missing, the skill
-  offers a quick backfill — it never blocks.
+- **Guided:** invoke `/next` (Claude Code and Grok) or `/skill:next` (omp).
+  On Grok, a name that collides with a built-in stays available as
+  `/idea-to-prod:next`. It reads your repo's artifact state, tells you where
+  the run stands, and hands off to the right stage skill.
+- **Direct:** invoke any stage skill (`/prd`, `/architect`, … — `/skill:prd`
+  on omp, `/idea-to-prod:prd` on Grok when the bare name collides) to enter
+  mid-stream. If a predecessor artifact is missing, the skill offers a quick
+  backfill — it never blocks.
 
 The pipeline runs at three scales: a **product run** (greenfield; artifacts
 at your repo's `docs/` root), a **feature run** (artifacts under
@@ -97,77 +85,32 @@ and re-entering the pipeline at the depth recorded in its brief).
 
 Beside the stages, the plugin ships utility skills
 ([ADR-0023](docs/adr/0023-utility-skills.md)) that act on the work
-surrounding the pipeline rather than a run's artifacts: `address-pr-review`
-works reviewer feedback on a PR you authored — fix, push, reply, resolve,
-and reconcile with the base branch. `autorun` drives a whole run end to end
-from a one-time brief — one fresh subagent per stage, every brief gap logged
-as an assumption, and, unless the brief explicitly authorizes the release,
-it prepares the release and stops rather than executing it. `mermaid` turns a process or system
-into a digestible mermaid diagram with explicit, contrast-safe colors that
-read in both light and dark renderers, and
-`interactive-architecture-diagram` goes further for the cases that want
-showing rather than telling — one self-contained dark-mode HTML file with an
-inline-SVG system diagram, a narrated step-through presenter mode, and
-PNG/SVG export, with no build step and no external requests.
-`animated-diagram` is its ambient cousin — the same dark inline-SVG
-language, but always moving on its own: dashed connectors streaming in the
-direction of execution and dots traveling the request path, built from a
-description or an existing mermaid source, as a pause-able HTML page or a
-pure `.svg` whose motion GitHub plays right inside a README.
-`architecture-diagram` is the still member of the family — a designed,
-theme-aware `.svg` system figure on light editorial paper that flips to
-the shared dark palette with the reader's color-scheme preference and
-embeds in READMEs, docs pages, and design docs as a plain image.
-`pipeline-board` turns that same editorial language on the pipeline
-itself — one self-contained `.svg` swimlane board placing every active
-run on its current stage, with placement stated by the shipped
-`board.py` tool rather than re-derived (ADR-0062), generated on demand
-and never committed.
-`factory-init` stamps a product repo
-with the factory scaffold — offline gates, dispatch workflows, and the cost
-ledger — so promoted work orders can run there unattended. `doctor` is the
-read-only counterpart to that stamp: run in the repo that *uses* these
-skills, it answers whether the install is actually wired up, tier by tier —
-the plugin side in any repo, the stamped detectors and targets when the
-factory is present, label drift only when asked — and reports each problem
-with the fix rather than applying it. `work-queue` runs several
-already-approved work orders at once — one worktree-isolated agent per
-order, bounded by the factory's WIP cap and priced against the monthly cap
-before anything is spent — and stops at merge-ready PRs, because the merge
-is a human gate. `audit` is the way in when there is no run yet and no
-defect named: it surveys the codebase read-only, reproduces every finding
-before reporting it, and routes each one to a carrier that already exists —
-a backlog seed, a maintenance run via `capture`, a feature run via `idea` —
-rather than opening a parallel plan tree of its own. `deepen` asks the
-narrower architectural question instead: where is the codebase **shallow**,
-its interfaces nearly as costly to learn as the implementations behind them?
-It confirms each candidate against real call sites rather than a feeling of
-friction, presents the deepenings as a self-contained before/after report
-outside the repo, and designs the chosen interface with you. `automate`
-turns the same evidence discipline on the tooling instead of the code:
-what Claude Code automation is this repo missing — hooks, subagents,
-skills, plugins, MCP servers, or a drift detector for a rule nothing
-checks — where every recommendation has to name the friction it removes,
-the thing that would construct it, and what it costs. File presence never
-justifies a recommendation; a repeated manual step written down in the
-repo's own artifacts does.
-`lean` is the standing argument for less. Asked to build, it climbs a
-fixed ladder before writing anything — does this need to exist, is it
-already in the repo, the standard library, the platform, an installed
-dependency — and stops at the first rung that holds; pointed at a diff
-or a whole tree it hands back a numbered cut-list instead, every
-deletion backed by a reference search rather than a hunch. It never
-cuts validation at a trust boundary, data-loss handling, security, or
-accessibility. `polish` is its counterpart for what the user sees: it
-takes a built interface from working to considered, first establishing
-who the surface is for and what the existing design system already
-decided, then applying one named move (critique, inspect, refine, pare,
-amplify, calm, states, copy, motion) and looking at the rendered result
-rather than reasoning about the code. It starts where `ux-design`
-deliberately stops, at the pixels. Both restate, in this pipeline's
-terms, ideas from two open-source skills —
-[Ponytail](https://github.com/DietrichGebert/ponytail) and
-[Impeccable](https://github.com/pbakaus/impeccable) — and each skill's
+surrounding the pipeline rather than a run's artifacts. The figure above
+places each one at the moment you reach for it; the same moments fill the
+table's Moment column.
+
+| Skill | Moment | Why it matters |
+|-------|--------|----------------|
+| `audit` | Before a run exists | Finds what to improve when no defect is named: read-only, every finding reproduced before it is reported, each routed to a backlog seed or a run. |
+| `automate` | Before a run exists | Recommends the hooks, subagents, skills and MCP servers a repo is missing, each priced and tied to a friction it removes; never scaffolds them. |
+| `deepen` | Reshaping what's built | Finds shallow modules whose interfaces cost nearly as much to learn as their implementations, confirms each at its real call sites, and designs the deeper interface with you. |
+| `lean` | Reshaping what's built | Argues for less: climbs a fixed ladder (does this need to exist, is it already in the repo, the standard library, the platform) before building, or hands back a numbered cut-list for a diff or tree, each deletion backed by a reference search; never cuts trust-boundary validation, data-loss handling, security or accessibility. |
+| `polish` | Reshaping what's built | Takes a built interface from working to considered: establishes who it is for and what the design system already decided, applies one named move, and judges the rendered result rather than the code; it starts where `ux-design` stops. |
+| `autorun` | Driving a run | Drives a whole run end to end from a one-time brief, one fresh subagent per stage, logging an assumption wherever the brief runs out. |
+| `work-queue` | Driving a run | Works several ready work orders at once, one worktree-isolated agent each, bounded and priced by the factory's caps; stops at merge-ready PRs. |
+| `address-pr-review` | Around a pull request | Acts on the feedback reviewers left on your PR: fixes what the comments ask, pushes, replies to and resolves every thread, and merges the base branch when behind. |
+| `launch-demo` | Around a pull request | Writes a shipped feature's launch copy in plain words and records a short narrated video whose every line is a sentence of it, from the run's artifacts or the pull request; copy only, with the reason, when a recorder is missing. |
+| `mermaid` | Drawing pictures | Turns a process or system into a digestible mermaid diagram, styled with explicit colors that hold contrast in light and dark renderers. |
+| `architecture-diagram` | Drawing pictures | A still, theme-aware SVG system figure on light editorial paper that embeds in READMEs and docs as a plain image; the figure above is one. |
+| `animated-diagram` | Drawing pictures | A diagram that moves on its own, connectors streaming in execution order, as a pause-able HTML page or a pure SVG a README plays inline. |
+| `interactive-architecture-diagram` | Drawing pictures | A self-contained HTML demo with a narrated step-through presenter, click-to-inspect panels and PNG/SVG export, for showing how a system works. |
+| `pipeline-board` | Drawing pictures | Places every active run on its current stage as a swimlane SVG, with placement stated by the shipped board.py tool rather than re-derived. |
+| `factory-init` | Installing the factory | Stamps the factory scaffold (offline gates, dispatch workflows, the cost ledger) into a product repo, and regenerates the template manifest after an edit. |
+| `doctor` | Installing the factory | Answers whether the install is actually wired up, tier by tier and read-only, reporting each problem with the fix rather than applying it. |
+
+`lean` and `polish` restate, in this pipeline's terms, ideas from two
+open-source skills — [Ponytail](https://github.com/DietrichGebert/ponytail)
+and [Impeccable](https://github.com/pbakaus/impeccable) — and each skill's
 references say what it borrowed.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter
@@ -179,7 +122,7 @@ conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
 - [`docs/adr/`](docs/adr/) — architecture decision records and their status
 - [`LEDGER.md`](LEDGER.md) — per-skill maturity (draft / used-once / battle-tested)
 - `python3 lint.py` — structural lint of the install, router, and eval surface (the `CHECKERS` tuple in [`lint.py`](lint.py) is the authoritative list); runs in CI on every push/PR
-- `python3 -m unittest discover tests` — the full offline suite: pipeline protocol, eval seams, and the factory tools, all against fixture trees; runs in CI on every push/PR
+- `python3 -m unittest discover tests` — the full offline suite: pipeline protocol, eval seams, and the factory tools, mostly against fixture trees plus pins on the real repo; runs in CI on every push/PR
 - `python3 trigger_eval.py --record` — routing eval: which skill fires for each query in [`evals/routing.json`](evals/routing.json) (needs the `claude` CLI; costs real runs)
 - [`docs/output-evals.md`](docs/output-evals.md) — on-demand output evals grading skill artifacts against expectations
 

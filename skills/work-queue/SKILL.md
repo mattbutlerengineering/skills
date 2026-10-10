@@ -1,6 +1,6 @@
 ---
 name: work-queue
-description: Use when several ready work orders should be worked at once rather than one at a time — "drain the queue", "work the backlog in parallel", "run the ready work orders", "take the next few work orders", or a direct invocation. Plans a batch bounded by factory.json's wip_cap, prices it against the monthly cap before spending anything, then runs one worktree-isolated agent per work order and reports merge-ready PRs. It never merges: the human merge is gate 3 (ADR-0033). Not the router (next advances one run by one stage) and not autorun (one run, every stage, sequentially) — this is many work orders through one stage, concurrently. Requires work orders already at wo:ready-for-agent; when none are, it says which plane is holding each one back rather than reporting an empty queue.
+description: Use when several ready work orders should be worked at once rather than one at a time — "drain the queue", "work the backlog in parallel", "run the ready work orders", "take the next few work orders", or a direct invocation. Plans a batch bounded by factory.json's wip_cap, prices it against the monthly cap before spending anything, then runs one worktree-isolated agent per work order and reports merge-ready PRs. It never merges; the human merge is gate 3 (ADR-0033). Not the router (next advances one run by one stage) and not autorun (one run, every stage, sequentially) — this is many work orders through one stage, concurrently. Requires work orders already at wo:ready-for-agent; when none are, it says which plane is holding each one back rather than reporting an empty queue.
 ---
 
 # Work Queue
@@ -85,8 +85,18 @@ Each agent's prompt must carry:
    implementation; `make check` must pass before it declares itself done.
 4. Its dollar budget from the plan, and the ADR-0034 rule that exhausting
    it means stopping and handing off, never quietly continuing.
-5. **Open a PR and stop.** Do not merge. Do not approve. Do not apply
+5. The PR body follows the protocol's Pull request body section
+   (`../../docs/pipeline-protocol.md`), with item 2's `Closes #N` line
+   and the work-order id citation detector B reads kept first.
+6. Confirm the branch base is the remote's default-branch tip before
+   writing anything, and reset onto that tip if it is not.
+7. Merge or rebase the remote's default-branch tip into the branch before
+   declaring done, so the branch applies cleanly to the tip as of hand-off.
+8. **Open a PR and stop.** Do not merge. Do not approve. Do not apply
    `wo:merged`.
+6. **Say what it doubts.** Finished work it is unsure of goes in a
+   `## Concerns` section of the PR body, one line per doubt, rather than
+   shipping as if it were certain. Unfinished work escalates instead.
 
 Model per work order follows `factory.json`'s routing bands — mechanical
 work does not need the implementation model.
@@ -94,7 +104,8 @@ work does not need the implementation model.
 ### 5. Report — and stop at the gate
 
 Report per work order: the PR, whether `make check` passed inside the
-worktree, and the budget it actually used.
+worktree, the budget it actually used, and any concerns its PR raised.
+A PR with concerns is reported with them, never as a clean result.
 
 Then record that spend, once per work order:
 

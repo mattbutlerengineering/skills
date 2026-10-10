@@ -6,6 +6,7 @@ strings callers will print, and the gh runner is injected so no test ever
 touches the network.
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -118,9 +119,10 @@ class TestLoadLabels(unittest.TestCase):
             path.write_bytes(b'[{"name": "caf\xe9"}]')
             labels, problems = label_sync.load_labels(Path(tmp))
             self.assertEqual(labels, [])
-            self.assertEqual(len(problems), 1)
-            self.assertTrue(problems[0].startswith(
-                "L: cannot read .github/labels.json:"), problems)
+            self.assertEqual(problems, [
+                "L: .github/labels.json is not valid JSON: 'utf-8' codec"
+                " can't decode byte 0xe9 in position 14: invalid"
+                " continuation byte"])
 
     def test_non_array_and_empty_array_are_flagged(self):
         for payload in ("{}", "[]"):
@@ -132,6 +134,40 @@ class TestLoadLabels(unittest.TestCase):
                 self.assertEqual(problems, [
                     "L: .github/labels.json must be a non-empty JSON array"
                     " of label entries"])
+
+    def test_a_string_and_a_null_are_flagged_the_same_way(self):
+        """The loader's own shape wording covers every top level that is
+        not a non-empty array — null included, which is why it keeps its
+        own check rather than asking cli.read_file for a shape."""
+        for payload in ('"labels"', "null"):
+            with self.subTest(payload=payload), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                tree.write(".github/labels.json", payload)
+                self.assertEqual(label_sync.load_labels(tree.root), ([], [
+                    "L: .github/labels.json must be a non-empty JSON array"
+                    " of label entries"]))
+
+    def test_an_empty_taxonomy_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", "")
+            self.assertEqual(label_sync.load_labels(tree.root), ([], [
+                "L: .github/labels.json is not valid JSON: Expecting value:"
+                " line 1 column 1 (char 0)"]))
+
+    @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
+    def test_a_taxonomy_the_process_may_not_read_is_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = tree.write(".github/labels.json", "[]")
+            path.chmod(0)
+            try:
+                self.assertEqual(label_sync.load_labels(tree.root), ([], [
+                    "L: cannot read .github/labels.json: [Errno 13]"
+                    f" Permission denied: '{path}'"]))
+            finally:
+                path.chmod(0o644)
 
     def test_entry_lacking_fields_is_flagged_and_excluded(self):
         with tempfile.TemporaryDirectory() as tmp:
