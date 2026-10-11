@@ -9,8 +9,9 @@ factory payload (architecture.md). Capabilities that would push this
 file past the 800-line ceiling live in sibling modules that import its
 row grammar (breakdown assumption 6): conductor_plan (plan, open),
 conductor_flow (the item state machine and the stall rule in next),
-conductor_run (the Worker runner) and conductor_merge (the merge
-precondition and the merge turn).
+conductor_run (the Worker runner), conductor_merge (the merge
+precondition and the merge turn) and conductor_close (the scorecard and
+closing a batch).
 
   python3 conductor.py plan <#N>...
         Price and order a batch of issues and show each item's reserved
@@ -35,6 +36,11 @@ precondition and the merge turn).
         item's reserved numbers, make check, push (never forced), wait
         for the head's checks, then squash-merge or enqueue. Any other
         outcome queues a stall ask.
+  python3 conductor.py scorecard <batch>
+        Print the batch's scorecard row as JSON, computed from its ledger
+        and docs/factory/costs.jsonl alone; appends nothing. A malformed
+        ledger line, a run with no spend row or a missing plan row fails
+        with a problem and no number.
   python3 conductor.py ask <batch> --kind K --question Q --option O
                            [--option O ...] --recommended O --why W
                            [--item #N] [--covers #N ...]
@@ -176,15 +182,20 @@ def row_problems(row):
     return problems
 
 
+def numbered(text):
+    """[(lineno, line)] for every non-blank line: the lines parse reads,
+    so the nth row parse returns sits on the nth lineno here."""
+    return [(lineno, line) for lineno, line in
+            enumerate(text.splitlines(), 1) if line.strip()]
+
+
 def parse(text, shown):
     """(rows, problems) for a ledger's text: every non-blank line parsed
     and checked, problems located as `cd: <shown>:<lineno> <suffix>`.
     Rows are None when any line has a problem: the reader fails, it never
     skips a line."""
     rows, problems = [], []
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if not line.strip():
-            continue
+    for lineno, line in numbered(text):
         try:
             row = json.loads(line)
         except (ValueError, RecursionError) as err:
@@ -221,19 +232,27 @@ def _read_locked(handle, shown):
     return parse(text, shown)
 
 
-def load(root, batch):
-    """(rows, problems): every row of the batch's ledger, in order, read
-    under a shared lock so a concurrent append is never seen half
-    written. rows is None on any problem."""
+def read_text(root, batch):
+    """(text, shown, problems): the batch ledger's text, read under a
+    shared lock so a concurrent append is never seen half written."""
     path, shown, problems = _ledger(root, batch)
     if problems:
-        return None, problems
+        return None, shown, problems
     try:
         with open(path, encoding="utf-8") as handle:
             fcntl.flock(handle, fcntl.LOCK_SH)
-            return _read_locked(handle, shown)
-    except OSError as err:
-        return None, [f"cd: cannot read {shown}: {err}"]
+            return handle.read(), shown, []
+    except (OSError, UnicodeDecodeError) as err:
+        return None, shown, [f"cd: cannot read {shown}: {err}"]
+
+
+def load(root, batch):
+    """(rows, problems): every row of the batch's ledger, in order. rows
+    is None on any problem."""
+    text, shown, problems = read_text(root, batch)
+    if problems:
+        return None, problems
+    return parse(text, shown)
 
 
 def append(root, batch, build):
@@ -408,6 +427,7 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
     git = git or runner("git")
     # The capability siblings import this module's row grammar, so they
     # are imported here, not at the top: one owner, no import cycle.
+    import conductor_close
     import conductor_flow
     import conductor_merge
     import conductor_plan
@@ -429,6 +449,9 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
         elif command == "run":
             problems = conductor_run.run_cli(root, [batch, *args], now, git,
                                              run, harness)
+        elif command == "scorecard":
+            problems = conductor_close.scorecard_cli(root, [batch, *args],
+                                                     now)
         elif command == "merge":
             problems = conductor_merge.merge_cli(root, [batch, *args], clock,
                                                  git, run, tool, sleep)

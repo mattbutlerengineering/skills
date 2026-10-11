@@ -198,6 +198,9 @@ def queue_stall(root, batch, now, item, reason, recommended, why):
 IDLE_WHY = ("a dead runner or an idle step is evidence about the run more"
             " than about the item")
 CHANGES_WHY = "a second request for changes is evidence about the item"
+# The stall reason of a second request for changes: the scorecard counts
+# it as a review change.
+CHANGES_AGAIN = "the reviewer requested changes a second time"
 
 
 def record_verdict(root, batch, now, item, verdict, reviewer_run):
@@ -223,8 +226,7 @@ def record_verdict(root, batch, now, item, verdict, reviewer_run):
             reason = "the reviewer requested changes; one fix step"
             if "build" not in _successors(entry["type"], "review", rows,
                                           item):
-                return stall_rows(rows, now, entry, "the reviewer requested"
-                                  " changes a second time", BLOCK,
+                return stall_rows(rows, now, entry, CHANGES_AGAIN, BLOCK,
                                   CHANGES_WHY)
         problems = transition_problems(rows, item, to, fields)
         if problems:

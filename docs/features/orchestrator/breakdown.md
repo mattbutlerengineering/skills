@@ -59,7 +59,7 @@ strings, `cli.report` for the exit, and `gh`/`git`/harness calls through
 
 ## Milestone 5: A batch closes with a scorecard, and the Owner can drive it
 
-- [ ] **WO-0162** Scorecard from ledger rows alone — size:M, blocked by: WO-0158 (PRD-0013 §User stories, §Success criteria)
+- [x] **WO-0162** Scorecard from ledger rows alone — size:M, blocked by: WO-0158 (PRD-0013 §User stories, §Success criteria)
   - Accept: `conductor.py scorecard <batch>` computes the architecture's scorecard fields (including `owner_touches_per_merged`, `estimate_error_pct` against the plan row, `collisions` from `renumbered_from` rows, `merged_per_owner_wait_hour` by ADR-0080's formula over the batch's ask-to-answer waits, `policy_compliance` against the plan's policy snapshot, and `conductor_session: "unmetered"`) from a fixture ledger and its `costs.jsonl` alone; it exits nonzero with a `cd:` problem naming file and line, and appends nothing, for a malformed ledger line, a `run` row with no `costs.jsonl` row of the same `run_id`, and a missing `plan` row.
 - [ ] **WO-0163** Close a batch — size:S, blocked by: WO-0161, WO-0162 (PRD-0013 §User stories, §Success criteria)
   - Accept: `conductor.py close <batch>`, with injected ports, appends blocked items' spend rows to the conductor branch's `costs.jsonl`, runs `scorecard` and appends its row to `docs/factory/scorecards.jsonl` only on success, writes the `close` row, commits the ledger, run evidence and scorecard on `conductor/<batch>`, opens its PR, queues its merge ask, and labels each blocked item's issue `needs-human` with a reason comment; a failing scorecard leaves `scorecards.jsonl` byte-identical.
@@ -309,3 +309,19 @@ and every existing seam it names exists on main (`cli.harness_run`,
      the verb that resumes it.
   Adjacent, not changed: the scratch-repo tests spawn real `git`
   processes, which adds a few minutes to the suite on this machine.
+- 2026-10-10 (Implement, row 0162): the scorecard and `close` live in
+  `conductor_close.py` (assumption 6). Choices inside the design, none
+  of them a design change: `owner_touches_per_merged` counts answer
+  rows (SC 1: every Owner action is an answer); `collisions` counts
+  renumbered numbers, the sum of every `renumbered_from` list;
+  `stalls` counts state rows into `stalled`; `escalations` counts asks
+  beyond the planned spend, gate and merge decisions (`stall` and
+  `clarify`); `review_changes_per_item` counts review-to-build moves
+  plus second-request stalls (their reason is now the constant
+  `conductor_flow.CHANGES_AGAIN`), over the plan's items;
+  `merged_per_owner_wait_hour` sums the wait of every answered ask;
+  `policy_compliance` is a fraction of runs. Ratios round to four
+  places and are null over a zero denominator. A malformed
+  `costs.jsonl` line fails the scorecard too, with cost_ledger's own
+  `ledger:` problem. `conductor.py`'s reader gains `read_text` and
+  `numbered` so a run row's problem can name its line.
