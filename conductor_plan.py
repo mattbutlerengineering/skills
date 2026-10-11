@@ -303,10 +303,21 @@ def _issue_numbers(args):
     return [int(arg[1:]) for arg in args]
 
 
+def _repeated(numbers):
+    """A problem per issue named more than once (review minor 2): each
+    would become its own item, with its own block and estimate."""
+    return [f"cd: #{number} is named more than once"
+            for number in sorted({n for n in numbers
+                                  if numbers.count(n) > 1})]
+
+
 def plan_cli(root, args, now, run, git):
     numbers = _issue_numbers(args)
     if numbers is None:
         return None
+    repeated = _repeated(numbers)
+    if repeated:
+        return repeated
     plan, problems = _plan(root, numbers, now, run, git)
     if plan is not None:
         print("\n".join(compose_plan(plan)))
@@ -317,6 +328,9 @@ def open_cli(root, args, now, run, git):
     numbers = _issue_numbers(args[1:])
     if numbers is None:
         return None
+    repeated = _repeated(numbers)
+    if repeated:
+        return repeated
     plan, problems = _plan(root, numbers, now, run, git)
     if plan is None:
         return problems

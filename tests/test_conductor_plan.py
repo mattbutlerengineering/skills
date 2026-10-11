@@ -321,6 +321,15 @@ class TestPlanCli(unittest.TestCase):
         self.assertNotIn("planned", out)
         self.assertIn("cd: gh issue view #13 failed: HTTP 502", out)
 
+    def test_an_issue_named_twice_is_refused_before_any_read(self):
+        # Review minor 2: "#12 #12" planned #12 twice, with two blocks.
+        for argv in (["plan", "#12", "#13", "#12"],
+                     ["open", "b1", "#12", "#12"]):
+            code, out = self.run_cli(argv, {}, fail=12)
+            self.assertEqual((code, out),
+                             (1, "cd: #12 is named more than once\n"
+                                 "cd: 1 problem(s)\n"), argv)
+
     def test_an_issue_argument_must_be_an_issue_key(self):
         code, out = self.run_cli(["plan", "12"], {12: issue(12)})
         self.assertEqual(code, 2)
