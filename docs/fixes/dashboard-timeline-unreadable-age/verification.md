@@ -52,7 +52,7 @@ The full battery is green at `55aac3b`.
   Ran 113 tests in 0.117s
 
   OK
-  $ python3 scratchpad/repro.py
+  $ python3 repro.py
   failed fetch:
      {'gate': 'prd', 'issue': 7, 'title': 'WO-0101: first', 'waited_s': None, 'aged': False, 'url': 'https://github.com/o/r/issues/7'}
      {'gate': 'merge', 'issue': 8, 'title': 'WO-0102: second', 'waited_s': None, 'aged': False, 'url': 'https://github.com/o/r/issues/8'}
@@ -66,7 +66,10 @@ The full battery is green at `55aac3b`.
   now differ in `aged`. The failed-fetch problem strings are the same
   strings as before, and `test_a_failing_timeline_lists_the_item_without_an_age`
   still asserts them exactly. The unparseable-JSON path is pinned by
-  `test_an_unparseable_timeline_is_unreadable_not_empty`.
+  `test_an_unparseable_timeline_is_unreadable_not_empty`, which (since
+review) also asserts the exact `returned unparseable JSON` problem
+strings for #7 and #8, so a swallowed parse failure fails it. The
+module still runs 113 tests, OK, after that assertion was added.
 - Result: PASS
 
 ### Render: the marker shows on an `aged: false` line and not on an `aged: true` line with no age

@@ -308,6 +308,11 @@ class TestQueues(unittest.TestCase):
         self.assertEqual([(q["waited_s"], q["aged"])
                           for q in state["queues"]],
                          [(None, False), (None, False)])
+        self.assertEqual(state["problems"], [
+            "dashboard: gh api timeline for #7 returned unparseable JSON:"
+            " Expecting value: line 1 column 1 (char 0)",
+            "dashboard: gh api timeline for #8 returned unparseable JSON:"
+            " Expecting value: line 1 column 1 (char 0)"])
 
     def test_a_read_timeline_with_no_arrival_is_aged_not_unreadable(self):
         """#665: a timeline that was read and holds no arrival at the

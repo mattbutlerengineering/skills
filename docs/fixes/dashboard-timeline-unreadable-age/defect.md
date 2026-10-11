@@ -41,10 +41,32 @@ Run in this worktree at `147da0f` on 2026-10-11. The script drives the
 real `dashboard.gather` with the test suite's own fixtures
 (`factory_repo`, `queue_gh`, `git_remote`, `clock` from
 `tests/test_dashboard.py`). The first case fails every timeline fetch.
-The second reads every timeline and finds no labeled events.
+The second reads every timeline and finds no labeled events. The script
+is not committed, so here it is in full. Save it outside the repo as
+`repro.py` and run it from the repo root:
+
+```python
+import sys, tempfile
+sys.path[:0] = [".", "tests"]
+from test_dashboard import factory_repo, queue_gh, git_remote, clock
+import dashboard
+for name, gh in (("failed fetch", queue_gh(failing=["api"])),
+                 ("read, no arrival", queue_gh())):
+    with tempfile.TemporaryDirectory() as tmp:
+        factory_repo(tmp)
+        state = dashboard.gather(tmp, run=gh, git=git_remote(), clock=clock)
+    print(f"{name}:")
+    for q in state["queues"]:
+        print("  ", q)
+    print("   problems:", state["problems"])
+```
+
+Rerun on 2026-10-11 during review against a copy of the branch with
+`147da0f`'s `dashboard.py` swapped in; the output below matched
+byte for byte.
 
 ```
-$ python3 scratchpad/repro.py
+$ python3 repro.py
 failed fetch:
    {'gate': 'prd', 'issue': 7, 'title': 'WO-0101: first', 'waited_s': None, 'url': 'https://github.com/o/r/issues/7'}
    {'gate': 'merge', 'issue': 8, 'title': 'WO-0102: second', 'waited_s': None, 'url': 'https://github.com/o/r/issues/8'}
