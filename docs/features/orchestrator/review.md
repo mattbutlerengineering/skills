@@ -353,3 +353,174 @@ skills`; `python3 gates.py` `gates: 0 problem(s)`; `python3 gates.py
 The verdict above still stands for what is not fixed: the ADR-0085
 decision is the Owner's, the ten minors stay deferred, and the
 real-batch criteria are NOT RUN.
+
+## Re-review (2026-10-11)
+
+A second Review pass over the post-review commits (`git diff
+e63b081..HEAD`: d75e6e2, d6391ab, aa0f612, fe57137, a902935), plus a
+skim of the first-pass fixes dcce1a8, 7d07599 and 309d2e7 for
+regressions. No paid run, no gh write, no merge. Every finding below
+was reproduced; the one item not reproduced is labelled a suspicion.
+
+### Do the fixes close their majors?
+
+- **Major 1 (merged = reviewed), d75e6e2: mostly, with one hole
+  (major R1 below).** The drift check at `conductor_merge.py:548-563`
+  is a real tree diff of the committed branch against `reviewed_head`.
+  A Worker's staged-but-uncommitted edit cannot slip past it: the
+  runner's spend commit (`conductor_run.py` `_spend`) commits the whole
+  index after every run, so it lands before the check. A merge turn can
+  start only from `ship` or from a `merging` stall (`_stalled_problems`),
+  so skipping the check on any other state opens no route. A drift
+  stall answered `retry` re-runs `ship` and is checked again.
+- **Major 2 (build re-priced, cap at launch), d6391ab: closed.**
+  `run_step` is the only code that writes a launch row (grep for
+  `state_row(`/`flow.move(`), and it now goes through `_launch` under
+  the ledger lock. `_launch`'s pending-ask reuse excludes `merge` asks,
+  so a pending train ask is never named as the cap pause. The gaps the
+  fix commit names (no re-pricing for a gate-less fix, the automatic
+  fix build, origin/main counted as of the last fetch) are stated
+  honestly in breakdown.md's Notes.
+- **Major 3 (no push, no gh), aa0f612: closed for the stated threat
+  model, with one overstated claim (minor R3).** Probed under
+  `worker_env(os.environ, ...)` on this machine: `gh auth status`
+  reports "not logged into any GitHub hosts" and `gh api user` exits 4;
+  `git credential fill` against a URL-scoped helper that hands out a
+  token returns "terminal prompts disabled", so the `credential.helper`
+  reset clears URL-scoped helpers too (the Owner's `~/.gitconfig` has
+  `credential.https://github.com.helper = !gh auth git-credential`).
+- **Major 4 (ADR-0036 reading), fe57137: well-formed.** ADR-0085 is
+  `Status: provisional`, indexed as provisional in `docs/adr/README.md`,
+  and ADR-0036 has no diff in `e63b081..HEAD`. 0085 exists on no other
+  local or remote branch (checked every ref on 2026-10-11). It says
+  plainly that the answer-row guard stops a confused Worker only, and
+  that the ADR itself needs a human code-owner merge. Its decision 4
+  describes the drift check accurately as a check at merge-turn start,
+  but it inherits R1's hole.
+
+### Findings
+
+**Major R1. Uncommitted Worker edits under `factory/` or to
+`.claude-plugin/plugin.json` are merged after the drift check.**
+`_drift` diffs committed trees only (`conductor_merge.py:561`). The
+merge turn then commits from the item worktree with `git add -A --
+factory` (`conductor_merge.py:215`, manifest-conflict path) and `git
+add -A -- .claude-plugin/plugin.json factory` (`conductor_merge.py:250`,
+version bump, which runs whenever the item touched `skills/`). Both
+pathspecs sweep in any unstaged or untracked file a Worker left there.
+`update-manifest` also re-pins it. Scenario, reproduced with the
+suite's own `TurnCase` (real git, local bare origin): the item commits
+`skills/x/SKILL.md`, the review head is taken, the ship step commits
+`release.md`, and the ship Worker leaves an untracked
+`factory/templates/unreviewed.yml` (a plausible slip, since its brief
+now says "commit nothing but release.md"). `merge_turn` returns `stall:
+None` and the item reaches `merged`. `git show
+<branch>:factory/templates/unreviewed.yml` prints the file, and `git
+diff --name-only <reviewed_head> <branch>` lists it. So an unreviewed
+change to the template payload stamped into product repos can merge.
+The Owner's merge answer and green CI still stand in front of it, so
+this is ranked major, not critical. Fix (not applied; route to
+Implement): refuse or stall the turn when `git -C <worktree> status
+--porcelain` is non-empty before the first Conductor commit, or stage
+only the exact paths the Conductor wrote (`factory/manifest.json`,
+`.claude-plugin/plugin.json`). The Notes' "still trust-based" list
+(breakdown.md, 2026-10-11, major 1) does not name this route, and
+neither does review.md's post-review section.
+
+**Minor R2. The test pinning `reviewed_head` cannot tell the head
+before the review run from the head after it.** The fake `Git` in
+`tests/test_conductor_run.py` answers every `rev-parse` with `c0ffee`
+(asserted at line 621). Mutation: pass a `rev-parse` of the branch
+taken *after* the Worker ran to `record_verdict`, instead of
+`ctx["head"]` (`conductor_run.py:526`). All 37 tests in
+`tests.test_conductor_run` still pass. That ordering is what makes a
+review Worker's own commits visible to the drift check, so a
+regression there would go unnoticed. The code is correct today.
+
+**Minor R3. "Every http(s) push URL is rewritten" is false for a
+remote with an explicit `pushurl`.** `url.<base>.pushInsteadOf` is not
+applied to `remote.<name>.pushurl`. Reproduced: with `worker_env`, a
+remote whose `pushurl` is `https://127.0.0.1:9/o/r.git` tries the
+network (`Failed to connect to 127.0.0.1 port 9`). The same URL given
+on the command line is rewritten (`'/dev/null/conductor-worker-may-not-
+push/...' does not appear to be a git repository`). The push still has
+no credential, because the helper reset and `GIT_TERMINAL_PROMPT=0`
+both hold. A token embedded in a configured `pushurl`, or a `~/.netrc`
+entry (none exists on the Owner's machine), would get through. The
+claim is overstated at `architecture.md:643`, `breakdown.md:427` (which
+names `.netrc` as covered) and `review.md:334`. The test
+`test_a_worker_push_to_any_remote_url_fails` pushes only to
+command-line URLs, so it cannot see this.
+
+**Minor R4. The after-review allowlist is wider than "this run's
+artifacts".** `AFTER_REVIEW` (`conductor_merge.py`, above
+`review_drift`) admits any run's `review.md` or `release.md`
+(`docs/features/<any>/` and `docs/fixes/<any>/`, plus root
+`docs/review.md` and `docs/release.md`). It also admits a whole-file
+rewrite of `docs/factory/costs.jsonl`, not only appended rows:
+`review_drift("#12", "h", ["docs/factory/costs.jsonl",
+"docs/features/other/review.md"])` returns `None`. A ship Worker that
+dropped spend rows would also lower `month_spend`'s figure for the
+cap. Defer: docs-only and trust-based like the rest of the Worker
+boundary. Hold costs.jsonl to an append-only diff if R1's fix touches
+this code.
+
+**Suspicion S1 (not reproduced). The Worker's shell may put a token
+back.** Claude Code's Bash tool initialises its shell from the user's
+profile, so an `export GH_TOKEN=...` in a profile would undo the
+stripping inside the Worker's Bash. On this machine `~/.zprofile` and
+`~/.zshrc` set none of the stripped variables, and
+`~/.claude/settings.json` has no `env` block, so nothing reproduces
+here. Worth one line in the conduct skill's prerequisites for other
+Owners.
+
+### First-pass fixes: no regression found
+
+- dcce1a8 (in-flight launch refused): `_launch` calls
+  `transition_problems` inside the lock, so it still applies.
+- 7d07599 (dead merge turn stalls): the drift stall is queued before
+  the move to `merging`, so it is not a dead turn.
+- 309d2e7 (unchecked build row stalls): `run_step` is unchanged on
+  that path.
+
+### Mutation results (one line per fix, each restored with `git
+checkout`, none committed)
+
+| Mutation | Result |
+| --- | --- |
+| drift stall skipped (`if drift is not None` → `if False`) | killed: `test_a_code_change_after_the_review_stalls_the_merge` |
+| reviewed-head refusal removed | killed: `test_a_reviewed_row_without_its_head_is_refused` |
+| `record_verdict` stores a constant head | killed: 2 tests (flow, run) |
+| head read after the review Worker | **survived** (R2) |
+| cap never refuses (`month <= cap` → `True`) | killed: 3 `TestMonthlyCap` tests |
+| in-flight ceilings ignored | killed: `test_in_flight_ceilings_and_item_branch_spend_count` |
+| item branches' spend not read | killed: same test |
+| build priced at one row | killed: 2 gate-ask tests |
+| cap pause resets the failure streak | killed: `test_a_cap_pause_does_not_reset_the_failure_streak` |
+| harness given the unscrubbed env | killed: `test_the_harness_gets_the_scrubbed_env_and_an_empty_gh_dir` |
+| `Bash(make check)` → `Bash(make *)` | killed: `test_make_is_narrowed_to_make_check` |
+| `GH_*` no longer stripped | killed: 2 `TestWorkerEnv` tests |
+| `credential.helper` reset dropped | killed: `test_the_owners_git_config_entries_are_replaced` |
+
+A seemingly surviving variant (`head = "c0ffee"` in `_prepare`) only
+matches the fake's fixed answer, so it counts as equivalent, not as a
+survivor.
+
+### Gates (re-review)
+
+- `python3 -m unittest discover tests`: `Ran 2336 tests`, `OK`.
+- `python3 lint.py`: `lint: 0 problem(s) across 32 skills`.
+- `python3 gates.py`: `gates: 0 problem(s)`.
+- `python3 gates.py --selftest`: `selftest: ok`.
+
+### Verdict (re-review)
+
+Not ready to ship. Majors 2 and 3 are closed by tests that kill their
+mutations. Major 1 is closed for committed changes, but R1 is a
+reproduced route by which an unreviewed `factory/` change merges. It
+needs a fix, or an explicit deferral by the Owner. Once R1 is fixed or
+deferred, the run is ready to ship, subject to the Owner's decisions:
+accept or reject ADR-0085, and give spend consent for the real-batch
+criteria, which are still NOT RUN. R2–R4 are minor and may be deferred:
+R2 and R3 are each a one-line test or doc fix, and R4 waits on R1's
+fix.
