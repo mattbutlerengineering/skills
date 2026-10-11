@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import conductor
@@ -114,7 +114,7 @@ class RunCase(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / "conductor"
         self.root.mkdir()
-
+        self.clock = lambda: NOW
         self.config(300)
 
     def config(self, cap):
@@ -133,8 +133,8 @@ class RunCase(unittest.TestCase):
         self.gh = gh or Gh()
         self.harness = harness
         result = conductor_run.run_step(
-            self.root, "b1", item, step, NOW, git=self.git, gh=self.gh,
-            harness=harness, pid=777)
+            self.root, "b1", item, step, self.clock, git=self.git,
+            gh=self.gh, harness=harness, pid=777)
         self.rows, _ = conductor.load(self.root, "b1")
         return result
 
@@ -301,7 +301,7 @@ class TestWorkerEnv(unittest.TestCase):
             (root / ".github").mkdir()
             (root / ".github/factory.json").write_text(
                 '{"monthly_cap_usd": 300}')
-            conductor_run.run_step(root, "b1", "#12", "spec", NOW,
+            conductor_run.run_step(root, "b1", "#12", "spec", lambda: NOW,
                                    git=Git(tmp), gh=Gh(), harness=harness,
                                    pid=777)
         env = harness.calls[0]["env"]
@@ -508,6 +508,22 @@ class TestFailedRun(RunCase):
         self.assertEqual(self.rows[-2]["reason"],
                          "the run completed but left no pr-body.md")
 
+    def test_rows_written_after_the_run_carry_the_time_it_ended(self):
+        # Review minor 1: stamped with the launch time, a stall ask after
+        # a 90-minute run read as 90 minutes of Owner wait.
+        ended = NOW + timedelta(minutes=90)
+        times = [NOW]
+
+        def work(cwd):
+            times[0] = ended
+        self.clock = lambda: times[0]
+        self.run_step("#12", "spec", Harness(act=work))
+        self.assertEqual([(r["kind"], r["at"]) for r in self.rows[-4:]], [
+            ("state", "2026-10-10T12:30:00Z"),
+            ("run", "2026-10-10T14:00:00Z"),
+            ("state", "2026-10-10T14:00:00Z"),
+            ("ask", "2026-10-10T14:00:00Z")])
+
     def test_a_failed_push_stalls_and_opens_no_pr(self):
         self.run_step("#12", "spec", Harness(act=pr_body),
                       git=Git(self.tmp.name, fail="push"))
@@ -612,8 +628,8 @@ class TestMonthlyCap(RunCase):
         (self.root / ".github/factory.json").write_text("{}")
         self.ledger(*BASE)
         _, problems = conductor_run.run_step(
-            self.root, "b1", "#12", "spec", NOW, git=Git(self.tmp.name),
-            gh=Gh(), harness=Harness(act=pr_body), pid=777)
+            self.root, "b1", "#12", "spec", lambda: NOW,
+            git=Git(self.tmp.name), gh=Gh(), harness=Harness(act=pr_body), pid=777)
         self.assertEqual(problems, [
             "config: factory.json names no positive monthly_cap_usd"])
 

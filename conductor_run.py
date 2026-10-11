@@ -465,11 +465,15 @@ def _prepare(root, batch, item, step, git, gh):
             "run_id": f"conductor-{batch}-{item[1:]}-{step}-{seq}"}, []
 
 
-def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
+def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
              pid=None):
     """(summary, problems): one Worker run. problems only when nothing
-    was launched or a ledger write failed; a failed run is a stall."""
+    was launched or a ledger write failed; a failed run is a stall. The
+    launch row carries the launch time, and every row written after the
+    run its end time (review minor 1): a stall ask stamped at launch
+    would count the whole run as Owner wait."""
     pid = os.getpid() if pid is None else pid
+    now = clock()
     ctx, problems = _prepare(root, batch, item, step, git, gh)
     if problems:
         return None, problems
@@ -494,6 +498,7 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
     event, ended, _ = _harness(
         harness, harness_command(brief, model, effort, ceiling), worktree,
         flow.WALL_CLOCK_MINUTES[entry["size"]], batch)
+    done = clock()
     tokens, cost, outcome, reported, stall = _meter(
         root, batch, run_id, event, ended, ceiling, model)
     if ended == "timeout":
@@ -502,7 +507,7 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
     spent_model = model if model in reported or not reported \
         else reported[0]
     failed = _spend(git, worktree, ctx["wo"], run_id, spent_model, tokens,
-                    cost, outcome, now)
+                    cost, outcome, done)
     if stall is None and not (worktree / PR_BODY_FILE).is_file():
         stall = "the run completed but left no pr-body.md"
     failed = failed or _deliver(git, gh, worktree, branch, item, batch)
@@ -512,7 +517,7 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
     charter = next(s["charter"] for s in entry["steps"]
                    if s["step"] == step)
     _, problems = append(root, batch, lambda rows: ({
-        "at": stamp(now), "kind": "run",
+        "at": stamp(done), "kind": "run",
         "item": item, "step": step, "charter": charter, "band": band,
         "model": model, "models_reported": reported, "effort": effort,
         "run_id": run_id, "pid": pid, "outcome": outcome}, []))
@@ -523,21 +528,21 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
         if verdict is None:
             stall = "review.md carries no verdict: pass|changes line"
         else:
-            _, problems = flow.record_verdict(root, batch, now, item,
+            _, problems = flow.record_verdict(root, batch, done, item,
                                               verdict, run_id, ctx["head"])
     if stall is not None:
-        _, problems = flow.queue_stall(root, batch, now, item, stall,
+        _, problems = flow.queue_stall(root, batch, done, item, stall,
                                        "retry", WORKER_WHY)
     return {"run_id": run_id, "outcome": outcome, "stall": stall}, problems
 
 
-def run_cli(root, args, now, git, gh, harness):
+def run_cli(root, args, clock, git, gh, harness):
     if len(args) != 3 or not cost_ledger.ISSUE_KEY.fullmatch(args[1]):
         return None
     batch, item, step = args
     if step not in flow.STEPS:
         return None
-    summary, problems = run_step(root, batch, item, step, now, git, gh,
+    summary, problems = run_step(root, batch, item, step, clock, git, gh,
                                  harness=harness or harness_run)
     if summary is not None:
         line = f"cd: run {summary['run_id']} {summary['outcome']}"

@@ -458,8 +458,8 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
         elif command == "answer":
             problems = _answer_cli(root, batch, args, now, env)
         elif command == "run":
-            problems = conductor_run.run_cli(root, [batch, *args], now, git,
-                                             run, harness)
+            problems = conductor_run.run_cli(root, [batch, *args], clock,
+                                             git, run, harness)
         elif command == "scorecard":
             problems = conductor_close.scorecard_cli(root, [batch, *args],
                                                      now)
