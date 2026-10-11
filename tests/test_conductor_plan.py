@@ -50,7 +50,10 @@ def fake_gh(issues, owner=OWNER, fail=None):
     return run
 
 
-def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", calls=None):
+def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", calls=None,
+             on_main=()):
+    """`on_main` names the files origin/main holds: ls-tree lists them,
+    and a worktree added from it checks them out."""
     import subprocess
 
     def run(args):
@@ -61,7 +64,16 @@ def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", calls=None):
                                                stderr="")
         if args[:2] == ["worktree", "add"]:
             Path(args[4]).mkdir(parents=True)
+            for path in on_main:
+                (Path(args[4]) / path).parent.mkdir(parents=True,
+                                                    exist_ok=True)
+                (Path(args[4]) / path).write_text("{}\n")
             return subprocess.CompletedProcess(args, 0, stdout="",
+                                               stderr="")
+        if args[0] == "ls-tree":
+            listed = "".join(f"{path}\n" for path in on_main
+                             if path in args)
+            return subprocess.CompletedProcess(args, 0, stdout=listed,
                                                stderr="")
         raise AssertionError(args)
     return run
@@ -245,8 +257,11 @@ class TestOpen(unittest.TestCase):
             self.assertEqual(worktree,
                              Path(tmp) / ".claude/worktrees/conductor-b1")
             rows, problems = conductor.load(worktree, "b1")
-        self.assertEqual(calls, [["worktree", "add", "-b", "conductor/b1",
-                                  str(worktree), "origin/main"]])
+        self.assertEqual(calls, [
+            ["ls-tree", "--name-only", "origin/main", "--",
+             "docs/factory/batches/b1/ledger.jsonl"],
+            ["worktree", "add", "-b", "conductor/b1", str(worktree),
+             "origin/main"]])
         self.assertEqual(problems, [])
         self.assertEqual([r["kind"] for r in rows],
                          ["plan", "reserve", "reserve", "reserve",
@@ -286,6 +301,23 @@ class TestOpen(unittest.TestCase):
                 conductor_plan.open_batch(tmp, "b1", result, clock(), fake_git()),
                 (None, ["cd: .claude/worktrees/conductor-b1 already"
                         " exists"]))
+
+    def test_a_batch_name_with_a_ledger_on_main_is_refused(self):
+        # Review minor 5: a closed batch's ledger is on main, so a reused
+        # name crashed with FileExistsError after the worktree was made.
+        result, _ = plan([issue(12)])
+        calls = []
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                conductor_plan.open_batch(
+                    tmp, "b1", result, clock(),
+                    fake_git(calls=calls, on_main=[conductor.LEDGER.format(
+                        batch="b1")])),
+                (None, ["cd: batch b1 already has a ledger on origin/main"
+                        " (docs/factory/batches/b1/ledger.jsonl); choose"
+                        " another batch name"]))
+            self.assertFalse(
+                (Path(tmp) / ".claude/worktrees/conductor-b1").exists())
 
     def test_a_bad_batch_name_is_refused_before_git(self):
         result, _ = plan([issue(12)])

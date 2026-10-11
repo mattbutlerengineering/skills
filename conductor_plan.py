@@ -234,7 +234,8 @@ def open_batch(root, batch, plan, now, git):
     """(the batch worktree, problems): create conductor/<batch> and its
     worktree from origin/main, write the plan row and one reserve row per
     block, and queue the spend ask. Refuses an empty plan, a bad batch
-    name and an existing worktree before git runs."""
+    name and an existing worktree before git runs, and a name whose
+    ledger is already on origin/main before any worktree is made."""
     if not (isinstance(batch, str) and BATCH_NAME.fullmatch(batch)):
         return None, [f"cd: batch {batch!r} is not a batch name"
                       " (lowercase letters, digits and hyphens)"]
@@ -244,6 +245,17 @@ def open_batch(root, batch, plan, now, git):
     worktree = Path(root) / shown
     if worktree.exists():
         return None, [f"cd: {shown} already exists"]
+    ledger_path = LEDGER.format(batch=batch)
+    try:
+        # A closed batch's ledger reaches main (review minor 5): its name
+        # is taken even once its branch and worktree are gone.
+        if git(["ls-tree", "--name-only", "origin/main", "--",
+                ledger_path]).stdout.strip():
+            return None, [f"cd: batch {batch} already has a ledger on"
+                          f" origin/main ({ledger_path}); choose another"
+                          " batch name"]
+    except CLI_FAILURES as err:
+        return None, [f"cd: git ls-tree origin/main failed: {detail(err)}"]
     try:
         git(["worktree", "add", "-b", f"conductor/{batch}", str(worktree),
              "origin/main"])
@@ -260,7 +272,7 @@ def open_batch(root, batch, plan, now, git):
               "what": kind, "values": values}
              for item in plan["items"]
              for kind, values in item["block"].items()]
-    ledger = worktree / LEDGER.format(batch=batch)
+    ledger = worktree / ledger_path
     ledger.parent.mkdir(parents=True, exist_ok=True)
     with open(ledger, "x", encoding="utf-8") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
