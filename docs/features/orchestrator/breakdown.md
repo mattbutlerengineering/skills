@@ -29,7 +29,7 @@ strings, `cli.report` for the exit, and `gh`/`git`/harness calls through
 
 ## Milestone 1: Policy and spend accept a batch (the existing ledgers know about the Conductor)
 
-- [ ] **WO-0153** Cost ledger admits issue-keyed rows (ADR-0084) — size:S, blocked by: — (PRD-0013 §Success criteria, §Problem statement)
+- [x] **WO-0153** Cost ledger admits issue-keyed rows (ADR-0084) — size:S, blocked by: — (PRD-0013 §Success criteria, §Problem statement)
   - Accept: `cost_ledger.line_problems` admits a `wo` of `#<n>` matching `#[1-9][0-9]*` and keeps rejecting every other non-`WO-####` value (`#0`, `#`, `12`, `#12a` each still return their existing problem string); `cost_ledger.wo_token` returns None for an issue-keyed row; `cost_ledger.dispatched`, and through it `work_queue.month_to_date`, counts the row's cost; `cost_report`'s `by_wo` and `dashboard.py`'s per-order spend show `#<n>` keys labelled as issues, beside work orders; detector G passes a fixture ledger holding an issue-keyed row and still fails one holding `wo: "12"`. `factory_init.py update-manifest` is re-run because `cost_ledger.py` and `cost_report.py` are mirrored. ADR-0084's status is unchanged.
 - [ ] **WO-0154** Effort policy beside routing — size:S, blocked by: — (PRD-0013 §User stories, §Open questions)
   - Accept: `factory_config.resolve_effort(band, config)` returns `(effort, [])` for a band in the `effort` table and fails closed with a `config:` problem string, in `resolve_model`'s shape, for a missing table or band; `config_problems` reports an `effort` value outside `low` / `medium` / `high` / `xhigh` / `max` and is silent when the table is absent; detector F's selftest fails on a planted bad effort value; `factory/templates/factory.json` gains the architecture's `effort` table (mechanical low, implementation medium, architecture_review high) and the manifest is regenerated.
@@ -109,3 +109,11 @@ and every existing seam it names exists on main (`cli.harness_run`,
   `effort` table edits a checksum-pinned template and owes a manifest
   regeneration. row 0153 owes one too: `cost_ledger.py` and `cost_report.py`
   are in `factory_init.MIRRORS`. `conductor.py` stays root-only (Architect).
+- 2026-10-10 (Implement, row 0153): the issue-key grammar is
+  `cost_ledger.ISSUE_KEY`; `cost_report.compose_report` and
+  `dashboard._output` read it to label a `#<n>` group as
+  "issue #<n> (no work order)". The dashboard's issue rows follow the
+  work-order rows in the output table. Adjacent, not changed: the
+  dashboard's `cost_per_wo` divides lifetime spend by every `by_wo` key,
+  so issue groups now count in its denominator as if they were orders.
+  Logged here for a later run rather than fixed in this row.

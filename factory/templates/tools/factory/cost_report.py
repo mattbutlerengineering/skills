@@ -147,9 +147,10 @@ def compose_report(totals, verdict, reason, cap, as_of, month,
     """The weekly report issue body: the report month's spend against the
     monthly cap (with the lifetime figure alongside — the spend line is
     the number the verdict decided on, ADR-0034's monthly window), a
-    by-work-order breakdown over the LIFETIME totals, and the pause
-    verdict. Deterministic text, easy to assert on and easy to skim (same
-    discipline as handoff.compose). cap is None only on a failing-closed
+    by-work-order breakdown over the LIFETIME totals (an ADR-0084 issue
+    key labelled as an issue), and the pause verdict. Deterministic text,
+    easy to assert on and easy to skim (same discipline as
+    handoff.compose). cap is None only on a failing-closed
     guard() path (no cap could be resolved); shown honestly rather than
     faked."""
     cap_text = f"${cap:.2f}" if cap is not None else "unknown"
@@ -162,7 +163,9 @@ def compose_report(totals, verdict, reason, cap, as_of, month,
              "### By work order (lifetime)"]
     if totals["by_wo"]:
         for wo in sorted(totals["by_wo"]):
-            lines.append(f"- {wo}: ${totals['by_wo'][wo]:.2f}")
+            label = (f"issue {wo} (no work order)"
+                     if cost_ledger.ISSUE_KEY.fullmatch(wo) else wo)
+            lines.append(f"- {label}: ${totals['by_wo'][wo]:.2f}")
     else:
         lines.append("- (no runs recorded)")
     lines += ["", "### Verdict", reason.strip()]

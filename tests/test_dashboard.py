@@ -466,6 +466,31 @@ class TestOutput(unittest.TestCase):
              "url": "https://github.com/o/r/pull/40", "spend": 3.25},
         ])
 
+    def test_issue_keyed_spend_rows_follow_the_work_orders(self):
+        # ADR-0084: a run with no work order is keyed by its issue. Its
+        # spend shows beside the work orders, labelled as an issue.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write(
+                "docs/factory/costs.jsonl",
+                '{"wo": "WO-0103", "run_id": "r1", "model": "m",'
+                ' "tokens": 10, "cost": 2.0, "outcome": "completed",'
+                ' "at": "2026-08-10"}\n'
+                '{"wo": "#12", "run_id": "r2", "model": "m",'
+                ' "tokens": 5, "cost": 0.5, "outcome": "completed",'
+                ' "at": "2026-08-11"}\n')
+            tree.write(".github/factory.json",
+                       '{"monthly_cap_usd": 300.0}')
+            state = dashboard.gather(tmp, run=queue_gh(prs=self.PRS),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        self.assertEqual([o["wo"] for o in state["output"]],
+                         ["WO-0101", "WO-0102", "WO-0103", "#12"])
+        self.assertEqual(state["output"][-1], {
+            "wo": "#12", "title": "issue #12 (no work order)",
+            "size": None, "state": None, "pr": None, "url": "",
+            "spend": 0.5})
+
     def test_an_absent_ledger_is_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             factory_repo(tmp)

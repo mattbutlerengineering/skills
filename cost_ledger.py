@@ -47,6 +47,12 @@ AT_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # daily gate digest inside ADR-0034's open outcome vocabulary.
 GATE_OUTCOME = re.compile(r"gate_wait:([a-z]+):(\d+)s")
 
+# The issue key (ADR-0084): a run that implements no single work order is
+# keyed by the issue it served, "#<n>" with no leading zero. wo_token
+# still returns None for it, so every work-order rule skips the row while
+# dispatched() counts its spend.
+ISSUE_KEY = re.compile(r"#[1-9][0-9]*")
+
 
 def entry(wo, run_id, model, tokens, cost, outcome, at):
     """A well-formed ledger record, built from LEDGER_FIELDS +
@@ -159,7 +165,8 @@ def wo_token(entry):
 
 
 def line_problems(entry):
-    """Unlocated shape problems for one parsed ledger record (ADR-0034):
+    """Unlocated shape problems for one parsed ledger record (ADR-0034;
+    `wo` is a WO-#### token or an ADR-0084 issue key):
     missing/unknown fields, per-field rules in LEDGER_FIELDS order, then
     the optional `at` rule (present means a valid ISO date; absent means a
     legacy row and is never a problem). Callers prefix their own label and
@@ -179,7 +186,9 @@ def line_problems(entry):
             continue
         value = entry[field]
         if field == "wo":
-            if not (isinstance(value, str) and WO_TOKEN.fullmatch(value)):
+            if not (isinstance(value, str)
+                    and (WO_TOKEN.fullmatch(value)
+                         or ISSUE_KEY.fullmatch(value))):
                 problems.append(f"wo {value!r} is not a WO-#### token")
         elif field in LEDGER_TEXT_FIELDS:
             if not isinstance(value, str) or not value.strip():

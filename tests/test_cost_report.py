@@ -386,6 +386,20 @@ class TestComposeReport(unittest.TestCase):
         self.assertIn("of unknown monthly cap", body)
 
 
+    def test_issue_keyed_spend_is_labelled_as_an_issue(self):
+        # ADR-0084: by_wo groups an issue-keyed row under its own #<n>
+        # key; the report says it is an issue, never a work order.
+        totals = cost_report.aggregate([
+            entry("WO-0001", "r-1", "m", 10, 15.0, "merged", "2026-07-06"),
+            entry("#12", "r-2", "m", 10, 0.5, "completed", "2026-07-07")])
+        self.assertEqual(totals["by_wo"], {"WO-0001": 15.0, "#12": 0.5})
+        body = cost_report.compose_report(
+            totals, cost_report.CONTINUE, "cr: ok", 300, "2026-07-13",
+            "2026-07", totals)
+        self.assertIn("- WO-0001: $15.00", body)
+        self.assertIn("- issue #12 (no work order): $0.50", body)
+        self.assertNotIn("- #12:", body)
+
 class TestReportTitle(unittest.TestCase):
     def test_title_includes_the_date(self):
         self.assertEqual(cost_report.report_title("2026-07-13"),
