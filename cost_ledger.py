@@ -189,7 +189,8 @@ def line_problems(entry):
             if not (isinstance(value, str)
                     and (WO_TOKEN.fullmatch(value)
                          or ISSUE_KEY.fullmatch(value))):
-                problems.append(f"wo {value!r} is not a WO-#### token")
+                problems.append(f"wo {value!r} is not a WO-#### token"
+                                " or an issue key (#<n>)")
         elif field in LEDGER_TEXT_FIELDS:
             if not isinstance(value, str) or not value.strip():
                 problems.append(f"{field} must be a non-empty string")

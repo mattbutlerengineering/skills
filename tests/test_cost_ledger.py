@@ -110,7 +110,8 @@ class TestLineProblems(unittest.TestCase):
     def test_bad_field_values_in_ledger_field_order(self):
         record = entry("nonsense", "", "m", -5, -1.0, "merged", "2026-08-02")
         self.assertEqual(cost_ledger.line_problems(record), [
-            "wo 'nonsense' is not a WO-#### token",
+            "wo 'nonsense' is not a WO-#### token or an issue key"
+            " (#<n>)",
             "run_id must be a non-empty string",
             "tokens must be a non-negative integer",
             "cost must be a non-negative number",
@@ -623,7 +624,8 @@ class TestIssueKeyedRows(unittest.TestCase):
         for value in ("#0", "#", "12", "#12a", "#012"):
             record = dict(self.ROW, wo=value)
             self.assertEqual(cost_ledger.line_problems(record),
-                             [f"wo {value!r} is not a WO-#### token"],
+                             [f"wo {value!r} is not a WO-#### token or"
+                              " an issue key (#<n>)"],
                              value)
 
     def test_an_issue_keyed_row_has_no_work_order_token(self):

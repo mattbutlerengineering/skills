@@ -305,6 +305,20 @@ class TestEffortProblems(unittest.TestCase):
             self.assertEqual(factory_config.config_problems(config), [],
                              value)
 
+    def test_an_effort_that_is_not_a_table_is_flagged(self):
+        # Review minor 9: detector F passed `"effort": "high"`, which
+        # every resolve_effort lookup then refused.
+        for value in ("high", ["low"], None):
+            config = dict(CONFIG, effort=value)
+            self.assertEqual(factory_config.config_problems(config), [
+                "effort must map bands to efforts"], value)
+
+    def test_an_effort_band_outside_the_bands_is_flagged(self):
+        config = dict(CONFIG, effort=dict(CONFIG["effort"], cheap="low"))
+        self.assertEqual(factory_config.config_problems(config), [
+            "effort.cheap is not a band (mechanical, implementation,"
+            " architecture_review)"])
+
     def test_an_absent_effort_table_is_silent(self):
         config = {key: value for key, value in CONFIG.items()
                   if key != "effort"}
