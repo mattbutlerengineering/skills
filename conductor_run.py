@@ -492,6 +492,9 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
             "fields": {"run_id": run_id, "pid": pid}}, spent, cap)
     if problems:
         return None, problems
+    # pr-body.md is this step's output only (review minor 7): one left by
+    # an earlier step would satisfy the expected-output check.
+    (worktree / PR_BODY_FILE).unlink(missing_ok=True)
     brief = compose_brief(step, item, entry["type"], worktree, branch,
                           ctx["block"], ctx["wo"], ctx["context"],
                           ctx["body"], ceiling)
@@ -511,6 +514,7 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     if stall is None and not (worktree / PR_BODY_FILE).is_file():
         stall = "the run completed but left no pr-body.md"
     failed = failed or _deliver(git, gh, worktree, branch, item, batch)
+    (worktree / PR_BODY_FILE).unlink(missing_ok=True)
     stall = stall or failed
     if stall is None and ctx["briefed"] is not None:
         stall = _left_unchecked(git, branch, ctx["briefed"], ctx["wo"])

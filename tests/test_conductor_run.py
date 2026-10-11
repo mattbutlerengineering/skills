@@ -524,6 +524,22 @@ class TestFailedRun(RunCase):
             ("state", "2026-10-10T14:00:00Z"),
             ("ask", "2026-10-10T14:00:00Z")])
 
+    def test_a_body_left_by_an_earlier_step_is_not_this_steps_output(self):
+        # Review minor 7: pr-body.md stayed in the worktree, so from the
+        # second step on the no-pr-body.md stall could never fire.
+        self.worktree("#12").mkdir(parents=True)
+        pr_body(self.worktree("#12"))
+        self.run_step("#12", "spec", Harness())
+        self.assertEqual(self.rows[-2]["reason"],
+                         "the run completed but left no pr-body.md")
+
+    def test_the_body_is_cleared_once_delivered(self):
+        # Left behind, it would also be an untracked file the merge
+        # turn's clean-worktree check stalls on.
+        self.run_step("#12", "spec", Harness(act=pr_body))
+        self.assertIsNone(self.rows[-1].get("ask_kind"))
+        self.assertFalse((self.worktree("#12") / "pr-body.md").exists())
+
     def test_a_failed_push_stalls_and_opens_no_pr(self):
         self.run_step("#12", "spec", Harness(act=pr_body),
                       git=Git(self.tmp.name, fail="push"))
