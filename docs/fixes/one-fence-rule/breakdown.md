@@ -31,7 +31,7 @@ its `factory/templates/tools/factory/` twin and runs
 
 ## Milestone 3: the validator's skip gate stops reading quoted claims
 
-- [ ] **`_unquoted` tracks fences through `fence_open`/`fence_closes`** — blockquote stripping stays local, and `validator.FENCES` is deleted
+- [x] **`_unquoted` tracks fences through `fence_open`/`fence_closes`** — blockquote stripping stays local, and `validator.FENCES` is deleted
   - Accept: a new `TestRunLifecycle` case is written first and watched fail on today's code: a body whose only `Closes` work-order line sits after an inner three-backtick line inside a four-backtick fence is a silent no-op under `uncited="skip"` (`problems == []`, no gh calls). The existing tilde-fence, blockquote, unterminated-fence and inline-backtick cases pass with no edits. The twin is synced and the manifest regenerated.
   - Blocked by: Move the strict walker into knowledge_plane
 

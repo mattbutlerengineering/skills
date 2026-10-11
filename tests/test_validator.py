@@ -831,6 +831,22 @@ class TestRunLifecycle(unittest.TestCase):
             self.assertEqual(problems, [])
             self.assertEqual(run.calls, [])
 
+    def test_a_quoted_fence_inside_a_longer_fence_is_content(self):
+        """one-fence-rule's repro: a four-backtick block quoting a markdown
+        example. The inner ``` line is content, so the work-order line
+        after it is still quoted and the body claims nothing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh()
+            body = ("````markdown\n```\n"
+                    "Implements WO-0004. Closes #999\n```\n````\n\n"
+                    "No work order: docs only.\n")
+            problems = validator.run_lifecycle(
+                tree.root, "wo:merged", env=self.env(tmp, body=body),
+                run=run, uncited="skip")
+            self.assertEqual(problems, [])
+            self.assertEqual(run.calls, [])
+
     def test_an_unterminated_fence_swallows_the_rest_of_the_body(self):
         """The conservative direction, asserted rather than assumed: an
         author who opens a fence and never closes it gets a skip, which

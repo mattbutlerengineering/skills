@@ -86,7 +86,8 @@ from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, label_names, report, write_outputs
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             repo_root, row_tracker_issue, row_work_order)
+                             fence_closes, fence_open, repo_root,
+                             row_tracker_issue, row_work_order)
 
 LIFECYCLE_PREFIX = "wo:"
 # The dispatch-queue state (ADR-0032). The claim's idempotency verdict is
@@ -365,11 +366,11 @@ def _flip(number, label, lifecycle, run):
     return remove, []
 
 
-# What "quoted" means to the skip gate below: a fenced region, and a
-# blockquote line. NOT inline code — backticks around an id are how this
-# repo writes identifiers in ordinary prose, genuine claims included, so
-# treating them as quotation would silence real work-order PRs (ADR-0064).
-FENCES = ("```", "~~~")
+# What "quoted" means to the skip gate below: a fenced region (the one
+# fence rule, knowledge_plane.fence_open/fence_closes), and a blockquote
+# line. NOT inline code — backticks around an id are how this repo writes
+# identifiers in ordinary prose, genuine claims included, so treating them
+# as quotation would silence real work-order PRs (ADR-0064).
 
 
 def _unquoted(body):
@@ -394,18 +395,17 @@ def _unquoted(body):
     kept = []
     fence = None
     for line in body.splitlines():
-        stripped = line.lstrip()
-        mark = next((f for f in FENCES if stripped.startswith(f)), None)
         if fence is not None:
-            # Inside a fence, only its OWN marker closes it: a ~~~ line
-            # within a backtick block is content, not a delimiter.
-            if mark == fence:
+            # Inside a fence, only its OWN marker, at least as long, closes
+            # it: a ~~~ line within a backtick block is content, and so is
+            # a ``` line within a ```` block.
+            if fence_closes(line, fence[0], fence[1]):
                 fence = None
             continue
-        if mark is not None:
-            fence = mark
+        fence = fence_open(line)
+        if fence is not None:
             continue
-        if stripped.startswith(">"):
+        if line.lstrip().startswith(">"):
             continue
         kept.append(line)
     return "\n".join(kept)
