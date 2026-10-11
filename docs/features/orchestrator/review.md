@@ -527,3 +527,80 @@ accept or reject ADR-0085, and give spend consent for the real-batch
 criteria, which are still NOT RUN. R2–R4 are minor and may be deferred:
 R2 and R3 are each a one-line test or doc fix, and R4 waits on R1's
 fix.
+
+## Re-review fixes (2026-10-11)
+
+Implement fixed R1–R4, test-first, one commit each. Each new test was
+seen to fail before its fix, or, for a test-gap or doc finding, its
+mutation or limit was shown. No paid run, no gh write, no merge.
+`skills/` is untouched, so the plugin version and manifest stay as
+they were.
+
+- **R1 (major): resolved in f9124f7.** A merge turn that starts from
+  `ship` now stalls, recommending `block`, when `git status --porcelain
+  --untracked-files=all` in the item worktree is non-empty. The check
+  runs with the reviewed-tree diff, before any Conductor commit. The
+  Conductor's own commits now stage by name only the files it writes:
+  `factory/manifest.json`, `.claude-plugin/plugin.json` on a version
+  bump, and the payload mirrors `update-manifest` refreshes
+  (`factory_init.MIRRORS`). They never use `-A`. The re-review's
+  scenario is now a test,
+  `test_a_file_a_worker_left_uncommitted_stalls_the_merge`: the item
+  touches `skills/`, and the ship Worker leaves an untracked
+  `factory/templates/unreviewed.yml`. The turn stalls, and the file is
+  on neither the branch nor `origin`. Two `TestConductorCommits` tests
+  hold each half on its own, by calling the version bump and the
+  manifest-conflict merge with a stray file present. All three failed
+  before the fix.
+- **R2 (minor): resolved in 22e1138.** A new test,
+  `test_the_reviewed_head_is_read_before_the_review_worker_runs`,
+  moves the fake branch head once the review Worker has run. It asserts
+  that the reviewed row records the head from before the run. The
+  re-review's mutant, which passes a `rev-parse` of the branch taken
+  after the run to `record_verdict`, is now killed by that test. The
+  file was restored with `git checkout`.
+- **R3 (minor): resolved in 81d05e0, as an honest doc fix.**
+  `architecture.md` amendment 12, breakdown.md's major-3 note, this
+  file's post-review section and `worker_env`'s docstring now say that
+  the `pushInsteadOf` rewrite covers a URL given on the command line or
+  as a remote's `url`, but not a remote's explicit `pushurl`. They also
+  say that a token embedded in a `pushurl`, or a `~/.netrc` entry, is
+  not blocked. Nothing cheap closes this for every remote. Env config
+  cannot unset a `pushurl`; adding one makes git push to both URLs.
+  Moving `HOME` to hide `.netrc` would also hide the harness's own
+  config. `test_a_configured_pushurl_is_not_rewritten` pins the limit,
+  so a change in git's behaviour shows up.
+- **R4 (minor): resolved in e6f8da9.** The run directory is now the
+  one whose `verification.md` the item changed between origin/main and
+  the reviewed head. Every item type runs `verify` before `review`.
+  Only that directory's `review.md` and `release.md` may change after
+  the review. `costs.jsonl` may change only by appending: its text at
+  the reviewed head must be a prefix of the branch's.
+  `test_another_runs_review_after_the_review_stalls_the_merge` (a
+  foreign run's `review.md` and the root `docs/release.md`) and
+  `test_a_dropped_spend_row_after_the_review_stalls_the_merge` both
+  stall. A mutant that lets any rewrite of `costs.jsonl` through is
+  killed, and so is one that allows the foreign paths. ADR-0085's
+  draft decision 4 is updated to match. Two existing fixtures now
+  commit a `verification.md` before the review.
+
+### Gates (re-review fixes)
+
+- `python3 -m unittest discover tests`: `Ran 2344 tests`, `OK`.
+- `python3 lint.py`: `lint: 0 problem(s) across 32 skills`.
+- `python3 gates.py`: `gates: 0 problem(s)`.
+- `python3 gates.py --selftest`: `selftest: ok`.
+
+### Verdict (re-review fixes)
+
+Ready to ship, subject to the Owner's decisions. Every finding from
+both review passes is fixed or recorded as a stated gap. What remains
+is the Owner's to decide:
+
+- accept or reject ADR-0085, and ADR-0084;
+- merge the PR stack;
+- give spend consent for the real batch, whose criteria are still NOT
+  RUN.
+
+Suspicion S1 (a profile that re-exports a token into the Worker's
+shell) is still unreproduced on this machine.
