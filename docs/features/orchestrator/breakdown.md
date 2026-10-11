@@ -38,7 +38,7 @@ strings, `cli.report` for the exit, and `gh`/`git`/harness calls through
 
 - [x] **WO-0155** Batch ledger grammar and the decision queue — size:M, blocked by: — (PRD-0013 §User stories, §Success criteria, §Actors)
   - Accept: `conductor.py` owns the row grammar of architecture.md's batch-ledger table (`plan`, `reserve`, `state`, `run`, `ask`, `answer`, `close`, each with `at`, `kind`, `item`); appends take an exclusive `fcntl.flock` on `ledger.jsonl`; the reader fails with a `cd:` problem naming file and line for a line that does not parse or breaks its kind's field rules, and never skips it. `conductor.py ask` writes an `ask` row with a fresh id; `answer` writes an `answer` row and refuses an unknown ask, an already-answered ask, a choice not among the ask's options, and any call with `CONDUCTOR_WORKER` set, each with its own exact problem string; `next` returns only the oldest unanswered ask.
-- [ ] **WO-0156** Priced plan, reserved blocks, and opening a batch — size:M, blocked by: WO-0154, WO-0155 (PRD-0013 §User stories, §Success criteria, §Solution)
+- [x] **WO-0156** Priced plan, reserved blocks, and opening a batch — size:M, blocked by: WO-0154, WO-0155 (PRD-0013 §User stories, §Success criteria, §Solution)
   - Accept: `conductor.py plan <#N>...`, given injected issue reads, a config and month-to-date spend, prints per item the type, steps, each step's charter, band, model, effort and ceiling (the step-to-charter table fixed in `conductor.py`), the item estimate from `budgets_usd` by its `size:` label, and a reserved PRD/ADR/WO block above the highest id on `origin/main` (read through `knowledge_plane`) and above every earlier block; then the batch estimate against what remains of `monthly_cap_usd`, and one deferral line each for a non-owner author, no `type:` label, no `size:` label, a closed issue, and over the cap. It plans nothing on a `config:` problem and refuses the whole plan on an unreadable or truncated issue read. `conductor.py open` creates the `conductor/<batch>` branch and worktree from `origin/main` (through the git port), writes the `plan` row (with its `routing`/`effort` policy snapshot) and one `reserve` row per block, and queues the spend ask; a test asserts no two items' blocks share a number.
 
 ## Milestone 3: One item runs end to end through metered Workers (stalls escalate)
@@ -126,3 +126,31 @@ and every existing seam it names exists on main (`cli.harness_run`,
   new CLI-bearing root module, so it also gets its `conductor` verb in
   `factory.py`'s table (`tests/test_factory_cli.py` pins one verb per
   such module).
+- 2026-10-10 (Implement, row 0156): row 0156 hit seven decisions the
+  artifacts did not settle. Implement stopped and recommended a default
+  for each. The Owner accepted all seven on 2026-10-10 via the
+  orchestrator's question, as assumptions:
+  1. Reserved block sizes per item: feature {PRD 1, ADR 3, WO 10}, fix
+     {ADR 1, WO 5}, order {} (its ids already exist). Fixed constants
+     with a `lean:` marker; a Worker that runs out stops and says so.
+  2. Steps per type: feature and fix [spec, build, verify, review,
+     ship]; order [build, verify, review, ship].
+  3. Type from labels: `wo:ready-for-agent` makes an order;
+     `type:feature` a feature; `type:defect` and `type:chore` a fix;
+     `type:support` and `type:sweep` are deferred as not plannable.
+  4. Step ceilings: the item's `budgets_usd[size]` estimate split
+     equally across its steps.
+  5. The repo owner is read with `gh repo view --json owner` through
+     `cli.gh_read`, failing closed.
+  6. The highest ids in use come from `git grep` over `origin/main` with
+     knowledge_plane's PRD/ADR/WO token grammars, taking the max of each.
+  7. `open` takes a caller-supplied batch slug: `open <batch> <#N>...`.
+- 2026-10-10 (Implement, row 0156), choices inside those answers: the
+  `git grep` is scoped to `docs/`, because tests and fixtures on
+  `origin/main` carry example ids in the nine-thousands that would push every
+  block past the 4-digit grammar. The batch worktree is
+  `.claude/worktrees/conductor-<batch>` under the repo root. The spend
+  ask's options are `approve` / `decline`, recommending `approve`, since
+  over-cap items are already deferred. `plan` reads ids from the local
+  `origin/main` ref without fetching, because it writes nothing; the
+  merge turn's confirmation (row 0161) covers a stale ref.
