@@ -52,7 +52,7 @@ strings, `cli.report` for the exit, and `gh`/`git`/harness calls through
 
 ## Milestone 4: Reviewed items merge in order (never green alone, red together)
 
-- [ ] **WO-0160** Merge precondition — size:S, blocked by: WO-0157 (PRD-0013 §User stories, §Success criteria, §Out of scope)
+- [x] **WO-0160** Merge precondition — size:S, blocked by: WO-0157 (PRD-0013 §User stories, §Success criteria, §Out of scope)
   - Accept: a pure check refuses `conductor.py merge` with its own problem string unless the item is `reviewed` with a pass verdict from a reviewer run distinct from every author run, and an answer covers it: its own merge ask, or a train ask whose `covers` lists it, answered with the train option, with every earlier item in that train already `merged`. A PR touching `docs/adr/**`, a run's `prd.md` or `architecture.md`, or `docs/design/**` passes on a train only when those files' blob ids equal the `gate_blobs` answered at its gate asks; a fixture with one changed blob is refused.
 - [ ] **WO-0161** The merge turn — size:M, blocked by: WO-0158, WO-0160 (PRD-0013 §User stories, §Success criteria, §Open questions)
   - Accept: with injected git and gh ports over a scratch repo, `conductor.py merge <batch> <item>` runs the architecture's eight steps in order: merges `origin/main` into the item branch; resolves only `costs.jsonl` (by the new `.gitattributes` line `docs/factory/costs.jsonl merge=union`) and the manifest (by regeneration); bumps the plugin patch version from `main`'s value when the item touched `skills/`; confirms every reserved number the item used is still free on `origin/main`, recording a mechanical renumber as a `reserve` row with `renumbered_from`; runs `make check`; pushes without force; waits up to 30 minutes for the new head's checks; then squash-merges, or enqueues when `mergeQueue(branch: "main")` is non-null and waits for merged or ejected. It writes a `merged` state row with `pr`, `sha` and `checks`. A non-mechanical conflict, a red re-check, an ejection, a timeout, or an unrenumberable collision each queue a stall ask and leave the branch as pushed; no test path force-pushes or retries.
@@ -238,3 +238,19 @@ and every existing seam it names exists on main (`cli.harness_run`,
   row. An open PR's body is updated through `gh api -X PATCH`, and a new
   PR is titled `#<n>: conductor batch <batch>`. A failed spend-row
   commit stalls like a failed push.
+- 2026-10-10 (Implement, row 0160): the precondition lives in
+  `conductor_merge.py` (assumption 6), as `merge_problems(rows, item,
+  blobs)`, pure over the ledger rows and the item branch's gate blobs.
+  Choices inside the design: a merge ask's consenting choice is `merge`
+  for an item's own ask and `train` for a train ask (the `conduct`
+  skill, row 0164, words its asks with those options); an item at
+  `ship` merges only once its ship run completed, and otherwise the
+  move to `merging` goes through `transition_problems`, so an
+  unanswered ask or a stall without a retry answer also refuses; the
+  author runs a reviewer must be distinct from are the recorded
+  `author_runs` plus every non-review run row of the item; when several
+  train asks cover an item, the latest consenting one decides; the
+  approved gate blobs are the union of the item's approved gate asks,
+  a later approval winning per path. The train reading (one answer per
+  ordered train, gate-path items only on identical blobs) is built as
+  designed and stays flagged for the Owner.
