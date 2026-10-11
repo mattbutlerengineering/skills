@@ -138,6 +138,71 @@ software that already shipped.
 
 - [ ] Run scale chosen deliberately (product / feature / maintenance)
 
+## 8. Project knowledge and reference files (optional)
+
+Two utility skills keep project-level files outside any run. Neither needs
+the factory stamp.
+
+- **Knowledge base** — `/knowledge-base` sets up `docs/kb/`: pages hold
+  only what the code doesn't tell an agent (invariants, gotchas,
+  cross-module flows, the why with its ADR). Its tool `kb.py` writes a
+  compressed index of page summaries inline into `CLAUDE.md` or
+  `AGENTS.md` between managed markers, so every session sees it (ADR-0078).
+  Ingest proposes page edits and a human promotes them. On this repo the
+  first paired test showed equal pass rates and roughly half the turns and
+  cost on tasks where the agent had to dig
+  (`docs/research/knowledge-base-ablation.md`); the index line alone did
+  not make an agent open a page for a task that didn't look like it needed
+  one, so a hard "do not" rule belongs in `CLAUDE.md` itself.
+- **UX patterns** — `/ux-patterns` derives `docs/ux-patterns.md` from the
+  code (behaviour rules: loading, errors, empty states, undo, focus);
+  `/ux-writing` owns its `## Voice & terms` section; `polish` and
+  `ux-design` read it (ADR-0079).
+
+- [ ] `python3 <plugin>/kb.py lint` prints `kb: 0 problem(s)` once
+      `docs/kb/` exists
+- [ ] The generated block in `CLAUDE.md` stays under its 2 KB budget
+
+## 9. Monorepos
+
+One pipeline root per repository: the repo root's `docs/`. Run discovery,
+the gate queue, the cost ledger and the factory stamp are all per repo,
+which is how GitHub labels, branch rules and CI already work, so a
+monorepo needs conventions rather than different tooling.
+
+- **Runs name their package.** Use the package as the slug prefix —
+  `docs/features/<package>-<slug>/`, `docs/fixes/<package>-<slug>/` — and
+  say in the idea brief or defect brief which package paths are in scope.
+  A change that spans packages is one run, not one per package.
+- **One knowledge base at the root.** Pages cite package paths in
+  `sources:`, so staleness is still checked per file; one index keeps the
+  always-loaded cost fixed however many packages there are.
+- **Scoped context in nested `CLAUDE.md` files.** Put package-specific
+  commands and "do not" rules in `<package>/CLAUDE.md`; Claude Code loads
+  it when work touches that package, on top of the root file.
+- **One stamp, one `make check`.** Stamp the factory once at the root; if
+  packages have their own test commands, call them from the root
+  `Makefile`'s `check` target rather than stamping per package.
+- **ADRs at the root**, numbered once for the whole repo (see the
+  protocol's "When to write an ADR").
+
+Per-package pipeline roots (a `docs/` inside each package) are not
+supported; run discovery would not find them.
+
+- [ ] Run slugs carry the package prefix
+- [ ] Package-specific rules live in nested `CLAUDE.md` files
+
+## An orchestrator (planned)
+
+Coordinating several issues at once — fanning out agents, choosing a
+model and context budget per item, ordering merges — is not a skill yet.
+It is an Idea-stage run (`docs/features/orchestrator/idea.md`, survey in
+`docs/research/orchestrator.md`). Until it lands, `work-queue` fans out
+ready work orders, `autorun` drives one run end to end, and a long
+interactive session coordinates the rest. One step needs no orchestrator:
+turn on the merge queue ADR-0070 already chose, if the repo's plan allows
+it.
+
 ## Deliberately not in scope
 
 Unattended dispatch stays off until explicitly opted into:
