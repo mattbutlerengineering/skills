@@ -73,8 +73,11 @@ only way an item becomes blocked.
 
 The asks the tool writes are the spend ask (`approve` / `decline`), the
 gate ask after an item's spec step (`approve` / `block`, over the gate
-files it lists), and stall asks (`retry`, `retry-up`, `block`; and
-`resume` / `stop` for a batch-wide pause). Two kinds are yours to word,
+files it lists, and the build's price: one run per breakdown row, so
+this answer is the build's spend consent), stall asks (`retry`,
+`retry-up`, `block`; and `resume` / `stop` for a batch-wide pause), and
+a monthly-cap pause (`resume` / `stop`) when a launch would pass
+`monthly_cap_usd`. Two kinds are yours to word,
 with `conductor.py ask`:
 
 - **Merge asks**, for each item in `merge_due`. Its own ask has options
@@ -100,7 +103,8 @@ mechanism, never in the foreground, and never more than `ready` lists:
 spend ask is unanswered or an item has an unanswered ask. When a runner
 exits, read its one-line result and the Worker's output it names, then
 run `next`. A failed run already queued its own stall ask; do not
-retry it.
+retry it. A launch the monthly cap refuses prints a `cd:` problem and
+pauses dispatch behind an ask; run `next` and present it.
 
 ### 5. Drive the merge turns the answers cover
 

@@ -607,3 +607,25 @@ question; breakdown.md's Notes hold the full text.
    counts that step's runs; the spend row is committed on the item
    branch before the push; a completed run with no `pr-body.md` stalls;
    the spec brief carries `stop-after: decompose`.
+
+2026-10-11. Post-review Implement. The Owner chose, via the
+orchestrator's question, to fix review majors 1–3. One fix's shape
+differs from the text above, and is recorded here for the Owner:
+
+10. **Build re-pricing.** The gate ask re-prices the item from the
+    number of unchecked breakdown rows times the build step's
+    `ceiling_usd`, not from the rows' `size:` bands. Each build run is
+    bounded by that ceiling (`--max-budget-usd`), whatever its row's
+    band, so rows × ceiling is the most the answer can let the build
+    spend; a band-priced figure would understate it. The ask carries
+    the figure as `build_usd`. A fix that changes no gate file still
+    skips the gate (amendment 4), so its build spend gets no
+    re-pricing ask; the run-time cap check below bounds it.
+11. **Run-time cap check.** Every `run` checks the month's spend, plus
+    the ceilings of runs still in flight, plus its own ceiling, against
+    `monthly_cap_usd` (read from `factory.json` at the batch root) under
+    the ledger lock, before it writes the launch row. The month's spend
+    is origin/main's `costs.jsonl` and every launched item branch's,
+    each row once by `row_key`, selected by `cost_ledger.dispatched`.
+    Over the cap, nothing launches: dispatch pauses behind one
+    batch-level `spend` ask (`resume` / `stop`, recommending `stop`).

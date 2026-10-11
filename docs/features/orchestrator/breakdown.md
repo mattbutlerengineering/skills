@@ -398,3 +398,21 @@ and every existing seam it names exists on main (`cli.harness_run`,
   commit nothing but their artifact. Still trust-based: a change made
   in the worktree by something other than a Worker (a human, a process
   a Worker left running) between the check and the push.
+- 2026-10-11 (Implement, post-review, review major 2): build spend is
+  re-priced at the gate and capped at run time, as architecture.md's
+  Amendments 10 and 11 record. Decisions inside the fix: the price is
+  rows × the build ceiling (the most the runs can spend), not band
+  prices; the cap is the current `factory.json`'s, not the plan row's
+  snapshot, so raising it is how the Owner resumes; in-flight ceilings
+  count, and the check runs under the ledger lock, so two runners
+  cannot both pass it on the same headroom; an over-cap launch pauses
+  dispatch behind a batch-level `spend` ask rather than stalling the
+  item, because a stall resumes only into its own state and `planned`,
+  `awaiting-gate` and `reviewed` are not steps. The three-failure
+  pause now counts only `stall` asks as its reset point, so a cap
+  pause does not clear a failure streak. Remaining gaps: a fix that
+  skips the gate gets no build re-pricing ask; a review's one
+  automatic fix build is not re-asked; and spend landing on main from
+  outside the batch counts only from the last fetch. `skills/conduct`
+  names the new ask, so plugin.json moves 0.8.0 to 0.8.1 and the
+  manifest is regenerated.

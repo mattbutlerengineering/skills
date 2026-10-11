@@ -96,7 +96,7 @@ ROW_FIELDS = {
     "run": (("step", "charter", "band", "model", "models_reported",
              "effort", "run_id", "pid", "outcome"), ()),
     "ask": (("id", "ask_kind", "question", "options", "recommended",
-             "why"), ("covers", "gate_blobs")),
+             "why"), ("covers", "gate_blobs", "build_usd")),
     "answer": (("ask", "choice", "note"), ()),
     "close": (("merged", "blocked"), ()),
 }
@@ -318,7 +318,7 @@ def next_ask(rows):
 
 
 def ask_row(rows, now, item, ask_kind, question, options, recommended,
-            why, covers=None, gate_blobs=None):
+            why, covers=None, gate_blobs=None, build_usd=None):
     """(row, problems): an ask row with a fresh id (ask-<n>, one past the
     ask count of `rows`, which include any rows about to be written with
     it), checked against the grammar."""
@@ -331,6 +331,8 @@ def ask_row(rows, now, item, ask_kind, question, options, recommended,
         row["covers"] = list(covers)
     if gate_blobs is not None:
         row["gate_blobs"] = dict(gate_blobs)
+    if build_usd is not None:
+        row["build_usd"] = build_usd
     return row, [f"cd: ask refused: {problem}"
                  for problem in row_problems(row)]
 

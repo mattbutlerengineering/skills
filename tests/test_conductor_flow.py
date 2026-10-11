@@ -352,11 +352,27 @@ class TestSurveyWrites(unittest.TestCase):
             {"at": "2026-10-10T12:30:00Z", "kind": "ask", "item": "#12",
              "id": "ask-2", "ask_kind": "gate",
              "question": "#12's spec is ready for its gate: approve these"
-                         " gate files and start the build?",
+                         " gate files and its build of 0 breakdown row(s)"
+                         " at up to $3.00 each ($0.00), re-pricing #12 at"
+                         " $12.00 against its $15.00 plan estimate?",
              "options": ["approve", "block"], "recommended": "approve",
              "why": "the spec step completed; the gate files are"
                     " docs/features/x/prd.md",
-             "gate_blobs": blobs}])
+             "gate_blobs": blobs, "build_usd": 0.0}])
+
+    def test_the_gate_ask_reprices_the_build_from_its_rows(self):
+        # Review major 2: build runs once per breakdown row at the build
+        # step's full ceiling, so the gate answer is the build's spend
+        # consent and names its price.
+        rows = [launch("#12", "planned", "spec"), ran("#12", "spec")]
+        writes = self.writes(rows, facts={
+            "#12": {"gate_blobs": {}, "unchecked": 4}})
+        self.assertEqual(writes[1]["question"],
+                         "#12's spec is ready for its gate: approve these"
+                         " gate files and its build of 4 breakdown row(s)"
+                         " at up to $3.00 each ($12.00), re-pricing #12 at"
+                         " $24.00 against its $15.00 plan estimate?")
+        self.assertEqual(writes[1]["build_usd"], 12.0)
 
     def test_a_feature_gates_even_with_no_gate_files(self):
         rows = [launch("#12", "planned", "spec"), ran("#12", "spec")]
@@ -450,6 +466,16 @@ class TestSurveyWrites(unittest.TestCase):
                 dict(stall_ask("ask-2", None, ("resume", "stop"))),
                 answered("ask-2", "resume")]
         self.assertEqual(self.writes(rows), [])
+
+    def test_a_cap_pause_does_not_reset_the_failure_streak(self):
+        rows = [ran("#12", "spec", outcome="agent-failed"),
+                ran("#13", "spec", outcome="agent-failed"),
+                dict(stall_ask("ask-2", None, ("resume", "stop")),
+                     ask_kind="spend"),
+                answered("ask-2", "resume"),
+                ran("#14", "build", outcome="agent-failed")]
+        self.assertEqual([w["options"] for w in self.writes(rows)],
+                         [["resume", "stop"]])
 
     def test_a_success_breaks_the_failure_streak(self):
         rows = [ran("#12", "spec", outcome="agent-failed"),

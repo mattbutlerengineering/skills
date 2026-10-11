@@ -86,7 +86,7 @@ def Git(tmp, changed="", shows=None, fail=None):
         elif "diff" in args:
             out = changed
         elif "show" in args:
-            out = (shows or {})[args[-1]]
+            out = (shows or {}).get(args[-1], "")
         return subprocess.CompletedProcess(args, 0, stdout=out, stderr="")
     run.calls = calls
     return run
@@ -112,6 +112,13 @@ class RunCase(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / "conductor"
         self.root.mkdir()
+
+        self.config(300)
+
+    def config(self, cap):
+        path = self.root / ".github/factory.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"monthly_cap_usd": cap}))
 
     def ledger(self, *rows):
         path = self.root / LEDGER
@@ -374,6 +381,89 @@ class TestFailedRun(RunCase):
                          ["cd: #99 is not an item of this batch's plan"])
         self.assertEqual(self.run_step("#14", "spec", Harness())[1],
                          ["cd: #14 has no spec step"])
+
+
+def spend_line(run, cost, at="2026-10-05", wo="#90"):
+    return json.dumps({"wo": wo, "run_id": run, "model": "m", "tokens": 1,
+                       "cost": cost, "outcome": "completed", "at": at})
+
+
+MAIN_COSTS = "origin/main:docs/factory/costs.jsonl"
+
+
+class TestMonthlyCap(RunCase):
+    """Review major 2: a launch is checked against the monthly cap at run
+    time, counting main's spend, the batch's item branches and the
+    ceilings of runs still in flight."""
+
+    def over(self, rows=BASE, shows=None):
+        self.config(10)
+        return self.run_step("#12", "spec", Harness(act=pr_body),
+                             git=Git(self.tmp.name, shows=shows), rows=rows)
+
+    def test_a_launch_that_would_pass_the_cap_pauses_dispatch(self):
+        summary, problems = self.over(shows={MAIN_COSTS: "\n".join([
+            spend_line("old", 50.0, at="2026-09-30"),
+            spend_line("a", 8.0)]) + "\n"})
+        self.assertIsNone(summary)
+        self.assertEqual(problems, [
+            "cd: launching #12 spec ($3.00 ceiling) would put the month at"
+            " $11.00 against its $10.00 cap; dispatch is paused behind"
+            " ask-2"])
+        self.assertEqual(self.harness.calls, [])
+        self.assertEqual(self.rows[-1], {
+            "at": "2026-10-10T12:30:00Z", "kind": "ask", "item": None,
+            "id": "ask-2", "ask_kind": "spend",
+            "question": "Launching #12 spec ($3.00 ceiling) would put the"
+                        " month at $11.00 against its $10.00 cap. Resume"
+                        " dispatch, or stop?",
+            "options": ["resume", "stop"], "recommended": "stop",
+            "why": "the monthly cap is ADR-0034's breaker; raise"
+                   " monthly_cap_usd in factory.json first, or a resumed"
+                   " launch asks again"})
+        self.assertFalse([r for r in self.rows if r["kind"] == "state"])
+
+    def test_in_flight_ceilings_and_item_branch_spend_count(self):
+        branch = "conductor/b1-13:docs/factory/costs.jsonl"
+        rows = BASE + [launch("#13", "planned", "spec"),
+                       ran("#13", "spec"),
+                       launch("#14", "planned", "build")]
+        line = spend_line("conductor-b1-13-spec-1", 2.5, wo="#13")
+        _, problems = self.over(rows=rows, shows={
+            MAIN_COSTS: spend_line("a", 2.0) + "\n",
+            # main's rows again on the branch count once
+            branch: spend_line("a", 2.0) + "\n" + line + "\n"})
+        self.assertEqual(problems, [
+            "cd: launching #12 spec ($3.00 ceiling) would put the month at"
+            " $10.50 against its $10.00 cap; dispatch is paused behind"
+            " ask-2"])
+
+    def test_a_launch_within_the_cap_runs(self):
+        summary, problems = self.over(shows={
+            MAIN_COSTS: spend_line("a", 7.0) + "\n"})
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["outcome"], "completed")
+
+    def test_a_held_batch_gets_no_second_pause_ask(self):
+        rows = BASE + [dict(stall_ask("ask-2", None, ("resume", "stop")),
+                            ask_kind="spend")]
+        _, problems = self.over(rows=rows, shows={
+            MAIN_COSTS: spend_line("a", 8.0) + "\n"})
+        self.assertEqual(problems, [
+            "cd: launching #12 spec ($3.00 ceiling) would put the month at"
+            " $11.00 against its $10.00 cap; dispatch is paused behind"
+            " ask-2"])
+        self.assertEqual(len([r for r in self.rows if r["kind"] == "ask"]),
+                         2)
+
+    def test_no_cap_refuses_the_launch(self):
+        (self.root / ".github/factory.json").write_text("{}")
+        self.ledger(*BASE)
+        _, problems = conductor_run.run_step(
+            self.root, "b1", "#12", "spec", NOW, git=Git(self.tmp.name),
+            gh=Gh(), harness=Harness(act=pr_body), pid=777)
+        self.assertEqual(problems, [
+            "config: factory.json names no positive monthly_cap_usd"])
 
 
 class TestReviewRun(RunCase):

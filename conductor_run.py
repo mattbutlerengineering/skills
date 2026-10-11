@@ -24,7 +24,8 @@ import factory_config
 from assembler import PR_BODY_FILE
 from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
     read_execution
-from conductor import WORKER_ENV, append, load, stamp
+from conductor import WORKER_ENV, answers, append, ask_row, current_state, \
+    load, stamp
 from knowledge_plane import WO_TOKEN
 from orientation_pack import orientation_pack
 from protocol import read_frontmatter
@@ -39,6 +40,8 @@ WORKTREE = ".claude/worktrees/conductor-{batch}-{n}"
 RUNS = "docs/factory/batches/{batch}/runs"
 CEILING_OUTCOME = {"timeout": "killed:cost-at-ceiling",
                    "unaccounted": "unaccounted:cost-at-ceiling"}
+CAP_WHY = ("the monthly cap is ADR-0034's breaker; raise monthly_cap_usd in"
+           " factory.json first, or a resumed launch asks again")
 WORKER_WHY = ("a first failure is evidence about the item as often as about"
               " the agent, so nothing retries without your answer")
 OBJECTIVES = {
@@ -298,6 +301,87 @@ def _left_unchecked(git, branch, briefed, wo):
     return None
 
 
+def month_spend(git, rows, batch, now):
+    """(dollars spent this month, problems) as the run-time cap check
+    sees it: origin/main's spend rows and every launched item branch's,
+    each row once (cost_ledger.row_key), selected by
+    cost_ledger.dispatched, the breaker's one row rule. The batch
+    worktree's own costs.jsonl is a snapshot from the batch's open, and
+    item spend stays on item branches until it merges."""
+    launched = [entry["item"] for entry in flow.plan_row(rows)["items"]
+                if any(row["kind"] == "state" and row["item"] ==
+                       entry["item"] and "run_id" in row for row in rows)]
+    entries = {}
+    for ref in ["origin/main"] + [flow.item_branch(batch, item)
+                                  for item in launched]:
+        shown = f"{ref}:{cost_ledger.COST_LEDGER}"
+        text, problems = _git(git, ["show", shown], f"cd: git show {shown}")
+        if problems:
+            return None, problems
+        for lineno, entry, suffixes in cost_ledger.parse(text):
+            if suffixes:
+                return None, [f"cd: {shown}:{lineno} {suffixes[0]}"]
+            entries[cost_ledger.row_key(entry)] = entry
+    month = now.strftime("%Y-%m")
+    return sum(entry["cost"] for entry in cost_ledger.dispatched(
+        list(entries.values()), month)), []
+
+
+def _in_flight_usd(rows):
+    """The ceilings of every launched run with no finishing run row: each
+    may still spend up to its ceiling."""
+    finished = {row["run_id"] for row in rows if row["kind"] == "run"}
+    total = 0.0
+    for entry in flow.plan_row(rows)["items"]:
+        states = [row for row in rows if row["kind"] == "state"
+                  and row["item"] == entry["item"]]
+        if states and "run_id" in states[-1] \
+                and states[-1]["run_id"] not in finished:
+            total += next(s["ceiling_usd"] for s in entry["steps"]
+                          if s["step"] == states[-1]["to"])
+    return total
+
+
+def _launch(root, batch, now, launch, spent, cap):
+    """(problems): the launch state row, written under the ledger lock
+    only while the month's spend, every in-flight ceiling and this run's
+    ceiling fit the monthly cap (review major 2). Otherwise dispatch is
+    paused behind a batch-level spend ask, reusing a pending one, and
+    nothing is launched."""
+    item, step, ceiling = launch["item"], launch["step"], launch["ceiling"]
+    refused = []
+
+    def build(rows):
+        problems = flow.transition_problems(rows, item, step,
+                                            launch["fields"])
+        if problems:
+            return None, problems
+        month = spent + _in_flight_usd(rows) + ceiling
+        if month <= cap:
+            return flow.state_row(now, item, current_state(rows, item),
+                                  step, "launched", **launch["fields"]), []
+        what = (f"{item} {step} (${ceiling:.2f} ceiling) would put the"
+                f" month at ${month:.2f} against its ${cap:.2f} cap")
+        given = answers(rows)
+        pending = next((row for row in rows if row["kind"] == "ask"
+                        and row["item"] is None
+                        and row["ask_kind"] != "merge"
+                        and row["id"] not in given), None)
+        written = []
+        if pending is None:
+            pending, problems = ask_row(
+                rows, now, None, "spend", f"Launching {what}. Resume"
+                " dispatch, or stop?", flow.PAUSE_OPTIONS, "stop", CAP_WHY)
+            if problems:
+                return None, problems
+            written = [pending]
+        refused.append(f"cd: launching {what}; dispatch is paused behind"
+                       f" {pending['id']}")
+        return written, []
+    _, problems = append(root, batch, build)
+    return problems or refused
+
+
 def _prepare(root, batch, item, step, git, gh):
     """(context dict, problems): everything decided before launch."""
     rows, problems = load(root, batch)
@@ -355,8 +439,15 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
     branch = flow.item_branch(batch, item)
     band, model, effort, ceiling = _policy(ctx["rows"], ctx["plan"], entry,
                                            step)
-    _, problems = flow.move(root, batch, now, item, step, "launched",
-                            run_id=run_id, pid=pid)
+    config, problems = factory_config.load(root)
+    cap, found = factory_config.resolve_cap(config or {})
+    problems = problems or found
+    if not problems:
+        spent, problems = month_spend(git, ctx["rows"], batch, now)
+    if not problems:
+        problems = _launch(root, batch, now, {
+            "item": item, "step": step, "ceiling": ceiling,
+            "fields": {"run_id": run_id, "pid": pid}}, spent, cap)
     if problems:
         return None, problems
     brief = compose_brief(step, item, entry["type"], worktree, branch,

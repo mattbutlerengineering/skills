@@ -301,7 +301,7 @@ def record_verdict(root, batch, now, item, verdict, reviewer_run, head):
     return append(root, batch, build)
 
 
-def _held(rows):
+def held(rows):
     """True when a batch-level ask is unanswered or was answered with a
     choice that holds dispatch (a declined spend, a stopped pause). A
     train or closing merge ask holds no Worker step."""
@@ -319,6 +319,7 @@ def _failure_streak(rows):
     """Consecutive failed runs since the last batch pause ask."""
     start = max((index for index, row in enumerate(rows)
                  if row["kind"] == "ask" and row["item"] is None
+                 and row["ask_kind"] == "stall"
                  and row["options"] == PAUSE_OPTIONS), default=-1)
     streak = 0
     for row in rows[start + 1:]:
@@ -353,6 +354,30 @@ def _finishing(rows, launched):
                  and row["run_id"] == run_id), None) if run_id else None
 
 
+def _build_usd(entry, rows):
+    """The build's price: one run per breakdown row, each up to the
+    build step's ceiling (the --max-budget-usd it runs under)."""
+    ceiling = next(s["ceiling_usd"] for s in entry["steps"]
+                   if s["step"] == "build")
+    return round(rows * ceiling, 2)
+
+
+def _gate_question(entry, rows):
+    """The gate ask, which doubles as the build-spend question
+    (architecture.md, `plan`): the plan priced one build run, so the
+    item is re-priced with one per breakdown row."""
+    item = entry["item"]
+    ceiling = next(s["ceiling_usd"] for s in entry["steps"]
+                   if s["step"] == "build")
+    build = _build_usd(entry, rows)
+    repriced = entry["estimate_usd"] - ceiling + build
+    return (f"{item}'s spec is ready for its gate: approve these gate files"
+            f" and its build of {rows} breakdown row(s) at up to"
+            f" ${ceiling:.2f} each (${build:.2f}), re-pricing {item} at"
+            f" ${repriced:.2f} against its ${entry['estimate_usd']:.2f}"
+            " plan estimate?")
+
+
 def _after_step(rows, now, entry, launched, facts):
     """(ready step or None, rows to write) once the item's launched step
     has finished with a completed run."""
@@ -368,10 +393,10 @@ def _after_step(rows, now, entry, launched, facts):
         files = (f"the gate files are {', '.join(sorted(blobs))}" if blobs
                  else "the item branch changes no gate file")
         asked, problems = ask_row(
-            rows + [moved], now, item, "gate",
-            f"{item}'s spec is ready for its gate: approve these gate files"
-            " and start the build?", GATE_OPTIONS, "approve",
-            f"the spec step completed; {files}", gate_blobs=blobs)
+            rows + [moved], now, item, "gate", _gate_question(
+                entry, facts[item]["unchecked"]), GATE_OPTIONS, "approve",
+            f"the spec step completed; {files}", gate_blobs=blobs,
+            build_usd=_build_usd(entry, facts[item]["unchecked"]))
         return None, ([moved, asked] if not problems else [])
     if state == "build":
         if entry["type"] == "order":
@@ -472,7 +497,7 @@ def survey(rows, now, wip_cap, alive, facts):
         flying += in_flight
         if ready is not None:
             candidates.append({"item": entry["item"], "step": ready})
-    if _failure_streak(rows) >= FAILURE_PAUSE and not _held(rows):
+    if _failure_streak(rows) >= FAILURE_PAUSE and not held(rows):
         asked, _ = ask_row(
             rows + writes, now, None, "stall",
             f"Three consecutive Worker runs failed in batch {plan['batch']}."
@@ -480,7 +505,7 @@ def survey(rows, now, wip_cap, alive, facts):
             "three failures in a row point at the batch or the harness more"
             " than at any one item")
         writes.append(asked)
-    if _held(rows + writes):
+    if held(rows + writes):
         return [], writes, []
     return candidates[:max(0, wip_cap - flying)], writes, []
 
