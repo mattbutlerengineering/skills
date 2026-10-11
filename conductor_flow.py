@@ -267,11 +267,12 @@ CHANGES_WHY = "a second request for changes is evidence about the item"
 CHANGES_AGAIN = "the reviewer requested changes a second time"
 
 
-def record_verdict(root, batch, now, item, verdict, reviewer_run):
+def record_verdict(root, batch, now, item, verdict, reviewer_run, head):
     """(rows written, problems): the review step's verdict. pass writes
-    `reviewed` with the item's author runs (every run but a review);
-    the first `changes` returns the item to build for one fix step; the
-    second stalls it."""
+    `reviewed` with the item's author runs (every run but a review) and
+    `head`, the item branch head the review run was launched on, which
+    the merge holds the merged tree to; the first `changes` returns the
+    item to build for one fix step; the second stalls it."""
     if verdict not in VERDICTS:
         return None, [f"cd: verdict {verdict!r} is not pass or changes"]
 
@@ -283,7 +284,7 @@ def record_verdict(root, batch, now, item, verdict, reviewer_run):
             authors = [row["run_id"] for row in rows if row["kind"] == "run"
                        and row["item"] == item and row["step"] != "review"]
             fields = {"verdict": "pass", "author_runs": authors,
-                      "reviewer_run": reviewer_run}
+                      "reviewer_run": reviewer_run, "reviewed_head": head}
             to, reason = "reviewed", "the reviewer passed it"
         else:
             fields, to = {}, "build"

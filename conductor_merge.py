@@ -9,7 +9,10 @@ gate blobs. An item merges only when it is reviewed with a pass verdict
 from a reviewer run distinct from every author run, its ship step has
 completed, and an answer covers it: its own merge ask answered `merge`,
 or a train ask whose `covers` lists it answered `train`, with every
-earlier item in that train already merged. An item whose branch changes
+earlier item in that train already merged. The merge turn also holds the
+merged tree to the reviewed one: a turn starting from `ship` stalls when
+anything but the review and ship artifacts changed after the head the
+review run was launched on. An item whose branch changes
 a gate file rides a train only when each gate file's blob id equals the
 one approved at its gate asks; otherwise it needs its own merge ask
 (ADR-0036 condition 3, as architecture.md reads it — flagged for the
@@ -49,7 +52,28 @@ def _reviewed_problems(rows, item):
     if reviewer in authors:
         return _refused(f"{item}'s reviewer run {reviewer} is among its"
                         " author runs")
+    if not is_text(passes[-1].get("reviewed_head")):
+        return _refused(f"{item}'s reviewed row records no reviewed head")
     return []
+
+
+# What may change on the item branch after the review run's launch head:
+# the review and ship steps' own artifacts and their spend rows. Anything
+# else was never reviewed (review major 1, breakdown Notes 2026-10-11).
+AFTER_REVIEW = re.compile(r"docs/factory/costs\.jsonl|docs/(?:(?:features"
+                          r"|fixes)/[^/]+/)?(?:review|release)\.md")
+
+
+def review_drift(item, head, changed):
+    """The stall reason when a path other than AFTER_REVIEW's changed
+    between the reviewed head and the branch, else None. PURE."""
+    unreviewed = sorted(path for path in changed
+                        if not AFTER_REVIEW.fullmatch(path))
+    if not unreviewed:
+        return None
+    return (f"{item} changed {', '.join(unreviewed)} after the review of"
+            f" {head[:12]}; merged code must be reviewed code, so it needs"
+            " a re-review")
 
 
 def _shipped_problems(rows, item):
@@ -135,6 +159,8 @@ QUEUE_QUERY = ("query($owner:String!,$name:String!){repository(owner:"
                '$owner,name:$name){mergeQueue(branch:"main"){id}}}')
 PREFIXES = {"prd": "PRD", "adr": "ADR", "wo": "WO"}
 ADR_FILE = re.compile(r"docs/adr/(\d{4})-[^/]+")
+DRIFT_WHY = ("the item has no path back to review, and a change nobody"
+             " reviewed must not merge; block it and file the change anew")
 RETRY_WHY = ("a timeout, an ejection or a failed call may be transient; the"
              " branch is left as pushed")
 BLOCK_WHY = ("a non-mechanical merge failure needs a fix step or a human,"
@@ -519,6 +545,26 @@ def _turn(root, batch, item, ports, worktree):
     return {"pr": pr, "sha": sha, "checks": checks}, []
 
 
+def _drift(rows, item, git, branch):
+    """(stall reason or None, problems): the reviewed-tree check, run on
+    a turn that starts from `ship`, before the Conductor's own commits.
+    A turn resumed from a stalled merge skips it: the state machine runs
+    no Worker between a `merging` stall and its resumed turn, and the
+    first turn already checked. A tree diff, so rewritten history is
+    caught as well as new commits."""
+    if current_state(rows, item) != "ship":
+        return None, []
+    head = [row for row in rows if row["kind"] == "state"
+            and row["item"] == item
+            and row["to"] == "reviewed"][-1]["reviewed_head"]
+    try:
+        changed = git(["diff", "--name-only", head, branch]).stdout.split()
+    except CLI_FAILURES as err:
+        return None, [f"cd: git diff {head[:12]} {branch} failed:"
+                      f" {detail(err)}"]
+    return review_drift(item, head, changed), []
+
+
 def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None):
     """(summary, problems): one merge turn. problems when the
     precondition refuses (nothing is touched) or a ledger write fails;
@@ -533,6 +579,13 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None):
     problems = merge_problems(rows, item, blobs)
     if problems:
         return None, problems
+    drift, problems = _drift(rows, item, git, flow.item_branch(batch, item))
+    if problems:
+        return None, problems
+    if drift is not None:
+        _, problems = flow.queue_stall(root, batch, clock(), item, drift,
+                                       BLOCK, DRIFT_WHY)
+        return {"item": item, "stall": drift}, problems
     worktree, problems = conductor_run.worktree_path(git, batch, item)
     if not problems and not worktree.is_dir():
         problems = [f"cd: no item worktree at {worktree}"]

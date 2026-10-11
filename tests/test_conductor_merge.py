@@ -38,9 +38,12 @@ def ask(ask_id, key, ask_kind, options, covers=None, gate_blobs=None):
     return row
 
 
-def reviewed(key, authors, reviewer, verdict="pass"):
+def reviewed(key, authors, reviewer, verdict="pass", head="HEAD"):
+    """A reviewed row. `head` "HEAD" stands for the item branch's head
+    when a merge-turn test runs (TurnCase.turn fills it in)."""
+    fields = {} if head is None else {"reviewed_head": head}
     return moved(key, "review", "reviewed", verdict=verdict,
-                 author_runs=authors, reviewer_run=reviewer)
+                 author_runs=authors, reviewer_run=reviewer, **fields)
 
 
 def order_shipped(key="#14"):
@@ -95,6 +98,15 @@ class TestMergePrecondition(unittest.TestCase):
             self.problems(rows + own("ask-2", "#14")),
             ["cd: merge refused: #14's reviewer run conductor-b1-14-verify-1"
              " is among its author runs"])
+
+    def test_a_reviewed_row_without_its_head_is_refused(self):
+        rows = order_shipped()
+        rows[6] = reviewed("#14", [run_id("#14", "build")],
+                           run_id("#14", "review"), head=None)
+        self.assertEqual(
+            self.problems(rows + own("ask-2", "#14")),
+            ["cd: merge refused: #14's reviewed row records no reviewed"
+             " head"])
 
     def test_an_unfinished_ship_step_is_refused(self):
         rows = order_shipped()[:-1] + own("ask-2", "#14")
@@ -348,8 +360,16 @@ class TurnCase(unittest.TestCase):
         gh.fake = fake
         return gh
 
-    def turn(self, rows, gh=None, tool=None):
-        self.ledger(START + rows)
+    def filled(self, rows, reviewed_at=None):
+        """A reviewed row's "HEAD" becomes `reviewed_at`, else the branch
+        head now: the review saw everything committed."""
+        head = reviewed_at or self.head()
+        return [dict(row, reviewed_head=head)
+                if row.get("reviewed_head") == "HEAD" else row
+                for row in rows]
+
+    def turn(self, rows, gh=None, tool=None, reviewed_at=None):
+        self.ledger(START + self.filled(rows, reviewed_at))
         self.gh = gh or self.fake_gh()
         summary, problems = merge.merge_turn(
             self.root, "b1", "#12", self.clock, self.git, self.gh,
@@ -441,6 +461,55 @@ class TestMergeTurn(TurnCase):
         self.assertEqual((problems, summary["stall"]), ([], None))
         self.assertEqual(sh(self.repo, "show", f"{BRANCH}:factory/"
                             "manifest.json"), '{"files": "regenerated"}\n')
+
+
+class TestReviewedTree(TurnCase):
+    """Merged code is reviewed code: after the review run's launch head,
+    only the review and ship steps' artifacts may change."""
+
+    def test_the_ship_steps_artifacts_may_follow_the_review(self):
+        self.item({"src.txt": "x\n"})
+        reviewed_at = self.head()
+        self.item({"docs/features/x/review.md": "r\n",
+                   "docs/features/x/release.md": "notes\n",
+                   "docs/factory/costs.jsonl":
+                   '{"row": "seed"}\n{"row": "ship"}\n'})
+        summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
+        self.assertEqual((problems, summary["stall"]), ([], None))
+        self.assertEqual(self.rows[-1]["to"], "merged")
+
+    def test_a_code_change_after_the_review_stalls_the_merge(self):
+        self.item({"src.txt": "x\n"})
+        reviewed_at = self.head()
+        self.item({"src.txt": "changed by the ship Worker\n",
+                   "docs/features/x/release.md": "notes\n"})
+        summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
+        self.assertEqual(problems, [])
+        reason = (f"#12 changed src.txt after the review of"
+                  f" {reviewed_at[:12]}; merged code must be reviewed code,"
+                  " so it needs a re-review")
+        self.assertEqual(summary["stall"], reason)
+        self.assertEqual((self.rows[-2]["from"], self.rows[-2]["to"],
+                          self.rows[-2]["reason"]),
+                         ("ship", "stalled", reason))
+        self.assertEqual(self.rows[-1]["recommended"], "block")
+        self.assertFalse(self.calls("git", "fetch"))
+        self.assertFalse(self.calls("git", "push"))
+        self.assertFalse([r for r in self.rows if r.get("to") == "merging"])
+
+    def test_a_resumed_merge_turn_keeps_its_own_commits(self):
+        # The first turn checked the tree before it merged main in; a
+        # stalled turn resumes with no Worker run since.
+        self.item({"src.txt": "x\n"})
+        reviewed_at = self.head()
+        self.main_moves({"other.txt": "main\n"})
+        sh(self.wt, "merge", "-q", "--no-edit", "origin/main")
+        rows = SHIPPED + [moved("#12", "ship", "merging"),
+                          moved("#12", "merging", "stalled"),
+                          stall_ask("ask-3", "#12"),
+                          answered("ask-3", "retry", "#12")]
+        summary, problems = self.turn(rows, reviewed_at=reviewed_at)
+        self.assertEqual((problems, summary["stall"]), ([], None))
 
 
 class TestMergeTurnStalls(TurnCase):
@@ -606,7 +675,7 @@ class TestReservations(TurnCase):
 class TestMergeCli(TurnCase):
     def test_merge_is_a_conductor_verb(self):
         self.item({"src.txt": "x\n"})
-        self.ledger(START + SHIPPED)
+        self.ledger(START + self.filled(SHIPPED))
         code, out = cli_contract.capture(
             conductor.main, ["merge", "b1", "#12"], env={}, clock=self.clock,
             root=self.root, run=self.fake_gh(), git=self.git,

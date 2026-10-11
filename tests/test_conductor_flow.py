@@ -474,7 +474,7 @@ class TestVerdict(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.ledger(tmp, rows)
             written, problems = flow.record_verdict(tmp, "b1", NOW, "#14",
-                                                    verdict, reviewer)
+                                                    verdict, reviewer, "h0")
             return written, problems
 
     def test_a_pass_records_the_author_and_reviewer_runs(self):
@@ -485,7 +485,10 @@ class TestVerdict(unittest.TestCase):
             "from": "review", "to": "reviewed",
             "reason": "the reviewer passed it", "verdict": "pass",
             "author_runs": [run_id("#14", "build"), run_id("#14", "verify")],
-            "reviewer_run": run_id("#14", "review")}])
+            "reviewer_run": run_id("#14", "review"),
+            # The branch head the review run was launched on: the merge
+            # refuses any later change but the ship artifacts.
+            "reviewed_head": "h0"}])
 
     def test_the_first_request_for_changes_queues_one_build_fix(self):
         written, _ = self.verdict(self.BUILT, "changes")

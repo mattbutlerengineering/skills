@@ -53,9 +53,12 @@ OBJECTIVES = {
               " review.md with `verdict: pass` or `verdict: changes` in"
               " its frontmatter. This brief overrides the reviewer"
               " charter's exit: post no comment, apply no label and merge"
-              " nothing.",
+              " nothing. Commit nothing but review.md: request changes"
+              " rather than fixing anything, since the merge refuses any"
+              " other change made after the review began.",
     "ship": "Prepare this item's release.md under the ship skill and"
-            " execute no release step."}
+            " execute no release step. Commit nothing but release.md:"
+            " the merge refuses any other change made after the review."}
 
 
 def harness_command(brief, model, effort, ceiling_usd):
@@ -320,13 +323,23 @@ def _prepare(root, batch, item, step, git, gh):
     # expected output is that row checked off on the branch.
     briefed = context.split("\n", 1)[0] if step == "build" \
         and entry["type"] != "order" else None
+    # The tree a review run is given: the merge holds the merged tree to
+    # it (review major 1).
+    head = None
+    if step == "review":
+        out, problems = _git(git, ["rev-parse", flow.item_branch(batch,
+                                                                 item)],
+                             "cd: git rev-parse")
+        if problems:
+            return None, problems
+        head = out.strip()
     seq = 1 + sum(1 for r in rows if r["kind"] == "state" and r["item"]
                   == item and r["to"] == step and "run_id" in r)
     block = {r["what"]: r["values"] for r in rows
              if r["kind"] == "reserve" and r["item"] == item}
     return {"rows": rows, "plan": plan, "entry": entry, "wo": wo,
             "context": context, "body": body, "worktree": worktree,
-            "block": block, "briefed": briefed,
+            "block": block, "briefed": briefed, "head": head,
             "run_id": f"conductor-{batch}-{item[1:]}-{step}-{seq}"}, []
 
 
@@ -382,7 +395,7 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
             stall = "review.md carries no verdict: pass|changes line"
         else:
             _, problems = flow.record_verdict(root, batch, now, item,
-                                              verdict, run_id)
+                                              verdict, run_id, ctx["head"])
     if stall is not None:
         _, problems = flow.queue_stall(root, batch, now, item, stall,
                                        "retry", WORKER_WHY)

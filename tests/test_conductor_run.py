@@ -77,8 +77,10 @@ def Git(tmp, changed="", shows=None, fail=None):
         if fail and fail in args:
             raise subprocess.CalledProcessError(1, args, stderr="rejected")
         out = ""
-        if args[:1] == ["rev-parse"]:
+        if args[:1] == ["rev-parse"] and "--git-common-dir" in args:
             out = str(Path(tmp) / ".git") + "\n"
+        elif args[:1] == ["rev-parse"]:
+            out = "c0ffee\n"
         elif args[:2] == ["worktree", "add"]:
             Path(args[4]).mkdir(parents=True)
         elif "diff" in args:
@@ -183,6 +185,10 @@ class TestBrief(unittest.TestCase):
         self.assertIn("`verdict: pass` or `verdict: changes`", text)
         self.assertIn("post no comment, apply no label and merge nothing",
                       text)
+        self.assertIn("Commit nothing but review.md", text)
+
+    def test_a_ship_brief_commits_nothing_but_release_md(self):
+        self.assertIn("Commit nothing but release.md", self.brief("ship"))
 
 
 class TestCompletedRun(RunCase):
@@ -393,6 +399,9 @@ class TestReviewRun(RunCase):
         self.assertEqual(self.rows[-1]["to"], "reviewed")
         self.assertEqual(self.rows[-1]["reviewer_run"],
                          "conductor-b1-14-review-1")
+        # The head the review run was launched on, read before it ran.
+        self.assertEqual(self.rows[-1]["reviewed_head"], "c0ffee")
+        self.assertIn(["rev-parse", "conductor/b1-14"], self.git.calls)
 
     def test_a_missing_verdict_stalls(self):
         self.review("")

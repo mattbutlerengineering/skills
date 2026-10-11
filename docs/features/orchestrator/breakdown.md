@@ -376,3 +376,25 @@ and every existing seam it names exists on main (`cli.harness_run`,
   one bump covering row 0159's autorun change and the new skill.
   `docs/setup.md`'s "An orchestrator (planned)" section, which this row
   makes false, now describes the Conductor.
+- 2026-10-11 (Implement, post-review, review major 1): merged code is
+  reviewed code. The Owner chose, via the orchestrator's question, to fix
+  review majors 1–3 test-first. The rule chosen as the thinnest sound
+  one: the review run's runner reads the item branch head before it
+  launches, and the `reviewed` row records it as `reviewed_head` (an
+  optional state field; the merge precondition refuses a reviewed row
+  without one). A merge turn that starts from `ship` then diffs that
+  head's tree against the branch, before any Conductor commit, and
+  stalls (recommending `block`) when any path but the run's
+  `review.md`, `release.md` or `docs/factory/costs.jsonl` changed. It is
+  a tree diff, not a commit walk, so rewritten history is caught and no
+  commit authorship has to be trusted (Worker and Conductor commit as
+  the same git user, so "Conductor-authored" could not be checked). A
+  turn resumed from a `merging` stall skips the check: the state machine
+  runs no Worker between that stall and its resumed turn, and the first
+  turn already checked before it merged `main` in. A stall rather than a
+  bare refusal, because the state machine has no path from `ship` back
+  to `review`: the Owner gets a `block` to answer instead of a merge
+  that is refused on every `next`. The review and ship briefs now say to
+  commit nothing but their artifact. Still trust-based: a change made
+  in the worktree by something other than a Worker (a human, a process
+  a Worker left running) between the check and the push.
