@@ -45,7 +45,7 @@ strings, `cli.report` for the exit, and `gh`/`git`/harness calls through
 
 - [x] **WO-0157** Item state machine and the stall rule in `next` — size:M, blocked by: WO-0155 (PRD-0013 §User stories, §Success criteria)
   - Accept: `state` rows move an item only along `planned → spec → awaiting-gate → build → verify → review → reviewed → ship → merging → merged`, with `stalled` from any non-terminal state and `blocked` reachable only through an answer row; a `fix` item skips the gate states its re-entry depth does not reach; an `order` item starts at `build`. `next` returns the steps ready to launch under `wip_cap`, never one for an item with an unanswered ask, and records a `stall` ask (options: retry on the same policy, retry one band up, block with a reason) when a run row's pid is gone with no finishing row, when an item has had no state change for twice its step's wall-clock limit, or on a second reviewer request for changes (the first queues one `build` fix step); three consecutive Worker failures across the batch pause dispatch behind one ask. A `reviewed` pass whose reviewer `run_id` is among the author runs is refused.
-- [ ] **WO-0158** Worker runner: one metered headless run per step — size:M, blocked by: WO-0153, WO-0156, WO-0157 (PRD-0013 §User stories, §Success criteria, §Actors)
+- [x] **WO-0158** Worker runner: one metered headless run per step — size:M, blocked by: WO-0153, WO-0156, WO-0157 (PRD-0013 §User stories, §Success criteria, §Actors)
   - Accept: `conductor.py run <batch> <item> <step>`, with an injected harness, composes every harness flag in one function (`--model`, `--effort`, `--max-budget-usd`, `--output-format json`, an `--allowedTools` list containing no `git push` and no `gh` write), sets `CONDUCTOR_WORKER` in the Worker's environment, and runs under `cli.harness_run` with the S 45 / M 90 / L 180 minute timeout; the brief carries objective, output, tools, boundaries (item worktree, reserved block, never the plugin version) and context budget, and includes the issue body only for a `spec` step. Each run writes exactly one `run` row and one `costs.jsonl` row on the item branch (`wo` is the work order for a build step, else `#<n>`; `run_id` is `conductor-<batch>-<item>-<step>-<seq>`; cost from `cli.read_execution`), keeps the result event as `runs/<run_id>.json`, pushes the item branch (never forced) and opens or updates its PR from the uncommitted `pr-body.md`. A missing harness binary records `agent-failed` at cost 0; an unaccountable result event or a wall-clock kill records the ceiling as cost and queues a stall; a failed push or PR open queues a stall; nothing retries.
 - [x] **WO-0159** Autorun honours `stop-after:` — size:S, blocked by: — (PRD-0013 §Out of scope, §Actors)
   - Accept: `skills/autorun/SKILL.md` states that a `stop-after: <stage>` line in `autorun-brief.md` makes autorun stop once that stage's artifact or recorded skip exists, without starting the next stage; the skill's `description:` is unchanged; `python3 lint.py` prints `lint: 0 problem(s)`. The version bump rides row 0164.
@@ -222,3 +222,19 @@ and every existing seam it names exists on main (`cli.harness_run`,
   `decline` or `stop`, so no step launches before the spend answer.
   `next` now needs `wip_cap` from factory.json, and its JSON gains
   `ready` and `recorded` beside `ask`.
+- 2026-10-10 (Implement, row 0158): the runner lives in
+  `conductor_run.py` (assumption 6). Choices inside the Owner's answers:
+  the `run` row's `model` and `effort` are the plan row's snapshot for
+  the step (one band up after `retry-up`, resolved from the snapshot's
+  `routing`/`effort`), while the spend row's `model` is the model the
+  result event reports when the passed one is absent from it. A result
+  event `read_execution` cannot meter is kept as evidence and recorded
+  as `unaccounted:cost-at-ceiling` (ADR-0034's open outcome vocabulary);
+  a wall-clock kill is `killed:cost-at-ceiling`. A result event whose
+  subtype is not `success` is `agent-failed` at its metered cost. Every
+  Worker-failure stall recommends `retry`. `run` refuses, before
+  creating a worktree or spawning anything, a step the state machine
+  would refuse, then re-checks under the lock as it writes the launch
+  row. An open PR's body is updated through `gh api -X PATCH`, and a new
+  PR is titled `#<n>: conductor batch <batch>`. A failed spend-row
+  commit stalls like a failed push.

@@ -8,7 +8,8 @@ strings, cli.report for the exit. Root-only: not mirrored into the
 factory payload (architecture.md). Capabilities that would push this
 file past the 800-line ceiling live in sibling modules that import its
 row grammar (breakdown assumption 6): conductor_plan (plan, open) and
-conductor_flow (the item state machine and the stall rule in next).
+conductor_flow (the item state machine and the stall rule in next) and
+conductor_run (the Worker runner).
 
   python3 conductor.py plan <#N>...
         Price and order a batch of issues and show each item's reserved
@@ -21,6 +22,10 @@ conductor_flow (the item state machine and the stall rule in next).
         Record any new stall and gate asks, then print as JSON the oldest
         unanswered ask, the steps ready to launch under wip_cap, and the
         ids of the asks just recorded ({"ask", "ready", "recorded"}).
+  python3 conductor.py run <batch> <#N> <step>
+        One metered headless Worker run of the item's step in its own
+        worktree (conductor/<batch>-<n>): launch row, brief, harness, spend
+        row, push, PR, run row; any failure queues a stall ask.
   python3 conductor.py ask <batch> --kind K --question Q --option O
                            [--option O ...] --recommended O --why W
                            [--item #N] [--covers #N ...]
@@ -386,7 +391,7 @@ def _answer_cli(root, batch, args, now, env):
 
 
 def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
-         alive=None):
+         alive=None, harness=None):
     env = os.environ if env is None else env
     now = (clock or (lambda: datetime.now(timezone.utc)))()
     root = root or repo_root()
@@ -395,6 +400,7 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
     # are imported here, not at the top: one owner, no import cycle.
     import conductor_flow
     import conductor_plan
+    import conductor_run
     problems = None
     if argv[:1] == ["plan"]:
         problems = conductor_plan.plan_cli(root, argv[1:], now, run, git)
@@ -409,6 +415,9 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
             problems = _ask_cli(root, batch, args, now)
         elif command == "answer":
             problems = _answer_cli(root, batch, args, now, env)
+        elif command == "run":
+            problems = conductor_run.run_cli(root, [batch, *args], now, git,
+                                             run, harness)
     if problems is None:
         print(__doc__.strip())
         return 2

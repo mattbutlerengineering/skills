@@ -33,7 +33,8 @@ SEQUENCE = ("planned", "spec", "awaiting-gate", "build", "verify",
 # lean: fixed wall-clock limits per size (architecture.md); the trigger
 # to tune one is a scorecard showing it fire on a healthy run.
 WALL_CLOCK_MINUTES = {"S": 45, "M": 90, "L": 180}
-BANDS = ("mechanical", "implementation", "architecture_review")
+# Cheapest first, so retry-up takes the next band to the right.
+BANDS = factory_config.BANDS
 STALL_OPTIONS = ("retry", "retry-up", "block")
 RETRIES = ("retry", "retry-up")
 GATE_OPTIONS = ["approve", "block"]
@@ -53,12 +54,12 @@ def item_branch(batch, item):
     return f"conductor/{batch}-{item[1:]}"
 
 
-def _plan(rows):
+def plan_row(rows):
     return next((row for row in rows if row["kind"] == "plan"), None)
 
 
-def _entry(rows, item):
-    plan = _plan(rows)
+def plan_entry(rows, item):
+    plan = plan_row(rows)
     return next((entry for entry in (plan or {}).get("items", [])
                  if entry["item"] == item), None)
 
@@ -74,7 +75,7 @@ def _unanswered(rows, item):
                  and row["item"] == item and row["id"] not in given), None)
 
 
-def _latest_answer(rows, item, ask_kind, after=-1):
+def latest_answer(rows, item, ask_kind, after=-1):
     """The latest answer to an ask of this kind on the item, written
     after row index `after`, or None."""
     asks = {row["id"] for row in rows if row["kind"] == "ask"
@@ -104,7 +105,7 @@ def _successors(item_type, state, rows, item):
 def _stalled_problems(rows, item, to):
     states = _states(rows, item)
     stalled_at = rows.index(states[-1])
-    resumed = _latest_answer(rows, item, "stall", after=stalled_at)
+    resumed = latest_answer(rows, item, "stall", after=stalled_at)
     if to != states[-1]["from"] or resumed is None \
             or resumed["choice"] not in RETRIES:
         return [f"cd: {item} leaves stalled only for"
@@ -115,7 +116,7 @@ def _stalled_problems(rows, item, to):
 def transition_problems(rows, item, to, fields):
     """Problems with moving `item` to `to` (with these extra state-row
     fields) given the ledger's rows. Empty means the move is legal."""
-    entry = _entry(rows, item)
+    entry = plan_entry(rows, item)
     if entry is None:
         return [f"cd: {item} is not an item of this batch's plan"]
     state = current_state(rows, item)
@@ -135,7 +136,7 @@ def transition_problems(rows, item, to, fields):
     if to not in _successors(entry["type"], state, rows, item):
         return [f"cd: {item} cannot move from {state} to {to}"]
     if state == "awaiting-gate":
-        opened = _latest_answer(rows, item, "gate")
+        opened = latest_answer(rows, item, "gate")
         if opened is None or opened["choice"] != "approve":
             return [f"cd: {item} leaves awaiting-gate only after an"
                     " approve answer to its gate ask"]
@@ -187,7 +188,7 @@ def stall_rows(rows, now, entry, reason, recommended, why):
 def queue_stall(root, batch, now, item, reason, recommended, why):
     """(rows written, problems): stall the item and queue its ask."""
     def build(rows):
-        entry = _entry(rows, item)
+        entry = plan_entry(rows, item)
         if entry is None:
             return None, [f"cd: {item} is not an item of this batch's plan"]
         return stall_rows(rows, now, entry, reason, recommended, why)
@@ -208,7 +209,7 @@ def record_verdict(root, batch, now, item, verdict, reviewer_run):
         return None, [f"cd: verdict {verdict!r} is not pass or changes"]
 
     def build(rows):
-        entry = _entry(rows, item)
+        entry = plan_entry(rows, item)
         if entry is None:
             return None, [f"cd: {item} is not an item of this batch's plan"]
         if verdict == "pass":
@@ -264,7 +265,7 @@ def _at(value):
 def needs_facts(rows):
     """The items whose finished spec or build step needs branch facts
     (gate blobs, unchecked rows) before `survey` can say what follows."""
-    plan = _plan(rows) or {}
+    plan = plan_row(rows) or {}
     found = []
     for entry in plan.get("items", []):
         item = entry["item"]
@@ -336,7 +337,7 @@ def _candidate(rows, now, entry, alive, facts):
     if state in TERMINAL or state == "merging":
         return None, False, []
     if state == "stalled":
-        resumed = _latest_answer(rows, item, "stall",
+        resumed = latest_answer(rows, item, "stall",
                                  after=rows.index(states[-1]))
         if _unanswered(rows, item) is None and resumed is not None \
                 and resumed["choice"] in RETRIES:
@@ -349,7 +350,7 @@ def _candidate(rows, now, entry, alive, facts):
     if state == "reviewed":
         return "ship", False, []
     if state == "awaiting-gate":
-        opened = _latest_answer(rows, item, "gate")
+        opened = latest_answer(rows, item, "gate")
         return ("build" if opened and opened["choice"] == "approve"
                 else None), False, []
     launched = states[-1]
@@ -372,7 +373,7 @@ def survey(rows, now, wip_cap, alive, facts):
     Rows to write are new stall and gate asks with their state moves,
     and the batch pause after FAILURE_PAUSE consecutive failed runs.
     `facts` maps an item to its branch facts (gate_blobs, unchecked)."""
-    plan = _plan(rows)
+    plan = plan_row(rows)
     if plan is None:
         return None, None, ["cd: the batch ledger has no plan row"]
     writes, candidates, flying = [], [], 0
@@ -405,7 +406,7 @@ def _git(git, args, what):
         return None, [f"cd: git {what} failed: {detail(err)}"]
 
 
-def _changed(git, branch):
+def changed_files(git, branch):
     out, problems = _git(git, ["diff", "--name-only",
                                f"origin/main...{branch}"],
                          f"diff for {branch}")
@@ -415,7 +416,7 @@ def _changed(git, branch):
 def gate_blobs(git, branch):
     """({gate path: blob id}, problems) for the gate files the item
     branch changes against origin/main."""
-    changed, problems = _changed(git, branch)
+    changed, problems = changed_files(git, branch)
     if problems:
         return None, problems
     gates = [path for path in changed if GATE_PATH.fullmatch(path)]
@@ -435,7 +436,7 @@ def gate_blobs(git, branch):
 def unchecked_rows(git, branch):
     """(unchecked top-level breakdown rows, problems) from the
     breakdown.md or defect.md the item branch changes."""
-    changed, problems = _changed(git, branch)
+    changed, problems = changed_files(git, branch)
     if problems:
         return None, problems
     rows = []
