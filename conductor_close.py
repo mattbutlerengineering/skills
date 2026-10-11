@@ -221,11 +221,25 @@ def carry_blocked_spend(git, root, batch, blocked):
 
 
 def append_scorecard(root, card):
-    """Append one scorecard row. APPEND ONLY: never reads or rewrites."""
+    """(problems): append the batch's one scorecard row, unless a row
+    for the batch is already there. APPEND ONLY: never rewrites. The
+    read makes a close retried after a failed close-row write score the
+    batch once, not twice (review minor 6); batch names are never
+    reused, since `open` refuses one whose ledger is on main."""
     path = Path(root) / SCORECARDS
+    if path.is_file():
+        for lineno, line in numbered(path.read_text(encoding="utf-8")):
+            try:
+                row = json.loads(line)
+            except ValueError as err:
+                return [f"cd: {SCORECARDS}:{lineno} is not valid JSON:"
+                        f" {err}"]
+            if isinstance(row, dict) and row.get("batch") == card["batch"]:
+                return []
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(card) + "\n")
+    return []
 
 
 def pr_body(batch, finals):
@@ -307,7 +321,9 @@ def close_batch(root, batch, clock, git, gh):
     card, problems = scorecard(root, batch, now)
     if problems:
         return None, problems
-    append_scorecard(root, card)
+    problems = append_scorecard(root, card)
+    if problems:
+        return None, problems
     ask_id, problems = _record_close(root, batch, now, finals)
     if problems:
         return None, problems
