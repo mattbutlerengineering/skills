@@ -166,15 +166,22 @@ def _work(rows, entry, step, git, gh, batch, worktree):
     return wo, f"{row}\n\n{orientation_pack(worktree, wo, row)}", None, []
 
 
-def _worktree(git, batch, item):
-    """(the item worktree, problems), created from origin/main by the
-    item's first runner."""
+def worktree_path(git, batch, item):
+    """(the item worktree's path under the main checkout, problems)."""
     out, problems = _git(git, ["rev-parse", "--path-format=absolute",
                                "--git-common-dir"], "cd: git rev-parse")
     if problems:
         return None, problems
-    path = Path(out.strip()).parent / WORKTREE.format(batch=batch,
-                                                      n=item[1:])
+    return Path(out.strip()).parent / WORKTREE.format(batch=batch,
+                                                      n=item[1:]), []
+
+
+def _worktree(git, batch, item):
+    """(the item worktree, problems), created from origin/main by the
+    item's first runner."""
+    path, problems = worktree_path(git, batch, item)
+    if problems:
+        return None, problems
     if not path.exists():
         _, problems = _git(git, ["worktree", "add", "-b",
                                  flow.item_branch(batch, item), str(path),

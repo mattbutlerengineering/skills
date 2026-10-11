@@ -54,7 +54,7 @@ strings, `cli.report` for the exit, and `gh`/`git`/harness calls through
 
 - [x] **WO-0160** Merge precondition — size:S, blocked by: WO-0157 (PRD-0013 §User stories, §Success criteria, §Out of scope)
   - Accept: a pure check refuses `conductor.py merge` with its own problem string unless the item is `reviewed` with a pass verdict from a reviewer run distinct from every author run, and an answer covers it: its own merge ask, or a train ask whose `covers` lists it, answered with the train option, with every earlier item in that train already `merged`. A PR touching `docs/adr/**`, a run's `prd.md` or `architecture.md`, or `docs/design/**` passes on a train only when those files' blob ids equal the `gate_blobs` answered at its gate asks; a fixture with one changed blob is refused.
-- [ ] **WO-0161** The merge turn — size:M, blocked by: WO-0158, WO-0160 (PRD-0013 §User stories, §Success criteria, §Open questions)
+- [x] **WO-0161** The merge turn — size:M, blocked by: WO-0158, WO-0160 (PRD-0013 §User stories, §Success criteria, §Open questions)
   - Accept: with injected git and gh ports over a scratch repo, `conductor.py merge <batch> <item>` runs the architecture's eight steps in order: merges `origin/main` into the item branch; resolves only `costs.jsonl` (by the new `.gitattributes` line `docs/factory/costs.jsonl merge=union`) and the manifest (by regeneration); bumps the plugin patch version from `main`'s value when the item touched `skills/`; confirms every reserved number the item used is still free on `origin/main`, recording a mechanical renumber as a `reserve` row with `renumbered_from`; runs `make check`; pushes without force; waits up to 30 minutes for the new head's checks; then squash-merges, or enqueues when `mergeQueue(branch: "main")` is non-null and waits for merged or ejected. It writes a `merged` state row with `pr`, `sha` and `checks`. A non-mechanical conflict, a red re-check, an ejection, a timeout, or an unrenumberable collision each queue a stall ask and leave the branch as pushed; no test path force-pushes or retries.
 
 ## Milestone 5: A batch closes with a scorecard, and the Owner can drive it
@@ -254,3 +254,58 @@ and every existing seam it names exists on main (`cli.harness_run`,
   a later approval winning per path. The train reading (one answer per
   ordered train, gate-path items only on identical blobs) is built as
   designed and stays flagged for the Owner.
+- 2026-10-10 (Implement, row 0161): the merge turn lives in
+  `conductor_merge.py` beside its precondition. Choices inside the
+  design, none of them a design change:
+  1. Ports: `git` (the existing port; item-worktree calls carry
+     `-C <worktree>`), `gh`, a `tool` port for `make -C <worktree> check`
+     and `python3 <worktree>/factory_init.py update-manifest`, and the
+     clock plus `sleep` for the two 30-minute waits (polled every 30
+     seconds). `conductor.main` gains `tool` and `sleep`. The tests run
+     the turn over a scratch repo with a local bare origin; gh, make and
+     the manifest regeneration are fakes.
+  2. Step 1 fetches `origin main` first, so a stale local ref (row 0156's
+     note) is refreshed before the merge. A conflict list of exactly the
+     manifest is regenerated and committed; any other conflict, or a
+     merge that fails with none, runs `git merge --abort` and stalls.
+     `costs.jsonl` never conflicts: the new root `.gitattributes`
+     merges it by union.
+  3. Step 3 also regenerates the manifest, because the manifest pins the
+     plugin version, and records the new version as a `reserve` row
+     (`what: plugin-version`), the architecture's write slot. The bump
+     is idempotent, so a retried turn does not bump twice.
+  4. Step 4's "used" numbers are the item's reserved numbers cited in a
+     line the item added (a branch line with no unclaimed copy in
+     origin/main's version of the file) or naming an ADR file the item
+     added. A used number present on origin/main moves to the next
+     number above every id on origin/main and every block in the batch;
+     the item's ADR file is renamed and only the item's added lines are
+     rewritten, then committed. Unrenumberable: a new number past 9999,
+     or a rename target that exists. A shared index both sides appended
+     to adjacently is a git conflict, so it stalls at step 2 as
+     non-mechanical.
+  5. After steps 1-4 the answer half of the precondition re-runs on the
+     branch's new gate blobs, so a gate file the update or a renumber
+     changed no longer rides a train (it stalls for its own merge ask).
+  6. Step 7 reads the new head's check runs
+     (`repos/{owner}/{repo}/commits/<sha>/check-runs`), stalls at once
+     on a run that completed with a conclusion other than success,
+     skipped or neutral, and records `checks` as {name: conclusion}.
+     Step 8 reads `mergeQueue(branch: "main")` through `gh api graphql`
+     and in both paths runs `gh pr merge <n> --squash
+     --match-head-commit <head>` (with a queue, gh enqueues and the
+     queue owns the strategy), then reads `gh pr view` for merged,
+     ejected (`isInMergeQueue` false while open) or a timeout. gh's
+     behaviour with `--squash` on a queue-required branch is unverified
+     offline.
+  7. A stall recommends `block` for a non-mechanical conflict, a red
+     make check or check run, an ejection, a collision and a refused
+     gate re-check; `retry` for a timeout, a failed push and a failed gh
+     or git read. The stall ask keeps the fixed options, so `retry-up`
+     is offered on a merge stall too, where it means the same as
+     `retry`.
+  8. `next` reported a stalled merge's resumed step as `merging`, which
+     `run` cannot launch; `conductor_flow` now reports it as `merge`,
+     the verb that resumes it.
+  Adjacent, not changed: the scratch-repo tests spawn real `git`
+  processes, which adds a few minutes to the suite on this machine.

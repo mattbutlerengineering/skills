@@ -7,9 +7,10 @@ functions with every input passed in, a thin main, cd:-prefixed problem
 strings, cli.report for the exit. Root-only: not mirrored into the
 factory payload (architecture.md). Capabilities that would push this
 file past the 800-line ceiling live in sibling modules that import its
-row grammar (breakdown assumption 6): conductor_plan (plan, open) and
-conductor_flow (the item state machine and the stall rule in next) and
-conductor_run (the Worker runner).
+row grammar (breakdown assumption 6): conductor_plan (plan, open),
+conductor_flow (the item state machine and the stall rule in next),
+conductor_run (the Worker runner) and conductor_merge (the merge
+precondition and the merge turn).
 
   python3 conductor.py plan <#N>...
         Price and order a batch of issues and show each item's reserved
@@ -26,6 +27,14 @@ conductor_run (the Worker runner).
         One metered headless Worker run of the item's step in its own
         worktree (conductor/<batch>-<n>): launch row, brief, harness, spend
         row, push, PR, run row; any failure queues a stall ask.
+  python3 conductor.py merge <batch> <#N>
+        One merge turn, refused unless the item is reviewed with a pass
+        from a distinct reviewer and an answer covers it: merge
+        origin/main in, resolve only costs.jsonl and the manifest, bump
+        the plugin patch version for a skills/ change, confirm the
+        item's reserved numbers, make check, push (never forced), wait
+        for the head's checks, then squash-merge or enqueue. Any other
+        outcome queues a stall ask.
   python3 conductor.py ask <batch> --kind K --question Q --option O
                            [--option O ...] --recommended O --why W
                            [--item #N] [--covers #N ...]
@@ -391,14 +400,16 @@ def _answer_cli(root, batch, args, now, env):
 
 
 def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
-         alive=None, harness=None):
+         alive=None, harness=None, tool=None, sleep=None):
     env = os.environ if env is None else env
-    now = (clock or (lambda: datetime.now(timezone.utc)))()
+    clock = clock or (lambda: datetime.now(timezone.utc))
+    now = clock()
     root = root or repo_root()
     git = git or runner("git")
     # The capability siblings import this module's row grammar, so they
     # are imported here, not at the top: one owner, no import cycle.
     import conductor_flow
+    import conductor_merge
     import conductor_plan
     import conductor_run
     problems = None
@@ -418,6 +429,9 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
         elif command == "run":
             problems = conductor_run.run_cli(root, [batch, *args], now, git,
                                              run, harness)
+        elif command == "merge":
+            problems = conductor_merge.merge_cli(root, [batch, *args], clock,
+                                                 git, run, tool, sleep)
     if problems is None:
         print(__doc__.strip())
         return 2

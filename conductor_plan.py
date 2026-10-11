@@ -47,11 +47,11 @@ WORKTREES = ".claude/worktrees"
 SPEND_OPTIONS = ["approve", "decline"]
 
 
-def ids_in_use(git):
-    """({kind: highest number}, problems) for the PRD, ADR and WO ids on
+def ids_on_main(git):
+    """({kind: set of numbers}, problems) for the PRD, ADR and WO ids on
     origin/main, through knowledge_plane's token grammars. Over-counts
     any id merely cited, which is the safe direction. grep's exit 1 is
-    "no match", so every kind is 0."""
+    "no match", so every kind is empty."""
     try:
         text = git(ID_GREP).stdout
     except subprocess.CalledProcessError as err:
@@ -60,9 +60,19 @@ def ids_in_use(git):
         text = ""
     except CLI_FAILURES as err:
         return None, [f"cd: git grep origin/main failed: {detail(err)}"]
-    return {kind: max((int(match.group(0)[-4:])
-                       for match in token.finditer(text)), default=0)
+    return {kind: {int(match.group(0)[-4:])
+                   for match in token.finditer(text)}
             for kind, token in ID_TOKENS}, []
+
+
+def ids_in_use(git):
+    """({kind: highest number}, problems): ids_on_main's maxima, 0 for a
+    kind with none."""
+    found, problems = ids_on_main(git)
+    if problems:
+        return None, problems
+    return {kind: max(numbers, default=0)
+            for kind, numbers in found.items()}, []
 
 
 def repo_owner(run):

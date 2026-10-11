@@ -341,7 +341,9 @@ def _candidate(rows, now, entry, alive, facts):
                                  after=rows.index(states[-1]))
         if _unanswered(rows, item) is None and resumed is not None \
                 and resumed["choice"] in RETRIES:
-            return states[-1]["from"], False, []
+            # A merge turn that stalled resumes as a merge, not a step.
+            resume = states[-1]["from"]
+            return ("merge" if resume == "merging" else resume), False, []
         return None, False, []
     if _unanswered(rows, item) is not None:
         return None, False, []
