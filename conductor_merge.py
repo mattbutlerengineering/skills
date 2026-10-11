@@ -16,6 +16,7 @@ one approved at its gate asks; otherwise it needs its own merge ask
 Owner).
 """
 import json
+import os
 import re
 import time
 from collections import Counter
@@ -518,7 +519,7 @@ def _turn(root, batch, item, ports, worktree):
     return {"pr": pr, "sha": sha, "checks": checks}, []
 
 
-def merge_turn(root, batch, item, clock, git, gh, tool, sleep):
+def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None):
     """(summary, problems): one merge turn. problems when the
     precondition refuses (nothing is touched) or a ledger write fails;
     a turn that cannot finish mechanically queues a stall ask and leaves
@@ -537,8 +538,10 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep):
         problems = [f"cd: no item worktree at {worktree}"]
     if problems:
         return None, problems
+    # The turn's pid lets `next` stall a turn that died mid-way.
     _, problems = flow.move(root, batch, clock(), item, "merging",
-                            "merge turn")
+                            "merge turn",
+                            pid=os.getpid() if pid is None else pid)
     if problems:
         return None, problems
     try:

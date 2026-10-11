@@ -399,13 +399,28 @@ def _in_flight(rows, now, entry, launched, alive):
     return False, written
 
 
+def _merge_gone(rows, now, entry, merging, alive):
+    """Stall rows for a merge turn whose process is gone with no merged
+    row (an interrupted turn), else []. A stall from `merging` resumes
+    as a merge after a retry answer."""
+    pid = merging.get("pid")
+    if pid is None or alive(pid):
+        return []
+    written, _ = stall_rows(
+        rows, now, entry, f"its merge turn (pid {pid}) is gone with no"
+        " merged row", "retry", IDLE_WHY)
+    return written
+
+
 def _candidate(rows, now, entry, alive, facts):
     """(ready step or None, in flight?, rows to write) for one item."""
     item = entry["item"]
     state = current_state(rows, item)
     states = _states(rows, item)
-    if state in TERMINAL or state == "merging":
+    if state in TERMINAL:
         return None, False, []
+    if state == "merging":
+        return None, False, _merge_gone(rows, now, entry, states[-1], alive)
     if state == "stalled":
         resumed = latest_answer(rows, item, "stall",
                                  after=rows.index(states[-1]))

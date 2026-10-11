@@ -353,7 +353,7 @@ class TurnCase(unittest.TestCase):
         self.gh = gh or self.fake_gh()
         summary, problems = merge.merge_turn(
             self.root, "b1", "#12", self.clock, self.git, self.gh,
-            tool or self.tool(), self.clock.sleep)
+            tool or self.tool(), self.clock.sleep, pid=555)
         self.rows, _ = conductor.load(self.root, "b1")
         return summary, problems
 
@@ -399,6 +399,8 @@ class TestMergeTurn(TurnCase):
             "pr", "merge", "44", "--squash", "--match-head-commit",
             self.head()]])
         self.assertEqual(self.rows[-2]["to"], "merging")
+        # The turn records its pid, so `next` can stall a turn that died.
+        self.assertEqual(self.rows[-2]["pid"], 555)
         self.assertEqual(self.rows[-1], {
             "at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#12",
             "from": "merging", "to": "merged", "reason": "merged as m1",

@@ -391,6 +391,25 @@ class TestSurveyWrites(unittest.TestCase):
              "why": "a dead runner or an idle step is evidence about the"
                     " run more than about the item"}])
 
+    def test_a_dead_merge_turn_stalls_and_resumes_as_a_merge(self):
+        # Review finding: an interrupted merge turn left the item at
+        # `merging` with no stall, no ready step and no way out.
+        rows = [launch("#14", "planned", "build"), ran("#14", "build"),
+                moved("#14", "ship", "merging", pid=4242)]
+        self.assertEqual(self.writes(rows), [])
+        writes = self.writes(rows, probe=dead)
+        self.assertEqual(writes[0], {
+            "at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#14",
+            "from": "merging", "to": "stalled",
+            "reason": "its merge turn (pid 4242) is gone with no merged"
+                      " row"})
+        self.assertEqual((writes[1]["ask_kind"], writes[1]["recommended"]),
+                         ("stall", "retry"))
+        resumed = rows + writes + [answered(writes[1]["id"], "retry",
+                                            "#14")]
+        ready, _, _ = flow.survey(START + resumed, NOW, 3, dead, {})
+        self.assertIn({"item": "#14", "step": "merge"}, ready)
+
     def test_an_idle_step_stalls_after_twice_its_wall_clock_limit(self):
         # #14 is size M: a 90-minute limit, so 180 minutes idle stalls.
         rows = [launch("#14", "planned", "build")]
