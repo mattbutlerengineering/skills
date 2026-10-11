@@ -202,6 +202,12 @@ def transition_problems(rows, item, to, fields):
             and fields.get("reviewer_run") in fields.get("author_runs", []):
         return [f"cd: {item} reviewed pass refused: reviewer run"
                 f" {fields['reviewer_run']} is among its author runs"]
+    # A launched step leaves only once its finishing run row exists, so a
+    # second runner from a stale `next` never shares its worktree.
+    launched = _states(rows, item)[-1] if state != "planned" else {}
+    if "run_id" in launched and _finishing(rows, launched) is None:
+        return [f"cd: {item}'s {state} run {launched['run_id']} is still"
+                " in flight"]
     return []
 
 

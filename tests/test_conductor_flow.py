@@ -214,6 +214,21 @@ class TestTransitions(unittest.TestCase):
                                        run_id="r", pid=1),
                          ["cd: #12 has an unanswered ask (ask-2)"])
 
+    def test_a_step_still_in_flight_is_never_launched_twice(self):
+        # Review finding: build -> build is a legal move, so a second
+        # runner launched from a stale `next` passed while the first
+        # build run had no finishing row, both Workers sharing one
+        # worktree and one run id.
+        rows = [launch("#13", "planned", "spec"), ran("#13", "spec"),
+                launch("#13", "spec", "build")]
+        self.assertEqual(
+            self.problems(rows, "#13", "build", run_id="r2", pid=2),
+            ["cd: #13's build run conductor-b1-13-build-1 is still in"
+             " flight"])
+        self.assertEqual(self.problems(rows, "#13", "stalled"), [])
+        self.assertEqual(self.problems(rows + [ran("#13", "build")], "#13",
+                                       "build", run_id="r2", pid=2), [])
+
     def test_an_item_outside_the_plan_is_refused(self):
         self.assertEqual(self.problems([], "#99", "spec"),
                          ["cd: #99 is not an item of this batch's plan"])

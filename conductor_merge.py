@@ -101,8 +101,8 @@ def merge_problems(rows, item, blobs):
     if flow.plan_entry(rows, item) is None:
         return [f"cd: {item} is not an item of this batch's plan"]
     problems = (_reviewed_problems(rows, item)
-                or flow.transition_problems(rows, item, "merging", {})
-                or _shipped_problems(rows, item))
+                or _shipped_problems(rows, item)
+                or flow.transition_problems(rows, item, "merging", {}))
     return problems or cover_problems(rows, item, blobs)
 
 
