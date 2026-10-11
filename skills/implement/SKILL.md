@@ -55,6 +55,9 @@ document — the code is the artifact, and progress is the checkboxes.
 
 - Surgical scope: touch only what the current item requires. Adjacent smells
   get logged, not fixed.
+- When an item moves code into a different module, re-read every moved
+  comment and the receiving module's docstring — especially any list of
+  what it owns — against the new home.
 - Never check an item whose acceptance criterion you didn't actually verify.
 - Commit at item boundaries with messages naming the item, so the history
   reads like the breakdown.
