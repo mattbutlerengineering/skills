@@ -14,8 +14,9 @@ and the row disagree, the row wins.
 
 ### Plan
 - Entry: the mirrored issue carries `wo:ready-for-agent` (ADR-0032
-  lifecycle) and the WO-#### bead is unclaimed with no open blockers.
-- Exit: bead claimed; a micro-plan (steps, test list, files, risks)
+  lifecycle), is not yet `wo:in-progress`, and the row has no open
+  `blocked by:` edge.
+- Exit: issue claimed (`wo:in-progress`); a micro-plan (steps, test list, files, risks)
   covers every acceptance criterion on the row; the budget class
   (dollar caps per `factory.json` `budgets_usd`, ADR-0034) is noted
   as the stop rule for the cycle.
@@ -43,7 +44,8 @@ and the row disagree, the row wins.
 
 ## Actions per cycle
 
-1. Claim the work order in beads.
+1. Claim the work order: its issue moves to `wo:in-progress`
+   (the assembler's claim, ADR-0045).
 2. Write the micro-plan from the row's criteria.
 3. TDD RED→GREEN→refactor (superpowers).
 4. systematic-debugging on any surprise — no guess-and-rerun loops.
@@ -65,12 +67,11 @@ and the row disagree, the row wins.
 | caveman | MEASURED |
 | headroom | MEASURED |
 | resolving-merge-conflicts | MEASURED |
-| beads | MEASURED |
 | context7 | RUN |
 
 ## Grants
 
-Claim/update its own beads; branch, commit, and push feature branches;
+Claim its own work-order issue (`wo:in-progress`); branch, commit, and push feature branches;
 open PRs and reply on them; run the repo's local gates and tests.
 Routing band: `implementation`. The charter names a band, never a model —
 the model id resolves from the repo's `factory.json` `routing` table at

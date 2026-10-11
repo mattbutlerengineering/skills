@@ -52,10 +52,10 @@ the canonical vocabulary.
 | [0029](0029-backlog-seed-inbox.md) | A derived, advisory backlog (seed inbox) | accepted |
 | [0030](0030-incident-fastlane-and-tracker-intake.md) | Incident fast lane and tracker intake | accepted (Decision 2; Decision 1 remains provisional) |
 | [0031](0031-omp-trigger-eval-adapter.md) | The trigger eval drives omp too; results are harness-marked | accepted |
-| [0032](0032-factory-dispatch-plane.md) | Factory dispatch plane: issues mirror breakdown rows one-way | accepted |
+| [0032](0032-factory-dispatch-plane.md) | Factory dispatch plane: issues mirror breakdown rows one-way | superseded in part by ADR-0083 (the beads clause; amended by ADR-0035) |
 | [0033](0033-three-human-gates.md) | Three human gates: PRD, blueprint, merge | amended by ADR-0036 |
 | [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | amended by ADR-0041 |
-| [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | accepted |
+| [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | superseded in part by ADR-0083 (the beads carve-out) |
 | [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | accepted |
 | [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | amended by ADR-0039 |
 | [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | amended by ADR-0045 |
@@ -64,7 +64,7 @@ the canonical vocabulary.
 | [0041](0041-gate-latency-rows-join-the-cost-ledger.md) | Gate-latency observations are cost-ledger rows | amended by ADR-0049 |
 | [0042](0042-gh-runner-and-event-read-join-the-cli-seam.md) | gh_runner and the event read join the cli seam | amended by ADR-0051 |
 | [0043](0043-pre-ledger-rows-are-annotated-in-the-knowledge-plane.md) | Pre-ledger rows are annotated in the knowledge plane | accepted |
-| [0044](0044-daily-improvement-routine.md) | A daily routine drives the factory's improvement loop | accepted |
+| [0044](0044-daily-improvement-routine.md) | A daily routine drives the factory's improvement loop | superseded in part by ADR-0083 (the queue is read from GitHub issues, not the beads export) |
 | [0045](0045-lifecycle-label-writers.md) | Every lifecycle label has a named writer; wo:blocked's is a human | accepted |
 | [0046](0046-tools-factory-symmetry-deferred.md) | tools/factory root symmetry deferred — flat root is load-bearing | amended by ADR-0059 (deferral stands; diagnosis replaced; blocker narrowed by ADR-0065) |
 | [0047](0047-factory-roles-seam.md) | Factory roles seam: factory_roles.py owns the role vocabulary | accepted |
@@ -103,3 +103,4 @@ the canonical vocabulary.
 | [0080](0080-accepted-means-a-dispatched-order-whose-mirror-merged.md) | Accepted means a dispatched order whose mirror merged | accepted |
 | [0081](0081-plugin-eval-is-an-on-demand-harness.md) | `claude plugin eval` is an on-demand harness with its own tree | accepted |
 | [0082](0082-the-pipeline-writes-adrs-at-its-stages.md) | The pipeline writes ADRs at its stages, by one test | accepted |
+| [0083](0083-github-issues-are-the-only-tracker.md) | GitHub issues are the only tracker; beads is retired | accepted |

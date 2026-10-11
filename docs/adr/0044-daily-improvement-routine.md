@@ -1,6 +1,6 @@
 # A daily routine drives the factory's improvement loop
 
-- Status: accepted
+- Status: superseded in part by ADR-0083 (the queue is read from GitHub issues, not the beads export)
 - Date: 2026-07-30
 
 ## Context

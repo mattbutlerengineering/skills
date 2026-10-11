@@ -1,6 +1,6 @@
 # Factory dispatch plane
 
-- Status: accepted
+- Status: superseded in part by ADR-0083 (the beads clause; amended by ADR-0035)
 - Date: 2026-07-11
 
 The software factory (PRD-0001) needs unattended agents to pick up work.

@@ -1,6 +1,6 @@
 # GitHub issues are the single work-order tracker mirror
 
-- Status: accepted
+- Status: superseded in part by ADR-0083 (the beads carve-out)
 - Date: 2026-07-12
 
 The work-order rows in `breakdown.md` (ADR-0004: the artifact is the
