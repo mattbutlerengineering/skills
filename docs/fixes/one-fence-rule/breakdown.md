@@ -37,7 +37,7 @@ its `factory/templates/tools/factory/` twin and runs
 
 ## Closure
 
-- [ ] **Prove one owner** — confirm the condition is gone, not just the three items checked off
+- [x] **Prove one owner** — confirm the condition is gone, not just the three items checked off
   - Accept: `grep -nE '^(FENCE_OPEN|FENCE_CLOSE|ARCH_FENCE|FENCES) *=' *.py` lists definitions in `knowledge_plane.py` only. Both `defect.md` repros, re-run against the changed tree, print no problem. `python3 -m unittest discover tests`, `python3 lint.py`, `python3 gates.py` and `python3 gates.py --selftest` are all green.
   - Blocked by: D tracks fences through `fence_open`/`fence_closes`; `_unquoted` tracks fences through `fence_open`/`fence_closes`
 
