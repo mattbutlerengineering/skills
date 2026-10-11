@@ -22,8 +22,10 @@ closing a batch).
         ask.
   python3 conductor.py next <batch>
         Record any new stall and gate asks, then print as JSON the oldest
-        unanswered ask, the steps ready to launch under wip_cap, and the
-        ids of the asks just recorded ({"ask", "ready", "recorded"}).
+        unanswered ask, the steps ready to launch under wip_cap (a
+        `merge` step once an answer covers a shipped item), the ids of
+        the asks just recorded, and the shipped items waiting for a
+        merge ask ({"ask", "ready", "recorded", "merge_due"}).
   python3 conductor.py run <batch> <#N> <step>
         One metered headless Worker run of the item's step in its own
         worktree (conductor/<batch>-<n>): launch row, brief, harness, spend

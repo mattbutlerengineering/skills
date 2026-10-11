@@ -589,6 +589,31 @@
       "notes": "adjacency: implement vs work-queue — one named work order is the stage skill; a batch is the queue"
     },
     {
+      "id": "conduct-1",
+      "kind": "direct",
+      "expected": "conduct",
+      "query": "Conduct these four issues as one batch: price them first, run the workers, and merge whatever passes review in order"
+    },
+    {
+      "id": "conduct-2",
+      "kind": "situational",
+      "expected": "conduct",
+      "query": "I wrote five issues I want taken all the way to merged with as few interruptions as possible — queue the decisions and ask me one at a time"
+    },
+    {
+      "id": "conduct-3",
+      "kind": "situational",
+      "expected": "conduct",
+      "query": "Pick the batch I opened yesterday back up and keep it moving — launch whatever is ready and show me the next decision"
+    },
+    {
+      "id": "conduct-vs-work-queue-1",
+      "kind": "near-miss",
+      "expected": "conduct",
+      "query": "Take these issues from spec through review, each reviewed by a different agent, merge them in order, and give me a scorecard at the end",
+      "notes": "adjacency: conduct vs work-queue — issues driven from spec to merged under the owner's answers, not ready work orders stopped at merge-ready PRs"
+    },
+    {
       "id": "audit-1",
       "kind": "direct",
       "expected": "audit",

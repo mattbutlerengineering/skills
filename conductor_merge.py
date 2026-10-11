@@ -29,12 +29,6 @@ from conductor import BLOCK, answers, append, current_state, is_text, \
     load, stamp
 from cost_ledger import ISSUE_KEY
 
-# The consenting choice of a merge ask: an item's own ask, and a train
-# ask that covers several items in order.
-MERGE_CHOICE = "merge"
-TRAIN_CHOICE = "train"
-
-
 def _refused(text):
     return [f"cd: merge refused: {text}"]
 
@@ -69,23 +63,6 @@ def _shipped_problems(rows, item):
     if not finished or finished[-1]["outcome"] != flow.COMPLETED:
         return _refused(f"{item}'s ship step has not completed")
     return []
-
-
-def _consents(rows, item):
-    """(own, trains): the merge asks covering the item whose answer
-    consents — its own asks answered `merge`, and train asks listing it
-    answered `train` — in ledger order."""
-    given = answers(rows)
-    own, trains = [], []
-    for row in rows:
-        if row["kind"] != "ask" or row["ask_kind"] != "merge":
-            continue
-        choice = (given.get(row["id"]) or {}).get("choice")
-        if row["item"] == item and choice == MERGE_CHOICE:
-            own.append(row)
-        elif item in row.get("covers", []) and choice == TRAIN_CHOICE:
-            trains.append(row)
-    return own, trains
 
 
 def _approved_blobs(rows, item):
@@ -133,7 +110,7 @@ def cover_problems(rows, item, blobs):
     """The answer half of merge_problems: an own merge answer, or a
     train answer with the earlier items merged and the gate blobs as
     approved. Re-run after the merge turn updates the branch."""
-    own, trains = _consents(rows, item)
+    own, trains = flow.consents(rows, item)
     if own:
         return []
     if not trains:

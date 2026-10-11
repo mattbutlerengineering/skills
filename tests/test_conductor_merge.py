@@ -165,6 +165,53 @@ class TestMergePrecondition(unittest.TestCase):
                          ["cd: #99 is not an item of this batch's plan"])
 
 
+class TestMergeDue(unittest.TestCase):
+    """`next` tells the Conductor which shipped items wait for a merge
+    ask it must word, and reports a covered item as ready to merge."""
+
+    def survey(self, rows):
+        ready, _, _ = flow.survey(START + rows, NOW, 3, lambda pid: True,
+                                  {})
+        return ready, flow.merge_due(START + rows)
+
+    def test_a_shipped_item_with_no_merge_ask_is_due_one(self):
+        ready, due = self.survey(order_shipped())
+        self.assertEqual(due, ["#14"])
+        self.assertNotIn({"item": "#14", "step": "merge"}, ready)
+
+    def test_an_unfinished_ship_step_is_not_due(self):
+        self.assertEqual(self.survey(order_shipped()[:-1])[1], [])
+
+    def test_a_pending_own_or_train_ask_is_not_due_again(self):
+        self.assertEqual(
+            self.survey(order_shipped() + own("ask-2", "#14")[:1])[1], [])
+        self.assertEqual(
+            self.survey(order_shipped() + train("ask-2", ["#14"])[:1])[1],
+            [])
+
+    def test_a_pending_train_ask_holds_no_worker_dispatch(self):
+        ready, _ = self.survey(order_shipped() + train("ask-2", ["#14"])[:1])
+        self.assertEqual(ready, [{"item": "#12", "step": "spec"},
+                                 {"item": "#13", "step": "spec"}])
+
+    def test_an_own_merge_answer_makes_the_item_ready_to_merge(self):
+        ready, due = self.survey(order_shipped() + own("ask-2", "#14"))
+        self.assertEqual(due, [])
+        self.assertIn({"item": "#14", "step": "merge"}, ready)
+
+    def test_a_train_answer_readies_only_the_head_of_the_train(self):
+        rows = (order_shipped() + feature_shipped({})
+                + train("ask-3", ["#14", "#12"]))
+        ready, due = self.survey(rows)
+        self.assertEqual(due, [])
+        self.assertIn({"item": "#14", "step": "merge"}, ready)
+        self.assertNotIn({"item": "#12", "step": "merge"}, ready)
+
+    def test_an_answer_declining_the_train_makes_its_items_due_again(self):
+        rows = order_shipped() + train("ask-2", ["#14"], "one-by-one")
+        self.assertEqual(self.survey(rows)[1], ["#14"])
+
+
 # --- the merge turn, over a scratch repo with a local bare origin --------
 
 BRANCH = "conductor/b1-12"

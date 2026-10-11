@@ -542,7 +542,7 @@ class TestNextCli(unittest.TestCase):
         self.assertEqual(code, 0, out)
         payload = json.loads(out[:out.rindex("\ncd:")])
         self.assertEqual(payload, {
-            "ask": None, "recorded": [],
+            "ask": None, "recorded": [], "merge_due": [],
             "ready": [{"item": "#12", "step": "spec"},
                       {"item": "#13", "step": "spec"}]})
 

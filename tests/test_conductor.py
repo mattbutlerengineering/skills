@@ -368,7 +368,7 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         self.assertEqual(code, 0)
         payload = json.loads(out[:out.rindex("\ncd:")])
         self.assertEqual(payload, {"ask": ask_row("ask-1"), "ready": [],
-                                   "recorded": []})
+                                   "recorded": [], "merge_due": []})
 
     def test_ask_then_answer_round_trip(self):
         code, out = self.run_cli([

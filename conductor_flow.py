@@ -41,6 +41,10 @@ GATE_OPTIONS = ["approve", "block"]
 PAUSE_OPTIONS = ["resume", "stop"]
 # A batch-level answer with one of these choices holds all dispatch.
 HOLD_CHOICES = ("decline", "stop")
+# The consenting choice of a merge ask: an item's own ask, and a train
+# ask that covers several items in order.
+MERGE_CHOICE = "merge"
+TRAIN_CHOICE = "train"
 FAILURE_PAUSE = 3
 COMPLETED = "completed"
 GATE_PATH = re.compile(r"docs/adr/.+|docs/design/.+|(?:.+/)?"
@@ -83,6 +87,60 @@ def latest_answer(rows, item, ask_kind, after=-1):
     found = [row for index, row in enumerate(rows) if index > after
              and row["kind"] == "answer" and row["ask"] in asks]
     return found[-1] if found else None
+
+
+def consents(rows, item):
+    """(own, trains): the merge asks covering the item whose answer
+    consents — its own asks answered `merge`, and train asks listing it
+    answered `train` — in ledger order."""
+    given = answers(rows)
+    own, trains = [], []
+    for row in rows:
+        if row["kind"] != "ask" or row["ask_kind"] != "merge":
+            continue
+        choice = (given.get(row["id"]) or {}).get("choice")
+        if row["item"] == item and choice == MERGE_CHOICE:
+            own.append(row)
+        elif item in row.get("covers", []) and choice == TRAIN_CHOICE:
+            trains.append(row)
+    return own, trains
+
+
+def _merge_ready(rows, item):
+    """True when an answer covers the shipped item and, on a train,
+    every earlier item has merged; the merge precondition re-checks."""
+    own, trains = consents(rows, item)
+    if own:
+        return True
+    if not trains:
+        return False
+    covers = trains[-1]["covers"]
+    return all(current_state(rows, earlier) == "merged"
+               for earlier in covers[:covers.index(item)])
+
+
+def merge_due(rows):
+    """The items whose ship step completed and that wait for a merge ask
+    the Conductor words: none answered to consent, and none pending,
+    whether the item's own or a train listing it. PURE."""
+    given = answers(rows)
+    pending = [row for row in rows if row["kind"] == "ask"
+               and row["ask_kind"] == "merge" and row["id"] not in given]
+    due = []
+    for entry in (plan_row(rows) or {}).get("items", []):
+        item = entry["item"]
+        states = _states(rows, item)
+        if not states or states[-1]["to"] != "ship":
+            continue
+        finished = _finishing(rows, states[-1])
+        if finished is None or finished["outcome"] != COMPLETED \
+                or _unanswered(rows, item) is not None \
+                or any(item in row.get("covers", []) for row in pending):
+            continue
+        own, trains = consents(rows, item)
+        if not (own or trains):
+            due.append(item)
+    return due
 
 
 def _successors(item_type, state, rows, item):
@@ -238,10 +296,12 @@ def record_verdict(root, batch, now, item, verdict, reviewer_run):
 
 def _held(rows):
     """True when a batch-level ask is unanswered or was answered with a
-    choice that holds dispatch (a declined spend, a stopped pause)."""
+    choice that holds dispatch (a declined spend, a stopped pause). A
+    train or closing merge ask holds no Worker step."""
     given = answers(rows)
     for row in rows:
-        if row["kind"] == "ask" and row["item"] is None:
+        if row["kind"] == "ask" and row["item"] is None \
+                and row["ask_kind"] != "merge":
             answer = given.get(row["id"])
             if answer is None or answer["choice"] in HOLD_CHOICES:
                 return True
@@ -312,6 +372,8 @@ def _after_step(rows, now, entry, launched, facts):
         if item not in facts:
             return None, []
         return ("build" if facts[item]["unchecked"] else "verify"), []
+    if state == "ship":
+        return ("merge" if _merge_ready(rows, item) else None), []
     return {"verify": "review"}.get(state), []
 
 
@@ -502,8 +564,9 @@ def advance(root, batch, now, wip_cap, alive, git):
         return None, problems
     recorded = [row["id"] for row in outcome["writes"]
                 if row["kind"] == "ask"]
-    return {"ask": next_ask(outcome["rows"] + outcome["writes"]),
-            "ready": outcome["ready"], "recorded": recorded}, []
+    after = outcome["rows"] + outcome["writes"]
+    return {"ask": next_ask(after), "ready": outcome["ready"],
+            "recorded": recorded, "merge_due": merge_due(after)}, []
 
 
 def next_cli(root, batch, args, now, git, alive):

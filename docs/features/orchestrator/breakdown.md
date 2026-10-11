@@ -63,7 +63,7 @@ strings, `cli.report` for the exit, and `gh`/`git`/harness calls through
   - Accept: `conductor.py scorecard <batch>` computes the architecture's scorecard fields (including `owner_touches_per_merged`, `estimate_error_pct` against the plan row, `collisions` from `renumbered_from` rows, `merged_per_owner_wait_hour` by ADR-0080's formula over the batch's ask-to-answer waits, `policy_compliance` against the plan's policy snapshot, and `conductor_session: "unmetered"`) from a fixture ledger and its `costs.jsonl` alone; it exits nonzero with a `cd:` problem naming file and line, and appends nothing, for a malformed ledger line, a `run` row with no `costs.jsonl` row of the same `run_id`, and a missing `plan` row.
 - [x] **WO-0163** Close a batch — size:S, blocked by: WO-0161, WO-0162 (PRD-0013 §User stories, §Success criteria)
   - Accept: `conductor.py close <batch>`, with injected ports, appends blocked items' spend rows to the conductor branch's `costs.jsonl`, runs `scorecard` and appends its row to `docs/factory/scorecards.jsonl` only on success, writes the `close` row, commits the ledger, run evidence and scorecard on `conductor/<batch>`, opens its PR, queues its merge ask, and labels each blocked item's issue `needs-human` with a reason comment; a failing scorecard leaves `scorecards.jsonl` byte-identical.
-- [ ] **WO-0164** The `conduct` skill, vocabulary and packaging — size:M, blocked by: WO-0156, WO-0158, WO-0159, WO-0161, WO-0163 (PRD-0013 §Solution, §Actors, §User stories, §Out of scope)
+- [x] **WO-0164** The `conduct` skill, vocabulary and packaging — size:M, blocked by: WO-0156, WO-0158, WO-0159, WO-0161, WO-0163 (PRD-0013 §Solution, §Actors, §User stories, §Out of scope)
   - Accept: `skills/conduct/SKILL.md` gives the Conductor's procedure in harness-neutral words: every entry runs `conductor.py next` first; it opens a batch, asks the spend question, launches runners in the background up to the cap, presents one ask at a time with the recommended option first and its reason, writes an answer only straight after the Owner picks it in this session, and drives the merge turns answers cover; it never writes or reviews an item's code and never re-derives a decision the tool made. `conduct` is in `protocol.UTILITY_SKILLS`, with the README, LEDGER and plugin surfaces lint requires; `CONTEXT.md` defines Conductor, Worker, batch, batch ledger, decision queue and merge train; `.claude-plugin/plugin.json`'s minor version is bumped once; `python3 -m unittest discover tests` prints `OK`, `python3 lint.py` prints `lint: 0 problem(s)`, and `python3 gates.py && python3 gates.py --selftest` prints `gates: 0 problem(s)` and `selftest: ok`.
 
 ## Coverage
@@ -353,3 +353,26 @@ and every existing seam it names exists on main (`cli.harness_run`,
      (commit, push, PR, label) is reported naming the step and is
      finished by hand; a `lean:` marker names the trigger to resume it
      mechanically.
+- 2026-10-10 (Implement, row 0164): the M4 gap is closed here. `next`
+  did not report an item at `ship` with a completed ship run as waiting
+  for a merge ask, so the skill could not know to word one. `next`'s
+  JSON gains `merge_due`: the shipped items with no consenting merge
+  answer and no pending merge ask (their own, or a train listing them).
+  Once an answer covers one (`merge` on its own ask, or `train` with
+  every earlier train item merged), `next` reports it ready as
+  `{"step": "merge"}`, the verb `run` cannot launch and `merge` resumes,
+  as row 0161 did for a stalled merge. To give that one owner, the
+  consent reading (`consents`, `MERGE_CHOICE`, `TRAIN_CHOICE`) moved from
+  `conductor_merge` to `conductor_flow`, which the precondition now
+  calls. Also changed: an unanswered batch-level `merge` ask (a train,
+  or the closing ask) no longer holds Worker dispatch; row 0157's hold
+  was for the spend ask and the batch pause, and a train question must
+  not idle every other item. Packaging: `conduct` joins
+  `protocol.UTILITY_SKILLS` (a mirrored file, so the manifest is
+  regenerated), plugin.json's description, the README table, the README
+  figure's "Driving a run" card, LEDGER at `draft` with no eval
+  evidence, and four routing cases (three cases is lint's floor; none
+  has been run). `.claude-plugin/plugin.json` moves 0.7.3 to 0.8.0, the
+  one bump covering row 0159's autorun change and the new skill.
+  `docs/setup.md`'s "An orchestrator (planned)" section, which this row
+  makes false, now describes the Conductor.

@@ -33,6 +33,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | pipeline-board | draft | — | — |
 | architecture-diagram | draft | — | — |
 | work-queue | draft | — | — |
+| conduct | draft | — | — |
 | audit | draft | — | — |
 | deepen | draft | — | — |
 | automate | draft | — | — |
