@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """knowledge_plane: the shared grammar and layout of the knowledge plane
-(ADR-0004, ADR-0037) — the typed-ID token grammar, the run-directory
-layout, and where a factory tool finds the repo root.
+(ADR-0004, ADR-0037) — the typed-ID token grammar, the fence rule that
+decides when such a token is quoted rather than claimed, the
+run-directory layout, and where a factory tool finds the repo root.
 
 These primitives grew up inside gates.py because its detectors needed
 them first, but every dispatch-plane tool reads the same plane:
@@ -78,7 +79,7 @@ def sanitize(value, limit=FIELD_LIMIT):
 # SAME character, AT LEAST as long, and carrying NO info string closes it. So
 # evidence that quotes markdown (a ```bash block inside a ~~~ block, a ```
 # inside a ````) stays content instead of desyncing the scanner and silently
-# swallowing every criterion below it, and an unclosed fence is reported.
+# swallowing every criterion below it (an unclosed fence is H's to report).
 # Deliberate deviation from CommonMark: the indent is unbounded, because
 # verification evidence is nested under `- Evidence:` list items, where the
 # fence is indented to the item's content column. We do not track containers,
