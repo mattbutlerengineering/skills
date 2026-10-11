@@ -15,8 +15,8 @@ anything but the review and ship artifacts changed after the head the
 review run was launched on. An item whose branch changes
 a gate file rides a train only when each gate file's blob id equals the
 one approved at its gate asks; otherwise it needs its own merge ask
-(ADR-0036 condition 3, as architecture.md reads it — flagged for the
-Owner).
+(ADR-0036 condition 3, as architecture.md reads it; drafted for the
+Owner as provisional ADR-0085).
 """
 import json
 import os

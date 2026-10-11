@@ -570,6 +570,10 @@ verdict from both rules.
 - [ADR-0084](../../adr/0084-the-cost-ledger-keys-a-run-by-issue-when-it-has-no-work-order.md):
   the cost ledger keys a run by its issue when it has no work order.
   Provisional; amends ADR-0034.
+- [ADR-0085](../../adr/0085-an-owner-answer-executed-by-the-conductor-is-the-human-merge.md):
+  an Owner answer executed by the Conductor is the human merge.
+  Provisional (2026-10-11, post-review); would amend ADR-0036 conditions
+  2 and 3 once the Owner accepts it.
 
 ## Amendments (implement-time, Owner-accepted)
 

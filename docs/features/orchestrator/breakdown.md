@@ -440,3 +440,16 @@ and every existing seam it names exists on main (`cli.harness_run`,
   `python3` (`os.environ`, `git -c`), read the keychain or an
   unencrypted key file, or call the GitHub API with a token it finds.
   Ssh fetches from the Worker also fail now, which no step needs.
+- 2026-10-11 (Implement, post-review, review major 4): the Owner chose
+  to have the ADR-0036 condition-3 reading written up rather than coded
+  around. It is drafted as ADR-0085, status provisional, and indexed.
+  It would amend ADR-0036 conditions 2 and 3 for merges inside a
+  Conductor batch: the Owner's in-session answer, executed by the
+  Conductor, is the human merge; one answer may cover a train; a
+  gate-path item rides a train only on byte-identical gate blobs; and
+  the review pass is recorded in the ledger, with the reviewed head,
+  not on the PR. ADR-0036's status line is unchanged until the Owner
+  accepts it. Number: 0085 was free on origin/main and on every open PR
+  branch (#670, #673, #675) on 2026-10-11. An uncommitted 0085 draft in
+  the stale worktree that architecture.md's last assumption names is
+  not on any branch.
