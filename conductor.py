@@ -41,6 +41,13 @@ closing a batch).
         and docs/factory/costs.jsonl alone; appends nothing. A malformed
         ledger line, a run with no spend row or a missing plan row fails
         with a problem and no number.
+  python3 conductor.py close <batch>
+        Once every item is merged or blocked: merge origin/main into
+        conductor/<batch>, carry blocked items' spend rows over, append
+        the scorecard to docs/factory/scorecards.jsonl only when it
+        computes, write the close row and the closing merge ask, commit,
+        push (never forced), open the closing PR, and label each blocked
+        item's issue needs-human with its reason.
   python3 conductor.py ask <batch> --kind K --question Q --option O
                            [--option O ...] --recommended O --why W
                            [--item #N] [--covers #N ...]
@@ -452,6 +459,9 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
         elif command == "scorecard":
             problems = conductor_close.scorecard_cli(root, [batch, *args],
                                                      now)
+        elif command == "close":
+            problems = conductor_close.close_cli(root, [batch, *args],
+                                                 clock, git, run)
         elif command == "merge":
             problems = conductor_merge.merge_cli(root, [batch, *args], clock,
                                                  git, run, tool, sleep)

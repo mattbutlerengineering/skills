@@ -226,5 +226,150 @@ class TestScorecardCli(unittest.TestCase):
             self.assertFalse((Path(tmp) / close.SCORECARDS).exists())
 
 
+# --- closing a batch (WO-0163), through a recording git and FakeGh -----
+
+BLOCKED_SPEND = [spend("conductor-b1-13-spec-1", 0.5, "#13"),
+                 spend("conductor-b1-13-build-1", 0.0, "#13")]
+CARD = '{"batch": "b0"}\n'
+
+
+def git_port(fake):
+    """The git port over a FakeGh: records, answers by argv prefix, and
+    returns what cli.runner returns."""
+    def git(args):
+        return subprocess.CompletedProcess(args, 0, fake(args), "")
+    return git
+
+
+class TestClose(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+        (self.root / close.SCORECARDS).parent.mkdir(parents=True)
+        (self.root / close.SCORECARDS).write_text(CARD, encoding="utf-8")
+
+    def close(self, rows, costs=SPEND[:4] + SPEND[5:], git=None, gh=None,
+              branch_costs=BLOCKED_SPEND):
+        write(self.root, lines(rows), lines(costs))
+        self.git = git or FakeGh({
+            ("-C", str(self.root), "show",
+             f"conductor/b1-13:{COSTS}"): lines(branch_costs)})
+        self.gh = gh or FakeGh()
+        return close.close_batch(self.root, "b1", lambda: NOW,
+                                 git_port(self.git), self.gh)
+
+    def ledger(self):
+        return [json.loads(line) for line in
+                (self.root / LEDGER).read_text().splitlines()]
+
+    def test_close_carries_blocked_spend_scores_commits_and_asks(self):
+        summary, problems = self.close(ROWS)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary, {"batch": "b1", "merged": ["#12", "#14"],
+                                   "blocked": ["#13"], "ask": "ask-5"})
+        costs = (self.root / COSTS).read_text().splitlines()
+        self.assertEqual([json.loads(line)["run_id"] for line in costs[-2:]],
+                         ["conductor-b1-13-spec-1", "conductor-b1-13-build-1"])
+        cards = (self.root / close.SCORECARDS).read_text().splitlines()
+        self.assertEqual(cards[0] + "\n", CARD)
+        self.assertEqual(json.loads(cards[1]), EXPECTED)
+        self.assertEqual(self.ledger()[-2:], [
+            {"at": "2026-10-10T16:00:00Z", "kind": "close", "item": None,
+             "merged": ["#12", "#14"], "blocked": ["#13"]},
+            {"at": "2026-10-10T16:00:00Z", "kind": "ask", "item": None,
+             "id": "ask-5", "ask_kind": "merge",
+             "question": "Merge batch b1's closing PR (conductor/b1): its"
+                         " ledger, run evidence and scorecard?",
+             "options": ["merge", "hold"], "recommended": "merge",
+             "why": "every item is merged or blocked, and the scorecard"
+                    " computed from the ledger"}])
+        here = ["-C", str(self.root)]
+        self.assertEqual(self.git.calls, [
+            here + ["fetch", "origin", "main"],
+            here + ["merge", "--no-edit", "origin/main"],
+            here + ["show", f"conductor/b1-13:{COSTS}"],
+            here + ["add", "--", "docs/factory/batches/b1", COSTS,
+                    close.SCORECARDS],
+            here + ["commit", "-m", "chore(conductor): close batch b1"],
+            here + ["push", "-u", "origin", "conductor/b1"]])
+        self.assertEqual(self.gh.calls, [
+            ["pr", "create", "--head", "conductor/b1", "--base", "main",
+             "--title", "conductor batch b1: ledger and scorecard",
+             "--body", "Conductor batch b1's closing PR: its batch"
+             " ledger, run evidence, scorecard, and the spend rows of its"
+             " blocked items (#13).\n\nCloses #12\nCloses #14\n\nNo work"
+             " order: the Conductor's closing PR for batch b1."],
+            ["issue", "edit", "13", "--add-label", "needs-human"],
+            ["issue", "comment", "13", "--body", "Blocked in conductor"
+             " batch b1: answer to ask-3: block"]])
+
+    def test_a_failing_scorecard_leaves_scorecards_byte_identical(self):
+        summary, problems = self.close(ROWS, costs=SPEND[:3])
+        self.assertIsNone(summary)
+        self.assertEqual(problems, [
+            f"cd: {LEDGER}:10 run conductor-b1-14-review-1 has no {COSTS}"
+            " row with its run_id"])
+        self.assertEqual((self.root / close.SCORECARDS).read_bytes(),
+                         CARD.encode())
+        self.assertEqual(self.ledger(), ROWS)
+        self.assertEqual(self.git.called("-C", str(self.root), "commit"), [])
+        self.assertEqual(self.gh.calls, [])
+
+    def test_a_batch_with_an_item_in_flight_is_refused(self):
+        rows = ROWS[:-1] + [state("#12", "ship", "merging", at(15))]
+        summary, problems = self.close(rows)
+        self.assertEqual((summary, problems), (None, [
+            "cd: close refused: #12 is merging, not merged or blocked"]))
+        self.assertEqual(self.git.calls, [])
+
+    def test_a_closed_batch_is_refused(self):
+        rows = ROWS + [{"at": at(16), "kind": "close", "item": None,
+                        "merged": ["#12", "#14"], "blocked": ["#13"]}]
+        self.assertEqual(self.close(rows), (None, [
+            "cd: close refused: batch b1 is already closed"]))
+
+    def test_carried_spend_is_never_appended_twice(self):
+        summary, problems = self.close(ROWS, costs=SPEND,
+                                       branch_costs=BLOCKED_SPEND[:1])
+        self.assertEqual(problems, [])
+        self.assertEqual((self.root / COSTS).read_text(), lines(SPEND))
+
+    def test_a_merge_conflict_with_main_refuses_and_aborts(self):
+        fake = FakeGh(failing=["-C", str(self.root), "merge", "--no-edit"])
+        summary, problems = self.close(ROWS, git=fake)
+        self.assertEqual((summary, problems), (None, [
+            "cd: close refused: merging origin/main into conductor/b1"
+            " failed: boom"]))
+        self.assertEqual(fake.calls[-1],
+                         ["-C", str(self.root), "merge", "--abort"])
+        self.assertEqual((self.root / close.SCORECARDS).read_bytes(),
+                         CARD.encode())
+
+    def test_a_failed_push_is_reported_after_the_close_is_recorded(self):
+        fake = FakeGh({("-C", str(self.root), "show",
+                        f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND)},
+                      failing=["-C", str(self.root), "push"])
+        summary, problems = self.close(ROWS, git=fake)
+        self.assertEqual(problems, [
+            "cd: close: pushing conductor/b1 failed: boom; finish the"
+            " push, the PR and the needs-human labels by hand"])
+        self.assertEqual(self.ledger()[-2]["kind"], "close")
+        self.assertEqual(self.gh.calls, [])
+
+
+class TestCloseCli(unittest.TestCase):
+    def test_close_prints_its_summary(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(tmp, lines(ROWS), lines(SPEND))
+            fake = FakeGh()
+            code, out = cli_contract.capture(
+                conductor.main, ["close", "b1"], env={}, clock=lambda: NOW,
+                root=tmp, run=FakeGh(), git=git_port(fake))
+            self.assertEqual((code, out), (0, (
+                "cd: closed batch b1: merged #12, #14; blocked #13;"
+                " merge ask ask-5\ncd: 0 problem(s)\n")))
+
+
 if __name__ == "__main__":
     unittest.main()
