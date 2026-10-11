@@ -84,7 +84,8 @@ becomes a logged assumption, never a silent guess.
 
 6. **Report.** Stage by stage: the artifact produced, its `assumptions:`
    entries, verification evidence, anything flagged for human review —
-   including a release that was prepared but not executed. Aggregate
+   including a release that was prepared but not executed, and each ADR
+   written unattended (status `provisional`, per the protocol). Aggregate
    every assumption from the artifacts' frontmatter into one list; note
    that the run was autorun-driven. Ship is where autorun stops: the run
    stays active until `retro.md` exists, and operate remains available

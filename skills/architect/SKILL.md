@@ -43,10 +43,11 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
    genuinely could have gone another way, each with your recommendation.
    Revise on feedback.
 
-7. **Offer ADRs sparingly.** Offer an ADR only when a decision is all three:
-   hard to reverse, surprising without context, and the result of a real
-   trade-off. If any is missing, the one-line record in the artifact is
-   enough. ADRs go in the target repo's `docs/adr/`.
+7. **Write ADRs sparingly.** Apply the protocol's "When to write an ADR"
+   test to each decision in the draft. Write an ADR for each one that
+   passes all three legs, following the protocol's placement, status and
+   numbering rules, and cite it from that decision's line in the artifact.
+   A decision that fails any leg keeps only its one-line record.
 
 8. **Write the artifact.** Walk the closing checklist in
    [`references/canon.md`](references/canon.md) against the draft first —

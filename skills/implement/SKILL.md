@@ -43,7 +43,10 @@ document — the code is the artifact, and progress is the checkboxes.
 
 5. **Log deviations.** When reality disagrees with the breakdown — an item splits,
    a contract needs adjusting — log it dated under `breakdown.md`'s Notes. A
-   design-level disagreement routes back to Architect, not around it.
+   design-level disagreement routes back to Architect, not around it. A
+   deviation from `architecture.md` that passes the protocol's "When to
+   write an ADR" test gets an ADR (superseding or amending one it
+   contradicts), cited from the Notes entry — never a silent divergence.
 
 6. **Hand off.** When every checkbox is checked, the stage is complete; next
    stage is Verify.
