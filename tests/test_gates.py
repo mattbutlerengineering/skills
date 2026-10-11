@@ -7,6 +7,7 @@ its public interface against a temp fixture tree, and tests assert the
 exact problem strings callers will print.
 """
 import hashlib
+import io
 import json
 import os
 import sys
@@ -1561,7 +1562,9 @@ class TestConfigShape(unittest.TestCase):
                 f"F: {rel} routing must map exactly mechanical,"
                 " implementation, architecture_review",
                 f"F: {rel} wip_cap must be a positive integer",
-                f"F: {rel} monthly_cap_usd must be a positive number"])
+                f"F: {rel} monthly_cap_usd must be a positive number",
+                f"F: {rel} effort.mechanical must be one of low, medium,"
+                " high, xhigh, max"])
 
     def test_a_config_that_is_not_an_object_is_one_problem(self):
         """F parses the file itself rather than going through
@@ -3019,6 +3022,17 @@ class TestMainSummary(cli_contract.ReportContract, unittest.TestCase):
 class TestSelftest(unittest.TestCase):
     def test_selftest_passes(self):
         self.assertEqual(gates.selftest(), 0)
+
+    def test_selftest_fails_when_f_misses_the_planted_effort(self):
+        """The F fixture plants a bad effort value; an F that stopped
+        reporting it must turn the selftest red."""
+        real = gates.check_config_shape
+
+        def blind(root):
+            return [p for p in real(root) if "effort" not in p]
+        with mock.patch.object(gates, "check_config_shape", blind), \
+                mock.patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(gates.selftest(), 1)
 
 
 if __name__ == "__main__":
