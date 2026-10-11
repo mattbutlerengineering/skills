@@ -31,8 +31,10 @@ Two inputs constrain everything you may propose:
   `OrderIntakeHandler` in a codebase whose glossary says *Order* is a
   worse proposal than the same module called the Order intake module.
 - **The recorded decisions** — `docs/adr/`, design notes, the "why we did
-  it this way" file. These exist so a review does not re-litigate settled
-  questions.
+  it this way" file, and the run artifacts where reviewed decisions and
+  deferrals land: a `release.md` follow-up recorded but not actioned, a
+  `review.md` decision. These exist so a review does not re-litigate
+  settled questions.
 
 **Check each decision's status before treating it as binding.** They are
 not equivalent, and this is where reviews waste their credibility:
@@ -77,7 +79,8 @@ report:
 
 Three ways a good-looking candidate dies, all common enough to check for:
 
-- **Shallow on purpose, and recorded.** Step 1 already told you.
+- **Shallow on purpose, and recorded.** Step 1 already told you — in an
+  ADR or in a run artifact's recorded decision or deferral.
 - **Consumers you cannot see.** A published package, a plugin surface, a
   documented extension point. The call-site count inside the tree is not
   the caller count, and a deletion test run on a partial set gives a

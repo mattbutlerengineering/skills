@@ -66,4 +66,8 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
   reason.
 - Interfaces are contracts: name inputs, outputs, and failure modes, not
   just component names.
+- When the design replaces one rule or implementation with another, list
+  the accepted behaviour changes from a comparison of the two rules — run
+  both over the inputs where they differ — not from the reproductions that
+  motivated the change.
 - No work breakdown, estimates, or sequencing — that's Decompose.
