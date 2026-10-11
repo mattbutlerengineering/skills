@@ -469,3 +469,14 @@ and every existing seam it names exists on main (`cli.harness_run`,
   (`factory_init.MIRRORS`). Either half alone closes the reproduced
   route; both are kept, because the second also holds on a resumed
   turn, which skips the first.
+- 2026-10-11 (Implement, re-review R4): the after-review allowlist is
+  narrowed to this run's artifacts. "This run" is the run directory
+  whose `verification.md` the item branch changed between origin/main
+  and the reviewed head (every item type runs `verify` before
+  `review`); only that directory's `review.md` and `release.md` may
+  change after the review. `docs/factory/costs.jsonl` may change only
+  by appending: its text at the reviewed head must be a prefix of the
+  branch's. A foreign run's `review.md` or a dropped spend row now
+  stalls like any other drift. An item whose verify step wrote no
+  `verification.md` has no run directory, so its review and release
+  artifacts stall too: a `block` to answer, not a silent pass.

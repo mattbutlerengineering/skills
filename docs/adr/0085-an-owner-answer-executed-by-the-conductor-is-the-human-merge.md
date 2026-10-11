@@ -59,8 +59,11 @@ Inside a Conductor batch:
    - a reviewer run that is among the author runs;
    - a reviewed row with no reviewed head;
    - a merge-turn start where anything changed after that head except
-     the review and ship artifacts (`review.md`, `release.md`,
-     `costs.jsonl`).
+     the run's own review and ship artifacts (`review.md` and
+     `release.md` beside the `verification.md` the item changed before
+     its review) and spend rows appended to `costs.jsonl`;
+   - a merge-turn start where the item worktree holds changes no
+     commit carries.
 
    The review Worker posts no PR comment.
 

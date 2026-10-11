@@ -391,6 +391,10 @@ class TurnCase(unittest.TestCase):
 
 
 SHIPPED = feature_shipped({}) + own("ask-2", "#12")
+# The item's code and its verify step's artifact, both before review:
+# the verified run's directory is the one whose review.md and release.md
+# may follow the review.
+VERIFIED = {"src.txt": "x\n", "docs/features/x/verification.md": "v\n"}
 
 
 class TestMergeTurn(TurnCase):
@@ -463,6 +467,21 @@ class TestMergeTurn(TurnCase):
                             "manifest.json"), '{"files": "regenerated"}\n')
 
 
+class TestReviewDrift(unittest.TestCase):
+    def test_only_the_runs_own_artifacts_and_appended_rows_pass(self):
+        own_dirs = {"docs/features/x/"}
+        self.assertIsNone(merge.review_drift(
+            "#12", "h", ["docs/factory/costs.jsonl",
+                         "docs/features/x/review.md",
+                         "docs/features/x/release.md"], own_dirs, True))
+        self.assertEqual(merge.review_drift(
+            "#12", "h", ["docs/factory/costs.jsonl",
+                         "docs/features/other/review.md"], own_dirs, False),
+            "#12 changed docs/factory/costs.jsonl,"
+            " docs/features/other/review.md after the review of h; merged"
+            " code must be reviewed code, so it needs a re-review")
+
+
 class TestConductorCommits(TurnCase):
     """The Conductor's own commits stage only the files it wrote, never
     a stray file left in the worktree (re-review R1)."""
@@ -492,7 +511,7 @@ class TestReviewedTree(TurnCase):
     only the review and ship steps' artifacts may change."""
 
     def test_the_ship_steps_artifacts_may_follow_the_review(self):
-        self.item({"src.txt": "x\n"})
+        self.item(VERIFIED)
         reviewed_at = self.head()
         self.item({"docs/features/x/review.md": "r\n",
                    "docs/features/x/release.md": "notes\n",
@@ -503,7 +522,7 @@ class TestReviewedTree(TurnCase):
         self.assertEqual(self.rows[-1]["to"], "merged")
 
     def test_a_code_change_after_the_review_stalls_the_merge(self):
-        self.item({"src.txt": "x\n"})
+        self.item(VERIFIED)
         reviewed_at = self.head()
         self.item({"src.txt": "changed by the ship Worker\n",
                    "docs/features/x/release.md": "notes\n"})
@@ -543,6 +562,34 @@ class TestReviewedTree(TurnCase):
         for ref in (BRANCH, "origin/" + BRANCH):
             self.assertNotIn("factory/templates/unreviewed.yml", sh(
                 self.repo, "ls-tree", "-r", "--name-only", ref))
+
+    def drifted(self, files, *paths):
+        """Commit `files` after a verified run's review; assert the turn
+        stalls naming exactly `paths`."""
+        self.item(dict(VERIFIED, **{"docs/factory/costs.jsonl":
+                                    '{"row": "seed"}\n{"row": "build"}\n'}))
+        reviewed_at = self.head()
+        self.item(files)
+        summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"], (
+            f"#12 changed {', '.join(paths)} after the review of"
+            f" {reviewed_at[:12]}; merged code must be reviewed code, so"
+            " it needs a re-review"))
+        self.assertFalse(self.calls("git", "push"))
+
+    def test_another_runs_review_after_the_review_stalls_the_merge(self):
+        # Re-review R4: only this run's own review.md and release.md.
+        self.drifted({"docs/features/x/release.md": "notes\n",
+                      "docs/features/other/review.md": "verdict: pass\n",
+                      "docs/release.md": "notes\n"},
+                     "docs/features/other/review.md", "docs/release.md")
+
+    def test_a_dropped_spend_row_after_the_review_stalls_the_merge(self):
+        # Re-review R4: costs.jsonl may only grow at its end.
+        self.drifted({"docs/factory/costs.jsonl":
+                      '{"row": "seed"}\n{"row": "ship"}\n'},
+                     "docs/factory/costs.jsonl")
 
     def test_a_resumed_merge_turn_keeps_its_own_commits(self):
         # The first turn checked the tree before it merged main in; a

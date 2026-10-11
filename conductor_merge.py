@@ -59,17 +59,24 @@ def _reviewed_problems(rows, item):
 
 
 # What may change on the item branch after the review run's launch head:
-# the review and ship steps' own artifacts and their spend rows. Anything
-# else was never reviewed (review major 1, breakdown Notes 2026-10-11).
-AFTER_REVIEW = re.compile(r"docs/factory/costs\.jsonl|docs/(?:(?:features"
-                          r"|fixes)/[^/]+/)?(?:review|release)\.md")
+# the review and ship steps' own artifacts, in the run directory whose
+# VERIFICATION the item changed before the review, and spend rows
+# appended to COSTS. Anything else was never reviewed (review major 1,
+# re-review R4, breakdown Notes 2026-10-11).
+COSTS = "docs/factory/costs.jsonl"
+VERIFICATION = re.compile(r"docs/(?:(?:features|fixes)/[^/]+/)?"
+                          r"verification\.md")
+AFTER_REVIEW = ("review.md", "release.md")
 
 
-def review_drift(item, head, changed):
-    """The stall reason when a path other than AFTER_REVIEW's changed
-    between the reviewed head and the branch, else None. PURE."""
-    unreviewed = sorted(path for path in changed
-                        if not AFTER_REVIEW.fullmatch(path))
+def review_drift(item, head, changed, own_dirs, appended):
+    """The stall reason when a path changed between the reviewed head and
+    the branch other than a run directory in `own_dirs`' AFTER_REVIEW
+    artifacts, or COSTS when `appended` (its old text is a prefix of its
+    new one), else None. PURE."""
+    allowed = {run_dir + name for run_dir in own_dirs
+               for name in AFTER_REVIEW} | ({COSTS} if appended else set())
+    unreviewed = sorted(path for path in changed if path not in allowed)
     if not unreviewed:
         return None
     return (f"{item} changed {', '.join(unreviewed)} after the review of"
@@ -582,10 +589,25 @@ def _drift(rows, item, git, branch, worktree):
             and row["to"] == "reviewed"][-1]["reviewed_head"]
     try:
         changed = git(["diff", "--name-only", head, branch]).stdout.split()
+        verified = git(["diff", "--name-only",
+                        f"origin/main...{head}"]).stdout.split()
     except CLI_FAILURES as err:
         return None, [f"cd: git diff {head[:12]} {branch} failed:"
                       f" {detail(err)}"]
-    return review_drift(item, head, changed), []
+    own_dirs = {path[:-len("verification.md")] for path in verified
+                if VERIFICATION.fullmatch(path)}
+    grown = _show(git, branch, COSTS) if COSTS in changed else None
+    appended = grown is not None and grown.startswith(
+        _show(git, head, COSTS) or "")
+    return review_drift(item, head, changed, own_dirs, appended), []
+
+
+def _show(git, ref, path):
+    """`path`'s text at `ref`, or None when it is absent there."""
+    try:
+        return git(["show", f"{ref}:{path}"]).stdout
+    except CLI_FAILURES:
+        return None
 
 
 def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None):
