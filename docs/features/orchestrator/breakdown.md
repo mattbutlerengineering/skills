@@ -416,3 +416,27 @@ and every existing seam it names exists on main (`cli.harness_run`,
   outside the batch counts only from the last fetch. `skills/conduct`
   names the new ask, so plugin.json moves 0.8.0 to 0.8.1 and the
   manifest is regenerated.
+- 2026-10-11 (Implement, post-review, review major 3): "no push, no
+  gh" is enforced in the Worker's environment (`conductor_run.
+  worker_env`, architecture.md amendment 12), and `Bash(make *)` is
+  narrowed to `Bash(make check)`, which no gh-writing target shares.
+  The combination chosen as the thinnest that blocks every push path a
+  confused Worker could take: `GIT_SSH_COMMAND=false` stops any ssh
+  push, whatever the host or ssh alias; an env-config
+  `url.<impossible path>.pushInsteadOf` for `https://` and `http://`
+  rewrites any http(s) push, credentials in the URL or `.netrc`
+  included, while fetches are untouched; and `credential.helper` reset
+  plus `GIT_TERMINAL_PROMPT=0` and stripped askpass variables keep git
+  from handing out a token. For gh: the token variables are stripped
+  and `GH_CONFIG_DIR` is an empty temporary directory removed after
+  the run (probed 2026-10-11: gh then reports "not logged into any
+  GitHub hosts", the macOS keychain token included). Not chosen: a
+  `pushurl` on the remote, which lives in the config shared with the
+  main checkout and so would break the runner's own push. Local-path
+  remotes still push, so `make check` passes under the Worker's
+  environment (run 2026-10-11: rc 0, 2336 tests). The tests assert the
+  env handed to the harness and run real git pushes against it. Still
+  trust-based: a hostile Worker can restore any variable through
+  `python3` (`os.environ`, `git -c`), read the keychain or an
+  unencrypted key file, or call the GitHub API with a token it finds.
+  Ssh fetches from the Worker also fail now, which no step needs.

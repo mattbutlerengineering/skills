@@ -629,3 +629,14 @@ differs from the text above, and is recorded here for the Owner:
     each row once by `row_key`, selected by `cost_ledger.dispatched`.
     Over the cap, nothing launches: dispatch pauses behind one
     batch-level `spend` ask (`resume` / `stop`, recommending `stop`).
+12. **Worker environment.** "No push, no gh" is enforced in the Worker's
+    environment, not only listed in its brief. `--allowedTools` narrows
+    `Bash(make *)` to `Bash(make check)`. The runner strips every
+    `GH_*`, `GITHUB_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, askpass and
+    inherited `GIT_CONFIG_*` or `GIT_SSH*` variable. It points
+    `GH_CONFIG_DIR` at an empty temporary directory, sets
+    `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND=false`, and adds env
+    git config that rewrites every http(s) push URL to a path that
+    cannot exist and resets `credential.helper`. This stops a confused
+    Worker. A hostile one can still restore a variable from
+    `python3`, so against hostility it remains trust-based.

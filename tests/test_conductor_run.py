@@ -4,10 +4,12 @@ no model ever runs — and tests assert the EXACT problem strings and rows.
 """
 import contextlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -156,6 +158,132 @@ class TestHarnessCommand(unittest.TestCase):
         tools = cmd[12:]
         self.assertEqual(tools, list(conductor_run.ALLOWED_TOOLS))
         self.assertFalse([t for t in tools if "push" in t or "gh" in t])
+
+    def test_make_is_narrowed_to_make_check(self):
+        # Review major 3: `make wo-failed` and `make wo-merged` write gh
+        # labels; a Worker needs only the check target.
+        makes = [t for t in conductor_run.ALLOWED_TOOLS if "make" in t]
+        self.assertEqual(makes, ["Bash(make check)"])
+
+
+def sh(cwd, *args, env=None):
+    return subprocess.run(["git", "-C", str(cwd), *args], env=env,
+                          capture_output=True, text=True)
+
+
+class TestWorkerEnv(unittest.TestCase):
+    """Review major 3: "no push, no gh" is the Worker's environment, not
+    a line in its brief. What is enforced is asserted on the env handed
+    to the harness, and the push block is run against a real git."""
+
+    OWNER = {"PATH": os.environ.get("PATH", ""), "HOME": "/home/o",
+             "GH_TOKEN": "t1", "GITHUB_TOKEN": "t2", "GH_HOST": "h",
+             "GH_ENTERPRISE_TOKEN": "t3", "GITHUB_ENTERPRISE_TOKEN": "t4",
+             "GH_CONFIG_DIR": "/home/o/.config/gh",
+             "GIT_ASKPASS": "/askpass", "SSH_ASKPASS": "/askpass",
+             "GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "remote.origin"
+             ".pushurl", "GIT_CONFIG_VALUE_0": "git@github.com:o/r.git",
+             "CLAUDECODE": "1"}
+
+    def env(self, gh_dir="/empty"):
+        return conductor_run.worker_env(self.OWNER, "b1", gh_dir)
+
+    def test_no_github_credential_reaches_the_worker(self):
+        env = self.env()
+        for name in ("GH_TOKEN", "GITHUB_TOKEN", "GH_HOST",
+                     "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN",
+                     "GIT_ASKPASS", "SSH_ASKPASS", "CLAUDECODE"):
+            self.assertNotIn(name, env)
+        self.assertEqual(env["GH_CONFIG_DIR"], "/empty")
+        self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
+        self.assertEqual(env["CONDUCTOR_WORKER"], "b1")
+        self.assertEqual(env["HOME"], "/home/o")
+
+    def test_the_owners_git_config_entries_are_replaced(self):
+        env = self.env()
+        count = int(env["GIT_CONFIG_COUNT"])
+        pairs = [(env[f"GIT_CONFIG_KEY_{i}"], env[f"GIT_CONFIG_VALUE_{i}"])
+                 for i in range(count)]
+        rewrite = "url./dev/null/conductor-worker-may-not-push/" \
+            ".pushInsteadOf"
+        self.assertEqual(pairs, [(rewrite, "https://"),
+                                 (rewrite, "http://"),
+                                 ("credential.helper", "")])
+        self.assertEqual(env["GIT_SSH_COMMAND"], "false")
+
+    def test_a_worker_push_to_any_remote_url_fails(self):
+        # No network: an ssh push dies at GIT_SSH_COMMAND, an https one
+        # is rewritten to a local path that cannot exist.
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "w"
+            subprocess.run(["git", "init", "-q", str(work)], check=True)
+            for key, value in (("user.email", "t@example.com"),
+                               ("user.name", "t"),
+                               ("commit.gpgsign", "false")):
+                sh(work, "config", key, value)
+            sh(work, "commit", "-q", "--allow-empty", "-m", "c")
+            owner = {k: v for k, v in os.environ.items()
+                     if not k.startswith("GIT_")}
+            env = conductor_run.worker_env(owner, "b1", tmp)
+            for target in ("git@github.com:o/r.git",
+                           "ssh://git@github.com/o/r.git", "gh-alias:o/r",
+                           "https://github.com/o/r.git",
+                           "https://x-access-token:t@github.com/o/r.git",
+                           "http://example.com/r.git"):
+                pushed = sh(work, "push", target, "HEAD:refs/heads/x",
+                            env=env)
+                self.assertNotEqual(pushed.returncode, 0, target)
+                self.assertTrue(
+                    "Could not read from remote repository"
+                    in pushed.stderr, (target, pushed.stderr))
+
+    def test_a_make_check_push_to_a_local_repo_still_works(self):
+        # The suite's merge-turn tests push to a local bare origin; the
+        # Worker's `make check` must still pass them.
+        with tempfile.TemporaryDirectory() as tmp:
+            origin, work = Path(tmp) / "origin.git", Path(tmp) / "w"
+            subprocess.run(["git", "init", "-q", "--bare", str(origin)],
+                           check=True)
+            subprocess.run(["git", "clone", "-q", str(origin), str(work)],
+                           check=True, capture_output=True)
+            for key, value in (("user.email", "t@example.com"),
+                               ("user.name", "t"),
+                               ("commit.gpgsign", "false")):
+                sh(work, "config", key, value)
+            sh(work, "commit", "-q", "--allow-empty", "-m", "c")
+            owner = {k: v for k, v in os.environ.items()
+                     if not k.startswith("GIT_")}
+            env = conductor_run.worker_env(owner, "b1", tmp)
+            self.assertEqual(sh(work, "push", "-q", "origin",
+                                "HEAD:refs/heads/x", env=env).returncode,
+                             0)
+            self.assertEqual(sh(work, "fetch", "-q", "origin",
+                                env=env).returncode, 0)
+
+    def test_the_harness_gets_the_scrubbed_env_and_an_empty_gh_dir(self):
+        seen = {}
+
+        def look(cwd):
+            seen["gh_dir"] = sorted(os.listdir(
+                harness.calls[0]["env"]["GH_CONFIG_DIR"]))
+            pr_body(cwd)
+        harness = Harness(act=look)
+        with tempfile.TemporaryDirectory() as tmp, \
+                unittest.mock.patch.dict(os.environ, {"GH_TOKEN": "t"}):
+            root = Path(tmp) / "conductor"
+            (root / "docs/factory/batches/b1").mkdir(parents=True)
+            (root / LEDGER).write_text("".join(json.dumps(r) + "\n"
+                                               for r in BASE))
+            (root / ".github").mkdir()
+            (root / ".github/factory.json").write_text(
+                '{"monthly_cap_usd": 300}')
+            conductor_run.run_step(root, "b1", "#12", "spec", NOW,
+                                   git=Git(tmp), gh=Gh(), harness=harness,
+                                   pid=777)
+        env = harness.calls[0]["env"]
+        self.assertNotIn("GH_TOKEN", env)
+        self.assertEqual(seen["gh_dir"], [])
+        self.assertFalse(Path(env["GH_CONFIG_DIR"]).exists())
 
 
 class TestBrief(unittest.TestCase):

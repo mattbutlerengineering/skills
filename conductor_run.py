@@ -16,6 +16,8 @@ queues a stall ask; nothing retries. The Owner's 2026-10-10 answers
 """
 import json
 import os
+import re
+import tempfile
 from pathlib import Path
 
 import conductor_flow as flow
@@ -32,10 +34,26 @@ from protocol import read_frontmatter
 
 HARNESS = "claude"
 # Fixed for every step (Owner, 2026-10-10): no git push, no gh at all.
+# make is only `make check` (review major 3): other targets write gh
+# labels. The list alone cannot hold "no push, no gh", since python3
+# reaches both; worker_env below is what enforces it.
 ALLOWED_TOOLS = ("Read", "Edit", "Write", "Glob", "Grep",
-                 "Bash(python3 *)", "Bash(make *)", "Bash(git add *)",
+                 "Bash(python3 *)", "Bash(make check)", "Bash(git add *)",
                  "Bash(git commit *)", "Bash(git status*)",
                  "Bash(git diff*)", "Bash(git log*)")
+# The Worker's environment (review major 3): no GitHub credential, no gh
+# config, no askpass; git's ssh transport is `false`, so no ssh push (or
+# fetch) reaches any host or alias; and the Owner's own GIT_CONFIG_*
+# entries are replaced: an http(s) push URL is rewritten to a path that
+# cannot exist, and no credential helper hands out a token. Local-path
+# remotes still work, so the suite's own scratch-repo pushes pass.
+WORKER_STRIPPED = re.compile(r"GH_.*|GITHUB_(?:ENTERPRISE_)?TOKEN|CLAUDECODE"
+                             r"|GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)"
+                             r"|GIT_SSH(?:_COMMAND)?|(?:GIT|SSH)_ASKPASS")
+NO_PUSH = "/dev/null/conductor-worker-may-not-push/"
+WORKER_GIT_CONFIG = ((f"url.{NO_PUSH}.pushInsteadOf", "https://"),
+                     (f"url.{NO_PUSH}.pushInsteadOf", "http://"),
+                     ("credential.helper", ""))
 WORKTREE = ".claude/worktrees/conductor-{batch}-{n}"
 RUNS = "docs/factory/batches/{batch}/runs"
 CEILING_OUTCOME = {"timeout": "killed:cost-at-ceiling",
@@ -62,6 +80,23 @@ OBJECTIVES = {
     "ship": "Prepare this item's release.md under the ship skill and"
             " execute no release step. Commit nothing but release.md:"
             " the merge refuses any other change made after the review."}
+
+
+def worker_env(base, batch, gh_config_dir):
+    """The Worker's environment: `base` (the runner's) minus every
+    WORKER_STRIPPED name, plus the batch flag, an empty gh config dir,
+    no terminal prompt and WORKER_GIT_CONFIG. It stops a confused Worker;
+    a hostile one can still put a credential back (breakdown Notes,
+    2026-10-11)."""
+    env = {name: value for name, value in base.items()
+           if not WORKER_STRIPPED.fullmatch(name)}
+    env.update({WORKER_ENV: batch, "GH_CONFIG_DIR": gh_config_dir,
+                "GIT_TERMINAL_PROMPT": "0", "GIT_SSH_COMMAND": "false",
+                "GIT_CONFIG_COUNT": str(len(WORKER_GIT_CONFIG))})
+    for index, (key, value) in enumerate(WORKER_GIT_CONFIG):
+        env[f"GIT_CONFIG_KEY_{index}"] = key
+        env[f"GIT_CONFIG_VALUE_{index}"] = value
+    return env
 
 
 def harness_command(brief, model, effort, ceiling_usd):
@@ -97,7 +132,8 @@ def compose_brief(step, item, item_type, worktree, branch, block, wo,
         " leave pr-body.md uncommitted.", "",
         "## Tools", "",
         f"Only these: {', '.join(ALLOWED_TOOLS)}. never git push, and"
-        " never run any gh command.", "",
+        " never run any gh command: this environment carries no GitHub"
+        " credential, and every push fails.", "",
         "## Boundaries", "",
         f"Work only in {worktree}. New PRD, ADR and WO ids come only from"
         f" this item's reserved block ({reserved}); if it runs out, stop"
@@ -198,10 +234,11 @@ def _worktree(git, batch, item):
 def _harness(harness, cmd, worktree, minutes, batch):
     """(result event or None, how it ended): completed, timeout,
     missing (no process ever started) or unaccounted (no result)."""
-    env = {**child_env(), WORKER_ENV: batch}
     try:
-        with harness(cmd, cwd=str(worktree), timeout=minutes * 60,
-                     env=env) as events:
+        with tempfile.TemporaryDirectory(prefix="conductor-gh-") as gh_dir, \
+                harness(cmd, cwd=str(worktree), timeout=minutes * 60,
+                        env=worker_env(child_env(), batch, gh_dir)) \
+                as events:
             results = [e for e in events
                        if isinstance(e, dict) and e.get("type") == "result"]
             timed_out = events.timed_out
