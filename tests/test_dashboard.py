@@ -254,9 +254,10 @@ class TestQueues(unittest.TestCase):
         self.assertEqual(state["repo"]["remote"], "o/r")
         self.assertEqual(state["queues"], [
             {"gate": "prd", "issue": 7, "title": "WO-0101: first",
-             "waited_s": 7200, "url": "https://github.com/o/r/issues/7"},
+             "waited_s": 7200, "aged": True,
+             "url": "https://github.com/o/r/issues/7"},
             {"gate": "merge", "issue": 8, "title": "WO-0102: second",
-             "waited_s": None,
+             "waited_s": None, "aged": True,
              "url": "https://github.com/o/r/issues/8"},
         ])
 
@@ -289,9 +290,38 @@ class TestQueues(unittest.TestCase):
                                      clock=clock)
         self.assertEqual([q["waited_s"] for q in state["queues"]],
                          [None, None])
+        self.assertEqual([q["aged"] for q in state["queues"]],
+                         [False, False])
         self.assertEqual(state["problems"], [
             "dashboard: gh api timeline for #7 failed: boom",
             "dashboard: gh api timeline for #8 failed: boom"])
+
+    def test_an_unparseable_timeline_is_unreadable_not_empty(self):
+        """#665: unparseable JSON is a failed read, like a failed fetch."""
+        from fake_gh import FakeGh
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            canned = queue_gh().answers
+            gh = FakeGh(answers={**canned, ("api",): "not json"})
+            state = dashboard.gather(tmp, run=gh, git=git_remote(),
+                                     clock=clock)
+        self.assertEqual([(q["waited_s"], q["aged"])
+                          for q in state["queues"]],
+                         [(None, False), (None, False)])
+
+    def test_a_read_timeline_with_no_arrival_is_aged_not_unreadable(self):
+        """#665: a timeline that was read and holds no arrival at the
+        gate has an unknown age, not an unreadable one — the distinction
+        gate_digest._queues keeps (absent vs present-and-empty)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            gh = queue_gh()
+            state = dashboard.gather(tmp, run=gh, git=git_remote(),
+                                     clock=clock)
+        self.assertEqual(state["problems"], [])
+        self.assertEqual([(q["waited_s"], q["aged"])
+                          for q in state["queues"]],
+                         [(None, True), (None, True)])
 
     def test_a_malformed_timestamp_is_refused_not_swallowed(self):
         """#491: a labeled event whose created_at does not read as a
@@ -887,7 +917,14 @@ const PAYLOAD = %s;
 const OUTPUT_STATES = %s;
 const METRICS_STATES = %s;
 const BACKLOG_STATES = %s;
+const AGES = {queues: [
+  {gate: "prd", issue: 10, title: "unread", waited_s: null, aged: false,
+   url: "https://github.com/octo/alpha/issues/10"},
+  {gate: "prd", issue: 11, title: "no arrival", waited_s: null,
+   aged: true, url: "https://github.com/octo/alpha/issues/11"},
+]};
 console.log(JSON.stringify({
+  needsYouAges: renderNeedsYou([{name: "alpha", payload: AGES}]),
   needsYou: renderNeedsYou([{name: "alpha", payload: PAYLOAD}]),
   needsYouEmpty: renderNeedsYou([]),
   card: renderRepoCard("alpha", PAYLOAD, null),
@@ -938,6 +975,17 @@ console.log(JSON.stringify({
         self.assertIn("[alpha]", strip)
         self.assertIn("WO-0101 &lt;b&gt;seed&lt;/b&gt;", strip)
         self.assertNotIn("<b>", strip)
+
+    def test_needs_you_marks_an_unreadable_age_on_its_own_line(self):
+        """#665: the gate digest's marker, on the item whose timeline
+        could not be read, and only there."""
+        strip = self.rendered()["needsYouAges"]
+        unread, no_arrival = strip.split("</li>")[:2]
+        self.assertIn("#10 unread", unread)
+        self.assertIn(" — age unknown (timeline unreadable)", unread)
+        self.assertIn("#11 no arrival", no_arrival)
+        self.assertNotIn("unreadable", no_arrival)
+        self.assertNotIn("waiting", strip)
 
     def test_needs_you_empty_state(self):
         strip = self.rendered()["needsYouEmpty"]

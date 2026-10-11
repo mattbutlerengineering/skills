@@ -101,9 +101,9 @@ issue absent from its map. `dashboard._timeline` is a separate fetch
 
 ## Work items
 
-- [ ] **Data: the queue entry says whether its timeline was read** — `_timeline` returns `None` on a failed or unparseable fetch, and `_queues` adds `aged` (true when the timeline was read) to each entry.
+- [x] **Data: the queue entry says whether its timeline was read** — `_timeline` returns `None` on a failed or unparseable fetch, and `_queues` adds `aged` (true when the timeline was read) to each entry.
   - Accept: in `tests/test_dashboard.py`, a failed fetch yields `aged: False` and a read-but-empty timeline yields `aged: True`, both with `waited_s: None`. The failed-fetch problem strings are unchanged.
-- [ ] **Render: the page marks an unreadable age on the item's line** — `renderNeedsYou` appends ` — age unknown (timeline unreadable)` when `aged` is false, matching the gate digest's wording.
+- [x] **Render: the page marks an unreadable age on the item's line** — `renderNeedsYou` appends ` — age unknown (timeline unreadable)` when `aged` is false, matching the gate digest's wording.
   - Accept: the node render harness shows the marker for an `aged: false` entry and leaves an `aged: true` entry with no age unmarked.
 
 ## Notes

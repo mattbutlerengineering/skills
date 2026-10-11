@@ -81,10 +81,13 @@ const renderNeedsYou = (states) => {
     const repoTag = `<span class="repo">[${esc(name)}]</span>`;
     for (const q of payload.queues || []) {
       const wait = fmtWait(q.waited_s);
+      // Mirrors gate_digest.compose_digest: an unreadable timeline is
+      // marked on its own line, apart from a read one with no arrival.
+      const age = wait ? ` — waiting ${esc(wait)}`
+        : q.aged === false ? " — age unknown (timeline unreadable)" : "";
       items.push(`<li class="queue">● ${esc(q.gate)} gate — ` +
         `<a href="${esc(q.url)}" target="_blank">#${esc(q.issue)} ` +
-        `${esc(q.title)}</a>` +
-        `${wait ? ` — waiting ${esc(wait)}` : ""} ${repoTag}</li>`);
+        `${esc(q.title)}</a>${age} ${repoTag}</li>`);
     }
     for (const finding of payload.drift || []) {
       items.push(`<li class="drift">⚠ ` +
