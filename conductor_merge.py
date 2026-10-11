@@ -522,6 +522,28 @@ def land(gh, pr, head, queued, clock, sleep):
         sleep(POLL_SECONDS)
 
 
+def _main_head(git, worktree):
+    return _git(git, worktree, ["rev-parse", "origin/main"],
+                "reading origin/main", RETRY).strip()
+
+
+def _main_held(git, worktree, base):
+    """Stalls, recommending a retry, when origin/main moved off `base`,
+    the main merged into the head the checks ran on (review minor 4).
+    Without a queue the squash lands on whatever main is then, so a
+    merge that landed during the wait would go unchecked against this
+    item. --match-head-commit pins only the PR head. A queue checks the
+    merge-result commit itself, so this runs only without one. The
+    window left is the moment between this read and the squash."""
+    _git(git, worktree, ["fetch", "origin", "main"], "fetching origin/main",
+         RETRY)
+    moved = _main_head(git, worktree)
+    if moved != base:
+        raise Stall(f"origin/main moved from {base[:12]} to {moved[:12]}"
+                    " while the checks ran; a retry merges it in and"
+                    " checks again", RETRY)
+
+
 def _reserve(root, batch, clock, item, fields):
     _, problems = append(root, batch, lambda rows: (
         [{"at": stamp(clock()), "kind": "reserve", "item": item, **one}
@@ -535,6 +557,7 @@ def _turn(root, batch, item, ports, worktree):
     git, gh, tool, clock, sleep = ports
     branch = flow.item_branch(batch, item)
     update_branch(git, tool, worktree, branch)
+    base = _main_head(git, worktree)
     version = bump_version(git, tool, worktree, branch)
     rows, problems = load(root, batch)
     if problems:
@@ -560,7 +583,10 @@ def _turn(root, batch, item, ports, worktree):
     head = _git(git, worktree, ["rev-parse", "HEAD"], "reading HEAD").strip()
     pr = _pr_number(gh, branch)
     checks = wait_checks(gh, head, clock, sleep)
-    sha = land(gh, pr, head, has_queue(gh), clock, sleep)
+    queued = has_queue(gh)
+    if not queued:
+        _main_held(git, worktree, base)
+    sha = land(gh, pr, head, queued, clock, sleep)
     return {"pr": pr, "sha": sha, "checks": checks}, []
 
 
