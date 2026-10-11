@@ -168,7 +168,7 @@ Re-read before pushing anything.
 - Never touch a gate-change path: `docs/adr/**`, a run's `prd.md`,
   `architecture.md`, `docs/design/**`.
 - Never run anything needing the `claude` CLI or an API key.
-- Never edit this file, `.beads/**`, any schedule, or another routine's
+- Never edit this file, any schedule, or another routine's
   journal.
 - Caps: one PR, one issue, S size, branch prefix `routine-groom/`, body marker
   `<!-- queue-groomer-routine -->`.

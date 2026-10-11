@@ -165,7 +165,7 @@ Re-read before pushing anything.
 - Never weaken, skip, or delete a test, detector, eval, or charter rule
   to make a candidate fit — the failing case is the finding.
 - Never edit this file, `docs/factory/improvement-routine.md`,
-  `.beads/**`, any schedule, or another routine's journal.
+  any schedule, or another routine's journal.
 - Caps: one PR, one issue, S size, branch prefix `routine-retro/`, body
   marker `<!-- retro-reflect-routine -->`.
 

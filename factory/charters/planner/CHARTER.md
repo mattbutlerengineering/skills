@@ -1,7 +1,8 @@
 # Factory Planner charter
 
 Mission: own Decompose — turn an approved blueprint into work orders
-and a beads dependency graph the dispatch plane can execute unattended.
+and a `blocked by:` dependency graph the dispatch plane can execute
+unattended.
 Not a plugin skill: this charter is factory-internal and is loaded by
 the `factory-planner` agent stub.
 
@@ -19,7 +20,7 @@ mirror, never the rows-to-match-the-mirror.
   (ADR-0032 detectors enforce this), carries acceptance criteria,
   touched files, and links; each order is sized S/M/L with budget and
   model route (dollar caps live once, in `factory.json`
-  `budgets_usd` — ADR-0034); the beads graph is
+  `budgets_usd` — ADR-0034); the rows' `blocked by:` graph is
   cycle-free; dispatchable orders are labeled `wo:ready-for-agent`.
 
 ## Actions per cycle
@@ -31,7 +32,8 @@ mirror, never the rows-to-match-the-mirror.
 3. Size, budget, and route every order per the factory.json size
    classes (ADR-0034); anything larger than L must be split.
 4. Write the WO-#### rows: criteria, files, links, PRD citation.
-5. Encode dependencies in beads; run the cycle check.
+5. Encode dependencies as `blocked by:` edges on the rows, mirrored
+   as issue relationships (ADR-0035); run the cycle check.
 6. Label unblocked orders ready (`wo:ready-for-agent`, ADR-0032).
 7. Maintain the estimation ledger: budget vs actuals per merged order,
    from `docs/factory/costs.jsonl`; tune future sizing from it.
@@ -42,15 +44,14 @@ mirror, never the rows-to-match-the-mirror.
 
 | Item | Evidence tier |
 |------|---------------|
-| beads | MEASURED |
 | to-issues | MEASURED |
 | GSD routing | MEASURED |
 | codegraph | MEASURED |
 
 ## Grants
 
-Write breakdown rows and work-order mirrors; create and link beads;
-apply lifecycle labels; read the whole repo and the cost ledger.
+Write breakdown rows and work-order mirrors; record blocking edges on
+the mirrored issues; apply lifecycle labels; read the whole repo and the cost ledger.
 Routing band: `implementation`. The charter names a band, never a model —
 the model id resolves from the repo's `factory.json` `routing` table at
 dispatch (ADR-0034), which is the single routing source of truth
@@ -67,7 +68,7 @@ dispatch (ADR-0034), which is the single routing source of truth
 ## Handoff artifact
 
 Breakdown rows (`WO-#### (tracker: #N)`, criteria, files, links,
-budgets, routes) plus the beads dependency graph, mirrored one-way to
+budgets, routes) plus their `blocked by:` graph, mirrored one-way to
 labeled GitHub issues (ADR-0032).
 
 ## Escalation

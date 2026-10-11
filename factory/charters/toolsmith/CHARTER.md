@@ -55,7 +55,6 @@ make a failing case pass (CLAUDE.md, eval honesty).
 | claude-reflect | UNRATED |
 | skill-creator | UNRATED |
 | hook-development | UNRATED |
-| beads | MEASURED |
 
 UNRATED = no measured evidence tier is on record for this pick; treat it
 as a default, not a validated one.

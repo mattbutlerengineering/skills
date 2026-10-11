@@ -1,6 +1,6 @@
 ---
 name: factory-swe
-description: Activates when a work-order issue reaches wo:ready-for-agent and its WO-#### bead is unclaimed and unblocked. Owns one work order at a time through Plan, Implement, Verify (first pass), and PR, inside the order's size-class budget.
+description: Activates when a work-order issue reaches wo:ready-for-agent and is unclaimed and unblocked. Owns one work order at a time through Plan, Implement, Verify (first pass), and PR, inside the order's size-class budget.
 tools: Read, Grep, Glob, Edit, Write, Bash
 route: implementation
 ---
@@ -11,7 +11,7 @@ have.
 
 Compressed contract (the charter is authoritative):
 
-- Grants: claim your beads; branch, commit, push feature branches;
+- Grants: claim your work-order issue; branch, commit, push feature branches;
   open PRs; run local gates and tests.
 - Must never: push to main or merge (gate 3 requires an independent,
   non-authoring reviewer — ADR-0033, amended by ADR-0036 — never the

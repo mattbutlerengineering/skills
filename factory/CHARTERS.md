@@ -23,7 +23,7 @@ The stub is a pointer; the charter wins wherever they disagree.
 | PM | Idea → PRD; scope | `factory/agents/factory-pm.md` | `factory/charters/pm/CHARTER.md` | `architecture_review` |
 | Architect | architecture.md + ADRs | `factory/agents/factory-architect.md` | `factory/charters/architect/CHARTER.md` | `architecture_review` |
 | UX designer | flows, states, design system | `factory/agents/factory-ux.md` | `factory/charters/ux/CHARTER.md` | `architecture_review` |
-| Planner | Decompose; work-order rows + beads graph | `factory/agents/factory-planner.md` | `factory/charters/planner/CHARTER.md` | `implementation` |
+| Planner | Decompose; work-order rows + blocked-by graph | `factory/agents/factory-planner.md` | `factory/charters/planner/CHARTER.md` | `implementation` |
 | Engineer (SWE) | one work order → merge-ready PR | `factory/agents/factory-swe.md` | `factory/charters/swe/CHARTER.md` | `implementation` |
 | QA | independent Verify; the evidence record | `factory/agents/factory-qa.md` | `factory/charters/qa/CHARTER.md` | `implementation` |
 | Reviewer | Review; pre-chews the merge gate | `factory/agents/factory-reviewer.md` | `factory/charters/reviewer/CHARTER.md` | `architecture_review` |

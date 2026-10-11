@@ -58,13 +58,10 @@ Read, in order:
 7. `LEDGER.md` — skills stuck at draft or used-once and bouncy trigger
    scores are Proposals material: paid eval runs are proposed, never
    run (§8).
-8. `.beads/issues.jsonl` — the committed queue export. Record its
-   freshness (`git log -1 --format=%cs -- .beads/issues.jsonl`); if
-   older than 7 days, downweight rung 2 of §4 and say so in the report.
-   The export is read-only intel: the cloud environment runs neither
-   `bd` nor dolt, and the routine never edits `.beads/**`. Status
-   changes it would have made (claim, close) go in the report for the
-   human to apply.
+8. The issue queue — `gh issue list --state open` (ADR-0083: GitHub
+   issues are the only tracker). Read-only intel: status changes the
+   routine would have made (close, relabel) go in the report for the
+   human to apply, except closing the day's own issue through its PR.
 9. `python3 one_owner.py` — the one-fact-one-owner pre-pass (ADR-0061).
    Read-only intel, like everything else in this section: every finding
    is report material, and a finding whose group `docs/backlog.md` does
@@ -109,9 +106,12 @@ never work:
 1. **Red main.** The fix is the day's work if it fits the size bound;
    otherwise propose-only plus an escalation at the top of the journal
    comment.
-2. **A ready queue item.** Eligible: status `open` in the export, no
-   unresolved blocking dependency, priority order (P0 first), oldest
-   first. Only if it fits the size bound.
+2. **A ready queue item.** Eligible: an open issue that is not a work
+   order (no `wo:*` label — those move only through the dispatch plane),
+   not a permanent state issue (gate-queue digest #178, journal #181),
+   not labelled `ready-for-human` or `needs-human`, and not blocked by
+   an issue that is still open; oldest first. Only if it fits the size
+   bound.
 3. **A graduated reflect candidate** (§6): a candidate rule with two or
    more distinct correction events across the journal history. The edit
    lands in `factory/charters/<role>/CHARTER.md` or
@@ -167,9 +167,7 @@ Closes #<the improvement issue>
 ```
 
 Cite a real work-order id in place of the `No work order:` line only
-when the PR genuinely implements that breakdown row. Beads tracker ids
-(`wo-` prefixed slugs) are not work-order ids; they neither satisfy nor
-trip detector B, and belong in prose only as queue references.
+when the PR genuinely implements that breakdown row.
 
 ## 6 Reflect (every run, every mode)
 
@@ -240,7 +238,7 @@ The routine re-reads this list before pushing anything.
   breakdown row (ADR-0032; detectors B and C enforce).
 - Never weaken, skip, or delete a test, detector, eval, or charter to
   go green — the failing case is the finding (charter).
-- Never edit this file, `.beads/**`, or the schedule.
+- Never edit this file or the schedule.
 - Caps: one PR, one issue, S size, branch prefix `routine/`, body
   marker `<!-- improvement-routine -->`, conventional-commit titles.
 

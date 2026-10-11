@@ -50,7 +50,6 @@ lives in one place (ADR-0004).
 |------|---------------|
 | idea / prd stage skills | UNRATED |
 | codegraph | MEASURED |
-| beads | MEASURED |
 
 UNRATED = no measured evidence tier is on record for this pick; treat it
 as a default, not a validated one.

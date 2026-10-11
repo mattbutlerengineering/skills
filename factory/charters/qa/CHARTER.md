@@ -49,7 +49,6 @@ not the PR description and not the implementer's summary.
 | verify stage skill | UNRATED |
 | verification-before-completion | UNRATED |
 | systematic-debugging | UNRATED |
-| beads | MEASURED |
 
 UNRATED = no measured evidence tier is on record for this pick; treat it
 as a default, not a validated one.

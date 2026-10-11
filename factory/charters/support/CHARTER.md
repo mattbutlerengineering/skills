@@ -53,7 +53,6 @@ into a second tracker — one signal, one record, mirrored one-way
 |------|---------------|
 | capture / operate stage skills | UNRATED |
 | sentry intake sweep | UNRATED |
-| beads | MEASURED |
 | to-issues | MEASURED |
 
 UNRATED = no measured evidence tier is on record for this pick; treat it

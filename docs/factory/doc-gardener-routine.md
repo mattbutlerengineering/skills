@@ -167,7 +167,7 @@ Re-read before pushing anything.
 - Never create a work-order issue or write a work-order id ahead of its
   breakdown row (ADR-0032).
 - Never edit this file or any routine protocol file, `docs/backlog.md`,
-  `.beads/**`, any schedule, or another routine's journal.
+  any schedule, or another routine's journal.
 - Caps: one PR, one issue, S size, branch prefix `routine-garden/`,
   body marker `<!-- doc-gardener-routine -->`.
 
