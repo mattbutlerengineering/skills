@@ -570,3 +570,40 @@ verdict from both rules.
 - [ADR-0084](../../adr/0084-the-cost-ledger-keys-a-run-by-issue-when-it-has-no-work-order.md):
   the cost ledger keys a run by its issue when it has no work order.
   Provisional; amends ADR-0034.
+
+## Amendments (implement-time, Owner-accepted)
+
+2026-10-10. Implement rows 0157 and 0158 met nine questions this design
+left open. The Owner accepted these answers via the orchestrator's
+question; breakdown.md's Notes hold the full text.
+
+1. **Launch record.** `run` appends a `state` row entering the step,
+   with optional `run_id` and `pid` (the runner's pid), before it spawns
+   the Worker. The one `run` row at the end is the finishing row. A dead
+   launch pid with no `run` row of its `run_id` is a stall.
+2. **Readiness.** An item stays in a step's state until the next launch
+   moves it. A step is done when its finishing run completed. An item is
+   ready when it is `planned`, `reviewed` or in a finished step, with no
+   unanswered ask.
+3. **Gate asks.** A completed `spec` run moves the item to
+   `awaiting-gate` and queues a `gate` ask (`approve` / `block`) whose
+   `gate_blobs` are the blob ids of the gate paths the item branch
+   changes. `approve` makes `build` ready.
+4. **Fix depth** is inferred from those gate paths: a fix that changes
+   none skips `awaiting-gate`.
+5. **Review verdict** is a `verdict: pass|changes` line in the run's
+   `review.md` frontmatter; the brief overrides the reviewer charter's
+   comment, label and merge exit.
+6. **Answers act.** `answer` writes the `blocked` state row for a
+   `block` answer. Stall options are `retry`, `retry-up` (the next band
+   up, omitted on the top band) and `block`. The three-failure pause is
+   an item-less stall ask, `resume` / `stop`.
+7. **Build runs** take the first unchecked row of the item branch's
+   `breakdown.md`; an order item's work order comes from its issue.
+8. **Item branch** `conductor/<batch>-<n>`, worktree
+   `.claude/worktrees/conductor-<batch>-<n>`, from `origin/main`.
+9. **Runner defaults:** a fixed `--allowedTools` list with no push and
+   no gh write; `--max-budget-usd` is the step's `ceiling_usd`; `seq`
+   counts that step's runs; the spend row is committed on the item
+   branch before the push; a completed run with no `pr-body.md` stalls;
+   the spec brief carries `stop-after: decompose`.

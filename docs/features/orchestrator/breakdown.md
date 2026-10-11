@@ -154,3 +154,57 @@ and every existing seam it names exists on main (`cli.harness_run`,
   over-cap items are already deferred. `plan` reads ids from the local
   `origin/main` ref without fetching, because it writes nothing; the
   merge turn's confirmation (row 0161) covers a stale ref.
+- 2026-10-10 (Implement, rows 0157 and 0158): the two rows hit nine
+  decisions the artifacts did not settle. Implement stopped and
+  recommended a default for each. The Owner accepted all nine on
+  2026-10-10 via the orchestrator's question:
+  1. Launch record: before spawning, `run` appends a `state` row
+     entering the step with two optional fields, `run_id` and `pid` (the
+     runner's own pid). The run's one `run` row, written at the end, is
+     the finishing row. `next` stalls an item whose launch pid is dead
+     (an injected probe) with no `run` row of that `run_id`.
+  2. Readiness: an item stays in a step's state until the next launch
+     moves it; a step is done when its finishing run row's outcome is
+     `completed`. `next` reports an item ready for its next step when
+     its state is `planned`, `reviewed`, or a finished step, and it has
+     no unanswered ask. The launch writes the move.
+  3. Gate asks: on a completed `spec` run, `next` moves the item to
+     `awaiting-gate` and queues a `gate` ask (`approve` / `block`,
+     recommending `approve`) whose `gate_blobs` are the blob ids, read
+     through the git port, of the gate paths the item branch changes
+     (`docs/adr/**`, `prd.md`, `architecture.md`, `docs/design/**`). An
+     `approve` answer makes `build` ready.
+  4. A fix item's re-entry depth is inferred from those gate paths: none
+     changed skips `awaiting-gate` (spec to build); any gates it. A
+     feature always gates.
+  5. Review verdict: the review brief requires a `verdict: pass|changes`
+     line in the run's `review.md` frontmatter, and overrides the
+     reviewer charter's comment, label and merge exit. `pass` writes
+     `reviewed` (with `author_runs` and `reviewer_run`); the first
+     `changes` writes review to build; the second queues a stall.
+  6. `answer` itself appends the `blocked` state row, under the same
+     lock, when an item's ask is answered `block`. A `retry` or
+     `retry-up` answer makes the stalled step ready again. Stall options
+     are `retry`, `retry-up`, `block`; `retry-up` takes the next band in
+     mechanical, implementation, architecture_review and is omitted on
+     the top band. Recommended: `retry` for a dead runner, an idle item
+     or a Worker failure; `block` for a second request for changes. The
+     three-failure batch pause is an item-less `stall` ask with options
+     `resume` / `stop`, recommending `stop`.
+  7. Each build run takes the first unchecked row of the item branch's
+     `breakdown.md`, and `wo` is that row's id; the item stays ready for
+     `build` while unchecked rows remain. An order item's work order
+     comes from its issue.
+  8. Item branch `conductor/<batch>-<n>`, worktree
+     `.claude/worktrees/conductor-<batch>-<n>`, created from
+     `origin/main` by the item's first runner.
+  9. Runner defaults: one fixed `--allowedTools` list (Read, Edit, Write,
+     Glob, Grep, `Bash(python3 *)`, `Bash(make *)`, and git add, commit,
+     status, diff and log; no push, no gh); `--max-budget-usd` is the
+     step's planned `ceiling_usd`; `seq` is the item's count of that
+     step's runs plus one; the spend row is committed onto the item
+     branch before the push; a completed run with no `pr-body.md` is
+     missing output and stalls; the spec brief carries
+     `stop-after: decompose`.
+  The architecture records them under "Amendments (implement-time,
+  Owner-accepted)".
