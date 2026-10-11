@@ -2,14 +2,15 @@
 stage: ship
 run: maintenance:one-fence-rule
 date: 2026-10-10
-released: prepared-not-executed
+released: 2026-10-10 (55d5eae)
 assumptions:
   - "Prepare-and-stop, matching this repo's maintenance runs: this stage pushed the branch, opened anchor issue #657 and PR #658, and merged nothing. A squash merge to main is the release mechanism, and it is the owner's gate-3 decision (ADR-0033)."
+  - "Executed after preparation: the owner then answered 'Squash-merge now' in-session (2026-10-10), and the merge ran. The prepared state above is kept as written, and the execution is recorded below."
   - "No plugin version bump: nothing under skills/ changed, so the plugin cache has nothing stale to serve."
   - "Scale: a design-touching refactor of three mirrored tools gets the full pre-flight below, including a payload-twin and manifest check."
 ---
 
-# Release: prepared, not executed (PR #658)
+# Release: shipped (PR #658, squash-merged as 55d5eae)
 
 **PR:** #658, `fix: one fence rule — detector D and the validator skip gate use the strict walker`
 **Branch:** `docs/one-fence-rule`, on `origin/main` at `008dd34`
@@ -57,7 +58,24 @@ revert the same way on its next update.
 3. Confirm #657 closed through `Closes #657`.
 4. Smoke check on `main`: `python3 gates.py && python3 gates.py --selftest`.
 
+## Release executed
+
+1. CI green on PR #658: `check` and `review` passed; `merged-label` and
+   `needs-review-label` were skipped by design on a PR with no work order.
+2. `gh pr merge 658 --squash --delete-branch` → `MERGED 55d5eae`.
+3. Issue #657: `CLOSED` through `Closes #657`.
+
 ## Post-release
 
-Not executed yet, because the merge is pending. Operate (`retro.md`)
-follows once the change has been on `main`.
+Smoke check on `main` at `55d5eae`:
+
+```
+gates: 0 problem(s)
+selftest: ok
+$ grep -nE '^(FENCE_OPEN|FENCE_CLOSE|ARCH_FENCE|FENCES) *=' *.py
+knowledge_plane.py:90:FENCE_OPEN = re.co…
+knowledge_plane.py:91:FENCE_CLOSE = re.c…
+```
+
+Operate (`retro.md`) follows once the change has been on `main` long
+enough to show how it behaves.
