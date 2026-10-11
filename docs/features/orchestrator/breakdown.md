@@ -36,7 +36,7 @@ strings, `cli.report` for the exit, and `gh`/`git`/harness calls through
 
 ## Milestone 2: A batch can be planned, opened and asked about (no Worker yet)
 
-- [ ] **WO-0155** Batch ledger grammar and the decision queue — size:M, blocked by: — (PRD-0013 §User stories, §Success criteria, §Actors)
+- [x] **WO-0155** Batch ledger grammar and the decision queue — size:M, blocked by: — (PRD-0013 §User stories, §Success criteria, §Actors)
   - Accept: `conductor.py` owns the row grammar of architecture.md's batch-ledger table (`plan`, `reserve`, `state`, `run`, `ask`, `answer`, `close`, each with `at`, `kind`, `item`); appends take an exclusive `fcntl.flock` on `ledger.jsonl`; the reader fails with a `cd:` problem naming file and line for a line that does not parse or breaks its kind's field rules, and never skips it. `conductor.py ask` writes an `ask` row with a fresh id; `answer` writes an `answer` row and refuses an unknown ask, an already-answered ask, a choice not among the ask's options, and any call with `CONDUCTOR_WORKER` set, each with its own exact problem string; `next` returns only the oldest unanswered ask.
 - [ ] **WO-0156** Priced plan, reserved blocks, and opening a batch — size:M, blocked by: WO-0154, WO-0155 (PRD-0013 §User stories, §Success criteria, §Solution)
   - Accept: `conductor.py plan <#N>...`, given injected issue reads, a config and month-to-date spend, prints per item the type, steps, each step's charter, band, model, effort and ceiling (the step-to-charter table fixed in `conductor.py`), the item estimate from `budgets_usd` by its `size:` label, and a reserved PRD/ADR/WO block above the highest id on `origin/main` (read through `knowledge_plane`) and above every earlier block; then the batch estimate against what remains of `monthly_cap_usd`, and one deferral line each for a non-owner author, no `type:` label, no `size:` label, a closed issue, and over the cap. It plans nothing on a `config:` problem and refuses the whole plan on an unreadable or truncated issue read. `conductor.py open` creates the `conductor/<batch>` branch and worktree from `origin/main` (through the git port), writes the `plan` row (with its `routing`/`effort` policy snapshot) and one `reserve` row per block, and queues the spend ask; a test asserts no two items' blocks share a number.
@@ -117,3 +117,12 @@ and every existing seam it names exists on main (`cli.harness_run`,
   dashboard's `cost_per_wo` divides lifetime spend by every `by_wo` key,
   so issue groups now count in its denominator as if they were orders.
   Logged here for a later run rather than fixed in this row.
+- 2026-10-10 (Implement, row 0155): the architecture's `ask` row lists
+  its own `kind` (spend / gate / merge / stall / clarify), which collides
+  with every row's `kind` field (here `"ask"`). The ask's field is
+  `ask_kind`; the CLI flag stays `--kind`. A rename inside the grammar
+  this row owns, not a design change. Ask ids are `ask-<n>`, one past the
+  batch's ask count, assigned under the append lock. `conductor.py` is a
+  new CLI-bearing root module, so it also gets its `conductor` verb in
+  `factory.py`'s table (`tests/test_factory_cli.py` pins one verb per
+  such module).
