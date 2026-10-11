@@ -600,7 +600,7 @@ class TestReviewRun(RunCase):
                         launch("#14", "build", "verify"),
                         ran("#14", "verify")]
 
-    def review(self, verdict_line):
+    def review(self, verdict_line, ran=None):
         path = "docs/fixes/x/review.md"
 
         def act(cwd):
@@ -608,9 +608,26 @@ class TestReviewRun(RunCase):
             (cwd / "docs/fixes/x").mkdir(parents=True)
             (cwd / path).write_text(f"---\nstage: review\n{verdict_line}"
                                     "---\n# Review\n")
+            if ran is not None:
+                ran.append(True)
         git = Git(self.tmp.name, changed=f"{path}\n")
+        if ran is not None:
+            git = self.moving_head(git, ran)
         self.run_step("#14", "review", Harness(act=act), git=git,
                       gh=Gh(title="WO-0180"), rows=self.REVIEWING)
+
+    @staticmethod
+    def moving_head(git, ran):
+        """The fake git, with the branch head moving once the review
+        Worker has run (its own commits land on the branch)."""
+        def run(args):
+            out = git(args)
+            if args[:1] == ["rev-parse"] and "--git-common-dir" not in args:
+                head = "a1fter" if ran else "bef0re"
+                return subprocess.CompletedProcess(args, 0, f"{head}\n", "")
+            return out
+        run.calls = git.calls
+        return run
 
     def test_a_pass_verdict_marks_the_item_reviewed(self):
         self.review("verdict: pass\n")
@@ -620,6 +637,13 @@ class TestReviewRun(RunCase):
         # The head the review run was launched on, read before it ran.
         self.assertEqual(self.rows[-1]["reviewed_head"], "c0ffee")
         self.assertIn(["rev-parse", "conductor/b1-14"], self.git.calls)
+
+    def test_the_reviewed_head_is_read_before_the_review_worker_runs(self):
+        # Re-review R2: a head read after the run would hide the review
+        # Worker's own commits from the merge's drift check.
+        self.review("verdict: pass\n", ran=[])
+        self.assertEqual(self.rows[-1]["to"], "reviewed")
+        self.assertEqual(self.rows[-1]["reviewed_head"], "bef0re")
 
     def test_a_missing_verdict_stalls(self):
         self.review("")
