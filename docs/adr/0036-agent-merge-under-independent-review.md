@@ -1,6 +1,6 @@
 # Agent merges permitted under independent review
 
-- Status: accepted
+- Status: amended by ADR-0085
 - Date: 2026-07-12
 
 Amends ADR-0033. The third human gate — **PR merge** — was a physical

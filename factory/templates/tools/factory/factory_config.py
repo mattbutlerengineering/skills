@@ -11,8 +11,9 @@ lives behind one interface; factory.json stays the single routing source
 of truth (ADR-0004), resolved in exactly one place, and detector F
 (gates.check_config_shape) remains the CI gate over the whole shape.
 
-This module also owns two vocabularies its accessors resolve over
-(ADR-0048): BANDS, the legal routing bands, and ARTIFACT_HOMES /
+This module also owns the vocabularies its accessors resolve over
+(ADR-0048): BANDS, the legal routing bands; EFFORTS, the legal values of
+the optional effort table (PRD-0013); and ARTIFACT_HOMES /
 artifact_paths, the installed-vs-payload location grammar every
 dual-home factory artifact is read through.
 
@@ -31,6 +32,10 @@ from cli import read_file
 # fail-closed per lookup, so a band outside the vocabulary is already a
 # problem there without a second membership check.
 BANDS = ("mechanical", "implementation", "architecture_review")
+
+# The effort vocabulary (PRD-0013): the values factory.json's optional
+# effort table may map a band to, the harness's own --effort choices.
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 # The installed-vs-payload location grammar (ADR-0048): artifact name ->
 # (installed rel to the repo root, payload rel to factory/ — the manifest
@@ -93,6 +98,21 @@ def resolve_model(band, config):
         return None, [
             f"config: factory.json routes no model to the {band} band"]
     return model, []
+
+
+def resolve_effort(band, config):
+    """(the effort for this band, problems) through factory.json's effort
+    table, which sits beside routing (PRD-0013). Fail-closed like
+    resolve_model: no table, or a band it does not map to an EFFORTS
+    value, is a problem, never a silent default."""
+    efforts = config.get("effort")
+    if not isinstance(efforts, dict):
+        return None, ["config: factory.json has no effort table"]
+    effort = efforts.get(band)
+    if effort not in EFFORTS:
+        return None, [
+            f"config: factory.json names no effort for the {band} band"]
+    return effort, []
 
 
 def _positive_number(value):
@@ -159,4 +179,9 @@ def config_problems(config):
         problems.append("wip_cap must be a positive integer")
     if not _positive_number(config.get("monthly_cap_usd")):
         problems.append("monthly_cap_usd must be a positive number")
+    efforts = config.get("effort")
+    if isinstance(efforts, dict):
+        problems += [f"effort.{band} must be one of {', '.join(EFFORTS)}"
+                     for band, effort in efforts.items()
+                     if effort not in EFFORTS]
     return problems

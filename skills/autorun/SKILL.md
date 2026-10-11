@@ -80,16 +80,21 @@ becomes a logged assumption, never a silent guess.
    — no deploy, publish, tag, or merge. And regardless of what the brief
    authorizes, never release unattended past unfixed critical review
    findings — stop and surface instead. Run operate only when feedback
-   already exists to capture.
+   already exists to capture. A `stop-after: <stage>` line in
+   `autorun-brief.md` ends the loop earlier: stop once that stage's
+   artifact or recorded skip exists, without starting the next stage,
+   and go to step 6. A spec Worker uses it to drive a run up to a human
+   gate and stop there.
 
 6. **Report.** Stage by stage: the artifact produced, its `assumptions:`
    entries, verification evidence, anything flagged for human review —
    including a release that was prepared but not executed, and each ADR
    written unattended (status `provisional`, per the protocol). Aggregate
    every assumption from the artifacts' frontmatter into one list; note
-   that the run was autorun-driven. Ship is where autorun stops: the run
-   stays active until `retro.md` exists, and operate remains available
-   once there is feedback to capture.
+   that the run was autorun-driven. Ship, or the brief's `stop-after:`
+   stage, is where autorun stops: the run stays active until `retro.md`
+   exists, and operate remains available once there is feedback to
+   capture.
 
 ## Rules
 

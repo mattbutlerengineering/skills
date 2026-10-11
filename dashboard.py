@@ -271,6 +271,13 @@ def _output(root, by_number, prs, spend):
                        or issue.get("url") or "",
                 "spend": spend.get(wo),
             })
+    # ADR-0084: a run with no work order is keyed by its issue. Its spend
+    # follows the work orders, labelled as an issue, never as an order.
+    for key in sorted(key for key in spend
+                      if cost_ledger.ISSUE_KEY.fullmatch(key)):
+        entries.append({"wo": key, "title": f"issue {key} (no work order)",
+                        "size": None, "state": None, "pr": None, "url": "",
+                        "spend": spend[key]})
     return entries
 
 

@@ -570,3 +570,81 @@ verdict from both rules.
 - [ADR-0084](../../adr/0084-the-cost-ledger-keys-a-run-by-issue-when-it-has-no-work-order.md):
   the cost ledger keys a run by its issue when it has no work order.
   Provisional; amends ADR-0034.
+- [ADR-0085](../../adr/0085-an-owner-answer-executed-by-the-conductor-is-the-human-merge.md):
+  an Owner answer executed by the Conductor is the human merge.
+  Provisional (2026-10-11, post-review); would amend ADR-0036 conditions
+  2 and 3 once the Owner accepts it.
+
+## Amendments (implement-time, Owner-accepted)
+
+2026-10-10. Implement rows 0157 and 0158 met nine questions this design
+left open. The Owner accepted these answers via the orchestrator's
+question; breakdown.md's Notes hold the full text.
+
+1. **Launch record.** `run` appends a `state` row entering the step,
+   with optional `run_id` and `pid` (the runner's pid), before it spawns
+   the Worker. The one `run` row at the end is the finishing row. A dead
+   launch pid with no `run` row of its `run_id` is a stall.
+2. **Readiness.** An item stays in a step's state until the next launch
+   moves it. A step is done when its finishing run completed. An item is
+   ready when it is `planned`, `reviewed` or in a finished step, with no
+   unanswered ask.
+3. **Gate asks.** A completed `spec` run moves the item to
+   `awaiting-gate` and queues a `gate` ask (`approve` / `block`) whose
+   `gate_blobs` are the blob ids of the gate paths the item branch
+   changes. `approve` makes `build` ready.
+4. **Fix depth** is inferred from those gate paths: a fix that changes
+   none skips `awaiting-gate`.
+5. **Review verdict** is a `verdict: pass|changes` line in the run's
+   `review.md` frontmatter; the brief overrides the reviewer charter's
+   comment, label and merge exit.
+6. **Answers act.** `answer` writes the `blocked` state row for a
+   `block` answer. Stall options are `retry`, `retry-up` (the next band
+   up, omitted on the top band) and `block`. The three-failure pause is
+   an item-less stall ask, `resume` / `stop`.
+7. **Build runs** take the first unchecked row of the item branch's
+   `breakdown.md`; an order item's work order comes from its issue.
+8. **Item branch** `conductor/<batch>-<n>`, worktree
+   `.claude/worktrees/conductor-<batch>-<n>`, from `origin/main`.
+9. **Runner defaults:** a fixed `--allowedTools` list with no push and
+   no gh write; `--max-budget-usd` is the step's `ceiling_usd`; `seq`
+   counts that step's runs; the spend row is committed on the item
+   branch before the push; a completed run with no `pr-body.md` stalls;
+   the spec brief carries `stop-after: decompose`.
+
+2026-10-11. Post-review Implement. The Owner chose, via the
+orchestrator's question, to fix review majors 1–3. One fix's shape
+differs from the text above, and is recorded here for the Owner:
+
+10. **Build re-pricing.** The gate ask re-prices the item from the
+    number of unchecked breakdown rows times the build step's
+    `ceiling_usd`, not from the rows' `size:` bands. Each build run is
+    bounded by that ceiling (`--max-budget-usd`), whatever its row's
+    band, so rows × ceiling is the most the answer can let the build
+    spend; a band-priced figure would understate it. The ask carries
+    the figure as `build_usd`. A fix that changes no gate file still
+    skips the gate (amendment 4), so its build spend gets no
+    re-pricing ask; the run-time cap check below bounds it.
+11. **Run-time cap check.** Every `run` checks the month's spend, plus
+    the ceilings of runs still in flight, plus its own ceiling, against
+    `monthly_cap_usd` (read from `factory.json` at the batch root) under
+    the ledger lock, before it writes the launch row. The month's spend
+    is origin/main's `costs.jsonl` and every launched item branch's,
+    each row once by `row_key`, selected by `cost_ledger.dispatched`.
+    Over the cap, nothing launches: dispatch pauses behind one
+    batch-level `spend` ask (`resume` / `stop`, recommending `stop`).
+12. **Worker environment.** "No push, no gh" is enforced in the Worker's
+    environment, not only listed in its brief. `--allowedTools` narrows
+    `Bash(make *)` to `Bash(make check)`. The runner strips every
+    `GH_*`, `GITHUB_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, askpass and
+    inherited `GIT_CONFIG_*` or `GIT_SSH*` variable. It points
+    `GH_CONFIG_DIR` at an empty temporary directory, sets
+    `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND=false`, and adds env
+    git config that rewrites an http(s) push URL to a path that cannot
+    exist and resets `credential.helper`. The rewrite covers a URL given
+    on the command line or a remote's `url`, but not a remote's explicit
+    `pushurl`, which `pushInsteadOf` never rewrites; such a push still
+    gets no token from a helper or a prompt. Not blocked: a token
+    embedded in a configured `pushurl`, or a `~/.netrc` entry (re-review
+    R3). This stops a confused Worker. A hostile one can still restore a variable from
+    `python3`, so against hostility it remains trust-based.

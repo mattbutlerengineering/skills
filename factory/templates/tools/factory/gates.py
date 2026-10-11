@@ -1905,13 +1905,14 @@ def _label_wiring_wired_fixture(root, makefile=None):
 
 def _config_shape_defect_fixture(root):
     """A factory.json with every F-checked field wrong at once: an
-    incomplete budgets_usd and routing map, a non-positive wip_cap, and a
-    negative monthly_cap_usd."""
+    incomplete budgets_usd and routing map, a non-positive wip_cap, a
+    negative monthly_cap_usd, and an effort outside the vocabulary."""
     path = root / "factory" / "templates" / "factory.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(
         {"budgets_usd": {"S": 5}, "routing": {"mechanical": "m"},
-         "wip_cap": 0, "monthly_cap_usd": -1}), encoding="utf-8")
+         "wip_cap": 0, "monthly_cap_usd": -1,
+         "effort": {"mechanical": "extreme"}}), encoding="utf-8")
     return path
 
 
@@ -2261,7 +2262,7 @@ def selftest():
         _config_shape_defect_fixture(root)
         problems = check_config_shape(root)
         expect("F", problems, "budgets_usd", "routing", "wip_cap",
-               "monthly_cap_usd")
+               "monthly_cap_usd", "effort.mechanical")
 
     # B
     with tempfile.TemporaryDirectory() as tmp:

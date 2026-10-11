@@ -155,3 +155,47 @@ criteria, actions, tool grants, escalation rules. Encoded as a charter
 (`factory/charters/<role>/CHARTER.md`) plus a subagent stub
 (`factory/agents/factory-<role>.md`); the roster is `factory/CHARTERS.md`.
 _Avoid_: persona, job description
+
+### Conductor (PRD-0013, ADR-0084)
+
+**Conductor**:
+The role the Owner's own session takes while it runs the `conduct`
+utility skill: it opens a batch, launches Workers, presents the decision
+queue, records the Owner's answers and drives the merge turns they
+cover. It never writes or reviews an item's code; `conductor.py` holds
+every rule. A role name, not the skill's name.
+_Avoid_: orchestrator (the run's working title), dispatcher, scheduler
+
+**Worker**:
+One headless harness process running one step of one batch item in that
+item's own worktree, on the model, effort and dollar ceiling the Owner's
+policy names, metered into the cost ledger. It cannot ask mid-run; it
+stops, and the Conductor queues the question.
+_Avoid_: subagent (an in-session agent, unmetered in dollars), agent (bare)
+
+**Batch**:
+A set of the Owner's issues the Conductor takes from a priced plan to
+every item merged or blocked, under one slug, on one batch branch
+(`conductor/<batch>`), closed with one scorecard.
+_Avoid_: round (work-queue's), sprint
+
+**Batch ledger**:
+The append-only JSONL record of one batch
+(`docs/factory/batches/<batch>/ledger.jsonl`): its plan, reservations,
+every item state change, every Worker run, every ask and answer, and its
+close. `conductor.py` owns the row grammar; a line that breaks it fails
+every reader. Not the cost ledger, which holds the batch's spend.
+_Avoid_: log, journal
+
+**Decision queue**:
+The batch ledger's unanswered asks, presented to the Owner oldest first,
+one at a time, recommended option first. An answer row written straight
+after the Owner picks an option in the Conductor's session is the only
+Owner write and the only consent the tool acts on.
+_Avoid_: inbox, approval queue, gate (one of the three human gates)
+
+**Merge train**:
+An ordered list of batch items one merge answer covers: each merges, in
+order, only after every earlier item has merged, and an item whose gate
+files changed after its gate answer needs its own merge ask instead.
+_Avoid_: merge queue (GitHub's, which a train may ride), batch merge

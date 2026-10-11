@@ -607,5 +607,42 @@ class TestDispatched(unittest.TestCase):
         self.assertEqual(cost_ledger.dispatched([gate], "2026-08"), [])
 
 
+
+class TestIssueKeyedRows(unittest.TestCase):
+    """ADR-0084: a run with no work order is keyed by its issue, #<n>.
+    The grammar widens by exactly that shape; every other non-WO value
+    keeps its old verdict and its old problem string."""
+
+    ROW = entry("#12", "conductor-b1-#12-spec-1", "m", 10, 0.75,
+                "completed", "2026-08-04")
+
+    def test_an_issue_key_is_admitted(self):
+        self.assertEqual(cost_ledger.line_problems(self.ROW), [])
+
+    def test_every_other_non_work_order_value_is_still_refused(self):
+        for value in ("#0", "#", "12", "#12a", "#012"):
+            record = dict(self.ROW, wo=value)
+            self.assertEqual(cost_ledger.line_problems(record),
+                             [f"wo {value!r} is not a WO-#### token"],
+                             value)
+
+    def test_an_issue_keyed_row_has_no_work_order_token(self):
+        self.assertIsNone(cost_ledger.wo_token(self.ROW))
+
+    def test_an_issue_keyed_row_is_spend(self):
+        self.assertEqual(cost_ledger.dispatched([self.ROW], "2026-08"),
+                         [self.ROW])
+
+    def test_the_breaker_counts_an_issue_keyed_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / cost_ledger.COST_LEDGER
+            ledger.parent.mkdir(parents=True)
+            ledger.write_text(json.dumps(self.ROW) + "\n", encoding="utf-8")
+            self.assertEqual(
+                work_queue.month_to_date(
+                    Path(tmp), datetime(2026, 8, 6, tzinfo=timezone.utc)),
+                (0.75, []))
+
+
 if __name__ == "__main__":
     unittest.main()

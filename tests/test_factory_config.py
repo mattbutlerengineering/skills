@@ -259,6 +259,57 @@ class TestResolveModel(unittest.TestCase):
             (None, ["config: factory.json has no routing table"]))
 
 
+
+class TestResolveEffort(unittest.TestCase):
+    """band -> effort through factory.json's effort table, beside routing
+    and fail-closed in resolve_model's shape (PRD-0013, architecture's
+    Policy component)."""
+
+    def test_each_band_resolves_to_its_shipped_effort(self):
+        for band, effort in (("mechanical", "low"),
+                             ("implementation", "medium"),
+                             ("architecture_review", "high")):
+            self.assertEqual(factory_config.resolve_effort(band, CONFIG),
+                             (effort, []), band)
+
+    def test_a_band_the_table_does_not_cover_is_a_problem(self):
+        self.assertEqual(
+            factory_config.resolve_effort("mechanical", {"effort": {}}),
+            (None, ["config: factory.json names no effort for the"
+                    " mechanical band"]))
+
+    def test_an_effort_outside_the_vocabulary_is_a_problem(self):
+        self.assertEqual(
+            factory_config.resolve_effort(
+                "mechanical", {"effort": {"mechanical": "extreme"}}),
+            (None, ["config: factory.json names no effort for the"
+                    " mechanical band"]))
+
+    def test_a_config_without_an_effort_table_is_a_problem(self):
+        self.assertEqual(
+            factory_config.resolve_effort("implementation", {}),
+            (None, ["config: factory.json has no effort table"]))
+
+
+class TestEffortProblems(unittest.TestCase):
+    def test_an_effort_outside_the_vocabulary_is_flagged(self):
+        config = dict(CONFIG, effort=dict(CONFIG["effort"],
+                                          mechanical="extreme"))
+        self.assertEqual(factory_config.config_problems(config), [
+            "effort.mechanical must be one of low, medium, high, xhigh,"
+            " max"])
+
+    def test_every_vocabulary_value_is_clean(self):
+        for value in ("low", "medium", "high", "xhigh", "max"):
+            config = dict(CONFIG, effort={"mechanical": value})
+            self.assertEqual(factory_config.config_problems(config), [],
+                             value)
+
+    def test_an_absent_effort_table_is_silent(self):
+        config = {key: value for key, value in CONFIG.items()
+                  if key != "effort"}
+        self.assertEqual(factory_config.config_problems(config), [])
+
 class TestResolveBudget(unittest.TestCase):
     def test_each_size_resolves_to_its_dollar_ceiling(self):
         for size, dollars in (("S", 5), ("M", 15), ("L", 40)):

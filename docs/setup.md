@@ -192,16 +192,17 @@ supported; run discovery would not find them.
 - [ ] Run slugs carry the package prefix
 - [ ] Package-specific rules live in nested `CLAUDE.md` files
 
-## An orchestrator (planned)
+## The Conductor (batches of issues)
 
 Coordinating several issues at once — fanning out agents, choosing a
-model and context budget per item, ordering merges — is not a skill yet.
-It is an Idea-stage run (`docs/features/orchestrator/idea.md`, survey in
-`docs/research/orchestrator.md`). Until it lands, `work-queue` fans out
-ready work orders, `autorun` drives one run end to end, and a long
-interactive session coordinates the rest. One step needs no orchestrator:
-turn on the merge queue ADR-0070 already chose, if the repo's plan allows
-it.
+model and effort per step, ordering merges — is the `conduct` utility
+skill and its root tool `conductor.py` (PRD-0013,
+`docs/features/orchestrator/`). The tool is root-only, so the skill runs
+in this repository, not in a stamped product repo. `work-queue` still
+fans out ready work orders through one stage, and `autorun` still drives
+one run end to end. One step needs no Conductor: turn on the merge queue
+ADR-0070 already chose, if the repo's plan allows it; the merge turn uses
+it when present.
 
 ## Deliberately not in scope
 

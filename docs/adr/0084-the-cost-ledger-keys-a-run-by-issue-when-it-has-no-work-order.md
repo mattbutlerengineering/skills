@@ -1,12 +1,12 @@
 # The cost ledger keys a run by its issue when it has no work order
 
-- Status: provisional
+- Status: accepted (Owner, 2026-10-11)
 - Date: 2026-10-10
 
 Amends ADR-0034's ledger `wo` field. The field set, the append-only rule,
 the monthly circuit breaker and ADR-0041's gate rows all stand. Written
-unattended by an autorun Architect stage (PRD-0013), so the status is
-provisional until the Owner confirms it.
+unattended by an autorun Architect stage (PRD-0013); the Owner accepted it
+on 2026-10-11.
 
 ADR-0034 fixed one spend ledger, `docs/factory/costs.jsonl`, with fields
 `{wo, run_id, model, tokens, cost, outcome}` plus `at`.

@@ -7,6 +7,7 @@ its public interface against a temp fixture tree, and tests assert the
 exact problem strings callers will print.
 """
 import hashlib
+import io
 import json
 import os
 import sys
@@ -483,6 +484,26 @@ class TestCostLedger(unittest.TestCase):
                 " row",
                 "G: docs/features/demo/breakdown.md:1 merged work order"
                 " WO-0001 has no line in docs/factory/costs.jsonl"])
+
+    def test_an_issue_keyed_row_passes(self):
+        """ADR-0084: a run with no work order is keyed by its issue. It
+        has no breakdown row to cross-check, and needs none."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                cost_ledger.entry("#12", "r-2", "m", 10, 0.5, "completed",
+                                  "2026-08-01"))
+            self.assertEqual(gates.check_cost_ledger(tree.root), [])
+
+    def test_a_bare_number_is_still_flagged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, self.LINE,
+                cost_ledger.entry("12", "r-2", "m", 10, 0.5, "completed",
+                                  "2026-08-01"))
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/factory/costs.jsonl:2 wo '12' is not a WO-####"
+                " token"])
 
     def test_untyped_wo_field_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1541,7 +1562,9 @@ class TestConfigShape(unittest.TestCase):
                 f"F: {rel} routing must map exactly mechanical,"
                 " implementation, architecture_review",
                 f"F: {rel} wip_cap must be a positive integer",
-                f"F: {rel} monthly_cap_usd must be a positive number"])
+                f"F: {rel} monthly_cap_usd must be a positive number",
+                f"F: {rel} effort.mechanical must be one of low, medium,"
+                " high, xhigh, max"])
 
     def test_a_config_that_is_not_an_object_is_one_problem(self):
         """F parses the file itself rather than going through
@@ -2999,6 +3022,17 @@ class TestMainSummary(cli_contract.ReportContract, unittest.TestCase):
 class TestSelftest(unittest.TestCase):
     def test_selftest_passes(self):
         self.assertEqual(gates.selftest(), 0)
+
+    def test_selftest_fails_when_f_misses_the_planted_effort(self):
+        """The F fixture plants a bad effort value; an F that stopped
+        reporting it must turn the selftest red."""
+        real = gates.check_config_shape
+
+        def blind(root):
+            return [p for p in real(root) if "effort" not in p]
+        with mock.patch.object(gates, "check_config_shape", blind), \
+                mock.patch("sys.stdout", new_callable=io.StringIO):
+            self.assertEqual(gates.selftest(), 1)
 
 
 if __name__ == "__main__":
