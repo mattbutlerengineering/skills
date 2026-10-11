@@ -102,3 +102,4 @@ the canonical vocabulary.
 | [0079](0079-a-utility-skill-may-own-a-project-reference-file.md) | A utility skill may own a project reference file, by section | provisional |
 | [0080](0080-accepted-means-a-dispatched-order-whose-mirror-merged.md) | Accepted means a dispatched order whose mirror merged | accepted |
 | [0081](0081-plugin-eval-is-an-on-demand-harness.md) | `claude plugin eval` is an on-demand harness with its own tree | accepted |
+| [0082](0082-the-pipeline-writes-adrs-at-its-stages.md) | The pipeline writes ADRs at its stages, by one test | accepted |

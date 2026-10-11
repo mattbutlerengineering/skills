@@ -28,6 +28,9 @@ arbitrate severity.
      hunch, not a finding.
    - **Design** — does the code match `architecture.md`'s contracts and the
      codebase's existing patterns? Undocumented deviations are findings.
+     So is a decision in the diff or the run's artifacts that passes the
+     protocol's "When to write an ADR" test with no ADR, and an edit to an
+     existing ADR's Decision section where a superseding ADR was owed.
    - **Security** — inputs validated at boundaries, no secrets in code,
      injection surfaces parameterized, errors don't leak internals.
    - **Complexity** — apply `lean`'s cut-list in

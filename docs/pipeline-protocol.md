@@ -244,6 +244,43 @@ date: 2026-07-01
 ---
 ```
 
+## When to write an ADR
+
+The pipeline writes ADRs as it goes (ADR-0082) — not on request. One test
+decides, and every leg must hold: the decision is **hard to reverse**,
+**surprising without context**, and **the result of a real trade-off**. A
+decision that fails any leg gets the one-line record in the run's own
+artifact (`architecture.md`'s decisions section, or the breakdown's Notes)
+and no ADR.
+
+- Write one: choosing event sourcing over CRUD tables for orders; a public
+  API versioned in the URL rather than a header; keeping the app on one
+  database when the PRD hinted at a split; dropping a supported runtime.
+- Don't: picking the codebase's existing test framework; naming a module;
+  a library swap behind an interface you own; anything the code makes
+  obvious on first read.
+
+Architect writes one for each design decision that passes; Implement writes
+one when a deviation from `architecture.md` passes; Review flags a passing
+decision with no ADR; Ship confirms the numbers before release.
+
+**Where.** The target repo's `docs/adr/`, as `NNNN-slug.md` with an index
+row in `docs/adr/README.md`. The shape is the repo's `docs/adr/TEMPLATE.md`
+(the factory stamp seeds it), else this plugin's
+`factory/templates/docs/adr/TEMPLATE.md`; with no `docs/adr/` yet, the first
+ADR creates the directory and its index. An ADR written without live user
+confirmation (an autorun stage, an assumption-logged default) carries
+status `provisional`.
+
+**Never rewrite.** A changed decision gets a new ADR that supersedes or
+amends the old one, and the old one's status line says so; the old
+Decision section stays as written.
+
+**Numbering.** A draft takes the next free number on its branch, which is
+provisional: parallel branches pick the same one. At merge time the number
+is confirmed against the base branch, and on a collision the later ADR
+renumbers — file name, index row, and every in-repo citation together.
+
 ## Pull request body
 
 A pull request body tells the reviewer at the merge gate (ADR-0033 gate 3)

@@ -26,6 +26,9 @@ branch.
    - No secrets in the diff; required configuration exists in the target
      environment.
    - Migrations/data changes have a tested forward path.
+   - Each ADR the run added has a number free on the base branch and a
+     row in `docs/adr/README.md`'s index; a collision renumbers per the
+     protocol's "When to write an ADR" numbering rule.
    - The rollback plan exists and is concrete: the actual commands or steps
      to undo this release, not "revert if needed". Beside the steps it
      records the door (one-way or two-way) and the blast radius in the
