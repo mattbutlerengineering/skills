@@ -669,5 +669,25 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         self.assertIn(self.usage_fragment, out)
 
 
+# --- autorun's stop-after line (WO-0159) -------------------------------
+
+class TestAutorunHonoursStopAfter(unittest.TestCase):
+    """A spec Worker drives a run with autorun up to a gate and stops
+    there. The skill prose is the runtime interface (it ships in the
+    plugin), so the contract the spec step relies on is pinned here."""
+
+    def text(self):
+        path = Path(__file__).resolve().parents[1] / "skills" / "autorun" \
+            / "SKILL.md"
+        return " ".join(path.read_text(encoding="utf-8").split())
+
+    def test_a_stop_after_line_stops_autorun_at_that_stage(self):
+        text = self.text()
+        self.assertIn("`stop-after: <stage>` line in `autorun-brief.md`",
+                      text)
+        self.assertIn("stop once that stage's artifact or recorded skip"
+                      " exists, without starting the next stage", text)
+
+
 if __name__ == "__main__":
     unittest.main()
