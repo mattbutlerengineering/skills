@@ -188,14 +188,21 @@ class TestBrief(unittest.TestCase):
 class TestCompletedRun(RunCase):
     def test_a_completed_build_writes_one_run_row_and_one_spend_row(self):
         path = "docs/features/x/breakdown.md"
-        git = Git(self.tmp.name, changed=f"{path}\n", shows={
-            f"conductor/b1-13:{path}": "- [x] **WO-0170** a\n"
-                                       "- [ ] **WO-0171** b\n"})
+        shows = {f"conductor/b1-13:{path}": "- [x] **WO-0170** a\n"
+                                            "- [ ] **WO-0171** b\n"}
+        git = Git(self.tmp.name, changed=f"{path}\n", shows=shows)
+
+        def work(cwd):
+            # The Worker checks its row off and commits it.
+            pr_body(cwd)
+            shows[f"conductor/b1-13:{path}"] = ("- [x] **WO-0170** a\n"
+                                                "- [x] **WO-0171** b\n")
         rows = BASE + [launch("#13", "planned", "spec"), ran("#13", "spec")]
         summary, problems = self.run_step("#13", "build",
-                                          Harness(act=pr_body), git=git,
+                                          Harness(act=work), git=git,
                                           rows=rows)
         self.assertEqual(problems, [])
+        self.assertIsNone(summary["stall"])
         rid = "conductor-b1-13-build-1"
         self.assertEqual(self.rows[-2], {
             "at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#13",
@@ -213,6 +220,25 @@ class TestCompletedRun(RunCase):
         kept = self.root / "docs/factory/batches/b1/runs" / f"{rid}.json"
         self.assertEqual(json.loads(kept.read_text()), RESULT)
         self.assertEqual(summary["outcome"], "completed")
+
+    def test_a_build_that_leaves_its_row_unchecked_stalls(self):
+        # Review finding: a completed build run that checked nothing off
+        # left the row unchecked, so `next` offered build again, forever,
+        # each run spending up to its ceiling with no new consent.
+        path = "docs/features/x/breakdown.md"
+        git = Git(self.tmp.name, changed=f"{path}\n", shows={
+            f"conductor/b1-13:{path}": "- [ ] **WO-0171** b\n"})
+        rows = BASE + [launch("#13", "planned", "spec"), ran("#13", "spec")]
+        summary, problems = self.run_step("#13", "build",
+                                          Harness(act=pr_body), git=git,
+                                          rows=rows)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"],
+                         "the build run completed but left WO-0171"
+                         " unchecked")
+        self.assertEqual([r["kind"] for r in self.rows[-3:]],
+                         ["run", "state", "ask"])
+        self.assertEqual(self.rows[-1]["ask_kind"], "stall")
 
     def test_the_harness_runs_bound_by_policy_in_the_item_worktree(self):
         self.run_step("#12", "spec", Harness(act=pr_body))

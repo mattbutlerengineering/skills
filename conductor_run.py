@@ -282,6 +282,19 @@ def _verdict(git, worktree, branch):
     return None
 
 
+def _left_unchecked(git, branch, briefed, wo):
+    """A stall reason when a completed build run left the breakdown row
+    it was briefed with unchecked on the branch, else None: without it,
+    `next` would offer the same build again, every run spending up to
+    its ceiling (stall rule 1, a completed run without its output)."""
+    pending, problems = flow.unchecked_rows(git, branch)
+    if problems:
+        return problems[0][len("cd: "):]
+    if briefed in pending:
+        return f"the build run completed but left {wo} unchecked"
+    return None
+
+
 def _prepare(root, batch, item, step, git, gh):
     """(context dict, problems): everything decided before launch."""
     rows, problems = load(root, batch)
@@ -303,13 +316,17 @@ def _prepare(root, batch, item, step, git, gh):
                                         worktree)
     if problems:
         return None, problems
+    # The breakdown row a feature or fix build is briefed with: its
+    # expected output is that row checked off on the branch.
+    briefed = context.split("\n", 1)[0] if step == "build" \
+        and entry["type"] != "order" else None
     seq = 1 + sum(1 for r in rows if r["kind"] == "state" and r["item"]
                   == item and r["to"] == step and "run_id" in r)
     block = {r["what"]: r["values"] for r in rows
              if r["kind"] == "reserve" and r["item"] == item}
     return {"rows": rows, "plan": plan, "entry": entry, "wo": wo,
             "context": context, "body": body, "worktree": worktree,
-            "block": block,
+            "block": block, "briefed": briefed,
             "run_id": f"conductor-{batch}-{item[1:]}-{step}-{seq}"}, []
 
 
@@ -348,6 +365,8 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
         stall = "the run completed but left no pr-body.md"
     failed = failed or _deliver(git, gh, worktree, branch, item, batch)
     stall = stall or failed
+    if stall is None and ctx["briefed"] is not None:
+        stall = _left_unchecked(git, branch, ctx["briefed"], ctx["wo"])
     charter = next(s["charter"] for s in entry["steps"]
                    if s["step"] == step)
     _, problems = append(root, batch, lambda rows: ({
