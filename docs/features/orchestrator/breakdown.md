@@ -453,3 +453,16 @@ and every existing seam it names exists on main (`cli.harness_run`,
   branch (#670, #673, #675) on 2026-10-11. An uncommitted 0085 draft in
   the stale worktree that architecture.md's last assumption names is
   not on any branch.
+- 2026-10-11 (Implement, re-review R1): a merge turn that starts from
+  `ship` now also stalls, recommending `block`, when `git status
+  --porcelain --untracked-files=all` in the item worktree is non-empty,
+  checked with the reviewed-tree diff and before any Conductor commit.
+  The tree diff sees committed trees only, so a file a Worker left
+  uncommitted would otherwise have been swept in by the Conductor's own
+  `git add -A -- factory` commits. Those commits now stage by name only
+  the files the Conductor writes: `factory/manifest.json`,
+  `.claude-plugin/plugin.json` on a version bump, and the payload
+  mirrors under `factory/templates/` that `update-manifest` refreshes
+  (`factory_init.MIRRORS`). Either half alone closes the reproduced
+  route; both are kept, because the second also holds on a resumed
+  turn, which skips the first.

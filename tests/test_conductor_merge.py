@@ -463,6 +463,30 @@ class TestMergeTurn(TurnCase):
                             "manifest.json"), '{"files": "regenerated"}\n')
 
 
+class TestConductorCommits(TurnCase):
+    """The Conductor's own commits stage only the files it wrote, never
+    a stray file left in the worktree (re-review R1)."""
+
+    def test_the_version_bump_commits_only_what_it_regenerated(self):
+        self.item({"skills/x/SKILL.md": "x\n"})
+        write(self.wt, {"factory/templates/stray.yml": "x: 1\n"})
+        self.assertEqual(merge.bump_version(self.git, self.tool(), self.wt,
+                                            BRANCH), "0.7.4")
+        self.assertEqual(sh(self.repo, "show", "--name-only", "--format=",
+                            BRANCH).split(),
+                         [".claude-plugin/plugin.json",
+                          "factory/manifest.json"])
+
+    def test_a_manifest_conflict_commits_only_what_it_regenerated(self):
+        self.item({"factory/manifest.json": '{"files": "item"}\n'})
+        self.main_moves({"factory/manifest.json": '{"files": "main"}\n'})
+        write(self.wt, {"factory/templates/stray.yml": "x: 1\n"})
+        merge.update_branch(self.git, self.tool(), self.wt, BRANCH)
+        self.assertNotIn("factory/templates/stray.yml", sh(
+            self.repo, "ls-tree", "-r", "--name-only", BRANCH))
+        self.assertTrue((self.wt / "factory/templates/stray.yml").is_file())
+
+
 class TestReviewedTree(TurnCase):
     """Merged code is reviewed code: after the review run's launch head,
     only the review and ship steps' artifacts may change."""
@@ -496,6 +520,29 @@ class TestReviewedTree(TurnCase):
         self.assertFalse(self.calls("git", "fetch"))
         self.assertFalse(self.calls("git", "push"))
         self.assertFalse([r for r in self.rows if r.get("to") == "merging"])
+
+    def test_a_file_a_worker_left_uncommitted_stalls_the_merge(self):
+        # Re-review R1: the ship Worker leaves an untracked template
+        # behind; no commit carries it, so the tree diff cannot see it.
+        self.item({"skills/x/SKILL.md": "x\n"})
+        reviewed_at = self.head()
+        self.item({"docs/features/x/release.md": "notes\n"})
+        write(self.wt, {"factory/templates/unreviewed.yml": "x: 1\n"})
+        summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
+        self.assertEqual(problems, [])
+        reason = ("#12's worktree holds changes no commit carries:"
+                  " factory/templates/unreviewed.yml; merged code must be"
+                  " reviewed code, so it needs a re-review")
+        self.assertEqual(summary["stall"], reason)
+        self.assertEqual((self.rows[-2]["from"], self.rows[-2]["to"],
+                          self.rows[-2]["reason"]),
+                         ("ship", "stalled", reason))
+        self.assertEqual(self.rows[-1]["recommended"], "block")
+        self.assertFalse(self.calls("git", "fetch"))
+        self.assertFalse(self.calls("tool", "update-manifest"))
+        for ref in (BRANCH, "origin/" + BRANCH):
+            self.assertNotIn("factory/templates/unreviewed.yml", sh(
+                self.repo, "ls-tree", "-r", "--name-only", ref))
 
     def test_a_resumed_merge_turn_keeps_its_own_commits(self):
         # The first turn checked the tree before it merged main in; a

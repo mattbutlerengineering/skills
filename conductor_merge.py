@@ -28,6 +28,7 @@ from pathlib import Path
 import conductor_flow as flow
 import conductor_plan
 import conductor_run
+from factory_init import MIRRORS
 from cli import CLI_FAILURES, detail, gh_read, runner
 from conductor import BLOCK, answers, append, current_state, is_text, \
     load, stamp
@@ -191,6 +192,16 @@ def _regenerate(tool, worktree):
         raise Stall(f"regenerating the manifest failed: {detail(err)}")
 
 
+def _written(worktree, *paths):
+    """The files the Conductor writes: `paths`, plus every payload
+    mirror update-manifest refreshes. Staged by name, never with -A, so
+    a file a Worker left behind is never swept into a Conductor commit
+    (re-review R1)."""
+    mirrors = [f"factory/templates/{rel}" for _, rel, _ in MIRRORS]
+    return [path for path in [*paths, *mirrors]
+            if (worktree / path).is_file()]
+
+
 def update_branch(git, tool, worktree, branch):
     """Steps 1-2: merge origin/main into the item branch. costs.jsonl
     merges by union (.gitattributes); a conflict in the manifest alone
@@ -212,7 +223,7 @@ def update_branch(git, tool, worktree, branch):
                     else f"merging origin/main into {branch} failed:"
                     f" {failure}")
     _regenerate(tool, worktree)
-    _git(git, worktree, ["add", "-A", "--", "factory"],
+    _git(git, worktree, ["add", "--", *_written(worktree, MANIFEST)],
          "staging the regenerated manifest")
     _git(git, worktree, ["commit", "--no-edit"],
          "committing the merge of origin/main")
@@ -247,7 +258,8 @@ def bump_version(git, tool, worktree, branch):
         return None
     path.write_text(bumped, encoding="utf-8")
     _regenerate(tool, worktree)
-    _git(git, worktree, ["add", "-A", "--", PLUGIN, "factory"],
+    _git(git, worktree, ["add", "--",
+                         *_written(worktree, PLUGIN, MANIFEST)],
          "staging the version bump")
     _git(git, worktree, ["commit", "-m",
                          f"chore(release): plugin version {version}"],
@@ -545,15 +557,26 @@ def _turn(root, batch, item, ports, worktree):
     return {"pr": pr, "sha": sha, "checks": checks}, []
 
 
-def _drift(rows, item, git, branch):
+def _drift(rows, item, git, branch, worktree):
     """(stall reason or None, problems): the reviewed-tree check, run on
     a turn that starts from `ship`, before the Conductor's own commits.
     A turn resumed from a stalled merge skips it: the state machine runs
     no Worker between a `merging` stall and its resumed turn, and the
     first turn already checked. A tree diff, so rewritten history is
-    caught as well as new commits."""
+    caught as well as new commits; and a clean worktree, so nothing a
+    Worker left uncommitted can reach a Conductor commit (re-review R1)."""
     if current_state(rows, item) != "ship":
         return None, []
+    try:
+        status = git(["-C", str(worktree), "status", "--porcelain",
+                      "--untracked-files=all"]).stdout
+    except CLI_FAILURES as err:
+        return None, [f"cd: git status in {worktree} failed: {detail(err)}"]
+    dirty = sorted(line[3:] for line in status.splitlines() if line)
+    if dirty:
+        return (f"{item}'s worktree holds changes no commit carries:"
+                f" {', '.join(dirty)}; merged code must be reviewed code,"
+                " so it needs a re-review"), []
     head = [row for row in rows if row["kind"] == "state"
             and row["item"] == item
             and row["to"] == "reviewed"][-1]["reviewed_head"]
@@ -579,18 +602,19 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None):
     problems = merge_problems(rows, item, blobs)
     if problems:
         return None, problems
-    drift, problems = _drift(rows, item, git, flow.item_branch(batch, item))
+    worktree, problems = conductor_run.worktree_path(git, batch, item)
+    if not problems and not worktree.is_dir():
+        problems = [f"cd: no item worktree at {worktree}"]
+    if problems:
+        return None, problems
+    drift, problems = _drift(rows, item, git, flow.item_branch(batch, item),
+                             worktree)
     if problems:
         return None, problems
     if drift is not None:
         _, problems = flow.queue_stall(root, batch, clock(), item, drift,
                                        BLOCK, DRIFT_WHY)
         return {"item": item, "stall": drift}, problems
-    worktree, problems = conductor_run.worktree_path(git, batch, item)
-    if not problems and not worktree.is_dir():
-        problems = [f"cd: no item worktree at {worktree}"]
-    if problems:
-        return None, problems
     # The turn's pid lets `next` stall a turn that died mid-way.
     _, problems = flow.move(root, batch, clock(), item, "merging",
                             "merge turn",
