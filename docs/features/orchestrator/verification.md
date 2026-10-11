@@ -271,3 +271,9 @@ spend consent. They do not route back to Implement.
   makes it the likely place for a stall.
 - **`--help`** prints usage and exits 2, the unknown-verb path. That is
   harmless, but no `--help` verb exists.
+- **Post-review fixes (2026-10-11).** The review majors 1–3 fixes
+  (review.md, "Post-review fixes") are verified only offline, by tests
+  that failed first and a `make check` run under the Worker's scrubbed
+  environment (rc 0). No real Worker has run under that environment.
+  The "no push, no gh" boundary is enforced against a confused Worker
+  only; against a hostile one it remains trust-based.

@@ -283,3 +283,73 @@ The last two touch consent and authority, which this PRD exists to
 protect. Separately, the real-batch success criteria are still NOT RUN,
 pending the Owner's spend consent (verification.md). The ten minors are
 deferred with reasons above.
+
+## Post-review fixes (2026-10-11)
+
+The Owner answered the fix-or-defer question through the orchestrator:
+fix majors 1–3 test-first, and write major 4 up as a provisional ADR
+for the Owner to accept or reject. An Implement pass did both. Each fix
+began with a new test that was seen to fail. Each landed as its own
+commit, with decisions logged in breakdown.md's Notes (2026-10-11).
+
+- **Major: nothing ties the merged tree to the reviewed tree. Fixed in
+  d75e6e2.**
+  - What is enforced: the review run's runner reads the item branch
+    head before the review Worker starts. The `reviewed` row records it
+    as `reviewed_head`, and the merge refuses a reviewed row without
+    one. A merge turn that starts from `ship` diffs that head's tree
+    against the branch before any Conductor commit. It stalls,
+    recommending `block`, when any path changed except the run's
+    `review.md`, `release.md` or `costs.jsonl`. This covers both a ship
+    Worker's commits and a review Worker's own changes. It is a tree
+    diff, so rewritten history is caught too. A turn resumed from a
+    `merging` stall skips the check, because no Worker runs between
+    that stall and the resumed turn.
+  - What is still trust-based: a change made in the worktree by
+    something other than a Worker step, between the check and the push.
+- **Major: build spend is not re-priced or capped. Fixed in d6391ab.**
+  - What is enforced: the gate ask names the build's price (unchecked
+    rows × the build ceiling, with the item re-priced) and records it
+    as `build_usd`, so the gate answer is the build's spend consent.
+    Every `run` checks this month's spend under the ledger lock before
+    it launches. That spend is origin/main's rows plus every launched
+    item branch's, each row counted once, plus in-flight ceilings and
+    its own ceiling. If the total would pass `monthly_cap_usd`, nothing
+    launches, and dispatch pauses behind a batch-level `spend` ask.
+  - The shape differs from the architecture: the price is rows ×
+    ceiling, not `size:` bands. Architecture amendments 10 and 11
+    record this.
+  - Gaps that remain: a fix that skips the gate gets no re-pricing ask
+    (the cap still bounds it), and the review's one automatic fix build
+    is not re-asked.
+- **Major: the tool list does not enforce "no push, no gh". Fixed in
+  aa0f612.**
+  - What is enforced: `Bash(make *)` is now `Bash(make check)`. The
+    Worker's environment loses every `GH_*`, GitHub token, askpass and
+    inherited `GIT_CONFIG_*` or `GIT_SSH*` variable.
+    - `GH_CONFIG_DIR` points at an empty temporary directory, so gh
+      reports "not logged into any GitHub hosts", the keychain token
+      included.
+    - `GIT_SSH_COMMAND=false` stops any ssh push.
+    - Env git config rewrites any http(s) push URL to an impossible
+      path and resets the credential helper.
+    - The tests assert the env handed to the harness and run real git
+      pushes against it. `make check` passes under that env (rc 0).
+  - What is still trust-based: a hostile Worker can restore any of this
+    from `python3`, read the keychain or an unencrypted ssh key, or call
+    the GitHub API with a token it finds. The environment stops a
+    confused Worker, not a hostile one, the same caveat as
+    `CONDUCTOR_WORKER`.
+- **Major: ADR-0036 condition 3 is reinterpreted with no amending ADR.
+  Drafted as ADR-0085 in fe57137.** It is provisional, and ADR-0036's
+  status is untouched. The Owner's acceptance (amend ADR-0036's status
+  line) or rejection (drop the train branch) is still owed before Ship.
+
+Gates after the four commits: `python3 -m unittest discover tests`
+`Ran 2336 tests`, `OK`; `python3 lint.py` `lint: 0 problem(s) across 32
+skills`; `python3 gates.py` `gates: 0 problem(s)`; `python3 gates.py
+--selftest` `selftest: ok`.
+
+The verdict above still stands for what is not fixed: the ADR-0085
+decision is the Owner's, the ten minors stay deferred, and the
+real-batch criteria are NOT RUN.
