@@ -7,7 +7,8 @@ functions with every input passed in, a thin main, cd:-prefixed problem
 strings, cli.report for the exit. Root-only: not mirrored into the
 factory payload (architecture.md). Capabilities that would push this
 file past the 800-line ceiling live in sibling modules that import its
-row grammar (breakdown assumption 6): conductor_plan (plan, open).
+row grammar (breakdown assumption 6): conductor_plan (plan, open) and
+conductor_flow (the item state machine and the stall rule in next).
 
   python3 conductor.py plan <#N>...
         Price and order a batch of issues and show each item's reserved
@@ -17,7 +18,9 @@ row grammar (breakdown assumption 6): conductor_plan (plan, open).
         origin/main, write the plan and reserve rows, and queue the spend
         ask.
   python3 conductor.py next <batch>
-        The oldest unanswered ask, as JSON ({"ask": row or null}).
+        Record any new stall and gate asks, then print as JSON the oldest
+        unanswered ask, the steps ready to launch under wip_cap, and the
+        ids of the asks just recorded ({"ask", "ready", "recorded"}).
   python3 conductor.py ask <batch> --kind K --question Q --option O
                            [--option O ...] --recommended O --why W
                            [--item #N] [--covers #N ...]
@@ -60,7 +63,7 @@ ROW_FIELDS = {
     "reserve": (("what", "values"), ("renumbered_from",)),
     "state": (("from", "to", "reason"),
               ("verdict", "author_runs", "reviewer_run", "pr", "sha",
-               "checks")),
+               "checks", "run_id", "pid")),
     "run": (("step", "charter", "band", "model", "models_reported",
              "effort", "run_id", "pid", "outcome"), ()),
     "ask": (("id", "ask_kind", "question", "options", "recommended",
@@ -73,6 +76,10 @@ COMMON_FIELDS = ("at", "kind", "item")
 STATE_FIELDS = {"reviewed": ("author_runs", "reviewer_run", "verdict"),
                 "merged": ("checks", "pr", "sha")}
 ASK_KINDS = ("spend", "gate", "merge", "stall", "clarify")
+TERMINAL = ("merged", "blocked")
+# An answer with this choice blocks the ask's item (Owner, 2026-10-10):
+# the one path into `blocked`.
+BLOCK = "block"
 
 
 def is_text(value):
@@ -219,8 +226,9 @@ def append(root, batch, build):
     """(row, problems): build the next row from the ledger's current rows
     and append it, holding an exclusive lock across the read and the
     write so concurrent runners serialise. build(rows) returns (row,
-    problems); a row that breaks the grammar is refused, and nothing is
-    written on any problem. Never creates a ledger: `open` does."""
+    problems), where row may be a list of rows written together under
+    the one lock; a row that breaks the grammar is refused, and nothing
+    is written on any problem. Never creates a ledger: `open` does."""
     path, shown, problems = _ledger(root, batch)
     if problems:
         return None, problems
@@ -234,7 +242,9 @@ def append(root, batch, build):
             if problems:
                 return None, problems
             handle.seek(0, os.SEEK_END)
-            handle.write(json.dumps(row) + "\n")
+            written = row if isinstance(row, list) else [row]
+            handle.write("".join(json.dumps(one) + "\n"
+                                 for one in written))
             return row, []
     except OSError as err:
         return None, [f"cd: cannot write {shown}: {err}"]
@@ -244,34 +254,51 @@ def stamp(now):
     return now.astimezone(timezone.utc).strftime(AT_FORMAT)
 
 
-def _answers(rows):
+def answers(rows):
+    """{ask id: its answer row}."""
     return {row["ask"]: row for row in rows if row["kind"] == "answer"}
+
+
+def current_state(rows, item):
+    """The item's state: its last state row's `to`, else `planned`."""
+    states = [row for row in rows
+              if row["kind"] == "state" and row["item"] == item]
+    return states[-1]["to"] if states else "planned"
 
 
 def next_ask(rows):
     """The oldest unanswered ask row, or None: the decision queue shows
     one question at a time."""
-    answered = _answers(rows)
+    answered = answers(rows)
     return next((row for row in rows
                  if row["kind"] == "ask" and row["id"] not in answered),
                 None)
 
 
+def ask_row(rows, now, item, ask_kind, question, options, recommended,
+            why, covers=None, gate_blobs=None):
+    """(row, problems): an ask row with a fresh id (ask-<n>, one past the
+    ask count of `rows`, which include any rows about to be written with
+    it), checked against the grammar."""
+    count = sum(1 for row in rows if row["kind"] == "ask")
+    row = {"at": stamp(now), "kind": "ask", "item": item,
+           "id": f"ask-{count + 1}", "ask_kind": ask_kind,
+           "question": question, "options": list(options),
+           "recommended": recommended, "why": why}
+    if covers:
+        row["covers"] = list(covers)
+    if gate_blobs is not None:
+        row["gate_blobs"] = dict(gate_blobs)
+    return row, [f"cd: ask refused: {problem}"
+                 for problem in row_problems(row)]
+
+
 def ask(root, batch, now, item, ask_kind, question, options, recommended,
         why, covers=None):
-    """(row, problems): append an ask row with a fresh id (ask-<n>, one
-    past the batch's ask count)."""
-    def build(rows):
-        count = sum(1 for row in rows if row["kind"] == "ask")
-        row = {"at": stamp(now), "kind": "ask", "item": item,
-               "id": f"ask-{count + 1}", "ask_kind": ask_kind,
-               "question": question, "options": list(options),
-               "recommended": recommended, "why": why}
-        if covers:
-            row["covers"] = list(covers)
-        return row, [f"cd: ask refused: {problem}"
-                     for problem in row_problems(row)]
-    return append(root, batch, build)
+    """(row, problems): append an ask row with a fresh id."""
+    return append(root, batch, lambda rows: ask_row(
+        rows, now, item, ask_kind, question, options, recommended, why,
+        covers=covers))
 
 
 def answer(root, batch, now, ask_id, choice, note, env):
@@ -279,7 +306,9 @@ def answer(root, batch, now, ask_id, choice, note, env):
     an unknown ask, an answered ask, a choice outside its options, and
     any call made with CONDUCTOR_WORKER set. That flag stops a confused
     Worker, not a hostile one; the trigger to harden it is an answer row
-    whose timing matches no Owner turn."""
+    whose timing matches no Owner turn. A `block` answer to an item's
+    ask also writes the item's `blocked` state row under the same lock:
+    the only way into `blocked`."""
     if env.get(WORKER_ENV):
         return None, [f"cd: answer refused: {WORKER_ENV} is set, and a"
                       " Worker never answers an ask"]
@@ -289,16 +318,27 @@ def answer(root, batch, now, ask_id, choice, note, env):
                       and row["id"] == ask_id), None)
         if asked is None:
             return None, [f"cd: no ask {ask_id} in this batch"]
-        given = _answers(rows).get(ask_id)
+        given = answers(rows).get(ask_id)
         if given is not None:
             return None, [f"cd: ask {ask_id} is already answered"
                           f" ({given['choice']!r})"]
         if choice not in asked["options"]:
             return None, [f"cd: {choice!r} is not an option of ask"
                           f" {ask_id} ({', '.join(asked['options'])})"]
-        return {"at": stamp(now), "kind": "answer", "item": asked["item"],
-                "ask": ask_id, "choice": choice, "note": note}, []
-    return append(root, batch, build)
+        row = {"at": stamp(now), "kind": "answer", "item": asked["item"],
+               "ask": ask_id, "choice": choice, "note": note}
+        state = current_state(rows, asked["item"])
+        if choice != BLOCK or asked["item"] is None or state in TERMINAL:
+            return row, []
+        reason = f"answer to {ask_id}: {BLOCK}" + (f" ({note})" if note
+                                                    else "")
+        return [row, {"at": row["at"], "kind": "state",
+                      "item": asked["item"], "from": state,
+                      "to": "blocked", "reason": reason}], []
+    written, problems = append(root, batch, build)
+    if isinstance(written, list):
+        written = written[0]
+    return written, problems
 
 
 def _flags(args, repeatable):
@@ -345,22 +385,15 @@ def _answer_cli(root, batch, args, now, env):
     return problems
 
 
-def _next_cli(root, batch, args):
-    if args:
-        return None
-    rows, problems = load(root, batch)
-    if rows is not None:
-        print(json.dumps({"ask": next_ask(rows)}, indent=2))
-    return problems
-
-
-def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None):
+def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
+         alive=None):
     env = os.environ if env is None else env
     now = (clock or (lambda: datetime.now(timezone.utc)))()
     root = root or repo_root()
     git = git or runner("git")
     # The capability siblings import this module's row grammar, so they
     # are imported here, not at the top: one owner, no import cycle.
+    import conductor_flow
     import conductor_plan
     problems = None
     if argv[:1] == ["plan"]:
@@ -370,7 +403,8 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None):
     elif len(argv) >= 2:
         command, batch, args = argv[0], argv[1], argv[2:]
         if command == "next":
-            problems = _next_cli(root, batch, args)
+            problems = conductor_flow.next_cli(root, batch, args, now,
+                                               git, alive)
         elif command == "ask":
             problems = _ask_cli(root, batch, args, now)
         elif command == "answer":

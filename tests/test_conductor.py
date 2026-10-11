@@ -137,6 +137,11 @@ class TestRowGrammar(unittest.TestCase):
             "question must be a non-empty string",
             "why must be a non-empty string"])
 
+    def test_a_launch_state_row_carries_its_run_id_and_pid(self):
+        row = dict(MINIMAL["state"], run_id="conductor-b1-12-spec-1",
+                   pid=4242)
+        self.assertEqual(conductor.row_problems(row), [])
+
     def test_an_ask_may_carry_a_train_and_gate_blobs(self):
         row = dict(ask_row("ask-1"), covers=["#12", "#13"],
                    gate_blobs={"docs/adr/0090-x.md": "abc123"})
@@ -287,6 +292,37 @@ class TestAnswer(unittest.TestCase):
             self.refused([PLAN, ask_row("ask-1")], "ask-1", "perhaps"),
             ["cd: 'perhaps' is not an option of ask ask-1 (yes, no)"])
 
+    def test_a_block_answer_blocks_the_item_under_the_same_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_ledger(tmp, PLAN, MINIMAL["state"],
+                         ask_row("ask-1", options=("retry", "block")))
+            row, problems = conductor.answer(tmp, "b1", clock(), "ask-1",
+                                             "block", "flaky", env={})
+            rows, _ = conductor.load(tmp, "b1")
+        self.assertEqual(problems, [])
+        self.assertEqual(row["choice"], "block")
+        self.assertEqual(rows[-2:], [row, {
+            "at": AT, "kind": "state", "item": "#12", "from": "spec",
+            "to": "blocked", "reason": "answer to ask-1: block (flaky)"}])
+
+    def test_a_block_answer_on_a_batch_ask_moves_no_item(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_ledger(tmp, PLAN, ask_row("ask-1", item=None,
+                                            options=("block", "go")))
+            conductor.answer(tmp, "b1", clock(), "ask-1", "block", "",
+                             env={})
+            rows, _ = conductor.load(tmp, "b1")
+        self.assertEqual(rows[-1]["kind"], "answer")
+
+    def test_a_block_answer_leaves_a_terminal_item_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write_ledger(tmp, PLAN, dict(MINIMAL["state"], to="blocked"),
+                         ask_row("ask-1", options=("retry", "block")))
+            conductor.answer(tmp, "b1", clock(), "ask-1", "block", "",
+                             env={})
+            rows, _ = conductor.load(tmp, "b1")
+        self.assertEqual(rows[-1]["kind"], "answer")
+
     def test_a_worker_may_never_answer(self):
         self.assertEqual(
             self.refused([PLAN, ask_row("ask-1")], "ask-1", "yes",
@@ -316,6 +352,9 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         write_ledger(self.tmp.name, PLAN, ask_row("ask-1"))
+        Path(self.tmp.name, ".github").mkdir()
+        Path(self.tmp.name, ".github/factory.json").write_text(
+            json.dumps({"wip_cap": 2}))
 
     def run_cli(self, argv, env=None):
         return cli_contract.capture(conductor.main, argv, env=env or {},
@@ -328,7 +367,8 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         code, out = self.run_cli(["next", "b1"])
         self.assertEqual(code, 0)
         payload = json.loads(out[:out.rindex("\ncd:")])
-        self.assertEqual(payload, {"ask": ask_row("ask-1")})
+        self.assertEqual(payload, {"ask": ask_row("ask-1"), "ready": [],
+                                   "recorded": []})
 
     def test_ask_then_answer_round_trip(self):
         code, out = self.run_cli([
@@ -341,7 +381,8 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                                   "--note", "flaky"])
         self.assertEqual(code, 0, out)
         rows, _ = conductor.load(self.tmp.name, "b1")
-        self.assertEqual(rows[-1], {"at": AT, "kind": "answer",
+        self.assertEqual(rows[-1]["to"], "blocked")
+        self.assertEqual(rows[-2], {"at": AT, "kind": "answer",
                                     "item": "#12", "ask": "ask-2",
                                     "choice": "block", "note": "flaky"})
 

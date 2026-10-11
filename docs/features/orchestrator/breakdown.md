@@ -43,7 +43,7 @@ strings, `cli.report` for the exit, and `gh`/`git`/harness calls through
 
 ## Milestone 3: One item runs end to end through metered Workers (stalls escalate)
 
-- [ ] **WO-0157** Item state machine and the stall rule in `next` — size:M, blocked by: WO-0155 (PRD-0013 §User stories, §Success criteria)
+- [x] **WO-0157** Item state machine and the stall rule in `next` — size:M, blocked by: WO-0155 (PRD-0013 §User stories, §Success criteria)
   - Accept: `state` rows move an item only along `planned → spec → awaiting-gate → build → verify → review → reviewed → ship → merging → merged`, with `stalled` from any non-terminal state and `blocked` reachable only through an answer row; a `fix` item skips the gate states its re-entry depth does not reach; an `order` item starts at `build`. `next` returns the steps ready to launch under `wip_cap`, never one for an item with an unanswered ask, and records a `stall` ask (options: retry on the same policy, retry one band up, block with a reason) when a run row's pid is gone with no finishing row, when an item has had no state change for twice its step's wall-clock limit, or on a second reviewer request for changes (the first queues one `build` fix step); three consecutive Worker failures across the batch pause dispatch behind one ask. A `reviewed` pass whose reviewer `run_id` is among the author runs is refused.
 - [ ] **WO-0158** Worker runner: one metered headless run per step — size:M, blocked by: WO-0153, WO-0156, WO-0157 (PRD-0013 §User stories, §Success criteria, §Actors)
   - Accept: `conductor.py run <batch> <item> <step>`, with an injected harness, composes every harness flag in one function (`--model`, `--effort`, `--max-budget-usd`, `--output-format json`, an `--allowedTools` list containing no `git push` and no `gh` write), sets `CONDUCTOR_WORKER` in the Worker's environment, and runs under `cli.harness_run` with the S 45 / M 90 / L 180 minute timeout; the brief carries objective, output, tools, boundaries (item worktree, reserved block, never the plugin version) and context budget, and includes the issue body only for a `spec` step. Each run writes exactly one `run` row and one `costs.jsonl` row on the item branch (`wo` is the work order for a build step, else `#<n>`; `run_id` is `conductor-<batch>-<item>-<step>-<seq>`; cost from `cli.read_execution`), keeps the result event as `runs/<run_id>.json`, pushes the item branch (never forced) and opens or updates its PR from the uncommitted `pr-body.md`. A missing harness binary records `agent-failed` at cost 0; an unaccountable result event or a wall-clock kill records the ceiling as cost and queues a stall; a failed push or PR open queues a stall; nothing retries.
@@ -208,3 +208,17 @@ and every existing seam it names exists on main (`cli.harness_run`,
      `stop-after: decompose`.
   The architecture records them under "Amendments (implement-time,
   Owner-accepted)".
+- 2026-10-10 (Implement, row 0157): the state machine and the stall
+  rule live in `conductor_flow.py`, split from `conductor.py` by
+  capability in its own commit before this row (assumption 6;
+  `conductor_plan.py` holds plan and open). `conductor.py` keeps the
+  grammar and gains what the grammar's writers need: optional `run_id`
+  and `pid` on a state row, multi-row appends under one lock,
+  `current_state`, `ask_row`, and the `blocked` row `answer` writes. The
+  second request for changes stalls through `record_verdict`, the write
+  the runner makes after a review step (decision 5), not through `next`:
+  the verdict is known only when the review run ends. `next` also holds
+  all dispatch while a batch-level ask is unanswered or was answered
+  `decline` or `stop`, so no step launches before the spend answer.
+  `next` now needs `wip_cap` from factory.json, and its JSON gains
+  `ready` and `recorded` beside `ask`.
