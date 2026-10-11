@@ -19,7 +19,7 @@ its `factory/templates/tools/factory/` twin and runs
 
 ## Milestone 1: the fence rule has one owner (no behaviour change)
 
-- [ ] **Move the strict walker into knowledge_plane** — `FENCE_OPEN`, `FENCE_CLOSE`, `fence_open`, `fence_closes` and `unfenced` become public in `knowledge_plane.py`; gates' `_walk_sections` (H, M) and N/O import them, and gates no longer defines them
+- [x] **Move the strict walker into knowledge_plane** — `FENCE_OPEN`, `FENCE_CLOSE`, `fence_open`, `fence_closes` and `unfenced` become public in `knowledge_plane.py`; gates' `_walk_sections` (H, M) and N/O import them, and gates no longer defines them
   - Accept: a new `TestFences` in `tests/test_knowledge_plane.py` passes. It covers `~~~` nested in a backtick fence, a three-backtick line nested in a four-backtick fence, a closer at least as long as the opener closing it, the backtick-info rule, leading whitespace, and an unterminated fence swallowing the rest of the input. `TestEvidenceHonesty`, `TestCaptureCompleteness`, `TestNeedsClarification` and `TestPrdCoverage` in `tests/test_gates.py` pass with no edits. The twins are synced, the manifest is regenerated, and `python3 gates.py && python3 gates.py --selftest` is green.
   - Blocked by: —
 

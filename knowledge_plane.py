@@ -73,6 +73,59 @@ def sanitize(value, limit=FIELD_LIMIT):
     return text
 
 
+# CommonMark fences, tracked as a stack of one — NOT a parity toggle. An
+# opening fence records its marker character and length; only a fence of the
+# SAME character, AT LEAST as long, and carrying NO info string closes it. So
+# evidence that quotes markdown (a ```bash block inside a ~~~ block, a ```
+# inside a ````) stays content instead of desyncing the scanner and silently
+# swallowing every criterion below it, and an unclosed fence is reported.
+# Deliberate deviation from CommonMark: the indent is unbounded, because
+# verification evidence is nested under `- Evidence:` list items, where the
+# fence is indented to the item's content column. We do not track containers,
+# and false-positiving on honest nested evidence is the worse error.
+# One owner: deciding that a line is quoted rather than asserted is this
+# rule, and every caller (gates' H, M, N, O and D, validator's skip gate)
+# reads it from here rather than keeping a looser copy of its own.
+FENCE_OPEN = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})(?P<info>.*)$")
+FENCE_CLOSE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})[ \t]*$")
+
+
+def fence_open(line):
+    """(marker char, marker length) if `line` opens a fence, else None."""
+    match = FENCE_OPEN.match(line)
+    if not match:
+        return None
+    marker, info = match.group("marker"), match.group("info")
+    # CommonMark: a backtick fence's info string may not contain a backtick.
+    if marker[0] == "`" and "`" in info:
+        return None
+    return marker[0], len(marker)
+
+
+def fence_closes(line, char, length):
+    """Does `line` close a fence opened with `length` copies of `char`?"""
+    match = FENCE_CLOSE.match(line)
+    if not match:
+        return False
+    marker = match.group("marker")
+    return marker[0] == char and len(marker) >= length
+
+
+def unfenced(lines):
+    """(lineno, line) for every line outside a fenced code block — fenced
+    content is quoted, not asserted. An unterminated fence swallows the
+    rest of the input."""
+    fence = None
+    for lineno, line in enumerate(lines, 1):
+        if fence is not None:
+            if fence_closes(line, fence[0], fence[1]):
+                fence = None
+            continue
+        fence = fence_open(line)
+        if fence is None:
+            yield lineno, line
+
+
 # A breakdown row is a checkbox bullet line; its work order is its FIRST
 # WO token (later tokens are blocking edges). Notes and Accept: sub-bullets
 # are prose, never rows. One grammar for the whole dispatch plane:

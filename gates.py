@@ -87,8 +87,8 @@ import standards_index
 from cli import read_event, read_file, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             parse_run, repo_root, row_done, row_pre_ledger,
-                             run_dirs)
+                             fence_closes, fence_open, parse_run, repo_root,
+                             row_done, row_pre_ledger, run_dirs, unfenced)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
@@ -187,18 +187,6 @@ RESULT_LINE = re.compile(
 # `results` entry in the artifact, which switched the artifact-wide backstop
 # off entirely. The frontmatter block is skipped, not scanned.
 FRONTMATTER_FENCE = re.compile(r"^---\s*$")
-# CommonMark fences, tracked as a stack of one — NOT a parity toggle. An
-# opening fence records its marker character and length; only a fence of the
-# SAME character, AT LEAST as long, and carrying NO info string closes it. So
-# evidence that quotes markdown (a ```bash block inside a ~~~ block, a ```
-# inside a ````) stays content instead of desyncing the scanner and silently
-# swallowing every criterion below it, and an unclosed fence is reported.
-# Deliberate deviation from CommonMark: the indent is unbounded, because
-# verification evidence is nested under `- Evidence:` list items, where the
-# fence is indented to the item's content column. We do not track containers,
-# and false-positiving on honest nested evidence is the worse error.
-FENCE_OPEN = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})(?P<info>.*)$")
-FENCE_CLOSE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})[ \t]*$")
 # The disclaimer must be explicit, and it must be WRITTEN: read from body
 # text, never from a heading. TEMPLATE.md ships a `## Not verified` slot in
 # EVERY artifact, so a heading that counted as a disclosure would let the
@@ -1040,27 +1028,6 @@ def _is_disclosure(verdict):
     return bool(DISCLOSURE_VERDICT.match(VERDICT_LEAD.sub("", verdict)))
 
 
-def _fence_open(line):
-    """(marker char, marker length) if `line` opens a fence, else None."""
-    match = FENCE_OPEN.match(line)
-    if not match:
-        return None
-    marker, info = match.group("marker"), match.group("info")
-    # CommonMark: a backtick fence's info string may not contain a backtick.
-    if marker[0] == "`" and "`" in info:
-        return None
-    return marker[0], len(marker)
-
-
-def _fence_closes(line, char, length):
-    """Does `line` close a fence opened with `length` copies of `char`?"""
-    match = FENCE_CLOSE.match(line)
-    if not match:
-        return False
-    marker = match.group("marker")
-    return marker[0] == char and len(marker) >= length
-
-
 def _skip_frontmatter(lines):
     """The index of the first BODY line of an artifact's LINES: content
     after a closing `---` fence, when the artifact opens with a YAML
@@ -1104,7 +1071,7 @@ def _walk_sections(lines, body_start):
     underlined = False
     for lineno, line in enumerate(lines[body_start:], body_start + 1):
         if fence is not None:
-            if _fence_closes(line, fence[0], fence[1]):
+            if fence_closes(line, fence[0], fence[1]):
                 fence = None
             else:
                 yield "line", lineno, (line, True)
@@ -1112,7 +1079,7 @@ def _walk_sections(lines, body_start):
         if underlined:  # the ===/--- under a Setext title, already consumed
             underlined = False
             continue
-        opened = _fence_open(line)
+        opened = fence_open(line)
         if opened:
             fence = (opened[0], opened[1], lineno)
             continue
@@ -1291,20 +1258,6 @@ SECTION_CITATION = re.compile(r"§\s*([^,;)§]+)")
 COVERAGE_ADOPTED = "2026-09-21"
 
 
-def _unfenced(lines):
-    """(lineno, line) for every line outside a fenced code block — fenced
-    content is quoted, not asserted, for N and O alike."""
-    fence = None
-    for lineno, line in enumerate(lines, 1):
-        if fence is not None:
-            if _fence_closes(line, fence[0], fence[1]):
-                fence = None
-            continue
-        fence = _fence_open(line)
-        if fence is None:
-            yield lineno, line
-
-
 def check_needs_clarification(root, parsed=None):
     """N: a prd.md or architecture.md — the two artifacts with a human
     approval gate (ADR-0033) — must carry no unresolved
@@ -1322,7 +1275,7 @@ def check_needs_clarification(root, parsed=None):
             if entry[key] is None:
                 continue
             rel = (entry["path"] / name).relative_to(root)
-            for lineno, line in _unfenced(entry[key]):
+            for lineno, line in unfenced(entry[key]):
                 if CLARIFICATION_MARKER.search(CODE_SPAN.sub("", line)):
                     problems.append(f"N: {rel}:{lineno} unresolved"
                                     " [NEEDS CLARIFICATION] marker")
@@ -1335,7 +1288,7 @@ def _prd_sections(lines):
     coverage waiver."""
     sections = []
     pending = None  # the section still looking for its first body line
-    for lineno, line in _unfenced(lines):
+    for lineno, line in unfenced(lines):
         heading = HEADING_LINE.match(line)
         if heading and len(heading.group(1)) == 2:
             pending = [lineno, heading.group(2), False]

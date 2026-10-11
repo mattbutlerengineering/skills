@@ -13,9 +13,9 @@ from gates import (_clean_repo_fixture, _evidence_honesty_defect_fixture,
                    _link_integrity_defect_fixture, _wo_citation_defect_fixture)
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              PRD_TOKEN, ROW, WO_TOKEN, breakdown_files,
-                             mirror_map, parse_run, repo_root, row_done,
+                             fence_closes, fence_open, mirror_map, parse_run, repo_root, row_done,
                              row_blockers, row_unreadable_blockers,
-                             row_work_order, run_dirs, sanitize)
+                             row_work_order, run_dirs, sanitize, unfenced)
 
 
 class TestTokens(unittest.TestCase):
@@ -586,6 +586,49 @@ class TestSanitize(unittest.TestCase):
         for forbidden in ("\u202e", "\u200b", "\u2066", "\ufeff"):
             dirty = f"a{forbidden}b{forbidden}c"
             self.assertNotIn(forbidden, sanitize(dirty))
+
+
+class TestFences(unittest.TestCase):
+    """The one fence rule: CommonMark closing (same character, at least as
+    long as the opener, no info string) plus the backtick-info rule. Every
+    caller that asks "is this line quoted?" reads it from here."""
+
+    def kept(self, text):
+        return [line for _, line in unfenced(text.split("\n"))]
+
+    def test_tilde_inside_backtick_fence_is_content(self):
+        self.assertEqual(
+            self.kept("a\n```\n~~~\nquoted\n```\nb"), ["a", "b"])
+
+    def test_three_backticks_inside_four_is_content(self):
+        self.assertEqual(
+            self.kept("a\n````\n```\nquoted\n```\n````\nb"), ["a", "b"])
+
+    def test_a_longer_closer_closes(self):
+        self.assertEqual(self.kept("a\n```\nquoted\n`````\nb"), ["a", "b"])
+        self.assertTrue(fence_closes("`````", "`", 3))
+        self.assertFalse(fence_closes("``", "`", 3))
+        self.assertFalse(fence_closes("~~~", "`", 3))
+        self.assertFalse(fence_closes("``` bash", "`", 3))
+
+    def test_backtick_info_with_a_backtick_does_not_open(self):
+        self.assertIsNone(fence_open("``` a`b"))
+        self.assertEqual(fence_open("~~~ a`b"), ("~", 3))
+        self.assertEqual(self.kept("``` a`b\nb"), ["``` a`b", "b"])
+
+    def test_leading_whitespace_is_allowed(self):
+        self.assertEqual(fence_open("    ```bash"), ("`", 3))
+        self.assertTrue(fence_closes("    ```  ", "`", 3))
+        self.assertEqual(self.kept("- x\n  ```\n  quoted\n  ```\nb"),
+                         ["- x", "b"])
+
+    def test_unterminated_fence_swallows_the_rest(self):
+        self.assertEqual(self.kept("a\n````\nquoted\n```\nb"), ["a"])
+
+    def test_line_numbers_are_one_based(self):
+        self.assertEqual(list(unfenced(["a", "```", "x", "```", "b"])),
+                         [(1, "a"), (5, "b")])
+
 
 if __name__ == "__main__":
     unittest.main()
