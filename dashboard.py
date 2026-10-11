@@ -127,9 +127,11 @@ def _age_seconds(since, now):
 
 
 def _timeline(slug, number, run, problems):
-    """One issue's label events, [] on a failed or unparseable fetch —
+    """One issue's label events, None on a failed or unparseable fetch —
     the item still lists, just without an age (the gate_digest rule:
-    a failed fetch is a problem, never a lost queue item).
+    a failed fetch is a problem, never a lost queue item). None, not
+    []: [] is a timeline that was read and holds nothing, and _queues
+    must tell an unreadable age from an unknown one (#665).
 
     A fetch that succeeds can still carry an event label_events refuses
     for a malformed timestamp — reported here, since a successful read
@@ -140,7 +142,7 @@ def _timeline(slug, number, run, problems):
                    run=run)
     problems.extend(read.problems)
     if read.value is None:
-        return []
+        return None
     raw = [event for page in read.value for event in page]
     refused = refused_timestamps(raw)
     if refused:
@@ -165,7 +167,10 @@ def _listing(slug, run, problems):
 def _queues(slug, listing, mirror, run, now, problems):
     """The open mirrored issues waiting at each human gate, in gate
     then issue order, aged from the current stay's labeled event when
-    the timeline yields one."""
+    the timeline yields one. `aged` says whether the timeline could be
+    read at all — the difference between an unknown age (read, no
+    arrival) and an unreadable one (fetch failed), the same fact
+    gate_digest's Item carries under the same name."""
     entries = []
     for gate, queue_label, _, _ in GATES:
         for issue in sorted(listing, key=lambda e: e.get("number") or 0):
@@ -175,12 +180,13 @@ def _queues(slug, listing, mirror, run, now, problems):
                     queue_label not in label_names(issue):
                 continue
             events = _timeline(slug, number, run, problems)
-            since = waiting_since(events, queue_label)
+            since = waiting_since(events or [], queue_label)
             entries.append({
                 "gate": gate,
                 "issue": number,
                 "title": issue.get("title") or "",
                 "waited_s": _age_seconds(since, now) if since else None,
+                "aged": events is not None,
                 "url": issue.get("url") or "",
             })
     return entries
