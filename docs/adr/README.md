@@ -104,3 +104,4 @@ the canonical vocabulary.
 | [0081](0081-plugin-eval-is-an-on-demand-harness.md) | `claude plugin eval` is an on-demand harness with its own tree | accepted |
 | [0082](0082-the-pipeline-writes-adrs-at-its-stages.md) | The pipeline writes ADRs at its stages, by one test | accepted |
 | [0083](0083-github-issues-are-the-only-tracker.md) | GitHub issues are the only tracker; beads is retired | accepted |
+| [0084](0084-the-cost-ledger-keys-a-run-by-issue-when-it-has-no-work-order.md) | The cost ledger keys a run by its issue when it has no work order | provisional |
