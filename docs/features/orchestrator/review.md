@@ -331,8 +331,11 @@ commit, with decisions logged in breakdown.md's Notes (2026-10-11).
       reports "not logged into any GitHub hosts", the keychain token
       included.
     - `GIT_SSH_COMMAND=false` stops any ssh push.
-    - Env git config rewrites any http(s) push URL to an impossible
-      path and resets the credential helper.
+    - Env git config rewrites an http(s) push URL given on the
+      command line or as a remote's `url` to an impossible path, and
+      resets the credential helper. It does not rewrite a remote's
+      explicit `pushurl`, so a token embedded there, or a `~/.netrc`
+      entry, is not blocked (corrected per re-review R3).
     - The tests assert the env handed to the harness and run real git
       pushes against it. `make check` passes under that env (rc 0).
   - What is still trust-based: a hostile Worker can restore any of this

@@ -87,7 +87,8 @@ def worker_env(base, batch, gh_config_dir):
     WORKER_STRIPPED name, plus the batch flag, an empty gh config dir,
     no terminal prompt and WORKER_GIT_CONFIG. It stops a confused Worker;
     a hostile one can still put a credential back (breakdown Notes,
-    2026-10-11)."""
+    2026-10-11). pushInsteadOf skips a remote's explicit pushurl, so a
+    token embedded there, or a ~/.netrc entry, is not blocked."""
     env = {name: value for name, value in base.items()
            if not WORKER_STRIPPED.fullmatch(name)}
     env.update({WORKER_ENV: batch, "GH_CONFIG_DIR": gh_config_dir,

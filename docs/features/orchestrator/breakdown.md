@@ -424,8 +424,11 @@ and every existing seam it names exists on main (`cli.harness_run`,
   confused Worker could take: `GIT_SSH_COMMAND=false` stops any ssh
   push, whatever the host or ssh alias; an env-config
   `url.<impossible path>.pushInsteadOf` for `https://` and `http://`
-  rewrites any http(s) push, credentials in the URL or `.netrc`
-  included, while fetches are untouched; and `credential.helper` reset
+  rewrites an http(s) push URL given on the command line or as a
+  remote's `url`, while fetches are untouched (but not a remote's
+  explicit `pushurl`, which `pushInsteadOf` never rewrites, so a token
+  embedded there or a `~/.netrc` entry is not blocked; corrected per
+  re-review R3); and `credential.helper` reset
   plus `GIT_TERMINAL_PROMPT=0` and stripped askpass variables keep git
   from handing out a token. For gh: the token variables are stripped
   and `GH_CONFIG_DIR` is an empty temporary directory removed after

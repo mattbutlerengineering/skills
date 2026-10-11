@@ -640,7 +640,11 @@ differs from the text above, and is recorded here for the Owner:
     inherited `GIT_CONFIG_*` or `GIT_SSH*` variable. It points
     `GH_CONFIG_DIR` at an empty temporary directory, sets
     `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND=false`, and adds env
-    git config that rewrites every http(s) push URL to a path that
-    cannot exist and resets `credential.helper`. This stops a confused
-    Worker. A hostile one can still restore a variable from
+    git config that rewrites an http(s) push URL to a path that cannot
+    exist and resets `credential.helper`. The rewrite covers a URL given
+    on the command line or a remote's `url`, but not a remote's explicit
+    `pushurl`, which `pushInsteadOf` never rewrites; such a push still
+    gets no token from a helper or a prompt. Not blocked: a token
+    embedded in a configured `pushurl`, or a `~/.netrc` entry (re-review
+    R3). This stops a confused Worker. A hostile one can still restore a variable from
     `python3`, so against hostility it remains trust-based.

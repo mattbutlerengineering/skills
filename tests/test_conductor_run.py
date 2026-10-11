@@ -237,6 +237,30 @@ class TestWorkerEnv(unittest.TestCase):
                     "Could not read from remote repository"
                     in pushed.stderr, (target, pushed.stderr))
 
+    def test_a_configured_pushurl_is_not_rewritten(self):
+        # Re-review R3, the documented limit: pushInsteadOf skips a
+        # remote's explicit pushurl, so git dials it (a closed local
+        # port here) with no helper to hand it a token.
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "w"
+            subprocess.run(["git", "init", "-q", str(work)], check=True)
+            for key, value in (("user.email", "t@example.com"),
+                               ("user.name", "t"),
+                               ("commit.gpgsign", "false"),
+                               ("remote.o.url", "https://127.0.0.1:9/r"),
+                               ("remote.o.pushurl",
+                                "https://127.0.0.1:9/o/r.git")):
+                sh(work, "config", key, value)
+            sh(work, "commit", "-q", "--allow-empty", "-m", "c")
+            owner = {k: v for k, v in os.environ.items()
+                     if not k.startswith("GIT_")}
+            env = conductor_run.worker_env(owner, "b1", tmp)
+            pushed = sh(work, "push", "o", "HEAD:refs/heads/x", env=env)
+            self.assertNotEqual(pushed.returncode, 0)
+            self.assertIn("127.0.0.1", pushed.stderr)
+            self.assertNotIn("conductor-worker-may-not-push",
+                             pushed.stderr)
+
     def test_a_make_check_push_to_a_local_repo_still_works(self):
         # The suite's merge-turn tests push to a local bare origin; the
         # Worker's `make check` must still pass them.
