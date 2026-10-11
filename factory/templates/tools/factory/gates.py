@@ -263,7 +263,6 @@ ARCH_ABSENT_PROSE = re.compile(
     r"\bno\s+`(?P<path>[^`\n]+)`(?:\s+here)?\s*(?=[,.;:)]|$)")
 ARCH_EXISTS_PROSE = re.compile(r"`(?P<path>[^`\n]+)`\s+exists\s+here\b")
 ARCH_CLAIMS_FENCE = re.compile(r"^\s*```\s*tree-claims\s*$")
-ARCH_FENCE = re.compile(r"^\s*(?:```|~~~)")
 ARCH_CLAIM = re.compile(
     r"^\s*(?P<verb>exists|absent)\s*:\s*(?P<path>\S+)\s*$", re.IGNORECASE)
 # A claim must name a plain repo path. A glob or a `..` is not resolvable
@@ -525,20 +524,18 @@ def _architecture_drift(root, parsed):
         if entry["architecture"] is None:
             continue
         rel = (entry["path"] / "architecture.md").relative_to(root)
-        fence = None  # None | "tree-claims" | "other"
+        fence = None  # None | (marker char, marker length, is tree-claims)
         for lineno, line in enumerate(entry["architecture"], 1):
             if fence is not None:
-                if ARCH_FENCE.match(line):
+                if fence_closes(line, fence[0], fence[1]):
                     fence = None
-                elif fence == "tree-claims":
+                elif fence[2]:
                     problems.extend(
                         _declared_claims(root, rel, lineno, line))
                 continue
-            if ARCH_CLAIMS_FENCE.match(line):
-                fence = "tree-claims"
-                continue
-            if ARCH_FENCE.match(line):
-                fence = "other"
+            opened = fence_open(line)
+            if opened:
+                fence = (*opened, bool(ARCH_CLAIMS_FENCE.match(line)))
                 continue
             problems.extend(_prose_claims(root, rel, lineno, line))
     return problems

@@ -25,7 +25,7 @@ its `factory/templates/tools/factory/` twin and runs
 
 ## Milestone 2: detector D stops reading quoted claims
 
-- [ ] **D tracks fences through `fence_open`/`fence_closes`** — `_architecture_drift` keeps `ARCH_CLAIMS_FENCE` to recognise the tree-claims block and deletes `ARCH_FENCE`
+- [x] **D tracks fences through `fence_open`/`fence_closes`** — `_architecture_drift` keeps `ARCH_CLAIMS_FENCE` to recognise the tree-claims block and deletes `ARCH_FENCE`
   - Accept: two new `TestArchitectureDrift` cases are written first and watched fail on today's code: a quoted `exists here` claim after a `~~~` line inside a three-backtick fence, and the same claim inside a four-backtick fence that quotes a three-backtick block (`defect.md`'s repro). Both return no D problem after the change. The existing tree-claims, prose and plain-fence cases pass with no edits. The twin is synced and the manifest regenerated.
   - Blocked by: Move the strict walker into knowledge_plane
 

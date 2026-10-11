@@ -1010,6 +1010,26 @@ class TestArchitectureDrift(unittest.TestCase):
                        "```\n")
             self.assertEqual(gates.check_blueprint_drift(tree.root), [])
 
+    def test_a_tilde_line_inside_a_backtick_fence_is_content(self):
+        # Only a backtick marker at least as long closes a backtick fence,
+        # so the claim after the ~~~ line is still quoted.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```\n~~~\n"
+                       "`present.py` exists here\n```\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_a_quoted_fence_inside_a_longer_fence_is_content(self):
+        # defect.md's repro: a four-backtick block quoting a three-backtick
+        # one. The inner ``` lines neither open nor close anything.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(self.ARCH,
+                       "# A\n\n````markdown\n```\n"
+                       "`present.py` exists here\n```\n````\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
     def test_no_architecture_md_is_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
