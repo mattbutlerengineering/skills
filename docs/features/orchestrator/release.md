@@ -11,7 +11,7 @@ assumptions:
   - "Stale worktree default: recommend discarding it, because its draft is an earlier Architect attempt that #670 supersedes. This stage did not touch it."
 ---
 
-# Release: the Conductor, plugin 0.8.1 (PRs #670, #673, #675) — prepared, not executed
+# Release: the Conductor, plugin 0.8.1 (PRs #670, #673, #675)
 
 Production for this repo is the installable plugin. Work reaches users
 when it is merged to `main`, and installed caches pick it up when
@@ -362,9 +362,44 @@ revert its squash commit alone. #670 and #673 are docs.
    `feat/orchestrator-implement` and pushed. That is the only push. No
    merge, tag, PR edit, label or issue change.
 
+## Release executed (2026-10-11)
+
+The Owner answered "Merge all three" in session (2026-10-11), after
+accepting ADR-0084 and ADR-0085 and discarding the stale worktree. The
+orchestrator then ran the steps above:
+
+1. `origin/main` re-checked at cc6ef9f, unchanged since the simulation;
+   `gh pr checks` pass or skipping on all three.
+2. #673 retargeted to main via `gh api -X PATCH`, then #670 squashed →
+   b6548a0. #671 closed.
+3. #675 retargeted to main, #673's checks re-run green, #673 squashed →
+   569695a. #672 closed.
+4. `git merge origin/main` in #675's worktree → conflicts in
+   `docs/adr/README.md`, `architecture.md`, `breakdown.md` (as
+   simulated) and `docs/adr/0084-…md` (the acceptance edit, added after
+   the simulation). All four resolved branch-side; the resulting tree
+   was byte-identical to the already-verified branch head 72c1593.
+   Pushed as 3c9193e; checks green.
+5. #675 squashed with `--match-head-commit 3c9193e` → 09ab22e. #674
+   closed.
+
 ## Post-release checks
 
-None run, because nothing was released. After the Owner's merges:
+Run on `main` at 09ab22e:
+
+- `python3 -m unittest discover tests` → `Ran 2344 tests in 53.809s`,
+  `OK`; `python3 lint.py` → `lint: 0 problem(s) across 32 skills`;
+  `python3 gates.py` → `gates: 0 problem(s)`; `--selftest` → `selftest: ok`.
+- `.claude-plugin/plugin.json` → `0.8.1`.
+- `claude plugin update idea-to-prod@skills` → `Plugin "idea-to-prod"
+  updated from 0.7.3 to 0.8.1`; the cache holds
+  `0.8.1/skills/conduct/SKILL.md`.
+- `python3 conductor.py next nosuchbatch` → `cd: no batch ledger at
+  docs/factory/batches/nosuchbatch/ledger.jsonl`, `cd: 1 problem(s)`,
+  exit 1 (the CLI loads and fails closed; no batch, no spend).
+- #671, #672 and #674 → CLOSED.
+
+The checklist as prepared:
 
 - Step 6 above: the triad on origin/main, and `plugin.json` at 0.8.1.
 - `claude plugin update idea-to-prod@skills`, then in a fresh session
@@ -384,7 +419,7 @@ makes the mechanism available.
 
 ## Outcome
 
-Prepared, not executed. Pre-flight is green, and the stack's merge
+Executed 2026-10-11 (09ab22e). It was first prepared, not executed. Pre-flight is green, and the stack's merge
 order is simulated: #675 needs a branch-side conflict resolution after
 #673, and the steps above give it. The Owner decisions 1–6 gate the
 merges, and decision 7 gates the success criteria. No merge, tag,
