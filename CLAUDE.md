@@ -51,6 +51,9 @@ pre-pass, deliberately **not** a gate:
 
 - **Stdlib only.** Every script is standalone Python 3 standard library.
   No third-party dependencies.
+- **Bump `.claude-plugin/plugin.json`'s version with any `skills/`
+  change.** Installed plugin caches refresh only when the version moves,
+  and `lint.py` checks only that the field exists.
 - **Seam modules, everything else thin callers**: `protocol.py`
   (ADR-0021 — taxonomy, artifact table, frontmatter, next-stage),
   `eval_schema.py` (ADR-0022, ADR-0024 — all eval knowledge: routing
@@ -132,7 +135,10 @@ notes are frozen in `docs/research/beads-memories-archive.md`.
 
 Non-inferable project knowledge, one page per line. Read a page before changing what its line names.
 
+- docs/kb/cross-pr-merge-hazards.md: Two PRs can each pass CI and fail together; per-PR CI cannot see it — test the pair with merge-tree before merging in sequence.
 - docs/kb/gates-scan-every-doc.md: Detectors C and I scan every repo markdown, fences included; an example PRD/ADR/WO id or a sample link fails gates.
+- docs/kb/main-unprotected.md: main has no branch protection or rulesets — ADR-0036's required checks are convention, and the ADR-0070 merge queue is off.
 - docs/kb/manifest-regen.md: update-manifest hashes every file under factory/templates/; delete stray .orig/.rej first or they get checksum-pinned.
 - docs/kb/pr-body-contract.md: A PR body needs a WO id or a "No work order:" line plus Closes #N, or detector B fails on CI only — it skips locally.
+- docs/kb/stamp-outside-payload.md: factory-init stamps CODEOWNERS, the Makefile, factory.json, labels.json, seeded ADRs and design docs outside FACTORY_OWNED; update never refreshes them, and only doctor checks most.
 <!-- END KB INDEX -->
