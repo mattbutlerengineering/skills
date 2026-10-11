@@ -54,9 +54,9 @@ the canonical vocabulary.
 | [0031](0031-omp-trigger-eval-adapter.md) | The trigger eval drives omp too; results are harness-marked | accepted |
 | [0032](0032-factory-dispatch-plane.md) | Factory dispatch plane: issues mirror breakdown rows one-way | superseded in part by ADR-0083 (the beads clause; amended by ADR-0035) |
 | [0033](0033-three-human-gates.md) | Three human gates: PRD, blueprint, merge | amended by ADR-0036 |
-| [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | amended by ADR-0041, ADR-0084 |
+| [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | amended by ADR-0084 (and earlier by ADR-0041) |
 | [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | superseded in part by ADR-0083 (the beads carve-out) |
-| [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | accepted; amended by ADR-0085 |
+| [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | amended by ADR-0085 |
 | [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | amended by ADR-0039 |
 | [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | amended by ADR-0045 |
 | [0039](0039-tracker-grammar-joins-the-knowledge-plane.md) | Tracker-mirror grammar joins the knowledge plane | amended by ADR-0040 (roster further amended by ADR-0058; walk widened to parse_run by ADR-0068) |

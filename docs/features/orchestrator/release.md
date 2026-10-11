@@ -395,6 +395,6 @@ publish or deploy happened in this stage.
 Answered in session, through the orchestrator's questions:
 
 - **ADR-0084: accepted.** Status set to accepted. ADR-0034's status line
-  now reads "amended by ADR-0041, ADR-0084".
+  now reads "amended by ADR-0084 (and earlier by ADR-0041)".
 - **ADR-0085: accepted, trains included.** Status set to accepted.
-  ADR-0036's status line now reads "accepted; amended by ADR-0085".
+  ADR-0036's status line now reads "amended by ADR-0085".
