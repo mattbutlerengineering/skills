@@ -645,7 +645,8 @@ class TestMonthlyCap(RunCase):
         self.ledger(*BASE)
         _, problems = conductor_run.run_step(
             self.root, "b1", "#12", "spec", lambda: NOW,
-            git=Git(self.tmp.name), gh=Gh(), harness=Harness(act=pr_body), pid=777)
+            git=Git(self.tmp.name), gh=Gh(), harness=Harness(act=pr_body),
+            pid=777)
         self.assertEqual(problems, [
             "config: factory.json names no positive monthly_cap_usd"])
 

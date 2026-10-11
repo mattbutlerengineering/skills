@@ -204,7 +204,8 @@ def plan_batch(issues, owner, config, spent, highest, agents_dir):
                        "effort": config.get("effort")}}, []
 
 
-def _span(values):
+def span(values):
+    """A reserved block's numbers as `n` or `first-last`."""
     return (str(values[0]) if len(values) == 1
             else f"{values[0]}-{values[-1]}")
 
@@ -214,7 +215,7 @@ def compose_plan(plan):
     batch estimate against the cap, then one line per deferral."""
     lines = [f"cd: {len(plan['items'])} item(s) planned"]
     for item in plan["items"]:
-        block = ", ".join(f"{kind} {_span(values)}"
+        block = ", ".join(f"{kind} {span(values)}"
                           for kind, values in item["block"].items())
         lines.append(f"  {item['item']}  {item['type']}  size:{item['size']}"
                      f"  ${item['estimate_usd']:.2f}"

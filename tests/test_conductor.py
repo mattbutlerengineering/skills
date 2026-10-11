@@ -166,6 +166,19 @@ class TestRowGrammar(unittest.TestCase):
         self.assertEqual(conductor.row_problems(row), [])
 
 
+class TestOneOwner(unittest.TestCase):
+    def test_block_spans_and_ledger_times_have_one_owner_each(self):
+        # Review minor 10: byte-for-byte copies in sibling modules.
+        import conductor_close
+        import conductor_flow
+        import conductor_plan
+        import conductor_run
+        self.assertIs(conductor_run.span, conductor_plan.span)
+        self.assertIs(conductor_flow.parsed_at, conductor.parsed_at)
+        self.assertIs(conductor_close.parsed_at, conductor.parsed_at)
+        self.assertEqual(conductor.parsed_at(AT), clock())
+
+
 class TestLoad(unittest.TestCase):
     def test_reads_rows_in_order(self):
         with tempfile.TemporaryDirectory() as tmp:

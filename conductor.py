@@ -317,6 +317,11 @@ def stamp(now):
     return now.astimezone(timezone.utc).strftime(AT_FORMAT)
 
 
+def parsed_at(value):
+    """stamp's inverse: a row's `at` as an aware UTC datetime."""
+    return datetime.strptime(value, AT_FORMAT).replace(tzinfo=timezone.utc)
+
+
 def answers(rows):
     """{ask id: its answer row}."""
     return {row["ask"]: row for row in rows if row["kind"] == "answer"}

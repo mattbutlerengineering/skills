@@ -21,25 +21,20 @@ run evidence and scorecard, pushes (never forced), opens the closing PR,
 and labels each blocked item's issue needs-human with its reason.
 """
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 
 import conductor_flow as flow
 import cost_ledger
 import factory_config
 from cli import CLI_FAILURES, detail
-from conductor import AT_FORMAT, TERMINAL, append, ask_row, current_state, \
-    load, numbered, parse, read_text, stamp
+from conductor import TERMINAL, append, ask_row, current_state, load, \
+    numbered, parse, parsed_at, read_text, stamp
 
 SCORECARDS = "docs/factory/scorecards.jsonl"
 # Asks the Conductor raises beyond the planned spend, gate and merge
 # decisions.
 ESCALATIONS = ("stall", "clarify")
 PLACES = 4
-
-
-def _at(value):
-    return datetime.strptime(value, AT_FORMAT).replace(tzinfo=timezone.utc)
 
 
 def _ratio(numerator, denominator):
@@ -58,7 +53,7 @@ def _complies(run, policy):
 def _owner_wait_hours(rows):
     """The summed ask-to-answer wait of every answered ask, in hours."""
     asked = {row["id"]: row["at"] for row in rows if row["kind"] == "ask"}
-    return sum((_at(row["at"]) - _at(asked[row["ask"]])).total_seconds()
+    return sum((parsed_at(row["at"]) - parsed_at(asked[row["ask"]])).total_seconds()
                for row in rows if row["kind"] == "answer"
                and row["ask"] in asked) / 3600
 
@@ -114,7 +109,7 @@ def compute(rows, lines, shown, entries, now):
         "escalations": sum(1 for row in rows if row["kind"] == "ask"
                            and row["ask_kind"] in ESCALATIONS),
         "review_changes_per_item": _ratio(_review_changes(rows), len(items)),
-        "start_to_last_merge_s": (int((_at(max(merges)) - _at(plan["at"]))
+        "start_to_last_merge_s": (int((parsed_at(max(merges)) - parsed_at(plan["at"]))
                                       .total_seconds()) if merges else None),
         "merged_per_owner_wait_hour": _ratio(merged, wait),
         "policy_compliance": _ratio(

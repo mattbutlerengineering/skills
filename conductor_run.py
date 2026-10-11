@@ -28,6 +28,7 @@ from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
     read_execution
 from conductor import WORKER_ENV, answers, append, ask_row, current_state, \
     load, stamp
+from conductor_plan import span
 from knowledge_plane import WO_TOKEN
 from orientation_pack import orientation_pack
 from protocol import read_frontmatter
@@ -108,18 +109,13 @@ def harness_command(brief, model, effort, ceiling_usd):
             "json", "--allowedTools", *ALLOWED_TOOLS]
 
 
-def _span(values):
-    return (str(values[0]) if len(values) == 1
-            else f"{values[0]}-{values[-1]}")
-
-
 def compose_brief(step, item, item_type, worktree, branch, block, wo,
                   context, issue_body, ceiling):
     """The Worker's brief in its fixed shape. The issue body is an input
     only for a spec step (ADR-0032: owner-authored issues only)."""
     scale = ("maintenance run from capture" if item_type == "fix"
              else "feature run from idea")
-    reserved = ", ".join(f"{kind} {_span(values)}"
+    reserved = ", ".join(f"{kind} {span(values)}"
                          for kind, values in block.items()) or "none"
     inputs = [f"- {context}"] if context else []
     if step == "spec" and issue_body is not None:
