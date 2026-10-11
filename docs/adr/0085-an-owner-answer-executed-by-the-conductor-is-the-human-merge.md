@@ -1,14 +1,13 @@
 # An Owner answer executed by the Conductor is the human merge
 
-- Status: provisional
+- Status: accepted (Owner, 2026-10-11)
 - Date: 2026-10-11
 
-Would amend ADR-0036 conditions 2 and 3, for merges that
+Amends ADR-0036 conditions 2 and 3, for merges that
 `conductor.py merge` performs inside a Conductor batch (PRD-0013).
-Outside a batch, ADR-0036 stands as written. This draft was written at
-the Owner's request, after review major 4 of the orchestrator run. Until
-the Owner accepts it, its status stays provisional and ADR-0036's
-status line is unchanged.
+Outside a batch, ADR-0036 stands as written. It was drafted at
+the Owner's request, after review major 4 of the orchestrator run, and
+the Owner accepted it on 2026-10-11.
 
 ADR-0036 lets an agent merge a PR on green checks and an independent
 review. Condition 3 keeps a human code-owner merge for any PR that

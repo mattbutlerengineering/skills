@@ -389,3 +389,12 @@ order is simulated: #675 needs a branch-side conflict resolution after
 #673, and the steps above give it. The Owner decisions 1–6 gate the
 merges, and decision 7 gates the success criteria. No merge, tag,
 publish or deploy happened in this stage.
+
+## Owner decisions (2026-10-11)
+
+Answered in session, through the orchestrator's questions:
+
+- **ADR-0084: accepted.** Status set to accepted. ADR-0034's status line
+  now reads "amended by ADR-0041, ADR-0084".
+- **ADR-0085: accepted, trains included.** Status set to accepted.
+  ADR-0036's status line now reads "accepted; amended by ADR-0085".
