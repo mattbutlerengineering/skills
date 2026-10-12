@@ -18,9 +18,10 @@ closing a batch).
         number block. Writes nothing. --agents names the charter stub
         directory (default factory/agents/, which a consumer repo lacks).
   python3 conductor.py open <batch> [--agents DIR] <#N>...
-        Plan, then create the conductor/<batch> branch and worktree from
-        origin/main, write the plan and reserve rows, and queue the spend
-        ask.
+        Plan, check what every `run` will need (factory.json, the cost
+        ledger on origin/main, no push gap), then create the
+        conductor/<batch> branch and worktree from origin/main, write the
+        plan and reserve rows, and queue the spend ask.
   python3 conductor.py next <batch>
         Record any new stall and gate asks, then print as JSON the oldest
         unanswered ask, the steps ready to launch under wip_cap (a
@@ -30,7 +31,8 @@ closing a batch).
   python3 conductor.py run <batch> <#N> <step>
         One metered headless Worker run of the item's step in its own
         worktree (conductor/<batch>-<n>): launch row, brief, harness, spend
-        row, push, PR, run row; any failure queues a stall ask.
+        row, push, PR, run row; any failure queues a stall ask, and a
+        launch refusal no retry fixes pauses dispatch behind an ask.
   python3 conductor.py merge <batch> <#N>
         One merge turn, refused unless the item is reviewed with a pass
         from a distinct reviewer and an answer covers it: merge
@@ -591,7 +593,7 @@ def _answer_cli(root, batch, args, now, env):
 
 
 def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
-         alive=None, harness=None, tool=None, sleep=None):
+         alive=None, harness=None, tool=None, sleep=None, netrc=None):
     env = os.environ if env is None else env
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
@@ -608,7 +610,8 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
     if argv[:1] == ["plan"]:
         problems = conductor_plan.plan_cli(root, argv[1:], now, run, git)
     elif argv[:1] == ["open"] and len(argv) >= 3:
-        problems = conductor_plan.open_cli(root, argv[1:], now, run, git)
+        problems = conductor_plan.open_cli(root, argv[1:], now, run, git,
+                                           netrc)
     elif len(argv) >= 2:
         command, batch, args = argv[0], argv[1], argv[2:]
         if command == "next" and env.get(WORKER_ENV):

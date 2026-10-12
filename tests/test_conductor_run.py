@@ -85,6 +85,10 @@ def Git(tmp, changed="", shows=None, fail=None):
             out = "c0ffee\n"
         elif args[:2] == ["worktree", "add"]:
             Path(args[4]).mkdir(parents=True)
+        elif args[:2] == ["ls-tree", "--name-only"]:
+            # A ledger is on a ref only when `shows` holds it there.
+            out = args[-1] + "\n" if f"{args[2]}:{args[-1]}" in (
+                shows or {}) else ""
         elif "diff" in args:
             out = changed
         elif "show" in args:
@@ -665,7 +669,9 @@ class TestMonthlyCap(RunCase):
             git=Git(self.tmp.name), gh=Gh(), harness=Harness(act=pr_body),
             pid=777, netrc=self.no_netrc)
         self.assertEqual(problems, [
-            "config: factory.json names no positive monthly_cap_usd"])
+            "config: factory.json names no positive monthly_cap_usd",
+            "cd: launching #12 spec was refused; dispatch is paused behind"
+            " ask-2"])
 
 
 class TestReviewRun(RunCase):

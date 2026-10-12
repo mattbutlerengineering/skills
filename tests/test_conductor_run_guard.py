@@ -53,10 +53,15 @@ def configured(tmp, out):
 
 class TestPushGuard(GuardCase):
     def assertRefused(self, result, problem):
+        """Refused, and dispatch paused behind one batch-wide ask
+        (#709): no retry fixes a push gap."""
         summary, problems, harness = result
-        self.assertEqual((summary, problems), (None, [problem]))
+        self.assertEqual((summary, problems), (None, [
+            problem, "cd: launching #12 spec was refused; dispatch is"
+            " paused behind ask-2"]))
         self.assertEqual(harness.calls, [])
-        self.assertEqual(self.load_kinds(), [r["kind"] for r in BASE])
+        self.assertEqual(self.load_kinds(),
+                         [r["kind"] for r in BASE] + ["ask"])
 
     def load_kinds(self):
         rows, _ = conductor.load(self.root, "b1")

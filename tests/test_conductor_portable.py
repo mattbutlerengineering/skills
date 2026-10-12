@@ -317,7 +317,10 @@ class TestWorkerGate(RunCase):
         self.config(300, gate="make check && true")
         summary, problems = self.run_step("#12", "spec",
                                           Harness(act=pr_body))
-        self.assertEqual((summary, problems), (None, [GATE_PROBLEM]))
+        # A refusal no retry fixes pauses dispatch (#709).
+        self.assertEqual((summary, problems), (None, [
+            GATE_PROBLEM, "cd: launching #12 spec was refused; dispatch is"
+            " paused behind ask-2"]))
         self.assertEqual(self.harness.calls, [])
 
 
@@ -419,7 +422,8 @@ class TestPlanCharters(unittest.TestCase):
             Path(tmp, ".github/factory.json").write_text(json.dumps(CONFIG))
             return cli_contract.capture(
                 conductor.main, argv, env={}, clock=clock, root=tmp,
-                run=fake_gh({12: issue(12)}), git=fake_git())
+                run=fake_gh({12: issue(12)}), git=fake_git(),
+                netrc=Path(tmp) / "netrc")
 
     def test_plan_reads_charters_from_the_named_directory(self):
         code, out = self.run_cli(["plan", "--agents", str(AGENTS), "#12"])

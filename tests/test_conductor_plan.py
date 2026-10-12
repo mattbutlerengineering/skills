@@ -70,6 +70,9 @@ def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", calls=None,
                 (Path(args[4]) / path).write_text("{}\n")
             return subprocess.CompletedProcess(args, 0, stdout="",
                                                stderr="")
+        if "--get-regexp" in args:
+            # open's launch preflight (#708): no remote has a pushurl.
+            raise subprocess.CalledProcessError(1, args)
         if args[0] == "ls-tree":
             listed = "".join(f"{path}\n" for path in on_main
                              if path in args)
