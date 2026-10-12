@@ -1189,6 +1189,59 @@ class TestReadExecution(unittest.TestCase):
                 None, f"execution file {path} usage input_tokens -1 is"
                 " not a non-negative integer"))
 
+    # #725: the headless CLI's error_max_budget_usd result zeroes `usage`
+    # and reports its counts per model in `modelUsage` (observed
+    # 2026-10-11, claude -p --max-budget-usd 0.0001).
+    BUDGET_STOP = {"type": "result", "subtype": "error_max_budget_usd",
+                   "is_error": True, "total_cost_usd": 0.0279511,
+                   "usage": {"input_tokens": 0, "output_tokens": 0,
+                             "cache_creation_input_tokens": 0,
+                             "cache_read_input_tokens": 0},
+                   "modelUsage": {"claude-haiku-4-5": {
+                       "inputTokens": 10, "outputTokens": 151,
+                       "cacheReadInputTokens": 13981,
+                       "cacheCreationInputTokens": 12894,
+                       "thinkingTokens": 46, "costUSD": 0.0279511}}}
+
+    def test_a_zeroed_usage_is_metered_from_model_usage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, self.BUDGET_STOP)
+            self.assertEqual(cli.read_execution(path),
+                             ((27036, 0.0279511), None))
+
+    def test_model_usage_sums_across_models(self):
+        two = dict(self.BUDGET_STOP, modelUsage={
+            "a": {"inputTokens": 1, "outputTokens": 2},
+            "b": {"cacheReadInputTokens": 3,
+                  "cacheCreationInputTokens": 4}})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, two)
+            self.assertEqual(cli.read_execution(path), ((10, 0.0279511),
+                                                        None))
+
+    def test_a_nonzero_usage_is_not_overridden_by_model_usage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, dict(self.BUDGET_STOP,
+                                        usage={"input_tokens": 5}))
+            self.assertEqual(cli.read_execution(path), ((5, 0.0279511),
+                                                        None))
+
+    def test_a_bad_model_usage_count_is_an_error_not_a_zero(self):
+        bad = dict(self.BUDGET_STOP,
+                   modelUsage={"m": {"outputTokens": "many"}})
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, bad)
+            self.assertEqual(cli.read_execution(path), (
+                None, f"execution file {path} modelUsage m outputTokens"
+                " 'many' is not a non-negative integer"))
+
+    def test_a_model_usage_that_is_not_an_object_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, dict(self.BUDGET_STOP, modelUsage=[1]))
+            self.assertEqual(cli.read_execution(path), (
+                None, f"execution file {path} result entry's modelUsage"
+                " is not an object of objects"))
+
 
 class TestPidAlivePredicate(unittest.TestCase):
     """pid_alive underpins assert_grandchild_reaped's grace loop, so a

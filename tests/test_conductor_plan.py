@@ -188,19 +188,19 @@ class TestPlanBatch(unittest.TestCase):
             "steps": [
                 {"step": "spec", "charter": "architect",
                  "band": "architecture_review", "model": "fable",
-                 "effort": "high", "ceiling_usd": 3.0},
+                 "effort": "high", "ceiling_usd": 6.44},
                 {"step": "build", "charter": "swe",
                  "band": "implementation", "model": "sonnet",
-                 "effort": "medium", "ceiling_usd": 3.0},
+                 "effort": "medium", "ceiling_usd": 2.14},
                 {"step": "verify", "charter": "qa",
                  "band": "implementation", "model": "sonnet",
-                 "effort": "medium", "ceiling_usd": 3.0},
+                 "effort": "medium", "ceiling_usd": 2.14},
                 {"step": "review", "charter": "reviewer",
                  "band": "architecture_review", "model": "fable",
-                 "effort": "high", "ceiling_usd": 3.0},
+                 "effort": "high", "ceiling_usd": 2.14},
                 {"step": "ship", "charter": "qa",
                  "band": "implementation", "model": "sonnet",
-                 "effort": "medium", "ceiling_usd": 3.0}],
+                 "effort": "medium", "ceiling_usd": 2.14}],
             "estimate_usd": 15, "after": [],
             "block": {"prd": [14], "adr": [84, 85, 86],
                       "wo": list(range(153, 163))}}])
@@ -275,7 +275,7 @@ class TestComposePlan(unittest.TestCase):
         self.assertEqual(lines[1], "  #12  feature  size:M  $15.00"
                          "  reserves prd 14, adr 84-86, wo 153-162")
         self.assertEqual(lines[2], "    spec    architect  architecture_review"
-                         "  fable  high  $3.00")
+                         "  fable  high  $6.44")
         self.assertEqual(lines[-2], "  batch estimate $15.00 against"
                          " $280.00 left of the $300.00 monthly cap")
         self.assertEqual(lines[-1], "  #13 deferred: no type: label")

@@ -100,7 +100,11 @@ directory>/../../factory/agents`, straight after `plan` or after
 Show the Owner the plan as printed: per item its type, steps, charter,
 band, model, effort and ceiling, its estimate and reserved number block,
 the batch estimate against what remains of the monthly cap, and every
-deferral line. Deferrals are part of the answer, never noise. `open`
+deferral line. Deferrals are part of the answer, never noise. A step's
+ceiling is its weighted share of the item's estimate: spec takes three
+shares and every other step one, unless `conductor.step_weights` in
+`factory.json` says otherwise, so name the spec share when you show it.
+`open`
 first checks what every `run` will need (a usable `factory.json`, a
 readable cost ledger on `origin/main`, no push gap; see step 4) and
 refuses before anything exists, so no launch refusal of that kind can
