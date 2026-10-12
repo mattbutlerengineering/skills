@@ -481,6 +481,18 @@ class TestCompletedRun(RunCase):
                           self.rows[-1]["effort"]),
                          ("architecture_review", "fable", "high"))
 
+    def test_retry_up_is_not_re_offered_after_a_run_at_the_top_band(self):
+        # #732: a stalled run already bumped to the top band must not
+        # have retry-up offered again — a further retry-up would run at
+        # the same band it just failed at.
+        rows = BASE + [launch("#14", "planned", "build"),
+                       moved("#14", "build", "stalled"),
+                       stall_ask("ask-2", "#14"),
+                       answered("ask-2", "retry-up", "#14")]
+        self.run_step("#14", "build", Harness(missing=True),
+                      gh=Gh(title="WO-0180: order"), rows=rows)
+        self.assertEqual(self.rows[-1]["options"], ["retry", "block"])
+
     def test_a_renumbered_block_briefs_its_live_numbers(self):
         # #694: the brief once kept each kind's last reserve row, so a
         # renumber row hid the numbers the item still holds.

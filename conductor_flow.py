@@ -209,10 +209,14 @@ def _band(entry, step):
 
 def stall_rows(rows, now, entry, reason, recommended, why):
     """[state row, stall ask] for an item that stalls in its current
-    state. retry-up is offered only below the top band."""
+    state. retry-up is offered only when the run leaving this state
+    (if any — a dead runner leaves none) was not already at the top
+    band: the planned band alone misses a prior retry-up bump (#732)."""
     item = entry["item"]
     state = current_state(rows, item)
-    band = _band(entry, state)
+    finishing = item_view(rows, item)["finishing"]
+    band = finishing["band"] if finishing is not None \
+        else _band(entry, state)
     options = [option for option in STALL_OPTIONS
                if option != "retry-up" or band != BANDS[-1]]
     moved = state_row(now, item, state, "stalled", reason)
