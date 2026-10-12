@@ -225,7 +225,13 @@ when set, replaces the built-in rule (the first `type:` label, the first
 values is deferred rather than guessed. `default_size` sizes an issue
 with no size label at all. `defer_labels` lists labels such as
 `blocked` or `needs-review`, and an issue carrying one is deferred with
-the label named. Detector F checks the table. `work-queue` still
+the label named. An item's size budget is its estimate, split across
+its steps as their ceilings by step weight (#724): by default `spec`
+takes three shares and `build`, `verify`, `review` and `ship` one each,
+so a size-M feature at $15 plans spec at $6.44 and each other step at
+$2.14. `step_weights` maps any of those steps to a positive number that
+replaces its default weight; the batch estimate stays the size budget.
+Detector F checks the table. `work-queue` still
 fans out ready work orders through one stage, and `autorun` still drives
 one run end to end. One step needs no Conductor: turn on the merge queue
 ADR-0070 already chose, if the repo's plan allows it; the merge turn uses
