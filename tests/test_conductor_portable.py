@@ -419,7 +419,7 @@ class TestPlanCharters(unittest.TestCase):
             Path(tmp, ".github/factory.json").write_text(json.dumps(CONFIG))
             return cli_contract.capture(
                 conductor.main, argv, env={}, clock=clock, root=tmp,
-                run=fake_gh({12: issue(12)}), git=fake_git())
+                run=fake_gh({12: issue(12)}), git=fake_git(checkout=tmp))
 
     def test_plan_reads_charters_from_the_named_directory(self):
         code, out = self.run_cli(["plan", "--agents", str(AGENTS), "#12"])
