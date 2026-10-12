@@ -1253,6 +1253,38 @@
       "expected": null,
       "query": "Write a SQL query that lists customers with no orders in the last 90 days",
       "notes": "database work with no migration in it must not fire prisma-migrations"
+    },
+    {
+      "id": "implement-queue-direct-1",
+      "kind": "direct",
+      "expected": "implement-queue",
+      "query": "Work the queue: pick up the ready-labelled issues, implement them in parallel and merge the green ones"
+    },
+    {
+      "id": "implement-queue-direct-2",
+      "kind": "direct",
+      "expected": "implement-queue",
+      "query": "Set this up so a scheduled routine drains our ready GitHub issues every 30 minutes, with a review gate before anything lands"
+    },
+    {
+      "id": "implement-queue-situational-1",
+      "kind": "situational",
+      "expected": "implement-queue",
+      "query": "We have nine issues labelled ready and nobody to babysit them overnight. Get them turned into reviewed PRs while I'm away"
+    },
+    {
+      "id": "implement-queue-vs-work-queue-1",
+      "kind": "near-miss",
+      "expected": "work-queue",
+      "query": "Run the work orders that are at wo:ready-for-agent in parallel and stop at merge-ready PRs",
+      "notes": "adjacency: implement-queue vs work-queue — factory work orders from breakdown rows are work-queue's; plain ready issues are implement-queue's"
+    },
+    {
+      "id": "implement-queue-vs-conduct-1",
+      "kind": "near-miss",
+      "expected": "conduct",
+      "query": "Take issues 41, 42 and 47 as one batch, price it first, and ask me before each merge",
+      "notes": "adjacency: implement-queue vs conduct — an Owner-named, priced batch with in-session answers is conduct's"
     }
   ]
 }

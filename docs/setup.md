@@ -223,11 +223,58 @@ standing-consent policy, and how the repo's own issue labels plan
 when set, replaces the built-in rule (the first `type:` label, the first
 `size:S|M|L` label), and an issue whose labels map to two different
 values is deferred rather than guessed. `default_size` sizes an issue
-with no size label at all. Detector F checks the table. `work-queue` still
+with no size label at all. `defer_labels` lists labels such as
+`blocked` or `needs-review`, and an issue carrying one is deferred with
+the label named. Detector F checks the table. `work-queue` still
 fans out ready work orders through one stage, and `autorun` still drives
 one run end to end. One step needs no Conductor: turn on the merge queue
 ADR-0070 already chose, if the repo's plan allows it; the merge turn uses
 it when present.
+
+## Consumer adoption
+
+Read this before deleting anything a repo already has (#712). Measured in
+mattbutlerengineering/mattbutlerengineering#6332.
+
+**Plugin skills load only in local sessions.** A repo's
+`.claude/settings.json` can declare this marketplace in
+`extraKnownMarketplaces` and turn the plugin on in `enabledPlugins`. A local
+Claude Code session on that repo then lists every `idea-to-prod:*` skill. A
+claude.ai cloud routine on the same commit lists none, with no error and no
+trust prompt. The RemoteTrigger API accepts `enabled_plugins` and
+`extra_marketplaces` on a trigger, but silently drops them and echoes back
+`[]`. So `conduct` is an Owner-attended, local-only path. It is not a
+replacement for a repo's own unattended queue.
+
+**Retire a repo-local skill or agent only when nothing plugin-less calls
+it.** A local skill or agent can give way to a plugin skill only when
+nothing that runs without the plugin calls it. Callers that run without the
+plugin include cloud routines, prompts that GitHub Actions hand to an agent,
+and agents dispatched by name (a classifier's routing table, for example).
+If any of them calls it, keep it.
+
+**Tools-only (Conductor-only) stamp.** A repo that wants the Conductor and
+none of the CI can install just two pieces: `tools/factory/` and
+`.github/factory.json` with its `conductor` table. Leave out the workflows,
+the `Makefile` and the seeded ADRs, so CI and spend stay as they are. There
+is no stamp flag for this mode. Copy the two pieces from a stamped payload by
+hand, and expect `doctor` (detector E) to report the files left out as
+missing. That finding describes the chosen scope and is not a fault.
+
+- Without a `Makefile`, set `conductor.gate_command`. It must be one command
+  with no shell operators, because the Worker's tool allowlist permits that
+  exact command and, beyond `python3` and a few `git` commands, nothing
+  else. A fresh item worktree has no
+  `node_modules` or equivalent. So when the gate needs a dependency install
+  first, ship a small gate script that installs and then checks, and point
+  `gate_command` at it.
+- Open batches from the repo's own checkout, not a throwaway clone. The batch
+  ledger is an uncommitted file in the batch worktree until `close` commits
+  it (#704).
+
+Worked example: mattbutlerengineering/mattbutlerengineering#6364 adds
+`tools/factory/`, `.github/factory.json` and a `scripts/conductor-gate.sh`
+gate, and nothing else.
 
 ## Deliberately not in scope
 

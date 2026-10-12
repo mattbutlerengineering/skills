@@ -51,14 +51,18 @@ def fake_gh(issues, owner=OWNER, fail=None):
 
 
 def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", calls=None,
-             on_main=()):
+             on_main=(), checkout=None):
     """`on_main` names the files origin/main holds: ls-tree lists them,
-    and a worktree added from it checks them out."""
+    and a worktree added from it checks them out. `checkout` is the main
+    checkout whose .git rev-parse names as the common dir."""
     import subprocess
 
     def run(args):
         if calls is not None:
             calls.append(args)
+        if args[:1] == ["rev-parse"] and checkout is not None:
+            return subprocess.CompletedProcess(
+                args, 0, stdout=f"{Path(checkout) / '.git'}\n", stderr="")
         if args[0] == "grep":
             return subprocess.CompletedProcess(args, 0, stdout=grep,
                                                stderr="")
@@ -70,6 +74,9 @@ def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", calls=None,
                 (Path(args[4]) / path).write_text("{}\n")
             return subprocess.CompletedProcess(args, 0, stdout="",
                                                stderr="")
+        if "--get-regexp" in args:
+            # open's launch preflight (#708): no remote has a pushurl.
+            raise subprocess.CalledProcessError(1, args)
         if args[0] == "ls-tree":
             listed = "".join(f"{path}\n" for path in on_main
                              if path in args)
@@ -77,6 +84,34 @@ def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", calls=None,
                                                stderr="")
         raise AssertionError(args)
     return run
+
+
+def real_git(cwd, *args):
+    """git run for real in cwd, as a fixture step."""
+    import subprocess
+    return subprocess.run(
+        ["git", "-c", "user.email=t@example.com", "-c", "user.name=Tester",
+         "-c", "commit.gpgsign=false", *args], cwd=cwd, check=True,
+        capture_output=True, text=True)
+
+
+def git_in(cwd):
+    """A real git port started in cwd, the way the Owner's shell is."""
+    def run(args):
+        return real_git(cwd, *args)
+    return run
+
+
+def linked_worktree(tmp):
+    """(main checkout, linked worktree): a real repo whose origin/main is
+    its one commit, and a `git worktree add` of it beside it."""
+    main = Path(tmp).resolve() / "main"
+    linked = Path(tmp).resolve() / "linked"
+    real_git(tmp, "init", "-q", "-b", "main", str(main))
+    real_git(main, "commit", "-q", "--allow-empty", "-m", "seed")
+    real_git(main, "update-ref", "refs/remotes/origin/main", "HEAD")
+    real_git(main, "worktree", "add", "-q", str(linked))
+    return main, linked
 
 
 CONFIG = {"budgets_usd": {"S": 5, "M": 15, "L": 40},
@@ -252,12 +287,13 @@ class TestOpen(unittest.TestCase):
         calls = []
         with tempfile.TemporaryDirectory() as tmp:
             worktree, problems = conductor_plan.open_batch(
-                tmp, "b1", result, clock(), fake_git(calls=calls))
+                "b1", result, clock(), fake_git(calls=calls, checkout=tmp))
             self.assertEqual(problems, [])
             self.assertEqual(worktree,
                              Path(tmp) / ".claude/worktrees/conductor-b1")
             rows, problems = conductor.load(worktree, "b1")
         self.assertEqual(calls, [
+            ["rev-parse", "--path-format=absolute", "--git-common-dir"],
             ["ls-tree", "--name-only", "origin/main", "--",
              "docs/factory/batches/b1/ledger.jsonl"],
             ["worktree", "add", "-b", "conductor/b1", str(worktree),
@@ -287,8 +323,8 @@ class TestOpen(unittest.TestCase):
         calls = []
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(
-                conductor_plan.open_batch(tmp, "b1", result, clock(),
-                                     fake_git(calls=calls)),
+                conductor_plan.open_batch("b1", result, clock(),
+                                          fake_git(calls=calls)),
                 (None, ["cd: nothing to open: every issue was deferred"]))
         self.assertEqual(calls, [])
 
@@ -298,7 +334,8 @@ class TestOpen(unittest.TestCase):
             (Path(tmp) / ".claude/worktrees/conductor-b1").mkdir(
                 parents=True)
             self.assertEqual(
-                conductor_plan.open_batch(tmp, "b1", result, clock(), fake_git()),
+                conductor_plan.open_batch("b1", result, clock(),
+                                          fake_git(checkout=tmp)),
                 (None, ["cd: .claude/worktrees/conductor-b1 already"
                         " exists"]))
 
@@ -310,9 +347,9 @@ class TestOpen(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(
                 conductor_plan.open_batch(
-                    tmp, "b1", result, clock(),
-                    fake_git(calls=calls, on_main=[conductor.LEDGER.format(
-                        batch="b1")])),
+                    "b1", result, clock(),
+                    fake_git(calls=calls, checkout=tmp,
+                             on_main=[conductor.LEDGER.format(batch="b1")])),
                 (None, ["cd: batch b1 already has a ledger on origin/main"
                         " (docs/factory/batches/b1/ledger.jsonl); choose"
                         " another batch name"]))
@@ -323,10 +360,52 @@ class TestOpen(unittest.TestCase):
         result, _ = plan([issue(12)])
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(
-                conductor_plan.open_batch(tmp, "B 1", result, clock(),
-                                     fake_git())[1],
+                conductor_plan.open_batch("B 1", result, clock(),
+                                          fake_git())[1],
                 ["cd: batch 'B 1' is not a batch name (lowercase letters,"
                  " digits and hyphens)"])
+
+    def test_a_failed_rev_parse_opens_nothing(self):
+        import subprocess
+        result, _ = plan([issue(12)])
+
+        def git(args):
+            raise subprocess.CalledProcessError(128, args,
+                                                stderr="not a git repo")
+        self.assertEqual(
+            conductor_plan.open_batch("b1", result, clock(), git),
+            (None, ["cd: git rev-parse failed: not a git repo"]))
+
+    def test_from_a_linked_worktree_it_opens_under_the_main_checkout(self):
+        # Issue #710: run from a linked worktree, open nested the batch
+        # worktree inside it, so reaping that worktree took the batch.
+        result, _ = plan([issue(12)])
+        with tempfile.TemporaryDirectory() as tmp:
+            main, linked = linked_worktree(tmp)
+            worktree, problems = conductor_plan.open_batch(
+                "b1", result, clock(), git_in(linked))
+            self.assertEqual(problems, [])
+            self.assertEqual(worktree,
+                             main / ".claude/worktrees/conductor-b1")
+            self.assertTrue(
+                (worktree / conductor.LEDGER.format(batch="b1")).is_file())
+            self.assertFalse((linked / ".claude").exists())
+
+
+class TestMainCheckout(unittest.TestCase):
+    """Issue #710: the batch worktree and every item worktree anchor at
+    the main checkout, whichever checkout the command runs from."""
+
+    def test_both_anchors_agree_from_a_linked_worktree(self):
+        import conductor_run
+        with tempfile.TemporaryDirectory() as tmp:
+            main, linked = linked_worktree(tmp)
+            for cwd in (main, linked):
+                self.assertEqual(conductor_plan.main_checkout(git_in(cwd)),
+                                 (main, []))
+                self.assertEqual(
+                    conductor_run.worktree_path(git_in(cwd), "b1", "#12"),
+                    (main / ".claude/worktrees/conductor-b1-12", []))
 
 
 class TestPlanCli(unittest.TestCase):
@@ -338,7 +417,7 @@ class TestPlanCli(unittest.TestCase):
             Path(tmp, "factory/agents").symlink_to(AGENTS)
             return cli_contract.capture(
                 conductor.main, argv, env={}, clock=clock, root=tmp,
-                run=fake_gh(issues, fail=fail), git=fake_git())
+                run=fake_gh(issues, fail=fail), git=fake_git(checkout=tmp))
 
     def test_plan_prints_the_plan(self):
         code, out = self.run_cli(["plan", "#12"], {12: issue(12)})
