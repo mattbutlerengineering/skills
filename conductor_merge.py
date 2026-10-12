@@ -9,10 +9,11 @@ gate blobs. An item merges only when it is reviewed with a pass verdict
 from a reviewer run distinct from every author run, its ship step has
 completed, and an answer covers it: its own merge ask answered `merge`,
 or a train ask whose `covers` lists it answered `train`, with every
-earlier item in that train already merged. The merge turn also holds the
-merged tree to the reviewed one: a turn starting from `ship` stalls when
-anything but the review and ship artifacts changed after the head the
-review run was launched on. An item whose branch changes
+earlier item in that train already merged, or a standing consent row
+that the opt-in policy still covers (ADR-0086). The merge turn also
+holds the merged tree to the reviewed one: a turn starting from `ship`
+stalls when anything but the review and ship artifacts changed after the
+head the review run was launched on. An item whose branch changes
 a gate file rides a train only when each gate file's blob id equals the
 one approved at its gate asks; otherwise it needs its own merge ask
 (ADR-0036 condition 3, as architecture.md reads it; drafted for the
@@ -33,6 +34,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
+import conductor_consent as consent
 import conductor_flow as flow
 import conductor_plan
 import conductor_run
@@ -135,28 +137,35 @@ def _train_problems(rows, item, train, blobs):
     return []
 
 
-def merge_problems(rows, item, blobs):
-    """Problems refusing a merge of `item`, PURE over the ledger's rows
-    and `blobs` ({gate path: blob id} the item branch changes). Empty
-    means the merge may proceed."""
+def merge_problems(rows, item, blobs, policy=None):
+    """Problems refusing a merge of `item`, PURE over the ledger's rows,
+    `blobs` ({gate path: blob id} the item branch changes) and the
+    resolved standing-consent policy (None: off). Empty means the merge
+    may proceed."""
     if flow.plan_entry(rows, item) is None:
         return [f"cd: {item} is not an item of this batch's plan"]
     problems = (_reviewed_problems(rows, item)
                 or _shipped_problems(rows, item)
                 or flow.transition_problems(rows, item, "merging", {}))
-    return problems or cover_problems(rows, item, blobs)
+    return problems or cover_problems(rows, item, blobs, policy)
 
 
-def cover_problems(rows, item, blobs):
+def cover_problems(rows, item, blobs, policy=None):
     """The answer half of merge_problems: an own merge answer, or a
     train answer with the earlier items merged and the gate blobs as
-    approved. Re-run after the merge turn updates the branch."""
+    approved, or else a standing consent the policy, as it reads now,
+    still covers: still on, and still no gate-path file (ADR-0086).
+    Re-run after the merge turn updates the branch."""
     own, trains = flow.consents(rows, item)
     if own:
         return []
-    if not trains:
+    if trains:
+        return _train_problems(rows, item, trains[-1], blobs)
+    if consent.standing(rows, item) is None:
         return _refused(f"no merge answer covers {item}")
-    return _train_problems(rows, item, trains[-1], blobs)
+    return [problem for reason in consent.standing_problems(
+        item, blobs, None, policy or {"enabled": False})
+        for problem in _refused(reason)]
 
 
 # --- the merge turn (WO-0161) ------------------------------------------
@@ -573,10 +582,11 @@ def _reserve(root, batch, clock, item, fields):
     return problems
 
 
-def _turn(root, batch, item, ports, worktree, gate):
+def _turn(root, batch, item, ports, worktree, gate, policy):
     """Steps 1-8 on a turn already moved to `merging`. (pr, sha, checks),
     or raises Stall; ledger problems are returned as the last value.
-    `gate` is the gate command's argv, run in the item worktree."""
+    `gate` is the gate command's argv, run in the item worktree;
+    `policy` the standing-consent policy the cover is re-checked under."""
     git, gh, tool, clock, sleep = ports
     branch = flow.item_branch(batch, item)
     update_branch(git, tool, worktree, branch)
@@ -594,7 +604,7 @@ def _turn(root, batch, item, ports, worktree, gate):
     blobs, problems = flow.gate_blobs(git, branch)
     if problems:
         raise Stall(problems[0][len("cd: "):], RETRY)
-    changed = cover_problems(rows, item, blobs)
+    changed = cover_problems(rows, item, blobs, policy)
     if changed:
         raise Stall(changed[0][len("cd: "):])
     try:
@@ -668,15 +678,16 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
     is the batch root's factory config (None reads as empty: every
     optional table at its default)."""
     gate, problems = factory_config.resolve_gate_command(config or {})
-    if problems:
-        return None, problems
+    policy, found = factory_config.resolve_standing_consent(config or {})
+    if problems or found:
+        return None, problems + found
     rows, problems = load(root, batch)
     if problems:
         return None, problems
     blobs, problems = flow.gate_blobs(git, flow.item_branch(batch, item))
     if problems:
         return None, problems
-    problems = merge_problems(rows, item, blobs)
+    problems = merge_problems(rows, item, blobs, policy)
     if problems:
         return None, problems
     worktree, problems = conductor_run.worktree_path(git, batch, item)
@@ -701,7 +712,7 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
     try:
         merged, problems = _turn(root, batch, item,
                                  (git, gh, tool, clock, sleep), worktree,
-                                 gate)
+                                 gate, policy)
     except Stall as stall:
         _, problems = flow.queue_stall(
             root, batch, clock(), item, stall.reason, stall.recommended,

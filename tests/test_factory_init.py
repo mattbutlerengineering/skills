@@ -66,6 +66,7 @@ EXPECTED_RELS = {
     "templates/tools/factory/conductor_run.py",
     "templates/tools/factory/conductor_merge.py",
     "templates/tools/factory/conductor_close.py",
+    "templates/tools/factory/conductor_consent.py",
 }
 
 SEEDED_ADRS = REPO_ROOT / "factory" / "templates" / "docs" / "adr"

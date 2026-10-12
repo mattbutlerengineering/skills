@@ -191,8 +191,19 @@ _Avoid_: log, journal
 The batch ledger's unanswered asks, presented to the Owner oldest first,
 one at a time, recommended option first. An answer row written straight
 after the Owner picks an option in the Conductor's session is the only
-Owner write and the only consent the tool acts on.
+Owner write, and the only consent the tool acts on except standing
+consent.
 _Avoid_: inbox, approval queue, gate (one of the three human gates)
+
+**Standing consent**:
+The Owner's merge consent given in advance through `factory.json`'s
+opt-in `conductor.standing_consent` policy, off by default (ADR-0086).
+`next` records it as a `consent` row for a shipped item that no merge ask
+covers, when the item changes no gate-path file and, if tier labels are
+configured, its issue carries one. The merge still needs a reviewed pass
+from a distinct Worker and green checks. It is not an answer, and the
+scorecard never counts it as an Owner touch.
+_Avoid_: auto-merge, pre-approval, blanket consent
 
 **Merge train**:
 An ordered list of batch items one merge answer covers: each merges, in

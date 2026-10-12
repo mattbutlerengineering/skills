@@ -46,6 +46,14 @@ It records any new stall and gate asks, then prints JSON with four keys:
 - `recorded`: the ids of asks it just wrote;
 - `merge_due`: shipped items waiting for a merge question you word.
 
+When the repo's `factory.json` turns on `conductor.standing_consent`
+(ADR-0086; off by default), `next` itself records standing consent for
+each shipped item the policy covers: no merge ask covers it, it changes
+no gate-path file, and, if tier labels are listed, its issue carries
+one. That item comes back in `ready` as a `merge` step with no question.
+An item left in `merge_due` is one the policy does not cover, and it
+needs the Owner's own answer as usual. A gate-path item always does.
+
 A closed session loses time, never state: resuming a batch is running
 `next` again. If there is no batch yet, go to step 2. A `cd:` problem is
 a refusal; report it and stop.
@@ -138,8 +146,9 @@ For each `ready` entry whose step is `merge`, one at a time:
     python3 conductor.py merge <batch> <#N>
 
 The tool refuses unless the item is reviewed with a pass from a reviewer
-distinct from its authors and an answer covers it, and on a train only
-once every earlier item has merged. It merges `main` in, bumps the
+distinct from its authors and an answer, or a standing consent the
+policy still covers, covers it; on a train, it also refuses until
+every earlier item has merged. It merges `main` in, bumps the
 plugin version for a `skills/` change (only in this plugin's own repo;
 never in a stamped one), confirms reserved numbers, re-runs the gate
 command, waits for green checks and merges. Anything it cannot do
@@ -166,7 +175,13 @@ A failing scorecard is a problem to report, never a number to estimate.
 - Never write an item's code, never review an item, and never edit a
   Worker's branch. Workers write; a distinct Worker reviews.
 - Never write an answer the Owner did not give in this session, and
-  never write to the batch ledger by hand.
+  never write to the batch ledger by hand. Standing consent is the
+  policy's, recorded by `next`. It is never yours to grant, and it
+  never covers any ask but an item's merge.
+- In a session with no Owner present (a scheduled run), present no
+  asks and answer none. Advance only what `ready` lists. When `ready`
+  is empty and an ask is waiting, stop: the batch waits there for the
+  Owner.
 - Never force-push, and never merge outside `conductor.py merge` or the
   closing ask's answer.
 - One Conductor per batch. A second session on the same batch races the

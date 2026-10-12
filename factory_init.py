@@ -240,6 +240,8 @@ MIRRORS = (
     ("conductor_run.py", "tools/factory/conductor_run.py", identity),
     ("conductor_merge.py", "tools/factory/conductor_merge.py", identity),
     ("conductor_close.py", "tools/factory/conductor_close.py", identity),
+    ("conductor_consent.py", "tools/factory/conductor_consent.py",
+     identity),
     (".github/workflows/validator.yml",
      ".github/workflows/validator.yml", identity),
     (".github/workflows/assembler.yml",

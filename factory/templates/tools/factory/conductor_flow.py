@@ -21,6 +21,7 @@ import json
 import os
 import re
 
+import conductor_consent as consent
 import factory_config
 from cli import CLI_FAILURES, detail
 from conductor import (BLOCK, TERMINAL, answers, append, ask_row,
@@ -106,10 +107,11 @@ def consents(rows, item):
 
 
 def _merge_ready(rows, item):
-    """True when an answer covers the shipped item and, on a train,
-    every earlier item has merged; the merge precondition re-checks."""
+    """True when an answer or a standing consent covers the shipped item
+    and, on a train, every earlier item has merged; the merge
+    precondition re-checks."""
     own, trains = consents(rows, item)
-    if own:
+    if own or consent.standing(rows, item):
         return True
     if not trains:
         return False
@@ -137,9 +139,20 @@ def merge_due(rows):
                 or any(item in row.get("covers", []) for row in pending):
             continue
         own, trains = consents(rows, item)
-        if not (own or trains):
+        if not (own or trains or consent.standing(rows, item)):
             due.append(item)
     return due
+
+
+def standing_due(rows):
+    """The merge-due items no merge ask covers at all, answered or not:
+    the ones the standing policy may cover (ADR-0086). Once the Owner
+    has a merge ask on an item, the Owner's answer decides it. PURE."""
+    asked = set()
+    for row in rows:
+        if row["kind"] == "ask" and row["ask_kind"] == "merge":
+            asked.update([row["item"], *row.get("covers", [])])
+    return [item for item in merge_due(rows) if item not in asked]
 
 
 def _successors(item_type, state, rows, item):
@@ -400,7 +413,13 @@ def _after_step(rows, now, entry, launched, facts):
             return None, []
         return ("build" if facts[item]["unchecked"] else "verify"), []
     if state == "ship":
-        return ("merge" if _merge_ready(rows, item) else None), []
+        if _merge_ready(rows, item):
+            return "merge", []
+        standing = facts.get(item, {}).get("standing")
+        if standing is not None and not standing["problems"]:
+            return "merge", [consent.consent_row(
+                now, item, standing["labels"], standing["policy"])]
+        return None, []
     return {"verify": "review"}.get(state), []
 
 
@@ -586,15 +605,41 @@ def pid_alive(pid):
     return True
 
 
-def advance(root, batch, now, wip_cap, alive, git):
-    """(result, problems): `next`. Reads branch facts for finished steps,
-    then surveys and writes new asks under the ledger lock."""
+def standing_facts(git, gh, batch, rows, policy):
+    """({item: {"problems", "labels", "policy"}}, problems): the standing
+    policy's verdict on each item it may cover (ADR-0086), from the item
+    branch's gate files and, under a tier list, its issue's labels. Empty
+    while the policy is off."""
+    facts = {}
+    for item in standing_due(rows) if policy["enabled"] else []:
+        blobs, problems = gate_blobs(git, item_branch(batch, item))
+        if problems:
+            return None, problems
+        labels, problems = consent.issue_labels(gh, item, policy)
+        if problems:
+            return None, problems
+        facts[item] = {"problems": consent.standing_problems(
+            item, blobs, labels, policy), "labels": labels,
+            "policy": policy}
+    return facts, []
+
+
+def advance(root, batch, now, wip_cap, alive, git, gh=None, policy=None):
+    """(result, problems): `next`. Reads branch facts for finished steps
+    and the standing policy's facts for shipped items, then surveys and
+    writes new asks and consent rows under the ledger lock."""
     rows, problems = load(root, batch)
     if problems:
         return None, problems
     facts, problems = branch_facts(git, batch, needs_facts(rows))
     if problems:
         return None, problems
+    standing, problems = standing_facts(
+        git, gh, batch, rows, policy or {"enabled": False})
+    if problems:
+        return None, problems
+    for item, verdict in standing.items():
+        facts.setdefault(item, {})["standing"] = verdict
     outcome = {}
 
     def build(rows):
@@ -611,7 +656,7 @@ def advance(root, batch, now, wip_cap, alive, git):
             "recorded": recorded, "merge_due": merge_due(after)}, []
 
 
-def next_cli(root, batch, args, now, git, alive):
+def next_cli(root, batch, args, now, git, alive, gh=None):
     if args:
         return None
     config, problems = factory_config.load(root)
@@ -620,8 +665,11 @@ def next_cli(root, batch, args, now, git, alive):
     wip = config.get("wip_cap")
     if isinstance(wip, bool) or not isinstance(wip, int) or wip < 1:
         return ["cd: factory.json wip_cap must be a positive integer"]
+    policy, problems = factory_config.resolve_standing_consent(config)
+    if problems:
+        return problems
     result, problems = advance(root, batch, now, wip, alive or pid_alive,
-                               git)
+                               git, gh, policy)
     if result is not None:
         print(json.dumps(result, indent=2))
     return problems
