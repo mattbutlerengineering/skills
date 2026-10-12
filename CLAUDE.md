@@ -34,6 +34,7 @@ the `claude` CLI):
   `plugin-evals/results/`. A cited run's `aggregate-result.json` is
   copied unedited to append-only `plugin-evals/records/<date>[-N].json`.
   It is eval evidence and never graduates LEDGER maturity.
+  <!-- drift-ignore: aggregate-result.json -->
 
 Also on demand, but free and needing nothing installed — a review
 pre-pass, deliberately **not** a gate:
@@ -92,6 +93,7 @@ pre-pass, deliberately **not** a gate:
   before its `breakdown.md` row exists.
 - **Typed IDs live in run-artifact frontmatter** (`id: PRD-0001`), never a
   parallel `docs/prd/` tree (ADR-0004).
+  <!-- drift-ignore: docs/prd/ -->
 
 ## Eval honesty (non-negotiable)
 
