@@ -97,6 +97,11 @@ then pass this plugin's, `--agents <this skill's
 directory>/../../factory/agents`, straight after `plan` or after
 `open <batch>`.
 
+A batch name is lowercase letters, digits and hyphens, and never ends
+in `-<digits>`: item #N of batch `oct` runs on `conductor/oct-N`, so a
+batch named `oct-2` would share item #2's branch and worktree, and
+`open` refuses it.
+
 Show the Owner the plan as printed: per item its type, steps, charter,
 band, model, effort and ceiling, its estimate and reserved number block,
 the batch estimate against what remains of the monthly cap, and every

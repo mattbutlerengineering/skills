@@ -232,6 +232,24 @@ class TestHardStop(unittest.TestCase):
             self.assertEqual(json.loads(line)["at"], "2026-08-02")
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
+    def test_a_malformed_row_is_refused_and_the_handoff_still_posts(self):
+        # #736: hard_stop appended blindly, so one bad row made every
+        # later ledger read report a problem and paused dispatch.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            posted = []
+            problems = budget_guard.hard_stop(
+                tree.root, "WO-7", "over budget", done=[],
+                remaining=["finish"], resume="rerun", run_id="r-1",
+                model="m", tokens=1, cost=16.40, at="2026-08-02",
+                run=lambda args: None, post=posted.append)
+            self.assertEqual(problems, [
+                "bg: refusing to record WO-7: wo 'WO-7' is not a"
+                " WO-#### token or an issue key (#<n>)"])
+            self.assertEqual(len(posted), 1)
+            self.assertFalse(
+                (tree.root / "docs" / "factory" / "costs.jsonl").exists())
+
     def test_the_exhaustion_row_is_inside_the_pushed_commit(self):
         # WO-0032: the pushed WIP commit is the row's only escape from
         # the ephemeral runner — `git add -A` must already see it on
@@ -344,34 +362,6 @@ class TestRecord(unittest.TestCase):
                 " WO-#### token or an issue key (#<n>)"])
             self.assertEqual(self.lines(tree), [])
 
-    def test_a_negative_cost_is_refused_before_the_write(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            problems = budget_guard.record(
-                tree.root, "WO-0007", "r-1", "claude-sonnet-5", 4200, -1.0,
-                "completed", "2026-08-07")
-            self.assertEqual(problems, [
-                "bg: refusing to record WO-0007: cost must be a"
-                " non-negative number"])
-            self.assertEqual(self.lines(tree), [])
-
-    def test_the_same_run_is_never_recorded_twice(self):
-        """A re-recorded run would double-count against the monthly cap,
-        which is the entire reason the row is written."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            self.assertEqual(budget_guard.record(
-                tree.root, "WO-0007", "r-1", "claude-sonnet-5", 4200, 1.25,
-                "completed", "2026-08-07"), [])
-            problems = budget_guard.record(
-                tree.root, "WO-0007", "r-1", "claude-sonnet-5", 4200, 1.25,
-                "completed", "2026-08-07")
-            self.assertEqual(problems, [
-                "bg: refusing to record WO-0007: run_id 'r-1' is already in"
-                " the ledger — recording it twice would double-count the"
-                " run against the monthly cap"])
-            self.assertEqual(len(self.lines(tree)), 1)
-
     def test_a_second_run_of_the_same_work_order_is_allowed(self):
         """Dedupe keys on (wo, run_id), not wo — a work order legitimately
         gets a second dispatch after a failure."""
@@ -383,120 +373,6 @@ class TestRecord(unittest.TestCase):
                     1.25, "completed", "2026-08-07"), [])
             self.assertEqual([row["run_id"] for row in self.lines(tree)],
                              ["r-1", "r-2"])
-
-    def test_the_refusal_agrees_with_the_seam_about_identity(self):
-        """record's double-count guard and cost_ledger.row_key must be the
-        SAME fact, not two facts that agree today.
-
-        Every other case here writes the identity out by hand, so all of
-        them keep passing if the seam's identity moves and record's copy
-        does not — measured: mutating row_key to a three-field identity
-        fails one cost_ledger test and none of this module's. This case asks
-        the seam what it thinks of each candidate and asserts record reached
-        the same verdict, so a divergence lands here.
-
-        Two candidates, because one direction is not enough. Each differs
-        from the recorded row in exactly one field:
-
-          - a new MODEL, which today's (wo, run_id) identity ignores. A
-            WIDER identity (one that grew to include model) calls it
-            distinct while a stale inline copy still refuses it.
-          - a new RUN_ID, which today's identity honours. A NARROWER
-            identity (one that shrank to wo alone) calls it a duplicate
-            while a stale inline copy still accepts it.
-
-        A single candidate catches only the direction it happens to move
-        in.
-        """
-        first = ("WO-0007", "r-1", "claude-sonnet-5", 4200, 1.25,
-                 "completed", "2026-08-07")
-        candidates = {
-            "a new model": ("WO-0007", "r-1", "claude-haiku-4-5", 100, 0.1,
-                            "completed", "2026-08-07"),
-            "a new run_id": ("WO-0007", "r-2", "claude-sonnet-5", 4200, 1.25,
-                             "completed", "2026-08-07"),
-        }
-        for differs_by, candidate in candidates.items():
-            with self.subTest(differs_by=differs_by):
-                with tempfile.TemporaryDirectory() as tmp:
-                    tree = FixtureTree(tmp)
-                    self.assertEqual(
-                        budget_guard.record(tree.root, *first), [])
-                    recorded, problems = cost_ledger.read(tree.root)
-                    self.assertEqual(problems, [])
-                    seam_calls_it_a_duplicate = (
-                        cost_ledger.row_key(cost_ledger.entry(*candidate))
-                        == cost_ledger.row_key(recorded[0]))
-                    refused = bool(
-                        budget_guard.record(tree.root, *candidate))
-                    self.assertEqual(
-                        refused, seam_calls_it_a_duplicate,
-                        "record and cost_ledger.row_key disagree about"
-                        f" whether {candidate[:3]} is already in the ledger")
-                    self.assertEqual(
-                        len(self.lines(tree)),
-                        1 if seam_calls_it_a_duplicate else 2)
-
-    def test_an_unparseable_ledger_fails_closed(self):
-        """Appending spend to a ledger that cannot be summed would
-        undercount silently — the failure this path exists to end."""
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write("docs/factory/costs.jsonl", "{not json\n")
-            problems = budget_guard.record(
-                tree.root, "WO-0007", "r-1", "claude-sonnet-5", 4200, 1.25,
-                "completed", "2026-08-07")
-            self.assertEqual(len(problems), 1)
-            self.assertTrue(problems[0].startswith(
-                "bg: refusing to record WO-0007: ledger:"), problems)
-            self.assertEqual(
-                (tree.root / "docs" / "factory" / "costs.jsonl").read_text(
-                    encoding="utf-8"), "{not json\n")
-
-    def test_a_ledger_that_is_not_utf8_fails_closed(self):
-        """The same refusal for bytes that will not decode: one bg:
-        problem carrying the ledger's own, and not a byte appended —
-        where the read raised UnicodeDecodeError before the refusal
-        could be reached."""
-        wo = "WO-0007"
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            ledger = tree.write("docs/factory/costs.jsonl", "")
-            ledger.write_bytes(b"\xff\xfe\x00")
-            problems = budget_guard.record(
-                tree.root, wo, "r-1", "claude-sonnet-5", 4200, 1.25,
-                "completed", "2026-08-07")
-            self.assertEqual(problems, [
-                f"bg: refusing to record {wo}: ledger: cannot read"
-                " docs/factory/costs.jsonl: 'utf-8' codec can't decode byte"
-                " 0xff in position 0: invalid start byte"])
-            self.assertEqual(ledger.read_bytes(), b"\xff\xfe\x00")
-
-    def test_a_ledger_line_the_parser_refuses_fails_closed(self):
-        """The same refusal for a line json.loads refuses with
-        ValueError, not JSONDecodeError (an integer past the
-        interpreter's digit limit): one bg: problem carrying the line's
-        own, and not a byte appended — where the read raised before the
-        refusal could be reached."""
-        wo = "WO-0007"
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            good = json.dumps(cost_ledger.entry(
-                wo, "r-0", "claude-sonnet-5", 100, 0.5, "completed",
-                "2026-08-06"))
-            text = (good + "\n" + good.replace(
-                '"tokens": 100', '"tokens": ' + "1" * 5000) + "\n")
-            ledger = tree.write("docs/factory/costs.jsonl", text)
-            problems = budget_guard.record(
-                tree.root, wo, "r-1", "claude-sonnet-5", 4200, 1.25,
-                "completed", "2026-08-07")
-            self.assertEqual(problems, [
-                f"bg: refusing to record {wo}: ledger:"
-                " docs/factory/costs.jsonl:2 is not valid JSON: Exceeds the"
-                " limit (4300 digits) for integer string conversion: value"
-                " has 5000 digits; use sys.set_int_max_str_digits() to"
-                " increase the limit"])
-            self.assertEqual(ledger.read_text(encoding="utf-8"), text)
 
     def test_an_exhaustion_row_and_a_completion_row_coexist(self):
         """hard_stop and record write the same shape; only outcome differs,

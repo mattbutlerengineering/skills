@@ -16,6 +16,7 @@ from pathlib import Path
 import conductor
 import conductor_close as close
 import conductor_flow as flow
+import conductor_run
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
@@ -245,6 +246,27 @@ DIRTY_MERGE = subprocess.CalledProcessError(
     "Aborting\n")
 
 
+# The blocked item's commits beyond origin/main: only its spend rows,
+# which close carries into costs.jsonl (#728 item 2), or real work too.
+COST_ONLY_LOG = "".join(f"{conductor_run.SPEND_SUBJECT}{entry['run_id']}\n"
+                        for entry in BLOCKED_SPEND)
+WORK_LOG = "feat: the blueprint\n" + COST_ONLY_LOG
+
+
+BRANCH_SHA = "5bed5e"
+LEASED_DELETE = ["push", "--force-with-lease=refs/heads/conductor/b1-13:"
+                 f"{BRANCH_SHA}", "origin", ":refs/heads/conductor/b1-13"]
+
+
+def head_call(root):
+    return ("-C", str(root), "rev-parse", "conductor/b1-13")
+
+
+def log_call(root):
+    return ("-C", str(root), "log", "--format=%s",
+            f"origin/main..{BRANCH_SHA}")
+
+
 def git_port(fake):
     """The git port over a FakeGh: records, answers by argv prefix, and
     returns what cli.runner returns."""
@@ -262,11 +284,13 @@ class TestClose(unittest.TestCase):
         (self.root / close.SCORECARDS).write_text(CARD, encoding="utf-8")
 
     def close(self, rows, costs=SPEND[:4] + SPEND[5:], git=None, gh=None,
-              branch_costs=BLOCKED_SPEND):
+              branch_costs=BLOCKED_SPEND, branch_log=COST_ONLY_LOG):
         write(self.root, lines(rows), lines(costs))
         self.git = git or FakeGh({
             ("-C", str(self.root), "show",
-             f"conductor/b1-13:{COSTS}"): lines(branch_costs)})
+             f"conductor/b1-13:{COSTS}"): lines(branch_costs),
+            head_call(self.root): BRANCH_SHA + "\n",
+            log_call(self.root): branch_log})
         self.gh = gh or FakeGh({LABEL_LIST: HAS_NEEDS_HUMAN})
         return close.close_batch(self.root, "b1", lambda: NOW,
                                  git_port(self.git), self.gh)
@@ -301,10 +325,13 @@ class TestClose(unittest.TestCase):
             here + ["fetch", "origin", "main"],
             here + ["merge", "--no-edit", "origin/main"],
             here + ["show", f"conductor/b1-13:{COSTS}"],
+            here + ["rev-parse", "conductor/b1-13"],
+            here + ["log", "--format=%s", f"origin/main..{BRANCH_SHA}"],
             here + ["add", "--", "docs/factory/batches/b1", COSTS,
                     close.SCORECARDS],
             here + ["commit", "-m", "chore(conductor): close batch b1"],
-            here + ["push", "-u", "origin", "conductor/b1"]])
+            here + ["push", "-u", "origin", "conductor/b1"],
+            here + LEASED_DELETE])
         self.assertEqual(self.gh.calls, [
             LABEL_LIST_CALL,
             ["pr", "create", "--head", "conductor/b1", "--base", "main",
@@ -316,6 +343,78 @@ class TestClose(unittest.TestCase):
             ["issue", "edit", "13", "--add-label", "needs-human"],
             ["issue", "comment", "13", "--body", "Blocked in conductor"
              " batch b1: answer to ask-3: block"]])
+
+    def test_a_branch_holding_real_work_is_kept_and_named(self):
+        # #728 item 2: a branch with a blueprint is worth keeping, and
+        # the Owner is told where it is.
+        summary, problems = self.close(ROWS, branch_log=WORK_LOG)
+        self.assertEqual(problems, [])
+        self.assertEqual(self.git.called("-C", str(self.root), "push",
+                                         LEASED_DELETE[1]), [])
+        self.assertEqual(self.gh.calls[1][-1], "Conductor batch b1's closing"
+                         " PR: its batch ledger, run evidence, scorecard,"
+                         " and the spend rows of its blocked items (#13)."
+                         "\n\nKept on origin, holding work beyond spend"
+                         " rows: conductor/b1-13.\n\nCloses #12\nCloses"
+                         " #14\n\nNo work order: the Conductor's closing PR"
+                         " for batch b1.")
+        self.assertEqual(self.gh.calls[-1], [
+            "issue", "comment", "13", "--body", "Blocked in conductor batch"
+            " b1: answer to ask-3: block. Its branch conductor/b1-13 is kept"
+            " on origin: it holds work beyond its spend rows."])
+
+    def test_a_branch_with_nothing_beyond_main_is_left_alone(self):
+        summary, problems = self.close(ROWS, branch_log="")
+        self.assertEqual(problems, [])
+        self.assertEqual(self.git.called("-C", str(self.root), "push",
+                                         LEASED_DELETE[1]), [])
+        self.assertNotIn("Kept on origin", self.gh.calls[1][-1])
+
+    def test_an_unreadable_branch_log_refuses_the_close(self):
+        fake = FakeGh({("-C", str(self.root), "show",
+                        f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
+                       head_call(self.root): BRANCH_SHA + "\n"},
+                      failing=list(log_call(self.root)))
+        self.assertEqual(self.close(ROWS, git=fake), (None, [
+            "cd: close refused: reading conductor/b1-13's commits failed:"
+            " boom"]))
+        self.assertEqual(fake.called("-C", str(self.root), "commit"), [])
+
+    def test_the_delete_is_leased_on_the_inspected_sha(self):
+        # A commit on origin's branch that the local ref lacks was never
+        # inspected; the lease makes git refuse the delete then.
+        self.close(ROWS)
+        self.assertEqual(self.git.called("-C", str(self.root), "push",
+                                         LEASED_DELETE[1]),
+                         [["-C", str(self.root), *LEASED_DELETE]])
+
+    def test_a_refused_delete_is_reported_after_the_pr(self):
+        stale = subprocess.CalledProcessError(
+            1, "git", stderr=" ! [rejected] (stale info)\n")
+        fake = FakeGh({("-C", str(self.root), "show",
+                        f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
+                       head_call(self.root): BRANCH_SHA + "\n",
+                       log_call(self.root): COST_ONLY_LOG},
+                      failing=["-C", str(self.root), *LEASED_DELETE],
+                      error=stale)
+        summary, problems = self.close(ROWS, git=fake)
+        self.assertEqual(problems, [
+            "cd: close: deleting origin's conductor/b1-13 failed:"
+            " ! [rejected] (stale info); delete it by hand"])
+        self.assertEqual([call[:2] for call in self.gh.calls],
+                         [list(LABEL_LIST), ["pr", "create"],
+                          ["issue", "edit"], ["issue", "comment"]])
+
+    def test_a_prefix_sharing_batchs_spend_row_is_not_carried(self):
+        # Batch b1-13-x's item #5 shares #13's old prefix conductor-b1-13-
+        # (#735); its spend row on #13's branch is not this batch's.
+        other = spend("conductor-b1-13-x-5-spec-1", 7.0, "#5")
+        summary, problems = self.close(
+            ROWS, branch_costs=BLOCKED_SPEND + [other])
+        self.assertEqual(problems, [])
+        costs = (self.root / COSTS).read_text().splitlines()
+        self.assertEqual([json.loads(line)["run_id"] for line in costs[-2:]],
+                         ["conductor-b1-13-spec-1", "conductor-b1-13-build-1"])
 
     def test_a_failing_scorecard_leaves_scorecards_byte_identical(self):
         summary, problems = self.close(ROWS, costs=SPEND[:3])
@@ -347,6 +446,16 @@ class TestClose(unittest.TestCase):
                                        branch_costs=BLOCKED_SPEND[:1])
         self.assertEqual(problems, [])
         self.assertEqual((self.root / COSTS).read_text(), lines(SPEND))
+
+    def test_carried_spend_dedups_on_row_key_not_run_id(self):
+        # #736: ADR-0049 made (wo, run_id) the identity; a row sharing
+        # only the run_id is a different row and must still be carried.
+        other = spend("conductor-b1-13-spec-1", 0.5, "#99")
+        costs = SPEND[:4] + SPEND[5:] + [other]
+        summary, problems = self.close(ROWS, costs=costs)
+        self.assertEqual(problems, [])
+        self.assertEqual((self.root / COSTS).read_text(),
+                         lines(costs + BLOCKED_SPEND))
 
     def test_a_retry_after_a_failed_close_record_scores_once(self):
         # Review minor 6: the scorecard was appended before the close

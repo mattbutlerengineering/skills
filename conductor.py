@@ -100,8 +100,18 @@ from cli import gh_runner, report, runner  # noqa: E402
 from cost_ledger import ISSUE_KEY
 from knowledge_plane import repo_root
 
-LEDGER = "docs/factory/batches/{batch}/ledger.jsonl"
-BATCH_NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
+# The Batch's names (#735): every ref, path and run id a batch makes is
+# formed here and nowhere else. An item's name is its batch's name plus
+# -<n>, and a batch name never ends in -<digits>, so no item's branch or
+# worktree is ever another batch's (item #2 of `oct` is not batch
+# `oct-2`). A run id is parsed from the right, so a batch whose name
+# extends another's (`oct-2-x`) never claims that batch's runs.
+BATCH_NAME = re.compile(r"(?![a-z0-9-]*-\d+$)[a-z0-9][a-z0-9-]*")
+WORKTREES = ".claude/worktrees"
+BATCH_DIR = "docs/factory/batches/{batch}"
+LEDGER = BATCH_DIR + "/ledger.jsonl"
+RUNS = BATCH_DIR + "/runs"
+RUN_ID = re.compile(r"conductor-(?P<batch>.+)-(?P<n>\d+)-[a-z]+-\d+")
 AT = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 AT_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 WORKER_ENV = "CONDUCTOR_WORKER"
@@ -142,6 +152,55 @@ STANDING = "standing"
 COMPLETED = "completed"
 # The stall answers that resume an item's stalled step.
 RETRIES = ("retry", "retry-up")
+
+
+def batch_name_problems(batch):
+    """The batch name lands in refs and paths: anything but a slug that
+    no item name can equal is refused before it is used."""
+    if isinstance(batch, str) and BATCH_NAME.fullmatch(batch):
+        return []
+    return [f"cd: batch {batch!r} is not a batch name (lowercase letters,"
+            " digits and hyphens, never ending in -<digits>, which names"
+            " an item)"]
+
+
+def _item_name(batch, item):
+    return f"{batch}-{item[1:]}"
+
+
+def batch_dir(batch):
+    return BATCH_DIR.format(batch=batch)
+
+
+def batch_branch(batch):
+    return f"conductor/{batch}"
+
+
+def item_branch(batch, item):
+    """The item's branch (Owner, 2026-10-10): conductor/<batch>-<n>."""
+    return f"conductor/{_item_name(batch, item)}"
+
+
+def batch_worktree(batch):
+    """Relative to the main checkout."""
+    return f"{WORKTREES}/conductor-{batch}"
+
+
+def item_worktree(batch, item):
+    """Relative to the main checkout."""
+    return f"{WORKTREES}/conductor-{_item_name(batch, item)}"
+
+
+def run_id(batch, item, step, seq):
+    return f"conductor-{_item_name(batch, item)}-{step}-{seq}"
+
+
+def run_item(batch, run):
+    """The item key of one of this batch's run ids, else None."""
+    found = RUN_ID.fullmatch(run)
+    if found is None or found["batch"] != batch:
+        return None
+    return f"#{found['n']}"
 
 
 def is_text(value):
@@ -290,9 +349,9 @@ def parse(text, shown):
 def _ledger(root, batch):
     """(path, shown, problems) for a batch's ledger. The batch name lands
     in a path, so anything but a slug is refused before it is used."""
-    if not (isinstance(batch, str) and BATCH_NAME.fullmatch(batch)):
-        return None, None, [f"cd: batch {batch!r} is not a batch name"
-                            " (lowercase letters, digits and hyphens)"]
+    problems = batch_name_problems(batch)
+    if problems:
+        return None, None, problems
     shown = LEDGER.format(batch=batch)
     path = Path(root) / shown
     if not path.is_file():

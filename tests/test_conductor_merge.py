@@ -20,7 +20,7 @@ import conductor_merge as merge
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fake_gh import FakeGh  # noqa: E402
-from test_conductor_flow import (AT, NOW, START, answered,  # noqa: E402
+from test_conductor_flow import (AT, NOW, START, alive, answered,  # noqa: E402
                                  launch, moved, ran, run_id, stall_ask)
 
 ADR = "docs/adr/0090-x.md"
@@ -181,9 +181,9 @@ class TestMergeDue(unittest.TestCase):
     ask it must word, and reports a covered item as ready to merge."""
 
     def survey(self, rows):
-        ready, _, _ = flow.survey(START + rows, NOW, 3, lambda pid: True,
-                                  {})
-        return ready, flow.merge_due(START + rows)
+        facts = {key: {"gate_blobs": {}} for key in ("#12", "#14")}
+        ready, _, _ = flow.survey(START + rows, NOW, 3, alive, facts)
+        return ready, flow.merge_due(START + rows, facts)
 
     def test_a_shipped_item_with_no_merge_ask_is_due_one(self):
         ready, due = self.survey(order_shipped())

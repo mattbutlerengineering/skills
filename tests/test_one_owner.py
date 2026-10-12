@@ -47,7 +47,8 @@ def failing_git(err):
     return run
 
 
-def check_tree(adrs=("0037",), adr_status="accepted", **modules):
+def check_tree(adrs=("0037",), adr_status="accepted",
+               adr_name="{}-a-decision.md", **modules):
     """check() against a fixture tree of literal modules — never the live
     tree, so no case here decays as the tree is cleaned. A `|` in a name
     is a path separator. `adrs` are the decision records the tree holds,
@@ -55,7 +56,7 @@ def check_tree(adrs=("0037",), adr_status="accepted", **modules):
     with tempfile.TemporaryDirectory() as tmp:
         fixture = FixtureTree(tmp)
         for number in adrs:
-            fixture.write(f"docs/adr/{number}-a-decision.md",
+            fixture.write("docs/adr/" + adr_name.format(number),
                           f"# A decision\n\n- Status: {adr_status}\n")
         listing = []
         for name, source in modules.items():
@@ -884,12 +885,21 @@ class TestCoverage(unittest.TestCase):
             ["one-owner: budget_guard.py:1 cites ADR-9999, which is not in"
              " docs/adr/"])
 
+    def test_every_adr_filename_form_resolves_a_citation(self):
+        """Issue #747: the decision records are the one ADR file set
+        knowledge_plane.adr_paths reads — `0037.md` is one, as it is to
+        adr_status and detector C."""
+        self.assertEqual(
+            check_tree(adr_name="{}.md",
+                       budget_guard=runner_git("dashboard.git_runner"),
+                       dashboard=runner_git("budget_guard.git_runner")), [])
+
     def test_status_liveness_is_deliberately_not_checked(self):
-        """The status grammar's owner is gates.ADR_STATUS, and importing a
-        detector module from a tool is the coupling ADR-0058 removed.
-        Folding ADR_STATUS into knowledge_plane is its own decision, not a
-        ride-along — so a superseded citation resolves, and the deferral is
-        visible in the suite rather than only in prose."""
+        """Citation resolution is this pass's whole claim about a record.
+        The status grammar now lives in knowledge_plane (issue #747), but
+        reading liveness here would be a new finding, not a ride-along —
+        so a superseded citation resolves, and the choice is visible in
+        the suite rather than only in prose."""
         self.assertEqual(
             check_tree(adr_status="superseded by ADR-0060",
                        budget_guard=runner_git("dashboard.git_runner"),

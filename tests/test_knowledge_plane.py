@@ -13,7 +13,8 @@ from gates import (_clean_repo_fixture, _evidence_honesty_defect_fixture,
                    _link_integrity_defect_fixture, _wo_citation_defect_fixture)
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              PRD_TOKEN, ROW, WO_TOKEN, breakdown_files,
-                             fence_closes, fence_open, mirror_map, parse_run, repo_root, row_done,
+                             fence_closes, fence_open, local_link_targets,
+                             resolve_link, mirror_map, parse_run, repo_root, row_done,
                              row_blockers, row_unreadable_blockers,
                              row_work_order, run_dirs, sanitize, unfenced)
 
@@ -630,5 +631,159 @@ class TestFences(unittest.TestCase):
                          [(1, "a"), (5, "b")])
 
 
+class TestLocalLinkTargets(unittest.TestCase):
+    """The one local-link grammar (issue #739): CommonMark inline link
+    destinations — titled, <angle-bracketed>, image — with URLs and
+    in-page anchors excluded. Fence and inline-code skipping stays each
+    caller's policy, so the grammar reads whatever text it is handed."""
+
+    def test_the_issue_table(self):
+        for text, want in (('[a](x.md "T")', ["x.md"]),
+                           ("[a](x.md 'T')", ["x.md"]),
+                           ("[a](x.md (T))", ["x.md"]),
+                           ("[a](<my file.md>)", ["my file.md"]),
+                           ('[a](<my file.md> "T")', ["my file.md"]),
+                           ("[a]( x.md)", ["x.md"]),
+                           ("[a](x.md)", ["x.md"])):
+            with self.subTest(text=text):
+                self.assertEqual(local_link_targets(text), want)
+
+    def test_image_links_are_links(self):
+        self.assertEqual(local_link_targets("![logo](img/logo.png)"),
+                         ["img/logo.png"])
+
+    def test_fragments_and_queries_are_kept_as_written(self):
+        self.assertEqual(local_link_targets("[a](x.md#top) [b](y.md?v=1)"),
+                         ["x.md#top", "y.md?v=1"])
+
+    def test_urls_anchors_and_empty_targets_are_not_local(self):
+        self.assertEqual(local_link_targets(
+            "[a](#top) [b](https://x.io/a.md) [c](mailto:a@b.c) [d]()"
+            " [e](<>)"), [])
+
+    def test_balanced_parentheses_stay_in_the_target(self):
+        self.assertEqual(local_link_targets("[a](docs/a(1).md)"),
+                         ["docs/a(1).md"])
+
+    def test_a_space_without_a_title_is_not_a_link(self):
+        self.assertEqual(local_link_targets("[a](x.md junk)"), [])
+
+    def test_every_link_on_a_line_in_order(self):
+        self.assertEqual(local_link_targets("[a](a.md), [b](b.md)\n[c](c.md)"),
+                         ["a.md", "b.md", "c.md"])
+
+    def test_fences_and_inline_code_are_the_callers_policy(self):
+        self.assertEqual(local_link_targets("`[a](a.md)`"), ["a.md"])
+
+
+class TestResolveLink(unittest.TestCase):
+    def test_relative_targets_resolve_against_the_linking_doc(self):
+        self.assertEqual(resolve_link(Path("/r"), Path("/r/docs/a.md"),
+                                      "../b.md"), Path("/r/docs/../b.md"))
+
+    def test_a_leading_slash_is_root_relative(self):
+        self.assertEqual(resolve_link(Path("/r"), Path("/r/docs/a.md"),
+                                      "/src/x.py"), Path("/r/src/x.py"))
+
+    def test_fragment_and_query_are_not_part_of_the_path(self):
+        for target in ("b.md#top", "b.md?v=1", "b.md?v=1#top"):
+            with self.subTest(target=target):
+                self.assertEqual(resolve_link(Path("/r"), Path("/r/a.md"),
+                                              target), Path("/r/b.md"))
+
+    def test_an_anchor_or_url_names_no_path(self):
+        for target in ("#top", "?v=1", "https://x.io/a.md", "mailto:a@b.c"):
+            with self.subTest(target=target):
+                self.assertIsNone(resolve_link(Path("/r"), Path("/r/a.md"),
+                                               target))
+
+
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAdrRecord(unittest.TestCase):
+    """The ADR record (issue #747): which files are ADRs, what status each
+    declares, and its standing — one reading every tool and detector
+    consults instead of six globs and three status readers."""
+
+    STANDINGS = [
+        ("accepted", "active"),
+        ("accepted (Owner, 2026-10-11)", "active"),
+        ("amended by ADR-0085", "active"),
+        ("amended by ADR-0084 (and earlier by ADR-0041)", "active"),
+        ("provisional", "provisional"),
+        ("superseded in part by ADR-0083 (the beads clause)", "partial"),
+        ("superseded by ADR-0002", "retired"),
+        ("active", "unrecognized"),
+        ("", "unrecognized"),
+        (None, "unrecognized"),
+    ]
+
+    def test_every_status_head_has_its_standing(self):
+        for text, expected in self.STANDINGS:
+            with self.subTest(status=text):
+                self.assertEqual(knowledge_plane.standing(text), expected)
+
+    def test_every_adr_filename_form_is_one_file_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adr_dir = root / "docs" / "adr"
+            adr_dir.mkdir(parents=True)
+            for name in ("0001-a.md", "0062.md", "adr-0063-x.md",
+                         "ADR-007-auth.md", "README.md", "TEMPLATE.md",
+                         "notes.md", "0004_under.md"):
+                (adr_dir / name).write_text("# X\n", encoding="utf-8")
+            found = [(number, path.name)
+                     for number, path in knowledge_plane.adr_paths(root)]
+            parsed = {path.name for path, _ in parse_run(root)["adr_files"]}
+        self.assertEqual(found, [("0001", "0001-a.md"), ("0062", "0062.md"),
+                                 ("007", "ADR-007-auth.md"),
+                                 ("0063", "adr-0063-x.md")])
+        self.assertEqual(parsed, {name for _, name in found})
+
+    def test_no_adr_directory_is_an_empty_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(knowledge_plane.adr_paths(tmp), [])
+
+    def test_a_status_line_is_read_with_its_line(self):
+        record = knowledge_plane.adr_record(
+            Path("docs/adr/0001-old.md"),
+            ["# Old", "", "- Status: superseded by ADR-0002 (all of it)"])
+        self.assertEqual(record, {
+            "number": "0001", "path": Path("docs/adr/0001-old.md"),
+            "lineno": 3, "status": "superseded by ADR-0002 (all of it)",
+            "head": "superseded by ADR-0002", "standing": "retired",
+            "superseded_by": "0002"})
+
+    def test_a_frontmatter_status_is_the_fallback(self):
+        record = knowledge_plane.adr_record(
+            Path("0062.md"),
+            ["---", "date: 2026-01-01", "status: provisional", "---", "# X"])
+        self.assertEqual((record["number"], record["lineno"],
+                          record["status"], record["standing"]),
+                         ("0062", 3, "provisional", "provisional"))
+
+    def test_a_status_line_wins_over_frontmatter(self):
+        record = knowledge_plane.adr_record(
+            Path("0001-x.md"),
+            ["---", "status: active", "---", "- Status: accepted"])
+        self.assertEqual((record["lineno"], record["status"]),
+                         (4, "accepted"))
+
+    def test_no_status_anywhere_is_none(self):
+        record = knowledge_plane.adr_record(Path("0003-bare.md"), ["# Bare"])
+        self.assertEqual((record["lineno"], record["status"], record["head"],
+                          record["standing"], record["superseded_by"]),
+                         (0, None, None, "unrecognized", None))
+
+    def test_adr_records_reads_the_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adr_dir = root / "docs" / "adr"
+            adr_dir.mkdir(parents=True)
+            (adr_dir / "0062.md").write_text(
+                "# X\n\n- Status: accepted\n", encoding="utf-8")
+            [record] = knowledge_plane.adr_records(root)
+        self.assertEqual((record["number"], record["standing"]),
+                         ("0062", "active"))

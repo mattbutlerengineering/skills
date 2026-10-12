@@ -160,6 +160,20 @@ class TestBuildIndex(unittest.TestCase):
                 "domain": "factory",
             }])
 
+    def test_every_adr_filename_form_is_read(self):
+        # Issue #747: the index reads the same ADR file set every other
+        # reader does (knowledge_plane.adr_paths), not its own glob.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "docs" / "adr" / "0032.md"
+            path.parent.mkdir(parents=True)
+            path.write_text("# One-way mirror\n\n- Status: accepted\n\n"
+                            "## Normative statements\n\n" + VALID_BULLET
+                            + "\n", encoding="utf-8")
+            entries, problems = standards_index.build_index(tmp)
+            self.assertEqual(problems, [])
+            self.assertEqual([entry["source"] for entry in entries],
+                             ["adr/0032#adr0032-one-way-mirror"])
+
     def test_entries_are_sorted_by_slug(self):
         with tempfile.TemporaryDirectory() as tmp:
             adr_file(tmp, "0001",
