@@ -1,6 +1,6 @@
 # Three human gates
 
-- Status: amended by ADR-0036
+- Status: amended by ADR-0087 (and earlier by ADR-0036)
 - Date: 2026-07-11
 
 The factory's goal is maximum AFK execution, but unbounded autonomy is
