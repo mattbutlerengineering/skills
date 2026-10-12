@@ -44,7 +44,7 @@ from collections import namedtuple
 from pathlib import Path
 
 from cli import CLI_FAILURES, detail, report, runner
-from knowledge_plane import repo_root
+from knowledge_plane import adr_paths, repo_root
 
 # The real git CLI (cli.runner): a failed or missing git raises
 # CLI_FAILURES, and source_files turns that into a one-owner: problem
@@ -392,10 +392,7 @@ def _ident(path, name):
 
 def _adr_ids(root):
     """The decision records this repo holds, as citable ids."""
-    directory = Path(root) / "docs" / "adr"
-    return {f"ADR-{path.name[:4]}" for path
-            in directory.glob("[0-9][0-9][0-9][0-9]-*.md")
-            } if directory.is_dir() else set()
+    return {f"ADR-{number}" for number, _ in adr_paths(root)}
 
 
 def _coverage(found_groups, marks):
@@ -447,10 +444,10 @@ def _rent(found_groups, marks, sites, defined, adr_ids):
     to fix, so a marker whose counterpart was deleted, renamed or folded
     is itself a finding: the list cannot rot quietly.
 
-    Whether the cited record is still LIVE is deliberately not checked.
-    The status grammar's owner is gates.ADR_STATUS, and importing a
-    detector module from a tool is the coupling ADR-0058 removed; folding
-    that grammar into a seam is its own decision, not a ride-along.
+    Whether the cited record is still LIVE is deliberately not checked:
+    citation resolution is this pass's whole claim. The status grammar
+    now lives in knowledge_plane (issue #747), but reading liveness here
+    would be a new finding, not a ride-along.
     """
     stated = {_ident(site.path, site.name) for site in sites}
     group_of = {(site.path, site.name): group
