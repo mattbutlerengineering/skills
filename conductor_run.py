@@ -15,8 +15,10 @@ queues a stall ask; nothing retries. The Owner's 2026-10-10 answers
 (breakdown.md Notes) fix the branch names, tool list and defaults used.
 """
 import json
+import netrc as netrc_file
 import os
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -46,7 +48,8 @@ ALLOWED_TOOLS = ("Read", "Edit", "Write", "Glob", "Grep",
 # config, no askpass; git's ssh transport is `false`, so no ssh push (or
 # fetch) reaches any host or alias; and the Owner's own GIT_CONFIG_*
 # entries are replaced: an http(s) push URL is rewritten to a path that
-# cannot exist, and no credential helper hands out a token. Local-path
+# cannot exist (all but a remote's explicit pushurl, which push_gaps
+# refuses), and no credential helper hands out a token. Local-path
 # remotes still work, so the suite's own scratch-repo pushes pass.
 WORKER_STRIPPED = re.compile(r"GH_.*|GITHUB_(?:ENTERPRISE_)?TOKEN|CLAUDECODE"
                              r"|GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)"
@@ -86,10 +89,14 @@ OBJECTIVES = {
 def worker_env(base, batch, gh_config_dir):
     """The Worker's environment: `base` (the runner's) minus every
     WORKER_STRIPPED name, plus the batch flag, an empty gh config dir,
-    no terminal prompt and WORKER_GIT_CONFIG. It stops a confused Worker;
-    a hostile one can still put a credential back (breakdown Notes,
-    2026-10-11). pushInsteadOf skips a remote's explicit pushurl, so a
-    token embedded there, or a ~/.netrc entry, is not blocked."""
+    no terminal prompt and WORKER_GIT_CONFIG. pushInsteadOf skips a
+    remote's explicit pushurl, and git's https transport reads ~/.netrc;
+    this env closes neither, so push_gaps refuses the launch while
+    either is configured (re-review R3). What stays trust-based: it
+    stops a confused Worker, not a hostile one (breakdown Notes,
+    2026-10-11). A Worker can undo this env from python3, reach a key
+    held outside it (a keychain entry, a key loaded in the SSH agent),
+    or get a token back from a shell profile that exports one."""
     env = {name: value for name, value in base.items()
            if not WORKER_STRIPPED.fullmatch(name)}
     env.update({WORKER_ENV: batch, "GH_CONFIG_DIR": gh_config_dir,
@@ -99,6 +106,58 @@ def worker_env(base, batch, gh_config_dir):
         env[f"GIT_CONFIG_KEY_{index}"] = key
         env[f"GIT_CONFIG_VALUE_{index}"] = value
     return env
+
+
+GUARD = "cd: launch refused: "
+PUSHURL_KEY = r"^remote\..*\.pushurl$"
+
+
+def _pushurls(git, worktree):
+    """(the configured remote.<name>.pushurl keys, problems). `git config
+    --get-regexp` exits 1 when nothing matches."""
+    try:
+        out = git(["-C", str(worktree), "config", "--get-regexp",
+                   PUSHURL_KEY]).stdout
+    except subprocess.CalledProcessError as err:
+        if err.returncode == 1:
+            return [], []
+        return None, [f"{GUARD}git config failed: {detail(err)}"]
+    except CLI_FAILURES as err:
+        return None, [f"{GUARD}git config failed: {detail(err)}"]
+    return [line.split()[0] for line in out.splitlines() if line.strip()], []
+
+
+def _netrc_hosts(path):
+    """(the hosts a netrc file holds credentials for, "default" included,
+    problems). An absent file holds none; one that does not parse is a
+    problem, never read as empty."""
+    if not path.exists():
+        return [], []
+    try:
+        return sorted(netrc_file.netrc(str(path)).hosts), []
+    except (OSError, UnicodeDecodeError, netrc_file.NetrcParseError) as err:
+        return None, [f"{GUARD}cannot read {path}: {err}"]
+
+
+def push_gaps(git, worktree, netrc):
+    """(problems): the fail-closed launch guard for the two push gaps
+    worker_env cannot close (re-review R3). A remote's explicit pushurl
+    is not rewritten by pushInsteadOf, and git's https transport reads
+    the netrc file (~/.netrc; `netrc` is injectable), so either could
+    carry a credential to a Worker's push. Either refuses the launch."""
+    keys, problems = _pushurls(git, worktree)
+    problems += [f"{GUARD}remote {key[len('remote.'):-len('.pushurl')]}"
+                 " has an explicit pushurl, which the Worker's push block"
+                 f" does not rewrite; unset {key} while a batch runs"
+                 for key in keys or []]
+    hosts, found = _netrc_hosts(netrc)
+    problems += found
+    problems += [f"{GUARD}{netrc} has a {host} entry, which git's https"
+                 " transport would hand a Worker's push; move it aside"
+                 " while a batch runs"
+                 for host in hosts or [] if host == "default"
+                 or host == "github.com" or host.endswith(".github.com")]
+    return problems
 
 
 def harness_command(brief, model, effort, ceiling_usd):
@@ -416,7 +475,7 @@ def _launch(root, batch, now, launch, spent, cap):
     return problems or refused
 
 
-def _prepare(root, batch, item, step, git, gh):
+def _prepare(root, batch, item, step, git, gh, netrc):
     """(context dict, problems): everything decided before launch."""
     rows, problems = load(root, batch)
     if problems:
@@ -431,6 +490,8 @@ def _prepare(root, batch, item, step, git, gh):
     if problems:
         return None, problems
     worktree, problems = _worktree(git, batch, item)
+    if not problems:
+        problems = push_gaps(git, worktree, netrc)
     if problems:
         return None, problems
     wo, context, body, problems = _work(rows, entry, step, git, gh, batch,
@@ -462,7 +523,7 @@ def _prepare(root, batch, item, step, git, gh):
 
 
 def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
-             pid=None):
+             pid=None, netrc=None):
     """(summary, problems): one Worker run. problems only when nothing
     was launched or a ledger write failed; a failed run is a stall. The
     launch row carries the launch time, and every row written after the
@@ -470,7 +531,8 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     would count the whole run as Owner wait."""
     pid = os.getpid() if pid is None else pid
     now = clock()
-    ctx, problems = _prepare(root, batch, item, step, git, gh)
+    netrc = Path.home() / ".netrc" if netrc is None else netrc
+    ctx, problems = _prepare(root, batch, item, step, git, gh, netrc)
     if problems:
         return None, problems
     entry, run_id, worktree = ctx["entry"], ctx["run_id"], ctx["worktree"]

@@ -115,6 +115,9 @@ class RunCase(unittest.TestCase):
         self.root = Path(self.tmp.name) / "conductor"
         self.root.mkdir()
         self.clock = lambda: NOW
+        # The launch guard reads a netrc file (re-review R3): the suite
+        # never reads the machine's own.
+        self.no_netrc = Path(self.tmp.name) / "netrc"
         self.config(300)
 
     def config(self, cap):
@@ -134,7 +137,7 @@ class RunCase(unittest.TestCase):
         self.harness = harness
         result = conductor_run.run_step(
             self.root, "b1", item, step, self.clock, git=self.git,
-            gh=self.gh, harness=harness, pid=777)
+            gh=self.gh, harness=harness, pid=777, netrc=self.no_netrc)
         self.rows, _ = conductor.load(self.root, "b1")
         return result
 
@@ -238,9 +241,10 @@ class TestWorkerEnv(unittest.TestCase):
                     in pushed.stderr, (target, pushed.stderr))
 
     def test_a_configured_pushurl_is_not_rewritten(self):
-        # Re-review R3, the documented limit: pushInsteadOf skips a
-        # remote's explicit pushurl, so git dials it (a closed local
-        # port here) with no helper to hand it a token.
+        # Re-review R3, the limit worker_env leaves: pushInsteadOf skips
+        # a remote's explicit pushurl, so git dials it (a closed local
+        # port here) with no helper to hand it a token. push_gaps
+        # refuses a launch while one is configured.
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp) / "w"
             subprocess.run(["git", "init", "-q", str(work)], check=True)
@@ -303,7 +307,7 @@ class TestWorkerEnv(unittest.TestCase):
                 '{"monthly_cap_usd": 300}')
             conductor_run.run_step(root, "b1", "#12", "spec", lambda: NOW,
                                    git=Git(tmp), gh=Gh(), harness=harness,
-                                   pid=777)
+                                   pid=777, netrc=Path(tmp) / "netrc")
         env = harness.calls[0]["env"]
         self.assertNotIn("GH_TOKEN", env)
         self.assertEqual(seen["gh_dir"], [])
@@ -646,7 +650,7 @@ class TestMonthlyCap(RunCase):
         _, problems = conductor_run.run_step(
             self.root, "b1", "#12", "spec", lambda: NOW,
             git=Git(self.tmp.name), gh=Gh(), harness=Harness(act=pr_body),
-            pid=777)
+            pid=777, netrc=self.no_netrc)
         self.assertEqual(problems, [
             "config: factory.json names no positive monthly_cap_usd"])
 
@@ -712,10 +716,11 @@ class TestRunCli(RunCase):
     def test_run_is_a_conductor_verb(self):
         self.ledger(*BASE)
         git = Git(self.tmp.name)
-        code, out = cli_contract.capture(
-            conductor.main, ["run", "b1", "#12", "spec"], env={},
-            clock=lambda: NOW, root=self.root, run=Gh(), git=git,
-            harness=Harness(act=pr_body))
+        with unittest.mock.patch.dict(os.environ, {"HOME": self.tmp.name}):
+            code, out = cli_contract.capture(
+                conductor.main, ["run", "b1", "#12", "spec"], env={},
+                clock=lambda: NOW, root=self.root, run=Gh(), git=git,
+                harness=Harness(act=pr_body))
         self.assertEqual(code, 0, out)
         self.assertIn("cd: run conductor-b1-12-spec-1 completed", out)
 
