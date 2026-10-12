@@ -30,7 +30,7 @@ from assembler import PR_BODY_FILE
 from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
     read_execution
 from conductor import WORKER_ENV, answers, append, ask_row, current_state, \
-    load, stamp
+    item_view, load, stamp, view
 from conductor_plan import span
 from knowledge_plane import WO_TOKEN
 from orientation_pack import orientation_pack
@@ -224,16 +224,12 @@ def _policy(rows, plan, entry, step):
     planned = next(s for s in entry["steps"] if s["step"] == step)
     band, model, effort = planned["band"], planned["model"], \
         planned["effort"]
-    states = [r for r in rows if r["kind"] == "state"
-              and r["item"] == entry["item"]]
-    if states and states[-1]["to"] == "stalled":
-        resumed = flow.latest_answer(rows, entry["item"], "stall",
-                                      after=rows.index(states[-1]))
-        if resumed and resumed["choice"] == "retry-up" \
-                and band in flow.BANDS[:-1]:
-            band = flow.BANDS[flow.BANDS.index(band) + 1]
-            model, _ = factory_config.resolve_model(band, plan["policy"])
-            effort, _ = factory_config.resolve_effort(band, plan["policy"])
+    resumed = item_view(rows, entry["item"])["resumed"]
+    if resumed and resumed["choice"] == "retry-up" \
+            and band in flow.BANDS[:-1]:
+        band = flow.BANDS[flow.BANDS.index(band) + 1]
+        model, _ = factory_config.resolve_model(band, plan["policy"])
+        effort, _ = factory_config.resolve_effort(band, plan["policy"])
     return band, model, effort, planned["ceiling_usd"]
 
 
@@ -411,9 +407,10 @@ def month_spend(git, rows, batch, now):
     cost_ledger.dispatched, the breaker's one row rule. The batch
     worktree's own costs.jsonl is a snapshot from the batch's open, and
     item spend stays on item branches until it merges."""
-    launched = [entry["item"] for entry in flow.plan_row(rows)["items"]
-                if any(row["kind"] == "state" and row["item"] ==
-                       entry["item"] and "run_id" in row for row in rows)]
+    read = view(rows)
+    launched = [entry["item"] for entry in read["plan"]["items"]
+                if any("run_id" in row
+                       for row in read["items"][entry["item"]]["states"])]
     entries = {}
     for ref in ["origin/main"] + [flow.item_branch(batch, item)
                                   for item in launched]:
@@ -433,15 +430,13 @@ def month_spend(git, rows, batch, now):
 def _in_flight_usd(rows):
     """The ceilings of every launched run with no finishing run row: each
     may still spend up to its ceiling."""
-    finished = {row["run_id"] for row in rows if row["kind"] == "run"}
+    read = view(rows)
     total = 0.0
-    for entry in flow.plan_row(rows)["items"]:
-        states = [row for row in rows if row["kind"] == "state"
-                  and row["item"] == entry["item"]]
-        if states and "run_id" in states[-1] \
-                and states[-1]["run_id"] not in finished:
+    for entry in read["plan"]["items"]:
+        found = read["items"][entry["item"]]
+        if found["in_flight"]:
             total += next(s["ceiling_usd"] for s in entry["steps"]
-                          if s["step"] == states[-1]["to"])
+                          if s["step"] == found["state"])
     return total
 
 
@@ -490,10 +485,11 @@ def _prepare(root, batch, item, step, git, gh, netrc):
     rows, problems = load(root, batch)
     if problems:
         return None, problems
-    plan = flow.plan_row(rows) or {}
-    entry = flow.plan_entry(rows, item)
+    plan = view(rows)["plan"] or {}
+    found = item_view(rows, item)
+    entry = found["entry"]
     if entry is None:
-        return None, [f"cd: {item} is not an item of this batch's plan"]
+        return None, [found["unknown"]]
     if step not in [s["step"] for s in entry["steps"]]:
         return None, [f"cd: {item} has no {step} step"]
     problems = flow.transition_problems(rows, item, step, {})
@@ -522,13 +518,11 @@ def _prepare(root, batch, item, step, git, gh, netrc):
         if problems:
             return None, problems
         head = out.strip()
-    seq = 1 + sum(1 for r in rows if r["kind"] == "state" and r["item"]
-                  == item and r["to"] == step and "run_id" in r)
-    block = {r["what"]: r["values"] for r in rows
-             if r["kind"] == "reserve" and r["item"] == item}
+    seq = 1 + sum(1 for r in found["states"]
+                  if r["to"] == step and "run_id" in r)
     return {"rows": rows, "plan": plan, "entry": entry, "wo": wo,
             "context": context, "body": body, "worktree": worktree,
-            "block": block, "briefed": briefed, "head": head,
+            "block": found["reserved"], "briefed": briefed, "head": head,
             "run_id": f"conductor-{batch}-{item[1:]}-{step}-{seq}"}, []
 
 

@@ -477,6 +477,19 @@ class TestCompletedRun(RunCase):
                           self.rows[-1]["effort"]),
                          ("architecture_review", "fable", "high"))
 
+    def test_a_renumbered_block_briefs_its_live_numbers(self):
+        # #694: the brief once kept each kind's last reserve row, so a
+        # renumber row hid the numbers the item still holds.
+        def reserve(what, values, **extra):
+            return {"at": PLAN["at"], "kind": "reserve", "item": "#14",
+                    "what": what, "values": values, **extra}
+        rows = BASE + [reserve("prd", [5, 6]), reserve("adr", [90, 91]),
+                       reserve("adr", [120], renumbered_from=[90])]
+        self.run_step("#14", "build", Harness(act=pr_body),
+                      gh=Gh(title="WO-0180: order"), rows=rows)
+        self.assertIn("reserved block (prd 5-6, adr 91,120)",
+                      self.harness.calls[0]["cmd"][2])
+
 
 class TestFailedRun(RunCase):
     def stalled(self):
