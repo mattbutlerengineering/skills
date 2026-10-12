@@ -24,8 +24,9 @@ import re
 import conductor_consent as consent
 import factory_config
 from cli import CLI_FAILURES, detail
-from conductor import (BLOCK, TERMINAL, answers, append, ask_row,
-                       current_state, load, next_ask, parsed_at, stamp)
+from conductor import (BLOCK, COMPLETED, TERMINAL, answers, append,
+                       ask_row, current_state, item_view, load, next_ask,
+                       parsed_at, stamp, view)
 
 STEPS = ("spec", "build", "verify", "review", "ship")
 SEQUENCE = ("planned", "spec", "awaiting-gate", "build", "verify",
@@ -36,7 +37,6 @@ WALL_CLOCK_MINUTES = {"S": 45, "M": 90, "L": 180}
 # Cheapest first, so retry-up takes the next band to the right.
 BANDS = factory_config.BANDS
 STALL_OPTIONS = ("retry", "retry-up", "block")
-RETRIES = ("retry", "retry-up")
 GATE_OPTIONS = ["approve", "block"]
 PAUSE_OPTIONS = ["resume", "stop"]
 # A batch-level answer with one of these choices holds all dispatch.
@@ -46,7 +46,6 @@ HOLD_CHOICES = ("decline", "stop")
 MERGE_CHOICE = "merge"
 TRAIN_CHOICE = "train"
 FAILURE_PAUSE = 3
-COMPLETED = "completed"
 GATE_PATH = re.compile(r"docs/adr/.+|docs/design/.+|(?:.+/)?"
                        r"(?:prd|architecture)\.md")
 UNCHECKED_ROW = re.compile(r"- \[ \] .*")
@@ -124,18 +123,16 @@ def merge_due(rows):
     """The items whose ship step completed and that wait for a merge ask
     the Conductor words: none answered to consent, and none pending,
     whether the item's own or a train listing it. PURE."""
-    given = answers(rows)
+    read = view(rows)
     pending = [row for row in rows if row["kind"] == "ask"
-               and row["ask_kind"] == "merge" and row["id"] not in given]
+               and row["ask_kind"] == "merge"
+               and row["id"] not in read["answers"]]
     due = []
-    for entry in (plan_row(rows) or {}).get("items", []):
+    for entry in (read["plan"] or {}).get("items", []):
         item = entry["item"]
-        states = _states(rows, item)
-        if not states or states[-1]["to"] != "ship":
-            continue
-        finished = _finishing(rows, states[-1])
-        if finished is None or finished["outcome"] != COMPLETED \
-                or _unanswered(rows, item) is not None \
+        found = read["items"][item]
+        if found["state"] != "ship" or not found["completed"] \
+                or found["pending"] is not None \
                 or any(item in row.get("covers", []) for row in pending):
             continue
         own, trains = consents(rows, item)
@@ -166,47 +163,44 @@ def _successors(item_type, state, rows, item):
         return ["build", "verify"]
     if state == "review":
         fixed = any(row["from"] == "review" and row["to"] == "build"
-                    for row in _states(rows, item))
+                    for row in item_view(rows, item)["states"])
         return ["reviewed"] if fixed else ["reviewed", "build"]
     following = SEQUENCE.index(state) + 1
     return list(SEQUENCE[following:following + 1])
 
 
-def _stalled_problems(rows, item, to):
-    states = _states(rows, item)
-    stalled_at = rows.index(states[-1])
-    resumed = latest_answer(rows, item, "stall", after=stalled_at)
-    if to != states[-1]["from"] or resumed is None \
-            or resumed["choice"] not in RETRIES:
-        return [f"cd: {item} leaves stalled only for"
-                f" {states[-1]['from']}, after a retry answer"]
+def _stalled_problems(found, to):
+    stalled = found["last"]
+    if to != stalled["from"] or not found["retry"]:
+        return [f"cd: {found['item']} leaves stalled only for"
+                f" {stalled['from']}, after a retry answer"]
     return []
 
 
 def transition_problems(rows, item, to, fields):
     """Problems with moving `item` to `to` (with these extra state-row
     fields) given the ledger's rows. Empty means the move is legal."""
-    entry = plan_entry(rows, item)
+    found = item_view(rows, item)
+    entry, state = found["entry"], found["state"]
     if entry is None:
-        return [f"cd: {item} is not an item of this batch's plan"]
-    state = current_state(rows, item)
+        return [found["unknown"]]
     if state in TERMINAL:
         return [f"cd: {item} is {state}, and {state} is terminal"]
     if to == "blocked":
         return [f"cd: {item} is blocked only by a {BLOCK} answer to one of"
                 " its asks"]
-    waiting = _unanswered(rows, item)
+    waiting = found["pending"]
     if waiting is not None and to != "stalled":
         return [f"cd: {item} has an unanswered ask ({waiting['id']})"]
     if to == "stalled":
         return ([] if state != "stalled"
                 else [f"cd: {item} cannot move from stalled to stalled"])
     if state == "stalled":
-        return _stalled_problems(rows, item, to)
+        return _stalled_problems(found, to)
     if to not in _successors(entry["type"], state, rows, item):
         return [f"cd: {item} cannot move from {state} to {to}"]
     if state == "awaiting-gate":
-        opened = latest_answer(rows, item, "gate")
+        opened = found["gate"]
         if opened is None or opened["choice"] != "approve":
             return [f"cd: {item} leaves awaiting-gate only after an"
                     " approve answer to its gate ask"]
@@ -216,10 +210,9 @@ def transition_problems(rows, item, to, fields):
                 f" {fields['reviewer_run']} is among its author runs"]
     # A launched step leaves only once its finishing run row exists, so a
     # second runner from a stale `next` never shares its worktree.
-    launched = _states(rows, item)[-1] if state != "planned" else {}
-    if "run_id" in launched and _finishing(rows, launched) is None:
-        return [f"cd: {item}'s {state} run {launched['run_id']} is still"
-                " in flight"]
+    if found["in_flight"]:
+        return [f"cd: {item}'s {state} run {found['last']['run_id']} is"
+                " still in flight"]
     return []
 
 
@@ -264,10 +257,11 @@ def stall_rows(rows, now, entry, reason, recommended, why):
 def queue_stall(root, batch, now, item, reason, recommended, why):
     """(rows written, problems): stall the item and queue its ask."""
     def build(rows):
-        entry = plan_entry(rows, item)
-        if entry is None:
-            return None, [f"cd: {item} is not an item of this batch's plan"]
-        return stall_rows(rows, now, entry, reason, recommended, why)
+        found = item_view(rows, item)
+        if found["entry"] is None:
+            return None, [found["unknown"]]
+        return stall_rows(rows, now, found["entry"], reason, recommended,
+                          why)
     return append(root, batch, build)
 
 
@@ -289,13 +283,13 @@ def record_verdict(root, batch, now, item, verdict, reviewer_run, head):
         return None, [f"cd: verdict {verdict!r} is not pass or changes"]
 
     def build(rows):
-        entry = plan_entry(rows, item)
+        found = item_view(rows, item)
+        entry = found["entry"]
         if entry is None:
-            return None, [f"cd: {item} is not an item of this batch's plan"]
+            return None, [found["unknown"]]
         if verdict == "pass":
-            authors = [row["run_id"] for row in rows if row["kind"] == "run"
-                       and row["item"] == item and row["step"] != "review"]
-            fields = {"verdict": "pass", "author_runs": authors,
+            fields = {"verdict": "pass",
+                      "author_runs": list(found["author_runs"]),
                       "reviewer_run": reviewer_run, "reviewed_head": head}
             to, reason = "reviewed", "the reviewer passed it"
         else:
@@ -343,17 +337,11 @@ def _failure_streak(rows):
 def needs_facts(rows):
     """The items whose finished spec or build step needs branch facts
     (gate blobs, unchecked rows) before `survey` can say what follows."""
-    plan = plan_row(rows) or {}
-    found = []
-    for entry in plan.get("items", []):
-        item = entry["item"]
-        states = _states(rows, item)
-        if not states or states[-1]["to"] not in ("spec", "build"):
-            continue
-        finished = _finishing(rows, states[-1])
-        if finished is not None and finished["outcome"] == COMPLETED:
-            found.append(item)
-    return found
+    read = view(rows)
+    found = [read["items"][entry["item"]]
+             for entry in (read["plan"] or {}).get("items", [])]
+    return [one["item"] for one in found
+            if one["state"] in ("spec", "build") and one["completed"]]
 
 
 def _finishing(rows, launched):
@@ -454,40 +442,34 @@ def _merge_gone(rows, now, entry, merging, alive):
 
 def _candidate(rows, now, entry, alive, facts):
     """(ready step or None, in flight?, rows to write) for one item."""
-    item = entry["item"]
-    state = current_state(rows, item)
-    states = _states(rows, item)
+    found = item_view(rows, entry["item"])
+    state, launched = found["state"], found["last"]
     if state in TERMINAL:
         return None, False, []
     if state == "merging":
-        return None, False, _merge_gone(rows, now, entry, states[-1], alive)
+        return None, False, _merge_gone(rows, now, entry, launched, alive)
     if state == "stalled":
-        resumed = latest_answer(rows, item, "stall",
-                                 after=rows.index(states[-1]))
-        if _unanswered(rows, item) is None and resumed is not None \
-                and resumed["choice"] in RETRIES:
+        if found["retry"]:
             # A merge turn that stalled resumes as a merge, not a step.
-            resume = states[-1]["from"]
+            resume = launched["from"]
             return ("merge" if resume == "merging" else resume), False, []
         return None, False, []
-    if _unanswered(rows, item) is not None:
+    if found["pending"] is not None:
         return None, False, []
     if state == "planned":
         return entry["steps"][0]["step"], False, []
     if state == "reviewed":
         return "ship", False, []
     if state == "awaiting-gate":
-        opened = latest_answer(rows, item, "gate")
+        opened = found["gate"]
         return ("build" if opened and opened["choice"] == "approve"
                 else None), False, []
-    launched = states[-1]
     if "run_id" not in launched:
         return state, False, []
-    finished = _finishing(rows, launched)
-    if finished is None:
+    if found["in_flight"]:
         flying, written = _in_flight(rows, now, entry, launched, alive)
         return None, flying, written
-    if finished["outcome"] != COMPLETED:
+    if not found["completed"]:
         return None, False, []
     ready, written = _after_step(rows, now, entry, launched, facts)
     return ready, False, written
@@ -500,7 +482,7 @@ def survey(rows, now, wip_cap, alive, facts):
     Rows to write are new stall and gate asks with their state moves,
     and the batch pause after FAILURE_PAUSE consecutive failed runs.
     `facts` maps an item to its branch facts (gate_blobs, unchecked)."""
-    plan = plan_row(rows)
+    plan = view(rows)["plan"]
     if plan is None:
         return None, None, ["cd: the batch ledger has no plan row"]
     writes, candidates, flying = [], [], 0
