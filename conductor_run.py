@@ -488,7 +488,7 @@ def _prepare(root, batch, item, step, git, gh, netrc):
     plan = view(rows)["plan"] or {}
     found = item_view(rows, item)
     entry = found["entry"]
-    if entry is None:
+    if found["unknown"]:
         return None, [found["unknown"]]
     if step not in [s["step"] for s in entry["steps"]]:
         return None, [f"cd: {item} has no {step} step"]

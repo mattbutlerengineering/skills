@@ -134,7 +134,7 @@ def merge_problems(rows, item, blobs, policy=None):
     resolved standing-consent policy (None: off). Empty means the merge
     may proceed."""
     found = item_view(rows, item)
-    if found["entry"] is None:
+    if found["unknown"]:
         return [found["unknown"]]
     problems = (_reviewed_problems(rows, item)
                 or _shipped_problems(rows, item)

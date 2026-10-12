@@ -57,37 +57,6 @@ def item_branch(batch, item):
     return f"conductor/{batch}-{item[1:]}"
 
 
-def plan_row(rows):
-    return next((row for row in rows if row["kind"] == "plan"), None)
-
-
-def plan_entry(rows, item):
-    plan = plan_row(rows)
-    return next((entry for entry in (plan or {}).get("items", [])
-                 if entry["item"] == item), None)
-
-
-def _states(rows, item):
-    return [row for row in rows
-            if row["kind"] == "state" and row["item"] == item]
-
-
-def _unanswered(rows, item):
-    given = answers(rows)
-    return next((row for row in rows if row["kind"] == "ask"
-                 and row["item"] == item and row["id"] not in given), None)
-
-
-def latest_answer(rows, item, ask_kind, after=-1):
-    """The latest answer to an ask of this kind on the item, written
-    after row index `after`, or None."""
-    asks = {row["id"] for row in rows if row["kind"] == "ask"
-            and row["item"] == item and row["ask_kind"] == ask_kind}
-    found = [row for index, row in enumerate(rows) if index > after
-             and row["kind"] == "answer" and row["ask"] in asks]
-    return found[-1] if found else None
-
-
 def consents(rows, item):
     """(own, trains): the merge asks covering the item whose answer
     consents — its own asks answered `merge`, and train asks listing it
@@ -182,7 +151,7 @@ def transition_problems(rows, item, to, fields):
     fields) given the ledger's rows. Empty means the move is legal."""
     found = item_view(rows, item)
     entry, state = found["entry"], found["state"]
-    if entry is None:
+    if found["unknown"]:
         return [found["unknown"]]
     if state in TERMINAL:
         return [f"cd: {item} is {state}, and {state} is terminal"]
@@ -258,7 +227,7 @@ def queue_stall(root, batch, now, item, reason, recommended, why):
     """(rows written, problems): stall the item and queue its ask."""
     def build(rows):
         found = item_view(rows, item)
-        if found["entry"] is None:
+        if found["unknown"]:
             return None, [found["unknown"]]
         return stall_rows(rows, now, found["entry"], reason, recommended,
                           why)
@@ -285,7 +254,7 @@ def record_verdict(root, batch, now, item, verdict, reviewer_run, head):
     def build(rows):
         found = item_view(rows, item)
         entry = found["entry"]
-        if entry is None:
+        if found["unknown"]:
             return None, [found["unknown"]]
         if verdict == "pass":
             fields = {"verdict": "pass",
@@ -342,12 +311,6 @@ def needs_facts(rows):
              for entry in (read["plan"] or {}).get("items", [])]
     return [one["item"] for one in found
             if one["state"] in ("spec", "build") and one["completed"]]
-
-
-def _finishing(rows, launched):
-    run_id = launched.get("run_id")
-    return next((row for row in rows if row["kind"] == "run"
-                 and row["run_id"] == run_id), None) if run_id else None
 
 
 def _build_usd(entry, rows):
