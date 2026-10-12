@@ -76,8 +76,11 @@ research note, a lesson from this session):
 2. Draft an itemised change list. Each item is one verb on one claim:
    **ADD** a claim, **UPDATE** a claim (the old one is kept and marked
    superseded, never silently overwritten), **DELETE** a claim that is no
-   longer true (say what disproves it), or **NOOP** (the source teaches
-   nothing non-inferable — the most common correct answer).
+   longer true (say what disproves it), **CONFLICT** (the source
+   contradicts a claim and the code does not say which is right — the
+   human rules), or **NOOP** (the source teaches nothing non-inferable —
+   the most common correct answer). A source about a neighbouring
+   subject is an ADD, never an UPDATE to the nearest page.
 3. Every added or updated claim cites a source path, and the page's
    `verified:` becomes the commit you checked it against.
 4. Present the list and stop. Apply only the items the user promotes.
@@ -112,8 +115,14 @@ Run `kb.py lint`. For each problem:
   changed code, then propose UPDATE, DELETE or NOOP per claim (step 2's
   rules). A page that is still true gets its `verified:` moved to HEAD.
 - **orphan / out of date / no index** — run `kb.py index`.
-- **missing frontmatter, broken source, related or link** — fix the page,
-  or delete it if nothing on it survives.
+- **broken source** — when the stale line says `renamed to X`, propose
+  an UPDATE to `sources:` and re-verify against X. When the source is
+  gone, triage per claim: a claim that rested only on it is a DELETE
+  proposal; a claim another source still backs stays. Delete the page
+  only when nothing on it survives.
+- **summary over its cap** — rewrite it as the one fact the page holds.
+- **missing frontmatter, broken related or link** — fix the page, or
+  delete it if nothing on it survives.
 - **over budget** — shorten summaries, merge pages, or delete the page
   that pays least. `kb.py stats` shows page sizes. Past the budget, the
   answer is fewer pages, not a search engine.
