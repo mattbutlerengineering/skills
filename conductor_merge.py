@@ -17,10 +17,18 @@ a gate file rides a train only when each gate file's blob id equals the
 one approved at its gate asks; otherwise it needs its own merge ask
 (ADR-0036 condition 3, as architecture.md reads it; drafted for the
 Owner as provisional ADR-0085).
+
+The turn runs in this plugin's repo and in a stamped consumer repo
+alike (#678): its gate is factory.json's conductor.gate_command, and the
+plugin-version bump and the manifest regeneration happen only in the
+factory source repo, the one whose root holds factory_init.py beside
+.claude-plugin/plugin.json. factory_init is root-only, so it is imported
+only there.
 """
 import json
 import os
 import re
+import subprocess
 import time
 from collections import Counter
 from pathlib import Path
@@ -28,8 +36,8 @@ from pathlib import Path
 import conductor_flow as flow
 import conductor_plan
 import conductor_run
-from factory_init import MIRRORS
-from cli import CLI_FAILURES, detail, gh_read, runner
+import factory_config
+from cli import CLI_FAILURES, detail, gh_read
 from conductor import BLOCK, answers, append, current_state, is_text, \
     load, stamp
 from cost_ledger import ISSUE_KEY
@@ -191,6 +199,14 @@ def _git(git, worktree, args, what, recommended=BLOCK):
         raise Stall(f"{what} failed: {detail(err)}", recommended)
 
 
+def factory_source(worktree):
+    """True in this plugin's own repo: factory_init.py, which writes the
+    manifest and is never mirrored, beside the plugin.json it pins. A
+    consumer repo, plugin or not, has no factory_init.py at its root."""
+    root = Path(worktree)
+    return (root / "factory_init.py").is_file() and (root / PLUGIN).is_file()
+
+
 def _regenerate(tool, worktree):
     try:
         tool(["python3", str(worktree / "factory_init.py"),
@@ -204,6 +220,7 @@ def _written(worktree, *paths):
     mirror update-manifest refreshes. Staged by name, never with -A, so
     a file a Worker left behind is never swept into a Conductor commit
     (re-review R1)."""
+    from factory_init import MIRRORS  # root-only: factory source only
     mirrors = [f"factory/templates/{rel}" for _, rel, _ in MIRRORS]
     return [path for path in [*paths, *mirrors]
             if (worktree / path).is_file()]
@@ -212,7 +229,9 @@ def _written(worktree, *paths):
 def update_branch(git, tool, worktree, branch):
     """Steps 1-2: merge origin/main into the item branch. costs.jsonl
     merges by union (.gitattributes); a conflict in the manifest alone
-    is resolved by regeneration; any other conflict aborts the merge."""
+    is resolved by regeneration in the factory source repo; any other
+    conflict, or a manifest conflict in a consumer repo, aborts the
+    merge."""
     _git(git, worktree, ["fetch", "origin", "main"], "fetching origin/main",
          RETRY)
     try:
@@ -223,7 +242,7 @@ def update_branch(git, tool, worktree, branch):
     conflicted = _git(git, worktree, ["diff", "--name-only",
                                       "--diff-filter=U"],
                       "listing conflicts").split()
-    if conflicted != [MANIFEST]:
+    if conflicted != [MANIFEST] or not factory_source(worktree):
         _git(git, worktree, ["merge", "--abort"], "aborting the merge")
         raise Stall(f"merging origin/main into {branch} conflicts in"
                     f" {', '.join(conflicted)}" if conflicted
@@ -237,9 +256,12 @@ def update_branch(git, tool, worktree, branch):
 
 
 def bump_version(git, tool, worktree, branch):
-    """Step 3: when the item touched skills/, set the branch's plugin
-    version to origin/main's with the patch part bumped, regenerate the
-    manifest that pins it, and commit. The new version, or None."""
+    """Step 3: when the item touched skills/ in the factory source repo,
+    set the branch's plugin version to origin/main's with the patch part
+    bumped, regenerate the manifest that pins it, and commit. The new
+    version, or None; always None in a consumer repo (#678)."""
+    if not factory_source(worktree):
+        return None
     changed, problems = flow.changed_files(git, branch)
     if problems:
         raise Stall(problems[0][len("cd: "):], RETRY)
@@ -551,9 +573,10 @@ def _reserve(root, batch, clock, item, fields):
     return problems
 
 
-def _turn(root, batch, item, ports, worktree):
+def _turn(root, batch, item, ports, worktree, gate):
     """Steps 1-8 on a turn already moved to `merging`. (pr, sha, checks),
-    or raises Stall; ledger problems are returned as the last value."""
+    or raises Stall; ledger problems are returned as the last value.
+    `gate` is the gate command's argv, run in the item worktree."""
     git, gh, tool, clock, sleep = ports
     branch = flow.item_branch(batch, item)
     update_branch(git, tool, worktree, branch)
@@ -575,9 +598,9 @@ def _turn(root, batch, item, ports, worktree):
     if changed:
         raise Stall(changed[0][len("cd: "):])
     try:
-        tool(["make", "-C", str(worktree), "check"])
+        tool(gate, cwd=str(worktree))
     except CLI_FAILURES as err:
-        raise Stall(f"make check failed on {branch}: {detail(err)}")
+        raise Stall(f"{' '.join(gate)} failed on {branch}: {detail(err)}")
     _git(git, worktree, ["push", "origin", branch], f"pushing {branch}",
          RETRY)
     head = _git(git, worktree, ["rev-parse", "HEAD"], "reading HEAD").strip()
@@ -636,11 +659,17 @@ def _show(git, ref, path):
         return None
 
 
-def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None):
+def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
+               config=None):
     """(summary, problems): one merge turn. problems when the
     precondition refuses (nothing is touched) or a ledger write fails;
     a turn that cannot finish mechanically queues a stall ask and leaves
-    the branch as pushed — never a forced push, never a retry."""
+    the branch as pushed — never a forced push, never a retry. `config`
+    is the batch root's factory config (None reads as empty: every
+    optional table at its default)."""
+    gate, problems = factory_config.resolve_gate_command(config or {})
+    if problems:
+        return None, problems
     rows, problems = load(root, batch)
     if problems:
         return None, problems
@@ -671,7 +700,8 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None):
         return None, problems
     try:
         merged, problems = _turn(root, batch, item,
-                                 (git, gh, tool, clock, sleep), worktree)
+                                 (git, gh, tool, clock, sleep), worktree,
+                                 gate)
     except Stall as stall:
         _, problems = flow.queue_stall(
             root, batch, clock(), item, stall.reason, stall.recommended,
@@ -684,13 +714,21 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None):
     return {"item": item, "stall": None, **merged}, problems
 
 
+def run_tool(argv, cwd=None):
+    """The tool port: run argv (in `cwd`), raising CLI_FAILURES."""
+    return subprocess.run(argv, check=True, capture_output=True, text=True,
+                          cwd=cwd)
+
+
 def merge_cli(root, args, clock, git, gh, tool=None, sleep=None):
     if len(args) != 2 or not ISSUE_KEY.fullmatch(args[1]):
         return None
+    config, problems = factory_config.load(root)
+    if problems:
+        return problems
     summary, problems = merge_turn(
-        root, args[0], args[1], clock, git, gh,
-        tool or (lambda argv: runner(argv[0])(argv[1:])),
-        sleep or time.sleep)
+        root, args[0], args[1], clock, git, gh, tool or run_tool,
+        sleep or time.sleep, config=config)
     if summary is not None:
         print(f"cd: merge of {summary['item']} stalled: {summary['stall']}"
               if summary["stall"] else

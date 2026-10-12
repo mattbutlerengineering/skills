@@ -648,3 +648,24 @@ differs from the text above, and is recorded here for the Owner:
     embedded in a configured `pushurl`, or a `~/.netrc` entry (re-review
     R3). This stops a confused Worker. A hostile one can still restore a variable from
     `python3`, so against hostility it remains trust-based.
+
+2026-10-11. Issue #678, at the Owner's direction that the Conductor be
+consumed by other repos. Two choices above no longer hold: the
+frontmatter assumption that `conductor.py` stays root-only, and the
+"Root-only tool" decision.
+
+13. **Payload-portable Conductor.** `conductor.py` and its five
+    capability siblings are mirrored into the factory payload
+    (`tools/factory/`, `factory_init.MIRRORS`). Every module they import
+    already shipped. The `conduct` skill runs whichever copy the repo
+    has. In a stamped repo:
+    - The gate is `factory.json`'s optional `conductor.gate_command`.
+      It is one command with no shell operators, and absent it is
+      `make check`. It is the Worker's one `Bash(...)` gate permission,
+      and the merge turn runs it in the item worktree.
+    - `plan` and `open` take `--agents DIR` for the charter stubs, since
+      a stamped repo has no `factory/agents/` (ADR-0055).
+    - The merge turn bumps the plugin version and regenerates the
+      manifest only in the factory source repo, whose root holds
+      `factory_init.py` beside `.claude-plugin/plugin.json`. Elsewhere it
+      bumps nothing, and a manifest conflict is a stall like any other.

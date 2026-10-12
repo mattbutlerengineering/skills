@@ -45,13 +45,13 @@ target — one problem line per refusal, no partial stamps. That last refusal is
 strict: a repo that already has `docs/adr/README.md` cannot be stamped without
 moving the conflict out of the way first.
 
-77 files land: the 38-file payload installed to its destinations, plus the
+89 files land: the 44-file payload installed to its destinations, plus the
 pristine mirror it was stamped from. `factory/manifest.json` is the authority.
 
 | Group | Count | What |
 |-------|-------|------|
-| `factory/` | 39 | the manifest and the pristine mirror the stamped detectors check themselves against |
-| `tools/factory/` | 18 | the detector suite and the tools the workflows call |
+| `factory/` | 45 | the manifest and the pristine mirror the stamped detectors check themselves against |
+| `tools/factory/` | 24 | the detector suite, the tools the workflows call, and the Conductor's batch tool |
 | `docs/adr/` | 8 | the seeded ADR set, the convention, and the template |
 | `.github/workflows/` | 6 | validator, assembler, design, cost-report, gate-digest, toolsmith-mine |
 | `.github/` | 3 | `factory.json` (budgets, routing bands, WIP cap, monthly cap), `labels.json` (the 28-label taxonomy), `CODEOWNERS` (the code-owner gate) |

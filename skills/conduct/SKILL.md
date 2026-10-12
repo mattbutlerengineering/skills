@@ -13,9 +13,17 @@ number reservation, the item state machine, the stall rule, the merge
 precondition and the scorecard. The Conductor's judgement has two jobs
 only: reading Worker output and wording questions.
 
-`conductor.py` is root-only: it is not in the factory payload. If the
-repo has no `conductor.py` at its root, stop and say so; do not
-improvise its rules.
+Find the tool before anything else. It is `conductor.py` at the root of
+this plugin's own repo, and `tools/factory/conductor.py` in a repo
+stamped by factory-init (the payload ships it). Every command below
+writes `python3 conductor.py`; in a stamped repo run
+`python3 tools/factory/conductor.py` instead. If the repo has neither,
+stop and say so: it needs `factory-init` (stamp, or update an older
+stamp). Do not improvise the tool's rules.
+
+The repo's `factory.json` (`.github/factory.json` when stamped) names
+its gate in `conductor.gate_command`; absent, it is `make check`.
+Workers may run that one command, and the merge turn runs it.
 
 All batch state is the **batch ledger**
 (`docs/factory/batches/<batch>/ledger.jsonl`) on the batch branch
@@ -46,6 +54,12 @@ a refusal; report it and stop.
 
     python3 conductor.py plan <#N>...
     python3 conductor.py open <batch> <#N>...
+
+The plan reads each step's band from the charter stubs in
+`factory/agents/`. A stamped repo has none unless it authored its own;
+then pass this plugin's, `--agents <this skill's
+directory>/../../factory/agents`, straight after `plan` or after
+`open <batch>`.
 
 Show the Owner the plan as printed: per item its type, steps, charter,
 band, model, effort and ceiling, its estimate and reserved number block,
@@ -126,8 +140,9 @@ For each `ready` entry whose step is `merge`, one at a time:
 The tool refuses unless the item is reviewed with a pass from a reviewer
 distinct from its authors and an answer covers it, and on a train only
 once every earlier item has merged. It merges `main` in, bumps the
-plugin version for a `skills/` change, confirms reserved numbers,
-re-checks, waits for green checks and merges. Anything it cannot do
+plugin version for a `skills/` change (only in this plugin's own repo;
+never in a stamped one), confirms reserved numbers, re-runs the gate
+command, waits for green checks and merges. Anything it cannot do
 mechanically becomes a stall ask. Never merge an item any other way.
 
 ### 6. Close the batch

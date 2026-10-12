@@ -18,6 +18,7 @@ import json
 import netrc as netrc_file
 import os
 import re
+import shlex
 import subprocess
 import tempfile
 from pathlib import Path
@@ -37,13 +38,21 @@ from protocol import read_frontmatter
 
 HARNESS = "claude"
 # Fixed for every step (Owner, 2026-10-10): no git push, no gh at all.
-# make is only `make check` (review major 3): other targets write gh
-# labels. The list alone cannot hold "no push, no gh", since python3
+# The one gate permission is exactly the repo's gate command (review
+# major 3: `make check` here, never `make *`, whose other targets write
+# gh labels; factory.json's conductor.gate_command in a consumer repo,
+# #678). The list alone cannot hold "no push, no gh", since python3
 # reaches both; worker_env below is what enforces it.
-ALLOWED_TOOLS = ("Read", "Edit", "Write", "Glob", "Grep",
-                 "Bash(python3 *)", "Bash(make check)", "Bash(git add *)",
-                 "Bash(git commit *)", "Bash(git status*)",
-                 "Bash(git diff*)", "Bash(git log*)")
+def allowed_tools(gate):
+    """The Worker's --allowedTools for a gate command given as argv."""
+    return ("Read", "Edit", "Write", "Glob", "Grep", "Bash(python3 *)",
+            f"Bash({shlex.join(gate)})", "Bash(git add *)",
+            "Bash(git commit *)", "Bash(git status*)", "Bash(git diff*)",
+            "Bash(git log*)")
+
+
+ALLOWED_TOOLS = allowed_tools(
+    shlex.split(factory_config.DEFAULT_GATE_COMMAND))
 # The Worker's environment (review major 3): no GitHub credential, no gh
 # config, no askpass; git's ssh transport is `false`, so no ssh push (or
 # fetch) reaches any host or alias; and the Owner's own GIT_CONFIG_*
@@ -160,16 +169,17 @@ def push_gaps(git, worktree, netrc):
     return problems
 
 
-def harness_command(brief, model, effort, ceiling_usd):
+def harness_command(brief, model, effort, ceiling_usd,
+                    tools=ALLOWED_TOOLS):
     """Every harness flag, composed in this one function: the headless
     CLI is a volatile vendor surface."""
     return [HARNESS, "-p", brief, "--model", model, "--effort", effort,
             "--max-budget-usd", f"{ceiling_usd:.2f}", "--output-format",
-            "json", "--allowedTools", *ALLOWED_TOOLS]
+            "json", "--allowedTools", *tools]
 
 
 def compose_brief(step, item, item_type, worktree, branch, block, wo,
-                  context, issue_body, ceiling):
+                  context, issue_body, ceiling, tools=ALLOWED_TOOLS):
     """The Worker's brief in its fixed shape. The issue body is an input
     only for a spec step (ADR-0032: owner-authored issues only)."""
     scale = ("maintenance run from capture" if item_type == "fix"
@@ -187,7 +197,7 @@ def compose_brief(step, item, item_type, worktree, branch, block, wo,
         f" pull request body to {PR_BODY_FILE} at the worktree root and"
         " leave pr-body.md uncommitted.", "",
         "## Tools", "",
-        f"Only these: {', '.join(ALLOWED_TOOLS)}. never git push, and"
+        f"Only these: {', '.join(tools)}. never git push, and"
         " never run any gh command: this environment carries no GitHub"
         " credential, and every push fails.", "",
         "## Boundaries", "",
@@ -541,7 +551,8 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
                                            step)
     config, problems = factory_config.load(root)
     cap, found = factory_config.resolve_cap(config or {})
-    problems = problems or found
+    gate, unusable = factory_config.resolve_gate_command(config or {})
+    problems = problems or found or unusable
     if not problems:
         spent, problems = month_spend(git, ctx["rows"], batch, now)
     if not problems:
@@ -553,12 +564,13 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     # pr-body.md is this step's output only (review minor 7): one left by
     # an earlier step would satisfy the expected-output check.
     (worktree / PR_BODY_FILE).unlink(missing_ok=True)
+    tools = allowed_tools(gate)
     brief = compose_brief(step, item, entry["type"], worktree, branch,
                           ctx["block"], ctx["wo"], ctx["context"],
-                          ctx["body"], ceiling)
+                          ctx["body"], ceiling, tools)
     event, ended, _ = _harness(
-        harness, harness_command(brief, model, effort, ceiling), worktree,
-        flow.WALL_CLOCK_MINUTES[entry["size"]], batch)
+        harness, harness_command(brief, model, effort, ceiling, tools),
+        worktree, flow.WALL_CLOCK_MINUTES[entry["size"]], batch)
     done = clock()
     tokens, cost, outcome, reported, stall = _meter(
         root, batch, run_id, event, ended, ceiling, model)

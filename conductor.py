@@ -4,8 +4,8 @@ ledger's one owner.
 
 The `conduct` skill's compute half, in work_queue.py's conventions: pure
 functions with every input passed in, a thin main, cd:-prefixed problem
-strings, cli.report for the exit. Root-only: not mirrored into the
-factory payload (architecture.md). Capabilities that would push this
+strings, cli.report for the exit. Mirrored into the factory payload with
+its siblings (factory_init.MIRRORS, #678). Capabilities that would push this
 file past the 800-line ceiling live in sibling modules that import its
 row grammar (breakdown assumption 6): conductor_plan (plan, open),
 conductor_flow (the item state machine and the stall rule in next),
@@ -13,10 +13,11 @@ conductor_run (the Worker runner), conductor_merge (the merge
 precondition and the merge turn) and conductor_close (the scorecard and
 closing a batch).
 
-  python3 conductor.py plan <#N>...
+  python3 conductor.py plan [--agents DIR] <#N>...
         Price and order a batch of issues and show each item's reserved
-        number block. Writes nothing.
-  python3 conductor.py open <batch> <#N>...
+        number block. Writes nothing. --agents names the charter stub
+        directory (default factory/agents/, which a consumer repo lacks).
+  python3 conductor.py open <batch> [--agents DIR] <#N>...
         Plan, then create the conductor/<batch> branch and worktree from
         origin/main, write the plan and reserve rows, and queue the spend
         ask.
@@ -34,8 +35,9 @@ closing a batch).
         One merge turn, refused unless the item is reviewed with a pass
         from a distinct reviewer and an answer covers it: merge
         origin/main in, resolve only costs.jsonl and the manifest, bump
-        the plugin patch version for a skills/ change, confirm the
-        item's reserved numbers, make check, push (never forced), wait
+        the plugin patch version for a skills/ change (both in this
+        plugin's repo only), confirm the item's reserved numbers, run
+        the gate command, push (never forced), wait
         for the head's checks, then squash-merge or enqueue. Any other
         outcome queues a stall ask.
   python3 conductor.py scorecard <batch>
@@ -61,7 +63,12 @@ closing a batch).
 
 The batch ledger (docs/factory/batches/<batch>/ledger.jsonl) is
 append-only JSONL. Every row has `at`, `kind` and `item`; ROW_FIELDS
-holds each kind's own fields. A line that does not parse, or breaks its
+holds each kind's own fields.
+
+In a stamped consumer repo the same tools run from tools/factory/
+(factory-init's payload, #678): the gate is factory.json's
+conductor.gate_command (default `make check`), and the plugin-version
+bump and the manifest regeneration happen only in this plugin's repo. A line that does not parse, or breaks its
 kind's rules, fails the reader with its file and line: it is never
 skipped, because "could not read" must not read as "nothing to do".
 """

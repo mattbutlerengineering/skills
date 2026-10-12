@@ -22,6 +22,8 @@ config:-prefixed problem strings; a field the config does not cover is a
 problem, never a silent default.
 """
 import math
+import re
+import shlex
 from pathlib import Path
 
 from cli import read_file
@@ -152,6 +154,58 @@ def resolve_cap(config):
     return config["monthly_cap_usd"], []
 
 
+# The Conductor's optional table (issue #678): the gate command its
+# Workers may run and its merge turn runs, in the item worktree. Absent,
+# it is this repo's own gate. One command, run without a shell: it is
+# also the Worker's one Bash(...) permission, so a shell operator would
+# widen what that permission covers.
+CONDUCTOR_KEYS = ("gate_command",)
+DEFAULT_GATE_COMMAND = "make check"
+SHELL_OPERATOR = re.compile(r"[;&|<>`$\n]")
+
+
+def _gate_argv(command):
+    """The gate command as argv, or None when it is not one command."""
+    if not isinstance(command, str) or SHELL_OPERATOR.search(command):
+        return None
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        return None
+    return argv or None
+
+
+def conductor_problems(config):
+    """Value-grammar problems for factory.json's optional `conductor`
+    table, unprefixed: the one home of its rules, which config_problems
+    (detector F) and the resolvers below both apply."""
+    if "conductor" not in config:
+        return []
+    table = config["conductor"]
+    if not isinstance(table, dict):
+        return ["conductor must be an object"]
+    problems = []
+    unknown = sorted(set(table) - set(CONDUCTOR_KEYS))
+    if unknown:
+        problems.append(f"conductor has unknown key(s): {', '.join(unknown)}")
+    if "gate_command" in table and _gate_argv(table["gate_command"]) is None:
+        problems.append("conductor.gate_command must be one command with no"
+                        " shell operators")
+    return problems
+
+
+def resolve_gate_command(config):
+    """(the gate command as argv, problems): factory.json's
+    conductor.gate_command, DEFAULT_GATE_COMMAND when absent. A malformed
+    table is a problem, never a silent default."""
+    problems = conductor_problems(config)
+    if problems:
+        return None, [f"config: factory.json {problem}"
+                      for problem in problems]
+    table = config.get("conductor", {})
+    return _gate_argv(table.get("gate_command", DEFAULT_GATE_COMMAND)), []
+
+
 def config_problems(config):
     """Field-grammar problems for a parsed factory config, unprefixed.
 
@@ -188,4 +242,4 @@ def config_problems(config):
                      if effort not in EFFORTS]
     elif "effort" in config:
         problems.append("effort must map bands to efforts")
-    return problems
+    return problems + conductor_problems(config)

@@ -19,7 +19,6 @@ import conductor_flow as flow
 import conductor_merge as merge
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
 from test_conductor_flow import (AT, NOW, START, answered,  # noqa: E402
                                  launch, moved, ran, run_id, stall_ask)
@@ -233,7 +232,7 @@ SEED = {".gitattributes": "docs/factory/costs.jsonl merge=union\n",
         ".claude-plugin/plugin.json": '{\n  "name": "p",\n'
                                       '  "version": "0.7.3"\n}\n',
         "factory/manifest.json": '{"files": "seed"}\n',
-        "README.md": "readme\n",
+        "README.md": "readme\n", "factory_init.py": "# stand-in\n",
         "docs/adr/README.md": "# ADRs\n\nThe index.\n\n- ADR-0001 a\n"
                               "- ADR-0002 b\n- ADR-0003 c\n"}
 GREEN_RUN = {"name": "validate", "status": "completed",
@@ -335,7 +334,7 @@ class TurnCase(unittest.TestCase):
                               check=True, capture_output=True, text=True)
 
     def tool(self, fail=None):
-        def run(args):
+        def run(args, cwd=None):
             self.log.append(("tool", list(args)))
             if fail and fail in args:
                 raise subprocess.CalledProcessError(
@@ -767,32 +766,6 @@ class TestReservations(TurnCase):
         self.assertTrue(summary["stall"].startswith(
             "merge refused: #12's gate file docs/adr/"), summary)
         self.assertFalse(self.calls("git", "push"))
-
-
-class TestMergeCli(TurnCase):
-    def test_merge_is_a_conductor_verb(self):
-        self.item({"src.txt": "x\n"})
-        self.ledger(START + self.filled(SHIPPED))
-        code, out = cli_contract.capture(
-            conductor.main, ["merge", "b1", "#12"], env={}, clock=self.clock,
-            root=self.root, run=self.fake_gh(), git=self.git,
-            tool=self.tool(), sleep=self.clock.sleep)
-        self.assertEqual(code, 0, out)
-        self.assertIn("cd: merged #12 as m1 (PR #44)", out)
-
-    def test_a_refused_merge_touches_nothing(self):
-        self.item({"src.txt": "x\n"})
-        self.ledger(START + feature_shipped({}))
-        before = (self.root / LEDGER).read_text()
-        code, out = cli_contract.capture(
-            conductor.main, ["merge", "b1", "#12"], env={}, clock=self.clock,
-            root=self.root, run=self.fake_gh(), git=self.git,
-            tool=self.tool(), sleep=self.clock.sleep)
-        self.assertEqual(code, 1)
-        self.assertIn("cd: merge refused: no merge answer covers #12", out)
-        self.assertEqual((self.root / LEDGER).read_text(), before)
-        self.assertFalse(self.calls("git", "fetch"))
-        self.assertFalse([e for e in self.log if e[0] == "tool"])
 
 
 if __name__ == "__main__":

@@ -60,6 +60,12 @@ EXPECTED_RELS = {
     "templates/tools/factory/gate_digest.py",
     "templates/tools/factory/rejection_mining.py",
     "templates/tools/factory/standards_index.py",
+    "templates/tools/factory/conductor.py",
+    "templates/tools/factory/conductor_plan.py",
+    "templates/tools/factory/conductor_flow.py",
+    "templates/tools/factory/conductor_run.py",
+    "templates/tools/factory/conductor_merge.py",
+    "templates/tools/factory/conductor_close.py",
 }
 
 SEEDED_ADRS = REPO_ROOT / "factory" / "templates" / "docs" / "adr"
