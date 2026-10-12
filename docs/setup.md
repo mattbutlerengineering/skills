@@ -61,13 +61,13 @@ checks in section 4 apply to them as they stand: a kept `labels.json` must
 carry the labels detector J names, and a kept `CODEOWNERS` needs the factory's
 gate paths added by hand.
 
-91 files land: the 45-file payload installed to its destinations, plus the
+93 files land: the 46-file payload installed to its destinations, plus the
 pristine mirror it was stamped from. `factory/manifest.json` is the authority.
 
 | Group | Count | What |
 |-------|-------|------|
-| `factory/` | 46 | the manifest and the pristine mirror the stamped detectors check themselves against |
-| `tools/factory/` | 25 | the detector suite, the tools the workflows call, and the Conductor's batch tool |
+| `factory/` | 47 | the manifest and the pristine mirror the stamped detectors check themselves against |
+| `tools/factory/` | 26 | the detector suite, the tools the workflows call, the Conductor's batch tool, and a `.gitignore` for their bytecode |
 | `docs/adr/` | 8 | the seeded ADR set, the convention, and the template |
 | `.github/workflows/` | 6 | validator, assembler, design, cost-report, gate-digest, toolsmith-mine |
 | `.github/` | 3 | `factory.json` (budgets, routing bands, WIP cap, monthly cap), `labels.json` (the 28-label taxonomy), `CODEOWNERS` (the code-owner gate) |

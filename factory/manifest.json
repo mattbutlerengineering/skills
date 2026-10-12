@@ -1,6 +1,6 @@
 {
   "plugin": "idea-to-prod",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "files": {
     "templates/.github/CODEOWNERS": "ba6ab48054414914bd38f2c82365a89c1400ca0d5e39e9d7288832b9d3834192",
     "templates/.github/labels.json": "754d2c9792c8216e5db5f4c2e9f49e14d6ca5131da8598a9caea7ecf346fd4a8",
@@ -22,6 +22,7 @@
     "templates/docs/design/TEMPLATE.md": "e1f91e3f34bb0f742ca40e2390e5dfbeaaca585eddb69437b9a71b56708500a0",
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "a94312cefbe277b7104a34503c66e53067887f4a78bece5de9aabbda3887665f",
+    "templates/tools/factory/.gitignore": "a8d4901caf8ede345c3ade1b4e165f431b8386799d91695a83521444a9c553b0",
     "templates/tools/factory/assembler.py": "124ffa1b7b8e2c2bb75ea60692527d31029ee6a39572747034e89ac42a87778c",
     "templates/tools/factory/budget_guard.py": "f4e3abe3dfc820d3f397efc463f6d229925d33acf7625bde59fcc92bf6db20b4",
     "templates/tools/factory/cli.py": "aac42d644a206ca2c12de92285721131d36d4a8b084ebe5eb4a5413afe12d6c2",
