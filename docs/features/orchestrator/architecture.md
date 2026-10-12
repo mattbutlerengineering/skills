@@ -417,6 +417,15 @@ The stall ask's options are fixed:
 - retry one band up, which is the Owner's choice and never the Conductor's;
 - block with a reason.
 
+retry one band up is offered, and named in the question, only below the
+top band. A Worker failure's recommendation depends on how many runs of
+the step have stalled in a row (#725): the first recommends retry; a
+second consecutive budget stop at the same band and ceiling recommends
+retry one band up while it is offered and not yet taken, else block,
+since the same ceiling gives the same outcome. A retry of a step whose
+stalled run committed work is briefed with those commits and told to
+finish, not repeat, them.
+
 Three consecutive Worker failures across the batch pause all dispatch
 behind one ask.
 

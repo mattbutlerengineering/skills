@@ -75,8 +75,14 @@ CAP_WHY = ("the monthly cap is ADR-0034's breaker; raise monthly_cap_usd in"
            " factory.json first, or a resumed launch asks again")
 REFUSAL_WHY = ("a retry meets the same refusal until the setting it names"
                " changes; change it, then resume")
-WORKER_WHY = ("a first failure is evidence about the item as often as about"
-              " the agent, so nothing retries without your answer")
+# The subject of the spend commit each run ends with (_spend): it bounds
+# one run's own commits on the item branch.
+SPEND_SUBJECT = "chore(cost): "
+PRIOR_WORK = ("The previous {step} run, {run_id}, ended: {reason}. These"
+              " commits it made are already on {branch}, the head this"
+              " worktree is at:\n{commits}\nDo not repeat that work. Check"
+              " it against the objective, finish only what is missing (at"
+              " the least, write " + PR_BODY_FILE + "), and stop.")
 OBJECTIVES = {
     "spec": ("Drive issue {item}'s run with the autorun skill, as a"
              " {scale}, writing `stop-after: decompose` into its"
@@ -181,9 +187,11 @@ def harness_command(brief, model, effort, ceiling_usd,
 
 
 def compose_brief(step, item, item_type, worktree, branch, block, wo,
-                  context, issue_body, ceiling, tools=ALLOWED_TOOLS):
+                  context, issue_body, ceiling, tools=ALLOWED_TOOLS,
+                  prior=""):
     """The Worker's brief in its fixed shape. The issue body is an input
-    only for a spec step (ADR-0032: owner-authored issues only)."""
+    only for a spec step (ADR-0032: owner-authored issues only). `prior`
+    is a retry's note on the work its stalled run committed (#725)."""
     scale = ("maintenance run from capture" if item_type == "fix"
              else "feature run from idea")
     reserved = ", ".join(f"{kind} {span(values)}"
@@ -201,6 +209,7 @@ def compose_brief(step, item, item_type, worktree, branch, block, wo,
     return "\n".join([
         "## Objective", "",
         OBJECTIVES[step].format(item=item, scale=scale, wo=wo), "",
+        *(["## Prior work", "", prior, ""] if prior else []),
         "## Output", "",
         f"The stage artifact or code, as commits on {branch}. Write the"
         f" pull request body to {PR_BODY_FILE} at the worktree root and"
@@ -375,12 +384,40 @@ def _spend(git, worktree, wo, run_id, model, tokens, cost, outcome, now):
     cost_ledger.append(worktree, cost_ledger.entry(
         wo, run_id, model, tokens, cost, outcome, now.strftime("%Y-%m-%d")))
     for args in (["add", cost_ledger.COST_LEDGER],
-                 ["commit", "-m", f"chore(cost): {run_id}"]):
+                 ["commit", "-m", f"{SPEND_SUBJECT}{run_id}"]):
         _, problems = _git(git, ["-C", str(worktree), *args],
                            f"committing the spend row of {run_id}")
         if problems:
             return problems[0]
     return None
+
+
+def _prior_work(git, rows, item, step, branch):
+    """(the brief's prior-work note, "" when there is none, problems): on
+    a retry, the commits the stalled run of this step made, read from
+    the item branch between its spend commit and the one before (#725).
+    Without the note a retry repeats committed work from scratch."""
+    earlier = flow.prior_stalls(rows, item, step)
+    if not earlier or earlier[-1][0] is None:
+        return "", []
+    run, reason = earlier[-1]
+    out, problems = _git(git, ["log", "--format=%s",
+                               f"origin/main..{branch}"], "cd: git log")
+    if problems:
+        return None, problems
+    subjects = out.splitlines()
+    spend = SPEND_SUBJECT + run["run_id"]
+    if spend not in subjects:
+        return "", []
+    commits = []
+    for subject in subjects[subjects.index(spend) + 1:]:
+        if subject.startswith(SPEND_SUBJECT):
+            break
+        commits.append(f"- {subject}")
+    if not commits:
+        return "", []
+    return PRIOR_WORK.format(step=step, run_id=run["run_id"], reason=reason,
+                             branch=branch, commits="\n".join(commits)), []
 
 
 def _verdict(git, worktree, branch):
@@ -576,6 +613,10 @@ def _prepare(root, batch, item, step, git, gh, netrc, now):
                                         worktree)
     if problems:
         return None, problems
+    prior, problems = _prior_work(git, rows, item, step,
+                                  flow.item_branch(batch, item))
+    if problems:
+        return None, problems
     # The breakdown row a feature or fix build is briefed with: its
     # expected output is that row checked off on the branch.
     briefed = context.split("\n", 1)[0] if step == "build" \
@@ -595,6 +636,7 @@ def _prepare(root, batch, item, step, git, gh, netrc, now):
     return {"rows": rows, "plan": plan, "entry": entry, "wo": wo,
             "context": context, "body": body, "worktree": worktree,
             "block": found["reserved"], "briefed": briefed, "head": head,
+            "prior": prior,
             "run_id": f"conductor-{batch}-{item[1:]}-{step}-{seq}"}, []
 
 
@@ -638,7 +680,7 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     tools = allowed_tools(gate)
     brief = compose_brief(step, item, entry["type"], worktree, branch,
                           ctx["block"], ctx["wo"], ctx["context"],
-                          ctx["body"], ceiling, tools)
+                          ctx["body"], ceiling, tools, ctx["prior"])
     event, ended, _ = _harness(
         harness, harness_command(brief, model, effort, ceiling, tools),
         worktree, flow.WALL_CLOCK_MINUTES[entry["size"]], batch)
@@ -676,8 +718,10 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
             _, problems = flow.record_verdict(root, batch, done, item,
                                               verdict, run_id, ctx["head"])
     if stall is not None:
+        recommended, why = flow.worker_advice(ctx["rows"], entry, step,
+                                              band, stall)
         _, problems = flow.queue_stall(root, batch, done, item, stall,
-                                       "retry", WORKER_WHY)
+                                       recommended, why)
     return {"run_id": run_id, "outcome": outcome, "stall": stall}, problems
 
 
