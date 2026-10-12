@@ -18,6 +18,7 @@ from unittest import mock
 
 import cost_ledger
 import gates
+import knowledge_plane
 from factory_init import product_form
 
 # discover puts tests/ on sys.path; selective package-style runs need it
@@ -158,6 +159,18 @@ class TestLinkIntegrity(unittest.TestCase):
                 "C: skills/demo/SKILL.md:1 dangling ADR-0044"
                 " (no docs/adr file)"])
 
+    def test_every_adr_filename_form_resolves_a_citation(self):
+        # Issue #747: adr_status reads `0062.md` and `adr-0063-x.md` as
+        # ADRs, so C must not call their citations dangling. One file
+        # set, knowledge_plane.adr_paths, for every reader.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            gates._link_integrity_base_fixture(tree.root)
+            tree.write("docs/adr/0062.md", "# Bare\n")
+            tree.write("docs/adr/adr-0063-x.md", "# Prefixed\n")
+            tree.write("README.md", "See ADR-0062 and ADR-0063.\n")
+            self.assertEqual(gates.check_link_integrity(tree.root), [])
+
     def test_factory_templates_and_fixtures_stay_out_of_scope(self):
         # factory/templates/ is a seed tree checked against its OWN
         # numbering by TestSeededADRs, and factory/evals/fixtures/ carries
@@ -271,6 +284,34 @@ class TestBlueprintDrift(unittest.TestCase):
                 " does not match the file's 'superseded by ADR-0002'",
                 problems)
 
+    def test_a_frontmatter_only_status_is_read_not_missing(self):
+        # Issue #747: adr_status reads a frontmatter `status:` field when
+        # there is no Status line; D reads the same record, so the
+        # retirement counts and no "declares no Status line" is raised.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp,
+                "| [0001](0001-old.md) | Old | superseded by ADR-0002 |\n",
+                "| [0002](0002-new.md) | New | accepted |\n")
+            tree.write("docs/adr/0001-old.md",
+                       "---\nstatus: superseded by ADR-0002\n---\n# Old\n")
+            tree.write("docs/adr/0002-new.md",
+                       "# New\n\n- Status: accepted\n")
+            tree.write("docs/features/demo/breakdown.md",
+                       "- [ ] WO-0001 build it per ADR-0001 (PRD-0001)\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                "D: docs/features/demo/breakdown.md:1 cites ADR-0001,"
+                " superseded by ADR-0002 (blueprint drift)"])
+
+    def test_an_unknown_frontmatter_status_names_its_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, "| [0001](0001-x.md) | X | active |\n")
+            tree.write("docs/adr/0001-x.md",
+                       "---\ndate: 2026-01-01\nstatus: active\n---\n# X\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                "D: docs/adr/0001-x.md:3 unknown ADR status 'active'"])
+
     def test_artifact_citing_a_superseded_decision_is_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(
@@ -290,7 +331,7 @@ class TestBlueprintDrift(unittest.TestCase):
 
 class TestAdrStatusVocabulary(unittest.TestCase):
     """The ADR README's Statuses prose must name every head that
-    gates.ADR_STATUS accepts. The regex is the authority (detector D
+    knowledge_plane.ADR_STATUS accepts. The regex is the authority (detector D
     enforces it); the README is where a human learns the vocabulary, and
     the two heads it used to omit — "superseded in part by" and "amended
     by" — are load-bearing precisely because they do NOT retire a
@@ -321,7 +362,7 @@ class TestAdrStatusVocabulary(unittest.TestCase):
                 ("superseded by ADR-0042", True),
                 ("superseded in part by ADR-0042", False),
                 ("amended by ADR-0042", False)):
-            match = gates.ADR_STATUS.match(example)
+            match = knowledge_plane.ADR_STATUS.match(example)
             self.assertIsNotNone(match, example)
             self.assertEqual(bool(match.group("retired")), retired, example)
 

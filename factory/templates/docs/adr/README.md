@@ -10,7 +10,7 @@ answer adopted while awaiting confirmation — pivot freely), **superseded by
 ADR-NNNN** (fully retired — citing it is drift), **superseded in part by
 ADR-NNNN**, and **amended by ADR-NNNN** (both partial: the decision stays live
 and citable). The machine-readable authority is `ADR_STATUS` in
-`tools/factory/gates.py`, which also allows a parenthesized annotation after
+`tools/factory/knowledge_plane.py`, which also allows a parenthesized annotation after
 any head.
 
 ADRs 0001–0006 were seeded by `factory-init` and record the decisions the
