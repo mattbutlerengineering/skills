@@ -176,6 +176,118 @@ class TestTypeLabels(unittest.TestCase):
                                  " or fix"]))
 
 
+SIZE_LABELS = {"size:xs": "S", "size:s": "S", "size:m": "M",
+               "size:l": "L", "size:xl": "L"}
+
+
+def sized(**table):
+    return dict(CONFIG, conductor=table)
+
+
+class TestSizeLabels(unittest.TestCase):
+    """The consumer's own size labels (conductor.size_labels) and a
+    default size for an issue with none (conductor.default_size). With
+    neither, the size: rule is unchanged."""
+
+    def plan(self, issues, config):
+        import conductor_plan
+        return conductor_plan.plan_batch(issues, "matt", config, 0.0,
+                                         {"prd": 0, "adr": 0, "wo": 0},
+                                         AGENTS)
+
+    def test_absent_keys_resolve_to_none(self):
+        self.assertEqual(factory_config.resolve_size_labels({}), (None, []))
+        self.assertEqual(factory_config.resolve_default_size({}),
+                         (None, []))
+
+    def test_configured_keys_resolve_to_themselves(self):
+        config = {"conductor": {"size_labels": SIZE_LABELS,
+                                "default_size": "M"}}
+        self.assertEqual(factory_config.resolve_size_labels(config),
+                         (SIZE_LABELS, []))
+        self.assertEqual(factory_config.resolve_default_size(config),
+                         ("M", []))
+
+    def test_malformed_keys_are_exact_problems(self):
+        for table, problems in (
+                ({"size_labels": []},
+                 ["conductor.size_labels must map label names to S, M"
+                  " or L"]),
+                ({"size_labels": {"size:m": "medium", "big": 3}},
+                 ["conductor.size_labels.size:m must be S, M or L",
+                  "conductor.size_labels.big must be S, M or L"]),
+                ({"size_labels": {"": "S"}},
+                 ["conductor.size_labels keys must be non-blank label"
+                  " names"]),
+                ({"default_size": "XL"},
+                 ["conductor.default_size must be S, M or L"]),
+                ({"default_size": None},
+                 ["conductor.default_size must be S, M or L"])):
+            with self.subTest(table=table):
+                self.assertEqual(factory_config.config_problems(
+                    {"wip_cap": 1, "monthly_cap_usd": 1,
+                     "conductor": table}), problems)
+                prefixed = [f"config: factory.json {problem}"
+                            for problem in problems]
+                self.assertEqual(factory_config.resolve_size_labels(
+                    {"conductor": table}), (None, prefixed))
+                self.assertEqual(factory_config.resolve_default_size(
+                    {"conductor": table}), (None, prefixed))
+
+    def test_detector_f_reports_a_bad_default(self):
+        import gates
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, ".github").mkdir()
+            Path(tmp, ".github/factory.json").write_text(json.dumps(
+                sized(default_size="m")))
+            self.assertEqual(gates.check_config_shape(Path(tmp)), [
+                "F: .github/factory.json conductor.default_size must be"
+                " S, M or L"])
+
+    def test_the_consumers_size_labels_price_items(self):
+        result, problems = self.plan(
+            [issue(1, ("type:feature", "size:xl")),
+             issue(2, ("type:defect", "size:s", "size:xs"))],
+            sized(size_labels=SIZE_LABELS))
+        self.assertEqual(problems, [])
+        self.assertEqual([(i["item"], i["size"], i["estimate_usd"])
+                          for i in result["items"]],
+                         [("#1", "L", 40), ("#2", "S", 5)])
+
+    def test_a_size_map_replaces_the_size_rule(self):
+        result, _ = self.plan([issue(1, ("type:feature", "size:M"))],
+                              sized(size_labels=SIZE_LABELS))
+        self.assertEqual(result["deferred"], [
+            "#1 deferred: no label maps to a size (conductor.size_labels)"])
+
+    def test_labels_naming_two_sizes_defer(self):
+        result, _ = self.plan(
+            [issue(1, ("type:feature", "size:s", "size:l"))],
+            sized(size_labels=SIZE_LABELS, default_size="M"))
+        self.assertEqual(result["deferred"], [
+            "#1 deferred: its labels map to more than one size"
+            " (size:s -> S, size:l -> L)"])
+
+    def test_the_default_applies_only_with_no_size_label(self):
+        result, _ = self.plan(
+            [issue(1, ("type:feature",)), issue(2, ("type:feature",
+                                                    "size:L"))],
+            sized(default_size="S"))
+        self.assertEqual([(i["item"], i["size"]) for i in result["items"]],
+                         [("#1", "S"), ("#2", "L")])
+        result, _ = self.plan([issue(1, ("type:feature", "size:xs"))],
+                              sized(size_labels=SIZE_LABELS,
+                                    default_size="L"))
+        self.assertEqual(result["items"][0]["size"], "S")
+
+    def test_neither_key_keeps_the_size_rule(self):
+        result, _ = self.plan([issue(1, ("type:feature",)),
+                               issue(2, ("type:feature", "size:xl"))],
+                              CONFIG)
+        self.assertEqual(result["deferred"], ["#1 deferred: no size: label",
+                                              "#2 deferred: no size: label"])
+
+
 class TestWorkerGate(RunCase):
     def config(self, cap, gate=None):
         path = self.root / ".github/factory.json"

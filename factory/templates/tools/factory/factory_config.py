@@ -169,9 +169,18 @@ def resolve_cap(config):
 # a label the repo already uses to the item type it plans as. Absent,
 # the Conductor's own type: rule applies unchanged; present, it replaces
 # that rule. The order type stays the ready label's alone, so the map's
-# values are the two issue-sized types.
-CONDUCTOR_KEYS = ("gate_command", "standing_consent", "type_labels")
+# values are the two issue-sized types. `size_labels` does the same for
+# the budget sizes, and `default_size` sizes an issue that carries no
+# size label at all.
+CONDUCTOR_KEYS = ("gate_command", "standing_consent", "type_labels",
+                  "size_labels", "default_size")
 LABEL_ITEM_TYPES = ("feature", "fix")
+SIZES = ("S", "M", "L")
+
+
+def _one_of(values):
+    """`a or b`, `a, b or c`: a vocabulary as a problem string spells it."""
+    return " or ".join(filter(None, (", ".join(values[:-1]), values[-1])))
 STANDING_KEYS = ("enabled", "tier_labels")
 DEFAULT_GATE_COMMAND = "make check"
 SHELL_OPERATOR = re.compile(r"[;&|<>`$\n]")
@@ -207,20 +216,25 @@ def conductor_problems(config):
     if "standing_consent" in table:
         problems += _standing_problems(table["standing_consent"])
     if "type_labels" in table:
-        problems += _type_label_problems(table["type_labels"])
+        problems += _label_map_problems("type_labels", table["type_labels"],
+                                        LABEL_ITEM_TYPES)
+    if "size_labels" in table:
+        problems += _label_map_problems("size_labels", table["size_labels"],
+                                        SIZES)
+    if "default_size" in table and table["default_size"] not in SIZES:
+        problems.append(f"conductor.default_size must be {_one_of(SIZES)}")
     return problems
 
 
-def _type_label_problems(table):
-    prefix = "conductor.type_labels"
-    kinds = " or ".join(LABEL_ITEM_TYPES)
+def _label_map_problems(key, table, values):
+    """Problems for a conductor map from label names to `values`."""
+    prefix, kinds = f"conductor.{key}", _one_of(values)
     if not isinstance(table, dict):
         return [f"{prefix} must map label names to {kinds}"]
     if not all(isinstance(label, str) and label.strip() for label in table):
         return [f"{prefix} keys must be non-blank label names"]
     return [f"{prefix}.{label} must be {kinds}"
-            for label, kind in table.items()
-            if kind not in LABEL_ITEM_TYPES]
+            for label, kind in table.items() if kind not in values]
 
 
 def _standing_problems(policy):
@@ -255,17 +269,36 @@ def resolve_standing_consent(config):
             "tier_labels": list(policy.get("tier_labels", []))}, []
 
 
-def resolve_type_labels(config):
-    """(label -> item type, problems): factory.json's
-    conductor.type_labels, None when absent (the caller's type: rule
-    applies). A malformed table is a problem, never a default, so a typo
-    cannot silently plan or defer an issue."""
+def _conductor_value(config, key):
+    """(conductor.<key>, problems): None when absent. A malformed
+    conductor table is a problem, never a default, so a typo cannot
+    silently plan or defer an issue."""
     problems = conductor_problems(config)
     if problems:
         return None, [f"config: factory.json {problem}"
                       for problem in problems]
-    table = config.get("conductor", {}).get("type_labels")
-    return (dict(table) if table is not None else None), []
+    return config.get("conductor", {}).get(key), []
+
+
+def resolve_type_labels(config):
+    """(label -> item type, problems): factory.json's
+    conductor.type_labels, None when absent (the caller's type: rule
+    applies)."""
+    table, problems = _conductor_value(config, "type_labels")
+    return (dict(table) if table is not None else None), problems
+
+
+def resolve_size_labels(config):
+    """(label -> size, problems): factory.json's conductor.size_labels,
+    None when absent (the caller's size: rule applies)."""
+    table, problems = _conductor_value(config, "size_labels")
+    return (dict(table) if table is not None else None), problems
+
+
+def resolve_default_size(config):
+    """(the size for an issue with no size label, problems): factory.json's
+    conductor.default_size, None when absent (such an issue defers)."""
+    return _conductor_value(config, "default_size")
 
 
 def resolve_gate_command(config):
