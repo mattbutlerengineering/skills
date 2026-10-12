@@ -192,6 +192,21 @@ class TestDetail(unittest.TestCase):
                                         stderr=b"ttyd: not found\n")
         self.assertEqual(cli.detail(err), "ttyd: not found")
 
+    def test_every_line_joins_the_whole_stderr(self):
+        # #726: git's reason sits above its last line ("Aborting"), so a
+        # git failure keeps every line, each stripped, joined on " | ".
+        err = subprocess.CalledProcessError(
+            128, ["git", "merge"],
+            stderr="error: Your local changes would be overwritten:\n"
+                   "\ttools/factory/x.pyc\n\nAborting\n")
+        self.assertEqual(cli.detail(err, every_line=True),
+                         "error: Your local changes would be overwritten:"
+                         " | tools/factory/x.pyc | Aborting")
+
+    def test_every_line_falls_back_to_the_error(self):
+        err = FileNotFoundError(2, "No such file or directory: 'git'")
+        self.assertEqual(cli.detail(err, every_line=True), str(err))
+
 
 class TestFailureVocabulary(unittest.TestCase):
     def test_covers_ran_and_failed_and_never_ran(self):

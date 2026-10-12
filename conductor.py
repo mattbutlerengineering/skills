@@ -53,7 +53,13 @@ closing a batch).
         the scorecard to docs/factory/scorecards.jsonl only when it
         computes, write the close row and the closing merge ask, commit,
         push (never forced), open the closing PR, and label each blocked
-        item's issue needs-human with its reason.
+        item's issue needs-human with its reason, creating the label
+        when the repo lacks it.
+  python3 conductor.py close <batch> --merge
+        Once the Owner answered the closing ask `merge`: commit and push
+        the answer row to conductor/<batch>, so the merged ledger holds
+        it, wait for that head's checks, then squash-merge or enqueue
+        the closing PR.
   python3 conductor.py ask <batch> --kind K --question Q --option O
                            [--option O ...] --recommended O --why W
                            [--item #N] [--covers #N ...]
@@ -84,7 +90,13 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from cli import gh_runner, report, runner
+# Before any sibling import (#726): a run must never dirty its own
+# worktree with bytecode. A repo that once tracked tools/factory/
+# __pycache__ saw every run rewrite it, and close's merge of main
+# refused. The .gitignore the payload ships covers the untracked case.
+sys.dont_write_bytecode = True
+
+from cli import gh_runner, report, runner  # noqa: E402
 from cost_ledger import ISSUE_KEY
 from knowledge_plane import repo_root
 
@@ -634,7 +646,7 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
                                                      now)
         elif command == "close":
             problems = conductor_close.close_cli(root, [batch, *args],
-                                                 clock, git, run)
+                                                 clock, git, run, sleep)
         elif command == "merge":
             problems = conductor_merge.merge_cli(root, [batch, *args], clock,
                                                  git, run, tool, sleep)
@@ -645,4 +657,7 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
 
 
 if __name__ == "__main__":
+    # Its children too: the gate command a merge turn runs, and the
+    # Worker harness (whose env worker_env also pins).
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
     sys.exit(main(sys.argv[1:]))

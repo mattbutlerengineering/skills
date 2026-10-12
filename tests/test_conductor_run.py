@@ -206,6 +206,11 @@ class TestWorkerEnv(unittest.TestCase):
         self.assertEqual(env["CONDUCTOR_WORKER"], "b1")
         self.assertEqual(env["HOME"], "/home/o")
 
+    def test_a_worker_writes_no_bytecode(self):
+        # #726: a Worker's gate run in its worktree must not rewrite a
+        # tracked __pycache__/*.pyc, or the next merge of main refuses.
+        self.assertEqual(self.env()["PYTHONDONTWRITEBYTECODE"], "1")
+
     def test_the_owners_git_config_entries_are_replaced(self):
         env = self.env()
         count = int(env["GIT_CONFIG_COUNT"])
