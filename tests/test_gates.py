@@ -588,6 +588,22 @@ class TestStaleness(unittest.TestCase):
                 "I: docs/guide.md:1 stale link adr/0009-x.md (no such path)"])
 
 
+class TestStalenessLinkGrammar(unittest.TestCase):
+    """Issue #739: detector I reads the one CommonMark link grammar —
+    an angle-bracket path keeps its space, a title is not the path."""
+
+    def test_angle_bracket_paths_and_titles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/my notes.md", "x\n")
+            tree.write("docs/guide.md",
+                       '[a](<my notes.md>) [b](<gone file.md>)'
+                       ' [c](my%20x.md "T")\n')
+            self.assertEqual(gates.check_staleness(tree.root), [
+                "I: docs/guide.md:1 stale link gone file.md (no such path)",
+                "I: docs/guide.md:1 stale link my%20x.md (no such path)"])
+
+
 class TestStandardsDrift(unittest.TestCase):
     """K (ADR-0073): docs/standards.json's ADR-derived entries must match
     a fresh standards_index.build_index(root) regen, and an `enforced`

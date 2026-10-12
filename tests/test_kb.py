@@ -217,6 +217,14 @@ class TestLint(Tree):
             "kb: docs/kb/cache.md links to 'gone.md', which does not exist",
         ])
 
+    def test_titled_and_angle_bracket_links_resolve(self):
+        write(self.root / "docs" / "my notes.md", "x\n")
+        self.kb_page("cache", body='See [auth](auth.md "Auth") and'
+                     ' [n](<../my notes.md>) and [g](<gone.md> "G").\n')
+        self.indexed("auth")
+        self.assertEqual([p for p in self.lint() if "links to" in p], [
+            "kb: docs/kb/cache.md links to 'gone.md', which does not exist"])
+
     def test_bracketed_lists_parse_like_bare_ones(self):
         self.kb_page("cache", sources="[src/a.py]", related="[auth]")
         self.indexed("auth")

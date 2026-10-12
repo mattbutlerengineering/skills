@@ -37,8 +37,8 @@ import sys
 from pathlib import Path
 
 import cli
-from gates import MD_LINK, URL_TARGET
-from knowledge_plane import FENCE_OPEN, fence_closes, fence_open
+from knowledge_plane import (FENCE_OPEN, fence_closes, fence_open,
+                             local_link_targets, resolve_link)
 
 LABEL = "md-claims"
 USAGE = "usage: md_claims.py check|extract [root] [path ...]"
@@ -129,8 +129,8 @@ def _prose_claims(number, line):
     found = [(number, "path", span)
              for _, span in INLINE_CODE.findall(line) if _is_path(span)]
     bare = INLINE_CODE.sub(lambda m: " " * len(m.group(0)), line)
-    links = [(number, "link", target) for target in MD_LINK.findall(bare)
-             if not URL_TARGET.match(target) and not target.startswith("#")]
+    links = [(number, "link", target)
+             for target in local_link_targets(bare)]
     return links + found
 
 
@@ -240,9 +240,8 @@ def _tree_index(root):
 def _verify(root, index, doc, kind, text):
     doc_dir = (root / doc).parent
     if kind == "link":
-        target = text.split("#", 1)[0].split("?", 1)[0]
-        base = root if target.startswith("/") else doc_dir
-        if target and not (base / target.lstrip("/")).exists():
+        resolved = resolve_link(root, root / doc, text)
+        if resolved is not None and not resolved.exists():
             return [f"link target {text.split('#', 1)[0]!r} does not exist"]
         return []
     if kind == "path":
