@@ -632,3 +632,90 @@ class TestFences(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAdrRecord(unittest.TestCase):
+    """The ADR record (issue #747): which files are ADRs, what status each
+    declares, and its standing — one reading every tool and detector
+    consults instead of six globs and three status readers."""
+
+    STANDINGS = [
+        ("accepted", "active"),
+        ("accepted (Owner, 2026-10-11)", "active"),
+        ("amended by ADR-0085", "active"),
+        ("amended by ADR-0084 (and earlier by ADR-0041)", "active"),
+        ("provisional", "provisional"),
+        ("superseded in part by ADR-0083 (the beads clause)", "partial"),
+        ("superseded by ADR-0002", "retired"),
+        ("active", "unrecognized"),
+        ("", "unrecognized"),
+        (None, "unrecognized"),
+    ]
+
+    def test_every_status_head_has_its_standing(self):
+        for text, expected in self.STANDINGS:
+            with self.subTest(status=text):
+                self.assertEqual(knowledge_plane.standing(text), expected)
+
+    def test_every_adr_filename_form_is_one_file_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adr_dir = root / "docs" / "adr"
+            adr_dir.mkdir(parents=True)
+            for name in ("0001-a.md", "0062.md", "adr-0063-x.md",
+                         "ADR-007-auth.md", "README.md", "TEMPLATE.md",
+                         "notes.md", "0004_under.md"):
+                (adr_dir / name).write_text("# X\n", encoding="utf-8")
+            found = [(number, path.name)
+                     for number, path in knowledge_plane.adr_paths(root)]
+            parsed = {path.name for path, _ in parse_run(root)["adr_files"]}
+        self.assertEqual(found, [("0001", "0001-a.md"), ("0062", "0062.md"),
+                                 ("007", "ADR-007-auth.md"),
+                                 ("0063", "adr-0063-x.md")])
+        self.assertEqual(parsed, {name for _, name in found})
+
+    def test_no_adr_directory_is_an_empty_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(knowledge_plane.adr_paths(tmp), [])
+
+    def test_a_status_line_is_read_with_its_line(self):
+        record = knowledge_plane.adr_record(
+            Path("docs/adr/0001-old.md"),
+            ["# Old", "", "- Status: superseded by ADR-0002 (all of it)"])
+        self.assertEqual(record, {
+            "number": "0001", "path": Path("docs/adr/0001-old.md"),
+            "lineno": 3, "status": "superseded by ADR-0002 (all of it)",
+            "head": "superseded by ADR-0002", "standing": "retired",
+            "superseded_by": "0002"})
+
+    def test_a_frontmatter_status_is_the_fallback(self):
+        record = knowledge_plane.adr_record(
+            Path("0062.md"),
+            ["---", "date: 2026-01-01", "status: provisional", "---", "# X"])
+        self.assertEqual((record["number"], record["lineno"],
+                          record["status"], record["standing"]),
+                         ("0062", 3, "provisional", "provisional"))
+
+    def test_a_status_line_wins_over_frontmatter(self):
+        record = knowledge_plane.adr_record(
+            Path("0001-x.md"),
+            ["---", "status: active", "---", "- Status: accepted"])
+        self.assertEqual((record["lineno"], record["status"]),
+                         (4, "accepted"))
+
+    def test_no_status_anywhere_is_none(self):
+        record = knowledge_plane.adr_record(Path("0003-bare.md"), ["# Bare"])
+        self.assertEqual((record["lineno"], record["status"], record["head"],
+                          record["standing"], record["superseded_by"]),
+                         (0, None, None, "unrecognized", None))
+
+    def test_adr_records_reads_the_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            adr_dir = root / "docs" / "adr"
+            adr_dir.mkdir(parents=True)
+            (adr_dir / "0062.md").write_text(
+                "# X\n\n- Status: accepted\n", encoding="utf-8")
+            [record] = knowledge_plane.adr_records(root)
+        self.assertEqual((record["number"], record["standing"]),
+                         ("0062", "active"))

@@ -3,11 +3,12 @@
 
 Facts only, per ADR-0062: the review skill's ADR compliance pass (issue
 #684) checks a diff against the ADRs this tool calls live, and never
-reads a status line itself. The status grammar has one owner,
-gates.ADR_STATUS (detector D): only full supersession retires a
-decision, so "superseded in part by" and "amended by" stay live.
+reads a status line itself. Which files are ADRs, their status and their
+standing have one owner, knowledge_plane's ADR record (issue #747) — the
+same reading gates detectors C, D and K use: only full supersession
+retires a decision, so "superseded in part by" and "amended by" stay live.
 
-Standing, per ADR:
+Standing, per ADR (knowledge_plane.standing):
   active        accepted, or amended by a later ADR
   provisional   recorded without live confirmation — live, held softer
   partial       superseded in part — live outside the superseded part
@@ -21,42 +22,11 @@ error. Same seam discipline as board.py: functions take `root` and read
 real files under it, tested against tempfile fixture trees.
 """
 import json
-import re
 import sys
 from pathlib import Path
 
 import cli
-import gates
-from protocol import read_frontmatter
-
-# An ADR file is named by its number: this repo's `0062-slug.md`, or the
-# `ADR-007-slug.md` form other repos use. README.md and TEMPLATE.md carry
-# no number and are skipped by the same test.
-ADR_FILE = re.compile(r"^(?:ADR-?)?(?P<num>\d+)\b", re.IGNORECASE)
-
-
-def standing(text):
-    """The standing of one raw status text under gates.ADR_STATUS."""
-    match = gates.ADR_STATUS.match(text or "")
-    if not match:
-        return "unrecognized"
-    if match.group("retired"):
-        return "retired"
-    head = match.group(1)
-    if head == "provisional":
-        return "provisional"
-    if head.startswith("superseded in part"):
-        return "partial"
-    return "active"
-
-
-def _status(path):
-    """The raw status text: the `- Status:` line (gates' own reader), else
-    a frontmatter `status:` field, else None."""
-    _, text = gates._adr_status(path)  # gates owns the Status-line read
-    if text is None:
-        text = ((read_frontmatter(path) or {}).get("status") or "").strip()
-    return text or None
+from knowledge_plane import adr_records
 
 
 def _title(path):
@@ -66,15 +36,13 @@ def _title(path):
     return None
 
 
-def _entry(root, path, number):
-    text = _status(path)
-    match = gates.ADR_STATUS.match(text or "")
-    by = match.group("by") if match and match.group("retired") else None
-    return {"id": f"ADR-{number}",
+def _entry(root, record):
+    path, by = record["path"], record["superseded_by"]
+    return {"id": f"ADR-{record['number']}",
             "file": path.relative_to(root).as_posix(),
             "title": _title(path),
-            "status": text,
-            "standing": standing(text),
+            "status": record["status"],
+            "standing": record["standing"],
             "superseded_by": f"ADR-{by}" if by else None}
 
 
@@ -84,16 +52,10 @@ def gather(root):
     root = Path(root)
     if not root.is_dir():
         return None, [f"adr-status: {root} is not a directory"]
-    adr_dir = root / "docs" / "adr"
-    found = []
-    if adr_dir.is_dir():
-        for path in sorted(adr_dir.glob("*.md")):
-            match = ADR_FILE.match(path.name)
-            if match:
-                found.append((int(match.group("num")), path,
-                              match.group("num")))
-    return {"adrs": [_entry(root, path, number)
-                     for _, path, number in sorted(found)]}, []
+    records = sorted(adr_records(root),
+                     key=lambda record: (int(record["number"]),
+                                         record["path"]))
+    return {"adrs": [_entry(root, record) for record in records]}, []
 
 
 def main(argv):
