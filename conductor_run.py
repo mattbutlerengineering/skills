@@ -199,6 +199,13 @@ def compose_brief(step, item, item_type, worktree, branch, block, wo,
     inputs = [f"- {context}"] if context else []
     if step == "spec" and issue_body is not None:
         inputs.append(f"- Issue {item}, verbatim:\n\n{issue_body}")
+    # #724: a spec run committed a whole blueprint, ran out of budget
+    # before writing its PR body, and so opened no pull request.
+    keep_body = ([f"Keep the pull request body in {PR_BODY_FILE} current"
+                  " as each artifact is committed, and stop once the"
+                  f" breakdown is committed: a run that reaches its"
+                  f" ${ceiling:.2f} ceiling without {PR_BODY_FILE} opens"
+                  " no pull request."] if step == "spec" else [])
     return "\n".join([
         "## Objective", "",
         OBJECTIVES[step].format(item=item, scale=scale, wo=wo), "",
@@ -206,7 +213,7 @@ def compose_brief(step, item, item_type, worktree, branch, block, wo,
         "## Output", "",
         f"The stage artifact or code, as commits on {branch}. Write the"
         f" pull request body to {PR_BODY_FILE} at the worktree root and"
-        " leave pr-body.md uncommitted.", "",
+        " leave pr-body.md uncommitted.", *keep_body, "",
         "## Tools", "",
         f"Only these: {', '.join(tools)}. never git push, and"
         " never run any gh command: this environment carries no GitHub"

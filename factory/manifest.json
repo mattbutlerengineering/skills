@@ -1,6 +1,6 @@
 {
   "plugin": "idea-to-prod",
-  "version": "0.9.5",
+  "version": "0.10.0",
   "files": {
     "templates/.github/CODEOWNERS": "ba6ab48054414914bd38f2c82365a89c1400ca0d5e39e9d7288832b9d3834192",
     "templates/.github/labels.json": "754d2c9792c8216e5db5f4c2e9f49e14d6ca5131da8598a9caea7ecf346fd4a8",
@@ -31,11 +31,11 @@
     "templates/tools/factory/conductor_consent.py": "14f3c5d0359ee2d85296737e98392b29ac0d2c5ee56265161c5f2698a61c6941",
     "templates/tools/factory/conductor_flow.py": "0f4b8ada6d9a212d5baa06c72a3119acf90912c640c9645e0d47557cdc007943",
     "templates/tools/factory/conductor_merge.py": "ec9ffeab0a62301530012bf81b152d26bbf69b127d32d6f8b95dc9b59690287f",
-    "templates/tools/factory/conductor_plan.py": "1d514ae0d3ebff4de8eb766f3aff6a9368680c3774b4d09400d2307457d06452",
-    "templates/tools/factory/conductor_run.py": "63b1e4a2d586f41f6fa4069f7233ab7dced31a2026e4cdc859b7d6d61f71ae75",
+    "templates/tools/factory/conductor_plan.py": "10b091bcb2e79564ebc40203ae62644ecf43eaa132104c9281f3284c2d3a1f1a",
+    "templates/tools/factory/conductor_run.py": "fe7598025ec4777d8d0f50d47a4e28a84e35581661a7e1cd3d5296f3a514e0a1",
     "templates/tools/factory/cost_ledger.py": "f5e537f4ec5c96206b26e195ff6dc76bc226881fe3c580c176b3f1b348133047",
     "templates/tools/factory/cost_report.py": "0f90b61de9641f8d4c17d63f69ef23a671fd1a784e71725f298407d376d114eb",
-    "templates/tools/factory/factory_config.py": "3375b7202ca1be6cd8b27a3968bf98e4e7a5c2e340b29a077f3e97115a9cafbc",
+    "templates/tools/factory/factory_config.py": "04ea0ef8d59fb14eeb6c38671ae4d595c3150857cc8d52053c356f88e724bcfb",
     "templates/tools/factory/gate_digest.py": "09f73c600332b1f3fc6b8031a390ee0ed7d221eb4da9dec43e760cc0ea9f58dd",
     "templates/tools/factory/gates.py": "c2271e46058813b16ee74d89e5e569fc0fcff717775c1c99def702868698fdff",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
