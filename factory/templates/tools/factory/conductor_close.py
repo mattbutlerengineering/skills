@@ -227,27 +227,32 @@ def carry_blocked_spend(git, root, batch, blocked):
 
 
 def sort_blocked_branches(git, root, batch, blocked):
-    """({"delete": [branches], "keep": [branches]}, problems): a blocked
-    item's branch is deleted when its commits beyond origin/main are all
-    spend commits, whose rows carry_blocked_spend put on the batch
-    branch; it is kept when any commit is something else. A branch with
-    nothing beyond origin/main is in neither: it holds nothing to lose
-    or to keep, and may not be on origin at all."""
+    """({"delete": [(branch, sha)], "keep": [branches]}, problems): a
+    blocked item's branch is deleted when its commits beyond origin/main
+    are all spend commits, whose rows carry_blocked_spend put on the
+    batch branch; it is kept when any commit is something else. The sha
+    is the local ref inspected, which the delete leases on. A branch
+    with nothing beyond origin/main is in neither: it holds nothing to
+    lose or to keep, and may not be on origin at all."""
     sorted_branches = {"delete": [], "keep": []}
     for item in blocked:
         branch = flow.item_branch(batch, item)
-        out, problems = _git(git, root, ["log", "--format=%s",
-                                         f"origin/main..{branch}"],
-                             f"reading {branch}'s commits")
+        sha, problems = _git(git, root, ["rev-parse", branch],
+                             f"reading {branch}'s head")
+        out, problems = (None, problems) if problems else _git(
+            git, root, ["log", "--format=%s", f"origin/main..{sha.strip()}"],
+            f"reading {branch}'s commits")
         if problems:
             return None, [f"cd: close refused: {problem}"
                           for problem in problems]
         subjects = out.splitlines()
-        if subjects:
-            spend_only = all(subject.startswith(conductor_run.SPEND_SUBJECT)
-                             for subject in subjects)
-            sorted_branches["delete" if spend_only else "keep"].append(
-                branch)
+        if not subjects:
+            continue
+        if all(subject.startswith(conductor_run.SPEND_SUBJECT)
+               for subject in subjects):
+            sorted_branches["delete"].append((branch, sha.strip()))
+        else:
+            sorted_branches["keep"].append(branch)
     return sorted_branches, []
 
 
@@ -362,8 +367,12 @@ def _publish(root, batch, git, gh, finals, reasons, branches):
             return [f"cd: close: gh {' '.join(call[:2])} failed:"
                     f" {detail(err)}; finish the PR and the needs-human"
                     " labels by hand"]
-    for branch in branches["delete"]:
-        _, problems = _git(git, root, ["push", "origin", "--delete", branch],
+    # Leased on the sha inspected: git refuses the delete when origin's
+    # branch moved past it, so no commit close never read is removed.
+    for branch, sha in branches["delete"]:
+        ref = f"refs/heads/{branch}"
+        _, problems = _git(git, root, ["push", f"--force-with-lease={ref}:"
+                                       f"{sha}", "origin", f":{ref}"],
                            f"deleting origin's {branch}")
         if problems:
             return [f"cd: close: {problems[0]}; delete it by hand"]
