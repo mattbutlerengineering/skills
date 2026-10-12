@@ -41,7 +41,7 @@ import conductor_run
 import factory_config
 from cli import CLI_FAILURES, detail, gh_read
 from conductor import BLOCK, answers, append, current_state, is_text, \
-    load, stamp
+    item_view, load, stamp
 from cost_ledger import ISSUE_KEY
 
 def _refused(text):
@@ -52,14 +52,12 @@ def _reviewed_problems(rows, item):
     """The reviewed-pass half of the precondition: the item's last
     `reviewed` row is a pass, and its reviewer run is none of the item's
     author runs (as recorded, and every non-review run in the ledger)."""
-    passes = [row for row in rows if row["kind"] == "state"
-              and row["item"] == item and row["to"] == "reviewed"]
+    found = item_view(rows, item)
+    passes = [row for row in found["states"] if row["to"] == "reviewed"]
     if not passes or passes[-1].get("verdict") != "pass":
         return _refused(f"{item} has no reviewed pass")
     reviewer = passes[-1]["reviewer_run"]
-    authors = set(passes[-1]["author_runs"]) | {
-        row["run_id"] for row in rows if row["kind"] == "run"
-        and row["item"] == item and row["step"] != "review"}
+    authors = set(passes[-1]["author_runs"]) | set(found["author_runs"])
     if reviewer in authors:
         return _refused(f"{item}'s reviewer run {reviewer} is among its"
                         " author runs")
@@ -96,16 +94,10 @@ def review_drift(item, head, changed, own_dirs, appended):
 
 def _shipped_problems(rows, item):
     """From `ship`, the ship step's finishing run must have completed."""
-    states = [row for row in rows
-              if row["kind"] == "state" and row["item"] == item]
-    if states[-1]["to"] != "ship":
+    found = item_view(rows, item)
+    if found["state"] != "ship" or found["completed"]:
         return []
-    run_id = states[-1].get("run_id")
-    finished = [row for row in rows if row["kind"] == "run"
-                and run_id is not None and row["run_id"] == run_id]
-    if not finished or finished[-1]["outcome"] != flow.COMPLETED:
-        return _refused(f"{item}'s ship step has not completed")
-    return []
+    return _refused(f"{item}'s ship step has not completed")
 
 
 def _approved_blobs(rows, item):
@@ -113,9 +105,8 @@ def _approved_blobs(rows, item):
     approval winning for a path approved twice."""
     given = answers(rows)
     approved = {}
-    for row in rows:
-        if row["kind"] == "ask" and row["item"] == item \
-                and row["ask_kind"] == "gate" \
+    for row in item_view(rows, item)["asks"]:
+        if row["ask_kind"] == "gate" \
                 and (given.get(row["id"]) or {}).get("choice") == "approve":
             approved.update(row.get("gate_blobs") or {})
     return approved
@@ -142,8 +133,9 @@ def merge_problems(rows, item, blobs, policy=None):
     `blobs` ({gate path: blob id} the item branch changes) and the
     resolved standing-consent policy (None: off). Empty means the merge
     may proceed."""
-    if flow.plan_entry(rows, item) is None:
-        return [f"cd: {item} is not an item of this batch's plan"]
+    found = item_view(rows, item)
+    if found["entry"] is None:
+        return [found["unknown"]]
     problems = (_reviewed_problems(rows, item)
                 or _shipped_problems(rows, item)
                 or flow.transition_problems(rows, item, "merging", {}))
@@ -305,16 +297,6 @@ def bump_version(git, tool, worktree, branch):
     return version
 
 
-def _reserved(rows, item):
-    """{kind: set of numbers} the item holds, renumbered ones included."""
-    held = {kind: set() for kind in PREFIXES}
-    for row in rows:
-        if row["kind"] == "reserve" and row["item"] == item \
-                and row["what"] in held:
-            held[row["what"]].update(row["values"])
-    return held
-
-
 def _texts(git, worktree, path):
     """(origin/main's lines, the branch's lines) of one changed path: a
     path new on the item has no main lines; a deleted one no branch
@@ -432,7 +414,8 @@ def confirm_reservations(rows, item, git, worktree, branch):
     origin/main. A collision is renumbered mechanically (file name, and
     every line the item added); returns the reserve rows' fields
     ({what, values, renumbered_from}) for each renumbered kind."""
-    held = _reserved(rows, item)
+    live = item_view(rows, item)["reserved"]
+    held = {kind: set(live.get(kind, ())) for kind in PREFIXES}
     if not any(held.values()):
         return []
     on_main, problems = conductor_plan.ids_on_main(git)
@@ -643,9 +626,8 @@ def _drift(rows, item, git, branch, worktree):
         return (f"{item}'s worktree holds changes no commit carries:"
                 f" {', '.join(dirty)}; merged code must be reviewed code,"
                 " so it needs a re-review"), []
-    head = [row for row in rows if row["kind"] == "state"
-            and row["item"] == item
-            and row["to"] == "reviewed"][-1]["reviewed_head"]
+    head = [row for row in item_view(rows, item)["states"]
+            if row["to"] == "reviewed"][-1]["reviewed_head"]
     try:
         changed = git(["diff", "--name-only", head, branch]).stdout.split()
         verified = git(["diff", "--name-only",
