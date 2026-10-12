@@ -19,8 +19,9 @@ import conductor_run
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
-from test_conductor_flow import (PLAN, START, answered,  # noqa: E402
-                                 launch, moved, ran, run_id, stall_ask)
+from test_conductor_flow import (BUDGET, PLAN, START,  # noqa: E402
+                                 answered, failed, launch, moved, ran,
+                                 run_id, stall_ask)
 
 LEDGER = "docs/factory/batches/b1/ledger.jsonl"
 NOW = datetime(2026, 10, 10, 12, 30, tzinfo=timezone.utc)
@@ -68,10 +69,11 @@ def pr_body(path):
     (path / "pr-body.md").write_text("Body\n")
 
 
-def Git(tmp, changed="", shows=None, fail=None):
+def Git(tmp, changed="", shows=None, fail=None, log=""):
     """A git port over a scratch tree: worktree add makes the directory;
     every other call is recorded (run.calls) and answered from canned
-    output. `fail` names an argument whose call is rejected."""
+    output. `fail` names an argument whose call is rejected; `log` is
+    what `git log` prints."""
     calls = []
 
     def run(args):
@@ -85,6 +87,8 @@ def Git(tmp, changed="", shows=None, fail=None):
             out = "c0ffee\n"
         elif args[:2] == ["worktree", "add"]:
             Path(args[4]).mkdir(parents=True)
+        elif args[:1] == ["log"]:
+            out = log
         elif args[:2] == ["ls-tree", "--name-only"]:
             # A ledger is on a ref only when `shows` holds it there.
             out = args[-1] + "\n" if f"{args[2]}:{args[-1]}" in (
@@ -586,6 +590,88 @@ class TestFailedRun(RunCase):
                          ["cd: #99 is not an item of this batch's plan"])
         self.assertEqual(self.run_step("#14", "spec", Harness())[1],
                          ["cd: #14 has no spec step"])
+
+
+# #725: the headless CLI's budget-stop result, usage zeroed and the
+# counts only per model.
+BUDGET_STOP = {"type": "result", "subtype": "error_max_budget_usd",
+               "is_error": True, "total_cost_usd": 3.064511,
+               "usage": {"input_tokens": 0, "output_tokens": 0},
+               "modelUsage": {"m": {"inputTokens": 40, "outputTokens": 9000,
+                                    "cacheReadInputTokens": 900000,
+                                    "cacheCreationInputTokens": 60000}}}
+SPEC_LOG = ("chore(cost): conductor-b1-12-spec-1\n"
+            "docs(#12): breakdown\n"
+            "docs(#12): prd and architecture\n"
+            "chore(cost): conductor-b1-12-older\n"
+            "feat: not this run's\n")
+
+
+class TestRetryAfterBudgetStop(RunCase):
+    """#725: a retry after a budget stop continues the committed work,
+    a repeat budget stop recommends no plain retry, and the stop's
+    tokens are metered with its cost."""
+
+    RETRY = BASE + failed("#12", "planned", "spec",
+                          band="architecture_review")
+
+    def brief(self):
+        return self.harness.calls[0]["cmd"][2]
+
+    def test_a_budget_stop_meters_its_tokens_with_its_cost(self):
+        self.run_step("#12", "spec", Harness(events=[BUDGET_STOP]))
+        row = self.spend("#12")[0]
+        self.assertEqual((row["tokens"], row["cost"], row["outcome"]),
+                         (969040, 3.064511, "agent-failed"))
+        self.assertEqual(self.rows[-2]["reason"], BUDGET)
+
+    def test_a_retry_is_briefed_with_the_work_already_committed(self):
+        self.run_step("#12", "spec", Harness(act=pr_body),
+                      git=Git(self.tmp.name, log=SPEC_LOG), rows=self.RETRY)
+        self.assertIn(
+            "## Prior work\n\n"
+            "The previous spec run, conductor-b1-12-spec-1, ended: " + BUDGET
+            + ". These commits it made are already on conductor/b1-12, the"
+            " head this worktree is at:\n"
+            "- docs(#12): breakdown\n"
+            "- docs(#12): prd and architecture\n"
+            "Do not repeat that work. Check it against the objective, finish"
+            " only what is missing (at the least, write pr-body.md), and"
+            " stop.\n", self.brief())
+        self.assertNotIn("not this run's", self.brief())
+
+    def test_a_retry_with_nothing_committed_has_no_prior_work(self):
+        self.run_step("#12", "spec", Harness(act=pr_body),
+                      git=Git(self.tmp.name,
+                              log="chore(cost): conductor-b1-12-spec-1\n"),
+                      rows=self.RETRY)
+        self.assertNotIn("## Prior work", self.brief())
+
+    def test_a_first_run_reads_no_log(self):
+        self.run_step("#12", "spec", Harness(act=pr_body))
+        self.assertFalse([c for c in self.git.calls if c[:1] == ["log"]])
+        self.assertNotIn("## Prior work", self.brief())
+
+    def test_a_first_budget_stop_recommends_retry(self):
+        self.run_step("#12", "spec", Harness(events=[BUDGET_STOP]))
+        asked = self.rows[-1]
+        self.assertEqual((asked["recommended"], asked["why"]), (
+            "retry", "a first failure is evidence about the item as often"
+                     " as about the agent, so nothing retries without your"
+                     " answer"))
+
+    def test_a_second_budget_stop_at_the_top_band_recommends_block(self):
+        self.run_step("#12", "spec", Harness(events=[BUDGET_STOP]),
+                      git=Git(self.tmp.name, log=SPEC_LOG), rows=self.RETRY)
+        asked = self.rows[-1]
+        self.assertEqual(asked["question"], f"#12 stalled in spec: {BUDGET}."
+                         " Retry, or block?")
+        self.assertEqual((asked["options"], asked["recommended"],
+                          asked["why"]), (
+            ["retry", "block"], "block",
+            "a second consecutive budget stop on spec at the same $3.00"
+            " ceiling: the outcome repeats at that ceiling, so a plain"
+            " retry spends it again; block it"))
 
 
 def spend_line(run, cost, at="2026-10-05", wo="#90"):

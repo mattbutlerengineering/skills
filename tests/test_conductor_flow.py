@@ -620,3 +620,115 @@ class TestNextCli(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+BUDGET = "the Worker run ended error_max_budget_usd"
+
+
+def failed(key, frm, name, seq=1, band="implementation",
+           reason=BUDGET, ask_id="ask-2"):
+    """One failed run of `name` that stalled with `reason`, answered
+    retry: the rows a retry launches after."""
+    return [launch(key, frm, name, seq=seq),
+            dict(ran(key, name, seq, outcome="agent-failed"), band=band),
+            moved(key, name, "stalled", reason=reason),
+            stall_ask(ask_id, key), answered(ask_id, "retry", key)]
+
+
+class TestStallWording(unittest.TestCase):
+    """#725 item 3: the question names only the options offered."""
+
+    def ask(self, key):
+        entry = flow.item_view(START, key)["entry"]
+        rows = START + [launch(key, "planned", entry["steps"][0]["step"])]
+        written, problems = flow.stall_rows(rows, NOW, entry, "x", "retry",
+                                            "w")
+        self.assertEqual(problems, [])
+        return written[1]
+
+    def test_below_the_top_band_all_three_options_are_named(self):
+        asked = self.ask("#14")
+        self.assertEqual(asked["question"], "#14 stalled in build: x."
+                         " Retry, retry one band up, or block?")
+
+    def test_at_the_top_band_retry_up_is_neither_offered_nor_named(self):
+        asked = self.ask("#12")
+        self.assertEqual(asked["options"], ["retry", "block"])
+        self.assertEqual(asked["question"],
+                         "#12 stalled in spec: x. Retry, or block?")
+
+
+class TestWorkerAdvice(unittest.TestCase):
+    """#725 item 2: a failed Worker run's stall ask depends on how many
+    runs of the step have failed in a row, and a repeat budget stop at
+    the same ceiling recommends no plain retry."""
+
+    def advice(self, rows, key, name, band, reason=BUDGET):
+        entry = flow.item_view(START, key)["entry"]
+        return flow.worker_advice(START + rows, entry, name, band, reason)
+
+    def test_a_first_failure_recommends_retry(self):
+        self.assertEqual(
+            self.advice([], "#12", "spec", "architecture_review"),
+            ("retry", "a first failure is evidence about the item as often"
+                      " as about the agent, so nothing retries without your"
+                      " answer"))
+
+    def test_a_completed_earlier_run_does_not_count(self):
+        rows = [launch("#14", "planned", "build"), ran("#14", "build")]
+        self.assertEqual(self.advice(rows, "#14", "build",
+                                     "implementation")[0], "retry")
+
+    def test_a_repeat_budget_stop_at_the_top_band_recommends_block(self):
+        rows = failed("#12", "planned", "spec", band="architecture_review")
+        self.assertEqual(
+            self.advice(rows, "#12", "spec", "architecture_review"),
+            ("block", "a second consecutive budget stop on spec at the same"
+                      " $3.00 ceiling: the outcome repeats at that ceiling,"
+                      " so a plain retry spends it again; block it"))
+
+    def test_a_repeat_budget_stop_below_the_top_recommends_retry_up(self):
+        rows = failed("#14", "planned", "build")
+        self.assertEqual(
+            self.advice(rows, "#14", "build", "implementation"),
+            ("retry-up", "a second consecutive budget stop on build at the"
+                         " same $3.00 ceiling: the outcome repeats at that"
+                         " ceiling, so a plain retry spends it again; retry"
+                         " it one band up, on a stronger model"))
+
+    def test_a_repeat_budget_stop_after_a_retry_up_recommends_block(self):
+        rows = failed("#14", "planned", "build", band="architecture_review")
+        self.assertEqual(
+            self.advice(rows, "#14", "build", "architecture_review")[0],
+            "block")
+
+    def test_a_budget_stop_after_another_failure_still_retries(self):
+        rows = failed("#12", "planned", "spec", band="architecture_review",
+                      reason="the run completed but left no pr-body.md")
+        self.assertEqual(
+            self.advice(rows, "#12", "spec", "architecture_review"),
+            ("retry", "attempt 2 at spec failed after an earlier one did,"
+                      " so the item is as likely a cause as the agent;"
+                      " nothing retries without your answer"))
+
+    def test_the_attempt_counts_every_consecutive_failure(self):
+        rows = (failed("#12", "planned", "spec", band="architecture_review",
+                       reason="a")
+                + failed("#12", "stalled", "spec", seq=2,
+                         band="architecture_review", reason="b",
+                         ask_id="ask-3"))
+        self.assertEqual(
+            self.advice(rows, "#12", "spec", "architecture_review",
+                        reason="c")[1],
+            "attempt 3 at spec failed after an earlier one did, so the item"
+            " is as likely a cause as the agent; nothing retries without"
+            " your answer")
+
+    def test_prior_stalls_lists_the_trailing_failed_runs(self):
+        rows = (START + [launch("#14", "planned", "build"),
+                         ran("#14", "build")]
+                + failed("#14", "build", "build", seq=2))
+        self.assertEqual(
+            [(run["run_id"], reason)
+             for run, reason in flow.prior_stalls(rows, "#14", "build")],
+            [(run_id("#14", "build", 2), BUDGET)])
