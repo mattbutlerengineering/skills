@@ -17,7 +17,7 @@ default.
 | `when` | `"ship"` or `"on-demand"` | `ship`: Ship runs the skill at every release; `on-demand`: only a direct invocation does |
 | `recorder` | `"terminal"` or `"browser"` | which adapter records — vhs for a CLI, Playwright for a page |
 | `against` | non-empty string; for `browser`, an `http` or `https` URL | the shell vhs types the steps into (`bash`, `zsh`, …), or the URL the browser opens first |
-| `voice` | optional; non-empty string containing `{out}` | the voice command — see the swap below |
+| `voice` | optional; non-empty string containing `{out}`, with balanced shell quotes | the voice command — see the swap below |
 | `publish` | plain relative path, no `..`, inside the repo | the directory under which `<slug>/` is written |
 
 A minimal terminal config:
@@ -35,8 +35,9 @@ the verdict is copy-only with the reason.
 
 `voice` is any command that reads one line of text on stdin and writes
 a WAV at the path substituted for `{out}`. The tool runs it once per
-narration line, split without a shell, under a 60-second budget per
-line, and measures the WAV with ffprobe to place it on the timeline.
+narration line, split once at load by shell quoting rules but without a
+shell (the substituted path stays one argument, spaces and all), under
+a 60-second budget per line, and measures the WAV with ffprobe to place it on the timeline.
 
 The two free defaults, chosen by platform when the field is absent:
 
