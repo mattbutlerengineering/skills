@@ -28,6 +28,7 @@ import launch_demo  # noqa: E402
 LABEL = "launch-demo: docs/launch-demo.json"
 VALID = {"when": "ship", "recorder": "terminal", "against": "bash",
          "publish": "docs/launches"}
+SAY = ["say", "-o", "{out}"]  # load's parsed voice argv template
 ALL_TOOLS = {"ffmpeg": "/usr/bin/ffmpeg", "ffprobe": "/usr/bin/ffprobe",
              "vhs": "/usr/bin/vhs", "node": "/usr/bin/node",
              "say": "/usr/bin/say", "espeak-ng": "/usr/bin/espeak-ng"}
@@ -149,6 +150,12 @@ class TestLoad(unittest.TestCase):
                     (None, [f"{LABEL} voice must be a non-empty string"
                             " naming {out}"]))
 
+    def test_an_unparseable_voice_is_a_config_problem(self):
+        self.assertEqual(
+            self.load({**VALID, "voice": "say -o '{out}"}),
+            (None, [f"{LABEL} voice is not a parseable command: No closing"
+                    " quotation"]))
+
     def test_publish_must_be_a_plain_relative_path(self):
         for bad in ("/tmp/x", "../x", ""):
             with self.subTest(publish=bad):
@@ -161,23 +168,24 @@ class TestLoad(unittest.TestCase):
         config, problems = self.load(VALID, platform="darwin")
         self.assertEqual(problems, [])
         self.assertEqual(config, {**VALID,
-                                  "voice": "say --data-format=LEI16@22050"
-                                           " -o {out}"})
+                                  "voice": ["say",
+                                            "--data-format=LEI16@22050",
+                                            "-o", "{out}"]})
 
     def test_a_valid_file_gets_the_espeak_default_elsewhere(self):
         config, problems = self.load(VALID, platform="linux")
         self.assertEqual(problems, [])
-        self.assertEqual(config["voice"], "espeak-ng -w {out}")
+        self.assertEqual(config["voice"], ["espeak-ng", "-w", "{out}"])
 
-    def test_a_set_voice_is_kept(self):
-        config, problems = self.load({**VALID, "voice": "piper -o {out}"})
+    def test_a_set_voice_is_kept_as_its_argv(self):
+        config, problems = self.load({**VALID, "voice": "piper -o '{out}'"})
         self.assertEqual(problems, [])
-        self.assertEqual(config["voice"], "piper -o {out}")
+        self.assertEqual(config["voice"], ["piper", "-o", "{out}"])
 
 
-TERMINAL = {**VALID, "voice": "say -o {out}"}
+TERMINAL = {**VALID, "voice": SAY}
 BROWSER = {**VALID, "recorder": "browser", "against": "http://127.0.0.1:8765",
-           "voice": "say -o {out}"}
+           "voice": SAY}
 NODE_PROBE = ["-e", "require.resolve('playwright')"]
 
 
@@ -235,7 +243,8 @@ class TestProbe(unittest.TestCase):
         missing, _ = launch_demo.probe(TERMINAL, which, FakeRunners())
         self.assertEqual([entry[0] for entry in missing], ["say"])
         which = FakeWhich({**ALL_TOOLS, "piper": None})
-        config = {**TERMINAL, "voice": "piper --model x -o {out}"}
+        config = {**TERMINAL, "voice": ["piper", "--model", "x", "-o",
+                                        "{out}"]}
         missing, _ = launch_demo.probe(config, which, FakeRunners())
         self.assertEqual([entry[0] for entry in missing], ["piper"])
 
@@ -291,7 +300,7 @@ class TestProbeLeg(CliMixin, unittest.TestCase):
         write_config(self.root, VALID)
         self.which = FakeWhich({**ALL_TOOLS, "ffmpeg": None})
         missing, _ = launch_demo.probe(
-            {**VALID, "voice": "say -o {out}"}, self.which, self.runners)
+            {**VALID, "voice": SAY}, self.which, self.runners)
         (_, purpose, hint), = missing
         code, out = self.run_cli(["probe"])
         self.assertEqual(code, 0)
@@ -507,7 +516,7 @@ class WorkdirMixin:
 
 class TestNarrate(WorkdirMixin, unittest.TestCase):
     LINES = ["A.", "B."]
-    VOICE = "say -o {out}"
+    VOICE = SAY
 
     def test_each_line_is_spoken_to_its_own_wav_and_measured(self):
         runners = FakeRunners({"say": [writes(), writes()],
@@ -559,12 +568,47 @@ class TestNarrate(WorkdirMixin, unittest.TestCase):
 
     def test_the_voice_template_names_the_binary(self):
         runners = FakeRunners({"espeak-ng": [writes()], "ffprobe": ["1.0\n"]})
-        clips, problems = launch_demo.narrate(["A."], "espeak-ng -w {out}",
-                                              self.work, runners)
+        clips, problems = launch_demo.narrate(
+            ["A."], ["espeak-ng", "-w", "{out}"], self.work, runners)
         self.assertEqual(problems, [])
         self.assertEqual(runners.calls[0][:3],
                          ("espeak-ng", launch_demo.VOICE_TIMEOUT,
                           ["-w", str(self.work / "line-1.wav")]))
+
+
+class TestVoiceTemplate(WorkdirMixin, unittest.TestCase):
+    """The loaded voice reaches probe and narrate already parsed: a
+    workdir with a space stays one {out} argv element, and both legs
+    name the same binary (issue #749)."""
+
+    def loaded(self, voice):
+        root = Path(self.tmp.name)
+        write_config(root, {**VALID, "voice": voice})
+        config, problems = launch_demo.load(root, platform="darwin")
+        self.assertEqual(problems, [])
+        return config
+
+    def test_a_workdir_with_a_space_is_one_out_token(self):
+        work = Path(self.tmp.name) / "my work"
+        work.mkdir()
+        runners = FakeRunners({"say": [writes()], "ffprobe": ["1.0\n"]})
+        clips, problems = launch_demo.narrate(
+            ["A."], self.loaded("say -o {out}")["voice"], work, runners)
+        self.assertEqual(problems, [])
+        self.assertEqual(runners.calls[0][2], ["-o", str(work / "line-1.wav")])
+
+    def test_probe_and_narrate_agree_on_the_binary(self):
+        config = self.loaded("'/opt/my voice/piper' -o {out}")
+        which = FakeWhich({**ALL_TOOLS, "/opt/my voice/piper": None})
+        missing, _ = launch_demo.probe(config, which, FakeRunners())
+        runners = FakeRunners({"/opt/my voice/piper": [writes()],
+                               "ffprobe": ["1.0\n"]})
+        _, problems = launch_demo.narrate(["A."], config["voice"], self.work,
+                                          runners)
+        self.assertEqual(problems, [])
+        self.assertEqual([entry[0] for entry in missing],
+                         [runners.calls[0][0]])
+        self.assertEqual(runners.calls[0][0], "/opt/my voice/piper")
 
 
 class TestRecordTerminal(WorkdirMixin, unittest.TestCase):
@@ -819,8 +863,9 @@ class RenderMixin:
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        self.config = {**VALID, "publish": "out", "voice": "say -o {out}"}
-        write_config(self.root, self.config)
+        write_config(self.root, {**VALID, "publish": "out",
+                                 "voice": "say -o {out}"})
+        self.config, _ = launch_demo.load(self.root, platform="darwin")
         self.slug_dir = self.root / "out" / "demo"
         self.slug_dir.mkdir(parents=True)
         (self.slug_dir / "launch.md").write_text(LAUNCH_MD, encoding="utf-8")
@@ -1234,7 +1279,7 @@ class TestRenderBrowser(CwdMixin, RenderMixin, unittest.TestCase):
         super().setUp()
         self.config = {**self.config, "recorder": "browser",
                        "against": self.AGAINST}
-        write_config(self.root, self.config)
+        write_config(self.root, {**self.config, "voice": "say -o {out}"})
         board = storyboard()
         board["steps"][0]["do"] = "await page.click('#count');"
         board["steps"][1]["do"] = ""
