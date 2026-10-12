@@ -183,9 +183,19 @@ def _deferral(issue, labels, owner, rules=None):
     return item_type, size, None
 
 
+def ceilings(estimate, steps, weights):
+    """step -> ceiling: the estimate split across `steps` by weight, in
+    cents. The first step takes the rounding remainder, so the ceilings
+    sum to the estimate exactly (#724)."""
+    total = sum(weights[step] for step in steps)
+    rest = {step: round(estimate * weights[step] / total, 2)
+            for step in steps[1:]}
+    return {steps[0]: round(estimate - sum(rest.values()), 2), **rest}
+
+
 def _steps(item_type, labels, config, agents_dir, ceiling):
     """(the item's priced steps, problems): step, charter, band, then
-    (model, effort) from policy."""
+    (model, effort) from policy, and `ceiling[step]` as its ceiling."""
     steps, problems = [], []
     for step in ITEM_STEPS[item_type]:
         charter = STEP_CHARTERS.get(step) or assembler.select_charter(labels)
@@ -199,7 +209,7 @@ def _steps(item_type, labels, config, agents_dir, ceiling):
         problems += found
         steps.append({"step": step, "charter": charter, "band": band,
                       "model": model, "effort": effort,
-                      "ceiling_usd": ceiling})
+                      "ceiling_usd": ceiling[step]})
     return steps, problems
 
 
@@ -222,10 +232,14 @@ def _label_rules(config):
 def plan_batch(issues, owner, config, spent, highest, agents_dir):
     """(plan, problems): PURE over already-read inputs. Each plannable
     issue becomes an item priced from budgets_usd by its size, split
-    equally across its steps as their ceilings, with a reserved block
-    above the highest id in use and above every earlier block. Every
-    other issue is one deferral line. A config problem plans nothing."""
+    across its steps by step weight as their ceilings, with a reserved
+    block above the highest id in use and above every earlier block.
+    Every other issue is one deferral line. A config problem plans
+    nothing."""
     cap, problems = factory_config.resolve_cap(config)
+    if problems:
+        return None, problems
+    weights, problems = factory_config.resolve_step_weights(config)
     if problems:
         return None, problems
     rules, problems = _label_rules(config)
@@ -250,8 +264,8 @@ def plan_batch(issues, owner, config, spent, highest, agents_dir):
             deferred.append(f"{key} deferred: {reason}")
             continue
         steps, found = _steps(item_type, labels, config, agents_dir,
-                              round(estimate / len(ITEM_STEPS[item_type]),
-                                    2))
+                              ceilings(estimate, ITEM_STEPS[item_type],
+                                       weights))
         for problem in found:
             if problem not in problems:
                 problems.append(problem)
