@@ -245,6 +245,12 @@ the utility skills by the moment a person reaches for them.</desc>
   <text class="row mono" x="436" y="534">factory-init</text>
   <text class="row mono" x="436" y="550">doctor</text>
 </g>
+<g>
+  <rect class="mask" x="424" y="572" width="176" height="52" rx="6"/>
+  <rect class="node-ext" x="424" y="572" width="176" height="52" rx="6"/>
+  <text class="name" x="436" y="592">Looking things up</text>
+  <text class="row mono" x="436" y="610">prisma-migrations</text>
+</g>
 
 <!-- legend: hairline, then exactly the treatments and line kinds used -->
 <line class="hairline" x1="48" y1="640" x2="832" y2="640"/>

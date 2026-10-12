@@ -43,6 +43,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | knowledge-base | draft | — | 7/8 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | ux-writing | draft | — | 9/9 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | ux-patterns | draft | — | 8/8 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| prisma-migrations | draft | — | — |
 
 Reading of the 2026-07-01 run: all failures are under-triggering (no skill
 fired); zero cases fired the wrong skill. Distractors 5/5 stayed silent.
