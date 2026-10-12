@@ -19,6 +19,10 @@ when it computes, append-only under the evals/results/ discipline. Then
 it writes the close row and the closing merge ask, commits the ledger,
 run evidence and scorecard, pushes (never forced), opens the closing PR,
 and labels each blocked item's issue needs-human with its reason.
+Last, it deletes from origin each blocked item's branch whose only
+commits beyond origin/main are spend commits, whose rows it carried; a
+branch holding any other commit is kept, and named in the closing PR
+body and on its item's needs-human comment (#728).
 
 `close <batch> --merge` merges the closing PR once the Owner answered
 its ask `merge`, first committing and pushing that answer row (#726).
@@ -29,6 +33,7 @@ from pathlib import Path
 
 import conductor_flow as flow
 import conductor_merge
+import conductor_run
 import cost_ledger
 import factory_config
 import label_sync
@@ -226,6 +231,36 @@ def carry_blocked_spend(git, root, batch, blocked):
     return []
 
 
+def sort_blocked_branches(git, root, batch, blocked):
+    """({"delete": [(branch, sha)], "keep": [branches]}, problems): a
+    blocked item's branch is deleted when its commits beyond origin/main
+    are all spend commits, whose rows carry_blocked_spend put on the
+    batch branch; it is kept when any commit is something else. The sha
+    is the local ref inspected, which the delete leases on. A branch
+    with nothing beyond origin/main is in neither: it holds nothing to
+    lose or to keep, and may not be on origin at all."""
+    sorted_branches = {"delete": [], "keep": []}
+    for item in blocked:
+        branch = flow.item_branch(batch, item)
+        sha, problems = _git(git, root, ["rev-parse", branch],
+                             f"reading {branch}'s head")
+        out, problems = (None, problems) if problems else _git(
+            git, root, ["log", "--format=%s", f"origin/main..{sha.strip()}"],
+            f"reading {branch}'s commits")
+        if problems:
+            return None, [f"cd: close refused: {problem}"
+                          for problem in problems]
+        subjects = out.splitlines()
+        if not subjects:
+            continue
+        if all(subject.startswith(conductor_run.SPEND_SUBJECT)
+               for subject in subjects):
+            sorted_branches["delete"].append((branch, sha.strip()))
+        else:
+            sorted_branches["keep"].append(branch)
+    return sorted_branches, []
+
+
 def append_scorecard(root, card):
     """(problems): append the batch's one scorecard row, unless a row
     for the batch is already there. APPEND ONLY: never rewrites. The
@@ -248,13 +283,22 @@ def append_scorecard(root, card):
     return []
 
 
-def pr_body(batch, finals):
+def pr_body(batch, finals, kept=()):
     blocked = ", ".join(finals["blocked"]) or "none"
     closes = "".join(f"Closes {item}\n" for item in finals["merged"])
+    keeps = (f"Kept on origin, holding work beyond spend rows:"
+             f" {', '.join(kept)}.\n\n" if kept else "")
     return (f"Conductor batch {batch}'s closing PR: its batch ledger, run"
             " evidence, scorecard, and the spend rows of its blocked items"
-            f" ({blocked}).\n\n{closes}\nNo work order: the Conductor's"
-            f" closing PR for batch {batch}.")
+            f" ({blocked}).\n\n{keeps}{closes}\nNo work order: the"
+            f" Conductor's closing PR for batch {batch}.")
+
+
+def blocked_comment(batch, item, reason, kept):
+    branch = flow.item_branch(batch, item)
+    keeps = (f". Its branch {branch} is kept on origin: it holds work"
+             " beyond its spend rows." if branch in kept else "")
+    return f"Blocked in conductor batch {batch}: {reason}{keeps}"
 
 
 def _record_close(root, batch, now, finals):
@@ -287,10 +331,12 @@ def _missing_label(gh):
     return NEEDS_HUMAN not in label_names(listing), []
 
 
-def _publish(root, batch, git, gh, finals, reasons):
-    """Commit, push (never forced), open the closing PR and label each
-    blocked item. A problem names the step that failed; the close is
-    already recorded, so what remains is finished by hand."""
+def _publish(root, batch, git, gh, finals, reasons, branches):
+    """Commit, push (never forced), open the closing PR, label each
+    blocked item, then delete its spend-only branches from origin: only
+    once the push carried their spend rows. A problem names the step
+    that failed; the close is already recorded, so what remains is
+    finished by hand."""
     # lean: no resume after a failed publish step; the close row is
     # written, so a re-run is refused and the step is finished by hand.
     # The trigger to resume mechanically is a real batch hitting it.
@@ -307,7 +353,7 @@ def _publish(root, batch, git, gh, finals, reasons):
                     " the needs-human labels by hand"]
     calls = [["pr", "create", "--head", branch, "--base", "main", "--title",
               f"conductor batch {batch}: ledger and scorecard", "--body",
-              pr_body(batch, finals)]]
+              pr_body(batch, finals, branches["keep"])]]
     if finals["blocked"]:
         missing, problems = _missing_label(gh)
         if problems:
@@ -317,7 +363,8 @@ def _publish(root, batch, git, gh, finals, reasons):
     for item in finals["blocked"]:
         calls += [["issue", "edit", item[1:], "--add-label", NEEDS_HUMAN],
                   ["issue", "comment", item[1:], "--body",
-                   f"Blocked in conductor batch {batch}: {reasons[item]}"]]
+                   blocked_comment(batch, item, reasons[item],
+                                   branches["keep"])]]
     for call in calls:
         try:
             gh(call)
@@ -325,6 +372,15 @@ def _publish(root, batch, git, gh, finals, reasons):
             return [f"cd: close: gh {' '.join(call[:2])} failed:"
                     f" {detail(err)}; finish the PR and the needs-human"
                     " labels by hand"]
+    # Leased on the sha inspected: git refuses the delete when origin's
+    # branch moved past it, so no commit close never read is removed.
+    for branch, sha in branches["delete"]:
+        ref = f"refs/heads/{branch}"
+        _, problems = _git(git, root, ["push", f"--force-with-lease={ref}:"
+                                       f"{sha}", "origin", f":{ref}"],
+                           f"deleting origin's {branch}")
+        if problems:
+            return [f"cd: close: {problems[0]}; delete it by hand"]
     return []
 
 
@@ -342,6 +398,10 @@ def close_batch(root, batch, clock, git, gh):
                 or carry_blocked_spend(git, root, batch, finals["blocked"]))
     if problems:
         return None, problems
+    branches, problems = sort_blocked_branches(git, root, batch,
+                                               finals["blocked"])
+    if problems:
+        return None, problems
     now = clock()
     card, problems = scorecard(root, batch, now)
     if problems:
@@ -355,7 +415,7 @@ def close_batch(root, batch, clock, git, gh):
     reasons = {item: item_view(rows, item)["last"]["reason"]
                for item in finals["blocked"]}
     return {"batch": batch, **finals, "ask": ask_id}, _publish(
-        root, batch, git, gh, finals, reasons)
+        root, batch, git, gh, finals, reasons, branches)
 
 
 def _closing_answer(rows, batch):
