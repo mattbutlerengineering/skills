@@ -348,6 +348,16 @@ class TestClose(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual((self.root / COSTS).read_text(), lines(SPEND))
 
+    def test_carried_spend_dedups_on_row_key_not_run_id(self):
+        # #736: ADR-0049 made (wo, run_id) the identity; a row sharing
+        # only the run_id is a different row and must still be carried.
+        other = spend("conductor-b1-13-spec-1", 0.5, "#99")
+        costs = SPEND[:4] + SPEND[5:] + [other]
+        summary, problems = self.close(ROWS, costs=costs)
+        self.assertEqual(problems, [])
+        self.assertEqual((self.root / COSTS).read_text(),
+                         lines(costs + BLOCKED_SPEND))
+
     def test_a_retry_after_a_failed_close_record_scores_once(self):
         # Review minor 6: the scorecard was appended before the close
         # row, so a failed ledger write left it on disk, and the retry

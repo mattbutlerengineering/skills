@@ -24,8 +24,8 @@ import conductor_run
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_conductor_plan import CONFIG, clock, fake_gh, issue  # noqa: E402
-from test_conductor_run import BASE, MAIN_COSTS, Gh, Git, Harness, \
-    RunCase, pr_body, spend_line  # noqa: E402
+from test_conductor_run import BASE, MAIN_COSTS, RESULT, Gh, Git, \
+    Harness, RunCase, pr_body, spend_line  # noqa: E402
 from test_conductor_run_guard import PUSHURL, configured  # noqa: E402
 
 AGENTS = Path(__file__).resolve().parents[1] / "factory" / "agents"
@@ -223,6 +223,22 @@ class TestOpenPreflight(unittest.TestCase):
         self.assertEqual(self.open(config=config)[:2], ([
             "config: factory.json conductor.gate_command must be one"
             " command with no shell operators"], False))
+
+
+class TestSpendRowRefusal(RunCase):
+    def test_a_malformed_spend_row_is_refused_and_stalls(self):
+        # #736: _spend appended blindly, so a result reporting a blank
+        # model wrote a row every later ledger read refuses.
+        event = dict(RESULT, modelUsage={"": {}})
+        summary, problems = self.run_step(
+            "#12", "spec", Harness(events=[event], act=pr_body))
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"],
+                         "refusing to record the spend row of"
+                         " conductor-b1-12-spec-1: model must be a"
+                         " non-empty string")
+        self.assertFalse((self.worktree("#12")
+                          / "docs/factory/costs.jsonl").exists())
 
 
 if __name__ == "__main__":
