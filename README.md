@@ -111,6 +111,7 @@ table's Moment column.
 | `pipeline-board` | Drawing pictures | Places every active run on its current stage as a swimlane SVG, with placement stated by the shipped board.py tool rather than re-derived. |
 | `factory-init` | Installing the factory | Stamps the factory scaffold (offline gates, dispatch workflows, the cost ledger) into a product repo, and regenerates the template manifest after an edit. |
 | `doctor` | Installing the factory | Answers whether the install is actually wired up, tier by tier and read-only, reporting each problem with the fix rather than applying it. |
+| `prisma-migrations` | Looking things up | Reference for getting a Prisma schema change to every database safely: `migrate dev` versus `migrate deploy` versus `db push`, deploy ordering, baselining a database built without migrations, CI/CD wiring and failed-migration recovery, with copyable workflow and script templates. |
 
 `lean`, `polish`, `ux-writing` and `ux-patterns` restate, in this
 pipeline's terms, ideas from open-source work —

@@ -1215,6 +1215,44 @@
       "expected": "automate",
       "query": "Agents keep forgetting to run the formatter before committing in this repo. What hook or automation should enforce it?",
       "notes": "adjacency: automate vs knowledge-base — a rule nothing enforces wants automation, not a note"
+    },
+    {
+      "id": "prisma-migrations-direct-1",
+      "kind": "direct",
+      "expected": "prisma-migrations",
+      "query": "How do I create a Prisma migration for the new column and get it deployed to production safely?"
+    },
+    {
+      "id": "prisma-migrations-direct-2",
+      "kind": "direct",
+      "expected": "prisma-migrations",
+      "query": "Set up our GitHub Actions pipeline to run prisma migrate before the app deploys"
+    },
+    {
+      "id": "prisma-migrations-situational-1",
+      "kind": "situational",
+      "expected": "prisma-migrations",
+      "query": "Our production Postgres was built with prisma db push and has no migration history. We want proper migrations from now on without recreating any tables"
+    },
+    {
+      "id": "prisma-migrations-situational-2",
+      "kind": "situational",
+      "expected": "prisma-migrations",
+      "query": "The deploy failed with P3009 and now migrate deploy refuses to apply anything new — how do we get unstuck?"
+    },
+    {
+      "id": "prisma-migrations-vs-architect-1",
+      "kind": "near-miss",
+      "expected": "architect",
+      "query": "The PRD is approved — design the data model and storage approach for multi-tenant invoices",
+      "notes": "adjacency: prisma-migrations vs architect — choosing the schema is technical design; getting a chosen schema change into databases is prisma-migrations"
+    },
+    {
+      "id": "prisma-migrations-vs-sql-1",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Write a SQL query that lists customers with no orders in the last 90 days",
+      "notes": "database work with no migration in it must not fire prisma-migrations"
     }
   ]
 }
