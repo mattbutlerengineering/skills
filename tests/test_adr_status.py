@@ -1,7 +1,8 @@
 """adr_status.py (issue #684): the review skill's ADR compliance pass
 reads which of a repo's ADRs are live from this tool, never from its own
-reading of status lines (ADR-0062). Standing follows gates.ADR_STATUS,
-the one owner of the status grammar: only full supersession retires.
+reading of status lines (ADR-0062). Status and standing come from
+knowledge_plane's ADR record (issue #747), whose own tests pin the
+standing of every status head.
 
 Pinned against tempfile fixture trees, as board.py is.
 """
@@ -27,28 +28,6 @@ def write(path, text):
 def adr(root, name, title, status_line):
     write(Path(root) / "docs" / "adr" / name,
           f"# {title}\n\n{status_line}\n- Date: 2026-01-01\n\n## Decision\n")
-
-
-class TestStanding(unittest.TestCase):
-    """Each status head of the grammar maps to one standing."""
-
-    CASES = [
-        ("accepted", "active"),
-        ("accepted (Owner, 2026-10-11)", "active"),
-        ("amended by ADR-0085", "active"),
-        ("amended by ADR-0084 (and earlier by ADR-0041)", "active"),
-        ("provisional", "provisional"),
-        ("superseded in part by ADR-0083 (the beads clause)", "partial"),
-        ("superseded by ADR-0002", "retired"),
-        ("active", "unrecognized"),
-        ("", "unrecognized"),
-        (None, "unrecognized"),
-    ]
-
-    def test_every_status_head_has_its_standing(self):
-        for text, expected in self.CASES:
-            with self.subTest(status=text):
-                self.assertEqual(adr_status.standing(text), expected)
 
 
 class TestGather(unittest.TestCase):

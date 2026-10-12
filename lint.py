@@ -20,6 +20,7 @@ from pathlib import Path
 import eval_schema
 import protocol
 from cli import read_file, report
+from knowledge_plane import local_link_targets
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
                       TEMPLATED_STAGES, UTILITY_SKILLS)
 
@@ -396,8 +397,6 @@ def check_skill_recitals(root):
 # "references/playbook.md" resolved against the wrong directory.
 SKILL_ASSET = re.compile(
     r"(?<![A-Za-z0-9._/-])(?:references|assets)/[A-Za-z0-9._-]+")
-# A markdown link to a local file. In-page anchors are not files.
-LOCAL_LINK = re.compile(r"\]\(([^)#][^)]*)\)")
 
 
 def named_files(path, skill_dir):
@@ -406,8 +405,7 @@ def named_files(path, skill_dir):
     own directory, because that is how a reader resolves them — a
     reference file's `language.md` is its sibling, not the skill root's."""
     text = path.read_text(encoding="utf-8")
-    named = [(ref, path.parent) for ref in LOCAL_LINK.findall(text)
-             if "://" not in ref]
+    named = [(ref, path.parent) for ref in local_link_targets(text)]
     if path.name == "SKILL.md":
         named += [(ref, skill_dir) for ref in SKILL_ASSET.findall(text)]
     return sorted(set(named))

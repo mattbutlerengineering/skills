@@ -502,13 +502,39 @@ def print_report(output):
         print(f"  {expected}: {cells}", file=sys.stderr)
 
 
+def _is_trigger_result(r):
+    """The fields summarize() and metrics_report() read off one result."""
+    return (isinstance(r, dict) and "pass" in r
+            and isinstance(r.get("kind"), str)
+            and (r.get("expected") is None or isinstance(r["expected"], str))
+            and isinstance(r.get("fired"), dict)
+            and all(isinstance(n, int) for n in r["fired"].values())
+            and isinstance(r.get("errors", 0), int))
+
+
+def load_results(path):
+    """(output, problems) for a --metrics results file: a recorded trigger
+    snapshot, read through cli.read_file (ADR-0075) and shape-checked
+    once, here. A charter snapshot, an array, or an object without
+    results is a problem, never a traceback (#746)."""
+    output, problem = cli.read_file(path, str(path), dict)
+    if output is None:
+        return None, [problem or f"missing {path}"]
+    results = output.get("results")
+    if not isinstance(results, list):
+        return None, [f"{path} has no results list"]
+    problems = [f"{path} result #{n} is not a trigger result"
+                " (fired, kind, expected, pass)"
+                for n, r in enumerate(results) if not _is_trigger_result(r)]
+    return (None, problems) if problems else (output, [])
+
+
 def print_metrics(path, kind):
     """Print metrics_report() for one recorded results file; never writes."""
-    try:
-        output = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as err:
-        print(f"error: cannot read results file {path}: {err}",
-              file=sys.stderr)
+    output, problems = load_results(path)
+    if problems:
+        for problem in problems:
+            print(f"error: {problem}", file=sys.stderr)
         return 1
     print(f"{path.name} (harness: {output.get('harness') or 'claude'})")
     for line in metrics_report(output, kind):

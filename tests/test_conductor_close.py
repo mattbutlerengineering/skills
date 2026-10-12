@@ -317,6 +317,17 @@ class TestClose(unittest.TestCase):
             ["issue", "comment", "13", "--body", "Blocked in conductor"
              " batch b1: answer to ask-3: block"]])
 
+    def test_a_prefix_sharing_batchs_spend_row_is_not_carried(self):
+        # Batch b1-13-x's item #5 shares #13's old prefix conductor-b1-13-
+        # (#735); its spend row on #13's branch is not this batch's.
+        other = spend("conductor-b1-13-x-5-spec-1", 7.0, "#5")
+        summary, problems = self.close(
+            ROWS, branch_costs=BLOCKED_SPEND + [other])
+        self.assertEqual(problems, [])
+        costs = (self.root / COSTS).read_text().splitlines()
+        self.assertEqual([json.loads(line)["run_id"] for line in costs[-2:]],
+                         ["conductor-b1-13-spec-1", "conductor-b1-13-build-1"])
+
     def test_a_failing_scorecard_leaves_scorecards_byte_identical(self):
         summary, problems = self.close(ROWS, costs=SPEND[:3])
         self.assertIsNone(summary)
@@ -347,6 +358,16 @@ class TestClose(unittest.TestCase):
                                        branch_costs=BLOCKED_SPEND[:1])
         self.assertEqual(problems, [])
         self.assertEqual((self.root / COSTS).read_text(), lines(SPEND))
+
+    def test_carried_spend_dedups_on_row_key_not_run_id(self):
+        # #736: ADR-0049 made (wo, run_id) the identity; a row sharing
+        # only the run_id is a different row and must still be carried.
+        other = spend("conductor-b1-13-spec-1", 0.5, "#99")
+        costs = SPEND[:4] + SPEND[5:] + [other]
+        summary, problems = self.close(ROWS, costs=costs)
+        self.assertEqual(problems, [])
+        self.assertEqual((self.root / COSTS).read_text(),
+                         lines(costs + BLOCKED_SPEND))
 
     def test_a_retry_after_a_failed_close_record_scores_once(self):
         # Review minor 6: the scorecard was appended before the close

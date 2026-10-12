@@ -115,6 +115,10 @@ def _check_against(raw):
 def _check_voice(raw):
     if not (_is_text(raw["voice"]) and "{out}" in raw["voice"]):
         return "voice must be a non-empty string naming {out}"
+    try:
+        shlex.split(raw["voice"])
+    except ValueError as err:
+        return f"voice is not a parseable command: {err}"
 
 
 def _check_publish(raw):
@@ -122,19 +126,17 @@ def _check_publish(raw):
         return "publish must be a plain relative path inside the repo"
 
 
-# One grammar check per field, in field order; each answers the
-# unprefixed problem or None.
+# One grammar check per field, in field order: unprefixed problem or None.
 _FIELD_CHECKS = {"when": _check_when, "recorder": _check_recorder,
                  "against": _check_against, "voice": _check_voice,
                  "publish": _check_publish}
 
 
 def load(root, platform=sys.platform):
-    """(config, []) with the parsed docs/launch-demo.json, its voice
-    defaulted by platform when absent, or (None, problems) — one exact
-    string per field, in field order, every one prefixed `launch-demo: `.
-    Absence is the missing problem here; the Ship hook tests for the
-    file before invoking the skill and treats absence as nothing to do."""
+    """(config, []) — docs/launch-demo.json, its voice defaulted by platform
+    and shlex-split once into the argv template probe and narrate share —
+    or (None, problems): one exact string per field, in field order, each
+    prefixed `launch-demo: `. Absence is the missing problem here."""
     shown = f"{LABEL}: {CONFIG}"
     raw, problem = cli.read_file(Path(root) / CONFIG, CONFIG, dict)
     if problem:
@@ -152,9 +154,8 @@ def load(root, platform=sys.platform):
             problems.append(f"{shown} {problem}")
     if problems:
         return None, problems
-    config = dict(raw)
-    config.setdefault("voice", VOICE_DEFAULTS.get(platform, VOICE_FALLBACK))
-    return config, []
+    voice = raw.get("voice", VOICE_DEFAULTS.get(platform, VOICE_FALLBACK))
+    return {**raw, "voice": shlex.split(voice)}, []
 
 
 STORYBOARD_FIELDS = ("title", "tagline", "intro", "steps", "outro")
@@ -276,14 +277,13 @@ def _duration(path, runner):
 def narrate(lines, voice, workdir, runner=cli.runner):
     """(clips, []) — one (wav path, seconds) per line, in order — or
     (None, [one problem]) at the first line the voice cannot render.
-    The voice is the config's template with {out} substituted by
-    workdir/line-N.wav and split with shlex (no shell), the line on
-    stdin; the WAV is measured by ffprobe. Retry is safe: each run
-    overwrites its own file."""
+    The voice is load's argv template, {out} replaced inside each token
+    by workdir/line-N.wav (a spaced path stays one argument), the line on
+    stdin; ffprobe measures the WAV. Each run overwrites its own file."""
     clips = []
     for number, line in enumerate(lines, 1):
         wav = Path(workdir) / f"line-{number}.wav"
-        argv = shlex.split(voice.replace("{out}", str(wav)))
+        argv = [token.replace("{out}", str(wav)) for token in voice]
         try:
             runner(argv[0], VOICE_TIMEOUT)(argv[1:], input=line + "\n")
         except cli.CLI_FAILURES as err:
@@ -751,7 +751,7 @@ def probe(config, which=shutil.which, runner=cli.runner):
                                            "require.resolve('playwright')"])
         except cli.CLI_FAILURES:
             missing.append(("playwright", *TOOLS["playwright"]))
-    voice = shlex.split(config["voice"])[0]
+    voice = config["voice"][0]
     if not which(voice):
         missing.append((voice, VOICE_PURPOSE, VOICE_HINT))
     return missing, []

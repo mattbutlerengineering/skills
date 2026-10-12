@@ -71,6 +71,101 @@ class TestAppend(unittest.TestCase):
             self.assertEqual(lines, [json.dumps(first), json.dumps(second)])
 
 
+class TestRecord(unittest.TestCase):
+    """cost_ledger.record — the one guarded write every ledger writer goes
+    through (#736): shape check, fail closed on a read problem, dedup on
+    row_key, then append. Every refusal happens BEFORE the write, because
+    the ledger is append-only and a bad line is permanent."""
+
+    ROW = entry("WO-0007", "r-1", "claude-sonnet-5", 4200, 1.25,
+                "completed", "2026-08-07")
+
+    def ledger(self, tmp):
+        return Path(tmp) / cost_ledger.COST_LEDGER
+
+    def test_a_well_formed_row_lands_creating_the_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(cost_ledger.record(tmp, self.ROW), [])
+            self.assertEqual(self.ledger(tmp).read_text(encoding="utf-8"),
+                             json.dumps(self.ROW) + "\n")
+
+    def test_a_malformed_row_is_refused_before_the_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = dict(self.ROW, wo="WO-7", cost=-1.0)
+            self.assertEqual(cost_ledger.record(tmp, bad), [
+                "wo 'WO-7' is not a WO-#### token or an issue key (#<n>)",
+                "cost must be a non-negative number"])
+            self.assertFalse(self.ledger(tmp).exists())
+
+    def test_an_unreadable_ledger_appends_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = self.ledger(tmp)
+            ledger.parent.mkdir(parents=True)
+            ledger.write_bytes(b"\xff\xfe\x00")
+            self.assertEqual(cost_ledger.record(tmp, self.ROW), [
+                "ledger: cannot read docs/factory/costs.jsonl: 'utf-8'"
+                " codec can't decode byte 0xff in position 0: invalid"
+                " start byte"])
+            self.assertEqual(ledger.read_bytes(), b"\xff\xfe\x00")
+
+    def test_a_malformed_ledger_line_appends_nothing(self):
+        """Appending to a ledger that cannot be summed would undercount
+        silently — so one bad line refuses every write until it is
+        accounted for."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = self.ledger(tmp)
+            ledger.parent.mkdir(parents=True)
+            ledger.write_text('{"wo": "WO-0010"}\n', encoding="utf-8")
+            self.assertEqual(cost_ledger.record(tmp, self.ROW), [
+                "ledger: docs/factory/costs.jsonl:1 ledger line is missing"
+                " field(s): cost, model, outcome, run_id, tokens"])
+            self.assertEqual(ledger.read_text(encoding="utf-8"),
+                             '{"wo": "WO-0010"}\n')
+
+    def test_a_line_the_parser_refuses_appends_nothing(self):
+        """A line json.loads refuses with ValueError, not JSONDecodeError
+        (an integer past the interpreter's digit limit), refuses too —
+        where the read once raised before the refusal could be reached."""
+        with tempfile.TemporaryDirectory() as tmp:
+            good = json.dumps(entry("WO-0007", "r-0", "claude-sonnet-5",
+                                    100, 0.5, "completed", "2026-08-06"))
+            text = (good + "\n" + good.replace(
+                '"tokens": 100', '"tokens": ' + "1" * 5000) + "\n")
+            ledger = self.ledger(tmp)
+            ledger.parent.mkdir(parents=True)
+            ledger.write_text(text, encoding="utf-8")
+            self.assertEqual(cost_ledger.record(tmp, self.ROW), [
+                "ledger: docs/factory/costs.jsonl:2 is not valid JSON:"
+                " Exceeds the limit (4300 digits) for integer string"
+                " conversion: value has 5000 digits; use"
+                " sys.set_int_max_str_digits() to increase the limit"])
+            self.assertEqual(ledger.read_text(encoding="utf-8"), text)
+
+    def test_a_duplicate_row_key_is_refused(self):
+        """A re-recorded run would double-count against the monthly cap.
+        The identity is row_key's (ADR-0049): a row differing in any
+        other field is still the same row."""
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(cost_ledger.record(tmp, self.ROW), [])
+            again = dict(self.ROW, model="claude-haiku-4-5", cost=0.1)
+            self.assertEqual(cost_ledger.record(tmp, again), [
+                "run_id 'r-1' is already in the ledger — recording it"
+                " twice would double-count the run against the monthly"
+                " cap"])
+            self.assertEqual(len(self.ledger(tmp).read_text(
+                encoding="utf-8").splitlines()), 1)
+
+    def test_a_row_differing_in_its_key_is_a_new_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for row in (self.ROW, dict(self.ROW, run_id="r-2"),
+                        dict(self.ROW, wo="#12")):
+                self.assertEqual(cost_ledger.record(tmp, row), [])
+            entries, problems = cost_ledger.read(tmp)
+            self.assertEqual(problems, [])
+            self.assertEqual([cost_ledger.row_key(e) for e in entries], [
+                ("WO-0007", "r-1"), ("WO-0007", "r-2"), ("#12", "r-1")])
+
+
 class TestWoToken(unittest.TestCase):
     def test_a_valid_token_is_returned(self):
         record = entry("WO-0009", "r-1", "m", 1, 0.1, "merged", "2026-08-02")

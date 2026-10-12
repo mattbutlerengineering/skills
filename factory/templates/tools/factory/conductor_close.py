@@ -33,8 +33,9 @@ import cost_ledger
 import factory_config
 import label_sync
 from cli import CLI_FAILURES, detail, label_names
-from conductor import TERMINAL, answers, append, ask_row, current_state, \
-    item_view, load, numbered, parse, parsed_at, read_text, stamp, view
+from conductor import TERMINAL, answers, append, ask_row, batch_branch, \
+    batch_dir, current_state, item_view, load, numbered, parse, parsed_at, \
+    read_text, run_item, stamp, view
 
 SCORECARDS = "docs/factory/scorecards.jsonl"
 # Asks the Conductor raises beyond the planned spend, gate and merge
@@ -197,11 +198,13 @@ def update_from_main(git, root, branch):
 def carry_blocked_spend(git, root, batch, blocked):
     """Append to the batch branch's costs.jsonl every spend row a blocked
     item's branch holds for its runs and the batch branch lacks: so all
-    spend reaches main, and a re-run never appends a row twice."""
+    spend reaches main, and a re-run never appends a row twice. Lacking
+    is cost_ledger.row_key's identity (ADR-0049), and each row lands
+    through cost_ledger.record, the one guarded write (#736)."""
     entries, problems = cost_ledger.read(root)
     if problems:
         return problems
-    present = {entry["run_id"] for entry in entries}
+    present = {cost_ledger.row_key(entry) for entry in entries}
     for item in blocked:
         branch = flow.item_branch(batch, item)
         text, problems = _git(git, root, ["show", f"{branch}:"
@@ -209,15 +212,17 @@ def carry_blocked_spend(git, root, batch, blocked):
                               f"reading {branch}'s spend rows")
         if problems:
             return [f"cd: close refused: {problem}" for problem in problems]
-        prefix = f"conductor-{batch}-{item[1:]}-"
         for lineno, entry, suffixes in cost_ledger.parse(text):
             if suffixes:
                 return [f"cd: {branch}:{cost_ledger.COST_LEDGER}:{lineno}"
                         f" {suffix}" for suffix in suffixes]
-            if entry["run_id"].startswith(prefix) \
-                    and entry["run_id"] not in present:
-                cost_ledger.append(root, entry)
-                present.add(entry["run_id"])
+            if run_item(batch, entry["run_id"]) == item \
+                    and cost_ledger.row_key(entry) not in present:
+                refused = cost_ledger.record(root, entry)
+                if refused:
+                    return [f"cd: close refused: {problem}"
+                            for problem in refused]
+                present.add(cost_ledger.row_key(entry))
     return []
 
 
@@ -255,7 +260,7 @@ def pr_body(batch, finals):
 def _record_close(root, batch, now, finals):
     """(the closing merge ask's id, problems): the close row and the
     closing merge ask, written together under one lock."""
-    branch = f"conductor/{batch}"
+    branch = batch_branch(batch)
 
     def build(rows):
         closed = {"at": stamp(now), "kind": "close", "item": None,
@@ -289,9 +294,9 @@ def _publish(root, batch, git, gh, finals, reasons):
     # lean: no resume after a failed publish step; the close row is
     # written, so a re-run is refused and the step is finished by hand.
     # The trigger to resume mechanically is a real batch hitting it.
-    branch = f"conductor/{batch}"
+    branch = batch_branch(batch)
     for args, what in (
-            (["add", "--", f"docs/factory/batches/{batch}",
+            (["add", "--", batch_dir(batch),
               cost_ledger.COST_LEDGER, SCORECARDS], "staging the close"),
             (["commit", "-m", f"chore(conductor): close batch {batch}"],
              "committing the close"),
@@ -333,7 +338,7 @@ def close_batch(root, batch, clock, git, gh):
     finals, problems = _final_items(rows, batch)
     if problems:
         return None, problems
-    problems = (update_from_main(git, root, f"conductor/{batch}")
+    problems = (update_from_main(git, root, batch_branch(batch))
                 or carry_blocked_spend(git, root, batch, finals["blocked"]))
     if problems:
         return None, problems
@@ -380,7 +385,7 @@ def merge_closing(root, batch, clock, git, gh, sleep):
     problems = problems or _closing_answer(rows, batch)
     if problems:
         return None, problems
-    branch, ledger_dir = f"conductor/{batch}", f"docs/factory/batches/{batch}"
+    branch, ledger_dir = batch_branch(batch), batch_dir(batch)
     dirty, problems = _git(git, root, ["status", "--porcelain", "--",
                                        ledger_dir], "reading the ledger")
     steps = ([(["add", "--", ledger_dir], "staging the answer"),

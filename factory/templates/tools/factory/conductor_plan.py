@@ -13,7 +13,8 @@ import assembler
 import factory_config
 import work_queue
 from cli import CLI_FAILURES, detail, gh_read, label_names
-from conductor import BATCH_NAME, LEDGER, ask, is_text, stamp
+from conductor import LEDGER, WORKTREES, ask, batch_branch, \
+    batch_name_problems, batch_worktree, is_text, stamp
 from cost_ledger import ISSUE_KEY
 from knowledge_plane import ADR_TOKEN, PRD_TOKEN, WO_TOKEN
 
@@ -43,7 +44,6 @@ ID_TOKENS = (("prd", PRD_TOKEN), ("adr", ADR_TOKEN), ("wo", WO_TOKEN))
 ID_GREP = ["grep", "-h", "-o", "-E", "(PRD|ADR|WO)-[0-9]{4}", "origin/main",
            "--", "docs"]
 ISSUE_FIELDS = "number,state,author,labels"
-WORKTREES = ".claude/worktrees"
 SPEND_OPTIONS = ["approve", "decline"]
 
 
@@ -340,15 +340,15 @@ def open_batch(batch, plan, now, git):
     an empty plan and a bad batch name before git runs, an existing
     worktree before any git write, and a name whose ledger is already on
     origin/main before any worktree is made."""
-    if not (isinstance(batch, str) and BATCH_NAME.fullmatch(batch)):
-        return None, [f"cd: batch {batch!r} is not a batch name"
-                      " (lowercase letters, digits and hyphens)"]
+    problems = batch_name_problems(batch)
+    if problems:
+        return None, problems
     if not plan["items"]:
         return None, ["cd: nothing to open: every issue was deferred"]
     checkout, problems = main_checkout(git)
     if problems:
         return None, problems
-    shown = f"{WORKTREES}/conductor-{batch}"
+    shown = batch_worktree(batch)
     worktree = checkout / shown
     if worktree.exists():
         return None, [f"cd: {shown} already exists"]
@@ -364,7 +364,7 @@ def open_batch(batch, plan, now, git):
     except CLI_FAILURES as err:
         return None, [f"cd: git ls-tree origin/main failed: {detail(err)}"]
     try:
-        git(["worktree", "add", "-b", f"conductor/{batch}", str(worktree),
+        git(["worktree", "add", "-b", batch_branch(batch), str(worktree),
              "origin/main"])
     except CLI_FAILURES as err:
         return None, [f"cd: git worktree add failed: {detail(err)}"]
