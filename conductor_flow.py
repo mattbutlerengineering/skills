@@ -20,12 +20,11 @@ record, readiness, gate asks and verdicts used here.
 import json
 import os
 import re
-from datetime import datetime, timezone
 
 import factory_config
 from cli import CLI_FAILURES, detail
-from conductor import (AT_FORMAT, BLOCK, TERMINAL, answers, append,
-                       ask_row, current_state, load, next_ask, stamp)
+from conductor import (BLOCK, TERMINAL, answers, append, ask_row,
+                       current_state, load, next_ask, parsed_at, stamp)
 
 STEPS = ("spec", "build", "verify", "review", "ship")
 SEQUENCE = ("planned", "spec", "awaiting-gate", "build", "verify",
@@ -328,10 +327,6 @@ def _failure_streak(rows):
     return streak
 
 
-def _at(value):
-    return datetime.strptime(value, AT_FORMAT).replace(tzinfo=timezone.utc)
-
-
 def needs_facts(rows):
     """The items whose finished spec or build step needs branch facts
     (gate blobs, unchecked rows) before `survey` can say what follows."""
@@ -417,7 +412,7 @@ def _in_flight(rows, now, entry, launched, alive):
         reason = f"its runner (pid {pid}) is gone with no finishing run row"
     else:
         limit = 2 * WALL_CLOCK_MINUTES[entry["size"]]
-        idle = (now - _at(launched["at"])).total_seconds() / 60
+        idle = (now - parsed_at(launched["at"])).total_seconds() / 60
         if idle <= limit:
             return True, []
         reason = f"no state change for over {limit} minutes"

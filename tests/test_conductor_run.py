@@ -10,7 +10,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import conductor
@@ -114,7 +114,10 @@ class RunCase(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name) / "conductor"
         self.root.mkdir()
-
+        self.clock = lambda: NOW
+        # The launch guard reads a netrc file (re-review R3): the suite
+        # never reads the machine's own.
+        self.no_netrc = Path(self.tmp.name) / "netrc"
         self.config(300)
 
     def config(self, cap):
@@ -133,8 +136,8 @@ class RunCase(unittest.TestCase):
         self.gh = gh or Gh()
         self.harness = harness
         result = conductor_run.run_step(
-            self.root, "b1", item, step, NOW, git=self.git, gh=self.gh,
-            harness=harness, pid=777)
+            self.root, "b1", item, step, self.clock, git=self.git,
+            gh=self.gh, harness=harness, pid=777, netrc=self.no_netrc)
         self.rows, _ = conductor.load(self.root, "b1")
         return result
 
@@ -238,9 +241,10 @@ class TestWorkerEnv(unittest.TestCase):
                     in pushed.stderr, (target, pushed.stderr))
 
     def test_a_configured_pushurl_is_not_rewritten(self):
-        # Re-review R3, the documented limit: pushInsteadOf skips a
-        # remote's explicit pushurl, so git dials it (a closed local
-        # port here) with no helper to hand it a token.
+        # Re-review R3, the limit worker_env leaves: pushInsteadOf skips
+        # a remote's explicit pushurl, so git dials it (a closed local
+        # port here) with no helper to hand it a token. push_gaps
+        # refuses a launch while one is configured.
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp) / "w"
             subprocess.run(["git", "init", "-q", str(work)], check=True)
@@ -301,9 +305,9 @@ class TestWorkerEnv(unittest.TestCase):
             (root / ".github").mkdir()
             (root / ".github/factory.json").write_text(
                 '{"monthly_cap_usd": 300}')
-            conductor_run.run_step(root, "b1", "#12", "spec", NOW,
+            conductor_run.run_step(root, "b1", "#12", "spec", lambda: NOW,
                                    git=Git(tmp), gh=Gh(), harness=harness,
-                                   pid=777)
+                                   pid=777, netrc=Path(tmp) / "netrc")
         env = harness.calls[0]["env"]
         self.assertNotIn("GH_TOKEN", env)
         self.assertEqual(seen["gh_dir"], [])
@@ -508,6 +512,38 @@ class TestFailedRun(RunCase):
         self.assertEqual(self.rows[-2]["reason"],
                          "the run completed but left no pr-body.md")
 
+    def test_rows_written_after_the_run_carry_the_time_it_ended(self):
+        # Review minor 1: stamped with the launch time, a stall ask after
+        # a 90-minute run read as 90 minutes of Owner wait.
+        ended = NOW + timedelta(minutes=90)
+        times = [NOW]
+
+        def work(cwd):
+            times[0] = ended
+        self.clock = lambda: times[0]
+        self.run_step("#12", "spec", Harness(act=work))
+        self.assertEqual([(r["kind"], r["at"]) for r in self.rows[-4:]], [
+            ("state", "2026-10-10T12:30:00Z"),
+            ("run", "2026-10-10T14:00:00Z"),
+            ("state", "2026-10-10T14:00:00Z"),
+            ("ask", "2026-10-10T14:00:00Z")])
+
+    def test_a_body_left_by_an_earlier_step_is_not_this_steps_output(self):
+        # Review minor 7: pr-body.md stayed in the worktree, so from the
+        # second step on the no-pr-body.md stall could never fire.
+        self.worktree("#12").mkdir(parents=True)
+        pr_body(self.worktree("#12"))
+        self.run_step("#12", "spec", Harness())
+        self.assertEqual(self.rows[-2]["reason"],
+                         "the run completed but left no pr-body.md")
+
+    def test_the_body_is_cleared_once_delivered(self):
+        # Left behind, it would also be an untracked file the merge
+        # turn's clean-worktree check stalls on.
+        self.run_step("#12", "spec", Harness(act=pr_body))
+        self.assertIsNone(self.rows[-1].get("ask_kind"))
+        self.assertFalse((self.worktree("#12") / "pr-body.md").exists())
+
     def test_a_failed_push_stalls_and_opens_no_pr(self):
         self.run_step("#12", "spec", Harness(act=pr_body),
                       git=Git(self.tmp.name, fail="push"))
@@ -612,8 +648,9 @@ class TestMonthlyCap(RunCase):
         (self.root / ".github/factory.json").write_text("{}")
         self.ledger(*BASE)
         _, problems = conductor_run.run_step(
-            self.root, "b1", "#12", "spec", NOW, git=Git(self.tmp.name),
-            gh=Gh(), harness=Harness(act=pr_body), pid=777)
+            self.root, "b1", "#12", "spec", lambda: NOW,
+            git=Git(self.tmp.name), gh=Gh(), harness=Harness(act=pr_body),
+            pid=777, netrc=self.no_netrc)
         self.assertEqual(problems, [
             "config: factory.json names no positive monthly_cap_usd"])
 
@@ -679,10 +716,11 @@ class TestRunCli(RunCase):
     def test_run_is_a_conductor_verb(self):
         self.ledger(*BASE)
         git = Git(self.tmp.name)
-        code, out = cli_contract.capture(
-            conductor.main, ["run", "b1", "#12", "spec"], env={},
-            clock=lambda: NOW, root=self.root, run=Gh(), git=git,
-            harness=Harness(act=pr_body))
+        with unittest.mock.patch.dict(os.environ, {"HOME": self.tmp.name}):
+            code, out = cli_contract.capture(
+                conductor.main, ["run", "b1", "#12", "spec"], env={},
+                clock=lambda: NOW, root=self.root, run=Gh(), git=git,
+                harness=Harness(act=pr_body))
         self.assertEqual(code, 0, out)
         self.assertIn("cd: run conductor-b1-12-spec-1 completed", out)
 

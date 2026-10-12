@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -334,6 +335,22 @@ class TestClose(unittest.TestCase):
                                        branch_costs=BLOCKED_SPEND[:1])
         self.assertEqual(problems, [])
         self.assertEqual((self.root / COSTS).read_text(), lines(SPEND))
+
+    def test_a_retry_after_a_failed_close_record_scores_once(self):
+        # Review minor 6: the scorecard was appended before the close
+        # row, so a failed ledger write left it on disk, and the retry
+        # appended a second row to the append-only history.
+        failed = (None, [f"cd: cannot write {LEDGER}: disk full"])
+        with unittest.mock.patch.object(close, "_record_close",
+                                        return_value=failed):
+            self.assertEqual(self.close(ROWS), failed)
+        summary, problems = self.close(self.ledger())
+        self.assertEqual(problems, [])
+        cards = (self.root / close.SCORECARDS).read_text().splitlines()
+        self.assertEqual(cards[0] + "\n", CARD)
+        self.assertEqual([json.loads(card) for card in cards[1:]],
+                         [EXPECTED])
+        self.assertEqual(self.ledger()[-2]["kind"], "close")
 
     def test_a_merge_conflict_with_main_refuses_and_aborts(self):
         fake = FakeGh(failing=["-C", str(self.root), "merge", "--no-edit"])

@@ -341,7 +341,7 @@ class TestRecord(unittest.TestCase):
                 "completed", "2026-08-07")
             self.assertEqual(problems, [
                 "bg: refusing to record WO-7: wo 'WO-7' is not a"
-                " WO-#### token"])
+                " WO-#### token or an issue key (#<n>)"])
             self.assertEqual(self.lines(tree), [])
 
     def test_a_negative_cost_is_refused_before_the_write(self):

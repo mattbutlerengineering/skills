@@ -258,8 +258,9 @@ def commit(cwd, files, message="c"):
 
 
 class Clock:
-    """The wall clock the turn stamps rows and times waits with; sleep
-    advances it."""
+    """The turn's wall clock; sleep advances it, and fails past twice a
+    full wait's polls, so a broken timeout fails, not hangs (minor 8)."""
+    MAX_SLEEPS = 2 * merge.WAIT_MINUTES * 60 // merge.POLL_SECONDS
 
     def __init__(self):
         self.now, self.slept = NOW, []
@@ -268,6 +269,8 @@ class Clock:
         return self.now
 
     def sleep(self, seconds):
+        if len(self.slept) >= self.MAX_SLEEPS:
+            raise AssertionError("a wait never timed out")
         self.slept.append(seconds)
         self.now += timedelta(seconds=seconds)
 

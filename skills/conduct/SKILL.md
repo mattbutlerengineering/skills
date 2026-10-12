@@ -106,6 +106,17 @@ run `next`. A failed run already queued its own stall ask; do not
 retry it. A launch the monthly cap refuses prints a `cd:` problem and
 pauses dispatch behind an ask; run `next` and present it.
 
+A Worker runs with no GitHub credential in its environment, and git's
+push URLs rewritten to a path that cannot exist. The runner refuses to
+launch (`cd: launch refused: ...`) while a remote has an explicit
+`pushurl`, which that rewrite skips, or `~/.netrc` has a `github.com` or
+`default` entry. Report the refusal to the Owner; never unset or move
+their config yourself. What stays trust-based, and stops a confused
+Worker but not a hostile one: a Worker that runs python3 can rebuild its
+own environment and reach a key the Owner's session holds outside it (a
+macOS keychain entry, a key loaded in the SSH agent), and a shell
+profile that exports a token puts it back in the Worker's shell.
+
 ### 5. Drive the merge turns the answers cover
 
 For each `ready` entry whose step is `merge`, one at a time:

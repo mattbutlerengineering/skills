@@ -604,3 +604,71 @@ is the Owner's to decide:
 
 Suspicion S1 (a profile that re-exports a token into the Worker's
 shell) is still unreproduced on this machine.
+
+## Minors resolved (2026-10-11)
+
+The first pass's minors 1–10 and the push gaps re-review R3 left open,
+fixed test-first, one commit each. Each new test was seen to fail (or,
+for m8, the mutation was seen to hang) before its fix. No paid run, no
+gh write, no merge. `skills/conduct/SKILL.md` changed, so the plugin is
+0.8.2 (dbf04b2) and the manifest is regenerated.
+
+- **m1: resolved in e902e40.** `run_step` takes the clock. The launch
+  row carries the launch time; the run row, spend row, stall ask and
+  verdict carry the time the harness returned.
+- **m2: resolved in 362f816.** `plan` and `open` refuse an issue named
+  more than once, before any read.
+- **m3: resolved in de73aee.** The row grammar requires `covers` to be
+  a non-empty list of distinct issue keys and `gate_blobs` a map of
+  path to blob id. A string `covers` now fails the reader.
+- **m4: resolved in 0d30e48, half of it.** The turn records origin/main
+  after merging it in. Before a squash with no queue, it fetches again
+  and stalls with a retry if main moved; the retried turn merges the
+  new main and checks again. Reproduced first: a merge landing on main
+  during the check wait was squashed over unchecked. The window left is
+  the moment between that read and the squash. **The check-run-set
+  suspicion: not reproduced.** No pull_request workflow here has a
+  `needs:` job, so no run appears late; `wait_checks` already requires
+  every listed run to be completed. Not changed.
+- **m5: resolved in 9a05786.** `open` reads origin/main's tree for the
+  batch's ledger and refuses the name before any worktree is made.
+  Reproduced first: the `FileExistsError`.
+- **m6: resolved in d725bda.** `append_scorecard` appends only when no
+  row for the batch is there, so a close retried after a failed
+  close-row write scores the batch once. Reproduced first: two rows.
+- **m7: resolved in 73bcb49.** The runner removes `pr-body.md` before
+  the Worker runs and again once delivered. Found while fixing it: left
+  behind, it was an untracked file that R1's clean-worktree check would
+  stall every merge turn on.
+- **m8: resolved in 29a1df7.** The merge tests' fake sleep fails past
+  120 polls (twice a full wait). With `wait_checks`' timeout mutated to
+  `if False:`, the test hung (killed at 20s) before the fix and fails in
+  under a second after it. The file was restored with `git checkout`.
+- **m9: resolved in 9ffb53a.** The wo problem now reads "is not a
+  WO-#### token or an issue key (#<n>)". `config_problems` flags an
+  `effort` that is not a table and a band key outside `BANDS`, so
+  detector F no longer passes `"effort": "high"`. Payload mirrors and
+  manifest regenerated.
+- **m10: resolved in be77bc7.** `conductor_plan.span` and
+  `conductor.parsed_at` (beside its inverse, `stamp`) are the one owner
+  each; the copies are imports.
+- **Push gaps (R3): resolved in 0f991ca.** `push_gaps` refuses a launch,
+  writing nothing, while any remote has an explicit `pushurl` or the
+  netrc file has a `github.com`, `*.github.com` or `default` entry; a
+  netrc that does not parse also refuses. The worker_env docstring and
+  the conduct skill name what stays trust-based: a hostile Worker
+  undoing its env from python3, keys held outside the env (keychain, SSH
+  agent), and a token a shell profile exports (suspicion S1).
+  `architecture.md` amendment 12 still describes the gaps as open; it is
+  left as the record of that decision.
+
+Found, not changed: `one_owner.py` reports `conductor_merge.COSTS` and
+`cost_ledger.COST_LEDGER` as the same value with two owners. It was
+there before this pass.
+
+### Gates (minors resolved)
+
+- `python3 -m unittest discover tests`: `Ran 2364 tests`, `OK`.
+- `python3 lint.py`: `lint: 0 problem(s) across 32 skills`.
+- `python3 gates.py`: `gates: 0 problem(s)`.
+- `python3 gates.py --selftest`: `selftest: ok`.

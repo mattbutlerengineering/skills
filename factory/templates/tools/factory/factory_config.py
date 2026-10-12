@@ -181,7 +181,11 @@ def config_problems(config):
         problems.append("monthly_cap_usd must be a positive number")
     efforts = config.get("effort")
     if isinstance(efforts, dict):
+        problems += [f"effort.{band} is not a band ({', '.join(BANDS)})"
+                     for band in efforts if band not in BANDS]
         problems += [f"effort.{band} must be one of {', '.join(EFFORTS)}"
                      for band, effort in efforts.items()
                      if effort not in EFFORTS]
+    elif "effort" in config:
+        problems.append("effort must map bands to efforts")
     return problems

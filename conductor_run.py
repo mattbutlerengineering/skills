@@ -15,8 +15,10 @@ queues a stall ask; nothing retries. The Owner's 2026-10-10 answers
 (breakdown.md Notes) fix the branch names, tool list and defaults used.
 """
 import json
+import netrc as netrc_file
 import os
 import re
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -28,6 +30,7 @@ from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
     read_execution
 from conductor import WORKER_ENV, answers, append, ask_row, current_state, \
     load, stamp
+from conductor_plan import span
 from knowledge_plane import WO_TOKEN
 from orientation_pack import orientation_pack
 from protocol import read_frontmatter
@@ -45,7 +48,8 @@ ALLOWED_TOOLS = ("Read", "Edit", "Write", "Glob", "Grep",
 # config, no askpass; git's ssh transport is `false`, so no ssh push (or
 # fetch) reaches any host or alias; and the Owner's own GIT_CONFIG_*
 # entries are replaced: an http(s) push URL is rewritten to a path that
-# cannot exist, and no credential helper hands out a token. Local-path
+# cannot exist (all but a remote's explicit pushurl, which push_gaps
+# refuses), and no credential helper hands out a token. Local-path
 # remotes still work, so the suite's own scratch-repo pushes pass.
 WORKER_STRIPPED = re.compile(r"GH_.*|GITHUB_(?:ENTERPRISE_)?TOKEN|CLAUDECODE"
                              r"|GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)"
@@ -85,10 +89,14 @@ OBJECTIVES = {
 def worker_env(base, batch, gh_config_dir):
     """The Worker's environment: `base` (the runner's) minus every
     WORKER_STRIPPED name, plus the batch flag, an empty gh config dir,
-    no terminal prompt and WORKER_GIT_CONFIG. It stops a confused Worker;
-    a hostile one can still put a credential back (breakdown Notes,
-    2026-10-11). pushInsteadOf skips a remote's explicit pushurl, so a
-    token embedded there, or a ~/.netrc entry, is not blocked."""
+    no terminal prompt and WORKER_GIT_CONFIG. pushInsteadOf skips a
+    remote's explicit pushurl, and git's https transport reads ~/.netrc;
+    this env closes neither, so push_gaps refuses the launch while
+    either is configured (re-review R3). What stays trust-based: it
+    stops a confused Worker, not a hostile one (breakdown Notes,
+    2026-10-11). A Worker can undo this env from python3, reach a key
+    held outside it (a keychain entry, a key loaded in the SSH agent),
+    or get a token back from a shell profile that exports one."""
     env = {name: value for name, value in base.items()
            if not WORKER_STRIPPED.fullmatch(name)}
     env.update({WORKER_ENV: batch, "GH_CONFIG_DIR": gh_config_dir,
@@ -100,6 +108,58 @@ def worker_env(base, batch, gh_config_dir):
     return env
 
 
+GUARD = "cd: launch refused: "
+PUSHURL_KEY = r"^remote\..*\.pushurl$"
+
+
+def _pushurls(git, worktree):
+    """(the configured remote.<name>.pushurl keys, problems). `git config
+    --get-regexp` exits 1 when nothing matches."""
+    try:
+        out = git(["-C", str(worktree), "config", "--get-regexp",
+                   PUSHURL_KEY]).stdout
+    except subprocess.CalledProcessError as err:
+        if err.returncode == 1:
+            return [], []
+        return None, [f"{GUARD}git config failed: {detail(err)}"]
+    except CLI_FAILURES as err:
+        return None, [f"{GUARD}git config failed: {detail(err)}"]
+    return [line.split()[0] for line in out.splitlines() if line.strip()], []
+
+
+def _netrc_hosts(path):
+    """(the hosts a netrc file holds credentials for, "default" included,
+    problems). An absent file holds none; one that does not parse is a
+    problem, never read as empty."""
+    if not path.exists():
+        return [], []
+    try:
+        return sorted(netrc_file.netrc(str(path)).hosts), []
+    except (OSError, UnicodeDecodeError, netrc_file.NetrcParseError) as err:
+        return None, [f"{GUARD}cannot read {path}: {err}"]
+
+
+def push_gaps(git, worktree, netrc):
+    """(problems): the fail-closed launch guard for the two push gaps
+    worker_env cannot close (re-review R3). A remote's explicit pushurl
+    is not rewritten by pushInsteadOf, and git's https transport reads
+    the netrc file (~/.netrc; `netrc` is injectable), so either could
+    carry a credential to a Worker's push. Either refuses the launch."""
+    keys, problems = _pushurls(git, worktree)
+    problems += [f"{GUARD}remote {key[len('remote.'):-len('.pushurl')]}"
+                 " has an explicit pushurl, which the Worker's push block"
+                 f" does not rewrite; unset {key} while a batch runs"
+                 for key in keys or []]
+    hosts, found = _netrc_hosts(netrc)
+    problems += found
+    problems += [f"{GUARD}{netrc} has a {host} entry, which git's https"
+                 " transport would hand a Worker's push; move it aside"
+                 " while a batch runs"
+                 for host in hosts or [] if host == "default"
+                 or host == "github.com" or host.endswith(".github.com")]
+    return problems
+
+
 def harness_command(brief, model, effort, ceiling_usd):
     """Every harness flag, composed in this one function: the headless
     CLI is a volatile vendor surface."""
@@ -108,18 +168,13 @@ def harness_command(brief, model, effort, ceiling_usd):
             "json", "--allowedTools", *ALLOWED_TOOLS]
 
 
-def _span(values):
-    return (str(values[0]) if len(values) == 1
-            else f"{values[0]}-{values[-1]}")
-
-
 def compose_brief(step, item, item_type, worktree, branch, block, wo,
                   context, issue_body, ceiling):
     """The Worker's brief in its fixed shape. The issue body is an input
     only for a spec step (ADR-0032: owner-authored issues only)."""
     scale = ("maintenance run from capture" if item_type == "fix"
              else "feature run from idea")
-    reserved = ", ".join(f"{kind} {_span(values)}"
+    reserved = ", ".join(f"{kind} {span(values)}"
                          for kind, values in block.items()) or "none"
     inputs = [f"- {context}"] if context else []
     if step == "spec" and issue_body is not None:
@@ -420,7 +475,7 @@ def _launch(root, batch, now, launch, spent, cap):
     return problems or refused
 
 
-def _prepare(root, batch, item, step, git, gh):
+def _prepare(root, batch, item, step, git, gh, netrc):
     """(context dict, problems): everything decided before launch."""
     rows, problems = load(root, batch)
     if problems:
@@ -435,6 +490,8 @@ def _prepare(root, batch, item, step, git, gh):
     if problems:
         return None, problems
     worktree, problems = _worktree(git, batch, item)
+    if not problems:
+        problems = push_gaps(git, worktree, netrc)
     if problems:
         return None, problems
     wo, context, body, problems = _work(rows, entry, step, git, gh, batch,
@@ -465,12 +522,17 @@ def _prepare(root, batch, item, step, git, gh):
             "run_id": f"conductor-{batch}-{item[1:]}-{step}-{seq}"}, []
 
 
-def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
-             pid=None):
+def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
+             pid=None, netrc=None):
     """(summary, problems): one Worker run. problems only when nothing
-    was launched or a ledger write failed; a failed run is a stall."""
+    was launched or a ledger write failed; a failed run is a stall. The
+    launch row carries the launch time, and every row written after the
+    run its end time (review minor 1): a stall ask stamped at launch
+    would count the whole run as Owner wait."""
     pid = os.getpid() if pid is None else pid
-    ctx, problems = _prepare(root, batch, item, step, git, gh)
+    now = clock()
+    netrc = Path.home() / ".netrc" if netrc is None else netrc
+    ctx, problems = _prepare(root, batch, item, step, git, gh, netrc)
     if problems:
         return None, problems
     entry, run_id, worktree = ctx["entry"], ctx["run_id"], ctx["worktree"]
@@ -488,12 +550,16 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
             "fields": {"run_id": run_id, "pid": pid}}, spent, cap)
     if problems:
         return None, problems
+    # pr-body.md is this step's output only (review minor 7): one left by
+    # an earlier step would satisfy the expected-output check.
+    (worktree / PR_BODY_FILE).unlink(missing_ok=True)
     brief = compose_brief(step, item, entry["type"], worktree, branch,
                           ctx["block"], ctx["wo"], ctx["context"],
                           ctx["body"], ceiling)
     event, ended, _ = _harness(
         harness, harness_command(brief, model, effort, ceiling), worktree,
         flow.WALL_CLOCK_MINUTES[entry["size"]], batch)
+    done = clock()
     tokens, cost, outcome, reported, stall = _meter(
         root, batch, run_id, event, ended, ceiling, model)
     if ended == "timeout":
@@ -502,17 +568,18 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
     spent_model = model if model in reported or not reported \
         else reported[0]
     failed = _spend(git, worktree, ctx["wo"], run_id, spent_model, tokens,
-                    cost, outcome, now)
+                    cost, outcome, done)
     if stall is None and not (worktree / PR_BODY_FILE).is_file():
         stall = "the run completed but left no pr-body.md"
     failed = failed or _deliver(git, gh, worktree, branch, item, batch)
+    (worktree / PR_BODY_FILE).unlink(missing_ok=True)
     stall = stall or failed
     if stall is None and ctx["briefed"] is not None:
         stall = _left_unchecked(git, branch, ctx["briefed"], ctx["wo"])
     charter = next(s["charter"] for s in entry["steps"]
                    if s["step"] == step)
     _, problems = append(root, batch, lambda rows: ({
-        "at": stamp(now), "kind": "run",
+        "at": stamp(done), "kind": "run",
         "item": item, "step": step, "charter": charter, "band": band,
         "model": model, "models_reported": reported, "effort": effort,
         "run_id": run_id, "pid": pid, "outcome": outcome}, []))
@@ -523,21 +590,21 @@ def run_step(root, batch, item, step, now, git, gh, harness=harness_run,
         if verdict is None:
             stall = "review.md carries no verdict: pass|changes line"
         else:
-            _, problems = flow.record_verdict(root, batch, now, item,
+            _, problems = flow.record_verdict(root, batch, done, item,
                                               verdict, run_id, ctx["head"])
     if stall is not None:
-        _, problems = flow.queue_stall(root, batch, now, item, stall,
+        _, problems = flow.queue_stall(root, batch, done, item, stall,
                                        "retry", WORKER_WHY)
     return {"run_id": run_id, "outcome": outcome, "stall": stall}, problems
 
 
-def run_cli(root, args, now, git, gh, harness):
+def run_cli(root, args, clock, git, gh, harness):
     if len(args) != 3 or not cost_ledger.ISSUE_KEY.fullmatch(args[1]):
         return None
     batch, item, step = args
     if step not in flow.STEPS:
         return None
-    summary, problems = run_step(root, batch, item, step, now, git, gh,
+    summary, problems = run_step(root, batch, item, step, clock, git, gh,
                                  harness=harness or harness_run)
     if summary is not None:
         line = f"cd: run {summary['run_id']} {summary['outcome']}"

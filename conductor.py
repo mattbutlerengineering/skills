@@ -131,6 +131,27 @@ def _ask_problems(row):
                         " among the options")
     problems += [f"{field} must be a non-empty string"
                  for field in ("question", "why") if not is_text(row[field])]
+    return problems + _consent_problems(row)
+
+
+def _consent_problems(row):
+    """The optional fields that grant consent (review minor 3): a train's
+    `covers` is matched with `in`, so a string there would cover every
+    key it contains; read fail-closed, never coerced."""
+    problems = []
+    covers = row.get("covers")
+    if "covers" in row and not (
+            isinstance(covers, list) and covers
+            and all(isinstance(key, str) and ISSUE_KEY.fullmatch(key)
+                    for key in covers)
+            and len(set(covers)) == len(covers)):
+        problems.append("covers must be a non-empty list of distinct issue"
+                        " keys")
+    blobs = row.get("gate_blobs", {})
+    if not (isinstance(blobs, dict) and all(
+            is_text(path) and is_text(blob)
+            for path, blob in blobs.items())):
+        problems.append("gate_blobs must map file paths to blob ids")
     return problems
 
 
@@ -296,6 +317,11 @@ def stamp(now):
     return now.astimezone(timezone.utc).strftime(AT_FORMAT)
 
 
+def parsed_at(value):
+    """stamp's inverse: a row's `at` as an aware UTC datetime."""
+    return datetime.strptime(value, AT_FORMAT).replace(tzinfo=timezone.utc)
+
+
 def answers(rows):
     """{ask id: its answer row}."""
     return {row["ask"]: row for row in rows if row["kind"] == "answer"}
@@ -458,8 +484,8 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
         elif command == "answer":
             problems = _answer_cli(root, batch, args, now, env)
         elif command == "run":
-            problems = conductor_run.run_cli(root, [batch, *args], now, git,
-                                             run, harness)
+            problems = conductor_run.run_cli(root, [batch, *args], clock,
+                                             git, run, harness)
         elif command == "scorecard":
             problems = conductor_close.scorecard_cli(root, [batch, *args],
                                                      now)

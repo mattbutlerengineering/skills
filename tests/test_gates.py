@@ -503,7 +503,7 @@ class TestCostLedger(unittest.TestCase):
                                   "2026-08-01"))
             self.assertEqual(gates.check_cost_ledger(tree.root), [
                 "G: docs/factory/costs.jsonl:2 wo '12' is not a WO-####"
-                " token"])
+                " token or an issue key (#<n>)"])
 
     def test_untyped_wo_field_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -513,7 +513,7 @@ class TestCostLedger(unittest.TestCase):
             problems = gates.check_cost_ledger(tree.root)
             self.assertIn(
                 "G: docs/factory/costs.jsonl:1 wo 'nope' is not a WO-####"
-                " token", problems)
+                " token or an issue key (#<n>)", problems)
 
     def test_blank_lines_are_tolerated(self):
         with tempfile.TemporaryDirectory() as tmp:
