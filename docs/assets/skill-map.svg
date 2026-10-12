@@ -187,12 +187,13 @@ the utility skills by the moment a person reaches for them.</desc>
   <text class="sublabel mono" x="472" y="310" text-anchor="middle">the router</text>
 </g>
 <g>
-  <rect class="mask" x="568" y="256" width="112" height="80" rx="6"/>
-  <rect class="node-ext" x="568" y="256" width="112" height="80" rx="6"/>
+  <rect class="mask" x="568" y="256" width="112" height="96" rx="6"/>
+  <rect class="node-ext" x="568" y="256" width="112" height="96" rx="6"/>
   <text class="name" x="580" y="276">Driving a run</text>
   <text class="row mono" x="580" y="294">autorun</text>
   <text class="row mono" x="580" y="310">work-queue</text>
   <text class="row mono" x="580" y="326">conduct</text>
+  <text class="row mono" x="580" y="342">implement-queue</text>
 </g>
 
 <!-- outside the loop: the maintenance entry, and the five other cards,

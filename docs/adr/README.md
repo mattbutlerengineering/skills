@@ -53,7 +53,7 @@ the canonical vocabulary.
 | [0030](0030-incident-fastlane-and-tracker-intake.md) | Incident fast lane and tracker intake | accepted (Decision 2; Decision 1 remains provisional) |
 | [0031](0031-omp-trigger-eval-adapter.md) | The trigger eval drives omp too; results are harness-marked | accepted |
 | [0032](0032-factory-dispatch-plane.md) | Factory dispatch plane: issues mirror breakdown rows one-way | superseded in part by ADR-0083 (the beads clause; amended by ADR-0035) |
-| [0033](0033-three-human-gates.md) | Three human gates: PRD, blueprint, merge | amended by ADR-0036 |
+| [0033](0033-three-human-gates.md) | Three human gates: PRD, blueprint, merge | amended by ADR-0087 (and earlier by ADR-0036) |
 | [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | amended by ADR-0084 (and earlier by ADR-0041) |
 | [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | superseded in part by ADR-0083 (the beads carve-out) |
 | [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | amended by ADR-0085 |
@@ -107,3 +107,4 @@ the canonical vocabulary.
 | [0084](0084-the-cost-ledger-keys-a-run-by-issue-when-it-has-no-work-order.md) | The cost ledger keys a run by its issue when it has no work order | accepted |
 | [0085](0085-an-owner-answer-executed-by-the-conductor-is-the-human-merge.md) | An Owner answer executed by the Conductor is the human merge | amended by ADR-0086 |
 | [0086](0086-standing-consent-may-cover-a-conductor-merge.md) | Standing consent may cover a Conductor merge | accepted |
+| [0087](0087-a-queue-profile-may-opt-in-to-implement-queue-auto-merge.md) | A queue profile may opt in to implement-queue auto-merge | accepted |
