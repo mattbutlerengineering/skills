@@ -376,6 +376,147 @@ class TestNext(unittest.TestCase):
             [PLAN, ask_row("ask-1"), answer_row("ask-1")]))
 
 
+ITEM_PLAN = {**PLAN, "items": [{"item": "#12", "type": "fix"},
+                               {"item": "#13", "type": "order"}]}
+
+
+def state(frm, to, reason="moved", **fields):
+    return {"at": AT, "kind": "state", "item": "#12", "from": frm, "to": to,
+            "reason": reason, **fields}
+
+
+def run(run_id, step="build", outcome="completed"):
+    return {**MINIMAL["run"], "step": step, "run_id": run_id,
+            "outcome": outcome}
+
+
+def reserve(what, values, renumbered_from=None):
+    row = {"at": AT, "kind": "reserve", "item": "#12", "what": what,
+           "values": values}
+    if renumbered_from is not None:
+        row["renumbered_from"] = renumbered_from
+    return row
+
+
+STALL = state("build", "stalled", "its runner is gone")
+
+
+class TestItemView(unittest.TestCase):
+    """The batch ledger's one reading interface (issue #694): plain
+    read-only data, ordered by ledger position."""
+
+    def item(self, *rows, item="#12"):
+        return conductor.item_view([ITEM_PLAN, *rows], item)
+
+    def test_reads_an_items_rows_into_its_fields(self):
+        launched = state("planned", "build", "launched",
+                         run_id="r-1", pid=7)
+        found = self.item(launched, run("r-1"), ask_row("ask-1"),
+                          run("r-2", step="review"))
+        self.assertEqual(found["entry"], ITEM_PLAN["items"][0])
+        self.assertIsNone(found["unknown"])
+        self.assertEqual(found["state"], "build")
+        self.assertEqual(found["last"], launched)
+        self.assertEqual(found["states"], (launched,))
+        self.assertEqual(found["runs"], (run("r-1"), run("r-2", "review")))
+        self.assertEqual(found["asks"], (ask_row("ask-1"),))
+        self.assertEqual(found["pending"], ask_row("ask-1"))
+        self.assertEqual(found["finishing"], run("r-1"))
+        self.assertFalse(found["in_flight"])
+        self.assertTrue(found["completed"])
+        self.assertEqual(found["author_runs"], ("r-1",))
+
+    def test_a_launch_with_no_finishing_run_is_in_flight(self):
+        found = self.item(state("planned", "build", "launched",
+                                run_id="r-1", pid=7))
+        self.assertIsNone(found["finishing"])
+        self.assertTrue(found["in_flight"])
+        self.assertFalse(found["completed"])
+
+    def test_an_item_with_no_rows_is_planned(self):
+        found = self.item(item="#13")
+        self.assertEqual((found["state"], found["last"], found["states"]),
+                         ("planned", None, ()))
+        self.assertFalse(found["in_flight"] or found["retry"])
+
+    def test_equal_valued_state_rows_resolve_by_ledger_position(self):
+        # The second stall equals the first row for row: a retry answer
+        # between them answered the first stall, never the second.
+        found = self.item(STALL, ask_row("ask-1", ask_kind="stall"),
+                          answer_row("ask-1", "retry"),
+                          state("stalled", "build"), STALL)
+        self.assertIsNone(found["resumed"])
+        self.assertFalse(found["retry"])
+
+    def test_a_retry_answer_counts_only_after_the_stall(self):
+        before = self.item(ask_row("ask-1", ask_kind="stall"),
+                           answer_row("ask-1", "retry"), STALL)
+        after = self.item(STALL, ask_row("ask-1", ask_kind="stall"),
+                          answer_row("ask-1", "retry-up"))
+        self.assertEqual((before["resumed"], before["retry"]), (None, False))
+        self.assertEqual(after["resumed"], answer_row("ask-1", "retry-up"))
+        self.assertTrue(after["retry"])
+
+    def test_a_block_answer_resumes_nothing(self):
+        found = self.item(STALL, ask_row("ask-1", ask_kind="stall"),
+                          answer_row("ask-1", "block"))
+        self.assertFalse(found["retry"])
+
+    def test_a_pending_ask_blocks_retry(self):
+        found = self.item(STALL, ask_row("ask-1", ask_kind="stall"),
+                          answer_row("ask-1", "retry"),
+                          ask_row("ask-2", ask_kind="clarify"))
+        self.assertEqual(found["pending"], ask_row("ask-2",
+                                                   ask_kind="clarify"))
+        self.assertFalse(found["retry"])
+
+    def test_the_latest_gate_answer_is_read(self):
+        found = self.item(ask_row("ask-1", ask_kind="gate"),
+                          answer_row("ask-1", "block"),
+                          ask_row("ask-2", ask_kind="gate"),
+                          answer_row("ask-2", "approve"))
+        self.assertEqual(found["gate"], answer_row("ask-2", "approve"))
+
+    def test_the_live_block_is_the_union_less_what_was_renumbered(self):
+        found = self.item(reserve("prd", [3, 4]), reserve("adr", [7, 8]),
+                          reserve("adr", [12], renumbered_from=[7]))
+        self.assertEqual(found["reserved"], {"prd": (3, 4), "adr": (8, 12)})
+
+    def test_an_unknown_item_reads_with_a_ready_made_problem(self):
+        found = self.item(item="#99")
+        self.assertIsNone(found["entry"])
+        self.assertEqual(found["unknown"],
+                         "cd: #99 is not an item of this batch's plan")
+        self.assertEqual(found["state"], "planned")
+
+    def test_the_batch_view_holds_plan_answers_and_the_queue_head(self):
+        rows = [ITEM_PLAN, ask_row("ask-1"), answer_row("ask-1"),
+                ask_row("ask-2", item="#13")]
+        found = conductor.view(rows)
+        self.assertEqual(found["plan"], ITEM_PLAN)
+        self.assertEqual(found["answers"], {"ask-1": answer_row("ask-1")})
+        self.assertEqual(found["next_ask"], ask_row("ask-2", item="#13"))
+        self.assertEqual(set(found["items"]), {"#12", "#13"})
+        self.assertEqual(found["items"]["#12"],
+                         conductor.item_view(rows, "#12"))
+
+    def test_a_read_leaves_the_rows_unchanged(self):
+        rows = [ITEM_PLAN, STALL, ask_row("ask-1", ask_kind="stall"),
+                answer_row("ask-1", "retry"), reserve("adr", [7]),
+                reserve("adr", [12], renumbered_from=[7])]
+        before = json.dumps(rows)
+        conductor.view(rows)
+        conductor.item_view(rows, "#12")
+        self.assertEqual(json.dumps(rows), before)
+        self.assertEqual(len(rows), 6)
+
+    def test_a_non_contiguous_block_renders_each_run(self):
+        from conductor_plan import span
+        self.assertEqual(span([7]), "7")
+        self.assertEqual(span([7, 8, 9]), "7-9")
+        self.assertEqual(span([3, 4, 8, 12, 13]), "3-4,8,12-13")
+
+
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                unittest.TestCase):
     usage_fragment = "python3 conductor.py"

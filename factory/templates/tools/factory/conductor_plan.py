@@ -205,9 +205,17 @@ def plan_batch(issues, owner, config, spent, highest, agents_dir):
 
 
 def span(values):
-    """A reserved block's numbers as `n` or `first-last`."""
-    return (str(values[0]) if len(values) == 1
-            else f"{values[0]}-{values[-1]}")
+    """A reserved block's sorted numbers as `n` or `first-last` per
+    contiguous run, runs joined by commas: a renumbered live block need
+    not be contiguous (#694)."""
+    runs = []
+    for value in values:
+        if runs and value == runs[-1][1] + 1:
+            runs[-1] = (runs[-1][0], value)
+        else:
+            runs.append((value, value))
+    return ",".join(str(first) if first == last else f"{first}-{last}"
+                    for first, last in runs)
 
 
 def compose_plan(plan):
