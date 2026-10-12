@@ -424,6 +424,52 @@ def is_keepable(dest):
                 or dest.as_posix() in EXECUTABLE_SEEDS)
 
 
+# A workflow step's `run:` key, inline or as a list item; group 1 is
+# everything before `run`, so its length is the key's column.
+_RUN_KEY = re.compile(r"^(\s*(?:-\s+)?)run:\s*(.*)$")
+# A block scalar header (`|`, `>-`, `|2` ...), with an optional comment.
+_BLOCK_SCALAR = re.compile(r"^[|>][+-]?\d*\s*(#.*)?$")
+_SHELL_COMMENT = re.compile(r"(^|\s)#.*")
+_SHELL_OPERATOR = re.compile(r"&&|\|\||[;|]")
+_MAKE_CALL = re.compile(r"make\s+([a-z][a-z0-9-]*)")
+
+
+def _run_commands(text):
+    """The shell lines of every `run:` key in a workflow: the inline value,
+    or each line of its block scalar (those indented past the key)."""
+    lines, commands, i = text.splitlines(), [], 0
+    while i < len(lines):
+        match = _RUN_KEY.match(lines[i])
+        i += 1
+        if not match:
+            continue
+        if not _BLOCK_SCALAR.match(match.group(2)):
+            commands.append(match.group(2))
+            continue
+        column = len(match.group(1))
+        while i < len(lines) and (not lines[i].strip() or len(
+                lines[i]) - len(lines[i].lstrip()) > column):
+            commands.append(lines[i])
+            i += 1
+    return commands
+
+
+def make_calls(text):
+    """The make targets a workflow calls: `make <target>` as the command
+    word of a `run:` line or of a segment after a shell operator. Prose
+    anywhere else (a prompt, a name, a description) and shell comments
+    are not calls: a consumer workflow saying "so make the best backlog
+    candidates ready" reported a phantom `make the` target (#702)."""
+    targets = set()
+    for command in _run_commands(text):
+        for segment in _SHELL_OPERATOR.split(
+                _SHELL_COMMENT.sub("", command)):
+            match = _MAKE_CALL.match(segment.strip().lstrip("'\""))
+            if match:
+                targets.add(match.group(1))
+    return targets
+
+
 def missing_make_targets(target):
     """Targets the stamped workflows call that the repo's Makefile lacks.
 
@@ -432,7 +478,8 @@ def missing_make_targets(target):
     that adds a target
     (wo-failed, ADR-0045) leaves a repo whose refreshed assembler.yml calls
     a target its Makefile has never heard of. Nothing else reports that
-    until the workflow runs in anger.
+    until the workflow runs in anger. Only real calls count (make_calls):
+    a consumer repo's own workflows sit in the same directory.
     """
     makefile = target / "Makefile"
     if not makefile.is_file():
@@ -443,12 +490,7 @@ def missing_make_targets(target):
     workflows = target / ".github" / "workflows"
     called = set()
     for path in sorted(workflows.glob("*.yml")) if workflows.is_dir() else []:
-        # comment lines describe the convention ("every step goes through a
-        # `make` target") and would otherwise read as a call
-        body = "\n".join(line for line in
-                         path.read_text(encoding="utf-8").splitlines()
-                         if not line.lstrip().startswith("#"))
-        called.update(re.findall(r"\bmake\s+([a-z][a-z0-9-]*)", body))
+        called |= make_calls(path.read_text(encoding="utf-8"))
     return [f"factory-init: workflows call `make {name}` but the Makefile"
             f" has no {name} target (add it, or re-stamp the Makefile)"
             for name in sorted(called - defined)]
