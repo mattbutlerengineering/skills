@@ -317,6 +317,17 @@ class TestClose(unittest.TestCase):
             ["issue", "comment", "13", "--body", "Blocked in conductor"
              " batch b1: answer to ask-3: block"]])
 
+    def test_a_prefix_sharing_batchs_spend_row_is_not_carried(self):
+        # Batch b1-13-x's item #5 shares #13's old prefix conductor-b1-13-
+        # (#735); its spend row on #13's branch is not this batch's.
+        other = spend("conductor-b1-13-x-5-spec-1", 7.0, "#5")
+        summary, problems = self.close(
+            ROWS, branch_costs=BLOCKED_SPEND + [other])
+        self.assertEqual(problems, [])
+        costs = (self.root / COSTS).read_text().splitlines()
+        self.assertEqual([json.loads(line)["run_id"] for line in costs[-2:]],
+                         ["conductor-b1-13-spec-1", "conductor-b1-13-build-1"])
+
     def test_a_failing_scorecard_leaves_scorecards_byte_identical(self):
         summary, problems = self.close(ROWS, costs=SPEND[:3])
         self.assertIsNone(summary)

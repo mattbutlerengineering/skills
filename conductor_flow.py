@@ -25,8 +25,8 @@ import conductor_consent as consent
 import factory_config
 from cli import CLI_FAILURES, detail
 from conductor import (BLOCK, COMPLETED, TERMINAL, answers, append,
-                       ask_row, current_state, item_view, load, next_ask,
-                       parsed_at, stamp, view)
+                       ask_row, current_state, item_branch, item_view, load,
+                       next_ask, parsed_at, stamp, view)
 
 STEPS = ("spec", "build", "verify", "review", "ship")
 SEQUENCE = ("planned", "spec", "awaiting-gate", "build", "verify",
@@ -50,11 +50,6 @@ GATE_PATH = re.compile(r"docs/adr/.+|docs/design/.+|(?:.+/)?"
                        r"(?:prd|architecture)\.md")
 UNCHECKED_ROW = re.compile(r"- \[ \] .*")
 VERDICTS = ("pass", "changes")
-
-
-def item_branch(batch, item):
-    """The item's branch (Owner, 2026-10-10): conductor/<batch>-<n>."""
-    return f"conductor/{batch}-{item[1:]}"
 
 
 def consents(rows, item):
