@@ -30,6 +30,13 @@ problem strings; the CLI prints them and exits nonzero.
                     destination resolving outside the target, and any
                     existing destination file — no partial stamps, no
                     overwrites, no writes outside the target tree.
+  stamp --keep-existing <target>
+                    the same stamp, except an existing curated seed
+                    (CODEOWNERS, factory.json, labels.json, ADR and
+                    design doc seeds — see is_keepable) is kept as the
+                    target's own and reported, not refused. Any
+                    collision in the executable payload is still
+                    refused, and nothing is overwritten.
 """
 import json
 import re
@@ -354,20 +361,39 @@ def payload_copies(source, target):
     return (copies, []) if not escapes else ([], escapes)
 
 
-def stamp(source, target):
-    """Stamp the source payload into target; refuse drift and overwrites."""
+def _stamp(source, target, keepable):
+    """(kept, problems): stamp every copy whose destination is absent.
+    An existing destination is kept when keepable(dest) says so and is a
+    clash otherwise; any clash refuses the whole stamp before a write."""
     source, target = Path(source), Path(target)
     copies, problems = payload_copies(source, target)
     if problems:
-        return problems
+        return [], problems
+    existing = [dest for _, dest in copies if (target / dest).exists()]
     clashes = [f"factory-init: target already has {dest.as_posix()}"
-               for _, dest in copies if (target / dest).exists()]
+               for dest in existing if not keepable(dest)]
     if clashes:
-        return clashes
+        return [], clashes
     for src, dest in copies:
+        if dest in existing:
+            continue
         (target / dest).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, target / dest)
-    return []
+    return sorted(dest.as_posix() for dest in existing), []
+
+
+def stamp(source, target):
+    """Stamp the source payload into target; refuse drift and overwrites."""
+    return _stamp(source, target, lambda dest: False)[1]
+
+
+def stamp_keeping(source, target):
+    """(kept, problems): stamp, keeping the target's own copy of any
+    curated seed it already has (is_keepable) instead of refusing it
+    (#701). A consumer repo with its own CODEOWNERS or ADR index can then
+    adopt the factory. An executable-payload collision is still refused,
+    and nothing is ever overwritten."""
+    return _stamp(source, target, is_keepable)
 
 
 # Factory-owned destinations: the executable payload plus the pristine
@@ -381,6 +407,21 @@ FACTORY_OWNED = ("tools/factory/", ".github/workflows/", "factory/")
 
 def is_factory_owned(dest):
     return dest.as_posix().startswith(FACTORY_OWNED)
+
+
+# The one destination outside FACTORY_OWNED that is executable: update
+# keeps the repo's Makefile, but the stamped workflows call only make
+# targets, so a first stamp cannot adopt a Makefile it never wrote.
+EXECUTABLE_SEEDS = ("Makefile",)
+
+
+def is_keepable(dest):
+    """A curated, non-executable seed (CODEOWNERS, factory.json,
+    labels.json, the ADR and design doc seeds): what stamp_keeping may
+    leave as the target's own copy. Derived from FACTORY_OWNED, so a new
+    payload directory is executable unless that split says otherwise."""
+    return not (is_factory_owned(dest)
+                or dest.as_posix() in EXECUTABLE_SEEDS)
 
 
 def missing_make_targets(target):
@@ -457,6 +498,11 @@ def main(argv):
         problems = update_manifest(root)
     elif len(argv) == 2 and argv[0] == "stamp":
         problems = stamp(root, Path(argv[1]))
+    elif argv[:2] == ["stamp", "--keep-existing"] and len(argv) == 3:
+        kept, problems = stamp_keeping(root, Path(argv[2]))
+        for rel in kept:
+            print(f"factory-init: kept {rel} (yours — the stamp did not"
+                  " write it)")
     elif len(argv) == 2 and argv[0] == "update":
         written, kept, problems = update(root, Path(argv[1]))
         for rel in kept:

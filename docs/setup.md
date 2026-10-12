@@ -45,6 +45,22 @@ target — one problem line per refusal, no partial stamps. That last refusal is
 strict: a repo that already has `docs/adr/README.md` cannot be stamped without
 moving the conflict out of the way first.
 
+A repo with curated files of its own can opt in instead (#701):
+
+```
+python3 factory_init.py stamp --keep-existing <path-to-target-repo>
+```
+
+It keeps the target's own copy of every curated, non-executable seed already
+there (`.github/CODEOWNERS`, `.github/factory.json`, `.github/labels.json`,
+the `docs/adr/` and `docs/design/` seeds) and prints one
+`factory-init: kept <path>` line per file. It still refuses any collision in
+the executable payload (`tools/factory/`, `.github/workflows/`, the `factory/`
+mirror, the `Makefile`) and never overwrites. Kept files are yours, so the
+checks in section 4 apply to them as they stand: a kept `labels.json` must
+carry the labels detector J names, and a kept `CODEOWNERS` needs the factory's
+gate paths added by hand.
+
 91 files land: the 45-file payload installed to its destinations, plus the
 pristine mirror it was stamped from. `factory/manifest.json` is the authority.
 
