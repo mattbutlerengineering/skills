@@ -135,7 +135,8 @@ as that PR's CI settles; it can overlap with workers still running.
 2. **Holds.** A `hold_labels` label on the PR or its issue ends the gate
    here: no review, no merge.
 3. **Fast path.** If the `fast-path` hook says the diff is low-risk
-   **and** no specialist reviewer matches it, skip step 4. If the hook
+   **and** no specialist reviewer matches it, skip step 4. That
+   classification counts as the review for the Merge policy (ADR-0088). If the hook
    cannot prove its own inputs are current (a stale build, an unreadable
    classifier), fail closed: review the PR and dispatch every specialist.
 4. **Review.** Dispatch the universal reviewer, plus each specialist
@@ -161,7 +162,9 @@ Under `merge: auto` (ADR-0087) the profile is the Owner's standing
 consent, and a PR that passes every gate step is enqueued with the
 `merge-command` hook. The consent never covers a PR that:
 
-- lacks a pass from a reviewer distinct from its author;
+- lacks a pass from a reviewer distinct from its author, unless it took
+  the fast path (step 3): the `fast-path` hook's low-risk
+  classification is the Owner's written review for it (ADR-0088);
 - lacks the `required_check` present and green;
 - carries a `hold_labels` label.
 - changes a file `gate_paths` matches.
