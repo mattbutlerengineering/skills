@@ -20,7 +20,8 @@ date: YYYY-MM-DD
 
 ## Passes with no findings
 
-<Which of correctness / design / security / complexity came back clean.>
+<Which of correctness / design / security / complexity / ADR compliance
+came back clean, and which domain passes ran clean or were not selected.>
 
 ## Verdict
 

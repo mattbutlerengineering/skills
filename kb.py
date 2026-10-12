@@ -13,6 +13,10 @@ a cited source changed in git since the page's verified commit.
   python3 kb.py index [root]   write the inline index
   python3 kb.py lint [root]    check the knowledge base
   python3 kb.py stats [root]   page count, index size, page lengths (JSON)
+  python3 kb.py drift [root]   instruction-file drift (kb_drift.py)
+  python3 kb.py harvest [root] [--days N] [--session ID]
+                               transcript candidates for ingest (JSON;
+                               kb_harvest.py)
 
 Root defaults to the working directory, the way the skill invokes it.
 Not to be confused with knowledge_plane.py: the knowledge plane is the
@@ -25,6 +29,8 @@ import sys
 from pathlib import Path
 
 import cli
+import kb_drift
+import kb_harvest
 from protocol import read_frontmatter
 
 LABEL = "kb"
@@ -245,11 +251,19 @@ def stats(root):
                 encoding="utf-8").splitlines()) for p in every}}, []
 
 
-USAGE = "usage: kb.py index|lint|stats [root]"
+USAGE = ("usage: kb.py index|lint|stats|drift [root]\n"
+         "       kb.py harvest [root] [--days N] [--session ID]"
+         " [--projects-dir DIR]")
 
 
 def main(argv):
-    """`python3 kb.py <index|lint|stats> [root]`."""
+    """`python3 kb.py <index|lint|stats> [root]`, or `drift [root]`
+    (kb_drift.py), or `harvest`, which takes its own flags
+    (kb_harvest.py)."""
+    if argv and argv[0] == "harvest":
+        return kb_harvest.main(argv[1:])
+    if argv and argv[0] == "drift":
+        return kb_drift.main(argv[1:])
     if not argv or argv[0] not in ("index", "lint", "stats") or len(argv) > 2:
         print(USAGE)
         return 2

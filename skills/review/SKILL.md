@@ -21,7 +21,7 @@ arbitrate severity.
 3. **Scope the diff.** The review covers what this run changed — the diff
    since the run began, not the whole repo.
 
-4. **Review in four passes:**
+4. **Review in five passes:**
    - **Correctness** — logic errors, unhandled failure modes, edge cases the
      tests missed. For each suspected bug, state the concrete failure
      scenario (inputs → wrong behavior); a bug you can't scenario-ize is a
@@ -41,23 +41,35 @@ arbitrate severity.
      adds must name its ceiling and its trigger; one that names no trigger
      is a finding. A concern about a module's shape rather than its size is
      handed to `deepen` in one line — never refactored here.
+   - **ADR compliance** — check the diff against every live ADR in the
+     target repo, per `references/adr-compliance.md`. Which ADRs are live
+     comes from the shipped `adr_status.py` tool, never from your own
+     reading of status lines. Each violation is a finding naming its
+     ADR id.
 
-5. **Load applicable standards.** Read `../../docs/standards.json` if
+5. **Run the domain passes the diff selects.** Match the changed paths
+   against the table in `references/domain-reviewers.md`, and run each
+   selected pass from its reference: `references/payments.md`,
+   `references/migrations.md`, `references/dependencies.md`. Their
+   findings join the others in the same ranking. With no match, record
+   that no domain pass was selected.
+
+6. **Load applicable standards.** Read `../../docs/standards.json` if
    present (an unbootstrapped repo has none yet — proceed). Filter to
    statements whose `domain` matches what the diff touches: `factory` for
    root-tool/`factory/**` changes, `pipeline` or `docs` for skill-body/
    `docs/**` changes, `eval` for eval-set/harness changes. A finding that
    matches a filtered statement cites its `slug`.
 
-6. **Rank and verify.** Order findings by severity (critical / major /
+7. **Rank and verify.** Order findings by severity (critical / major /
    minor). Re-read the code for each before writing it down — a false
    finding costs more trust than it's worth.
 
-7. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
+8. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `review.md` with protocol frontmatter. Record
    what was examined, findings, and the fix/defer decision per finding.
 
-8. **Fix loop.** Critical findings — and any unresolved finding that cites
+9. **Fix loop.** Critical findings — and any unresolved finding that cites
    an `enforced` standards-index statement, whatever severity it was ranked
    at — are fixed before Ship (route to Implement for anything non-trivial,
    then re-verify); the enforced-statement trigger sits alongside the
@@ -65,7 +77,7 @@ arbitrate severity.
    are fixed or explicitly deferred by the user. Minors, and findings
    against `advisory` statements, may be deferred freely.
 
-9. **Hand off.** Next stage is Ship.
+10. **Hand off.** Next stage is Ship.
 
 ## Rules
 

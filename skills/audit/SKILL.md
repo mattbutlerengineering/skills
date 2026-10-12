@@ -64,6 +64,7 @@ Scope follows the invocation:
 | bare | every category, hotspot-weighted by churn and criticality |
 | `audit <category>` | recon, then that category only |
 | `audit branch` | files changed since the merge-base with the default branch, plus their direct callers — tag each finding `introduced` or `pre-existing` and separate them in the table |
+| `audit claims` | human-facing markdown only: is the prose still true? Work [`references/markdown-claims.md`](references/markdown-claims.md) instead of the playbook — a shipped deterministic pass (`md_claims.py`) settles links, paths and commands by lookup first, then you judge what a lookup cannot. It also runs headless from CI; that file has the contract and an example workflow |
 
 When the harness can spawn read-only subagents and the tree is big enough
 to warrant it, fan out one per category cluster. **A subagent inherits none
