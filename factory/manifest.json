@@ -26,7 +26,7 @@
     "templates/tools/factory/budget_guard.py": "f4e3abe3dfc820d3f397efc463f6d229925d33acf7625bde59fcc92bf6db20b4",
     "templates/tools/factory/cli.py": "aac42d644a206ca2c12de92285721131d36d4a8b084ebe5eb4a5413afe12d6c2",
     "templates/tools/factory/conductor.py": "6845d86b2d30319b9fb5e2488cc3e60b887251f78c3bb994a4a44f004a5a80c2",
-    "templates/tools/factory/conductor_close.py": "86252f527abb85248a5a5deee852dcf8b293497136f933a4956deb0a64d15c53",
+    "templates/tools/factory/conductor_close.py": "3e18d6520daa8bdd1511d33e141f69c992282740a40f6adbbd315305645fc312",
     "templates/tools/factory/conductor_consent.py": "14f3c5d0359ee2d85296737e98392b29ac0d2c5ee56265161c5f2698a61c6941",
     "templates/tools/factory/conductor_flow.py": "b50644dbc958e34bb8343b88de7188397a05e4998e07b7f14603cba5a5dbc5fd",
     "templates/tools/factory/conductor_merge.py": "3ba4f7ad19cc37f0ad64e44678bcc95e9fa254d47d5a9ed41ec9e38a8804dee9",
