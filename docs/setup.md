@@ -197,8 +197,15 @@ supported; run discovery would not find them.
 Coordinating several issues at once — fanning out agents, choosing a
 model and effort per step, ordering merges — is the `conduct` utility
 skill and its root tool `conductor.py` (PRD-0013,
-`docs/features/orchestrator/`). The tool is root-only, so the skill runs
-in this repository, not in a stamped product repo. `work-queue` still
+`docs/features/orchestrator/`). The payload ships it, so a stamped repo
+runs `tools/factory/conductor.py`, passing this plugin's charter stubs
+with `--agents` (#678). Its optional `conductor` table in
+`.github/factory.json` names the repo's gate command, the
+standing-consent policy, and `type_labels`: a map from the repo's own
+issue labels to `feature` or `fix` (#700). Without that map an issue
+plans by its first `type:` label. With it, only mapped labels count, and
+an issue whose labels map to both types is deferred rather than
+guessed. Detector F checks the table. `work-queue` still
 fans out ready work orders through one stage, and `autorun` still drives
 one run end to end. One step needs no Conductor: turn on the merge queue
 ADR-0070 already chose, if the repo's plan allows it; the merge turn uses

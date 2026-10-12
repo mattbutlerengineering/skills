@@ -68,6 +68,114 @@ class TestGateCommandConfig(unittest.TestCase):
                          (["make", "check"], []))
 
 
+TYPE_LABELS = {"feature": "feature", "ci-fix": "fix", "bug": "fix"}
+
+
+def labelled(type_labels):
+    return dict(CONFIG, conductor={"type_labels": type_labels})
+
+
+class TestTypeLabels(unittest.TestCase):
+    """A consumer repo labels its issues its own way (#700): factory.json's
+    optional conductor.type_labels maps those labels to item types.
+    Absent, the type: rule is unchanged."""
+
+    def plan(self, issues, config):
+        import conductor_plan
+        return conductor_plan.plan_batch(issues, "matt", config, 0.0,
+                                         {"prd": 0, "adr": 0, "wo": 0},
+                                         AGENTS)
+
+    def test_the_map_values_are_plannable_issue_types(self):
+        import conductor_plan
+        self.assertEqual(set(factory_config.LABEL_ITEM_TYPES),
+                         set(conductor_plan.TYPE_BY_LABEL.values()))
+        self.assertLessEqual(set(factory_config.LABEL_ITEM_TYPES),
+                             set(conductor_plan.ITEM_STEPS))
+
+    def test_an_absent_map_resolves_to_none(self):
+        self.assertEqual(factory_config.resolve_type_labels({}), (None, []))
+        self.assertEqual(factory_config.resolve_type_labels(
+            {"conductor": {"gate_command": "make check"}}), (None, []))
+
+    def test_a_configured_map_resolves_to_itself(self):
+        self.assertEqual(factory_config.resolve_type_labels(
+            {"conductor": {"type_labels": TYPE_LABELS}}),
+            (TYPE_LABELS, []))
+
+    def test_a_malformed_map_is_an_exact_problem(self):
+        for table, problems in (
+                ([], ["conductor.type_labels must map label names to"
+                      " feature or fix"]),
+                ({"feature": "story"},
+                 ["conductor.type_labels.feature must be feature or fix"]),
+                ({"ci-fix": "order", "chore": 1},
+                 ["conductor.type_labels.ci-fix must be feature or fix",
+                  "conductor.type_labels.chore must be feature or fix"]),
+                ({" ": "fix", 3: "fix"},
+                 ["conductor.type_labels keys must be non-blank label"
+                  " names"])):
+            with self.subTest(table=table):
+                self.assertEqual(factory_config.config_problems(
+                    {"wip_cap": 1, "monthly_cap_usd": 1,
+                     "conductor": {"type_labels": table}}), problems)
+                self.assertEqual(factory_config.resolve_type_labels(
+                    {"conductor": {"type_labels": table}}),
+                    (None, [f"config: factory.json {problem}"
+                            for problem in problems]))
+
+    def test_detector_f_reports_a_bad_map(self):
+        import gates
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, ".github").mkdir()
+            Path(tmp, ".github/factory.json").write_text(json.dumps(
+                labelled({"ci-fix": "defect"})))
+            self.assertEqual(gates.check_config_shape(Path(tmp)), [
+                "F: .github/factory.json conductor.type_labels.ci-fix"
+                " must be feature or fix"])
+
+    def test_the_consumers_labels_plan_items(self):
+        result, problems = self.plan(
+            [issue(1, ("feature", "size:M")),
+             issue(2, ("ci-fix", "size:S", "frontend")),
+             issue(3, ("bug", "ci-fix", "size:S"))],
+            labelled(TYPE_LABELS))
+        self.assertEqual(problems, [])
+        self.assertEqual([(i["item"], i["type"]) for i in result["items"]],
+                         [("#1", "feature"), ("#2", "fix"), ("#3", "fix")])
+        self.assertEqual(result["deferred"], [])
+
+    def test_a_map_replaces_the_type_rule(self):
+        result, _ = self.plan(
+            [issue(1, ("type:feature", "size:M")),
+             issue(2, ("frontend", "size:S"))], labelled(TYPE_LABELS))
+        self.assertEqual(result["items"], [])
+        self.assertEqual(result["deferred"], [
+            "#1 deferred: no label maps to an item type"
+            " (conductor.type_labels)",
+            "#2 deferred: no label maps to an item type"
+            " (conductor.type_labels)"])
+
+    def test_labels_naming_two_types_defer(self):
+        result, _ = self.plan([issue(1, ("ci-fix", "feature", "size:S"))],
+                              labelled(TYPE_LABELS))
+        self.assertEqual(result["deferred"], [
+            "#1 deferred: its labels map to more than one item type"
+            " (ci-fix -> fix, feature -> feature)"])
+
+    def test_the_ready_label_still_makes_an_order(self):
+        result, _ = self.plan(
+            [issue(1, ("feature", "wo:ready-for-agent", "size:S"))],
+            labelled(TYPE_LABELS))
+        self.assertEqual([i["type"] for i in result["items"]], ["order"])
+
+    def test_a_bad_map_plans_nothing(self):
+        self.assertEqual(self.plan([issue(1)], labelled({"x": "chore"})),
+                         (None, ["config: factory.json"
+                                 " conductor.type_labels.x must be feature"
+                                 " or fix"]))
+
+
 class TestWorkerGate(RunCase):
     def config(self, cap, gate=None):
         path = self.root / ".github/factory.json"
