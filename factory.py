@@ -36,6 +36,7 @@ import sys
 # — a main whose slot merely carries a default must still be routed
 # "argv", or calling it bare leaves it reading THIS process's sys.argv.
 VERBS = {
+    "adr-status": ("adr_status", "argv"),
     "assembler": ("assembler", "argv"),
     "board": ("board", "argv"),
     "budget-guard": ("budget_guard", "argv"),
