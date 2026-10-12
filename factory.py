@@ -51,6 +51,7 @@ VERBS = {
     "label-sync": ("label_sync", "argv"),
     "launch-demo": ("launch_demo", "argv"),
     "lint": ("lint", "bare"),
+    "md-claims": ("md_claims", "argv"),
     "one-owner": ("one_owner", "argv"),
     "rejection-mining": ("rejection_mining", "argv"),
     "standards-index": ("standards_index", "argv"),

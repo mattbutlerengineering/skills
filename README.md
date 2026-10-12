@@ -91,7 +91,7 @@ table's Moment column.
 
 | Skill | Moment | Why it matters |
 |-------|--------|----------------|
-| `audit` | Before a run exists | Finds what to improve when no defect is named: read-only, every finding reproduced before it is reported, each routed to a backlog seed or a run. |
+| `audit` | Before a run exists | Finds what to improve when no defect is named: read-only, every finding reproduced before it is reported, each routed to a backlog seed or a run. Its claims scope checks whether the docs are still true — the shipped md_claims.py settles links, paths and commands by lookup, then a judgement pass that also runs headless from CI. |
 | `automate` | Before a run exists | Recommends the hooks, subagents, skills and MCP servers a repo is missing, each priced and tied to a friction it removes; never scaffolds them. |
 | `knowledge-base` | Before a run exists | Keeps the project facts an agent cannot get from the code (invariants, gotchas, the why with its ADR) in `docs/kb/`, indexed inline in CLAUDE.md or AGENTS.md by the shipped kb.py tool; ingest proposes itemised edits for a human to promote, and lint flags pages whose cited code changed since they were verified. |
 | `deepen` | Reshaping what's built | Finds shallow modules whose interfaces cost nearly as much to learn as their implementations, confirms each at its real call sites, and designs the deeper interface with you. |
