@@ -44,7 +44,11 @@ size label at all, and never settles a conflict.
 
 All batch state is the **batch ledger**
 (`docs/factory/batches/<batch>/ledger.jsonl`) on the batch branch
-`conductor/<batch>`. This skill carries nothing between turns.
+`conductor/<batch>`. This skill carries nothing between turns. Until
+`close` commits and pushes it, the ledger is an uncommitted file in the
+batch worktree, so open a batch from the repo's own checkout. A batch
+opened in a throwaway clone or a temp directory dies with that directory
+(#704).
 
 ## Process
 
