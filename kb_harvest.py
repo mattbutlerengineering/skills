@@ -22,6 +22,8 @@ the repo's absolute path with every non-alphanumeric character turned
 into `-` (older harnesses kept dots; paths past 200 characters are cut
 and given a hash suffix). Claude Code worktrees of the repo
 (`.claude/worktrees/*`) get their own slug beside it and are scanned too.
+Run from a linked worktree, the root resolves to the main checkout (the
+parent of git's common dir) first, so the same transcripts are found.
 
   python3 kb.py harvest [root] [--days N] [--session ID]
                         [--projects-dir DIR]
@@ -271,14 +273,30 @@ def mine(paths):
             "arcs": found, "recurring_errors": recurring(errors)}, problems
 
 
+def main_checkout(root):
+    """root's main checkout: the parent of git's common dir, so a linked
+    worktree finds the transcripts filed under the main checkout's slug
+    (#710). root itself when git cannot say (not a repo, no git), and
+    exactly as given when it already is the main checkout."""
+    root = Path(root).absolute()
+    try:
+        out = cli.runner("git")(["-C", str(root), "rev-parse",
+                                 "--path-format=absolute",
+                                 "--git-common-dir"]).stdout
+    except cli.CLI_FAILURES:
+        return root
+    main = Path(out.strip()).parent
+    return root if main == root.resolve() else main
+
+
 def harvest(root, projects=None, days=None, session=None, now=None):
     """(result, problems): the candidates in root's transcripts."""
     projects = Path(projects) if projects else projects_dir()
-    dirs = project_dirs(root, projects)
+    checkout = main_checkout(root)
+    dirs = project_dirs(checkout, projects)
     if not dirs:
         return None, [f"{LABEL}: no Claude Code transcripts for {root}"
-                      f" under {projects} (looked for"
-                      f" {slug(Path(root).absolute())})"]
+                      f" under {projects} (looked for {slug(checkout)})"]
     paths = select(dirs, days, session, time.time() if now is None else now)
     if session is not None and not paths:
         return None, [f"{LABEL}: no session transcript {session!r} in"

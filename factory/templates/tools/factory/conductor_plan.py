@@ -307,19 +307,35 @@ def compose_plan(plan):
     return lines
 
 
-def open_batch(root, batch, plan, now, git):
+def main_checkout(git):
+    """(the main checkout, problems): the parent of git's common dir, so
+    a command run from a linked worktree still anchors the Conductor's
+    worktrees at the main checkout, never nested inside itself (#710)."""
+    try:
+        out = git(["rev-parse", "--path-format=absolute",
+                   "--git-common-dir"]).stdout
+    except CLI_FAILURES as err:
+        return None, [f"cd: git rev-parse failed: {detail(err)}"]
+    return Path(out.strip()).parent, []
+
+
+def open_batch(batch, plan, now, git):
     """(the batch worktree, problems): create conductor/<batch> and its
-    worktree from origin/main, write the plan row and one reserve row per
-    block, and queue the spend ask. Refuses an empty plan, a bad batch
-    name and an existing worktree before git runs, and a name whose
-    ledger is already on origin/main before any worktree is made."""
+    worktree, under the main checkout, from origin/main, write the plan
+    row and one reserve row per block, and queue the spend ask. Refuses
+    an empty plan and a bad batch name before git runs, an existing
+    worktree before any git write, and a name whose ledger is already on
+    origin/main before any worktree is made."""
     if not (isinstance(batch, str) and BATCH_NAME.fullmatch(batch)):
         return None, [f"cd: batch {batch!r} is not a batch name"
                       " (lowercase letters, digits and hyphens)"]
     if not plan["items"]:
         return None, ["cd: nothing to open: every issue was deferred"]
+    checkout, problems = main_checkout(git)
+    if problems:
+        return None, problems
     shown = f"{WORKTREES}/conductor-{batch}"
-    worktree = Path(root) / shown
+    worktree = checkout / shown
     if worktree.exists():
         return None, [f"cd: {shown} already exists"]
     ledger_path = LEDGER.format(batch=batch)
@@ -435,7 +451,7 @@ def open_cli(root, args, now, run, git):
     if plan is None:
         return problems
     print("\n".join(compose_plan(plan)))
-    worktree, problems = open_batch(root, args[0], plan, now, git)
+    worktree, problems = open_batch(args[0], plan, now, git)
     if worktree is not None:
         print(f"cd: opened {worktree}")
     return problems

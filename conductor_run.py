@@ -31,7 +31,7 @@ from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
     read_execution
 from conductor import WORKER_ENV, answers, append, ask_row, current_state, \
     item_view, load, stamp, view
-from conductor_plan import span
+from conductor_plan import WORKTREES, main_checkout, span
 from knowledge_plane import WO_TOKEN
 from orientation_pack import orientation_pack
 from protocol import read_frontmatter
@@ -67,7 +67,7 @@ NO_PUSH = "/dev/null/conductor-worker-may-not-push/"
 WORKER_GIT_CONFIG = ((f"url.{NO_PUSH}.pushInsteadOf", "https://"),
                      (f"url.{NO_PUSH}.pushInsteadOf", "http://"),
                      ("credential.helper", ""))
-WORKTREE = ".claude/worktrees/conductor-{batch}-{n}"
+WORKTREE = WORKTREES + "/conductor-{batch}-{n}"
 RUNS = "docs/factory/batches/{batch}/runs"
 CEILING_OUTCOME = {"timeout": "killed:cost-at-ceiling",
                    "unaccounted": "unaccounted:cost-at-ceiling"}
@@ -272,12 +272,10 @@ def _work(rows, entry, step, git, gh, batch, worktree):
 
 def worktree_path(git, batch, item):
     """(the item worktree's path under the main checkout, problems)."""
-    out, problems = _git(git, ["rev-parse", "--path-format=absolute",
-                               "--git-common-dir"], "cd: git rev-parse")
+    checkout, problems = main_checkout(git)
     if problems:
         return None, problems
-    return Path(out.strip()).parent / WORKTREE.format(batch=batch,
-                                                      n=item[1:]), []
+    return checkout / WORKTREE.format(batch=batch, n=item[1:]), []
 
 
 def _worktree(git, batch, item):
