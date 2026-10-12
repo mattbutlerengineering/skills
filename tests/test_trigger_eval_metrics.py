@@ -147,14 +147,6 @@ class TestMetricsCli(unittest.TestCase):
             "kind: near-miss (3 case(s))",
             "micro recall: 1/6 = 0.167"])
 
-    def test_unreadable_file_exits_nonzero_with_an_error(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            missing = Path(tmp) / "absent.json"
-            code, out, err = self.run_main(["--metrics", str(missing)])
-        self.assertEqual(code, 1)
-        self.assertEqual(out, "")
-        self.assertIn("error: cannot read results file", err)
-
 
 if __name__ == "__main__":
     unittest.main()

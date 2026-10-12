@@ -380,10 +380,14 @@ def _deliver(git, gh, worktree, branch, item, batch):
 
 
 def _spend(git, worktree, wo, run_id, model, tokens, cost, outcome, now):
-    """Commit the run's one spend row on the item branch. A stall reason
-    on failure, else None."""
-    cost_ledger.append(worktree, cost_ledger.entry(
+    """Commit the run's one spend row on the item branch, written through
+    cost_ledger.record, the one guarded write (#736). A stall reason on
+    failure, else None."""
+    refused = cost_ledger.record(worktree, cost_ledger.entry(
         wo, run_id, model, tokens, cost, outcome, now.strftime("%Y-%m-%d")))
+    if refused:
+        return (f"refusing to record the spend row of {run_id}: "
+                + "; ".join(refused))
     for args in (["add", cost_ledger.COST_LEDGER],
                  ["commit", "-m", f"{SPEND_SUBJECT}{run_id}"]):
         _, problems = _git(git, ["-C", str(worktree), *args],

@@ -198,11 +198,13 @@ def update_from_main(git, root, branch):
 def carry_blocked_spend(git, root, batch, blocked):
     """Append to the batch branch's costs.jsonl every spend row a blocked
     item's branch holds for its runs and the batch branch lacks: so all
-    spend reaches main, and a re-run never appends a row twice."""
+    spend reaches main, and a re-run never appends a row twice. Lacking
+    is cost_ledger.row_key's identity (ADR-0049), and each row lands
+    through cost_ledger.record, the one guarded write (#736)."""
     entries, problems = cost_ledger.read(root)
     if problems:
         return problems
-    present = {entry["run_id"] for entry in entries}
+    present = {cost_ledger.row_key(entry) for entry in entries}
     for item in blocked:
         branch = flow.item_branch(batch, item)
         text, problems = _git(git, root, ["show", f"{branch}:"
@@ -215,9 +217,12 @@ def carry_blocked_spend(git, root, batch, blocked):
                 return [f"cd: {branch}:{cost_ledger.COST_LEDGER}:{lineno}"
                         f" {suffix}" for suffix in suffixes]
             if run_item(batch, entry["run_id"]) == item \
-                    and entry["run_id"] not in present:
-                cost_ledger.append(root, entry)
-                present.add(entry["run_id"])
+                    and cost_ledger.row_key(entry) not in present:
+                refused = cost_ledger.record(root, entry)
+                if refused:
+                    return [f"cd: close refused: {problem}"
+                            for problem in refused]
+                present.add(cost_ledger.row_key(entry))
     return []
 
 

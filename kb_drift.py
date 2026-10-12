@@ -39,6 +39,7 @@ import re
 from pathlib import Path
 
 import cli
+from knowledge_plane import local_link_targets
 from protocol import read_frontmatter
 
 LABEL = "drift"
@@ -64,7 +65,6 @@ SKIP_DIRS = frozenset((".git", "node_modules", ".venv", "venv",
                        "__pycache__", "dist", "build"))
 KEPT_HIDDEN = frozenset((".claude", ".github", ".claude-plugin"))
 SPAN = re.compile(r"`([^`\n]+)`")
-LINK = re.compile(r"\]\(([^)\s]+)\)")
 COMMAND = re.compile(r"(?:^|\s)(?:python3?|node|bash|sh|zsh|bun|deno|"
                      r"ruby|tsx)\s+(\S+)")
 SLASH = re.compile(r"^/([a-z][a-z0-9_-]*)(?::([a-z][a-z0-9_-]*))?(?:\s|$)")
@@ -224,7 +224,8 @@ class Disk:
 
 
 def _candidates(line, in_fence):
-    """(position, token as written) for every path-like token on a line."""
+    """Every path-like token on a line, as written: spans and commands in
+    line order, then its local links (knowledge_plane's link grammar)."""
     found = [(m.start(1), m.group(1)) for m in COMMAND.finditer(line)] \
         if in_fence else []
     if not in_fence:
@@ -234,13 +235,13 @@ def _candidates(line, in_fence):
                 found.append((span.start(1), text))
             found += [(span.start(1) + m.start(1), m.group(1))
                       for m in COMMAND.finditer(text)]
-        found += [(m.start(1), m.group(1)) for m in LINK.finditer(line)]
-    return sorted(found)
+    return [token for _, token in sorted(found)] + (
+        [] if in_fence else local_link_targets(line))
 
 
 def _path_problems(disk, rel, number, line, in_fence, base, ignored):
     problems = []
-    for _, written in _candidates(line, in_fence):
+    for written in _candidates(line, in_fence):
         token = path_token(written)
         if token and written not in ignored and token not in ignored \
                 and not disk.exists(token, base):
