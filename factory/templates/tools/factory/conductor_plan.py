@@ -110,7 +110,31 @@ def read_issues(numbers, run):
     return (None, problems) if problems else (issues, [])
 
 
-def _deferral(issue, labels, owner):
+def _item_type(labels, type_labels):
+    """(item type, reason) from the issue's labels. Without a configured
+    map, the first type: label decides through TYPE_BY_LABEL. With one
+    (factory.json conductor.type_labels, #700), every label it maps
+    counts, and labels mapping to two different types defer: guessing
+    which the Owner meant would price and step the item wrongly."""
+    if type_labels is None:
+        typed = [name for name in labels if name.startswith("type:")]
+        if not typed:
+            return None, "no type: label"
+        if typed[0] not in TYPE_BY_LABEL:
+            return None, f"{typed[0]} is not plannable"
+        return TYPE_BY_LABEL[typed[0]], None
+    mapped = [(name, type_labels[name]) for name in labels
+              if name in type_labels]
+    kinds = {kind for _, kind in mapped}
+    if not kinds:
+        return None, "no label maps to an item type (conductor.type_labels)"
+    if len(kinds) > 1:
+        named = ", ".join(f"{name} -> {kind}" for name, kind in mapped)
+        return None, f"its labels map to more than one item type ({named})"
+    return kinds.pop(), None
+
+
+def _deferral(issue, labels, owner, type_labels=None):
     """(item type, size, reason): reason is None for a plannable issue."""
     if (issue["state"] or "").upper() != "OPEN":
         return None, None, "closed"
@@ -121,12 +145,9 @@ def _deferral(issue, labels, owner):
     if assembler.READY_LABEL in labels:
         item_type = "order"
     else:
-        typed = [name for name in labels if name.startswith("type:")]
-        if not typed:
-            return None, None, "no type: label"
-        if typed[0] not in TYPE_BY_LABEL:
-            return None, None, f"{typed[0]} is not plannable"
-        item_type = TYPE_BY_LABEL[typed[0]]
+        item_type, reason = _item_type(labels, type_labels)
+        if reason is not None:
+            return None, None, reason
     size = next((name[len("size:"):] for name in labels
                  if name in ("size:S", "size:M", "size:L")), None)
     if size is None:
@@ -163,12 +184,16 @@ def plan_batch(issues, owner, config, spent, highest, agents_dir):
     cap, problems = factory_config.resolve_cap(config)
     if problems:
         return None, problems
+    type_labels, problems = factory_config.resolve_type_labels(config)
+    if problems:
+        return None, problems
     next_free = {kind: highest[kind] + 1 for kind in highest}
     items, deferred, total = [], [], 0
     for issue in issues:
         key = f"#{issue['number']}"
         labels = label_names(issue)
-        item_type, size, reason = _deferral(issue, labels, owner)
+        item_type, size, reason = _deferral(issue, labels, owner,
+                                             type_labels)
         if reason is None:
             estimate, found = factory_config.resolve_budget(size, config)
             problems += found

@@ -164,7 +164,14 @@ def resolve_cap(config):
 # OFF unless the table says otherwise: a Conductor merge with no Owner
 # answer, for an item that changes no gate-path file and, when
 # tier_labels is non-empty, whose issue carries one of them.
-CONDUCTOR_KEYS = ("gate_command", "standing_consent")
+#
+# And it holds the consumer's issue-label map (#700): `type_labels` maps
+# a label the repo already uses to the item type it plans as. Absent,
+# the Conductor's own type: rule applies unchanged; present, it replaces
+# that rule. The order type stays the ready label's alone, so the map's
+# values are the two issue-sized types.
+CONDUCTOR_KEYS = ("gate_command", "standing_consent", "type_labels")
+LABEL_ITEM_TYPES = ("feature", "fix")
 STANDING_KEYS = ("enabled", "tier_labels")
 DEFAULT_GATE_COMMAND = "make check"
 SHELL_OPERATOR = re.compile(r"[;&|<>`$\n]")
@@ -199,7 +206,21 @@ def conductor_problems(config):
                         " shell operators")
     if "standing_consent" in table:
         problems += _standing_problems(table["standing_consent"])
+    if "type_labels" in table:
+        problems += _type_label_problems(table["type_labels"])
     return problems
+
+
+def _type_label_problems(table):
+    prefix = "conductor.type_labels"
+    kinds = " or ".join(LABEL_ITEM_TYPES)
+    if not isinstance(table, dict):
+        return [f"{prefix} must map label names to {kinds}"]
+    if not all(isinstance(label, str) and label.strip() for label in table):
+        return [f"{prefix} keys must be non-blank label names"]
+    return [f"{prefix}.{label} must be {kinds}"
+            for label, kind in table.items()
+            if kind not in LABEL_ITEM_TYPES]
 
 
 def _standing_problems(policy):
@@ -232,6 +253,19 @@ def resolve_standing_consent(config):
     policy = config.get("conductor", {}).get("standing_consent", {})
     return {"enabled": policy.get("enabled", False),
             "tier_labels": list(policy.get("tier_labels", []))}, []
+
+
+def resolve_type_labels(config):
+    """(label -> item type, problems): factory.json's
+    conductor.type_labels, None when absent (the caller's type: rule
+    applies). A malformed table is a problem, never a default, so a typo
+    cannot silently plan or defer an issue."""
+    problems = conductor_problems(config)
+    if problems:
+        return None, [f"config: factory.json {problem}"
+                      for problem in problems]
+    table = config.get("conductor", {}).get("type_labels")
+    return (dict(table) if table is not None else None), []
 
 
 def resolve_gate_command(config):
