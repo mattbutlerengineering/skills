@@ -13,9 +13,17 @@ number reservation, the item state machine, the stall rule, the merge
 precondition and the scorecard. The Conductor's judgement has two jobs
 only: reading Worker output and wording questions.
 
-`conductor.py` is root-only: it is not in the factory payload. If the
-repo has no `conductor.py` at its root, stop and say so; do not
-improvise its rules.
+Find the tool before anything else. It is `conductor.py` at the root of
+this plugin's own repo, and `tools/factory/conductor.py` in a repo
+stamped by factory-init (the payload ships it). Every command below
+writes `python3 conductor.py`; in a stamped repo run
+`python3 tools/factory/conductor.py` instead. If the repo has neither,
+stop and say so: it needs `factory-init` (stamp, or update an older
+stamp). Do not improvise the tool's rules.
+
+The repo's `factory.json` (`.github/factory.json` when stamped) names
+its gate in `conductor.gate_command`; absent, it is `make check`.
+Workers may run that one command, and the merge turn runs it.
 
 All batch state is the **batch ledger**
 (`docs/factory/batches/<batch>/ledger.jsonl`) on the batch branch
@@ -38,6 +46,14 @@ It records any new stall and gate asks, then prints JSON with four keys:
 - `recorded`: the ids of asks it just wrote;
 - `merge_due`: shipped items waiting for a merge question you word.
 
+When the repo's `factory.json` turns on `conductor.standing_consent`
+(ADR-0086; off by default), `next` itself records standing consent for
+each shipped item the policy covers: no merge ask covers it, it changes
+no gate-path file, and, if tier labels are listed, its issue carries
+one. That item comes back in `ready` as a `merge` step with no question.
+An item left in `merge_due` is one the policy does not cover, and it
+needs the Owner's own answer as usual. A gate-path item always does.
+
 A closed session loses time, never state: resuming a batch is running
 `next` again. If there is no batch yet, go to step 2. A `cd:` problem is
 a refusal; report it and stop.
@@ -46,6 +62,12 @@ a refusal; report it and stop.
 
     python3 conductor.py plan <#N>...
     python3 conductor.py open <batch> <#N>...
+
+The plan reads each step's band from the charter stubs in
+`factory/agents/`. A stamped repo has none unless it authored its own;
+then pass this plugin's, `--agents <this skill's
+directory>/../../factory/agents`, straight after `plan` or after
+`open <batch>`.
 
 Show the Owner the plan as printed: per item its type, steps, charter,
 band, model, effort and ceiling, its estimate and reserved number block,
@@ -124,10 +146,12 @@ For each `ready` entry whose step is `merge`, one at a time:
     python3 conductor.py merge <batch> <#N>
 
 The tool refuses unless the item is reviewed with a pass from a reviewer
-distinct from its authors and an answer covers it, and on a train only
-once every earlier item has merged. It merges `main` in, bumps the
-plugin version for a `skills/` change, confirms reserved numbers,
-re-checks, waits for green checks and merges. Anything it cannot do
+distinct from its authors and an answer, or a standing consent the
+policy still covers, covers it; on a train, it also refuses until
+every earlier item has merged. It merges `main` in, bumps the
+plugin version for a `skills/` change (only in this plugin's own repo;
+never in a stamped one), confirms reserved numbers, re-runs the gate
+command, waits for green checks and merges. Anything it cannot do
 mechanically becomes a stall ask. Never merge an item any other way.
 
 ### 6. Close the batch
@@ -151,7 +175,13 @@ A failing scorecard is a problem to report, never a number to estimate.
 - Never write an item's code, never review an item, and never edit a
   Worker's branch. Workers write; a distinct Worker reviews.
 - Never write an answer the Owner did not give in this session, and
-  never write to the batch ledger by hand.
+  never write to the batch ledger by hand. Standing consent is the
+  policy's, recorded by `next`. It is never yours to grant, and it
+  never covers any ask but an item's merge.
+- In a session with no Owner present (a scheduled run), present no
+  asks and answer none. Advance only what `ready` lists. When `ready`
+  is empty and an ask is waiting, stop: the batch waits there for the
+  Owner.
 - Never force-push, and never merge outside `conductor.py merge` or the
   closing ask's answer.
 - One Conductor per batch. A second session on the same batch races the

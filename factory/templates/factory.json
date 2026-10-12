@@ -15,5 +15,12 @@
     "architecture_review": "high"
   },
   "wip_cap": 3,
-  "monthly_cap_usd": 300
+  "monthly_cap_usd": 300,
+  "conductor": {
+    "gate_command": "make check",
+    "standing_consent": {
+      "enabled": false,
+      "tier_labels": []
+    }
+  }
 }

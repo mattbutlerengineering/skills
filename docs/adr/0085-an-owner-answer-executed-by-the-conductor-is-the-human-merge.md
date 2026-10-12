@@ -1,6 +1,6 @@
 # An Owner answer executed by the Conductor is the human merge
 
-- Status: accepted (Owner, 2026-10-11)
+- Status: amended by ADR-0086 (accepted by the Owner, 2026-10-11)
 - Date: 2026-10-11
 
 Amends ADR-0036 conditions 2 and 3, for merges that

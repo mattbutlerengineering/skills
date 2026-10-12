@@ -574,6 +574,9 @@ verdict from both rules.
   an Owner answer executed by the Conductor is the human merge.
   Provisional (2026-10-11, post-review); would amend ADR-0036 conditions
   2 and 3 once the Owner accepts it.
+- [ADR-0086](../../adr/0086-standing-consent-may-cover-a-conductor-merge.md):
+  standing consent may cover a Conductor merge. Accepted by the Owner
+  on 2026-10-11 (amendment 14); amends ADR-0085.
 
 ## Amendments (implement-time, Owner-accepted)
 
@@ -648,3 +651,47 @@ differs from the text above, and is recorded here for the Owner:
     embedded in a configured `pushurl`, or a `~/.netrc` entry (re-review
     R3). This stops a confused Worker. A hostile one can still restore a variable from
     `python3`, so against hostility it remains trust-based.
+
+2026-10-11. Issue #678, at the Owner's direction that the Conductor be
+consumed by other repos. Two choices above no longer hold: the
+frontmatter assumption that `conductor.py` stays root-only, and the
+"Root-only tool" decision.
+
+13. **Payload-portable Conductor.** `conductor.py` and its five
+    capability siblings are mirrored into the factory payload
+    (`tools/factory/`, `factory_init.MIRRORS`). Every module they import
+    already shipped. The `conduct` skill runs whichever copy the repo
+    has. In a stamped repo:
+    - The gate is `factory.json`'s optional `conductor.gate_command`.
+      It is one command with no shell operators, and absent it is
+      `make check`. It is the Worker's one `Bash(...)` gate permission,
+      and the merge turn runs it in the item worktree.
+    - `plan` and `open` take `--agents DIR` for the charter stubs, since
+      a stamped repo has no `factory/agents/` (ADR-0055).
+    - The merge turn bumps the plugin version and regenerates the
+      manifest only in the factory source repo, whose root holds
+      `factory_init.py` beside `.claude-plugin/plugin.json`. Elsewhere it
+      bumps nothing, and a manifest conflict is a stall like any other.
+
+2026-10-11. Issue #679. The Owner chose, in session, an opt-in and
+narrow policy. ADR-0086 records it and amends ADR-0085. PRD-0013's "no
+unattended merges" holds except for what it covers.
+
+14. **Standing consent.** `factory.json`'s
+    `conductor.standing_consent` (`enabled`, `tier_labels`) is off by
+    default.
+    - When it is on, `next` checks each shipped item that no merge ask
+      covers, answered or not. It reads the item branch's gate files
+      and, under a tier list, the issue's labels (one `gh issue view`).
+      If the item changes no `GATE_PATH` file and carries a listed
+      label, `next` appends a `consent` row (`policy: "standing"`,
+      `reason`) and offers the item's `merge` step. Otherwise the item
+      stays in `merge_due` for the Owner.
+    - The merge precondition takes that row as the item's cover, after
+      the reviewed-pass checks every merge already runs. It re-checks
+      that the policy is still on and that the item changes no gate
+      file, both before the turn and again after the turn merges `main`
+      in. The turn still waits for green checks.
+    - A `consent` row is not an `answer`, so the scorecard's Owner-touch
+      and Owner-wait figures never count it.
+    - `next` refuses under `CONDUCTOR_WORKER`, as `answer` does.

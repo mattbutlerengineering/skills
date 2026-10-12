@@ -4,8 +4,8 @@ ledger's one owner.
 
 The `conduct` skill's compute half, in work_queue.py's conventions: pure
 functions with every input passed in, a thin main, cd:-prefixed problem
-strings, cli.report for the exit. Root-only: not mirrored into the
-factory payload (architecture.md). Capabilities that would push this
+strings, cli.report for the exit. Mirrored into the factory payload with
+its siblings (factory_init.MIRRORS, #678). Capabilities that would push this
 file past the 800-line ceiling live in sibling modules that import its
 row grammar (breakdown assumption 6): conductor_plan (plan, open),
 conductor_flow (the item state machine and the stall rule in next),
@@ -13,10 +13,11 @@ conductor_run (the Worker runner), conductor_merge (the merge
 precondition and the merge turn) and conductor_close (the scorecard and
 closing a batch).
 
-  python3 conductor.py plan <#N>...
+  python3 conductor.py plan [--agents DIR] <#N>...
         Price and order a batch of issues and show each item's reserved
-        number block. Writes nothing.
-  python3 conductor.py open <batch> <#N>...
+        number block. Writes nothing. --agents names the charter stub
+        directory (default factory/agents/, which a consumer repo lacks).
+  python3 conductor.py open <batch> [--agents DIR] <#N>...
         Plan, then create the conductor/<batch> branch and worktree from
         origin/main, write the plan and reserve rows, and queue the spend
         ask.
@@ -34,8 +35,9 @@ closing a batch).
         One merge turn, refused unless the item is reviewed with a pass
         from a distinct reviewer and an answer covers it: merge
         origin/main in, resolve only costs.jsonl and the manifest, bump
-        the plugin patch version for a skills/ change, confirm the
-        item's reserved numbers, make check, push (never forced), wait
+        the plugin patch version for a skills/ change (both in this
+        plugin's repo only), confirm the item's reserved numbers, run
+        the gate command, push (never forced), wait
         for the head's checks, then squash-merge or enqueue. Any other
         outcome queues a stall ask.
   python3 conductor.py scorecard <batch>
@@ -63,7 +65,14 @@ The batch ledger (docs/factory/batches/<batch>/ledger.jsonl) is
 append-only JSONL. Every row has `at`, `kind` and `item`; ROW_FIELDS
 holds each kind's own fields. A line that does not parse, or breaks its
 kind's rules, fails the reader with its file and line: it is never
-skipped, because "could not read" must not read as "nothing to do".
+skipped, because "could not read" must not read as "nothing to do". A
+`consent` row is standing consent (ADR-0086): written only by `next`,
+under factory.json's opt-in policy, and never an answer.
+
+In a stamped consumer repo the same tools run from tools/factory/
+(factory-init's payload, #678): the gate is factory.json's
+conductor.gate_command (default `make check`), and the plugin-version
+bump and the manifest regeneration happen only in this plugin's repo.
 """
 import fcntl
 import json
@@ -98,6 +107,10 @@ ROW_FIELDS = {
     "ask": (("id", "ask_kind", "question", "options", "recommended",
              "why"), ("covers", "gate_blobs", "build_usd")),
     "answer": (("ask", "choice", "note"), ()),
+    # Standing consent (ADR-0086): the merge consent factory.json's
+    # policy grants an item `next` found it covers. Not an answer: the
+    # scorecard's Owner-touch figures never count it.
+    "consent": (("policy", "reason"), ()),
     "close": (("merged", "blocked"), ()),
 }
 COMMON_FIELDS = ("at", "kind", "item")
@@ -109,6 +122,8 @@ TERMINAL = ("merged", "blocked")
 # An answer with this choice blocks the ask's item (Owner, 2026-10-10):
 # the one path into `blocked`.
 BLOCK = "block"
+# The one consent policy a `consent` row may name (ADR-0086).
+STANDING = "standing"
 
 
 def is_text(value):
@@ -163,6 +178,18 @@ def _answer_problems(row):
     return problems
 
 
+def _consent_row_problems(row):
+    problems = []
+    if row["item"] is None:
+        problems.append("a consent row names its item")
+    if row["policy"] != STANDING:
+        problems.append(f"consent policy {row['policy']!r} is not"
+                        f" {STANDING}")
+    if not is_text(row["reason"]):
+        problems.append("reason must be a non-empty string")
+    return problems
+
+
 def _at_problems(value):
     valid = isinstance(value, str) and AT.fullmatch(value)
     if valid:
@@ -209,6 +236,8 @@ def row_problems(row):
         problems += _ask_problems(row)
     if kind == "answer":
         problems += _answer_problems(row)
+    if kind == "consent":
+        problems += _consent_row_problems(row)
     return problems
 
 
@@ -476,9 +505,14 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
         problems = conductor_plan.open_cli(root, argv[1:], now, run, git)
     elif len(argv) >= 2:
         command, batch, args = argv[0], argv[1], argv[2:]
-        if command == "next":
+        if command == "next" and env.get(WORKER_ENV):
+            # `next` writes standing consent (ADR-0086): the same guard
+            # as `answer`, which stops a confused Worker.
+            problems = [f"cd: next refused: {WORKER_ENV} is set, and a"
+                        " Worker never advances a batch"]
+        elif command == "next":
             problems = conductor_flow.next_cli(root, batch, args, now,
-                                               git, alive)
+                                               git, alive, run)
         elif command == "ask":
             problems = _ask_cli(root, batch, args, now)
         elif command == "answer":

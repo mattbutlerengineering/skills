@@ -209,7 +209,12 @@ def product_codeowners(text):
 # human-gate surface (ADR-0033) and the one other twin that genuinely
 # differs per repo: the root file names this repo's code owner, so it
 # mirrors through product_codeowners, which swaps the header and blanks
-# the owner to a placeholder the stamped repo substitutes.
+# the owner to a placeholder the stamped repo substitutes. conductor.py
+# and its capability siblings are the Conductor's batch tool (PRD-0013),
+# run by the conduct skill against a stamped repo (#678); they ship
+# together because each imports conductor.py's row grammar, and every
+# sibling they import already ships. conductor_merge reaches the
+# root-only factory_init only in this repo, behind factory_source.
 MIRRORS = (
     ("gates.py", "tools/factory/gates.py", identity),
     ("protocol.py", "tools/factory/protocol.py", identity),
@@ -229,6 +234,14 @@ MIRRORS = (
     ("rejection_mining.py", "tools/factory/rejection_mining.py", identity),
     ("work_queue.py", "tools/factory/work_queue.py", identity),
     ("standards_index.py", "tools/factory/standards_index.py", identity),
+    ("conductor.py", "tools/factory/conductor.py", identity),
+    ("conductor_plan.py", "tools/factory/conductor_plan.py", identity),
+    ("conductor_flow.py", "tools/factory/conductor_flow.py", identity),
+    ("conductor_run.py", "tools/factory/conductor_run.py", identity),
+    ("conductor_merge.py", "tools/factory/conductor_merge.py", identity),
+    ("conductor_close.py", "tools/factory/conductor_close.py", identity),
+    ("conductor_consent.py", "tools/factory/conductor_consent.py",
+     identity),
     (".github/workflows/validator.yml",
      ".github/workflows/validator.yml", identity),
     (".github/workflows/assembler.yml",

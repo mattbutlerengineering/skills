@@ -289,8 +289,10 @@ def open_batch(root, batch, plan, now, git):
     return worktree, problems
 
 
-def _plan(root, numbers, now, run, git):
-    """(plan, problems): read every input, then plan_batch."""
+def _plan(root, numbers, now, run, git, agents=None):
+    """(plan, problems): read every input, then plan_batch. `agents` is
+    the charter stub directory, the repo's own factory/agents/ unless
+    named (a consumer repo has none, ADR-0055: #678)."""
     config, problems = factory_config.load(root)
     if problems:
         return None, problems
@@ -307,13 +309,20 @@ def _plan(root, numbers, now, run, git):
     if problems:
         return None, problems
     return plan_batch(issues, owner, config, spent, highest,
-                      Path(root) / "factory" / "agents")
+                      agents or Path(root) / "factory" / "agents")
 
 
 def _issue_numbers(args):
     if not args or not all(ISSUE_KEY.fullmatch(arg) for arg in args):
         return None
     return [int(arg[1:]) for arg in args]
+
+
+def _agents(args):
+    """(the --agents directory or None, the remaining args)."""
+    if args[:1] == ["--agents"] and len(args) >= 2:
+        return Path(args[1]), args[2:]
+    return None, args
 
 
 def _repeated(numbers):
@@ -325,26 +334,28 @@ def _repeated(numbers):
 
 
 def plan_cli(root, args, now, run, git):
+    agents, args = _agents(args)
     numbers = _issue_numbers(args)
     if numbers is None:
         return None
     repeated = _repeated(numbers)
     if repeated:
         return repeated
-    plan, problems = _plan(root, numbers, now, run, git)
+    plan, problems = _plan(root, numbers, now, run, git, agents)
     if plan is not None:
         print("\n".join(compose_plan(plan)))
     return problems
 
 
 def open_cli(root, args, now, run, git):
-    numbers = _issue_numbers(args[1:])
+    agents, rest = _agents(args[1:])
+    numbers = _issue_numbers(rest)
     if numbers is None:
         return None
     repeated = _repeated(numbers)
     if repeated:
         return repeated
-    plan, problems = _plan(root, numbers, now, run, git)
+    plan, problems = _plan(root, numbers, now, run, git, agents)
     if plan is None:
         return problems
     print("\n".join(compose_plan(plan)))

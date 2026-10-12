@@ -67,6 +67,8 @@ MINIMAL = {
             "outcome": "completed"},
     "ask": ask_row("ask-1"),
     "answer": answer_row("ask-1"),
+    "consent": {"at": AT, "kind": "consent", "item": "#12",
+                "policy": "standing", "reason": "no gate-path file"},
     "close": {"at": AT, "kind": "close", "item": None, "merged": ["#12"],
               "blocked": []},
 }

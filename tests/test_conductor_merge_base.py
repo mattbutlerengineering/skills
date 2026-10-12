@@ -1,15 +1,21 @@
 """conductor_merge.py (PRD-0013, WO-0161): the merge base the checks
-ran on is the one the squash lands on (review minor 4). Split from
-test_conductor_merge.py, which sits at the 800-line ceiling; it reuses
-that file's scratch-repo TurnCase, so nothing real is pushed or merged
-beyond a local bare origin, and gh is FakeGh.
+ran on is the one the squash lands on (review minor 4), and the `merge`
+verb through conductor.main. Split from test_conductor_merge.py, which
+sits at the 800-line ceiling; it reuses that file's scratch-repo
+TurnCase, so nothing real is pushed or merged beyond a local bare
+origin, and gh is FakeGh.
 """
+import json
 import sys
 import unittest
 from pathlib import Path
 
+import conductor
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_conductor_merge import SHIPPED, TurnCase  # noqa: E402
+import cli_contract  # noqa: E402
+from test_conductor_merge import (LEDGER, SHIPPED, START,  # noqa: E402
+                                  TurnCase, feature_shipped)
 
 
 class TestMainMovesDuringTheWait(TurnCase):
@@ -53,6 +59,39 @@ class TestMainMovesDuringTheWait(TurnCase):
             '{"data": {"repository": {"mergeQueue": {"id": "q"}}}}'
         summary, _ = self.turn(SHIPPED, gh=gh)
         self.assertEqual(summary["sha"], "m1")
+
+
+class TestMergeCli(TurnCase):
+    def setUp(self):
+        # The verb reads the batch root's factory.json (#678): its gate
+        # command and its standing-consent policy.
+        super().setUp()
+        (self.root / ".github").mkdir(parents=True)
+        (self.root / ".github/factory.json").write_text(json.dumps({}))
+
+    def test_merge_is_a_conductor_verb(self):
+        self.item({"src.txt": "x\n"})
+        self.ledger(START + self.filled(SHIPPED))
+        code, out = cli_contract.capture(
+            conductor.main, ["merge", "b1", "#12"], env={}, clock=self.clock,
+            root=self.root, run=self.fake_gh(), git=self.git,
+            tool=self.tool(), sleep=self.clock.sleep)
+        self.assertEqual(code, 0, out)
+        self.assertIn("cd: merged #12 as m1 (PR #44)", out)
+
+    def test_a_refused_merge_touches_nothing(self):
+        self.item({"src.txt": "x\n"})
+        self.ledger(START + feature_shipped({}))
+        before = (self.root / LEDGER).read_text()
+        code, out = cli_contract.capture(
+            conductor.main, ["merge", "b1", "#12"], env={}, clock=self.clock,
+            root=self.root, run=self.fake_gh(), git=self.git,
+            tool=self.tool(), sleep=self.clock.sleep)
+        self.assertEqual(code, 1)
+        self.assertIn("cd: merge refused: no merge answer covers #12", out)
+        self.assertEqual((self.root / LEDGER).read_text(), before)
+        self.assertFalse(self.calls("git", "fetch"))
+        self.assertFalse([e for e in self.log if e[0] == "tool"])
 
 
 if __name__ == "__main__":

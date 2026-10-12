@@ -22,6 +22,8 @@ config:-prefixed problem strings; a field the config does not cover is a
 problem, never a silent default.
 """
 import math
+import re
+import shlex
 from pathlib import Path
 
 from cli import read_file
@@ -152,6 +154,98 @@ def resolve_cap(config):
     return config["monthly_cap_usd"], []
 
 
+# The Conductor's optional table (issue #678): the gate command its
+# Workers may run and its merge turn runs, in the item worktree. Absent,
+# it is this repo's own gate. One command, run without a shell: it is
+# also the Worker's one Bash(...) permission, so a shell operator would
+# widen what that permission covers.
+#
+# It also holds the standing-consent merge policy (ADR-0086, #679),
+# OFF unless the table says otherwise: a Conductor merge with no Owner
+# answer, for an item that changes no gate-path file and, when
+# tier_labels is non-empty, whose issue carries one of them.
+CONDUCTOR_KEYS = ("gate_command", "standing_consent")
+STANDING_KEYS = ("enabled", "tier_labels")
+DEFAULT_GATE_COMMAND = "make check"
+SHELL_OPERATOR = re.compile(r"[;&|<>`$\n]")
+
+
+def _gate_argv(command):
+    """The gate command as argv, or None when it is not one command."""
+    if not isinstance(command, str) or SHELL_OPERATOR.search(command):
+        return None
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        return None
+    return argv or None
+
+
+def conductor_problems(config):
+    """Value-grammar problems for factory.json's optional `conductor`
+    table, unprefixed: the one home of its rules, which config_problems
+    (detector F) and the resolvers below both apply."""
+    if "conductor" not in config:
+        return []
+    table = config["conductor"]
+    if not isinstance(table, dict):
+        return ["conductor must be an object"]
+    problems = []
+    unknown = sorted(set(table) - set(CONDUCTOR_KEYS))
+    if unknown:
+        problems.append(f"conductor has unknown key(s): {', '.join(unknown)}")
+    if "gate_command" in table and _gate_argv(table["gate_command"]) is None:
+        problems.append("conductor.gate_command must be one command with no"
+                        " shell operators")
+    if "standing_consent" in table:
+        problems += _standing_problems(table["standing_consent"])
+    return problems
+
+
+def _standing_problems(policy):
+    prefix = "conductor.standing_consent"
+    if not isinstance(policy, dict):
+        return [f"{prefix} must be an object"]
+    problems = []
+    unknown = sorted(set(policy) - set(STANDING_KEYS))
+    if unknown:
+        problems.append(f"{prefix} has unknown key(s): {', '.join(unknown)}")
+    if not isinstance(policy.get("enabled", False), bool):
+        problems.append(f"{prefix}.enabled must be true or false")
+    tiers = policy.get("tier_labels", [])
+    if not (isinstance(tiers, list)
+            and all(isinstance(name, str) and name.strip() for name in tiers)
+            and len(set(tiers)) == len(tiers)):
+        problems.append(f"{prefix}.tier_labels must be a list of distinct"
+                        " label names")
+    return problems
+
+
+def resolve_standing_consent(config):
+    """({"enabled", "tier_labels"}, problems): factory.json's
+    conductor.standing_consent, OFF when absent. A malformed table is a
+    problem, never a default, so a typo cannot read as consent."""
+    problems = conductor_problems(config)
+    if problems:
+        return None, [f"config: factory.json {problem}"
+                      for problem in problems]
+    policy = config.get("conductor", {}).get("standing_consent", {})
+    return {"enabled": policy.get("enabled", False),
+            "tier_labels": list(policy.get("tier_labels", []))}, []
+
+
+def resolve_gate_command(config):
+    """(the gate command as argv, problems): factory.json's
+    conductor.gate_command, DEFAULT_GATE_COMMAND when absent. A malformed
+    table is a problem, never a silent default."""
+    problems = conductor_problems(config)
+    if problems:
+        return None, [f"config: factory.json {problem}"
+                      for problem in problems]
+    table = config.get("conductor", {})
+    return _gate_argv(table.get("gate_command", DEFAULT_GATE_COMMAND)), []
+
+
 def config_problems(config):
     """Field-grammar problems for a parsed factory config, unprefixed.
 
@@ -188,4 +282,4 @@ def config_problems(config):
                      if effort not in EFFORTS]
     elif "effort" in config:
         problems.append("effort must map bands to efforts")
-    return problems
+    return problems + conductor_problems(config)
