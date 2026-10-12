@@ -107,4 +107,5 @@ the canonical vocabulary.
 | [0084](0084-the-cost-ledger-keys-a-run-by-issue-when-it-has-no-work-order.md) | The cost ledger keys a run by its issue when it has no work order | accepted |
 | [0085](0085-an-owner-answer-executed-by-the-conductor-is-the-human-merge.md) | An Owner answer executed by the Conductor is the human merge | amended by ADR-0086 |
 | [0086](0086-standing-consent-may-cover-a-conductor-merge.md) | Standing consent may cover a Conductor merge | accepted |
-| [0087](0087-a-queue-profile-may-opt-in-to-implement-queue-auto-merge.md) | A queue profile may opt in to implement-queue auto-merge | accepted |
+| [0087](0087-a-queue-profile-may-opt-in-to-implement-queue-auto-merge.md) | A queue profile may opt in to implement-queue auto-merge | amended by ADR-0088 |
+| [0088](0088-a-fast-path-classification-is-the-review-for-auto-merge.md) | A fast-path classification is the review for auto-merge | accepted |

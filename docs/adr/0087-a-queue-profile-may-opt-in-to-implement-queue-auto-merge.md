@@ -1,6 +1,6 @@
 # A queue profile may opt in to implement-queue auto-merge
 
-- Status: accepted (Owner, 2026-10-12)
+- Status: amended by ADR-0088 (accepted by the Owner, 2026-10-12)
 - Date: 2026-10-12
 
 Amends ADR-0033, for merges performed by the `implement-queue` skill in
