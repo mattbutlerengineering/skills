@@ -207,6 +207,22 @@ def _band(entry, step):
                 None)
 
 
+def stall_options(entry, state, band=None):
+    """The stall ask's options for a step: retry-up only below the top
+    band — `band` when given (the band a run actually used), else the
+    step's planned band."""
+    band = band or _band(entry, state)
+    return [option for option in STALL_OPTIONS
+            if option != "retry-up" or band != BANDS[-1]]
+
+
+def _choices(options):
+    """The question's closing choice, naming only `options` (#725)."""
+    words = [OPTION_WORDS[option] for option in options]
+    said = ", or ".join([", ".join(words[:-1]), words[-1]])
+    return said[0].upper() + said[1:] + "?"
+
+
 def stall_rows(rows, now, entry, reason, recommended, why):
     """[state row, stall ask] for an item that stalls in its current
     state. retry-up is offered only when the run leaving this state
@@ -215,16 +231,56 @@ def stall_rows(rows, now, entry, reason, recommended, why):
     item = entry["item"]
     state = current_state(rows, item)
     finishing = item_view(rows, item)["finishing"]
-    band = finishing["band"] if finishing is not None \
-        else _band(entry, state)
-    options = [option for option in STALL_OPTIONS
-               if option != "retry-up" or band != BANDS[-1]]
+    options = stall_options(entry, state, finishing["band"]
+                            if finishing is not None else None)
     moved = state_row(now, item, state, "stalled", reason)
     asked, problems = ask_row(
         rows + [moved], now, item, "stall",
-        f"{item} stalled in {state}: {reason}. Retry, retry one band up,"
-        " or block?", options, recommended, why)
+        f"{item} stalled in {state}: {reason}. {_choices(options)}",
+        options, recommended, why)
     return [moved, asked], problems
+
+
+def prior_stalls(rows, item, step):
+    """[(run row or None, stall reason)], oldest first: the item's latest
+    consecutive runs of `step` that each ended in a stall. A run of the
+    step that did not stall ends the streak."""
+    found = item_view(rows, item)
+    by_id = {row["run_id"]: row for row in found["runs"]}
+    launches = []
+    for row in found["states"]:
+        if row["to"] == step and "run_id" in row:
+            launches.append([by_id.get(row["run_id"]), None])
+        elif row["to"] == "stalled" and row["from"] == step and launches:
+            launches[-1][1] = row["reason"]
+    streak = []
+    for run, reason in launches:
+        streak = streak + [(run, reason)] if reason is not None else []
+    return streak
+
+
+def worker_advice(rows, entry, step, band, reason):
+    """(recommended, why) for the stall ask of a failed Worker run of
+    `step` at `band`, from the item's rows before that run launched
+    (#725). A first failure recommends retry; a second consecutive
+    budget stop at the same band recommends retry-up while it is offered
+    and the run was not already one band up, else block, since the
+    ceiling is the same and so is the outcome."""
+    earlier = prior_stalls(rows, entry["item"], step)
+    if not earlier:
+        return "retry", WORKER_WHY
+    run, last = earlier[-1]
+    if reason == BUDGET_REASON and last == BUDGET_REASON \
+            and (run or {}).get("band") == band:
+        ceiling = next(s["ceiling_usd"] for s in entry["steps"]
+                       if s["step"] == step)
+        up = "retry-up" in stall_options(entry, step) \
+            and band == _band(entry, step)
+        return ("retry-up" if up else BLOCK), REPEAT_BUDGET_WHY.format(
+            step=step, ceiling=ceiling,
+            remedy=("retry it one band up, on a stronger model" if up
+                    else "block it"))
+    return "retry", ATTEMPT_WHY.format(n=len(earlier) + 1, step=step)
 
 
 def queue_stall(root, batch, now, item, reason, recommended, why):
@@ -238,6 +294,20 @@ def queue_stall(root, batch, now, item, reason, recommended, why):
     return append(root, batch, build)
 
 
+OPTION_WORDS = {"retry": "retry", "retry-up": "retry one band up",
+                "block": "block"}
+WORKER_WHY = ("a first failure is evidence about the item as often as about"
+              " the agent, so nothing retries without your answer")
+ATTEMPT_WHY = ("attempt {n} at {step} failed after an earlier one did, so"
+               " the item is as likely a cause as the agent; nothing"
+               " retries without your answer")
+# The stall reason conductor_run gives a run the harness stopped at its
+# --max-budget-usd ceiling.
+BUDGET_STOP = "error_max_budget_usd"
+BUDGET_REASON = f"the Worker run ended {BUDGET_STOP}"
+REPEAT_BUDGET_WHY = ("a second consecutive budget stop on {step} at the same"
+                     " ${ceiling:.2f} ceiling: the outcome repeats at that"
+                     " ceiling, so a plain retry spends it again; {remedy}")
 IDLE_WHY = ("a dead runner or an idle step is evidence about the run more"
             " than about the item")
 CHANGES_WHY = "a second request for changes is evidence about the item"

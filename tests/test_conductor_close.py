@@ -232,6 +232,17 @@ class TestScorecardCli(unittest.TestCase):
 BLOCKED_SPEND = [spend("conductor-b1-13-spec-1", 0.5, "#13"),
                  spend("conductor-b1-13-build-1", 0.0, "#13")]
 CARD = '{"batch": "b0"}\n'
+LABEL_LIST = ("label", "list")
+LABEL_LIST_CALL = ["label", "list", "--json", "name,color,description",
+                   "--limit", "1000"]
+HAS_NEEDS_HUMAN = json.dumps([{"name": "bug"}, {"name": "needs-human"}])
+# Git's whole stderr for a merge a dirty tracked file refuses (#726):
+# its last line alone, "Aborting", hides the reason.
+DIRTY_MERGE = subprocess.CalledProcessError(
+    1, "git", stderr="error: Your local changes to the following files"
+    " would be overwritten by merge:\n\ttools/factory/__pycache__/cli.pyc\n"
+    "Please commit your changes or stash them before you merge.\n"
+    "Aborting\n")
 
 
 def git_port(fake):
@@ -256,7 +267,7 @@ class TestClose(unittest.TestCase):
         self.git = git or FakeGh({
             ("-C", str(self.root), "show",
              f"conductor/b1-13:{COSTS}"): lines(branch_costs)})
-        self.gh = gh or FakeGh()
+        self.gh = gh or FakeGh({LABEL_LIST: HAS_NEEDS_HUMAN})
         return close.close_batch(self.root, "b1", lambda: NOW,
                                  git_port(self.git), self.gh)
 
@@ -295,6 +306,7 @@ class TestClose(unittest.TestCase):
             here + ["commit", "-m", "chore(conductor): close batch b1"],
             here + ["push", "-u", "origin", "conductor/b1"]])
         self.assertEqual(self.gh.calls, [
+            LABEL_LIST_CALL,
             ["pr", "create", "--head", "conductor/b1", "--base", "main",
              "--title", "conductor batch b1: ledger and scorecard",
              "--body", "Conductor batch b1's closing PR: its batch"
@@ -363,6 +375,45 @@ class TestClose(unittest.TestCase):
         self.assertEqual((self.root / close.SCORECARDS).read_bytes(),
                          CARD.encode())
 
+    def test_a_refused_merge_names_gits_whole_reason(self):
+        fake = FakeGh(failing=["-C", str(self.root), "merge", "--no-edit"],
+                      error=DIRTY_MERGE)
+        self.assertEqual(self.close(ROWS, git=fake), (None, [
+            "cd: close refused: merging origin/main into conductor/b1"
+            " failed: error: Your local changes to the following files"
+            " would be overwritten by merge: |"
+            " tools/factory/__pycache__/cli.pyc | Please commit your"
+            " changes or stash them before you merge. | Aborting"]))
+
+    def test_a_missing_needs_human_label_is_created_before_use(self):
+        # #726: a tools-only stamp never syncs labels.json, so the label
+        # close writes may not exist; gh issue edit then fails.
+        gh = FakeGh({LABEL_LIST: json.dumps([{"name": "bug"}])})
+        summary, problems = self.close(ROWS, gh=gh)
+        self.assertEqual(problems, [])
+        self.assertEqual([call[:3] for call in gh.calls], [
+            LABEL_LIST_CALL[:3], ["pr", "create", "--head"],
+            ["label", "create", "needs-human"],
+            ["issue", "edit", "13"], ["issue", "comment", "13"]])
+        self.assertEqual(gh.calls[2], ["label", "create", "needs-human"])
+
+    def test_no_blocked_item_reads_no_labels(self):
+        rows = [row for row in ROWS if row.get("item") != "#13"]
+        rows[0] = dict(PLAN, items=[plan_item("#12", "feature"),
+                                    plan_item("#14", "order")])
+        summary, problems = self.close(rows, costs=SPEND[:4])
+        self.assertEqual(problems, [])
+        self.assertEqual([call[:2] for call in self.gh.calls],
+                         [["pr", "create"]])
+
+    def test_an_unreadable_label_list_opens_no_pr(self):
+        gh = FakeGh(failing=["label", "list"])
+        summary, problems = self.close(ROWS, gh=gh)
+        self.assertEqual(problems, [
+            "cd: close: gh label list failed: boom; finish the PR and the"
+            " needs-human labels by hand"])
+        self.assertEqual(gh.calls, [LABEL_LIST_CALL])
+
     def test_a_failed_push_is_reported_after_the_close_is_recorded(self):
         fake = FakeGh({("-C", str(self.root), "show",
                         f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND)},
@@ -375,6 +426,105 @@ class TestClose(unittest.TestCase):
         self.assertEqual(self.gh.calls, [])
 
 
+CLOSED = ROWS + [
+    {"at": at(16), "kind": "close", "item": None,
+     "merged": ["#12", "#14"], "blocked": ["#13"]},
+    ask("ask-5", None, "merge", at(16), ("merge", "hold"))]
+CHECKS = ("api", "repos/{owner}/{repo}/commits/c105ed/check-runs"
+          "?per_page=100")
+GREEN_GH = {
+    ("pr", "list", "--head", "conductor/b1"): json.dumps([{"number": 6}]),
+    CHECKS: json.dumps({"check_runs": [{"name": "ci", "status": "completed",
+                                         "conclusion": "success"}]}),
+    ("api", "graphql"): json.dumps(
+        {"data": {"repository": {"mergeQueue": None}}}),
+    ("pr", "view", "6"): json.dumps({"state": "MERGED",
+                                     "mergeCommit": {"oid": "m3r6ed"}})}
+
+
+class TestClosingMerge(unittest.TestCase):
+    """#726: the closing ask's answer is committed to the batch branch
+    and pushed before the closing PR merges, so the merged ledger holds
+    the answer that authorised its own merge."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+        self.here = ["-C", str(self.root)]
+
+    def merge(self, rows, dirty=True, gh=None):
+        write(self.root, lines(rows))
+        self.git = FakeGh({
+            (*self.here, "status", "--porcelain"):
+                f" M {LEDGER}\n" if dirty else "",
+            (*self.here, "rev-parse", "HEAD"): "c105ed\n"})
+        self.gh = gh or FakeGh(GREEN_GH)
+        return close.merge_closing(self.root, "b1", lambda: NOW,
+                                   git_port(self.git), self.gh,
+                                   lambda seconds: None)
+
+    def test_the_answer_is_pushed_before_the_closing_pr_merges(self):
+        rows = CLOSED + [answer("ask-5", "merge", at(17))]
+        self.assertEqual(self.merge(rows), (
+            {"batch": "b1", "pr": 6, "sha": "m3r6ed"}, []))
+        self.assertEqual(self.git.calls, [
+            self.here + ["status", "--porcelain", "--",
+                         "docs/factory/batches/b1"],
+            self.here + ["add", "--", "docs/factory/batches/b1"],
+            self.here + ["commit", "-m", "chore(conductor): record batch"
+                         " b1's closing answer"],
+            self.here + ["push", "-u", "origin", "conductor/b1"],
+            self.here + ["rev-parse", "HEAD"]])
+        self.assertEqual(self.gh.calls[-2], [
+            "pr", "merge", "6", "--squash", "--match-head-commit",
+            "c105ed"])
+
+    def test_an_answer_already_pushed_commits_nothing(self):
+        rows = CLOSED + [answer("ask-5", "merge", at(17))]
+        summary, problems = self.merge(rows, dirty=False)
+        self.assertEqual(problems, [])
+        self.assertEqual([call[2] for call in self.git.calls],
+                         ["status", "push", "rev-parse"])
+
+    def test_an_unanswered_closing_ask_is_refused(self):
+        self.assertEqual(self.merge(CLOSED), (None, [
+            "cd: closing merge refused: ask-5 is unanswered"]))
+        self.assertEqual((self.git.calls, self.gh.calls), ([], []))
+
+    def test_a_hold_answer_is_refused(self):
+        rows = CLOSED + [answer("ask-5", "hold", at(17))]
+        self.assertEqual(self.merge(rows), (None, [
+            "cd: closing merge refused: ask-5 was answered hold, not"
+            " merge"]))
+        self.assertEqual(self.gh.calls, [])
+
+    def test_an_open_batch_is_refused(self):
+        self.assertEqual(self.merge(ROWS), (None, [
+            "cd: closing merge refused: batch b1 is not closed"]))
+
+    def test_red_checks_merge_nothing(self):
+        red = {**GREEN_GH, CHECKS: json.dumps({"check_runs": [
+            {"name": "ci", "status": "completed",
+             "conclusion": "failure"}]})}
+        rows = CLOSED + [answer("ask-5", "merge", at(17))]
+        self.assertEqual(self.merge(rows, gh=FakeGh(red)), (None, [
+            "cd: closing merge: checks failed on c105ed: ci"]))
+        self.assertFalse(self.gh.called("pr", "merge"))
+
+    def test_the_cli_merges_and_prints(self):
+        rows = CLOSED + [answer("ask-5", "merge", at(17))]
+        write(self.root, lines(rows))
+        git = FakeGh({(*self.here, "rev-parse", "HEAD"): "c105ed\n"})
+        code, out = cli_contract.capture(
+            conductor.main, ["close", "b1", "--merge"], env={},
+            clock=lambda: NOW, root=self.root, run=FakeGh(GREEN_GH),
+            git=git_port(git), sleep=lambda seconds: None)
+        self.assertEqual((code, out), (0, (
+            "cd: merged batch b1's closing PR #6 as m3r6ed\n"
+            "cd: 0 problem(s)\n")))
+
+
 class TestCloseCli(unittest.TestCase):
     def test_close_prints_its_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -382,7 +532,8 @@ class TestCloseCli(unittest.TestCase):
             fake = FakeGh()
             code, out = cli_contract.capture(
                 conductor.main, ["close", "b1"], env={}, clock=lambda: NOW,
-                root=tmp, run=FakeGh(), git=git_port(fake))
+                root=tmp, run=FakeGh({LABEL_LIST: HAS_NEEDS_HUMAN}),
+                git=git_port(fake))
             self.assertEqual((code, out), (0, (
                 "cd: closed batch b1: merged #12, #14; blocked #13;"
                 " merge ask ask-5\ncd: 0 problem(s)\n")))

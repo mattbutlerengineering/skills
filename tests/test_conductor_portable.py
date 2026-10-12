@@ -7,6 +7,7 @@ gh and tool call goes through a fake or a scratch repo, and tests assert
 the EXACT problem strings.
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,7 @@ import conductor
 import conductor_merge as merge
 import conductor_run
 import factory_config
+import factory_init
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
@@ -492,6 +494,47 @@ class TestFactorySource(tcm.TurnCase):
         (self.wt / "factory_init.py").unlink()
         self.assertFalse(merge.factory_source(self.wt))
         self.assertTrue(merge.factory_source(REPO))
+
+
+class TestNoBytecode(unittest.TestCase):
+    """#726: a consumer that once tracked tools/factory/__pycache__ had
+    every conductor.py run rewrite it, and close's merge of main then
+    refused. The stamped tool writes no bytecode, and its children
+    (the gate command, the Worker harness) inherit the same rule."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.target = Path(tmp.name)
+        self.assertEqual(factory_init.stamp(REPO, self.target), [])
+        self.env = {name: value for name, value in os.environ.items()
+                    if name not in ("PYTHONDONTWRITEBYTECODE",
+                                    "PYTHONPYCACHEPREFIX")}
+
+    def python(self, *args):
+        return subprocess.run([sys.executable, *args], cwd=self.target,
+                              env=self.env, capture_output=True, text=True)
+
+    def test_running_the_stamped_conductor_leaves_no_pycache(self):
+        ran = self.python("tools/factory/conductor.py")
+        self.assertEqual(ran.returncode, 2, ran.stderr)
+        self.assertEqual(sorted(path.relative_to(self.target).as_posix()
+                                for path in self.target.rglob(
+                                    "__pycache__")), [])
+
+    def test_its_children_inherit_no_bytecode(self):
+        probe = ("import os, runpy, sys\n"
+                 "sys.argv = ['conductor.py']\n"
+                 "sys.path.insert(0, 'tools/factory')\n"
+                 "try:\n"
+                 "    runpy.run_path('tools/factory/conductor.py',"
+                 " run_name='__main__')\n"
+                 "except SystemExit:\n"
+                 "    pass\n"
+                 "print(os.environ.get('PYTHONDONTWRITEBYTECODE'),"
+                 " file=sys.stderr)\n")
+        ran = self.python("-c", probe)
+        self.assertEqual(ran.stderr, "1\n")
 
 
 class TestPlanCharters(unittest.TestCase):

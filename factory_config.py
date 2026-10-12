@@ -175,8 +175,17 @@ def resolve_cap(config):
 # say "not now" (blocked, needs-review): an issue carrying one is
 # deferred with the label named, whatever else it carries. Absent,
 # nothing defers for its labels alone.
+#
+# `step_weights` (#724) weights how an item's size budget splits across
+# its steps as their ceilings. The default gives spec three shares and
+# every other step one: spec drives the whole run from idea to breakdown
+# at the top band, and an even share ran out of budget on 3 runs of 3.
+# A configured weight replaces that step's default; the rest keep theirs.
 CONDUCTOR_KEYS = ("gate_command", "standing_consent", "type_labels",
-                  "size_labels", "default_size", "defer_labels")
+                  "size_labels", "default_size", "defer_labels",
+                  "step_weights")
+DEFAULT_STEP_WEIGHTS = {"spec": 3, "build": 1, "verify": 1, "review": 1,
+                        "ship": 1}
 LABEL_ITEM_TYPES = ("feature", "fix")
 SIZES = ("S", "M", "L")
 
@@ -230,7 +239,23 @@ def conductor_problems(config):
             and not _label_list(table["defer_labels"])):
         problems.append("conductor.defer_labels must be a list of distinct"
                         " label names")
+    if "step_weights" in table:
+        problems += _step_weight_problems(table["step_weights"])
     return problems
+
+
+def _step_weight_problems(weights):
+    """Problems for conductor.step_weights: known steps to positive
+    numbers."""
+    prefix, steps = "conductor.step_weights", tuple(DEFAULT_STEP_WEIGHTS)
+    if not isinstance(weights, dict):
+        return [f"{prefix} must map {_one_of(steps)} to positive numbers"]
+    unknown = sorted(set(weights) - set(steps))
+    if unknown:
+        return [f"{prefix} has unknown step(s): {', '.join(unknown)}"]
+    return [f"{prefix}.{step} must be a positive number"
+            for step, weight in weights.items()
+            if not _positive_number(weight)]
 
 
 def _label_list(value):
@@ -318,6 +343,15 @@ def resolve_defer_labels(config):
     None when absent (no issue defers for its labels alone)."""
     names, problems = _conductor_value(config, "defer_labels")
     return (list(names) if names is not None else None), problems
+
+
+def resolve_step_weights(config):
+    """(step -> weight, problems): DEFAULT_STEP_WEIGHTS with factory.json's
+    conductor.step_weights laid over it."""
+    table, problems = _conductor_value(config, "step_weights")
+    if problems:
+        return None, problems
+    return {**DEFAULT_STEP_WEIGHTS, **(table or {})}, []
 
 
 def resolve_gate_command(config):

@@ -633,6 +633,33 @@ class TestMergeTurnStalls(TurnCase):
         self.assertFalse(self.calls("git", "push"))
         self.assertEqual(self.rows[-1]["recommended"], "block")
 
+    def test_a_dirty_tracked_file_stalls_with_gits_whole_reason(self):
+        # #726: a merge refused before it starts has nothing to abort,
+        # and its reason sits above the last stderr line, "Aborting".
+        self.item({"src.txt": "x\n"})
+        self.main_moves({"README.md": "main\n"})
+        write(self.wt, {"README.md": "dirty\n"})
+        # A retried turn: from `ship`, the clean-worktree check would
+        # stall first.
+        rows = SHIPPED + [moved("#12", "ship", "merging"),
+                          moved("#12", "merging", "stalled"),
+                          stall_ask("ask-3", "#12"),
+                          answered("ask-3", "retry", "#12")]
+        summary, problems = self.turn(rows)
+        self.assertEqual(problems, [])
+        # The refused merge changed nothing, so re-running it yields the
+        # same stderr; its wording varies by git version (newer ones add
+        # a strategy line after "Aborting").
+        again = subprocess.run(["git", "-C", str(self.wt), "merge",
+                                "--no-edit", "origin/main"],
+                               capture_output=True, text=True)
+        lines = [line.strip() for line in again.stderr.splitlines()
+                 if line.strip()]
+        self.assertIn("README.md", lines)
+        self.assertIn("Aborting", lines)
+        self.assertStalled(summary, f"merging origin/main into {BRANCH}"
+                           f" failed: {' | '.join(lines)}")
+
     def test_a_red_make_check_stalls_before_any_push(self):
         self.item({"src.txt": "x\n"})
         summary, _ = self.turn(SHIPPED, tool=self.tool(fail="check"))

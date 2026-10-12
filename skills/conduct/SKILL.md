@@ -100,7 +100,11 @@ directory>/../../factory/agents`, straight after `plan` or after
 Show the Owner the plan as printed: per item its type, steps, charter,
 band, model, effort and ceiling, its estimate and reserved number block,
 the batch estimate against what remains of the monthly cap, and every
-deferral line. Deferrals are part of the answer, never noise. `open`
+deferral line. Deferrals are part of the answer, never noise. A step's
+ceiling is its weighted share of the item's estimate: spec takes three
+shares and every other step one, unless `conductor.step_weights` in
+`factory.json` says otherwise, so name the spec share when you show it.
+`open`
 first checks what every `run` will need (a usable `factory.json`, a
 readable cost ledger on `origin/main`, no push gap; see step 4) and
 refuses before anything exists, so no launch refusal of that kind can
@@ -211,7 +215,13 @@ It carries blocked items' spend rows, appends the scorecard to
 `docs/factory/scorecards.jsonl` only when the scorecard computes, opens
 the batch's closing pull request, queues its merge ask, and labels each
 blocked issue `needs-human` with its reason. Present the closing ask
-like any other; on `merge`, merge that pull request, and nothing else.
+like any other; on `merge`, record the answer, then:
+
+    python3 conductor.py close <batch> --merge
+
+It commits and pushes the answer row first, so the merged ledger holds
+the answer that authorised its merge, then waits for green checks and
+merges that pull request, and nothing else.
 A failing scorecard is a problem to report, never a number to estimate.
 
 ## Rules
@@ -230,7 +240,7 @@ A failing scorecard is a problem to report, never a number to estimate.
   is empty and an ask is waiting, stop: the batch waits there for the
   Owner.
 - Never force-push, and never merge outside `conductor.py merge` or the
-  closing ask's answer.
+  closing ask's answer through `conductor.py close <batch> --merge`.
 - One Conductor per batch. A second session on the same batch races the
   first.
 - Report Worker spend from the ledger the tool wrote, never from an
