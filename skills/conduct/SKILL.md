@@ -101,6 +101,12 @@ Show the Owner the plan as printed: per item its type, steps, charter,
 band, model, effort and ceiling, its estimate and reserved number block,
 the batch estimate against what remains of the monthly cap, and every
 deferral line. Deferrals are part of the answer, never noise. `open`
+first checks what every `run` will need (a usable `factory.json`, a
+readable cost ledger on `origin/main`, no push gap; see step 4) and
+refuses before anything exists, so no launch refusal of that kind can
+first appear after the Owner's spend consent. Report such a refusal and
+stop. A repo with no `docs/factory/costs.jsonl` on `origin/main` yet has
+spent nothing; that is not a refusal. Otherwise `open`
 creates the batch branch and worktree and queues the spend ask. Work
 from the batch worktree from here on, and run `next`.
 
@@ -155,6 +161,19 @@ exits, read its one-line result and the Worker's output it names, then
 run `next`. A failed run already queued its own stall ask; do not
 retry it. A launch the monthly cap refuses prints a `cd:` problem and
 pauses dispatch behind an ask; run `next` and present it.
+
+A launch refused before any Worker runs writes no run row, so the tool
+records the refusals a retry cannot fix: a push gap (any `cd: launch
+refused:` line), an unusable `factory.json` (a `config:` line), a
+malformed cost ledger on `origin/main` or an item branch, and the
+monthly cap. Each prints its problem, then `dispatch is paused behind
+<ask-id>`: a batch-wide pause ask (`resume` / `stop`) that holds every
+`ready` step. Run `next` and present it; the Owner fixes what it names,
+then answers `resume`. Every other refusal is transient and recorded
+nowhere, and `next` offers the step again: a git or gh read that failed,
+a ledger lock or write, or a step that is not legal yet (an item already
+in flight, an unanswered ask). Retry a transient refusal once on the
+next tick; if it repeats, report it to the Owner instead of looping.
 
 A Worker runs with no GitHub credential in its environment, and git's
 push URLs rewritten to a path that cannot exist. The runner refuses to

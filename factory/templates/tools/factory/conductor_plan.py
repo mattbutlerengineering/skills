@@ -439,7 +439,13 @@ def plan_cli(root, args, now, run, git):
     return problems
 
 
-def open_cli(root, args, now, run, git):
+def open_cli(root, args, now, run, git, netrc=None):
+    """`open`, refused before the batch exists while conductor_run's
+    preflight finds a launch refusal no retry fixes: the spend ask is the
+    Owner's consent, and no refusal may first appear after it (#708).
+    `netrc` is injectable, ~/.netrc unless named."""
+    # Imported here: conductor_run imports this module (span).
+    import conductor_run
     agents, rest = _agents(args[1:])
     numbers = _issue_numbers(rest)
     if numbers is None:
@@ -451,6 +457,10 @@ def open_cli(root, args, now, run, git):
     if plan is None:
         return problems
     print("\n".join(compose_plan(plan)))
+    problems = conductor_run.preflight(
+        root, git, Path.home() / ".netrc" if netrc is None else netrc)
+    if problems:
+        return problems
     worktree, problems = open_batch(args[0], plan, now, git)
     if worktree is not None:
         print(f"cd: opened {worktree}")

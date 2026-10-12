@@ -73,6 +73,8 @@ CEILING_OUTCOME = {"timeout": "killed:cost-at-ceiling",
                    "unaccounted": "unaccounted:cost-at-ceiling"}
 CAP_WHY = ("the monthly cap is ADR-0034's breaker; raise monthly_cap_usd in"
            " factory.json first, or a resumed launch asks again")
+REFUSAL_WHY = ("a retry meets the same refusal until the setting it names"
+               " changes; change it, then resume")
 WORKER_WHY = ("a first failure is evidence about the item as often as about"
               " the agent, so nothing retries without your answer")
 OBJECTIVES = {
@@ -398,13 +400,39 @@ def _left_unchecked(git, branch, briefed, wo):
     return None
 
 
+def ref_spend_rows(git, ref):
+    """(the spend rows the ref's cost ledger holds, problems a retry may
+    fix, problems it cannot). An absent ledger holds none (#708):
+    nothing seeds docs/factory/costs.jsonl in a consumer repo, so its
+    first run finds none on main. A malformed one is never read as
+    empty."""
+    path = cost_ledger.COST_LEDGER
+    listed, problems = _git(git, ["ls-tree", "--name-only", ref, "--",
+                                  path], f"cd: git ls-tree {ref}")
+    if problems:
+        return None, problems, []
+    if not listed.strip():
+        return [], [], []
+    shown = f"{ref}:{path}"
+    text, problems = _git(git, ["show", shown], f"cd: git show {shown}")
+    if problems:
+        return None, problems, []
+    entries = []
+    for lineno, entry, suffixes in cost_ledger.parse(text):
+        if suffixes:
+            return None, [], [f"cd: {shown}:{lineno} {suffixes[0]}"]
+        entries.append(entry)
+    return entries, [], []
+
+
 def month_spend(git, rows, batch, now):
-    """(dollars spent this month, problems) as the run-time cap check
-    sees it: origin/main's spend rows and every launched item branch's,
-    each row once (cost_ledger.row_key), selected by
-    cost_ledger.dispatched, the breaker's one row rule. The batch
-    worktree's own costs.jsonl is a snapshot from the batch's open, and
-    item spend stays on item branches until it merges."""
+    """(dollars spent this month, problems a retry may fix, problems it
+    cannot) as the run-time cap check sees it: origin/main's spend rows
+    and every launched item branch's, each row once
+    (cost_ledger.row_key), selected by cost_ledger.dispatched, the
+    breaker's one row rule. The batch worktree's own costs.jsonl is a
+    snapshot from the batch's open, and item spend stays on item
+    branches until it merges."""
     read = view(rows)
     launched = [entry["item"] for entry in read["plan"]["items"]
                 if any("run_id" in row
@@ -412,17 +440,28 @@ def month_spend(git, rows, batch, now):
     entries = {}
     for ref in ["origin/main"] + [flow.item_branch(batch, item)
                                   for item in launched]:
-        shown = f"{ref}:{cost_ledger.COST_LEDGER}"
-        text, problems = _git(git, ["show", shown], f"cd: git show {shown}")
-        if problems:
-            return None, problems
-        for lineno, entry, suffixes in cost_ledger.parse(text):
-            if suffixes:
-                return None, [f"cd: {shown}:{lineno} {suffixes[0]}"]
-            entries[cost_ledger.row_key(entry)] = entry
+        found, problems, malformed = ref_spend_rows(git, ref)
+        if problems or malformed:
+            return None, problems, malformed
+        entries.update((cost_ledger.row_key(entry), entry)
+                       for entry in found)
     month = now.strftime("%Y-%m")
     return sum(entry["cost"] for entry in cost_ledger.dispatched(
-        list(entries.values()), month)), []
+        list(entries.values()), month)), [], []
+
+
+def preflight(root, git, netrc):
+    """(problems): the launch refusals no retry fixes that `run` would
+    meet whatever the item: an unusable factory.json, a malformed cost
+    ledger on origin/main, and a push gap. `open` checks them before it
+    queues the spend ask, so none first appears after spend consent
+    (#708)."""
+    config, problems = factory_config.load(root)
+    if not problems:
+        problems = factory_config.resolve_cap(config)[1] \
+            + factory_config.resolve_gate_command(config)[1]
+    _, unread, malformed = ref_spend_rows(git, "origin/main")
+    return problems + unread + malformed + push_gaps(git, root, netrc)
 
 
 def _in_flight_usd(rows):
@@ -436,6 +475,41 @@ def _in_flight_usd(rows):
             total += next(s["ceiling_usd"] for s in entry["steps"]
                           if s["step"] == found["state"])
     return total
+
+
+def _pause(rows, now, ask_kind, question, recommended, why):
+    """(the batch-level ask dispatch waits behind, rows to write,
+    problems): a pending batch-level ask is reused, never repeated."""
+    given = answers(rows)
+    pending = next((row for row in rows if row["kind"] == "ask"
+                    and row["item"] is None and row["ask_kind"] != "merge"
+                    and row["id"] not in given), None)
+    if pending is not None:
+        return pending, [], []
+    asked, problems = ask_row(rows, now, None, ask_kind, question,
+                              flow.PAUSE_OPTIONS, recommended, why)
+    return asked, ([] if problems else [asked]), problems
+
+
+def hold_dispatch(root, batch, now, item, step, refusals):
+    """(problems): the refusals of a launch no retry fixes, then the
+    batch-wide pause ask they put dispatch behind (#709). A refused
+    launch writes no run row, so without it `next` would re-offer the
+    step on every tick and nothing would reach the Owner."""
+    held_by = []
+
+    def build(rows):
+        pending, written, problems = _pause(
+            rows, now, "stall", f"Launching {item} {step} was refused:"
+            f" {'; '.join(refusals)}. Resume dispatch, or stop?", "resume",
+            REFUSAL_WHY)
+        held_by.append(pending)
+        return (None, problems) if problems else (written, [])
+    _, problems = append(root, batch, build)
+    if problems:
+        return refusals + problems
+    return refusals + [f"cd: launching {item} {step} was refused; dispatch"
+                       f" is paused behind {held_by[-1]['id']}"]
 
 
 def _launch(root, batch, now, launch, spent, cap):
@@ -458,19 +532,11 @@ def _launch(root, batch, now, launch, spent, cap):
                                   step, "launched", **launch["fields"]), []
         what = (f"{item} {step} (${ceiling:.2f} ceiling) would put the"
                 f" month at ${month:.2f} against its ${cap:.2f} cap")
-        given = answers(rows)
-        pending = next((row for row in rows if row["kind"] == "ask"
-                        and row["item"] is None
-                        and row["ask_kind"] != "merge"
-                        and row["id"] not in given), None)
-        written = []
-        if pending is None:
-            pending, problems = ask_row(
-                rows, now, None, "spend", f"Launching {what}. Resume"
-                " dispatch, or stop?", flow.PAUSE_OPTIONS, "stop", CAP_WHY)
-            if problems:
-                return None, problems
-            written = [pending]
+        pending, written, problems = _pause(
+            rows, now, "spend", f"Launching {what}. Resume dispatch, or"
+            " stop?", "stop", CAP_WHY)
+        if problems:
+            return None, problems
         refused.append(f"cd: launching {what}; dispatch is paused behind"
                        f" {pending['id']}")
         return written, []
@@ -478,7 +544,7 @@ def _launch(root, batch, now, launch, spent, cap):
     return problems or refused
 
 
-def _prepare(root, batch, item, step, git, gh, netrc):
+def _prepare(root, batch, item, step, git, gh, netrc, now):
     """(context dict, problems): everything decided before launch."""
     rows, problems = load(root, batch)
     if problems:
@@ -494,10 +560,11 @@ def _prepare(root, batch, item, step, git, gh, netrc):
     if problems:
         return None, problems
     worktree, problems = _worktree(git, batch, item)
-    if not problems:
-        problems = push_gaps(git, worktree, netrc)
     if problems:
         return None, problems
+    problems = push_gaps(git, worktree, netrc)
+    if problems:
+        return None, hold_dispatch(root, batch, now, item, step, problems)
     wo, context, body, problems = _work(rows, entry, step, git, gh, batch,
                                         worktree)
     if problems:
@@ -527,14 +594,16 @@ def _prepare(root, batch, item, step, git, gh, netrc):
 def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
              pid=None, netrc=None):
     """(summary, problems): one Worker run. problems only when nothing
-    was launched or a ledger write failed; a failed run is a stall. The
+    was launched or a ledger write failed; a failed run is a stall, and
+    a launch refusal no retry fixes pauses dispatch (hold_dispatch). The
     launch row carries the launch time, and every row written after the
     run its end time (review minor 1): a stall ask stamped at launch
     would count the whole run as Owner wait."""
     pid = os.getpid() if pid is None else pid
     now = clock()
     netrc = Path.home() / ".netrc" if netrc is None else netrc
-    ctx, problems = _prepare(root, batch, item, step, git, gh, netrc)
+    ctx, problems = _prepare(root, batch, item, step, git, gh, netrc,
+                             now)
     if problems:
         return None, problems
     entry, run_id, worktree = ctx["entry"], ctx["run_id"], ctx["worktree"]
@@ -544,9 +613,12 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     config, problems = factory_config.load(root)
     cap, found = factory_config.resolve_cap(config or {})
     gate, unusable = factory_config.resolve_gate_command(config or {})
-    problems = problems or found or unusable
-    if not problems:
-        spent, problems = month_spend(git, ctx["rows"], batch, now)
+    refusals = problems or found or unusable
+    if not refusals:
+        spent, problems, refusals = month_spend(git, ctx["rows"], batch,
+                                                now)
+    if refusals:
+        return None, hold_dispatch(root, batch, now, item, step, refusals)
     if not problems:
         problems = _launch(root, batch, now, {
             "item": item, "step": step, "ceiling": ceiling,
