@@ -12,6 +12,7 @@ import ast
 import collections
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -1275,6 +1276,25 @@ class TestAcceptanceStampRealRepo(unittest.TestCase):
                              f"gates failed in stamped repo:\n"
                              f"{result.stdout}\n{result.stderr}")
             self.assertIn("gates: 0 problem(s)", result.stdout)
+
+    def test_running_the_stamped_tools_leaves_no_bytecode_to_commit(self):
+        # #705: a consumer ran conductor.py plan, and the commit that
+        # followed carried tools/factory/__pycache__/*.pyc.
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "product"
+            target.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=target, check=True)
+            self.assertEqual(factory_init.stamp(REPO_ROOT, target), [])
+            subprocess.run([sys.executable, "-c", "import conductor"],
+                           cwd=target / "tools" / "factory", check=True,
+                           env={k: v for k, v in os.environ.items()
+                                if k != "PYTHONDONTWRITEBYTECODE"})
+            self.assertTrue(any((target / "tools" / "factory"
+                                 / "__pycache__").iterdir()))
+            listed = subprocess.run(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                cwd=target, capture_output=True, text=True, check=True)
+            self.assertNotIn("__pycache__", listed.stdout)
 
 
 if __name__ == "__main__":
