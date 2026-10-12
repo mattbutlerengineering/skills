@@ -58,6 +58,8 @@ from pathlib import Path
 import cli
 import eval_schema
 import factory_roles
+from charter_recorded import (load_transcripts, recorded_arm,
+                              recorded_runner)
 from trigger_eval import HARNESSES, ROOT
 
 # A fixture may target any chartered role (factory_roles.ROLES — the
@@ -648,23 +650,6 @@ def claude_runner(root, model, timeout, charter=charter_text):
     return run
 
 
-def recorded_runner(transcripts):
-    """Score a recorded transcript set — the offline half, no model, no cost."""
-    def run(case):
-        return transcripts.get(case["id"],
-                               {"tool_calls": [], "text": "",
-                                "error": "no recorded transcript"})
-    return run
-
-
-def recorded_arm(pairs, arm):
-    """One arm of a recorded control set, {case_id: {arm: transcript}}.
-    A missing arm falls through to recorded_runner's error transcript."""
-    return recorded_runner({case_id: pair[arm]
-                            for case_id, pair in pairs.items()
-                            if isinstance(pair, dict) and arm in pair})
-
-
 def record(output, results_dir):
     """Write a dated snapshot; eval_schema owns the recording."""
     return eval_schema.write_snapshot(output, results_dir, "charter")
@@ -697,15 +682,6 @@ def print_control_report(output):
     print(f"charter control ({output['source']}):"
           f" {summary['sensitive']}/{summary['total']} sensitive",
           file=sys.stderr)
-
-
-def read_transcripts(path):
-    """The --transcripts file, or None after reporting why it is unusable."""
-    try:
-        return json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as err:
-        print(f"error: cannot read {path}: {err}", file=sys.stderr)
-        return None
 
 
 def arm_runners(args, transcripts):
@@ -772,8 +748,11 @@ def main(argv=None):
 
     transcripts = None
     if args.transcripts:
-        transcripts = read_transcripts(args.transcripts)
-        if transcripts is None:
+        transcripts, problems = load_transcripts(args.transcripts,
+                                                 args.control)
+        if problems:
+            for problem in problems:
+                print(f"error: {problem}", file=sys.stderr)
             return 1
         source, model = "recorded-transcripts", None
     else:

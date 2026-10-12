@@ -225,6 +225,85 @@ class TestMergeUnderStandingConsent(unittest.TestCase):
             "cd: merge refused: #12 has no reviewed pass"])
 
 
+class TestCover(unittest.TestCase):
+    """One reading of what covers an item's merge (issue #734), which
+    `next` and the merge precondition both consult: covered (ready to
+    merge), waiting (behind an unmerged train item) or owed (the Owner
+    owes a merge answer)."""
+
+    def cover(self, rows, blobs=None, policy=OFF):
+        return consent.cover(START + rows, "#12", blobs or {}, policy)
+
+    def test_a_consent_row_under_a_policy_turned_off_is_owed(self):
+        self.assertEqual(self.cover(SHIPPED + [ROW]), (
+            "owed", ["standing consent is off in factory.json"]))
+        self.assertEqual(self.cover(SHIPPED + [ROW], policy=ON),
+                         ("covered", []))
+
+    def test_a_train_answer_over_an_unapproved_blob_is_owed(self):
+        rows = tcm.feature_shipped({ADR: "aaa"}) + tcm.train("ask-2",
+                                                             ["#12"])
+        self.assertEqual(self.cover(rows, {ADR: "ccc"}), (
+            "owed", [f"#12's gate file {ADR} is not the one approved at"
+                     " its gate ask; it needs its own merge ask"]))
+        self.assertEqual(self.cover(rows, {ADR: "aaa"}), ("covered", []))
+
+    def test_a_train_behind_an_unmerged_item_is_waiting(self):
+        rows = SHIPPED + tcm.train("ask-2", ["#13", "#12"])
+        self.assertEqual(self.cover(rows), (
+            "waiting", ["#12 rides train ask-2 behind #13, which is"
+                        " planned, not merged"]))
+
+    def test_its_own_answer_beats_a_lapsed_standing_consent(self):
+        rows = SHIPPED + [ROW] + tcm.own("ask-2", "#12")
+        self.assertEqual(self.cover(rows), ("covered", []))
+
+    def test_nothing_covering_it_is_owed(self):
+        self.assertEqual(self.cover(SHIPPED),
+                         ("owed", ["no merge answer covers #12"]))
+
+
+class TestNextAgreesWithMerge(unittest.TestCase):
+    """The defect #734 named: `next` reported an item ready that the
+    merge precondition refused on every turn, and never offered the
+    merge ask the Owner then owed (ADR-0086)."""
+
+    advance = TestNextRecordsStandingConsent.advance
+
+    def test_a_lapsed_standing_consent_is_due_not_ready(self):
+        result, problems = self.advance(START + SHIPPED + [ROW], OFF)
+        self.assertEqual(problems, [])
+        self.assertNotIn({"item": "#12", "step": "merge"}, result["ready"])
+        self.assertEqual(result["merge_due"], ["#12"])
+        self.assertEqual(merge.merge_problems(self.rows, "#12", {}, OFF), [
+            "cd: merge refused: standing consent is off in factory.json"])
+
+    def test_a_train_over_a_changed_gate_blob_is_due_not_ready(self):
+        rows = (START + tcm.feature_shipped({ADR: "aaa"})
+                + tcm.train("ask-2", ["#12"]))
+        result, problems = self.advance(rows, OFF, changed=f"{ADR}\n")
+        self.assertEqual(problems, [])
+        self.assertNotIn({"item": "#12", "step": "merge"}, result["ready"])
+        self.assertEqual(result["merge_due"], ["#12"])
+
+    def test_a_train_behind_an_unmerged_item_is_neither(self):
+        rows = START + SHIPPED + tcm.train("ask-2", ["#13", "#12"])
+        result, _ = self.advance(rows, ON)
+        self.assertNotIn({"item": "#12", "step": "merge"}, result["ready"])
+        self.assertEqual(result["merge_due"], [])
+
+    def test_a_pending_own_ask_is_not_due(self):
+        rows = START + SHIPPED + [ROW] + tcm.own("ask-2", "#12")[:1]
+        result, _ = self.advance(rows, OFF)
+        self.assertEqual(result["merge_due"], [])
+
+    def test_its_own_answer_beats_a_lapsed_standing_consent(self):
+        rows = START + SHIPPED + [ROW] + tcm.own("ask-2", "#12")
+        result, _ = self.advance(rows, OFF)
+        self.assertIn({"item": "#12", "step": "merge"}, result["ready"])
+        self.assertEqual(result["merge_due"], [])
+
+
 class TestStandingMergeTurn(tcm.TurnCase):
     def merge(self, policy):
         self.ledger(tcm.START + self.filled(SHIPPED) + [ROW])

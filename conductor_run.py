@@ -29,9 +29,10 @@ import factory_config
 from assembler import PR_BODY_FILE
 from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
     read_execution
-from conductor import WORKER_ENV, answers, append, ask_row, current_state, \
-    item_view, load, stamp, view
-from conductor_plan import WORKTREES, main_checkout, span
+from conductor import RUNS, WORKER_ENV, answers, append, ask_row, \
+    current_state, item_view, item_worktree, load, stamp, view
+from conductor import run_id as make_run_id
+from conductor_plan import main_checkout, span
 from knowledge_plane import WO_TOKEN
 from orientation_pack import orientation_pack
 from protocol import read_frontmatter
@@ -67,8 +68,6 @@ NO_PUSH = "/dev/null/conductor-worker-may-not-push/"
 WORKER_GIT_CONFIG = ((f"url.{NO_PUSH}.pushInsteadOf", "https://"),
                      (f"url.{NO_PUSH}.pushInsteadOf", "http://"),
                      ("credential.helper", ""))
-WORKTREE = WORKTREES + "/conductor-{batch}-{n}"
-RUNS = "docs/factory/batches/{batch}/runs"
 CEILING_OUTCOME = {"timeout": "killed:cost-at-ceiling",
                    "unaccounted": "unaccounted:cost-at-ceiling"}
 CAP_WHY = ("the monthly cap is ADR-0034's breaker; raise monthly_cap_usd in"
@@ -295,7 +294,7 @@ def worktree_path(git, batch, item):
     checkout, problems = main_checkout(git)
     if problems:
         return None, problems
-    return checkout / WORKTREE.format(batch=batch, n=item[1:]), []
+    return checkout / item_worktree(batch, item), []
 
 
 def _worktree(git, batch, item):
@@ -381,10 +380,14 @@ def _deliver(git, gh, worktree, branch, item, batch):
 
 
 def _spend(git, worktree, wo, run_id, model, tokens, cost, outcome, now):
-    """Commit the run's one spend row on the item branch. A stall reason
-    on failure, else None."""
-    cost_ledger.append(worktree, cost_ledger.entry(
+    """Commit the run's one spend row on the item branch, written through
+    cost_ledger.record, the one guarded write (#736). A stall reason on
+    failure, else None."""
+    refused = cost_ledger.record(worktree, cost_ledger.entry(
         wo, run_id, model, tokens, cost, outcome, now.strftime("%Y-%m-%d")))
+    if refused:
+        return (f"refusing to record the spend row of {run_id}: "
+                + "; ".join(refused))
     for args in (["add", cost_ledger.COST_LEDGER],
                  ["commit", "-m", f"{SPEND_SUBJECT}{run_id}"]):
         _, problems = _git(git, ["-C", str(worktree), *args],
@@ -639,7 +642,7 @@ def _prepare(root, batch, item, step, git, gh, netrc, now):
             "context": context, "body": body, "worktree": worktree,
             "block": found["reserved"], "briefed": briefed, "head": head,
             "prior": prior,
-            "run_id": f"conductor-{batch}-{item[1:]}-{step}-{seq}"}, []
+            "run_id": make_run_id(batch, item, step, seq)}, []
 
 
 def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,

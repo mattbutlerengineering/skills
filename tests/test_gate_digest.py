@@ -302,6 +302,29 @@ class TestRunDaily(unittest.TestCase):
                 "ledger: docs/factory/costs.jsonl:1 ledger line is missing"
                 " field(s): cost, model, outcome, run_id, tokens"])
 
+    def test_a_rescan_over_an_unreadable_ledger_appends_nothing(self):
+        # #736: the failed read used to leave the dedup set empty, so
+        # every past gate passage was re-appended to the ledger.
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = tree(tmp)
+            ledger = fixture.write("docs/factory/costs.jsonl",
+                                   '{"wo": "WO-0010"}\n')
+            run = gh(issues=[issue(131, "WO-0010 sweeps", state="CLOSED",
+                                   labels=["wo:merged"])],
+                     timelines={131: [
+                         labeled("2026-07-01T09:00:00Z", "wo:needs-review"),
+                         unlabeled("2026-07-01T10:00:00Z",
+                                   "wo:needs-review"),
+                         labeled("2026-07-01T10:00:00Z", "wo:merged")]})
+            outputs, problems = gate_digest.run_daily(
+                fixture.root, run=run, clock=clock)
+            self.assertEqual(problems, [
+                "ledger: docs/factory/costs.jsonl:1 ledger line is missing"
+                " field(s): cost, model, outcome, run_id, tokens"])
+            self.assertEqual(outputs["changed"], "false")
+            self.assertEqual(ledger.read_text(encoding="utf-8"),
+                             '{"wo": "WO-0010"}\n')
+
     def test_a_failing_issue_list_reports_and_posts_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = gh(failing=["issue", "list"])

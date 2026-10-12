@@ -363,7 +363,21 @@ class TestOpen(unittest.TestCase):
                 conductor_plan.open_batch("B 1", result, clock(),
                                           fake_git())[1],
                 ["cd: batch 'B 1' is not a batch name (lowercase letters,"
-                 " digits and hyphens)"])
+                 " digits and hyphens, never ending in -<digits>, which"
+                 " names an item)"])
+
+    def test_an_item_name_is_refused_as_a_batch_name_before_git(self):
+        # #735: item #2 of batch oct is conductor/oct-2, so batch oct-2
+        # would share its branch and worktree.
+        result, _ = plan([issue(12)])
+        calls = []
+        self.assertEqual(
+            conductor_plan.open_batch("oct-2", result, clock(),
+                                      fake_git(calls=calls))[1],
+            ["cd: batch 'oct-2' is not a batch name (lowercase letters,"
+             " digits and hyphens, never ending in -<digits>, which"
+             " names an item)"])
+        self.assertEqual(calls, [])
 
     def test_a_failed_rev_parse_opens_nothing(self):
         import subprocess

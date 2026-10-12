@@ -181,6 +181,60 @@ class TestOneOwner(unittest.TestCase):
         self.assertEqual(conductor.parsed_at(AT), clock())
 
 
+class TestNames(unittest.TestCase):
+    """The Batch's names (#735): one owner, and the batch and item
+    namespaces disjoint."""
+    NAMES = ("oct", "oct-2", "oct-2-x", "b1", "b1-13", "a-b-c", "x9", "2")
+    ITEMS = ("#2", "#13", "#5")
+
+    def test_an_item_name_is_refused_as_a_batch_name(self):
+        self.assertEqual(conductor.item_branch("oct", "#2"),
+                         "conductor/oct-2")
+        self.assertEqual(conductor.batch_name_problems("oct-2"), [
+            "cd: batch 'oct-2' is not a batch name (lowercase letters,"
+            " digits and hyphens, never ending in -<digits>, which names"
+            " an item)"])
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(conductor.load(tmp, "oct-2"), (
+                None, conductor.batch_name_problems("oct-2")))
+
+    def test_no_item_branch_or_worktree_is_another_batchs(self):
+        batches = [name for name in self.NAMES
+                   if not conductor.batch_name_problems(name)]
+        self.assertEqual(batches, ["oct", "oct-2-x", "b1", "a-b-c", "x9", "2"])
+        branches = {conductor.batch_branch(b) for b in batches}
+        worktrees = {conductor.batch_worktree(b) for b in batches}
+        for batch in batches:
+            for item in self.ITEMS:
+                self.assertNotIn(conductor.item_branch(batch, item),
+                                 branches, (batch, item))
+                self.assertNotIn(conductor.item_worktree(batch, item),
+                                 worktrees, (batch, item))
+        self.assertEqual(conductor.batch_worktree("oct"),
+                         ".claude/worktrees/conductor-oct")
+        self.assertEqual(conductor.item_worktree("oct", "#2"),
+                         ".claude/worktrees/conductor-oct-2")
+
+    def test_a_run_id_round_trips_and_a_prefix_sharing_batch_is_not_ours(
+            self):
+        made = conductor.run_id("oct", "#2", "spec", 1)
+        self.assertEqual(made, "conductor-oct-2-spec-1")
+        self.assertEqual(conductor.run_item("oct", made), "#2")
+        # Batch oct-2-x's item #5 shares the prefix conductor-oct-2-.
+        other = conductor.run_id("oct-2-x", "#5", "spec", 1)
+        self.assertIsNone(conductor.run_item("oct", other))
+        self.assertEqual(conductor.run_item("oct-2-x", other), "#5")
+        self.assertIsNone(conductor.run_item("oct", "unrelated-run"))
+
+    def test_the_batch_dir_holds_the_ledger_and_runs(self):
+        top = Path(conductor.batch_dir("b1"))
+        self.assertEqual(top, Path("docs/factory/batches/b1"))
+        self.assertEqual(Path(conductor.LEDGER.format(batch="b1")).parent,
+                         top)
+        self.assertEqual(Path(conductor.RUNS.format(batch="b1")).parent,
+                         top)
+
+
 class TestLoad(unittest.TestCase):
     def test_reads_rows_in_order(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -222,7 +276,8 @@ class TestLoad(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(conductor.load(tmp, "../x"), (None, [
                 "cd: batch '../x' is not a batch name (lowercase letters,"
-                " digits and hyphens)"]))
+                " digits and hyphens, never ending in -<digits>, which"
+                " names an item)"]))
 
 
 class TestAppendLock(unittest.TestCase):

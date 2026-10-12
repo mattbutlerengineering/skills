@@ -86,6 +86,16 @@ class TestPaths(Tree):
             " not exist",
         ])
 
+    def test_titled_and_angle_bracket_dangling_links(self):
+        self.file("CLAUDE.md", '[a](docs/a.md "Title") [b](<docs/b.md>)'
+                  ' [ok](<src/app.py> "App")\n')
+        self.assertEqual(self.drift(), [
+            "drift: CLAUDE.md:1 names path 'docs/a.md', which does not"
+            " exist",
+            "drift: CLAUDE.md:1 names path 'docs/b.md', which does not"
+            " exist",
+        ])
+
     def test_placeholders_urls_globs_home_and_absolute_are_skipped(self):
         self.file("CLAUDE.md", "\n".join([
             "`docs/features/<slug>/run.md` `https://x.io/a.md`",
