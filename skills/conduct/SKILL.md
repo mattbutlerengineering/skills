@@ -25,6 +25,23 @@ The repo's `factory.json` (`.github/factory.json` when stamped) names
 its gate in `conductor.gate_command`; absent, it is `make check`.
 Workers may run that one command, and the merge turn runs it.
 
+An issue plans as a `feature` or a `fix` by its labels. Absent any other
+setting, the first `type:` label decides (`type:feature` is a feature,
+`type:defect` and `type:chore` are fixes). A repo with labels of its own
+maps them in `conductor.type_labels`, for example
+`{"feature": "feature", "ci-fix": "fix"}`. The map then replaces the
+`type:` rule, so list `type:` labels in it too if the repo uses both.
+An issue whose labels map to two different types is deferred with the
+labels named rather than guessed. `wo:ready-for-agent` still makes an
+order either way.
+
+Size works the same way. Absent any setting, the first `size:S`,
+`size:M` or `size:L` label prices the item. `conductor.size_labels` maps
+the repo's own size labels to `S`, `M` or `L` and then replaces that
+rule. Labels mapping to two sizes defer with the labels named.
+`conductor.default_size` (`S`, `M` or `L`) sizes an issue that has no
+size label at all, and never settles a conflict.
+
 All batch state is the **batch ledger**
 (`docs/factory/batches/<batch>/ledger.jsonl`) on the batch branch
 `conductor/<batch>`. This skill carries nothing between turns.

@@ -20,6 +20,21 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
    malformed manifest key, a destination resolving outside the target,
    and any existing file in the target, printing one problem line per
    refusal; resolve and re-run.
+
+   A repo that already has its own code owners, ADR index or similar
+   curated files can opt in to keeping them:
+
+       python3 factory_init.py stamp --keep-existing <path-to-product-repo>
+
+   It keeps the target's own copy of each curated, non-executable seed
+   it finds (`.github/CODEOWNERS`, `.github/factory.json`,
+   `.github/labels.json`, the `docs/adr/` and `docs/design/` seeds) and
+   prints `factory-init: kept <path>` for each. It still refuses any
+   collision in the executable payload (`tools/factory/`,
+   `.github/workflows/`, the `factory/` mirror, the `Makefile`) and never
+   overwrites. A kept file is the repo's version, not the factory's: a
+   kept `labels.json` needs the labels detector J names, and a kept
+   `CODEOWNERS` needs the factory's gate paths added by hand.
 3. What lands in the target — `factory/manifest.json` is the authority;
    the groups are:
    - `factory/` — the pristine mirror (manifest + templates) that the

@@ -30,6 +30,13 @@ problem strings; the CLI prints them and exits nonzero.
                     destination resolving outside the target, and any
                     existing destination file — no partial stamps, no
                     overwrites, no writes outside the target tree.
+  stamp --keep-existing <target>
+                    the same stamp, except an existing curated seed
+                    (CODEOWNERS, factory.json, labels.json, ADR and
+                    design doc seeds — see is_keepable) is kept as the
+                    target's own and reported, not refused. Any
+                    collision in the executable payload is still
+                    refused, and nothing is overwritten.
 """
 import json
 import re
@@ -354,20 +361,39 @@ def payload_copies(source, target):
     return (copies, []) if not escapes else ([], escapes)
 
 
-def stamp(source, target):
-    """Stamp the source payload into target; refuse drift and overwrites."""
+def _stamp(source, target, keepable):
+    """(kept, problems): stamp every copy whose destination is absent.
+    An existing destination is kept when keepable(dest) says so and is a
+    clash otherwise; any clash refuses the whole stamp before a write."""
     source, target = Path(source), Path(target)
     copies, problems = payload_copies(source, target)
     if problems:
-        return problems
+        return [], problems
+    existing = [dest for _, dest in copies if (target / dest).exists()]
     clashes = [f"factory-init: target already has {dest.as_posix()}"
-               for _, dest in copies if (target / dest).exists()]
+               for dest in existing if not keepable(dest)]
     if clashes:
-        return clashes
+        return [], clashes
     for src, dest in copies:
+        if dest in existing:
+            continue
         (target / dest).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, target / dest)
-    return []
+    return sorted(dest.as_posix() for dest in existing), []
+
+
+def stamp(source, target):
+    """Stamp the source payload into target; refuse drift and overwrites."""
+    return _stamp(source, target, lambda dest: False)[1]
+
+
+def stamp_keeping(source, target):
+    """(kept, problems): stamp, keeping the target's own copy of any
+    curated seed it already has (is_keepable) instead of refusing it
+    (#701). A consumer repo with its own CODEOWNERS or ADR index can then
+    adopt the factory. An executable-payload collision is still refused,
+    and nothing is ever overwritten."""
+    return _stamp(source, target, is_keepable)
 
 
 # Factory-owned destinations: the executable payload plus the pristine
@@ -383,6 +409,67 @@ def is_factory_owned(dest):
     return dest.as_posix().startswith(FACTORY_OWNED)
 
 
+# The one destination outside FACTORY_OWNED that is executable: update
+# keeps the repo's Makefile, but the stamped workflows call only make
+# targets, so a first stamp cannot adopt a Makefile it never wrote.
+EXECUTABLE_SEEDS = ("Makefile",)
+
+
+def is_keepable(dest):
+    """A curated, non-executable seed (CODEOWNERS, factory.json,
+    labels.json, the ADR and design doc seeds): what stamp_keeping may
+    leave as the target's own copy. Derived from FACTORY_OWNED, so a new
+    payload directory is executable unless that split says otherwise."""
+    return not (is_factory_owned(dest)
+                or dest.as_posix() in EXECUTABLE_SEEDS)
+
+
+# A workflow step's `run:` key, inline or as a list item; group 1 is
+# everything before `run`, so its length is the key's column.
+_RUN_KEY = re.compile(r"^(\s*(?:-\s+)?)run:\s*(.*)$")
+# A block scalar header (`|`, `>-`, `|2` ...), with an optional comment.
+_BLOCK_SCALAR = re.compile(r"^[|>][+-]?\d*\s*(#.*)?$")
+_SHELL_COMMENT = re.compile(r"(^|\s)#.*")
+_SHELL_OPERATOR = re.compile(r"&&|\|\||[;|]")
+_MAKE_CALL = re.compile(r"make\s+([a-z][a-z0-9-]*)")
+
+
+def _run_commands(text):
+    """The shell lines of every `run:` key in a workflow: the inline value,
+    or each line of its block scalar (those indented past the key)."""
+    lines, commands, i = text.splitlines(), [], 0
+    while i < len(lines):
+        match = _RUN_KEY.match(lines[i])
+        i += 1
+        if not match:
+            continue
+        if not _BLOCK_SCALAR.match(match.group(2)):
+            commands.append(match.group(2))
+            continue
+        column = len(match.group(1))
+        while i < len(lines) and (not lines[i].strip() or len(
+                lines[i]) - len(lines[i].lstrip()) > column):
+            commands.append(lines[i])
+            i += 1
+    return commands
+
+
+def make_calls(text):
+    """The make targets a workflow calls: `make <target>` as the command
+    word of a `run:` line or of a segment after a shell operator. Prose
+    anywhere else (a prompt, a name, a description) and shell comments
+    are not calls: a consumer workflow saying "so make the best backlog
+    candidates ready" reported a phantom `make the` target (#702)."""
+    targets = set()
+    for command in _run_commands(text):
+        for segment in _SHELL_OPERATOR.split(
+                _SHELL_COMMENT.sub("", command)):
+            match = _MAKE_CALL.match(segment.strip().lstrip("'\""))
+            if match:
+                targets.add(match.group(1))
+    return targets
+
+
 def missing_make_targets(target):
     """Targets the stamped workflows call that the repo's Makefile lacks.
 
@@ -391,7 +478,8 @@ def missing_make_targets(target):
     that adds a target
     (wo-failed, ADR-0045) leaves a repo whose refreshed assembler.yml calls
     a target its Makefile has never heard of. Nothing else reports that
-    until the workflow runs in anger.
+    until the workflow runs in anger. Only real calls count (make_calls):
+    a consumer repo's own workflows sit in the same directory.
     """
     makefile = target / "Makefile"
     if not makefile.is_file():
@@ -402,12 +490,7 @@ def missing_make_targets(target):
     workflows = target / ".github" / "workflows"
     called = set()
     for path in sorted(workflows.glob("*.yml")) if workflows.is_dir() else []:
-        # comment lines describe the convention ("every step goes through a
-        # `make` target") and would otherwise read as a call
-        body = "\n".join(line for line in
-                         path.read_text(encoding="utf-8").splitlines()
-                         if not line.lstrip().startswith("#"))
-        called.update(re.findall(r"\bmake\s+([a-z][a-z0-9-]*)", body))
+        called |= make_calls(path.read_text(encoding="utf-8"))
     return [f"factory-init: workflows call `make {name}` but the Makefile"
             f" has no {name} target (add it, or re-stamp the Makefile)"
             for name in sorted(called - defined)]
@@ -457,6 +540,11 @@ def main(argv):
         problems = update_manifest(root)
     elif len(argv) == 2 and argv[0] == "stamp":
         problems = stamp(root, Path(argv[1]))
+    elif argv[:2] == ["stamp", "--keep-existing"] and len(argv) == 3:
+        kept, problems = stamp_keeping(root, Path(argv[2]))
+        for rel in kept:
+            print(f"factory-init: kept {rel} (yours — the stamp did not"
+                  " write it)")
     elif len(argv) == 2 and argv[0] == "update":
         written, kept, problems = update(root, Path(argv[1]))
         for rel in kept:

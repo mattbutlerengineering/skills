@@ -110,8 +110,56 @@ def read_issues(numbers, run):
     return (None, problems) if problems else (issues, [])
 
 
-def _deferral(issue, labels, owner):
-    """(item type, size, reason): reason is None for a plannable issue."""
+def _item_type(labels, type_labels):
+    """(item type, reason) from the issue's labels. Without a configured
+    map, the first type: label decides through TYPE_BY_LABEL. With one
+    (factory.json conductor.type_labels, #700), every label it maps
+    counts, and labels mapping to two different types defer: guessing
+    which the Owner meant would price and step the item wrongly."""
+    if type_labels is None:
+        typed = [name for name in labels if name.startswith("type:")]
+        if not typed:
+            return None, "no type: label"
+        if typed[0] not in TYPE_BY_LABEL:
+            return None, f"{typed[0]} is not plannable"
+        return TYPE_BY_LABEL[typed[0]], None
+    return _mapped(labels, type_labels, "an item type", "type_labels")
+
+
+def _mapped(labels, table, what, key):
+    """(the one value the issue's mapped labels name, reason). No mapped
+    label, or labels mapping to two different values, is a reason."""
+    mapped = [(name, table[name]) for name in labels if name in table]
+    values = {value for _, value in mapped}
+    if not values:
+        return None, f"no label maps to {what} (conductor.{key})"
+    if len(values) > 1:
+        named = ", ".join(f"{name} -> {value}" for name, value in mapped)
+        noun = what.split(" ", 1)[1]
+        return None, f"its labels map to more than one {noun} ({named})"
+    return values.pop(), None
+
+
+def _size(labels, rules):
+    """(size, reason). Without a size map the first size:S|M|L label
+    decides; with one (conductor.size_labels) every label it maps counts,
+    and two different sizes defer. conductor.default_size applies only to
+    an issue with no size label at all, never to a conflict."""
+    table, default = rules.get("size_labels"), rules.get("default_size")
+    if table is None:
+        size = next((name[len("size:"):] for name in labels
+                     if name in ("size:S", "size:M", "size:L")), default)
+        return (size, None) if size else (None, "no size: label")
+    if default and not any(name in table for name in labels):
+        return default, None
+    return _mapped(labels, table, "a size", "size_labels")
+
+
+def _deferral(issue, labels, owner, rules=None):
+    """(item type, size, reason): reason is None for a plannable issue.
+    `rules` holds the configured label maps and default size, each
+    absent when factory.json does not set it."""
+    rules = rules or {}
     if (issue["state"] or "").upper() != "OPEN":
         return None, None, "closed"
     author = issue["author"].get("login")
@@ -121,16 +169,12 @@ def _deferral(issue, labels, owner):
     if assembler.READY_LABEL in labels:
         item_type = "order"
     else:
-        typed = [name for name in labels if name.startswith("type:")]
-        if not typed:
-            return None, None, "no type: label"
-        if typed[0] not in TYPE_BY_LABEL:
-            return None, None, f"{typed[0]} is not plannable"
-        item_type = TYPE_BY_LABEL[typed[0]]
-    size = next((name[len("size:"):] for name in labels
-                 if name in ("size:S", "size:M", "size:L")), None)
-    if size is None:
-        return None, None, "no size: label"
+        item_type, reason = _item_type(labels, rules.get("type_labels"))
+        if reason is not None:
+            return None, None, reason
+    size, reason = _size(labels, rules)
+    if reason is not None:
+        return None, None, reason
     return item_type, size, None
 
 
@@ -154,6 +198,20 @@ def _steps(item_type, labels, config, agents_dir, ceiling):
     return steps, problems
 
 
+def _label_rules(config):
+    """({type_labels, size_labels, default_size}, problems): the
+    configured label rules, each None when factory.json omits it."""
+    rules = {}
+    for key, resolve in (
+            ("type_labels", factory_config.resolve_type_labels),
+            ("size_labels", factory_config.resolve_size_labels),
+            ("default_size", factory_config.resolve_default_size)):
+        rules[key], problems = resolve(config)
+        if problems:
+            return None, problems
+    return rules, []
+
+
 def plan_batch(issues, owner, config, spent, highest, agents_dir):
     """(plan, problems): PURE over already-read inputs. Each plannable
     issue becomes an item priced from budgets_usd by its size, split
@@ -163,12 +221,15 @@ def plan_batch(issues, owner, config, spent, highest, agents_dir):
     cap, problems = factory_config.resolve_cap(config)
     if problems:
         return None, problems
+    rules, problems = _label_rules(config)
+    if problems:
+        return None, problems
     next_free = {kind: highest[kind] + 1 for kind in highest}
     items, deferred, total = [], [], 0
     for issue in issues:
         key = f"#{issue['number']}"
         labels = label_names(issue)
-        item_type, size, reason = _deferral(issue, labels, owner)
+        item_type, size, reason = _deferral(issue, labels, owner, rules)
         if reason is None:
             estimate, found = factory_config.resolve_budget(size, config)
             problems += found

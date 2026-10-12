@@ -45,6 +45,22 @@ target — one problem line per refusal, no partial stamps. That last refusal is
 strict: a repo that already has `docs/adr/README.md` cannot be stamped without
 moving the conflict out of the way first.
 
+A repo with curated files of its own can opt in instead (#701):
+
+```
+python3 factory_init.py stamp --keep-existing <path-to-target-repo>
+```
+
+It keeps the target's own copy of every curated, non-executable seed already
+there (`.github/CODEOWNERS`, `.github/factory.json`, `.github/labels.json`,
+the `docs/adr/` and `docs/design/` seeds) and prints one
+`factory-init: kept <path>` line per file. It still refuses any collision in
+the executable payload (`tools/factory/`, `.github/workflows/`, the `factory/`
+mirror, the `Makefile`) and never overwrites. Kept files are yours, so the
+checks in section 4 apply to them as they stand: a kept `labels.json` must
+carry the labels detector J names, and a kept `CODEOWNERS` needs the factory's
+gate paths added by hand.
+
 91 files land: the 45-file payload installed to its destinations, plus the
 pristine mirror it was stamped from. `factory/manifest.json` is the authority.
 
@@ -197,8 +213,17 @@ supported; run discovery would not find them.
 Coordinating several issues at once — fanning out agents, choosing a
 model and effort per step, ordering merges — is the `conduct` utility
 skill and its root tool `conductor.py` (PRD-0013,
-`docs/features/orchestrator/`). The tool is root-only, so the skill runs
-in this repository, not in a stamped product repo. `work-queue` still
+`docs/features/orchestrator/`). The payload ships it, so a stamped repo
+runs `tools/factory/conductor.py`, passing this plugin's charter stubs
+with `--agents` (#678). Its optional `conductor` table in
+`.github/factory.json` names the repo's gate command, the
+standing-consent policy, and how the repo's own issue labels plan
+(#700). `type_labels` maps labels to `feature` or `fix`, and
+`size_labels` maps them to the budget sizes `S`, `M` or `L`. Each map,
+when set, replaces the built-in rule (the first `type:` label, the first
+`size:S|M|L` label), and an issue whose labels map to two different
+values is deferred rather than guessed. `default_size` sizes an issue
+with no size label at all. Detector F checks the table. `work-queue` still
 fans out ready work orders through one stage, and `autorun` still drives
 one run end to end. One step needs no Conductor: turn on the merge queue
 ADR-0070 already chose, if the repo's plan allows it; the merge turn uses
