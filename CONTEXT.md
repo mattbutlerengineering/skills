@@ -187,6 +187,11 @@ close. `conductor.py` owns the row grammar; a line that breaks it fails
 every reader. Not the cost ledger, which holds the batch's spend.
 _Avoid_: log, journal
 
+**Item view**:
+One item's read-only reading of the batch ledger (state, launches, asks,
+reservations), computed by `conductor.py` from the rows. Capability
+modules ask it; they never filter rows.
+
 **Decision queue**:
 The batch ledger's unanswered asks, presented to the Owner oldest first,
 one at a time, recommended option first. An answer row written straight

@@ -27,8 +27,8 @@ import conductor_flow as flow
 import cost_ledger
 import factory_config
 from cli import CLI_FAILURES, detail
-from conductor import TERMINAL, append, ask_row, current_state, load, \
-    numbered, parse, parsed_at, read_text, stamp
+from conductor import TERMINAL, append, ask_row, current_state, \
+    item_view, load, numbered, parse, parsed_at, read_text, stamp, view
 
 SCORECARDS = "docs/factory/scorecards.jsonl"
 # Asks the Conductor raises beyond the planned spend, gate and merge
@@ -70,7 +70,7 @@ def _review_changes(rows):
 def compute(rows, lines, shown, entries, now):
     """(scorecard row, problems), PURE over the ledger's rows (each on
     its line in `lines`) and the cost ledger's entries."""
-    plan = flow.plan_row(rows)
+    plan = view(rows)["plan"]
     if plan is None:
         return None, [f"cd: {shown} has no plan row"]
     spent = {}
@@ -157,7 +157,7 @@ def _final_items(rows, batch):
     if any(row["kind"] == "close" for row in rows):
         return None, [f"cd: close refused: batch {batch} is already closed"]
     finals = {state: [] for state in TERMINAL}
-    for entry in (flow.plan_row(rows) or {}).get("items", []):
+    for entry in (view(rows)["plan"] or {}).get("items", []):
         state = current_state(rows, entry["item"])
         if state not in TERMINAL:
             return None, [f"cd: close refused: {entry['item']} is {state},"
@@ -322,8 +322,7 @@ def close_batch(root, batch, clock, git, gh):
     ask_id, problems = _record_close(root, batch, now, finals)
     if problems:
         return None, problems
-    reasons = {item: [row for row in rows if row["kind"] == "state"
-                      and row["item"] == item][-1]["reason"]
+    reasons = {item: item_view(rows, item)["last"]["reason"]
                for item in finals["blocked"]}
     return {"batch": batch, **finals, "ask": ask_id}, _publish(
         root, batch, git, gh, finals, reasons)

@@ -124,6 +124,10 @@ TERMINAL = ("merged", "blocked")
 BLOCK = "block"
 # The one consent policy a `consent` row may name (ADR-0086).
 STANDING = "standing"
+# A run row's outcome when its step finished cleanly.
+COMPLETED = "completed"
+# The stall answers that resume an item's stalled step.
+RETRIES = ("retry", "retry-up")
 
 
 def is_text(value):
@@ -351,25 +355,127 @@ def parsed_at(value):
     return datetime.strptime(value, AT_FORMAT).replace(tzinfo=timezone.utc)
 
 
+# --- the item view: the ledger's one reading interface (#694) ------------
+
+# The item kinds an item view groups, each a tuple in ledger order.
+_ITEM_KINDS = {"state": "states", "run": "runs", "ask": "asks",
+               "reserve": "reserves"}
+
+
+def _latest(answered, asks, ask_kind, after):
+    """The latest-placed answer to one of `asks` of this kind written
+    after ledger position `after`, or None. `answered` maps an ask id to
+    (position, answer row)."""
+    found = [answered[ask["id"]] for ask in asks
+             if ask["ask_kind"] == ask_kind and ask["id"] in answered
+             and answered[ask["id"]][0] > after]
+    return max(found, key=lambda pair: pair[0])[1] if found else None
+
+
+def _live_block(reserves):
+    """{what: sorted numbers}: every reserve row's values unioned, less
+    the ones a renumber row moved away (renumbered_from)."""
+    held, moved = {}, {}
+    for row in reserves:
+        held.setdefault(row["what"], set()).update(row["values"])
+        moved.setdefault(row["what"], set()).update(
+            row.get("renumbered_from", []))
+    live = {what: tuple(sorted(values - moved[what]))
+            for what, values in held.items()}
+    return {what: values for what, values in live.items() if values}
+
+
+def _item(item, entry, grouped, answered):
+    """One item's read-only view from its rows, grouped as
+    {field: ((position, row), ...)}."""
+    states = grouped.get("states", ())
+    rows_of = {field: tuple(row for _, row in grouped.get(field, ()))
+               for field in _ITEM_KINDS.values()}
+    position, last = states[-1] if states else (-1, None)
+    asks, runs = rows_of["asks"], rows_of["runs"]
+    pending = next((ask for ask in asks if ask["id"] not in answered),
+                   None)
+    run_id = (last or {}).get("run_id")
+    finishing = next((row for row in runs if row["run_id"] == run_id),
+                     None) if run_id else None
+    stalled = last is not None and last["to"] == "stalled"
+    resumed = _latest(answered, asks, "stall", position) if stalled \
+        else None
+    return {
+        "item": item, "entry": entry,
+        "unknown": (None if entry is not None
+                    else f"cd: {item} is not an item of this batch's plan"),
+        "state": last["to"] if last else "planned", "last": last,
+        "states": rows_of["states"], "runs": runs, "asks": asks,
+        "pending": pending, "finishing": finishing,
+        "in_flight": run_id is not None and finishing is None,
+        "completed": finishing is not None
+        and finishing["outcome"] == COMPLETED,
+        "resumed": resumed,
+        "retry": pending is None and resumed is not None
+        and resumed["choice"] in RETRIES,
+        "gate": _latest(answered, asks, "gate", -1),
+        "author_runs": tuple(row["run_id"] for row in runs
+                             if row["step"] != "review"),
+        "reserved": _live_block(rows_of["reserves"])}
+
+
+def view(rows):
+    """The batch ledger read once, as plain read-only data: {"plan" (the
+    plan row or None), "answers" ({ask id: its answer row}), "next_ask"
+    (the oldest unanswered ask row or None), "items" ({item: its item
+    view})}. Ordering is by ledger position, recorded here once; `rows`
+    is never changed. An item view holds the item's plan `entry` (None,
+    with the ready-made `unknown` problem, off the plan), its `state`,
+    `last` state row and `states`, `runs`, `asks`, `pending` ask, the
+    `finishing` run of its last launch, `in_flight`, `completed`, the
+    stall answer that `resumed` it, `retry`, its latest `gate` answer,
+    its `author_runs` and its live `reserved` block."""
+    plan, answered, grouped = None, {}, {}
+    for position, row in enumerate(rows):
+        kind = row["kind"]
+        if kind == "plan" and plan is None:
+            plan = row
+        elif kind == "answer":
+            answered[row["ask"]] = (position, row)
+        if row["item"] is not None and kind in _ITEM_KINDS:
+            grouped.setdefault(row["item"], {}).setdefault(
+                _ITEM_KINDS[kind], []).append((position, row))
+    entries = {entry["item"]: entry for entry in (plan or {}).get("items",
+                                                                   [])}
+    items = {item: _item(item, entries.get(item), grouped.get(item, {}),
+                         answered)
+             for item in [*entries, *(i for i in grouped
+                                      if i not in entries)]}
+    asks = (row for row in rows if row["kind"] == "ask")
+    return {"plan": plan,
+            "answers": {ask: row for ask, (_, row) in answered.items()},
+            "next_ask": next((row for row in asks
+                              if row["id"] not in answered), None),
+            "items": items}
+
+
+def item_view(rows, item):
+    """One item's view (see view): an item with no rows and off the plan
+    reads as `planned`, with `unknown` set."""
+    found = view(rows)["items"].get(item)
+    return found if found is not None else _item(item, None, {}, {})
+
+
 def answers(rows):
     """{ask id: its answer row}."""
-    return {row["ask"]: row for row in rows if row["kind"] == "answer"}
+    return view(rows)["answers"]
 
 
 def current_state(rows, item):
     """The item's state: its last state row's `to`, else `planned`."""
-    states = [row for row in rows
-              if row["kind"] == "state" and row["item"] == item]
-    return states[-1]["to"] if states else "planned"
+    return item_view(rows, item)["state"]
 
 
 def next_ask(rows):
     """The oldest unanswered ask row, or None: the decision queue shows
     one question at a time."""
-    answered = answers(rows)
-    return next((row for row in rows
-                 if row["kind"] == "ask" and row["id"] not in answered),
-                None)
+    return view(rows)["next_ask"]
 
 
 def ask_row(rows, now, item, ask_kind, question, options, recommended,
