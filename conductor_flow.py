@@ -207,10 +207,11 @@ def _band(entry, step):
                 None)
 
 
-def stall_options(entry, state):
+def stall_options(entry, state, band=None):
     """The stall ask's options for a step: retry-up only below the top
-    band."""
-    band = _band(entry, state)
+    band — `band` when given (the band a run actually used), else the
+    step's planned band."""
+    band = band or _band(entry, state)
     return [option for option in STALL_OPTIONS
             if option != "retry-up" or band != BANDS[-1]]
 
@@ -224,10 +225,14 @@ def _choices(options):
 
 def stall_rows(rows, now, entry, reason, recommended, why):
     """[state row, stall ask] for an item that stalls in its current
-    state. retry-up is offered only below the top band."""
+    state. retry-up is offered only when the run leaving this state
+    (if any — a dead runner leaves none) was not already at the top
+    band: the planned band alone misses a prior retry-up bump (#732)."""
     item = entry["item"]
     state = current_state(rows, item)
-    options = stall_options(entry, state)
+    finishing = item_view(rows, item)["finishing"]
+    options = stall_options(entry, state, finishing["band"]
+                            if finishing is not None else None)
     moved = state_row(now, item, state, "stalled", reason)
     asked, problems = ask_row(
         rows + [moved], now, item, "stall",
