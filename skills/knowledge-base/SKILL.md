@@ -1,6 +1,6 @@
 ---
 name: knowledge-base
-description: Use when the ask is to set up, feed, or check a project knowledge base — "set up a knowledge base for this repo", "write down the gotchas an agent keeps tripping over", "capture what this PR taught us so the next session knows", "is our project knowledge stale". Keeps only non-inferable facts in docs/kb/ — invariants, gotchas, cross-module flows, the why with its ADR — never overviews or restated code. The shipped kb.py tool writes a compressed index of page summaries inline into CLAUDE.md or AGENTS.md, so every session sees it. Ingest proposes itemised page edits and a human promotes them; nothing is filed automatically. Lint flags pages whose cited sources changed since verified, orphans, broken links and an over-budget index. Not audit (find defects), deepen (module shape), doctor (pipeline install) or automate (which hooks to add). Owns no run artifact and is never routed to.
+description: Use when the ask is to set up, feed, or check a project knowledge base — "set up a knowledge base for this repo", "write down the gotchas an agent keeps tripping over", "capture what this PR taught us so the next session knows", "is our project knowledge stale". Keeps only non-inferable facts in docs/kb/ — invariants, gotchas, cross-module flows, the why with its ADR — never overviews or restated code. The shipped kb.py tool writes a compressed index of page summaries inline into CLAUDE.md or AGENTS.md, so every session sees it. Ingest proposes itemised page edits — from a source handed in, or harvested from session transcripts — and a human promotes them; nothing is filed automatically. Lint flags stale pages, orphans, broken links, an over-budget index, and instruction-file drift in CLAUDE.md, AGENTS.md and .claude/rules. Not audit (find defects), deepen (module shape), doctor (pipeline install) or automate (which hooks to add). Owns no run artifact and is never routed to.
 ---
 
 # Knowledge Base
@@ -24,7 +24,9 @@ artifact. The run artifacts are the **knowledge plane**; this is the
 |---|---|
 | No `docs/kb/` yet | **Setup** — step 1 |
 | A merged PR, a retro, a research note, a hard-won lesson | **Ingest** — step 2 |
+| "What did the last sessions keep tripping over?" | **Ingest from transcripts** — step 2a |
 | "Is it still true?", or before trusting a page | **Lint and maintain** — step 3 |
+| "Are CLAUDE.md / AGENTS.md / the rules still right?" | **Instruction-file drift** — step 4 |
 
 ## The tool
 
@@ -34,6 +36,8 @@ two directories above this skill's directory in the same checkout:
     python3 <this skill's directory>/../../kb.py index [repo root]
     python3 <this skill's directory>/../../kb.py lint  [repo root]
     python3 <this skill's directory>/../../kb.py stats [repo root]
+    python3 <this skill's directory>/../../kb.py drift [repo root]
+    python3 <this skill's directory>/../../kb.py harvest [repo root] [--days N] [--session ID]
 
 `index` writes one line per page — `- docs/kb/<slug>.md: <summary>` —
 between managed markers in every always-loaded file present (`CLAUDE.md`,
@@ -84,6 +88,22 @@ research note, a lesson from this session):
 Done when: every promoted item is applied, nothing unpromoted was
 written, and lint is clean.
 
+## 2a. Ingest from transcripts — harvest
+
+Autonomous sessions rarely produce a human correction; their lessons
+are discovered — a check fails, the agent edits, the check passes. Run
+`kb.py harvest` (newest session) or `kb.py harvest --days N`, then read
+`references/ingest.md`'s harvest section. The tool prints candidate
+arcs and recurring errors as JSON; turning a candidate into a claim is
+judgement, and the step 2 rules apply unchanged — every candidate is
+proposed, most are NOOP, and a human promotes.
+
+The target is the consumer's choice: `docs/kb/` by default, or the file
+the user names (some repos keep gotchas in a rules file such as
+`.claude/rules/gotchas.md`). Ask once when the always-loaded file does
+not already say where gotchas go. Outside `docs/kb/`, propose bullets
+for that file instead of pages, and skip `kb.py index`.
+
 ## 3. Lint and maintain
 
 Run `kb.py lint`. For each problem:
@@ -103,6 +123,39 @@ page is about to drive a decision, re-check its claim against the code
 first; the oldest `verified:` goes first.
 
 Done when: `kb.py lint` prints `kb: 0 problem(s)`.
+
+## 4. Instruction-file drift
+
+Instruction files rot the way pages do: nothing compiles them, and every
+path, table row and slash command in them is a plain string. This skill
+owns them because it already writes into them (the managed index) and
+because their staleness is project knowledge going stale; doctor checks
+the pipeline install, not what a repo tells its sessions.
+
+Run `kb.py drift`. Each problem string is one false claim in CLAUDE.md,
+AGENTS.md, .claude/CLAUDE.md or .claude/rules/**:
+
+- **names path X, which does not exist** — the path moved or went.
+  Propose the corrected path or removing the sentence. A path a session
+  will *run* (in a command) is worse than one in prose; rank it first.
+- **references /X, which resolves to no skill or command** — an
+  instruction a checked-in file gives that a cloud session or worktree
+  agent cannot follow. Before proposing a fix, check whether X moved to
+  a plugin or a user-level install: the fix then is to say so (or to
+  name the plugin-qualified `/plugin:X`), not to delete the line.
+- **lists skill/agent X, which is not on disk**, or **is on disk but no
+  table lists it** — propose the table row change, in both directions.
+- **holds N entries but no instruction file mentions it** — a capability
+  nobody is told about; propose one line naming the directory.
+
+Present the findings ranked as above, each with its fix, and stop. Edit
+only what the user promotes. A name a file means to mention although it
+does not exist (a forbidden path, an output that appears later) is
+excused in that file with `<!-- drift-ignore: <name> -->`, which is
+itself a proposed edit. Never rewrite instruction prose for style.
+
+Done when: `kb.py drift` prints `drift: 0 problem(s)`, or every
+remaining finding was shown to the user and declined.
 
 ## Graduation
 

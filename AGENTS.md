@@ -83,6 +83,7 @@ pre-pass, deliberately **not** a gate:
   before its `breakdown.md` row exists.
 - **Typed IDs live in run-artifact frontmatter** (`id: PRD-0001`), never a
   parallel `docs/prd/` tree (ADR-0004).
+  <!-- drift-ignore: docs/prd/ -->
 
 ## Eval honesty (non-negotiable)
 
