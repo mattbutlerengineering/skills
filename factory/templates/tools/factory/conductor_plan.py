@@ -157,8 +157,8 @@ def _size(labels, rules):
 
 def _deferral(issue, labels, owner, rules=None):
     """(item type, size, reason): reason is None for a plannable issue.
-    `rules` holds the configured label maps and default size, each
-    absent when factory.json does not set it."""
+    `rules` holds the configured label maps, default size and defer
+    labels, each absent when factory.json does not set it."""
     rules = rules or {}
     if (issue["state"] or "").upper() != "OPEN":
         return None, None, "closed"
@@ -166,6 +166,11 @@ def _deferral(issue, labels, owner, rules=None):
     if author != owner:
         return None, None, (f"authored by {author}, not the repo owner"
                             f" {owner}")
+    blocking = [name for name in labels
+                if name in (rules.get("defer_labels") or ())]
+    if blocking:
+        return None, None, (f"carries defer label {blocking[0]}"
+                            " (conductor.defer_labels)")
     if assembler.READY_LABEL in labels:
         item_type = "order"
     else:
@@ -199,13 +204,15 @@ def _steps(item_type, labels, config, agents_dir, ceiling):
 
 
 def _label_rules(config):
-    """({type_labels, size_labels, default_size}, problems): the
-    configured label rules, each None when factory.json omits it."""
+    """({type_labels, size_labels, default_size, defer_labels},
+    problems): the configured label rules, each None when factory.json
+    omits it."""
     rules = {}
     for key, resolve in (
             ("type_labels", factory_config.resolve_type_labels),
             ("size_labels", factory_config.resolve_size_labels),
-            ("default_size", factory_config.resolve_default_size)):
+            ("default_size", factory_config.resolve_default_size),
+            ("defer_labels", factory_config.resolve_defer_labels)):
         rules[key], problems = resolve(config)
         if problems:
             return None, problems

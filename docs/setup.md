@@ -223,7 +223,9 @@ standing-consent policy, and how the repo's own issue labels plan
 when set, replaces the built-in rule (the first `type:` label, the first
 `size:S|M|L` label), and an issue whose labels map to two different
 values is deferred rather than guessed. `default_size` sizes an issue
-with no size label at all. Detector F checks the table. `work-queue` still
+with no size label at all. `defer_labels` lists labels such as
+`blocked` or `needs-review`, and an issue carrying one is deferred with
+the label named. Detector F checks the table. `work-queue` still
 fans out ready work orders through one stage, and `autorun` still drives
 one run end to end. One step needs no Conductor: turn on the merge queue
 ADR-0070 already chose, if the repo's plan allows it; the merge turn uses

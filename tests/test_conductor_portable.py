@@ -288,6 +288,88 @@ class TestSizeLabels(unittest.TestCase):
                                               "#2 deferred: no size: label"])
 
 
+DEFER_LABELS = ["blocked", "needs-review", "agent-skip"]
+DEFER_PROBLEM = ("conductor.defer_labels must be a list of distinct label"
+                 " names")
+
+
+def deferring(defer_labels, **table):
+    return dict(CONFIG, conductor=dict(table, defer_labels=defer_labels))
+
+
+class TestDeferLabels(unittest.TestCase):
+    """The consumer's blocking labels (#711): factory.json's optional
+    conductor.defer_labels defers any issue carrying one, the label
+    named. Absent, nothing is deferred for its labels alone."""
+
+    def plan(self, issues, config):
+        import conductor_plan
+        return conductor_plan.plan_batch(issues, "matt", config, 0.0,
+                                         {"prd": 0, "adr": 0, "wo": 0},
+                                         AGENTS)
+
+    def test_an_absent_list_resolves_to_none(self):
+        self.assertEqual(factory_config.resolve_defer_labels({}),
+                         (None, []))
+
+    def test_a_configured_list_resolves_to_itself(self):
+        self.assertEqual(factory_config.resolve_defer_labels(
+            {"conductor": {"defer_labels": DEFER_LABELS}}),
+            (DEFER_LABELS, []))
+
+    def test_a_malformed_list_is_an_exact_problem(self):
+        for value in ({"blocked": True}, "blocked", ["blocked", " "],
+                      ["blocked", 3], ["blocked", "blocked"]):
+            with self.subTest(value=value):
+                self.assertEqual(factory_config.config_problems(
+                    {"wip_cap": 1, "monthly_cap_usd": 1,
+                     "conductor": {"defer_labels": value}}),
+                    [DEFER_PROBLEM])
+                self.assertEqual(factory_config.resolve_defer_labels(
+                    {"conductor": {"defer_labels": value}}),
+                    (None, [f"config: factory.json {DEFER_PROBLEM}"]))
+
+    def test_detector_f_reports_a_bad_list(self):
+        import gates
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, ".github").mkdir()
+            Path(tmp, ".github/factory.json").write_text(json.dumps(
+                deferring("blocked")))
+            self.assertEqual(gates.check_config_shape(Path(tmp)), [
+                f"F: .github/factory.json {DEFER_PROBLEM}"])
+
+    def test_an_issue_carrying_a_defer_label_is_deferred(self):
+        result, problems = self.plan(
+            [issue(5995, ("type:defect", "size:S", "needs-review",
+                          "blocked")),
+             issue(2, ("type:feature", "size:M"))],
+            deferring(DEFER_LABELS))
+        self.assertEqual(problems, [])
+        self.assertEqual([i["item"] for i in result["items"]], ["#2"])
+        self.assertEqual(result["deferred"], [
+            "#5995 deferred: carries defer label needs-review"
+            " (conductor.defer_labels)"])
+
+    def test_a_defer_label_outranks_a_ready_order(self):
+        result, _ = self.plan(
+            [issue(1, ("wo:ready-for-agent", "size:S", "agent-skip"))],
+            deferring(DEFER_LABELS))
+        self.assertEqual(result["items"], [])
+        self.assertEqual(result["deferred"], [
+            "#1 deferred: carries defer label agent-skip"
+            " (conductor.defer_labels)"])
+
+    def test_an_absent_list_keeps_todays_plan(self):
+        result, _ = self.plan(
+            [issue(1, ("type:feature", "size:S", "blocked"))], CONFIG)
+        self.assertEqual([i["item"] for i in result["items"]], ["#1"])
+        self.assertEqual(result["deferred"], [])
+
+    def test_a_bad_list_plans_nothing(self):
+        self.assertEqual(self.plan([issue(1)], deferring([""])),
+                         (None, [f"config: factory.json {DEFER_PROBLEM}"]))
+
+
 class TestWorkerGate(RunCase):
     def config(self, cap, gate=None):
         path = self.root / ".github/factory.json"
