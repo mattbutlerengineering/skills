@@ -171,9 +171,12 @@ def resolve_cap(config):
 # that rule. The order type stays the ready label's alone, so the map's
 # values are the two issue-sized types. `size_labels` does the same for
 # the budget sizes, and `default_size` sizes an issue that carries no
-# size label at all.
+# size label at all. `defer_labels` (#711) lists labels the repo uses to
+# say "not now" (blocked, needs-review): an issue carrying one is
+# deferred with the label named, whatever else it carries. Absent,
+# nothing defers for its labels alone.
 CONDUCTOR_KEYS = ("gate_command", "standing_consent", "type_labels",
-                  "size_labels", "default_size")
+                  "size_labels", "default_size", "defer_labels")
 LABEL_ITEM_TYPES = ("feature", "fix")
 SIZES = ("S", "M", "L")
 
@@ -223,7 +226,19 @@ def conductor_problems(config):
                                         SIZES)
     if "default_size" in table and table["default_size"] not in SIZES:
         problems.append(f"conductor.default_size must be {_one_of(SIZES)}")
+    if ("defer_labels" in table
+            and not _label_list(table["defer_labels"])):
+        problems.append("conductor.defer_labels must be a list of distinct"
+                        " label names")
     return problems
+
+
+def _label_list(value):
+    """True when `value` is a list of distinct non-blank label names."""
+    return (isinstance(value, list)
+            and all(isinstance(name, str) and name.strip()
+                    for name in value)
+            and len(set(value)) == len(value))
 
 
 def _label_map_problems(key, table, values):
@@ -247,10 +262,7 @@ def _standing_problems(policy):
         problems.append(f"{prefix} has unknown key(s): {', '.join(unknown)}")
     if not isinstance(policy.get("enabled", False), bool):
         problems.append(f"{prefix}.enabled must be true or false")
-    tiers = policy.get("tier_labels", [])
-    if not (isinstance(tiers, list)
-            and all(isinstance(name, str) and name.strip() for name in tiers)
-            and len(set(tiers)) == len(tiers)):
+    if not _label_list(policy.get("tier_labels", [])):
         problems.append(f"{prefix}.tier_labels must be a list of distinct"
                         " label names")
     return problems
@@ -299,6 +311,13 @@ def resolve_default_size(config):
     """(the size for an issue with no size label, problems): factory.json's
     conductor.default_size, None when absent (such an issue defers)."""
     return _conductor_value(config, "default_size")
+
+
+def resolve_defer_labels(config):
+    """(label names, problems): factory.json's conductor.defer_labels,
+    None when absent (no issue defers for its labels alone)."""
+    names, problems = _conductor_value(config, "defer_labels")
+    return (list(names) if names is not None else None), problems
 
 
 def resolve_gate_command(config):
