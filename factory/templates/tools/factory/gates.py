@@ -87,9 +87,10 @@ import standards_index
 from cli import read_event, read_file, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             adr_record, fence_closes, fence_open, parse_run,
-                             repo_root, row_done, row_pre_ledger, run_dirs,
-                             status_head, unfenced)
+                             adr_record, fence_closes, fence_open,
+                             local_link_targets, parse_run, repo_root,
+                             resolve_link, row_done, row_pre_ledger,
+                             run_dirs, status_head, unfenced)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
@@ -108,10 +109,6 @@ NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
 ADR_INDEX_ROW = re.compile(
     r"^\|\s*\[(?P<num>\d{4})\]\((?P<file>[^)]+)\)\s*\|[^|]*\|"
     r"\s*(?P<status>[^|]*?)\s*\|")
-
-# Markdown links to repo paths; URLs, autolinks and bare anchors are not.
-MD_LINK = re.compile(r"\[[^\]]*\]\(\s*<?([^)>\s]+)>?")
-URL_TARGET = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
 
 # H reads verification.md the way the verify skill writes it: markdown
 # headings delimit criteria, a LABELLED line asserts the verdict, fenced
@@ -686,17 +683,12 @@ def check_staleness(root, parsed=None):
     for path, lines in parsed["scannable"]:
         rel = path.relative_to(root)
         for lineno, line in enumerate(lines, 1):
-            for target in MD_LINK.findall(line):
-                if URL_TARGET.match(target) or target.startswith("#"):
-                    continue
-                cleaned = target.split("#", 1)[0]
-                if not cleaned:
-                    continue
-                base = root if cleaned.startswith("/") else path.parent
-                if not (base / cleaned.lstrip("/")).exists():
+            for target in local_link_targets(line):
+                resolved = resolve_link(root, path, target)
+                if resolved is not None and not resolved.exists():
                     problems.append(
-                        f"I: {rel}:{lineno} stale link {cleaned}"
-                        " (no such path)")
+                        f"I: {rel}:{lineno} stale link"
+                        f" {target.split('#', 1)[0]} (no such path)")
     return problems
 
 

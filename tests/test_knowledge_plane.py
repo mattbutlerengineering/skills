@@ -13,7 +13,8 @@ from gates import (_clean_repo_fixture, _evidence_honesty_defect_fixture,
                    _link_integrity_defect_fixture, _wo_citation_defect_fixture)
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              PRD_TOKEN, ROW, WO_TOKEN, breakdown_files,
-                             fence_closes, fence_open, mirror_map, parse_run, repo_root, row_done,
+                             fence_closes, fence_open, local_link_targets,
+                             resolve_link, mirror_map, parse_run, repo_root, row_done,
                              row_blockers, row_unreadable_blockers,
                              row_work_order, run_dirs, sanitize, unfenced)
 
@@ -628,6 +629,73 @@ class TestFences(unittest.TestCase):
     def test_line_numbers_are_one_based(self):
         self.assertEqual(list(unfenced(["a", "```", "x", "```", "b"])),
                          [(1, "a"), (5, "b")])
+
+
+class TestLocalLinkTargets(unittest.TestCase):
+    """The one local-link grammar (issue #739): CommonMark inline link
+    destinations — titled, <angle-bracketed>, image — with URLs and
+    in-page anchors excluded. Fence and inline-code skipping stays each
+    caller's policy, so the grammar reads whatever text it is handed."""
+
+    def test_the_issue_table(self):
+        for text, want in (('[a](x.md "T")', ["x.md"]),
+                           ("[a](x.md 'T')", ["x.md"]),
+                           ("[a](x.md (T))", ["x.md"]),
+                           ("[a](<my file.md>)", ["my file.md"]),
+                           ('[a](<my file.md> "T")', ["my file.md"]),
+                           ("[a]( x.md)", ["x.md"]),
+                           ("[a](x.md)", ["x.md"])):
+            with self.subTest(text=text):
+                self.assertEqual(local_link_targets(text), want)
+
+    def test_image_links_are_links(self):
+        self.assertEqual(local_link_targets("![logo](img/logo.png)"),
+                         ["img/logo.png"])
+
+    def test_fragments_and_queries_are_kept_as_written(self):
+        self.assertEqual(local_link_targets("[a](x.md#top) [b](y.md?v=1)"),
+                         ["x.md#top", "y.md?v=1"])
+
+    def test_urls_anchors_and_empty_targets_are_not_local(self):
+        self.assertEqual(local_link_targets(
+            "[a](#top) [b](https://x.io/a.md) [c](mailto:a@b.c) [d]()"
+            " [e](<>)"), [])
+
+    def test_balanced_parentheses_stay_in_the_target(self):
+        self.assertEqual(local_link_targets("[a](docs/a(1).md)"),
+                         ["docs/a(1).md"])
+
+    def test_a_space_without_a_title_is_not_a_link(self):
+        self.assertEqual(local_link_targets("[a](x.md junk)"), [])
+
+    def test_every_link_on_a_line_in_order(self):
+        self.assertEqual(local_link_targets("[a](a.md), [b](b.md)\n[c](c.md)"),
+                         ["a.md", "b.md", "c.md"])
+
+    def test_fences_and_inline_code_are_the_callers_policy(self):
+        self.assertEqual(local_link_targets("`[a](a.md)`"), ["a.md"])
+
+
+class TestResolveLink(unittest.TestCase):
+    def test_relative_targets_resolve_against_the_linking_doc(self):
+        self.assertEqual(resolve_link(Path("/r"), Path("/r/docs/a.md"),
+                                      "../b.md"), Path("/r/docs/../b.md"))
+
+    def test_a_leading_slash_is_root_relative(self):
+        self.assertEqual(resolve_link(Path("/r"), Path("/r/docs/a.md"),
+                                      "/src/x.py"), Path("/r/src/x.py"))
+
+    def test_fragment_and_query_are_not_part_of_the_path(self):
+        for target in ("b.md#top", "b.md?v=1", "b.md?v=1#top"):
+            with self.subTest(target=target):
+                self.assertEqual(resolve_link(Path("/r"), Path("/r/a.md"),
+                                              target), Path("/r/b.md"))
+
+    def test_an_anchor_or_url_names_no_path(self):
+        for target in ("#top", "?v=1", "https://x.io/a.md", "mailto:a@b.c"):
+            with self.subTest(target=target):
+                self.assertIsNone(resolve_link(Path("/r"), Path("/r/a.md"),
+                                               target))
 
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """knowledge_plane: the shared grammar and layout of the knowledge plane
 (ADR-0004, ADR-0037) — the typed-ID token grammar, the fence rule that
-decides when such a token is quoted rather than claimed, the
+decides when such a token is quoted rather than claimed, the local
+markdown link grammar every doc checker resolves links with, the
 run-directory layout, and where a factory tool finds the repo root.
 
 These primitives grew up inside gates.py because its detectors needed
@@ -126,6 +127,46 @@ def unfenced(lines):
         if fence is None:
             yield lineno, line
 
+
+
+# A markdown inline link's destination, per CommonMark: optional leading
+# whitespace, then either <angle brackets> (which may hold spaces) or a
+# bare run with no whitespace and only balanced parentheses, then an
+# optional "title", 'title' or (title), then the closing paren. Images
+# share the grammar. One owner (issue #739): gates' detector I,
+# md_claims, kb lint, kb_drift and lint.py's skill-asset check each kept
+# a looser copy, and the copies read `[a](x.md "T")` three ways.
+_LINK = re.compile(
+    r"\]\(\s*(?:<(?P<angle>[^<>\n]*)>"
+    r"|(?P<bare>(?:[^\s()<]|\([^\s()]*\))(?:[^\s()]|\([^\s()]*\))*)?)"
+    r"""(?:\s+(?:"[^"\n]*"|'[^'\n]*'|\([^()\n]*\)))?\s*\)""")
+URL_TARGET = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*:")
+
+
+def local_link_targets(text):
+    """Every local link destination in `text`, in order and as written
+    (fragment and query kept; angle brackets and title dropped). URLs,
+    in-page anchors and empty destinations are not local. Fence and
+    inline-code skipping is each caller's policy, not the grammar's."""
+    targets = [m.group("angle") if m.group("angle") is not None
+               else m.group("bare") or "" for m in _LINK.finditer(text)]
+    return [t for t in targets
+            if t and not t.startswith("#") and not URL_TARGET.match(t)]
+
+
+def resolve_link(root, doc, target):
+    """The path a link in `doc` names: fragment and query dropped, a
+    leading slash read from `root`, anything else from `doc`'s own
+    directory. None when the target names no path (an anchor, a bare
+    query, a URL)."""
+    if URL_TARGET.match(target):
+        return None
+    path = target.split("#", 1)[0].split("?", 1)[0]
+    if not path:
+        return None
+    if path.startswith("/"):
+        return Path(root) / path.lstrip("/")
+    return Path(doc).parent / path
 
 # A breakdown row is a checkbox bullet line; its work order is its FIRST
 # WO token (later tokens are blocking edges). Notes and Accept: sub-bullets
