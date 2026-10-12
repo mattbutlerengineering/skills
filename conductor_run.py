@@ -106,7 +106,8 @@ OBJECTIVES = {
 def worker_env(base, batch, gh_config_dir):
     """The Worker's environment: `base` (the runner's) minus every
     WORKER_STRIPPED name, plus the batch flag, an empty gh config dir,
-    no terminal prompt and WORKER_GIT_CONFIG. pushInsteadOf skips a
+    no bytecode written into its worktree (#726), no terminal prompt
+    and WORKER_GIT_CONFIG. pushInsteadOf skips a
     remote's explicit pushurl, and git's https transport reads ~/.netrc;
     this env closes neither, so push_gaps refuses the launch while
     either is configured (re-review R3). What stays trust-based: it
@@ -117,6 +118,7 @@ def worker_env(base, batch, gh_config_dir):
     env = {name: value for name, value in base.items()
            if not WORKER_STRIPPED.fullmatch(name)}
     env.update({WORKER_ENV: batch, "GH_CONFIG_DIR": gh_config_dir,
+                "PYTHONDONTWRITEBYTECODE": "1",
                 "GIT_TERMINAL_PROMPT": "0", "GIT_SSH_COMMAND": "false",
                 "GIT_CONFIG_COUNT": str(len(WORKER_GIT_CONFIG))})
     for index, (key, value) in enumerate(WORKER_GIT_CONFIG):

@@ -215,7 +215,13 @@ It carries blocked items' spend rows, appends the scorecard to
 `docs/factory/scorecards.jsonl` only when the scorecard computes, opens
 the batch's closing pull request, queues its merge ask, and labels each
 blocked issue `needs-human` with its reason. Present the closing ask
-like any other; on `merge`, merge that pull request, and nothing else.
+like any other; on `merge`, record the answer, then:
+
+    python3 conductor.py close <batch> --merge
+
+It commits and pushes the answer row first, so the merged ledger holds
+the answer that authorised its merge, then waits for green checks and
+merges that pull request, and nothing else.
 A failing scorecard is a problem to report, never a number to estimate.
 
 ## Rules
@@ -234,7 +240,7 @@ A failing scorecard is a problem to report, never a number to estimate.
   is empty and an ask is waiting, stop: the batch waits there for the
   Owner.
 - Never force-push, and never merge outside `conductor.py merge` or the
-  closing ask's answer.
+  closing ask's answer through `conductor.py close <batch> --merge`.
 - One Conductor per batch. A second session on the same batch races the
   first.
 - Report Worker spend from the ledger the tool wrote, never from an

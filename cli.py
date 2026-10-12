@@ -67,17 +67,21 @@ def child_env():
     return {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
 
-def detail(err):
+def detail(err, every_line=False):
     """One-line detail for a failed CLI call's problem string: the
     command's own stderr when it ran, else the OS error (e.g. the binary
-    not installed)."""
+    not installed). Its last line by default; with every_line, each
+    non-blank line stripped and joined on " | ", for a command like git
+    whose reason sits above a last line such as "Aborting" (#726)."""
     stderr = getattr(err, "stderr", None) or ""
     if isinstance(stderr, bytes):
         # subprocess.run attaches a timed-out child's output undecoded,
         # even in text mode.
         stderr = stderr.decode("utf-8", errors="replace")
-    stderr = stderr.strip()
-    return stderr.splitlines()[-1] if stderr else str(err)
+    lines = [line.strip() for line in stderr.splitlines() if line.strip()]
+    if not lines:
+        return str(err)
+    return " | ".join(lines) if every_line else lines[-1]
 
 
 def report(label, problems, prefix="", suffix=""):

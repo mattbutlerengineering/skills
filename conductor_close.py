@@ -19,15 +19,21 @@ when it computes, append-only under the evals/results/ discipline. Then
 it writes the close row and the closing merge ask, commits the ledger,
 run evidence and scorecard, pushes (never forced), opens the closing PR,
 and labels each blocked item's issue needs-human with its reason.
+
+`close <batch> --merge` merges the closing PR once the Owner answered
+its ask `merge`, first committing and pushing that answer row (#726).
 """
 import json
+import time
 from pathlib import Path
 
 import conductor_flow as flow
+import conductor_merge
 import cost_ledger
 import factory_config
-from cli import CLI_FAILURES, detail
-from conductor import TERMINAL, append, ask_row, current_state, \
+import label_sync
+from cli import CLI_FAILURES, detail, label_names
+from conductor import TERMINAL, answers, append, ask_row, current_state, \
     item_view, load, numbered, parse, parsed_at, read_text, stamp, view
 
 SCORECARDS = "docs/factory/scorecards.jsonl"
@@ -171,7 +177,7 @@ def _git(git, root, args, what):
     try:
         return git(["-C", str(root), *args]).stdout, []
     except CLI_FAILURES as err:
-        return None, [f"{what} failed: {detail(err)}"]
+        return None, [f"{what} failed: {detail(err, every_line=True)}"]
 
 
 def update_from_main(git, root, branch):
@@ -263,6 +269,19 @@ def _record_close(root, batch, now, finals):
     return (written[1]["id"] if written else None), problems
 
 
+def _missing_label(gh):
+    """(True when the repo lacks needs-human, problems). A tools-only
+    stamp never syncs labels.json, so the one label close writes may not
+    exist (#726). Checked here, where it is written, rather than at
+    `open`: a label deleted mid-batch, and a batch opened before this
+    check, are caught too. A missing label is created bare; label_sync
+    --apply gives it the taxonomy's colour where labels.json exists."""
+    listing, problems = label_sync.live_labels(gh)
+    if listing is None:
+        return None, problems
+    return NEEDS_HUMAN not in label_names(listing), []
+
+
 def _publish(root, batch, git, gh, finals, reasons):
     """Commit, push (never forced), open the closing PR and label each
     blocked item. A problem names the step that failed; the close is
@@ -284,6 +303,12 @@ def _publish(root, batch, git, gh, finals, reasons):
     calls = [["pr", "create", "--head", branch, "--base", "main", "--title",
               f"conductor batch {batch}: ledger and scorecard", "--body",
               pr_body(batch, finals)]]
+    if finals["blocked"]:
+        missing, problems = _missing_label(gh)
+        if problems:
+            return [f"cd: close: {problems[0]}; finish the PR and the"
+                    " needs-human labels by hand"]
+        calls += [["label", "create", NEEDS_HUMAN]] if missing else []
     for item in finals["blocked"]:
         calls += [["issue", "edit", item[1:], "--add-label", NEEDS_HUMAN],
                   ["issue", "comment", item[1:], "--body",
@@ -328,7 +353,67 @@ def close_batch(root, batch, clock, git, gh):
         root, batch, git, gh, finals, reasons)
 
 
-def close_cli(root, args, clock, git, gh):
+def _closing_answer(rows, batch):
+    """(problems): refused unless the batch is closed and the Owner
+    answered its closing merge ask `merge`."""
+    closed = [index for index, row in enumerate(rows)
+              if row["kind"] == "close"]
+    if not closed:
+        return [f"cd: closing merge refused: batch {batch} is not closed"]
+    asked = next(row for row in rows[closed[0]:] if row["kind"] == "ask")
+    answered = answers(rows).get(asked["id"])
+    if answered is None:
+        return [f"cd: closing merge refused: {asked['id']} is unanswered"]
+    if answered["choice"] != "merge":
+        return [f"cd: closing merge refused: {asked['id']} was answered"
+                f" {answered['choice']}, not merge"]
+    return []
+
+
+def merge_closing(root, batch, clock, git, gh, sleep):
+    """(summary, problems): merge the closing PR once the Owner answered
+    its ask `merge`. The answer row is written after close pushed, so it
+    is committed and pushed first (#726): the ledger that merges holds
+    the answer that authorised its merge. Then the checks on that head,
+    and a squash-merge or enqueue pinned to it."""
+    rows, problems = load(root, batch)
+    problems = problems or _closing_answer(rows, batch)
+    if problems:
+        return None, problems
+    branch, ledger_dir = f"conductor/{batch}", f"docs/factory/batches/{batch}"
+    dirty, problems = _git(git, root, ["status", "--porcelain", "--",
+                                       ledger_dir], "reading the ledger")
+    steps = ([(["add", "--", ledger_dir], "staging the answer"),
+              (["commit", "-m", f"chore(conductor): record batch {batch}'s"
+                " closing answer"], "committing the answer")]
+             if dirty and dirty.strip() else [])
+    for args, what in steps + [(["push", "-u", "origin", branch],
+                                f"pushing {branch}"),
+                               (["rev-parse", "HEAD"], "reading the head")]:
+        if problems:
+            break
+        head, problems = _git(git, root, args, what)
+    if problems:
+        return None, [f"cd: closing merge: {problems[0]}"]
+    try:
+        pr = conductor_merge.pr_number(gh, branch)
+        conductor_merge.wait_checks(gh, head.strip(), clock, sleep)
+        sha = conductor_merge.land(gh, pr, head.strip(),
+                                   conductor_merge.has_queue(gh), clock,
+                                   sleep)
+    except conductor_merge.Stall as stall:
+        return None, [f"cd: closing merge: {stall.reason}"]
+    return {"batch": batch, "pr": pr, "sha": sha}, []
+
+
+def close_cli(root, args, clock, git, gh, sleep=None):
+    if args[1:] == ["--merge"]:
+        summary, problems = merge_closing(root, args[0], clock, git, gh,
+                                          sleep or time.sleep)
+        if summary is not None:
+            print(f"cd: merged batch {summary['batch']}'s closing PR"
+                  f" #{summary['pr']} as {summary['sha']}")
+        return problems
     if len(args) != 1:
         return None
     summary, problems = close_batch(root, args[0], clock, git, gh)
