@@ -157,8 +157,8 @@ def _size(labels, rules):
 
 def _deferral(issue, labels, owner, rules=None):
     """(item type, size, reason): reason is None for a plannable issue.
-    `rules` holds the configured label maps and default size, each
-    absent when factory.json does not set it."""
+    `rules` holds the configured label maps, default size and defer
+    labels, each absent when factory.json does not set it."""
     rules = rules or {}
     if (issue["state"] or "").upper() != "OPEN":
         return None, None, "closed"
@@ -166,6 +166,11 @@ def _deferral(issue, labels, owner, rules=None):
     if author != owner:
         return None, None, (f"authored by {author}, not the repo owner"
                             f" {owner}")
+    blocking = [name for name in labels
+                if name in (rules.get("defer_labels") or ())]
+    if blocking:
+        return None, None, (f"carries defer label {blocking[0]}"
+                            " (conductor.defer_labels)")
     if assembler.READY_LABEL in labels:
         item_type = "order"
     else:
@@ -199,13 +204,15 @@ def _steps(item_type, labels, config, agents_dir, ceiling):
 
 
 def _label_rules(config):
-    """({type_labels, size_labels, default_size}, problems): the
-    configured label rules, each None when factory.json omits it."""
+    """({type_labels, size_labels, default_size, defer_labels},
+    problems): the configured label rules, each None when factory.json
+    omits it."""
     rules = {}
     for key, resolve in (
             ("type_labels", factory_config.resolve_type_labels),
             ("size_labels", factory_config.resolve_size_labels),
-            ("default_size", factory_config.resolve_default_size)):
+            ("default_size", factory_config.resolve_default_size),
+            ("defer_labels", factory_config.resolve_defer_labels)):
         rules[key], problems = resolve(config)
         if problems:
             return None, problems
@@ -300,19 +307,35 @@ def compose_plan(plan):
     return lines
 
 
-def open_batch(root, batch, plan, now, git):
+def main_checkout(git):
+    """(the main checkout, problems): the parent of git's common dir, so
+    a command run from a linked worktree still anchors the Conductor's
+    worktrees at the main checkout, never nested inside itself (#710)."""
+    try:
+        out = git(["rev-parse", "--path-format=absolute",
+                   "--git-common-dir"]).stdout
+    except CLI_FAILURES as err:
+        return None, [f"cd: git rev-parse failed: {detail(err)}"]
+    return Path(out.strip()).parent, []
+
+
+def open_batch(batch, plan, now, git):
     """(the batch worktree, problems): create conductor/<batch> and its
-    worktree from origin/main, write the plan row and one reserve row per
-    block, and queue the spend ask. Refuses an empty plan, a bad batch
-    name and an existing worktree before git runs, and a name whose
-    ledger is already on origin/main before any worktree is made."""
+    worktree, under the main checkout, from origin/main, write the plan
+    row and one reserve row per block, and queue the spend ask. Refuses
+    an empty plan and a bad batch name before git runs, an existing
+    worktree before any git write, and a name whose ledger is already on
+    origin/main before any worktree is made."""
     if not (isinstance(batch, str) and BATCH_NAME.fullmatch(batch)):
         return None, [f"cd: batch {batch!r} is not a batch name"
                       " (lowercase letters, digits and hyphens)"]
     if not plan["items"]:
         return None, ["cd: nothing to open: every issue was deferred"]
+    checkout, problems = main_checkout(git)
+    if problems:
+        return None, problems
     shown = f"{WORKTREES}/conductor-{batch}"
-    worktree = Path(root) / shown
+    worktree = checkout / shown
     if worktree.exists():
         return None, [f"cd: {shown} already exists"]
     ledger_path = LEDGER.format(batch=batch)
@@ -438,7 +461,7 @@ def open_cli(root, args, now, run, git, netrc=None):
         root, git, Path.home() / ".netrc" if netrc is None else netrc)
     if problems:
         return problems
-    worktree, problems = open_batch(root, args[0], plan, now, git)
+    worktree, problems = open_batch(args[0], plan, now, git)
     if worktree is not None:
         print(f"cd: opened {worktree}")
     return problems

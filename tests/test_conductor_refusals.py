@@ -158,6 +158,8 @@ def open_git(tmp, pushurl="", main_costs=None, calls=None):
         out = ""
         if args[0] == "grep":
             out = "PRD-0013\n"
+        elif args[0] == "rev-parse":
+            out = f"{Path(tmp) / '.git'}\n"
         elif args[:2] == ["worktree", "add"]:
             Path(args[4]).mkdir(parents=True)
         elif args[0] == "ls-tree":

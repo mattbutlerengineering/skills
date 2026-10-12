@@ -42,6 +42,13 @@ rule. Labels mapping to two sizes defer with the labels named.
 `conductor.default_size` (`S`, `M` or `L`) sizes an issue that has no
 size label at all, and never settles a conflict.
 
+A repo that marks issues "not now" lists those labels in
+`conductor.defer_labels`, for example
+`["blocked", "needs-review", "agent-skip"]`. An issue carrying any of
+them is deferred with the label named (`#5995 deferred: carries defer
+label needs-review (conductor.defer_labels)`), even with
+`wo:ready-for-agent`. Absent, no label defers an issue on its own.
+
 All batch state is the **batch ledger**
 (`docs/factory/batches/<batch>/ledger.jsonl`) on the batch branch
 `conductor/<batch>`. This skill carries nothing between turns. Until

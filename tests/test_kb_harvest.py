@@ -11,6 +11,7 @@ import contextlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -122,6 +123,44 @@ class TestLocate(Tree):
         self.assertEqual(problems, [
             f"harvest: no Claude Code transcripts for {REPO} under"
             f" {self.projects} (looked for {self.slug})"])
+
+
+def real_git(cwd, *args):
+    subprocess.run(
+        ["git", "-c", "user.email=t@example.com", "-c", "user.name=Tester",
+         "-c", "commit.gpgsign=false", *args], cwd=cwd, check=True,
+        capture_output=True, text=True)
+
+
+class TestLinkedWorktree(Tree):
+    """Issue #710: run from a linked worktree, harvest looked up the
+    worktree's own slug and found no transcripts. It anchors at the main
+    checkout, the parent of git's common dir."""
+
+    def setUp(self):
+        super().setUp()
+        base = Path(self._tmp.name).resolve()
+        self.main, self.linked = base / "main", base / "linked"
+        real_git(base, "init", "-q", "-b", "main", str(self.main))
+        real_git(self.main, "commit", "-q", "--allow-empty", "-m", "seed")
+        real_git(self.main, "worktree", "add", "-q", str(self.linked))
+        self.main_dir = self.projects / kb_harvest.slug(self.main)
+
+    def test_finds_the_main_checkouts_transcripts(self):
+        self.save(Session(cwd=str(self.main)), where=self.main_dir)
+        result, problems = kb_harvest.harvest(self.linked, self.projects,
+                                              now=self.now)
+        self.assertEqual(problems, [])
+        self.assertEqual(result["scanned"]["dirs"], [str(self.main_dir)])
+
+    def test_the_problem_names_the_main_checkouts_slug(self):
+        result, problems = kb_harvest.harvest(self.linked, self.projects,
+                                              now=self.now)
+        self.assertIsNone(result)
+        self.assertEqual(problems, [
+            f"harvest: no Claude Code transcripts for {self.linked} under"
+            f" {self.projects} (looked for"
+            f" {kb_harvest.slug(self.main)})"])
 
 
 class TestSelect(Tree):
