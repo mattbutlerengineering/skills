@@ -23,6 +23,7 @@ from unittest import mock
 
 import factory_init
 import gates
+import knowledge_plane
 
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling fixture_tree import
@@ -1032,10 +1033,12 @@ class TestSeededADRs(unittest.TestCase):
 
     def test_every_seeded_adr_has_a_valid_status(self):
         for path in self.numbered():
-            _, text = gates._adr_status(path)
+            record = knowledge_plane.adr_record(
+                path, path.read_text(encoding="utf-8").splitlines())
+            text = record["status"]
             self.assertIsNotNone(text, f"{path.name} has no Status line")
-            self.assertRegex(text, gates.ADR_STATUS,
-                             f"{path.name} status {text!r}")
+            self.assertIsNotNone(record["head"],
+                                 f"{path.name} status {text!r}")
 
     def test_every_seeded_adr_is_indexed(self):
         index = (SEEDED_ADRS / "README.md").read_text(encoding="utf-8")
