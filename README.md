@@ -44,7 +44,11 @@ third-party tools, MCP servers, or other plugins required.
 That is the whole setup for the skills. To also stamp the factory into a repo
 — offline gates, dispatch workflows, cost ledger — and confirm the install
 works end to end, follow [`docs/setup.md`](docs/setup.md). `/doctor` checks it
-mechanically, at whichever tier the repo has reached.
+mechanically, at whichever tier the repo has reached. Adopting into a repo
+that already has its own skills, agents or cloud routines? Read
+[Consumer adoption](docs/setup.md#consumer-adoption) first: plugin skills
+load only in local sessions, and a tools-only (Conductor-only) stamp is
+available.
 
 ## Usage
 
