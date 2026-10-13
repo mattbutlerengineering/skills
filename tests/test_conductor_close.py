@@ -562,11 +562,16 @@ class TestClosingMerge(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.here = ["-C", str(self.root)]
 
-    def merge(self, rows, dirty=True, gh=None):
+    def merge(self, rows, dirty=True, gh=None, mains=("a11ce0",)):
+        """`mains` is what each successive read of origin/main answers:
+        a second value is main moving while the checks ran."""
         write(self.root, lines(rows))
+        heads = [f"{sha}\n" for sha in mains]
         self.git = FakeGh({
             (*self.here, "status", "--porcelain"):
                 f" M {LEDGER}\n" if dirty else "",
+            (*self.here, "rev-parse", "origin/main"):
+                lambda args: heads.pop(0) if len(heads) > 1 else heads[0],
             (*self.here, "rev-parse", "HEAD"): "c105ed\n"})
         self.gh = gh or FakeGh(GREEN_GH)
         return close.merge_closing(self.root, "b1", lambda: NOW,
@@ -583,8 +588,13 @@ class TestClosingMerge(unittest.TestCase):
             self.here + ["add", "--", "docs/factory/batches/b1"],
             self.here + ["commit", "-m", "chore(conductor): record batch"
                          " b1's closing answer"],
-            self.here + ["push", "-u", "origin", "conductor/b1"],
-            self.here + ["rev-parse", "HEAD"]])
+            self.here + ["fetch", "origin", "main"],
+            self.here + ["merge", "--no-edit", "origin/main"],
+            self.here + ["rev-parse", "origin/main"],
+            self.here + ["push", "origin", "conductor/b1"],
+            self.here + ["rev-parse", "HEAD"],
+            self.here + ["fetch", "origin", "main"],
+            self.here + ["rev-parse", "origin/main"]])
         self.assertEqual(self.gh.calls[-2], [
             "pr", "merge", "6", "--squash", "--match-head-commit",
             "c105ed"])
@@ -594,7 +604,32 @@ class TestClosingMerge(unittest.TestCase):
         summary, problems = self.merge(rows, dirty=False)
         self.assertEqual(problems, [])
         self.assertEqual([call[2] for call in self.git.calls],
-                         ["status", "push", "rev-parse"])
+                         ["status", "fetch", "merge", "rev-parse", "push",
+                          "rev-parse", "fetch", "rev-parse"])
+
+    def test_main_moving_while_the_checks_ran_lands_nothing(self):
+        # #770: without a merge queue the squash lands on whatever main
+        # is, so checks on a head that never had that main merged in
+        # must not land it (ADR-0086).
+        rows = CLOSED + [answer("ask-5", "merge", at(17))]
+        self.assertEqual(self.merge(rows, mains=("a11ce0", "b0b0b0")), (
+            None, ["cd: closing merge: origin/main moved from a11ce0 to"
+                   " b0b0b0 while the checks ran; a retry merges it in"
+                   " and checks again"]))
+        self.assertFalse(self.gh.called("pr", "merge"))
+
+    def test_a_conflict_with_main_lands_nothing(self):
+        rows = CLOSED + [answer("ask-5", "merge", at(17))]
+        write(self.root, lines(rows))
+        self.git = FakeGh(failing=[*self.here, "merge", "--no-edit"])
+        self.gh = FakeGh(GREEN_GH)
+        self.assertEqual(close.merge_closing(
+            self.root, "b1", lambda: NOW, git_port(self.git), self.gh,
+            lambda seconds: None), (None, [
+                "cd: closing merge: merging origin/main into conductor/b1"
+                " failed: boom"]))
+        self.assertIn(self.here + ["merge", "--abort"], self.git.calls)
+        self.assertEqual(self.gh.calls, [])
 
     def test_an_unanswered_closing_ask_is_refused(self):
         self.assertEqual(self.merge(CLOSED), (None, [

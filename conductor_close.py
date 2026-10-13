@@ -186,10 +186,11 @@ def _git(git, root, args, what):
         return None, [f"{what} failed: {detail(err, every_line=True)}"]
 
 
-def update_from_main(git, root, branch):
+def update_from_main(git, root, branch, refused="close refused"):
     """Merge origin/main into the batch branch, so the merged items'
     spend rows (which reached main on their own PRs) are in its
-    costs.jsonl. Any failure aborts the merge and refuses the close."""
+    costs.jsonl, and the closing merge's checks run on that main. Any
+    failure aborts the merge and refuses the step `refused` names."""
     _, problems = _git(git, root, ["fetch", "origin", "main"],
                        "fetching origin/main")
     if not problems:
@@ -197,7 +198,7 @@ def update_from_main(git, root, branch):
                            f"merging origin/main into {branch}")
         if problems:
             _git(git, root, ["merge", "--abort"], "aborting the merge")
-    return [f"cd: close refused: {problem}" for problem in problems]
+    return [f"cd: {refused}: {problem}" for problem in problems]
 
 
 def carry_blocked_spend(git, root, batch, blocked):
@@ -439,8 +440,9 @@ def merge_closing(root, batch, clock, git, gh, sleep):
     """(summary, problems): merge the closing PR once the Owner answered
     its ask `merge`. The answer row is written after close pushed, so it
     is committed and pushed first (#726): the ledger that merges holds
-    the answer that authorised its merge. Then the checks on that head,
-    and a squash-merge or enqueue pinned to it."""
+    the answer that authorised its merge. Then origin/main is merged in
+    and conductor_merge.land_branch lands it, as the merge turn does
+    (#770): checks on that head, main held unless queued."""
     rows, problems = load(root, batch)
     problems = problems or _closing_answer(rows, batch)
     if problems:
@@ -452,20 +454,19 @@ def merge_closing(root, batch, clock, git, gh, sleep):
               (["commit", "-m", f"chore(conductor): record batch {batch}'s"
                 " closing answer"], "committing the answer")]
              if dirty and dirty.strip() else [])
-    for args, what in steps + [(["push", "-u", "origin", branch],
-                                f"pushing {branch}"),
-                               (["rev-parse", "HEAD"], "reading the head")]:
+    for args, what in steps:
         if problems:
             break
-        head, problems = _git(git, root, args, what)
+        _, problems = _git(git, root, args, what)
     if problems:
         return None, [f"cd: closing merge: {problems[0]}"]
+    problems = update_from_main(git, root, branch, refused="closing merge")
+    if problems:
+        return None, problems
     try:
-        pr = conductor_merge.pr_number(gh, branch)
-        conductor_merge.wait_checks(gh, head.strip(), clock, sleep)
-        sha = conductor_merge.land(gh, pr, head.strip(),
-                                   conductor_merge.has_queue(gh), clock,
-                                   sleep)
+        base = conductor_merge.main_head(git, root)
+        pr, sha, _ = conductor_merge.land_branch(git, gh, root, branch, base,
+                                                 clock, sleep)
     except conductor_merge.Stall as stall:
         return None, [f"cd: closing merge: {stall.reason}"]
     return {"batch": batch, "pr": pr, "sha": sha}, []

@@ -502,7 +502,9 @@ def land(gh, pr, head, queued, clock, sleep):
         sleep(POLL_SECONDS)
 
 
-def _main_head(git, worktree):
+def main_head(git, worktree):
+    """origin/main's sha as last fetched: the base a caller passes to
+    land_branch once it merged that main into the branch."""
     return _git(git, worktree, ["rev-parse", "origin/main"],
                 "reading origin/main", RETRY).strip()
 
@@ -517,11 +519,29 @@ def _main_held(git, worktree, base):
     window left is the moment between this read and the squash."""
     _git(git, worktree, ["fetch", "origin", "main"], "fetching origin/main",
          RETRY)
-    moved = _main_head(git, worktree)
+    moved = main_head(git, worktree)
     if moved != base:
         raise Stall(f"origin/main moved from {base[:12]} to {moved[:12]}"
                     " while the checks ran; a retry merges it in and"
                     " checks again", RETRY)
+
+
+def land_branch(git, gh, worktree, branch, base, clock, sleep):
+    """(pr, sha, checks): push `branch`, wait for green checks on its
+    head, then land that head, or raise Stall. `base` is the origin/main
+    the caller merged into the branch; without a merge queue main must
+    still be there when the checks finish (ADR-0086: the check runs on
+    the updated head). The one owner of landing a checked head (#770):
+    the merge turn and the closing merge both call it."""
+    _git(git, worktree, ["push", "origin", branch], f"pushing {branch}",
+         RETRY)
+    head = _git(git, worktree, ["rev-parse", "HEAD"], "reading HEAD").strip()
+    pr = pr_number(gh, branch)
+    checks = wait_checks(gh, head, clock, sleep)
+    queued = has_queue(gh)
+    if not queued:
+        _main_held(git, worktree, base)
+    return pr, land(gh, pr, head, queued, clock, sleep), checks
 
 
 def _reserve(root, batch, clock, item, fields):
@@ -539,7 +559,7 @@ def _turn(root, batch, item, ports, worktree, gate, policy):
     git, gh, tool, clock, sleep = ports
     branch = flow.item_branch(batch, item)
     update_branch(git, tool, worktree, branch)
-    base = _main_head(git, worktree)
+    base = main_head(git, worktree)
     version = bump_version(git, tool, worktree, branch)
     rows, problems = load(root, batch)
     if problems:
@@ -560,15 +580,8 @@ def _turn(root, batch, item, ports, worktree, gate, policy):
         tool(gate, cwd=str(worktree))
     except CLI_FAILURES as err:
         raise Stall(f"{' '.join(gate)} failed on {branch}: {detail(err)}")
-    _git(git, worktree, ["push", "origin", branch], f"pushing {branch}",
-         RETRY)
-    head = _git(git, worktree, ["rev-parse", "HEAD"], "reading HEAD").strip()
-    pr = pr_number(gh, branch)
-    checks = wait_checks(gh, head, clock, sleep)
-    queued = has_queue(gh)
-    if not queued:
-        _main_held(git, worktree, base)
-    sha = land(gh, pr, head, queued, clock, sleep)
+    pr, sha, checks = land_branch(git, gh, worktree, branch, base, clock,
+                                  sleep)
     return {"pr": pr, "sha": sha, "checks": checks}, []
 
 
