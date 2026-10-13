@@ -270,6 +270,15 @@ class TestBlueprintDrift(unittest.TestCase):
                 " missing file 0009-ghost.md",
                 "D: docs/adr/README.md has no index row for ADR-0001"])
 
+    def test_titled_index_row_link_resolves(self):
+        # issue #773: ADR_INDEX_ROW read the title into the filename.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, '| [0001](0001-spine.md "Spine") | Spine | accepted |\n')
+            tree.write("docs/adr/0001-spine.md",
+                       "# Spine\n\n- Status: accepted\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
     def test_index_status_out_of_step_with_the_file_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(

@@ -760,6 +760,15 @@ class TestSkillAssets(CheckerTreeTest):
         (self.root / "skills" / "idea" / "SKILL.md").unlink()
         self.assertEqual(lint.check_skill_assets(self.root), [])
 
+    def test_fragment_or_query_on_a_shipped_asset_link_is_clean(self):
+        # issue #773: lint resolved link targets by hand, keeping the
+        # #fragment, and called a file that ships "does not exist".
+        skill_dir = self.write_skill(
+            "idea", "See [rules](references/markdown-claims.md#rules) and"
+                    " [raw](references/markdown-claims.md?raw=1).\n")
+        self.write_ref(skill_dir, "markdown-claims.md", "r\n")
+        self.assertEqual(lint.check_skill_assets(self.root), [])
+
     def test_broken_link_between_two_reference_files(self):
         # The gap the SKILL.md-only walk missed: reference files link to
         # each other, and renaming one breaks every sibling silently.
@@ -1813,6 +1822,19 @@ class TestLedgerLinks(CheckerTreeTest):
             lint.check_ledger_links(self.root),
             ["LEDGER.md links to eval results path 'evals/results/notes.md' "
              "that does not match the results naming grammar"])
+
+    def test_titled_eval_link_resolves(self):
+        # issue #773 (the #739 defect surviving in lint): EVAL_LINK read
+        # the title into the target, so a valid, present file was both
+        # off-grammar and missing.
+        (self.root / "evals" / "results"
+         / "trigger-2026-01-01.json").write_text("{}", encoding="utf-8")
+        ledger = self.root / "LEDGER.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8")
+            + '| extra | [2026-01-01](evals/results/trigger-2026-01-01.json'
+            ' "run") |\n', encoding="utf-8")
+        self.assertEqual(lint.check_ledger_links(self.root), [])
 
     def test_valid_output_grading_link_passes(self):
         grading_dir = (self.root / "evals" / "results" / "output"

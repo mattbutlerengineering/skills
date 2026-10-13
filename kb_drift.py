@@ -39,7 +39,7 @@ import re
 from pathlib import Path
 
 import cli
-from knowledge_plane import local_link_targets
+from knowledge_plane import local_link_targets, resolve_link
 from protocol import read_frontmatter
 
 LABEL = "drift"
@@ -225,7 +225,7 @@ class Disk:
 
 def _candidates(line, in_fence):
     """Every path-like token on a line, as written: spans and commands in
-    line order, then its local links (knowledge_plane's link grammar)."""
+    line order. Links are _link_problems' to read."""
     found = [(m.start(1), m.group(1)) for m in COMMAND.finditer(line)] \
         if in_fence else []
     if not in_fence:
@@ -235,19 +235,35 @@ def _candidates(line, in_fence):
                 found.append((span.start(1), text))
             found += [(span.start(1) + m.start(1), m.group(1))
                       for m in COMMAND.finditer(text)]
-    return [token for _, token in sorted(found)] + (
-        [] if in_fence else local_link_targets(line))
+    return [token for _, token in sorted(found)]
 
 
-def _path_problems(disk, rel, number, line, in_fence, base, ignored):
+def _link_problems(disk, rel, number, line, doc, ignored):
+    """A line's local links, resolved by knowledge_plane.resolve_link
+    (issue #773) — so a fragment, query or leading slash is read the way
+    every other caller reads it — then judged, and reported, as the
+    repo-root path they name."""
+    problems = []
+    for written in local_link_targets(line):
+        named = resolve_link(disk.root, doc, written)
+        token = named and path_token(named.relative_to(disk.root).as_posix())
+        if token and written not in ignored and token not in ignored \
+                and not disk.exists(token, disk.root):
+            problems.append(f"{LABEL}: {rel}:{number} names path {token!r},"
+                            " which does not exist")
+    return problems
+
+
+def _path_problems(disk, rel, number, line, in_fence, doc, ignored):
     problems = []
     for written in _candidates(line, in_fence):
         token = path_token(written)
         if token and written not in ignored and token not in ignored \
-                and not disk.exists(token, base):
+                and not disk.exists(token, doc.parent):
             problems.append(f"{LABEL}: {rel}:{number} names path {token!r},"
                             " which does not exist")
-    return problems
+    return problems + ([] if in_fence else _link_problems(
+        disk, rel, number, line, doc, ignored))
 
 
 def _slash_problems(disk, settings, rel, number, line, ignored):
@@ -363,7 +379,7 @@ def _file_problems(disk, settings, path, text):
             in_fence = not in_fence
             continue
         problems += _path_problems(disk, rel, number, line, in_fence,
-                                   path.parent, ignored)
+                                   path, ignored)
         if not in_fence:
             problems += _slash_problems(disk, settings, rel, number, line,
                                         ignored)
