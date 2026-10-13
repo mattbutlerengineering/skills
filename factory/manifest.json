@@ -1,6 +1,6 @@
 {
   "plugin": "idea-to-prod",
-  "version": "0.12.0",
+  "version": "0.12.2",
   "files": {
     "templates/.github/CODEOWNERS": "ba6ab48054414914bd38f2c82365a89c1400ca0d5e39e9d7288832b9d3834192",
     "templates/.github/labels.json": "754d2c9792c8216e5db5f4c2e9f49e14d6ca5131da8598a9caea7ecf346fd4a8",
@@ -37,7 +37,7 @@
     "templates/tools/factory/cost_report.py": "0f90b61de9641f8d4c17d63f69ef23a671fd1a784e71725f298407d376d114eb",
     "templates/tools/factory/factory_config.py": "04ea0ef8d59fb14eeb6c38671ae4d595c3150857cc8d52053c356f88e724bcfb",
     "templates/tools/factory/gate_digest.py": "c725a335bd4db09d801e1631bd5aac49b33e591eb5d7c4f75cbc2e2b022f4fda",
-    "templates/tools/factory/gates.py": "87d38d5ea6c18739b6b441531f39bfe35ca89d030c9d03ca42418a8e5a61ad14",
+    "templates/tools/factory/gates.py": "ecfa0ee17b5a5334767c78cd4136063b9a35ac80c9ce119bcf90e10ea213edba",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/human_gates.py": "4ab98cede8a4f7faa133aae397dd4c516d2af6a7610f49b8dc6a2825e4d3cdf1",
     "templates/tools/factory/knowledge_plane.py": "8159b1f6da4f882ee5cf6817349f4ef71a92b2ab2ae10b8884d8fa80e6a43a9c",

@@ -728,7 +728,7 @@ class TestStandardsDrift(unittest.TestCase):
                  "status": "advisory", "domain": "factory"}])
             self.assertEqual(gates.check_standards_drift(tree.root), [])
 
-    def test_an_enforced_entry_needs_an_accepted_source(self):
+    def test_an_enforced_entry_needs_a_source_in_force(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
             self.adr(tree, "docs/adr/0001-x.md", "provisional",
@@ -739,7 +739,26 @@ class TestStandardsDrift(unittest.TestCase):
                  "status": "enforced", "domain": "factory"}])
             self.assertEqual(gates.check_standards_drift(tree.root), [
                 "K: enforced statement 'some-slug' cites ADR-0001, status"
-                " 'provisional' (not accepted)"])
+                " 'provisional' (not in force)"])
+
+    def test_an_enforced_entry_may_cite_a_standing_source(self):
+        # #763: a source superseded only in part, or amended, still
+        # stands, so its standard can be enforced (ADR-0089).
+        for status in ("superseded in part by ADR-0002 (its mirror)",
+                       "amended by ADR-0002 (accepted by the Owner)"):
+            with self.subTest(status=status), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                self.adr(tree, "docs/adr/0001-x.md", status,
+                         "- **some-slug** (factory): Something MUST"
+                         " happen.")
+                self.standards(tree, [
+                    {"slug": "some-slug", "statement": "Something MUST"
+                     " happen.", "level": "MUST",
+                     "source": "adr/0001#some-slug",
+                     "status": "enforced", "domain": "factory"}])
+                self.assertEqual(gates.check_standards_drift(tree.root),
+                                 [])
 
     def test_an_enforced_entry_citing_a_superseded_adr_fails_too(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -753,7 +772,7 @@ class TestStandardsDrift(unittest.TestCase):
                  "status": "enforced", "domain": "factory"}])
             self.assertEqual(gates.check_standards_drift(tree.root), [
                 "K: enforced statement 'some-slug' cites ADR-0001, status"
-                " 'superseded by ADR-0002' (not accepted)"])
+                " 'superseded by ADR-0002' (not in force)"])
 
     def test_a_malformed_committed_index_is_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
