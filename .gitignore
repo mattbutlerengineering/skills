@@ -7,3 +7,8 @@ __pycache__/
 # claude plugin eval run output (ADR-0081): scratch, never committed;
 # a run cited as evidence is copied into plugin-evals/records/.
 /plugin-evals/results/
+
+# Retired by ADR-0083: beads is gone, but checkouts that once ran bd keep a
+# local .beads/ (a ~40 MB Dolt store). Ignored so a broad `git add` can never
+# commit it; delete it locally whenever you like (#786).
+.beads/
