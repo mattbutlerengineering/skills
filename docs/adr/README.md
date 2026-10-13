@@ -109,3 +109,4 @@ the canonical vocabulary.
 | [0086](0086-standing-consent-may-cover-a-conductor-merge.md) | Standing consent may cover a Conductor merge | accepted |
 | [0087](0087-a-queue-profile-may-opt-in-to-implement-queue-auto-merge.md) | A queue profile may opt in to implement-queue auto-merge | amended by ADR-0088 |
 | [0088](0088-a-fast-path-classification-is-the-review-for-auto-merge.md) | A fast-path classification is the review for auto-merge | accepted |
+| [0089](0089-an-enforced-standard-may-cite-a-standing-adr.md) | An enforced standard may cite a standing ADR | accepted |
