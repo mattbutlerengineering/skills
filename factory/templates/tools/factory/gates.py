@@ -45,7 +45,7 @@ ai-tooling suite where the rule is the same idea):
   K STANDARDS-DRIFT — docs/standards.json's ADR-derived entries match a
                      fresh standards_index.build_index(root) regen, and
                      every `enforced`-status entry's source ADR is
-                     `accepted` (ADR-0073)
+                     in force (ADR-0073, ADR-0089)
   M CAPTURE-COMPLETENESS — every docs/fixes/<slug>/defect.md that exists
                      carries skills/capture/TEMPLATE.md's required
                      sections, each with real (non-placeholder) content
@@ -1317,6 +1317,12 @@ def _drift_fingerprint(entry):
     return tuple(entry.get(field) for field in _DRIFT_FIELDS)
 
 
+# The knowledge_plane.standing values whose ADR can source an enforced
+# standard (ADR-0089): accepted or amended, or superseded only in part.
+# Provisional, retired and unrecognized never can.
+ENFORCEABLE_STANDINGS = ("active", "partial")
+
+
 def check_standards_drift(root, parsed=None):
     """K: docs/standards.json is a derived, regenerable index (ADR-0073)
     over docs/adr/*.md's `## Normative statements` sections — the same
@@ -1334,9 +1340,11 @@ def check_standards_drift(root, parsed=None):
         compared on every field EXCEPT `status` (see _DRIFT_FIELDS —
         `status` can never "drift" from an ADR regen by definition, since
         an ADR bullet never states one).
-    (2) an `enforced`-status entry's source ADR's status (its
-        knowledge_plane.adr_record — the same reading detector D and
-        adr_status use, not a second status parser) is not `accepted`.
+    (2) an `enforced`-status entry's source ADR is not in force: its
+        knowledge_plane.adr_record standing (the same reading detector D
+        and adr_status use, not a second status parser) is not one of
+        ENFORCEABLE_STANDINGS — accepted, amended, or superseded only in
+        part (ADR-0089).
 
     An absent docs/standards.json is not a K problem — mirrors detector
     G's "an absent ledger is silent" precedent (check_cost_ledger): the
@@ -1396,10 +1404,10 @@ def check_standards_drift(root, parsed=None):
             continue
         record = records.get(number, {})
         status = record.get("status")
-        if record.get("head") != "accepted":
+        if record.get("standing") not in ENFORCEABLE_STANDINGS:
             problems.append(
                 f"K: enforced statement {entry.get('slug')!r} cites"
-                f" ADR-{number}, status {status!r} (not accepted)")
+                f" ADR-{number}, status {status!r} (not in force)")
     return problems
 
 
@@ -2097,7 +2105,7 @@ def selftest():
         expect("K", check_standards_drift(root),
                "docs/standards.json has drifted",
                "enforced statement 'enforced-slug' cites ADR-0002,"
-               " status 'provisional' (not accepted)")
+               " status 'provisional' (not in force)")
 
     # K: the happy path — a regen-matching index, and no ADR standing.
     with tempfile.TemporaryDirectory() as tmp:
