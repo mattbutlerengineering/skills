@@ -397,6 +397,21 @@ def mirror_map(root):
 # `0062.md`, or the `ADR-007-slug.md` form other repos use. README.md and
 # TEMPLATE.md carry no number and are skipped by the same test.
 ADR_FILE = re.compile(r"^(?:ADR-?)?(?P<num>\d+)\b", re.IGNORECASE)
+
+
+def adr_file_number(name):
+    """(number, written) for an ADR filename, or None if NAME is not
+    one. `written` is the digits as the filename has them; `number` is
+    the same value at the one width every reader keys on — ADR_TOKEN's
+    citations, gates' index rows, standards_index sources — so
+    `ADR-007-auth.md` is ADR-0007 (issue #774)."""
+    match = ADR_FILE.match(name)
+    if not match:
+        return None
+    written = match.group("num")
+    return f"{int(written):04d}", written
+
+
 # The status vocabulary (docs/adr/README.md), as a status head plus an
 # optional free-text annotation: "accepted (shipped by ...)" is accepted.
 # Only full supersession retires a decision — "superseded in part by" and
@@ -421,9 +436,9 @@ def adr_paths(root):
         return []
     found = []
     for path in sorted(adr_dir.glob("*.md")):
-        match = ADR_FILE.match(path.name)
-        if match:
-            found.append((match.group("num"), path))
+        numbered = adr_file_number(path.name)
+        if numbered:
+            found.append((numbered[0], path))
     return found
 
 
@@ -471,14 +486,17 @@ def _declared_status(lines):
 
 
 def adr_record(path, lines):
-    """One ADR, read once: {number, path, lineno, status, head, standing,
-    superseded_by}. PATH must be an adr_paths file; LINES are its lines
-    (a parse_run adr_files entry). lineno is the line the status was read
+    """One ADR, read once: {number, written, path, lineno, status, head,
+    standing, superseded_by}. PATH must be an adr_paths file; LINES are
+    its lines (a parse_run adr_files entry). number and written are
+    adr_file_number's pair. lineno is the line the status was read
     from, 0 when it declares none; superseded_by is the retiring ADR's
     number, or None."""
     lineno, text = _declared_status(lines)
     match = ADR_STATUS.match(text or "")
-    return {"number": ADR_FILE.match(path.name).group("num"),
+    number, written = adr_file_number(path.name)
+    return {"number": number,
+            "written": written,
             "path": path,
             "lineno": lineno,
             "status": text,

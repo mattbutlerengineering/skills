@@ -20,7 +20,7 @@ from pathlib import Path
 import eval_schema
 import protocol
 from cli import read_file, report
-from knowledge_plane import local_link_targets
+from knowledge_plane import local_link_targets, resolve_link
 from protocol import (ALL_SKILLS, MAINTENANCE_STAGES, STAGES,
                       TEMPLATED_STAGES, UTILITY_SKILLS)
 
@@ -399,16 +399,19 @@ SKILL_ASSET = re.compile(
     r"(?<![A-Za-z0-9._/-])(?:references|assets)/[A-Za-z0-9._-]+")
 
 
-def named_files(path, skill_dir):
-    """(reference-as-written, directory it resolves against) for every
-    local file `path` names. Links resolve against the LINKING file's
-    own directory, because that is how a reader resolves them — a
-    reference file's `language.md` is its sibling, not the skill root's."""
+def named_files(root, path, skill_dir):
+    """(reference-as-written, path it names) for every local file `path`
+    names, resolved by knowledge_plane.resolve_link (issue #773). Links
+    resolve against the LINKING file's own directory, because that is
+    how a reader resolves them — a reference file's `language.md` is its
+    sibling, not the skill root's."""
     text = path.read_text(encoding="utf-8")
-    named = [(ref, path.parent) for ref in local_link_targets(text)]
+    named = [(ref, resolve_link(root, path, ref))
+             for ref in local_link_targets(text)]
     if path.name == "SKILL.md":
-        named += [(ref, skill_dir) for ref in SKILL_ASSET.findall(text)]
-    return sorted(set(named))
+        named += [(ref, resolve_link(root, skill_dir / "SKILL.md", ref))
+                  for ref in SKILL_ASSET.findall(text)]
+    return sorted({(ref, target) for ref, target in named if target})
 
 
 def check_skill_assets(root):
@@ -439,8 +442,8 @@ def check_skill_assets(root):
         problems = []
         for path in sorted(skill_dir.rglob("*.md")):
             source = path.relative_to(skill_dir).as_posix()
-            for ref, base in named_files(path, skill_dir):
-                target = (base / ref).resolve()
+            for ref, named in named_files(root, path, skill_dir):
+                target = named.resolve()
                 if not target.is_relative_to(skill_dir.resolve()):
                     problems.append(
                         f"skills/{slug}/{source} names {ref!r}, which is "
@@ -1008,9 +1011,6 @@ def check_backlog(root):
     return protocol.check_backlog(text)
 
 
-EVAL_LINK = re.compile(r"\]\((evals/results/[^)]+)\)")
-
-
 def check_ledger_links(root):
     """Every eval-evidence link in LEDGER.md follows the results naming
     grammar (eval_schema owns it, issue #26) and resolves to a results
@@ -1019,14 +1019,17 @@ def check_ledger_links(root):
     path = root / "LEDGER.md"
     if not path.is_file():
         return []  # absence already reported by check_ledger
-    targets = EVAL_LINK.findall(path.read_text(encoding="utf-8"))
+    links = [(target, resolve_link(root, path, target))
+             for target in local_link_targets(
+                 path.read_text(encoding="utf-8"))
+             if target.startswith("evals/results/")]
     return (
         [f"LEDGER.md links to eval results path {target!r} "
          "that does not match the results naming grammar"
-         for target in targets
-         if not eval_schema.valid_results_link(target)]
+         for target, named in links if not eval_schema.valid_results_link(
+             named.relative_to(root).as_posix())]
         + [f"LEDGER.md links to missing eval results file {target!r}"
-           for target in targets if not (root / target).is_file()]
+           for target, named in links if not named.is_file()]
     )
 
 

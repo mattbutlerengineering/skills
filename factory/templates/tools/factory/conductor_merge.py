@@ -32,7 +32,7 @@ import re
 import subprocess
 import time
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import conductor_consent as consent
 import conductor_flow as flow
@@ -43,6 +43,7 @@ from cli import CLI_FAILURES, detail, gh_read
 from conductor import BLOCK, append, current_state, is_text, \
     item_view, load, stamp
 from cost_ledger import ISSUE_KEY
+from knowledge_plane import ADR_FILE
 
 def _refused(text):
     return [f"cd: merge refused: {text}"]
@@ -137,7 +138,6 @@ RETRY = "retry"
 QUEUE_QUERY = ("query($owner:String!,$name:String!){repository(owner:"
                '$owner,name:$name){mergeQueue(branch:"main"){id}}}')
 PREFIXES = {"prd": "PRD", "adr": "ADR", "wo": "WO"}
-ADR_FILE = re.compile(r"docs/adr/(\d{4})-[^/]+")
 DRIFT_WHY = ("the item has no path back to review, and a change nobody"
              " reviewed must not merge; block it and file the change anew")
 RETRY_WHY = ("a timeout, an ejection or a failed call may be transient; the"
@@ -292,6 +292,15 @@ def _token(kind, number):
     return re.compile(rf"\b{PREFIXES[kind]}-{number:04d}\b")
 
 
+def _adr_file(path):
+    """The ADR_FILE match for a repo-relative PATH in the ADR file set
+    knowledge_plane.adr_paths reads (docs/adr/*.md), else None."""
+    where = PurePosixPath(path)
+    if str(where.parent) != "docs/adr" or where.suffix != ".md":
+        return None
+    return ADR_FILE.match(where.name)
+
+
 def _used(held, files, new_paths):
     """{kind: numbers} of the item's block it actually used: cited in a
     line it added, or naming an ADR file it added."""
@@ -302,8 +311,7 @@ def _used(held, files, new_paths):
                         for lines, marks in files.values()
                         for line, added in zip(lines, marks) if added)
             named = kind == "adr" and any(
-                ADR_FILE.fullmatch(path)
-                and int(ADR_FILE.fullmatch(path).group(1)) == number
+                _adr_file(path) and int(_adr_file(path).group("num")) == number
                 for path in new_paths)
             if cited or named:
                 used.setdefault(kind, []).append(number)
@@ -345,11 +353,13 @@ def _renumber(git, worktree, files, new_paths, moves):
     commit. Lines that are origin/main's are never touched."""
     renames = {}
     for path in new_paths:
-        found = ADR_FILE.fullmatch(path)
-        number = int(found.group(1)) if found else None
+        found = _adr_file(path)
+        number = int(found.group("num")) if found else None
         if number in moves.get("adr", {}):
-            renames[path] = (f"docs/adr/{moves['adr'][number]:04d}"
-                             f"{path[len('docs/adr/0000'):]}")
+            name = PurePosixPath(path).name
+            renames[path] = (f"docs/adr/{name[:found.start('num')]}"
+                             f"{moves['adr'][number]:04d}"
+                             f"{name[found.end('num'):]}")
     for old, new in renames.items():
         if (worktree / new).exists():
             raise Stall(f"{old} cannot be renumbered: {new} already exists")
