@@ -228,10 +228,16 @@ class TestProcessTreeReaping(unittest.TestCase):
         # nothing and its grandchild holds the stdout write end open, so
         # the reader can only leave its loop by observing the exit — the
         # cleanup therefore always runs against a dead leader.
+        # The timeout clock starts at the PID file, as in the test above:
+        # under load a spawn slower than the 2 s timeout let the harness
+        # kill the group before the fake wrote its file, which read as
+        # "fake claude never started" (#761).
         self.install_fake(FAKE_EXITING_CLAUDE)
-        watcher = self.watch_for_grandchild(budget=6)
-        fired = run_single_query("q", {"idea": "d"}, timeout=2,
-                                 model=None, isolate=False)
+        watcher = self.watch_for_grandchild(budget=70)
+        with mock.patch.object(cli, "time",
+                               ReadinessGatedClock(self.pid_file)):
+            fired = run_single_query("q", {"idea": "d"}, timeout=2,
+                                     model=None, isolate=False)
         self.assertIsNone(fired)
         self.assert_grandchild_reaped(watcher)
 
