@@ -9,8 +9,10 @@ import unittest
 from pathlib import Path
 
 import knowledge_plane
-from gates import (_clean_repo_fixture, _evidence_honesty_defect_fixture,
-                   _link_integrity_defect_fixture, _wo_citation_defect_fixture)
+from gates_selftest import (clean_repo_fixture,
+                            evidence_honesty_defect_fixture,
+                            link_integrity_defect_fixture,
+                            wo_citation_defect_fixture)
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              PRD_TOKEN, ROW, WO_TOKEN, breakdown_files,
                              fence_closes, fence_open, local_link_targets,
@@ -334,7 +336,7 @@ class TestBreakdownFiles(unittest.TestCase):
 class TestParseRun(unittest.TestCase):
     """parse_run (ADR-0039's amendment, issue #441 — expand phase only:
     no detector reads this yet). Built through the SAME planted-defect
-    fixtures gates.py's own detector tests and selftest() share
+    fixtures (gates_selftest.py) gates' detector tests and selftest() share
     (issue #440's consolidation), not a fresh hand-typed tree — the
     exact duplication #440 closed."""
 
@@ -348,7 +350,7 @@ class TestParseRun(unittest.TestCase):
     def test_breakdown_matches_breakdown_files_exactly(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _wo_citation_defect_fixture(root)
+            wo_citation_defect_fixture(root)
             parsed = parse_run(root)
             expected = dict(breakdown_files(root))
             path = root / "docs/features/demo/breakdown.md"
@@ -362,7 +364,7 @@ class TestParseRun(unittest.TestCase):
     def test_prd_id_and_adr_files_from_link_integrity_fixture(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _link_integrity_defect_fixture(root)
+            link_integrity_defect_fixture(root)
             parsed = parse_run(root)
             self.assertEqual(
                 self.run_entry(root, parsed, "docs/features/demo")["prd_id"],
@@ -375,7 +377,7 @@ class TestParseRun(unittest.TestCase):
     def test_verification_text_captured_per_run_and_unreadable_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _evidence_honesty_defect_fixture(root)
+            evidence_honesty_defect_fixture(root)
             # Corrupt one of the fixture's four verification.md files —
             # the case check_evidence_honesty turns into its own
             # "H: ... cannot be read" problem string.
@@ -457,7 +459,7 @@ class TestParseRun(unittest.TestCase):
         # A, G, H) do not pay for a walk they will not use.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _wo_citation_defect_fixture(root)
+            wo_citation_defect_fixture(root)
             self.assertEqual(parse_run(root)["scannable"], [])
 
     def test_scannable_reads_each_given_path_once_in_order(self):
@@ -480,7 +482,7 @@ class TestParseRun(unittest.TestCase):
         # without raising and must see every artifact it plants.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            _clean_repo_fixture(root)
+            clean_repo_fixture(root)
             parsed = parse_run(root)
             demo = self.run_entry(root, parsed, "docs/features/demo")
             self.assertIsNotNone(demo["breakdown"])

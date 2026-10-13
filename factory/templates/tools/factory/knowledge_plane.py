@@ -533,7 +533,9 @@ def parse_run(root, scannable=()):
     Issue #441 added this function, unused; issue #442 (the "migrate"
     step) wired detectors A, C, D, G, H and I onto it — gates.run_all
     now calls parse_run once per pass and hands the same parsed dict to
-    each of those six, and each of their own filesystem reads is gone.
+    every detector whose gates.ROSTER row declares a parsed input (K, N
+    and O joined those six later), and each of their own filesystem
+    reads is gone.
 
     `scannable`: an iterable of Paths the CALLER has already selected
     (gates._scannable_files(root), for detectors C, D and I) — read once

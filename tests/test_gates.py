@@ -10,6 +10,7 @@ import hashlib
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,7 @@ from unittest import mock
 
 import cost_ledger
 import gates
+import gates_selftest as fixtures
 import knowledge_plane
 from factory_init import product_form
 
@@ -33,8 +35,9 @@ import workflow_parse  # noqa: E402
 
 def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=()):
     """An in-memory knowledge_plane.parse_run()-shaped dict, built by hand
-    rather than through a real tempdir tree (issue #442). The migrated
-    detectors (A, C, D, G, H, I) read only this shape now — run_entry
+    rather than through a real tempdir tree (issue #442). The detectors
+    whose gates.ROSTER row declares a parsed input read only this shape
+    now — run_entry
     below builds one "runs" entry; a fixture builder that only needs one
     run can skip it and pass a single-element `runs` list directly."""
     return {"runs": list(runs), "adr_files": list(adr_files),
@@ -70,7 +73,7 @@ def offending_run_steps(text, allowed=()):
 
 class TestWoCitation(unittest.TestCase):
     def test_uncited_row_is_flagged_and_cited_row_is_not(self):
-        # Mirrors gates._wo_citation_defect_fixture's content, built as an
+        # Mirrors fixtures.wo_citation_defect_fixture's content, built as an
         # in-memory parsed run instead of a tempdir tree (issue #442).
         root = Path("/repo")
         parsed = parsed_run(runs=[run_entry(
@@ -97,7 +100,7 @@ class TestLinkIntegrity(unittest.TestCase):
     def base_parsed(self, scannable=()):
         """PRD-0001 and ADR-0001 resolve — the minimal resolvable pair C's
         dangling-token checks run against (mirrors
-        gates._link_integrity_base_fixture, in memory)."""
+        fixtures.link_integrity_base_fixture, in memory)."""
         return parsed_run(
             runs=[run_entry(self.ROOT / "docs/features/demo",
                             prd_id="PRD-0001")],
@@ -144,7 +147,7 @@ class TestLinkIntegrity(unittest.TestCase):
         # _scannable_files' own INCLUSION boundary, not C's pure logic.
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
-            gates._link_integrity_base_fixture(tree.root)
+            fixtures.link_integrity_base_fixture(tree.root)
             tree.write("README.md", "See ADR-0042 for context.\n")
             tree.write(".github/PULL_REQUEST_TEMPLATE.md", "Cites ADR-0043.\n")
             tree.write("skills/demo/SKILL.md", "Per ADR-0044.\n")
@@ -165,7 +168,7 @@ class TestLinkIntegrity(unittest.TestCase):
         # set, knowledge_plane.adr_paths, for every reader.
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
-            gates._link_integrity_base_fixture(tree.root)
+            fixtures.link_integrity_base_fixture(tree.root)
             tree.write("docs/adr/0062.md", "# Bare\n")
             tree.write("docs/adr/adr-0063-x.md", "# Prefixed\n")
             tree.write("README.md", "See ADR-0062 and ADR-0063.\n")
@@ -176,7 +179,7 @@ class TestLinkIntegrity(unittest.TestCase):
         # citation grammar reads, so citing ADR-0007 is not dangling.
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
-            gates._link_integrity_base_fixture(tree.root)
+            fixtures.link_integrity_base_fixture(tree.root)
             tree.write("docs/adr/ADR-007-x.md", "# Short form\n")
             tree.write("README.md", "See ADR-0007.\n")
             self.assertEqual(gates.check_link_integrity(tree.root), [])
@@ -189,7 +192,7 @@ class TestLinkIntegrity(unittest.TestCase):
         # tree: this pins _scannable_files' own EXCLUSION boundary.
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
-            gates._link_integrity_base_fixture(tree.root)
+            fixtures.link_integrity_base_fixture(tree.root)
             tree.write("factory/templates/docs/adr/0001-seed.md",
                        "Cites ADR-9999.\n")
             tree.write("factory/evals/fixtures/demo/work-order.md",
@@ -1181,7 +1184,7 @@ class TestArchitectureDrift(unittest.TestCase):
 class TestScaffoldSync(unittest.TestCase):
     def manifested_tree(self, tmp, payload="check:\n"):
         tree = FixtureTree(tmp)
-        gates._scaffold_sync_fixture(tree.root, payload=payload)
+        fixtures.scaffold_sync_fixture(tree.root, payload=payload)
         return tree
 
     def test_matching_payload_is_silent(self):
@@ -1320,15 +1323,15 @@ class TestLabelWiring(unittest.TestCase):
     say about it nobody says."""
 
     REPO = Path(__file__).resolve().parents[1]
-    MAKEFILE = gates._LABEL_WIRING_MAKEFILE
+    MAKEFILE = fixtures.LABEL_WIRING_MAKEFILE
 
     def taxonomy(self, names):
-        return gates._label_taxonomy_json(names)
+        return fixtures.label_taxonomy_json(names)
 
     def wired_tree(self, tmp, makefile=None):
         """(tree, every label it names) — the correctly curated state."""
         tree = FixtureTree(tmp)
-        named = gates._label_wiring_wired_fixture(tree.root, makefile=makefile)
+        named = fixtures.label_wiring_wired_fixture(tree.root, makefile=makefile)
         return tree, named
 
     def test_a_taxonomy_carrying_every_named_label_is_silent(self):
@@ -1493,32 +1496,125 @@ class TestLabelWiring(unittest.TestCase):
                 problems)
 
 
-class TestDetectorRoster(unittest.TestCase):
-    """gates.DETECTORS is the letter namespace's one source of truth
-    (gates.py's own module docstring says so). Nothing previously
-    checked it against CHECKERS, which is exactly how "J": (None, None,
-    "unused") survived on `main` for months after check_label_wiring
-    (docstring: "J: every label...") was written, wired into CHECKERS,
-    and covered by TestLabelWiring above — three places agreeing
-    detector J exists, and the one roster table that is supposed to
-    list every claimed letter still saying it doesn't."""
+class TestRoster(unittest.TestCase):
+    """gates.ROSTER is the detector roster: one row per letter, declaring
+    the detector's name, home, plane, checker and input, and run_all
+    dispatches by the declared input (#738). The roster used to be five
+    parallel lists, and they drifted: DETECTORS said J was unused while
+    J was wired (#516), and comments said "the six" parsed checkers while
+    nine were. These read the table itself, never a docstring."""
 
-    def test_every_checker_s_own_letter_is_claimed_in_the_roster(self):
-        for checker in gates.CHECKERS:
-            letter = checker.__doc__.split(":", 1)[0].strip()
-            name, home, plane = gates.DETECTORS[letter]
-            self.assertIsNotNone(
-                name, f"{checker.__name__} is {letter}, but "
-                f"DETECTORS[{letter!r}] still says unused")
-            self.assertEqual(plane, "offline")
+    def test_every_offline_row_has_a_checker_and_no_network_row_does(self):
+        for row in gates.ROSTER:
+            with self.subTest(letter=row.letter):
+                self.assertIn(row.plane, ("offline", "network"))
+                self.assertEqual(row.fn is None, row.plane == "network")
 
-    def test_no_roster_entry_claims_a_letter_no_checker_owns(self):
-        checker_letters = {c.__doc__.split(":", 1)[0].strip()
-                            for c in gates.CHECKERS}
-        claimed_offline = {letter for letter, (name, _, plane)
-                            in gates.DETECTORS.items()
-                            if name is not None and plane == "offline"}
-        self.assertEqual(claimed_offline, checker_letters)
+    def test_every_offline_row_declares_a_known_input(self):
+        for row in gates.ROSTER:
+            with self.subTest(letter=row.letter):
+                if row.fn is None:
+                    self.assertIsNone(row.input)
+                else:
+                    self.assertIn(row.input, gates.INPUTS)
+
+    def test_letters_are_unique(self):
+        letters = [row.letter for row in gates.ROSTER]
+        self.assertEqual(len(letters), len(set(letters)))
+
+    def test_every_check_function_has_exactly_one_row(self):
+        checkers = {obj for name, obj in vars(gates).items()
+                    if name.startswith("check_") and callable(obj)}
+        fns = [row.fn for row in gates.ROSTER if row.fn is not None]
+        self.assertEqual(len(fns), len(set(fns)))
+        self.assertEqual(set(fns), checkers)
+
+    @staticmethod
+    def plant_e(root):
+        fixtures.scaffold_sync_fixture(root).write_text(
+            "check: tampered\n", encoding="utf-8")
+
+    @staticmethod
+    def plant_j(root):
+        named = fixtures.label_wiring_wired_fixture(root)
+        (root / ".github" / "labels.json").write_text(
+            fixtures.label_taxonomy_json(
+                [n for n in named if n != "wo:merged"]),
+            encoding="utf-8")
+
+    def defects(self):
+        """One planted defect per wired letter; B's returns its env."""
+        return {
+            "A": fixtures.wo_citation_defect_fixture,
+            "B": lambda root: fixtures.pr_event_fixture(root, {
+                "pull_request": {"title": "x", "body": "no tokens here"}}),
+            "C": fixtures.link_integrity_defect_fixture,
+            "D": fixtures.blueprint_drift_defect_fixture,
+            "E": self.plant_e,
+            "F": fixtures.config_shape_defect_fixture,
+            "G": fixtures.cost_ledger_defect_fixture,
+            "H": fixtures.evidence_honesty_defect_fixture,
+            "I": fixtures.staleness_defect_fixture,
+            "J": self.plant_j,
+            "K": fixtures.standards_drift_defect_fixture,
+            "M": fixtures.capture_completeness_defect_fixture,
+            "N": fixtures.needs_clarification_defect_fixture,
+            "O": lambda root: fixtures.prd_coverage_fixture(
+                root, waive_actors=False),
+        }
+
+    def test_each_row_reports_its_planted_defect_under_its_own_letter(self):
+        """Through run_all's own dispatch, one row at a time: the row's
+        declared input must be enough for it to find its defect (C, D
+        and I find nothing without the scannable docs), and every
+        problem it reports carries the row's letter."""
+        defects = self.defects()
+        wired = [row for row in gates.ROSTER if row.fn is not None]
+        self.assertEqual({row.letter for row in wired}, set(defects))
+        for row in wired:
+            with self.subTest(letter=row.letter), \
+                    tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                env = defects[row.letter](root)
+                env = env if isinstance(env, dict) else {}
+                with mock.patch.object(gates, "ROSTER", (row,)):
+                    problems = gates.run_all(root, env=env)
+                self.assertTrue(problems)
+                for problem in problems:
+                    self.assertTrue(
+                        problem.startswith(f"{row.letter}: "), problem)
+
+    def test_run_all_hands_each_row_its_declared_input(self):
+        seen = {}
+
+        def recorder(letter):
+            def record(root, *args):
+                seen[letter] = args
+                return []
+            return record
+        roster = tuple(row._replace(fn=recorder(row.letter))
+                       if row.fn is not None else row
+                       for row in gates.ROSTER)
+        env = {"GITHUB_EVENT_PATH": "/nowhere"}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixtures.clean_repo_fixture(root)
+            with mock.patch.object(gates, "ROSTER", roster):
+                self.assertEqual(gates.run_all(root, env=env), [])
+        for row in gates.ROSTER:
+            if row.fn is None:
+                continue
+            with self.subTest(letter=row.letter):
+                args = seen[row.letter]
+                if row.input == "root":
+                    self.assertEqual(args, ())
+                elif row.input == "env":
+                    self.assertEqual(args, (env,))
+                else:
+                    (parsed,) = args
+                    self.assertIn("runs", parsed)
+                    if row.input == "parsed+scannable":
+                        self.assertTrue(parsed["scannable"])
 
 
 class TestNeedsClarification(unittest.TestCase):
@@ -1675,7 +1771,7 @@ class TestConfigShape(unittest.TestCase):
     def test_invalid_fields_are_each_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            gates._config_shape_defect_fixture(root)
+            fixtures.config_shape_defect_fixture(root)
             rel = "factory/templates/factory.json"
             self.assertEqual(gates.check_config_shape(root), [
                 f"F: {rel} budgets_usd must map exactly S, M, L",
@@ -1780,7 +1876,7 @@ class TestConfigShape(unittest.TestCase):
 
 class TestPrTraceability(unittest.TestCase):
     def event_env(self, tmp, event):
-        return gates._pr_event_fixture(Path(tmp), event)
+        return fixtures.pr_event_fixture(Path(tmp), event)
 
     def pr_env(self, tmp, title, body):
         return self.event_env(tmp, {"pull_request":
@@ -2003,7 +2099,7 @@ class TestEvidenceHonesty(unittest.TestCase):
             "### Budget guard holds\n\n"
             "- Verdict: PASS\n\n"
             "## Appendix: branch log\n\n"
-            + gates.EVIDENCE_APPENDIX_FENCE),
+            + fixtures.EVIDENCE_APPENDIX_FENCE),
             [(3, self.claim("Dispatch fires", "PASS")),
              (7, self.claim("Budget guard holds", "PASS"))])
 
@@ -2075,11 +2171,11 @@ class TestEvidenceHonesty(unittest.TestCase):
         template-shaped artifact with ZERO command output passed silently.
         A disclosure is what the author WRITES, never the slot label."""
         self.assertEqual(gates.evidence_problems(
-            gates.EVIDENCE_FABRICATED_HEAD + "### Test suite\n\n"
+            fixtures.EVIDENCE_FABRICATED_HEAD + "### Test suite\n\n"
             "- Check: ran the full suite; everything passed comfortably.\n\n"
             "### Dispatch\n\n"
             "- Check: watched the workflow run to completion.\n\n"
-            + gates.EVIDENCE_FABRICATED_TAIL),
+            + fixtures.EVIDENCE_FABRICATED_TAIL),
             [(1, self.BACKSTOP)])
 
     def test_renaming_the_lying_section_does_not_excuse_it(self):
@@ -2104,7 +2200,7 @@ class TestEvidenceHonesty(unittest.TestCase):
         single throwaway leaf (a fence holding one dot) laundered a roll-up
         making every real claim."""
         self.assertEqual(gates.evidence_problems(
-            gates.EVIDENCE_HONEST_LEAF + "## Results\n\n"
+            fixtures.EVIDENCE_HONEST_LEAF + "## Results\n\n"
             "- Result: all 6 PRD criteria PASS\n"
             "- Verdict: ship it\n"),
             [(11, self.claim("Results", "all 6 PRD criteria PASS"))])
@@ -2259,7 +2355,7 @@ class TestEvidenceHonesty(unittest.TestCase):
         """BYPASS 4c. An unclosed fence absorbed the tail of the artifact in
         silence. It must be a problem, not a swallow."""
         self.assertEqual(gates.evidence_problems(
-            gates.EVIDENCE_SUITE_GREEN_OPEN + "- Result: PASS\n"),
+            fixtures.EVIDENCE_SUITE_GREEN_OPEN + "- Result: PASS\n"),
             [(4, "unclosed code fence — every criterion after it is"
                  " unread")])
 
@@ -2573,16 +2669,16 @@ class TestRunAll(unittest.TestCase):
 
     def test_run_all_parses_the_knowledge_plane_exactly_once(self):
         """Issue #443 (the "contract" step): run_all must build `parsed`
-        ONE time per pass and thread it to every _PARSED_CHECKERS entry —
-        never let a detector's own `parsed=None` fallback fire and
-        re-parse it. `wraps` keeps the real parse running (the six
+        ONE time per pass and thread it to every ROSTER row declaring a
+        parsed input — never let a detector's own `parsed=None` fallback
+        fire and re-parse it. `wraps` keeps the real parse running (those
         detectors still need real content to stay silent on the clean
         fixture) while counting calls, so this catches a regression a
         problem-string diff alone would not: an accidental second parse
         that happens to read the same content back."""
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            gates._clean_repo_fixture(root)
+            fixtures.clean_repo_fixture(root)
             with mock.patch.object(
                     gates, "parse_run", wraps=gates.parse_run) as parse_run:
                 problems = gates.run_all(root, env={})
@@ -3140,8 +3236,19 @@ class TestMainSummary(cli_contract.ReportContract, unittest.TestCase):
 
 
 class TestSelftest(unittest.TestCase):
+    def test_the_selftest_flag_still_runs_through_gates_py(self):
+        """`python3 gates.py --selftest` is the spelling both Makefiles,
+        CI and CLAUDE.md use; the fixtures moving out (#784) must not
+        change it."""
+        repo = Path(__file__).resolve().parent.parent
+        result = subprocess.run(
+            [sys.executable, str(repo / "gates.py"), "--selftest"],
+            cwd=repo, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "selftest: ok\n")
+
     def test_selftest_passes(self):
-        self.assertEqual(gates.selftest(), 0)
+        self.assertEqual(fixtures.selftest(), 0)
 
     def test_selftest_fails_when_f_misses_the_planted_effort(self):
         """The F fixture plants a bad effort value; an F that stopped
@@ -3152,7 +3259,7 @@ class TestSelftest(unittest.TestCase):
             return [p for p in real(root) if "effort" not in p]
         with mock.patch.object(gates, "check_config_shape", blind), \
                 mock.patch("sys.stdout", new_callable=io.StringIO):
-            self.assertEqual(gates.selftest(), 1)
+            self.assertEqual(fixtures.selftest(), 1)
 
 
 if __name__ == "__main__":

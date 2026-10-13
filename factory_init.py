@@ -186,7 +186,8 @@ def product_codeowners(text):
 # twins that genuinely differ per repo, and product_makefile and
 # product_codeowners above are the whole translation — a new make target
 # is a root-Makefile edit plus update-manifest, never a hand-sync.
-# gates.py imports its sibling protocol; label_sync.py is the
+# gates.py imports its sibling protocol, and its --selftest delegates to
+# its sibling gates_selftest.py (#784); label_sync.py is the
 # sweeps-only network detector L; validator.py is the validator workflow's
 # brain; budget_guard.py/handoff.py are the ADR-0034 dollar-budget stop and
 # its hard-stop handoff, run ad hoc by a dispatched agent, not by a workflow
@@ -224,6 +225,7 @@ def product_codeowners(text):
 # root-only factory_init only in this repo, behind factory_source.
 MIRRORS = (
     ("gates.py", "tools/factory/gates.py", identity),
+    ("gates_selftest.py", "tools/factory/gates_selftest.py", identity),
     ("protocol.py", "tools/factory/protocol.py", identity),
     ("knowledge_plane.py", "tools/factory/knowledge_plane.py", identity),
     ("cli.py", "tools/factory/cli.py", identity),
