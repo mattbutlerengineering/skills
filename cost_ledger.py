@@ -174,6 +174,34 @@ def record(root, entry):
     return []
 
 
+def record_new(root, rows):
+    """(landed, problems): the guarded write for a batch writer (#772) —
+    record()'s rules over many rows with ONE read. A row whose row_key
+    is already in the ledger, or earlier in the batch, is skipped, not
+    refused: callers carrying or re-scanning rows hand over everything
+    and never restate the dedup. landed is the rows appended, in order.
+
+    Fails closed before any write: a read() problem, or any row
+    line_problems rejects, refuses the whole batch and lands nothing.
+    Every problem carries read()'s ledger: label (a shape refusal names
+    the row's run_id), so callers pass them through as they are."""
+    shape = [f"ledger: refusing run_id {row.get('run_id')!r}: {problem}"
+             for row in rows for problem in line_problems(row)]
+    if shape:
+        return [], shape
+    entries, problems = read(root)
+    if problems:
+        return [], problems
+    present = {row_key(existing) for existing in entries}
+    landed = []
+    for row in rows:
+        if row_key(row) not in present:
+            append(root, row)
+            present.add(row_key(row))
+            landed.append(row)
+    return landed, []
+
+
 def row_key(entry):
     """The row's (wo, run_id) identity — ADR-0041's dedup rule in the
     module that composes both fields: gate_entry keys run_id on the

@@ -20,9 +20,9 @@ it writes the close row and the closing merge ask, commits the ledger,
 run evidence and scorecard, pushes (never forced), opens the closing PR,
 and labels each blocked item's issue needs-human with its reason.
 Last, it deletes from origin each blocked item's branch whose only
-commits beyond origin/main are spend commits, whose rows it carried; a
-branch holding any other commit is kept, and named in the closing PR
-body and on its item's needs-human comment (#728).
+commits beyond origin/main are its own runs' spend commits, whose rows
+it carried; a branch holding any other commit is kept, and named in the
+closing PR body and on its item's needs-human comment (#728, #771).
 
 `close <batch> --merge` merges the closing PR once the Owner answered
 its ask `merge`, first committing and pushing that answer row (#726).
@@ -201,61 +201,60 @@ def update_from_main(git, root, branch, refused="close refused"):
     return [f"cd: {refused}: {problem}" for problem in problems]
 
 
+def _at(git, root):
+    """The git port run inside root: conductor_run's readers take a port
+    that needs no -C."""
+    return lambda args: git(["-C", str(root), *args])
+
+
+def _refused(problems):
+    return [f"cd: close refused: {problem.removeprefix('cd: ')}"
+            for problem in problems]
+
+
 def carry_blocked_spend(git, root, batch, blocked):
     """Append to the batch branch's costs.jsonl every spend row a blocked
-    item's branch holds for its runs and the batch branch lacks: so all
-    spend reaches main, and a re-run never appends a row twice. Lacking
-    is cost_ledger.row_key's identity (ADR-0049), and each row lands
-    through cost_ledger.record, the one guarded write (#736)."""
-    entries, problems = cost_ledger.read(root)
-    if problems:
-        return problems
-    present = {cost_ledger.row_key(entry) for entry in entries}
+    item's branch holds for its runs: so all spend reaches main. The
+    rows are read by conductor_run.ref_rows, where an absent ledger holds
+    none (#708, #772), and land through cost_ledger.record_new, which
+    skips a row the batch branch already holds (row_key, ADR-0049), so a
+    re-run never appends a row twice."""
+    rows = []
     for item in blocked:
-        branch = flow.item_branch(batch, item)
-        text, problems = _git(git, root, ["show", f"{branch}:"
-                                          f"{cost_ledger.COST_LEDGER}"],
-                              f"reading {branch}'s spend rows")
-        if problems:
-            return [f"cd: close refused: {problem}" for problem in problems]
-        for lineno, entry, suffixes in cost_ledger.parse(text):
-            if suffixes:
-                return [f"cd: {branch}:{cost_ledger.COST_LEDGER}:{lineno}"
-                        f" {suffix}" for suffix in suffixes]
-            if run_item(batch, entry["run_id"]) == item \
-                    and cost_ledger.row_key(entry) not in present:
-                refused = cost_ledger.record(root, entry)
-                if refused:
-                    return [f"cd: close refused: {problem}"
-                            for problem in refused]
-                present.add(cost_ledger.row_key(entry))
-    return []
+        found, unread, malformed = conductor_run.ref_rows(
+            _at(git, root), flow.item_branch(batch, item))
+        if unread or malformed:
+            return _refused(unread) + malformed
+        rows += [entry for entry in found
+                 if run_item(batch, entry["run_id"]) == item]
+    _, problems = cost_ledger.record_new(root, rows)
+    return problems
 
 
 def sort_blocked_branches(git, root, batch, blocked):
     """({"delete": [(branch, sha)], "keep": [branches]}, problems): a
     blocked item's branch is deleted when its commits beyond origin/main
-    are all spend commits, whose rows carry_blocked_spend put on the
-    batch branch; it is kept when any commit is something else. The sha
-    is the local ref inspected, which the delete leases on. A branch
-    with nothing beyond origin/main is in neither: it holds nothing to
-    lose or to keep, and may not be on origin at all."""
+    are all spend commits of that item's own runs in this batch
+    (conductor_run.spend_run, run_item), whose rows carry_blocked_spend
+    put on the batch branch; it is kept when any commit is something
+    else — a Worker's own `chore(cost): ...` commit, or another batch's
+    run, included (#771). The sha is the local ref inspected, which the
+    delete leases on. A branch with nothing beyond origin/main is in
+    neither: it holds nothing to lose or to keep, and may not be on
+    origin at all."""
     sorted_branches = {"delete": [], "keep": []}
     for item in blocked:
         branch = flow.item_branch(batch, item)
         sha, problems = _git(git, root, ["rev-parse", branch],
                              f"reading {branch}'s head")
-        out, problems = (None, problems) if problems else _git(
-            git, root, ["log", "--format=%s", f"origin/main..{sha.strip()}"],
-            f"reading {branch}'s commits")
+        subjects, problems = (None, problems) if problems else \
+            conductor_run.run_commits(_at(git, root), branch, sha.strip())
         if problems:
-            return None, [f"cd: close refused: {problem}"
-                          for problem in problems]
-        subjects = out.splitlines()
+            return None, _refused(problems)
         if not subjects:
             continue
-        if all(subject.startswith(conductor_run.SPEND_SUBJECT)
-               for subject in subjects):
+        if all(run_item(batch, conductor_run.spend_run(subject) or "")
+               == item for subject in subjects):
             sorted_branches["delete"].append((branch, sha.strip()))
         else:
             sorted_branches["keep"].append(branch)

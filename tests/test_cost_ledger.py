@@ -166,6 +166,66 @@ class TestRecord(unittest.TestCase):
                 ("WO-0007", "r-1"), ("WO-0007", "r-2"), ("#12", "r-1")])
 
 
+class TestRecordNew(unittest.TestCase):
+    """cost_ledger.record_new — a batch writer's guarded write (#772):
+    one read, then every row not already present lands once. A row
+    already in the ledger, or repeated within the batch, is skipped,
+    not refused, so callers never restate row_key's dedup."""
+
+    ROW = TestRecord.ROW
+
+    def ledger(self, tmp):
+        return Path(tmp) / cost_ledger.COST_LEDGER
+
+    def test_lands_only_rows_not_already_present(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(cost_ledger.record(tmp, self.ROW), [])
+            second = dict(self.ROW, run_id="r-2")
+            third = dict(self.ROW, wo="#12")
+            landed, problems = cost_ledger.record_new(
+                tmp, [dict(self.ROW, cost=9.0), second, third,
+                      dict(second, cost=3.0)])
+            self.assertEqual((landed, problems), ([second, third], []))
+            self.assertEqual(self.ledger(tmp).read_text(encoding="utf-8"),
+                             "".join(json.dumps(row) + "\n"
+                                     for row in (self.ROW, second, third)))
+
+    def test_an_absent_ledger_is_created_and_nothing_new_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(cost_ledger.record_new(tmp, []), ([], []))
+            self.assertFalse(self.ledger(tmp).exists())
+            self.assertEqual(cost_ledger.record_new(tmp, [self.ROW]),
+                             ([self.ROW], []))
+            self.assertEqual(cost_ledger.record_new(tmp, [self.ROW]),
+                             ([], []))
+
+    def test_a_malformed_row_refuses_the_batch_before_any_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = dict(self.ROW, run_id="r-2", cost=-1.0)
+            self.assertEqual(cost_ledger.record_new(tmp, [self.ROW, bad]), (
+                [], ["ledger: refusing run_id 'r-2': cost must be a non-negative number"]))
+            self.assertFalse(self.ledger(tmp).exists())
+
+    def test_an_unreadable_ledger_appends_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = self.ledger(tmp)
+            ledger.parent.mkdir(parents=True)
+            ledger.write_text('{"wo": "WO-0010"}\n', encoding="utf-8")
+            self.assertEqual(cost_ledger.record_new(tmp, [self.ROW]), ([], [
+                "ledger: docs/factory/costs.jsonl:1 ledger line is missing"
+                " field(s): cost, model, outcome, run_id, tokens"]))
+            self.assertEqual(ledger.read_text(encoding="utf-8"),
+                             '{"wo": "WO-0010"}\n')
+
+    def test_reads_the_ledger_once_per_batch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rows = [dict(self.ROW, run_id=f"r-{n}") for n in range(3)]
+            with mock.patch.object(cost_ledger, "read",
+                                   wraps=cost_ledger.read) as read:
+                cost_ledger.record_new(tmp, rows)
+            self.assertEqual(read.call_count, 1)
+
+
 class TestWoToken(unittest.TestCase):
     def test_a_valid_token_is_returned(self):
         record = entry("WO-0009", "r-1", "m", 1, 0.1, "merged", "2026-08-02")

@@ -262,6 +262,11 @@ def head_call(root):
     return ("-C", str(root), "rev-parse", "conductor/b1-13")
 
 
+def ls_call(root):
+    return ("-C", str(root), "ls-tree", "--name-only", "conductor/b1-13",
+            "--", COSTS)
+
+
 def log_call(root):
     return ("-C", str(root), "log", "--format=%s",
             f"origin/main..{BRANCH_SHA}")
@@ -289,6 +294,7 @@ class TestClose(unittest.TestCase):
         self.git = git or FakeGh({
             ("-C", str(self.root), "show",
              f"conductor/b1-13:{COSTS}"): lines(branch_costs),
+            ls_call(self.root): COSTS + "\n",
             head_call(self.root): BRANCH_SHA + "\n",
             log_call(self.root): branch_log})
         self.gh = gh or FakeGh({LABEL_LIST: HAS_NEEDS_HUMAN})
@@ -324,6 +330,7 @@ class TestClose(unittest.TestCase):
         self.assertEqual(self.git.calls, [
             here + ["fetch", "origin", "main"],
             here + ["merge", "--no-edit", "origin/main"],
+            here + ["ls-tree", "--name-only", "conductor/b1-13", "--", COSTS],
             here + ["show", f"conductor/b1-13:{COSTS}"],
             here + ["rev-parse", "conductor/b1-13"],
             here + ["log", "--format=%s", f"origin/main..{BRANCH_SHA}"],
@@ -373,6 +380,7 @@ class TestClose(unittest.TestCase):
     def test_an_unreadable_branch_log_refuses_the_close(self):
         fake = FakeGh({("-C", str(self.root), "show",
                         f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
+                       ls_call(self.root): COSTS + "\n",
                        head_call(self.root): BRANCH_SHA + "\n"},
                       failing=list(log_call(self.root)))
         self.assertEqual(self.close(ROWS, git=fake), (None, [
@@ -393,6 +401,7 @@ class TestClose(unittest.TestCase):
             1, "git", stderr=" ! [rejected] (stale info)\n")
         fake = FakeGh({("-C", str(self.root), "show",
                         f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
+                       ls_call(self.root): COSTS + "\n",
                        head_call(self.root): BRANCH_SHA + "\n",
                        log_call(self.root): COST_ONLY_LOG},
                       failing=["-C", str(self.root), *LEASED_DELETE],
@@ -415,6 +424,40 @@ class TestClose(unittest.TestCase):
         costs = (self.root / COSTS).read_text().splitlines()
         self.assertEqual([json.loads(line)["run_id"] for line in costs[-2:]],
                          ["conductor-b1-13-spec-1", "conductor-b1-13-build-1"])
+
+    def test_a_workers_own_cost_commit_keeps_the_branch(self):
+        # #771: a Worker's `chore(cost): ...` commit is real work, not
+        # one of this item's spend commits; deleting the branch loses it.
+        worker = "chore(cost): raise the default monthly cap\n"
+        summary, problems = self.close(ROWS, branch_log=worker + COST_ONLY_LOG)
+        self.assertEqual(problems, [])
+        self.assertEqual(self.git.called("-C", str(self.root), "push",
+                                         LEASED_DELETE[1]), [])
+        self.assertIn("Kept on origin", self.gh.calls[1][-1])
+
+    def test_another_batchs_spend_commit_keeps_the_branch(self):
+        # #771: carry does not carry that run's rows, so they are not on
+        # the batch branch; the commit is not this item's spend.
+        other = f"{conductor_run.SPEND_SUBJECT}conductor-oct-1-build-1\n"
+        summary, problems = self.close(ROWS, branch_log=other + COST_ONLY_LOG)
+        self.assertEqual(problems, [])
+        self.assertEqual(self.git.called("-C", str(self.root), "push",
+                                         LEASED_DELETE[1]), [])
+
+    def test_a_blocked_branch_with_no_cost_ledger_carries_nothing(self):
+        # #772: nothing seeds costs.jsonl in a consumer repo (#708), so a
+        # branch with no spend commit has no ledger; an absent ledger
+        # holds no rows, and the close goes on.
+        fake = FakeGh({ls_call(self.root): "",
+                       head_call(self.root): BRANCH_SHA + "\n",
+                       log_call(self.root): ""},
+                      failing=["-C", str(self.root), "show"])
+        # #13's rows already reached the batch branch, so the scorecard
+        # computes; the branch adds none.
+        costs = SPEND[:4] + SPEND[5:] + BLOCKED_SPEND
+        summary, problems = self.close(ROWS, costs=costs, git=fake)
+        self.assertEqual(problems, [])
+        self.assertEqual((self.root / COSTS).read_text(), lines(costs))
 
     def test_a_failing_scorecard_leaves_scorecards_byte_identical(self):
         summary, problems = self.close(ROWS, costs=SPEND[:3])
@@ -525,7 +568,8 @@ class TestClose(unittest.TestCase):
 
     def test_a_failed_push_is_reported_after_the_close_is_recorded(self):
         fake = FakeGh({("-C", str(self.root), "show",
-                        f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND)},
+                        f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
+                       ls_call(self.root): COSTS + "\n"},
                       failing=["-C", str(self.root), "push"])
         summary, problems = self.close(ROWS, git=fake)
         self.assertEqual(problems, [
