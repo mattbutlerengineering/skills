@@ -106,8 +106,10 @@ NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
 
 # An index row: | [0032](0032-slug.md) | Decision | status |
+# The first cell's link target is knowledge_plane's to read (issue #773:
+# a hand-rolled `[^)]+` took a link title into the filename).
 ADR_INDEX_ROW = re.compile(
-    r"^\|\s*\[(?P<num>\d{4})\]\((?P<file>[^)]+)\)\s*\|[^|]*\|"
+    r"^\|\s*(?P<cell>\[(?P<num>\d{4})\]\([^|]*\))\s*\|[^|]*\|"
     r"\s*(?P<status>[^|]*?)\s*\|")
 
 # H reads verification.md the way the verify skill writes it: markdown
@@ -567,9 +569,11 @@ def check_blueprint_drift(root, parsed=None):
             match = ADR_INDEX_ROW.match(line)
             if not match:
                 continue
-            number, filename = match.group("num"), match.group("file")
+            number = match.group("num")
             rows[number] = (lineno, match.group("status"))
-            if not (adr_dir / filename).is_file():
+            filename = next(iter(local_link_targets(match.group("cell"))), "")
+            named = resolve_link(root, adr_dir / "README.md", filename)
+            if named is None or not named.is_file():
                 problems.append(
                     f"D: docs/adr/README.md:{lineno} index row ADR-{number}"
                     f" links to missing file {filename}")
