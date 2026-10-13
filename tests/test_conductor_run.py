@@ -19,6 +19,7 @@ import conductor_run
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
+from fake_git import FakeGit  # noqa: E402
 from test_conductor_flow import (BUDGET, PLAN, START,  # noqa: E402
                                  answered, failed, launch, moved, ran,
                                  run_id, stall_ask)
@@ -69,37 +70,39 @@ def pr_body(path):
     (path / "pr-body.md").write_text("Body\n")
 
 
-def Git(tmp, changed="", shows=None, fail=None, log=""):
-    """A git port over a scratch tree: worktree add makes the directory;
-    every other call is recorded (run.calls) and answered from canned
-    output. `fail` names an argument whose call is rejected; `log` is
-    what `git log` prints."""
-    calls = []
+def add_worktree(args):
+    """A FakeGit answer: `worktree add -b <branch> <path>` makes the
+    directory, as git does, and prints nothing."""
+    Path(args[4]).mkdir(parents=True)
+    return ""
 
-    def run(args):
-        calls.append(args)
-        if fail and fail in args:
-            raise subprocess.CalledProcessError(1, args, stderr="rejected")
-        out = ""
-        if args[:1] == ["rev-parse"] and "--git-common-dir" in args:
-            out = str(Path(tmp) / ".git") + "\n"
-        elif args[:1] == ["rev-parse"]:
-            out = "c0ffee\n"
-        elif args[:2] == ["worktree", "add"]:
-            Path(args[4]).mkdir(parents=True)
-        elif args[:1] == ["log"]:
-            out = log
-        elif args[:2] == ["ls-tree", "--name-only"]:
-            # A ledger is on a ref only when `shows` holds it there.
-            out = args[-1] + "\n" if f"{args[2]}:{args[-1]}" in (
-                shows or {}) else ""
-        elif "diff" in args:
-            out = changed
-        elif "show" in args:
-            out = (shows or {}).get(args[-1], "")
-        return subprocess.CompletedProcess(args, 0, stdout=out, stderr="")
-    run.calls = calls
-    return run
+
+def Git(tmp, changed="", shows=None, failing=None, log="", heads=None,
+        pushurls=""):
+    """FakeGit over a scratch tree: the main checkout is `tmp`, every
+    branch head is c0ffee (or `heads`, a callable answer), `git log`
+    prints `log`, the item diff is `changed`, and a ref holds a file only
+    when `shows` maps "<ref>:<path>" to its text — so an absent ledger is
+    one ls-tree lists nothing for and git show fails on. `pushurls` is
+    what `config --get-regexp` prints in any checkout (none: git exits
+    1). `failing` is the argv prefix whose call git rejects."""
+    shows = shows or {}
+
+    def listed(args):
+        return args[-1] + "\n" if f"{args[2]}:{args[-1]}" in shows else ""
+
+    def in_a_checkout(args):
+        return pushurls if "--get-regexp" in args else ""
+    return FakeGit({
+        ("-C",): in_a_checkout,
+        ("rev-parse",): heads or "c0ffee\n",
+        ("rev-parse", "--path-format=absolute", "--git-common-dir"):
+            f"{Path(tmp) / '.git'}\n",
+        ("worktree", "add"): add_worktree, ("log",): log,
+        ("diff",): changed, ("ls-tree", "--name-only"): listed,
+        # Read at call time: a Worker's commit changes what a ref holds.
+        ("show",): lambda args: shows.get(args[-1], "")},
+        failing=failing)
 
 
 def Gh(prs=(), body="Spec this.", title="t", fail=None):
@@ -584,9 +587,10 @@ class TestFailedRun(RunCase):
 
     def test_a_failed_push_stalls_and_opens_no_pr(self):
         self.run_step("#12", "spec", Harness(act=pr_body),
-                      git=Git(self.tmp.name, fail="push"))
+                      git=Git(self.tmp.name, failing=[
+                          "-C", str(self.worktree("#12")), "push"]))
         self.assertTrue(self.rows[-2]["reason"].startswith(
-            "pushing conductor/b1-12 failed: rejected"))
+            "pushing conductor/b1-12 failed: fatal: rejected"))
         self.assertFalse([c for c in self.gh.calls if c[0] == "pr"])
 
     def test_a_failed_pr_open_stalls(self):
@@ -804,24 +808,16 @@ class TestReviewRun(RunCase):
                                     "---\n# Review\n")
             if ran is not None:
                 ran.append(True)
-        git = Git(self.tmp.name, changed=f"{path}\n")
-        if ran is not None:
-            git = self.moving_head(git, ran)
+        git = Git(self.tmp.name, changed=f"{path}\n",
+                  heads=None if ran is None else self.moving_head(ran))
         self.run_step("#14", "review", Harness(act=act), git=git,
                       gh=Gh(title="WO-0180"), rows=self.REVIEWING)
 
     @staticmethod
-    def moving_head(git, ran):
-        """The fake git, with the branch head moving once the review
+    def moving_head(ran):
+        """A rev-parse answer: the branch head moves once the review
         Worker has run (its own commits land on the branch)."""
-        def run(args):
-            out = git(args)
-            if args[:1] == ["rev-parse"] and "--git-common-dir" not in args:
-                head = "a1fter" if ran else "bef0re"
-                return subprocess.CompletedProcess(args, 0, f"{head}\n", "")
-            return out
-        run.calls = git.calls
-        return run
+        return lambda args: "a1fter\n" if ran else "bef0re\n"
 
     def test_a_pass_verdict_marks_the_item_reviewed(self):
         self.review("verdict: pass\n")

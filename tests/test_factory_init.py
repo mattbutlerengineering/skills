@@ -45,6 +45,7 @@ EXPECTED_RELS = {
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
+    "templates/tools/factory/gates_selftest.py",
     "templates/tools/factory/work_queue.py",
     "templates/tools/factory/knowledge_plane.py",
     "templates/tools/factory/cli.py",

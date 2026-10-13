@@ -3,8 +3,8 @@
 match .github/labels.json (PRD-0001; ADR-0033 lifecycle labels).
 
 A NETWORK detector: it reads the live label set through the gh CLI, so it
-runs in scheduled sweeps only and is NEVER wired into gates.py CHECKERS
-(those stay offline). Conventions match gates.py/lint.py: functions return
+runs in scheduled sweeps only and its gates.py ROSTER row carries no
+checker (run_all stays offline). Conventions match gates.py/lint.py: functions return
 L:-prefixed problem strings; the CLI prints them and exits nonzero.
 
   python3 label_sync.py           report drift (gh label list)

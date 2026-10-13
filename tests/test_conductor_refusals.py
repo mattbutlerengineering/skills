@@ -4,7 +4,7 @@ repo; a malformed one still refuses. A refusal no retry fixes (a push
 gap, an unusable factory.json, a malformed ledger) pauses dispatch
 behind a batch-wide ask, so `next` stops re-offering the refused step.
 `open` checks the same item-independent refusals before it queues the
-spend ask, so none can first appear after spend consent. git is a fake
+spend ask, so none can first appear after spend consent. git is FakeGit
 or a scratch repo, gh is FakeGh, and the harness never runs a model.
 """
 import contextlib
@@ -23,10 +23,11 @@ import conductor_plan
 import conductor_run
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from test_conductor_plan import CONFIG, clock, fake_gh, issue  # noqa: E402
-from test_conductor_run import BASE, MAIN_COSTS, RESULT, Gh, Git, \
+from test_conductor_plan import CONFIG, clock, issue, \
+    issues_gh  # noqa: E402
+from test_conductor_run import BASE, MAIN_COSTS, RESULT, Git, \
     Harness, RunCase, pr_body, spend_line  # noqa: E402
-from test_conductor_run_guard import PUSHURL, configured  # noqa: E402
+from test_conductor_run_guard import PUSHURL  # noqa: E402
 
 AGENTS = Path(__file__).resolve().parents[1] / "factory" / "agents"
 PUSHURL_REFUSAL = ("cd: launch refused: remote origin has an explicit"
@@ -37,27 +38,12 @@ MALFORMED = (f"cd: {MAIN_COSTS}:1 is not valid JSON: Expecting value:"
              " line 1 column 1 (char 0)")
 
 
-def absent_main_ledger(tmp):
-    """The scratch Git port over a main with no costs.jsonl: `git show`
-    of it fails as real git's does, and ls-tree lists nothing."""
-    git = Git(tmp)
-
-    def run(args):
-        if MAIN_COSTS in args:
-            git.calls.append(args)
-            raise subprocess.CalledProcessError(
-                128, args, stderr="fatal: path 'docs/factory/costs.jsonl'"
-                " does not exist in 'origin/main'")
-        return git(args)
-    run.calls = git.calls
-    return run
-
-
 class TestAbsentLedger(RunCase):
     def test_no_ledger_on_main_is_zero_spend_and_the_run_launches(self):
+        # FakeGit's main holds no costs.jsonl: ls-tree lists nothing and
+        # `git show` of it fails as real git's does.
         summary, problems = self.run_step(
-            "#12", "spec", Harness(act=pr_body),
-            git=absent_main_ledger(self.tmp.name))
+            "#12", "spec", Harness(act=pr_body), git=Git(self.tmp.name))
         self.assertEqual(problems, [])
         self.assertEqual(summary["outcome"], "completed")
         self.assertFalse([call for call in self.git.calls
@@ -95,7 +81,7 @@ class TestRefusalPausesDispatch(RunCase):
 
     def refuse(self, rows=BASE):
         return self.run_step("#12", "spec", Harness(act=pr_body),
-                             git=configured(self.tmp.name, PUSHURL),
+                             git=Git(self.tmp.name, pushurls=PUSHURL),
                              rows=rows)
 
     def test_a_push_gap_pauses_dispatch_behind_one_ask(self):
@@ -141,38 +127,19 @@ class TestRefusalPausesDispatch(RunCase):
     def test_a_transient_git_failure_records_nothing(self):
         summary, problems = self.run_step(
             "#12", "spec", Harness(act=pr_body),
-            git=Git(self.tmp.name, fail="ls-tree"))
+            git=Git(self.tmp.name, failing=["ls-tree"]))
         self.assertIsNone(summary)
         self.assertEqual(problems, [
-            "cd: git ls-tree origin/main failed: rejected"])
+            "cd: git ls-tree origin/main failed: fatal: rejected"])
         self.assertEqual(self.rows, BASE)
 
 
-def open_git(tmp, pushurl="", main_costs=None, calls=None):
-    """A git port for `open`: grep for ids, worktree add, ls-tree over a
-    main that holds costs.jsonl only when `main_costs` is given, and the
-    pushurl read."""
-    def run(args):
-        if calls is not None:
-            calls.append(args)
-        out = ""
-        if args[0] == "grep":
-            out = "PRD-0013\n"
-        elif args[0] == "rev-parse":
-            out = f"{Path(tmp) / '.git'}\n"
-        elif args[:2] == ["worktree", "add"]:
-            Path(args[4]).mkdir(parents=True)
-        elif args[0] == "ls-tree":
-            out = args[-1] + "\n" if main_costs is not None \
-                and args[-1] == "docs/factory/costs.jsonl" else ""
-        elif args[0] == "show":
-            out = main_costs
-        elif "--get-regexp" in args:
-            if not pushurl:
-                raise subprocess.CalledProcessError(1, args)
-            out = pushurl
-        return subprocess.CompletedProcess(args, 0, stdout=out, stderr="")
-    return run
+def open_git(tmp, pushurl="", main_costs=None):
+    """FakeGit for `open`: a main that holds costs.jsonl only when
+    `main_costs` is given, and `pushurl` as the checkout's pushurl
+    config."""
+    shows = {} if main_costs is None else {MAIN_COSTS: main_costs}
+    return Git(tmp, shows=shows, pushurls=pushurl)
 
 
 class TestOpenPreflight(unittest.TestCase):
@@ -189,7 +156,7 @@ class TestOpenPreflight(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()):
                 problems = conductor_plan.open_cli(
                     tmp, ["b1", "--agents", str(AGENTS), "#12"], clock(),
-                    fake_gh({12: issue(12)}), open_git(tmp, **git),
+                    issues_gh({12: issue(12)}), open_git(tmp, **git),
                     netrc=netrc)
             opened = (Path(tmp) / ".claude/worktrees/conductor-b1").exists()
             return problems, opened, netrc

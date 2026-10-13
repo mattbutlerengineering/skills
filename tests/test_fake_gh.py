@@ -23,12 +23,27 @@ from fake_gh import FakeGh, default_error  # noqa: E402
 TESTS = Path(__file__).resolve().parent
 
 
+# gh's own top-level commands. No git command shares one of these names,
+# so an argv matched against one is a gh port's, never a git port's.
+GH_COMMANDS = frozenset({"api", "auth", "issue", "label", "pr", "release",
+                         "repo", "run", "search", "secret", "workflow"})
+# FakeGit has FakeGh's shape — `__call__(self, args)` — at the conductor's
+# git port, not this seam; tests/test_fake_git.py holds its roll-call.
+GIT_PORT_FAKE = "fake_git.py"
+
+
 def runner_modules(directory=TESTS):
     """Every module under `directory` that defines a gh-runner fake.
 
     The seam's port is `gh_runner(args)`, so a class with
     `__call__(self, args)` is one — derived from the syntax rather than
-    from a list somebody keeps up to date, which is the whole point.
+    from a list somebody keeps up to date, which is the whole point. So
+    is a function taking only `args`, at module level or nested in a
+    builder, that matches the argv against a gh command and answers it
+    itself (#782): test_conductor_plan's `fake_gh` was one, and a
+    class-only walk never saw it. A function that only hands the argv on
+    to another port — a wrapper adding a side effect around FakeGh — is
+    not one; FakeGh still answers.
 
     The directory is a parameter so the rule can be exercised against a
     tree that has a private fake in it. A second copy of this walk,
@@ -37,17 +52,48 @@ def runner_modules(directory=TESTS):
     """
     found = []
     for path in sorted(directory.glob("*.py")):
+        if path.name == GIT_PORT_FAKE:
+            continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if not isinstance(node, ast.ClassDef):
-                continue
-            for item in node.body:
-                if (isinstance(item, ast.FunctionDef)
-                        and item.name == "__call__"
-                        and [a.arg for a in item.args.args] == ["self",
-                                                                "args"]):
-                    found.append((path.name, node.name))
+            if isinstance(node, ast.ClassDef):
+                found += [(path.name, node.name) for item in node.body
+                          if _takes_only_args(item, "self")
+                          and item.name == "__call__"]
+            elif (_takes_only_args(node) and _matches_a_gh_command(node)
+                  and not _only_delegates(node)):
+                found.append((path.name, node.name))
     return found
+
+
+def _takes_only_args(node, *leading):
+    return (isinstance(node, ast.FunctionDef)
+            and [a.arg for a in node.args.args] == [*leading, "args"])
+
+
+def _matches_a_gh_command(function):
+    """Whether the function compares something with a gh command: a
+    literal argv prefix such as ["issue", "view"], or a bare "issue"."""
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Compare):
+            continue
+        for side in (node.left, *node.comparators):
+            head = side.elts[0] if isinstance(side, (ast.List, ast.Tuple)) \
+                and side.elts else side
+            if isinstance(head, ast.Constant) and head.value in GH_COMMANDS:
+                return True
+    return False
+
+
+def _only_delegates(function):
+    """Whether every answer the function gives is another port's answer
+    to the same argv (`return port(args)`), and it raises nothing."""
+    nodes = list(ast.walk(function))
+    if any(isinstance(node, ast.Raise) for node in nodes):
+        return False
+    return all(isinstance(node.value, ast.Call)
+               and [ast.unparse(arg) for arg in node.value.args] == ["args"]
+               for node in nodes if isinstance(node, ast.Return))
 
 
 class TestRecordThenComputeThenRaise(unittest.TestCase):
@@ -176,6 +222,43 @@ class TestItIsTheOneFakeAtTheSeam(unittest.TestCase):
                 "        return ''\n", encoding="utf-8")
             self.assertEqual(runner_modules(Path(tmp)),
                              [("test_private.py", "Private")])
+
+    def test_the_rule_can_see_a_function_style_fake(self):
+        """#782: a builder returning `run(args)` that answers gh itself,
+        the shape test_conductor_plan's fake_gh had, and a module-level
+        one comparing a bare command."""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "test_private.py").write_text(
+                "def fake_gh(issues):\n"
+                "    def run(args):\n"
+                "        if args[:2] == ['issue', 'view']:\n"
+                "            return issues[args[2]]\n"
+                "        raise AssertionError(args)\n"
+                "    return run\n"
+                "def gh(args):\n"
+                "    if args[0] == 'pr':\n"
+                "        return '[]'\n"
+                "    return ''\n", encoding="utf-8")
+            self.assertEqual(sorted(runner_modules(Path(tmp))),
+                             [("test_private.py", "gh"),
+                              ("test_private.py", "run")])
+
+    def test_the_rule_does_not_fire_on_a_wrapper_or_a_git_port(self):
+        """A wrapper that hands the argv on to FakeGh, and a git port
+        (whose commands no gh command shares), are not gh fakes."""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "test_other.py").write_text(
+                "def wrap(fake, moved):\n"
+                "    def port(args):\n"
+                "        if args[:1] == ['api']:\n"
+                "            moved.append(True)\n"
+                "        return fake(args)\n"
+                "    return port\n"
+                "def git(args):\n"
+                "    if args[:1] == ['show']:\n"
+                "        return 'x'\n"
+                "    return ''\n", encoding="utf-8")
+            self.assertEqual(runner_modules(Path(tmp)), [])
 
     def test_the_rule_does_not_fire_on_a_callable_that_is_not_the_port(self):
         """`__call__(self, cmd)` is some other callable — a harness

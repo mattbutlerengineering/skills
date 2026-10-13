@@ -431,8 +431,9 @@ class TestNext(unittest.TestCase):
             [PLAN, ask_row("ask-1"), answer_row("ask-1")]))
 
 
-ITEM_PLAN = {**PLAN, "items": [{"item": "#12", "type": "fix"},
-                               {"item": "#13", "type": "order"}]}
+ITEM_PLAN = {**PLAN, "items": [{"item": "#12", "type": "fix", "steps": []},
+                               {"item": "#13", "type": "order",
+                                "steps": []}]}
 
 
 def state(frm, to, reason="moved", **fields):
@@ -454,6 +455,24 @@ def reserve(what, values, renumbered_from=None):
 
 
 STALL = state("build", "stalled", "its runner is gone")
+
+
+def planned_step(name, charter, band):
+    return {"step": name, "charter": charter, "band": band,
+            "model": {"implementation": "m-impl"}.get(band, "m-arch"),
+            "effort": "medium" if band == "implementation" else "high",
+            "ceiling_usd": 4.5}
+
+
+STEPPED_PLAN = {
+    **PLAN,
+    "policy": {"routing": {"implementation": "m-impl",
+                           "architecture_review": "m-arch"},
+               "effort": {"implementation": "medium",
+                          "architecture_review": "high"}},
+    "items": [{"item": "#12", "type": "order", "steps": [
+        planned_step("build", "swe", "implementation"),
+        planned_step("review", "reviewer", "architecture_review")]}]}
 
 
 class TestItemView(unittest.TestCase):
@@ -564,6 +583,42 @@ class TestItemView(unittest.TestCase):
         conductor.item_view(rows, "#12")
         self.assertEqual(json.dumps(rows), before)
         self.assertEqual(len(rows), 6)
+
+    def test_steps_answer_the_plan_rows_snapshot(self):
+        found = self.policy()
+        self.assertEqual(found["build"], {
+            "charter": "swe", "band": "implementation", "model": "m-impl",
+            "effort": "medium", "ceiling_usd": 4.5, "bumped": False})
+
+    def test_a_retry_up_after_the_stall_runs_the_step_one_band_up(self):
+        found = self.policy(STALL, ask_row("ask-1", ask_kind="stall"),
+                            answer_row("ask-1", "retry-up"))
+        self.assertEqual(found["build"], {
+            "charter": "swe", "band": "architecture_review",
+            "model": "m-arch", "effort": "high", "ceiling_usd": 4.5,
+            "bumped": True})
+        self.assertFalse(found["review"]["bumped"])
+
+    def test_a_retry_up_before_the_stall_bumps_nothing(self):
+        found = self.policy(ask_row("ask-1", ask_kind="stall"),
+                            answer_row("ask-1", "retry-up"), STALL)
+        self.assertEqual((found["build"]["band"], found["build"]["bumped"]),
+                         ("implementation", False))
+
+    def test_a_retry_up_at_the_top_band_bumps_nothing(self):
+        found = self.policy(state("review", "stalled", "x"),
+                            ask_row("ask-1", ask_kind="stall"),
+                            answer_row("ask-1", "retry-up"))
+        self.assertEqual((found["review"]["band"], found["review"]["model"],
+                          found["review"]["bumped"]),
+                         ("architecture_review", "m-arch", False))
+
+    def test_a_step_off_the_plan_is_absent(self):
+        self.assertNotIn("spec", self.policy())
+        self.assertEqual(self.item(item="#99")["steps"], {})
+
+    def policy(self, *rows):
+        return conductor.item_view([STEPPED_PLAN, *rows], "#12")["steps"]
 
     def test_a_non_contiguous_block_renders_each_run(self):
         from conductor_plan import span
