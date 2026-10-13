@@ -1,7 +1,7 @@
 """conductor_close.py (PRD-0013, WO-0162, WO-0163): the scorecard and
 closing a batch. The scorecard is pure over the ledger's text and the
-cost ledger's rows; close runs only through injected ports (a recording
-git and FakeGh) — no real push, PR or label — and tests assert the EXACT
+cost ledger's rows; close runs only through injected ports (FakeGit
+and FakeGh) — no real push, PR or label — and tests assert the EXACT
 problem strings and rows.
 """
 import json
@@ -21,6 +21,7 @@ import conductor_run
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
+from fake_git import FakeGit  # noqa: E402
 
 LEDGER = "docs/factory/batches/b1/ledger.jsonl"
 COSTS = "docs/factory/costs.jsonl"
@@ -228,7 +229,7 @@ class TestScorecardCli(unittest.TestCase):
             self.assertFalse((Path(tmp) / close.SCORECARDS).exists())
 
 
-# --- closing a batch (WO-0163), through a recording git and FakeGh -----
+# --- closing a batch (WO-0163), through FakeGit and FakeGh ------------
 
 BLOCKED_SPEND = [spend("conductor-b1-13-spec-1", 0.5, "#13"),
                  spend("conductor-b1-13-build-1", 0.0, "#13")]
@@ -272,14 +273,6 @@ def log_call(root):
             f"origin/main..{BRANCH_SHA}")
 
 
-def git_port(fake):
-    """The git port over a FakeGh: records, answers by argv prefix, and
-    returns what cli.runner returns."""
-    def git(args):
-        return subprocess.CompletedProcess(args, 0, fake(args), "")
-    return git
-
-
 class TestClose(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -291,7 +284,7 @@ class TestClose(unittest.TestCase):
     def close(self, rows, costs=SPEND[:4] + SPEND[5:], git=None, gh=None,
               branch_costs=BLOCKED_SPEND, branch_log=COST_ONLY_LOG):
         write(self.root, lines(rows), lines(costs))
-        self.git = git or FakeGh({
+        self.git = git or FakeGit({
             ("-C", str(self.root), "show",
              f"conductor/b1-13:{COSTS}"): lines(branch_costs),
             ls_call(self.root): COSTS + "\n",
@@ -299,7 +292,7 @@ class TestClose(unittest.TestCase):
             log_call(self.root): branch_log})
         self.gh = gh or FakeGh({LABEL_LIST: HAS_NEEDS_HUMAN})
         return close.close_batch(self.root, "b1", lambda: NOW,
-                                 git_port(self.git), self.gh)
+                                 self.git, self.gh)
 
     def ledger(self):
         return [json.loads(line) for line in
@@ -378,14 +371,14 @@ class TestClose(unittest.TestCase):
         self.assertNotIn("Kept on origin", self.gh.calls[1][-1])
 
     def test_an_unreadable_branch_log_refuses_the_close(self):
-        fake = FakeGh({("-C", str(self.root), "show",
-                        f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
-                       ls_call(self.root): COSTS + "\n",
-                       head_call(self.root): BRANCH_SHA + "\n"},
-                      failing=list(log_call(self.root)))
+        fake = FakeGit({("-C", str(self.root), "show",
+                         f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
+                        ls_call(self.root): COSTS + "\n",
+                        head_call(self.root): BRANCH_SHA + "\n"},
+                       failing=list(log_call(self.root)))
         self.assertEqual(self.close(ROWS, git=fake), (None, [
             "cd: close refused: reading conductor/b1-13's commits failed:"
-            " boom"]))
+            " fatal: rejected"]))
         self.assertEqual(fake.called("-C", str(self.root), "commit"), [])
 
     def test_the_delete_is_leased_on_the_inspected_sha(self):
@@ -399,13 +392,13 @@ class TestClose(unittest.TestCase):
     def test_a_refused_delete_is_reported_after_the_pr(self):
         stale = subprocess.CalledProcessError(
             1, "git", stderr=" ! [rejected] (stale info)\n")
-        fake = FakeGh({("-C", str(self.root), "show",
-                        f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
-                       ls_call(self.root): COSTS + "\n",
-                       head_call(self.root): BRANCH_SHA + "\n",
-                       log_call(self.root): COST_ONLY_LOG},
-                      failing=["-C", str(self.root), *LEASED_DELETE],
-                      error=stale)
+        fake = FakeGit({("-C", str(self.root), "show",
+                         f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
+                        ls_call(self.root): COSTS + "\n",
+                        head_call(self.root): BRANCH_SHA + "\n",
+                        log_call(self.root): COST_ONLY_LOG},
+                       failing=["-C", str(self.root), *LEASED_DELETE],
+                       error=stale)
         summary, problems = self.close(ROWS, git=fake)
         self.assertEqual(problems, [
             "cd: close: deleting origin's conductor/b1-13 failed:"
@@ -448,10 +441,10 @@ class TestClose(unittest.TestCase):
         # #772: nothing seeds costs.jsonl in a consumer repo (#708), so a
         # branch with no spend commit has no ledger; an absent ledger
         # holds no rows, and the close goes on.
-        fake = FakeGh({ls_call(self.root): "",
-                       head_call(self.root): BRANCH_SHA + "\n",
-                       log_call(self.root): ""},
-                      failing=["-C", str(self.root), "show"])
+        fake = FakeGit({ls_call(self.root): "",
+                        head_call(self.root): BRANCH_SHA + "\n",
+                        log_call(self.root): ""},
+                       failing=["-C", str(self.root), "show"])
         # #13's rows already reached the batch branch, so the scorecard
         # computes; the branch adds none.
         costs = SPEND[:4] + SPEND[5:] + BLOCKED_SPEND
@@ -517,19 +510,19 @@ class TestClose(unittest.TestCase):
         self.assertEqual(self.ledger()[-2]["kind"], "close")
 
     def test_a_merge_conflict_with_main_refuses_and_aborts(self):
-        fake = FakeGh(failing=["-C", str(self.root), "merge", "--no-edit"])
+        fake = FakeGit(failing=["-C", str(self.root), "merge", "--no-edit"])
         summary, problems = self.close(ROWS, git=fake)
         self.assertEqual((summary, problems), (None, [
             "cd: close refused: merging origin/main into conductor/b1"
-            " failed: boom"]))
+            " failed: fatal: rejected"]))
         self.assertEqual(fake.calls[-1],
                          ["-C", str(self.root), "merge", "--abort"])
         self.assertEqual((self.root / close.SCORECARDS).read_bytes(),
                          CARD.encode())
 
     def test_a_refused_merge_names_gits_whole_reason(self):
-        fake = FakeGh(failing=["-C", str(self.root), "merge", "--no-edit"],
-                      error=DIRTY_MERGE)
+        fake = FakeGit(failing=["-C", str(self.root), "merge", "--no-edit"],
+                       error=DIRTY_MERGE)
         self.assertEqual(self.close(ROWS, git=fake), (None, [
             "cd: close refused: merging origin/main into conductor/b1"
             " failed: error: Your local changes to the following files"
@@ -567,13 +560,16 @@ class TestClose(unittest.TestCase):
         self.assertEqual(gh.calls, [LABEL_LIST_CALL])
 
     def test_a_failed_push_is_reported_after_the_close_is_recorded(self):
-        fake = FakeGh({("-C", str(self.root), "show",
-                        f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
-                       ls_call(self.root): COSTS + "\n"},
-                      failing=["-C", str(self.root), "push"])
+        fake = FakeGit({("-C", str(self.root), "show",
+                         f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
+                        ls_call(self.root): COSTS + "\n",
+                        head_call(self.root): BRANCH_SHA + "\n",
+                        log_call(self.root): COST_ONLY_LOG},
+                       failing=["-C", str(self.root), "push"])
         summary, problems = self.close(ROWS, git=fake)
         self.assertEqual(problems, [
-            "cd: close: pushing conductor/b1 failed: boom; finish the"
+            "cd: close: pushing conductor/b1 failed: fatal: rejected; finish"
+            " the"
             " push, the PR and the needs-human labels by hand"])
         self.assertEqual(self.ledger()[-2]["kind"], "close")
         self.assertEqual(self.gh.calls, [])
@@ -611,7 +607,7 @@ class TestClosingMerge(unittest.TestCase):
         a second value is main moving while the checks ran."""
         write(self.root, lines(rows))
         heads = [f"{sha}\n" for sha in mains]
-        self.git = FakeGh({
+        self.git = FakeGit({
             (*self.here, "status", "--porcelain"):
                 f" M {LEDGER}\n" if dirty else "",
             (*self.here, "rev-parse", "origin/main"):
@@ -619,7 +615,7 @@ class TestClosingMerge(unittest.TestCase):
             (*self.here, "rev-parse", "HEAD"): "c105ed\n"})
         self.gh = gh or FakeGh(GREEN_GH)
         return close.merge_closing(self.root, "b1", lambda: NOW,
-                                   git_port(self.git), self.gh,
+                                   self.git, self.gh,
                                    lambda seconds: None)
 
     def test_the_answer_is_pushed_before_the_closing_pr_merges(self):
@@ -665,13 +661,13 @@ class TestClosingMerge(unittest.TestCase):
     def test_a_conflict_with_main_lands_nothing(self):
         rows = CLOSED + [answer("ask-5", "merge", at(17))]
         write(self.root, lines(rows))
-        self.git = FakeGh(failing=[*self.here, "merge", "--no-edit"])
+        self.git = FakeGit(failing=[*self.here, "merge", "--no-edit"])
         self.gh = FakeGh(GREEN_GH)
         self.assertEqual(close.merge_closing(
-            self.root, "b1", lambda: NOW, git_port(self.git), self.gh,
+            self.root, "b1", lambda: NOW, self.git, self.gh,
             lambda seconds: None), (None, [
                 "cd: closing merge: merging origin/main into conductor/b1"
-                " failed: boom"]))
+                " failed: fatal: rejected"]))
         self.assertIn(self.here + ["merge", "--abort"], self.git.calls)
         self.assertEqual(self.gh.calls, [])
 
@@ -703,11 +699,13 @@ class TestClosingMerge(unittest.TestCase):
     def test_the_cli_merges_and_prints(self):
         rows = CLOSED + [answer("ask-5", "merge", at(17))]
         write(self.root, lines(rows))
-        git = FakeGh({(*self.here, "rev-parse", "HEAD"): "c105ed\n"})
+        git = FakeGit({(*self.here, "rev-parse", "HEAD"): "c105ed\n",
+                       (*self.here, "rev-parse", "origin/main"):
+                           "a11ce0\n"})
         code, out = cli_contract.capture(
             conductor.main, ["close", "b1", "--merge"], env={},
             clock=lambda: NOW, root=self.root, run=FakeGh(GREEN_GH),
-            git=git_port(git), sleep=lambda seconds: None)
+            git=git, sleep=lambda seconds: None)
         self.assertEqual((code, out), (0, (
             "cd: merged batch b1's closing PR #6 as m3r6ed\n"
             "cd: 0 problem(s)\n")))
@@ -717,11 +715,11 @@ class TestCloseCli(unittest.TestCase):
     def test_close_prints_its_summary(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(tmp, lines(ROWS), lines(SPEND))
-            fake = FakeGh()
+            fake = FakeGit({head_call(tmp): BRANCH_SHA + "\n"})
             code, out = cli_contract.capture(
                 conductor.main, ["close", "b1"], env={}, clock=lambda: NOW,
                 root=tmp, run=FakeGh({LABEL_LIST: HAS_NEEDS_HUMAN}),
-                git=git_port(fake))
+                git=fake)
             self.assertEqual((code, out), (0, (
                 "cd: closed batch b1: merged #12, #14; blocked #13;"
                 " merge ask ask-5\ncd: 0 problem(s)\n")))

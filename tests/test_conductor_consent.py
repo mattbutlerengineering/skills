@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 import test_conductor_merge as tcm  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
+from fake_git import FakeGit  # noqa: E402
 from test_conductor_flow import (AT, LEDGER, NOW, START,  # noqa: E402
                                  answered, alive, clock)
 
@@ -117,17 +118,10 @@ class TestStandingProblems(unittest.TestCase):
 
 
 def branch_git(changed=""):
-    """A git port answering the item branch's diff (and ls-tree for
-    any gate path in it)."""
-    def run(args):
-        if args[0] == "diff":
-            return subprocess.CompletedProcess(args, 0, stdout=changed)
-        if args[0] == "ls-tree":
-            tree = "".join(f"100644 blob b1\t{path}\n"
-                           for path in changed.split())
-            return subprocess.CompletedProcess(args, 0, stdout=tree)
-        raise AssertionError(args)
-    return run
+    """FakeGit answering the item branch's diff (and ls-tree for any
+    gate path in it)."""
+    return FakeGit({("diff",): changed, ("ls-tree",): "".join(
+        f"100644 blob b1\t{path}\n" for path in changed.split())})
 
 
 def issue_gh(labels):

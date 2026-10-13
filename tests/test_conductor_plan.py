@@ -4,6 +4,7 @@ external call goes through an injected fake, and tests assert the EXACT
 problem strings callers print.
 """
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -15,6 +16,8 @@ import conductor_plan
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
+from fake_gh import FakeGh  # noqa: E402
+from fake_git import FakeGit  # noqa: E402
 
 AT = "2026-10-10T12:00:00Z"
 
@@ -33,57 +36,37 @@ def issue(number, labels=("type:feature", "size:M"), state="OPEN",
             "labels": [{"name": name} for name in labels]}
 
 
-def fake_gh(issues, owner=OWNER, fail=None):
-    """A gh port answering repo view and issue view from canned data;
-    `fail` names an issue number whose read raises."""
-    import subprocess
-
-    def run(args):
-        if args[:2] == ["repo", "view"]:
-            return json.dumps(owner)
-        if args[:2] == ["issue", "view"]:
-            if args[2] == str(fail):
-                raise subprocess.CalledProcessError(1, args,
-                                                    stderr="HTTP 502")
-            return json.dumps(issues[int(args[2])])
-        raise AssertionError(args)
-    return run
+def issues_gh(issues, owner=OWNER, fail=None):
+    """FakeGh answering repo view and issue view from canned data; `fail`
+    names an issue number whose read gh rejects with HTTP 502."""
+    return FakeGh(
+        answers={("repo", "view"): json.dumps(owner),
+                 ("issue", "view"):
+                     lambda args: json.dumps(issues.get(int(args[2])))},
+        failing=None if fail is None else ["issue", "view", str(fail)],
+        error=subprocess.CalledProcessError(1, "gh", stderr="HTTP 502"))
 
 
-def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", calls=None,
-             on_main=(), checkout=None):
-    """`on_main` names the files origin/main holds: ls-tree lists them,
+def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", on_main=(),
+             checkout=None):
+    """FakeGit over origin/main: `grep` is what git grep prints, and
+    `on_main` names the files origin/main holds — ls-tree lists them,
     and a worktree added from it checks them out. `checkout` is the main
-    checkout whose .git rev-parse names as the common dir."""
-    import subprocess
+    checkout whose .git rev-parse names as the common dir. No checkout
+    has a pushurl, so open's launch preflight (#708) passes."""
+    def check_out(args):
+        Path(args[4]).mkdir(parents=True)
+        for path in on_main:
+            (Path(args[4]) / path).parent.mkdir(parents=True, exist_ok=True)
+            (Path(args[4]) / path).write_text("{}\n")
+        return ""
 
-    def run(args):
-        if calls is not None:
-            calls.append(args)
-        if args[:1] == ["rev-parse"] and checkout is not None:
-            return subprocess.CompletedProcess(
-                args, 0, stdout=f"{Path(checkout) / '.git'}\n", stderr="")
-        if args[0] == "grep":
-            return subprocess.CompletedProcess(args, 0, stdout=grep,
-                                               stderr="")
-        if args[:2] == ["worktree", "add"]:
-            Path(args[4]).mkdir(parents=True)
-            for path in on_main:
-                (Path(args[4]) / path).parent.mkdir(parents=True,
-                                                    exist_ok=True)
-                (Path(args[4]) / path).write_text("{}\n")
-            return subprocess.CompletedProcess(args, 0, stdout="",
-                                               stderr="")
-        if "--get-regexp" in args:
-            # open's launch preflight (#708): no remote has a pushurl.
-            raise subprocess.CalledProcessError(1, args)
-        if args[0] == "ls-tree":
-            listed = "".join(f"{path}\n" for path in on_main
-                             if path in args)
-            return subprocess.CompletedProcess(args, 0, stdout=listed,
-                                               stderr="")
-        raise AssertionError(args)
-    return run
+    answers = {("grep",): grep, ("worktree", "add"): check_out,
+               ("ls-tree",): lambda args: "".join(
+                   f"{path}\n" for path in on_main if path in args)}
+    if checkout is not None:
+        answers[("rev-parse",)] = f"{Path(checkout) / '.git'}\n"
+    return FakeGit(answers)
 
 
 def real_git(cwd, *args):
@@ -131,51 +114,49 @@ def plan(issues, config=CONFIG, spent=0.0, highest=HIGHEST):
 
 class TestIdsInUse(unittest.TestCase):
     def test_the_highest_of_each_kind_on_origin_main(self):
-        calls = []
-        self.assertEqual(conductor_plan.ids_in_use(fake_git(calls=calls)),
-                         (HIGHEST, []))
-        self.assertEqual(calls, [["grep", "-h", "-o", "-E",
-                                  "(PRD|ADR|WO)-[0-9]{4}", "origin/main",
-                                  "--", "docs"]])
+        git = fake_git()
+        self.assertEqual(conductor_plan.ids_in_use(git), (HIGHEST, []))
+        self.assertEqual(git.calls, [["grep", "-h", "-o", "-E",
+                                      "(PRD|ADR|WO)-[0-9]{4}", "origin/main",
+                                      "--", "docs"]])
 
     def test_no_ids_at_all_is_zero(self):
-        import subprocess
-
-        def run(args):
-            raise subprocess.CalledProcessError(1, args, stderr="")
-        self.assertEqual(conductor_plan.ids_in_use(run),
+        # git grep finding nothing exits 1, as FakeGit's does.
+        self.assertEqual(conductor_plan.ids_in_use(FakeGit()),
                          ({"prd": 0, "adr": 0, "wo": 0}, []))
 
     def test_a_failing_grep_is_a_problem(self):
-        import subprocess
-
-        def run(args):
-            raise subprocess.CalledProcessError(128, args,
-                                                stderr="bad revision")
-        self.assertEqual(conductor_plan.ids_in_use(run), (None, [
-            "cd: git grep origin/main failed: bad revision"]))
+        bad = subprocess.CalledProcessError(
+            128, "git", stderr="fatal: bad revision 'origin/main'\n")
+        self.assertEqual(
+            conductor_plan.ids_in_use(FakeGit(failing=["grep"], error=bad)),
+            (None, ["cd: git grep origin/main failed: fatal: bad revision"
+                    " 'origin/main'"]))
 
 
 class TestReadIssues(unittest.TestCase):
     def test_reads_each_issue(self):
         issues = {12: issue(12), 13: issue(13)}
-        self.assertEqual(conductor_plan.read_issues([12, 13], fake_gh(issues)),
+        self.assertEqual(conductor_plan.read_issues([12, 13],
+                                                    issues_gh(issues)),
                          ([issues[12], issues[13]], []))
 
     def test_an_unreadable_issue_refuses_the_read(self):
         self.assertEqual(
-            conductor_plan.read_issues([12, 13], fake_gh({12: issue(12)},
-                                                    fail=13)),
+            conductor_plan.read_issues([12, 13],
+                                       issues_gh({12: issue(12)}, fail=13)),
             (None, ["cd: gh issue view #13 failed: HTTP 502"]))
 
     def test_a_truncated_issue_refuses_the_read(self):
         partial = {12: {"number": 12, "state": "OPEN", "labels": []}}
-        self.assertEqual(conductor_plan.read_issues([12], fake_gh(partial)), (
+        self.assertEqual(conductor_plan.read_issues([12],
+                                                    issues_gh(partial)), (
             None, ["cd: gh issue view #12 returned an incomplete issue"]))
 
     def test_the_owner_is_read_and_fails_closed(self):
-        self.assertEqual(conductor_plan.repo_owner(fake_gh({})), ("matt", []))
-        self.assertEqual(conductor_plan.repo_owner(fake_gh({}, owner={})),
+        self.assertEqual(conductor_plan.repo_owner(issues_gh({})),
+                         ("matt", []))
+        self.assertEqual(conductor_plan.repo_owner(issues_gh({}, owner={})),
                          (None, ["cd: gh repo view names no owner"]))
 
 
@@ -284,15 +265,15 @@ class TestComposePlan(unittest.TestCase):
 class TestOpen(unittest.TestCase):
     def test_opens_the_branch_worktree_ledger_and_spend_ask(self):
         result, _ = plan([issue(12), issue(13, ("type:defect", "size:S"))])
-        calls = []
         with tempfile.TemporaryDirectory() as tmp:
+            git = fake_git(checkout=tmp)
             worktree, problems = conductor_plan.open_batch(
-                "b1", result, clock(), fake_git(calls=calls, checkout=tmp))
+                "b1", result, clock(), git)
             self.assertEqual(problems, [])
             self.assertEqual(worktree,
                              Path(tmp) / ".claude/worktrees/conductor-b1")
             rows, problems = conductor.load(worktree, "b1")
-        self.assertEqual(calls, [
+        self.assertEqual(git.calls, [
             ["rev-parse", "--path-format=absolute", "--git-common-dir"],
             ["ls-tree", "--name-only", "origin/main", "--",
              "docs/factory/batches/b1/ledger.jsonl"],
@@ -320,13 +301,11 @@ class TestOpen(unittest.TestCase):
 
     def test_an_all_deferred_plan_opens_nothing(self):
         result, _ = plan([issue(12, state="CLOSED")])
-        calls = []
-        with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(
-                conductor_plan.open_batch("b1", result, clock(),
-                                          fake_git(calls=calls)),
-                (None, ["cd: nothing to open: every issue was deferred"]))
-        self.assertEqual(calls, [])
+        git = fake_git()
+        self.assertEqual(
+            conductor_plan.open_batch("b1", result, clock(), git),
+            (None, ["cd: nothing to open: every issue was deferred"]))
+        self.assertEqual(git.calls, [])
 
     def test_an_existing_worktree_is_never_reused(self):
         result, _ = plan([issue(12)])
@@ -343,12 +322,11 @@ class TestOpen(unittest.TestCase):
         # Review minor 5: a closed batch's ledger is on main, so a reused
         # name crashed with FileExistsError after the worktree was made.
         result, _ = plan([issue(12)])
-        calls = []
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(
                 conductor_plan.open_batch(
                     "b1", result, clock(),
-                    fake_git(calls=calls, checkout=tmp,
+                    fake_git(checkout=tmp,
                              on_main=[conductor.LEDGER.format(batch="b1")])),
                 (None, ["cd: batch b1 already has a ledger on origin/main"
                         " (docs/factory/batches/b1/ledger.jsonl); choose"
@@ -370,25 +348,24 @@ class TestOpen(unittest.TestCase):
         # #735: item #2 of batch oct is conductor/oct-2, so batch oct-2
         # would share its branch and worktree.
         result, _ = plan([issue(12)])
-        calls = []
+        git = fake_git()
         self.assertEqual(
-            conductor_plan.open_batch("oct-2", result, clock(),
-                                      fake_git(calls=calls))[1],
+            conductor_plan.open_batch("oct-2", result, clock(), git)[1],
             ["cd: batch 'oct-2' is not a batch name (lowercase letters,"
              " digits and hyphens, never ending in -<digits>, which"
              " names an item)"])
-        self.assertEqual(calls, [])
+        self.assertEqual(git.calls, [])
 
     def test_a_failed_rev_parse_opens_nothing(self):
-        import subprocess
         result, _ = plan([issue(12)])
-
-        def git(args):
-            raise subprocess.CalledProcessError(128, args,
-                                                stderr="not a git repo")
+        outside = subprocess.CalledProcessError(
+            128, "git", stderr="fatal: not a git repository (or any of the"
+            " parent directories): .git\n")
+        git = FakeGit(failing=["rev-parse"], error=outside)
         self.assertEqual(
             conductor_plan.open_batch("b1", result, clock(), git),
-            (None, ["cd: git rev-parse failed: not a git repo"]))
+            (None, ["cd: git rev-parse failed: fatal: not a git repository"
+                    " (or any of the parent directories): .git"]))
 
     def test_from_a_linked_worktree_it_opens_under_the_main_checkout(self):
         # Issue #710: run from a linked worktree, open nested the batch
@@ -431,7 +408,7 @@ class TestPlanCli(unittest.TestCase):
             Path(tmp, "factory/agents").symlink_to(AGENTS)
             return cli_contract.capture(
                 conductor.main, argv, env={}, clock=clock, root=tmp,
-                run=fake_gh(issues, fail=fail), git=fake_git(checkout=tmp))
+                run=issues_gh(issues, fail=fail), git=fake_git(checkout=tmp))
 
     def test_plan_prints_the_plan(self):
         code, out = self.run_cli(["plan", "#12"], {12: issue(12)})
