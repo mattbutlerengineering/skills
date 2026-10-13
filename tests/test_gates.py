@@ -171,6 +171,16 @@ class TestLinkIntegrity(unittest.TestCase):
             tree.write("README.md", "See ADR-0062 and ADR-0063.\n")
             self.assertEqual(gates.check_link_integrity(tree.root), [])
 
+    def test_a_three_digit_adr_file_resolves_its_four_digit_citation(self):
+        # Issue #774: ADR-007-x.md is ADR-0007, the one width the
+        # citation grammar reads, so citing ADR-0007 is not dangling.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            gates._link_integrity_base_fixture(tree.root)
+            tree.write("docs/adr/ADR-007-x.md", "# Short form\n")
+            tree.write("README.md", "See ADR-0007.\n")
+            self.assertEqual(gates.check_link_integrity(tree.root), [])
+
     def test_factory_templates_and_fixtures_stay_out_of_scope(self):
         # factory/templates/ is a seed tree checked against its OWN
         # numbering by TestSeededADRs, and factory/evals/fixtures/ carries
@@ -228,6 +238,16 @@ class TestBlueprintDrift(unittest.TestCase):
     def test_no_adr_dir_is_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(gates.check_blueprint_drift(Path(tmp)), [])
+
+    def test_a_three_digit_adr_file_is_indexed_at_four_digits(self):
+        # Issue #774: the index row grammar is four digits, so the
+        # ADR-007 file must be ADR-0007 to D, or no row could match it.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, "| [0007](ADR-007-auth.md) | Auth | accepted |\n")
+            tree.write("docs/adr/ADR-007-auth.md",
+                       "# Auth\n\n- Status: accepted\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
 
     def test_shipping_annotation_does_not_count_as_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -759,6 +779,21 @@ class TestStandardsDrift(unittest.TestCase):
                      "status": "enforced", "domain": "factory"}])
                 self.assertEqual(gates.check_standards_drift(tree.root),
                                  [])
+
+    def test_an_enforced_entry_from_a_three_digit_adr_is_checked(self):
+        # Issue #774: an ADR-007 file's source is adr/0007, so K finds
+        # its record and checks it is in force rather than skipping it.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/ADR-007-x.md", "provisional",
+                     "- **some-slug** (factory): Something MUST happen.")
+            self.standards(tree, [
+                {"slug": "some-slug", "statement": "Something MUST"
+                 " happen.", "level": "MUST", "source": "adr/0007#some-slug",
+                 "status": "enforced", "domain": "factory"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: enforced statement 'some-slug' cites ADR-0007, status"
+                " 'provisional' (not in force)"])
 
     def test_an_enforced_entry_citing_a_superseded_adr_fails_too(self):
         with tempfile.TemporaryDirectory() as tmp:

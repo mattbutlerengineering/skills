@@ -738,7 +738,7 @@ class TestAdrRecord(unittest.TestCase):
                      for number, path in knowledge_plane.adr_paths(root)]
             parsed = {path.name for path, _ in parse_run(root)["adr_files"]}
         self.assertEqual(found, [("0001", "0001-a.md"), ("0062", "0062.md"),
-                                 ("007", "ADR-007-auth.md"),
+                                 ("0007", "ADR-007-auth.md"),
                                  ("0063", "adr-0063-x.md")])
         self.assertEqual(parsed, {name for _, name in found})
 
@@ -751,10 +751,17 @@ class TestAdrRecord(unittest.TestCase):
             Path("docs/adr/0001-old.md"),
             ["# Old", "", "- Status: superseded by ADR-0002 (all of it)"])
         self.assertEqual(record, {
-            "number": "0001", "path": Path("docs/adr/0001-old.md"),
+            "number": "0001", "written": "0001",
+            "path": Path("docs/adr/0001-old.md"),
             "lineno": 3, "status": "superseded by ADR-0002 (all of it)",
             "head": "superseded by ADR-0002", "standing": "retired",
             "superseded_by": "0002"})
+
+    def test_the_number_is_four_digits_whatever_the_file_wrote(self):
+        record = knowledge_plane.adr_record(
+            Path("docs/adr/ADR-007-auth.md"), ["- Status: accepted"])
+        self.assertEqual((record["number"], record["written"]),
+                         ("0007", "007"))
 
     def test_a_frontmatter_status_is_the_fallback(self):
         record = knowledge_plane.adr_record(

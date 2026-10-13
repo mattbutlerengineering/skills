@@ -69,7 +69,7 @@ class TestGather(unittest.TestCase):
                   "---\nstatus: active\n---\n# Auth middleware\n")
             model, _ = adr_status.gather(tmp)
         [entry] = model["adrs"]
-        self.assertEqual(entry["id"], "ADR-007")
+        self.assertEqual(entry["id"], "ADR-0007")
         self.assertEqual(entry["status"], "active")
         self.assertEqual(entry["standing"], "unrecognized")
         self.assertEqual(entry["title"], "Auth middleware")
