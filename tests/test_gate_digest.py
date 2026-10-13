@@ -18,6 +18,7 @@ import re
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -235,6 +236,30 @@ class TestRunDaily(unittest.TestCase):
             self.assertEqual(outputs["changed"], "false")
             entries, _ = cost_ledger.read(fixture.root)
             self.assertEqual(len(entries), 1)
+
+    def test_a_rescan_reads_the_ledger_once(self):
+        # #772: the capture read the ledger once to dedup, then once
+        # more per new passage inside record().
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = tree(tmp)
+            timelines = {number: [
+                labeled("2026-07-01T09:00:00Z", "wo:needs-review"),
+                unlabeled("2026-07-01T10:00:00Z", "wo:needs-review"),
+                labeled("2026-07-01T10:00:00Z", "wo:merged"),
+            ] for number in (131, 123)}
+            issues = [issue(131, "WO-0010 sweeps", state="CLOSED",
+                            labels=["wo:merged"]),
+                      issue(123, "WO-0018 rejection mining", state="CLOSED",
+                            labels=["wo:merged"])]
+            run = gh(issues=issues, timelines=timelines)
+            with unittest.mock.patch.object(
+                    cost_ledger, "read", wraps=cost_ledger.read) as read:
+                outputs, problems = gate_digest.run_daily(
+                    fixture.root, run=run, clock=clock)
+            self.assertEqual(problems, [])
+            self.assertEqual(read.call_count, 1)
+            entries, _ = cost_ledger.read(fixture.root)
+            self.assertEqual(len(entries), 2)
 
     def test_a_closed_issue_is_never_a_queue_item(self):
         with tempfile.TemporaryDirectory() as tmp:

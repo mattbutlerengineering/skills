@@ -157,28 +157,15 @@ def _capture_latency(root, mirror, events_by_issue, problems):
     """Append every not-yet-recorded gate passage to the cost ledger and
     return the new rows. The dedup identity is cost_ledger.row_key
     (ADR-0041): gate_entry keys run_id on the passage timestamp, so a
-    daily re-scan of the same history appends nothing. A ledger that
+    daily re-scan of the same history appends nothing — the skip is
+    cost_ledger.record_new's, in one ledger read (#772). A ledger that
     cannot be read stops the capture (#736): with no recorded set to
     dedup against, every past passage would be re-appended."""
-    existing, ledger_problems = cost_ledger.read(root)
-    if ledger_problems:
-        problems.extend(ledger_problems)
-        return []
-    recorded = {cost_ledger.row_key(entry) for entry in existing}
-    new_rows = []
-    for number, events in sorted(events_by_issue.items()):
-        for gate, waited, passed_at in gate_passages(events):
-            row = cost_ledger.gate_entry(mirror[number], gate, waited,
-                                         passed_at)
-            if cost_ledger.row_key(row) not in recorded:
-                new_rows.append(row)
-    landed = []
-    for row in new_rows:
-        refused = cost_ledger.record(root, row)
-        problems.extend(f"gd: refusing to record {row['wo']}: {problem}"
-                        for problem in refused)
-        if not refused:
-            landed.append(row)
+    rows = [cost_ledger.gate_entry(mirror[number], gate, waited, passed_at)
+            for number, events in sorted(events_by_issue.items())
+            for gate, waited, passed_at in gate_passages(events)]
+    landed, refused = cost_ledger.record_new(root, rows)
+    problems.extend(refused)
     return landed
 
 

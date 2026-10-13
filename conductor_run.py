@@ -29,7 +29,7 @@ import factory_config
 from assembler import PR_BODY_FILE
 from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
     read_execution
-from conductor import RUNS, WORKER_ENV, answers, append, ask_row, \
+from conductor import RUN_ID, RUNS, WORKER_ENV, answers, append, ask_row, \
     current_state, item_view, item_worktree, load, stamp, view
 from conductor import run_id as make_run_id
 from conductor_plan import main_checkout, span
@@ -75,7 +75,7 @@ CAP_WHY = ("the monthly cap is ADR-0034's breaker; raise monthly_cap_usd in"
 REFUSAL_WHY = ("a retry meets the same refusal until the setting it names"
                " changes; change it, then resume")
 # The subject of the spend commit each run ends with (_spend): it bounds
-# one run's own commits on the item branch.
+# one run's own commits on the item branch, and spend_run reads it back.
 SPEND_SUBJECT = "chore(cost): "
 PRIOR_WORK = ("The previous {step} run, {run_id}, ended: {reason}. These"
               " commits it made are already on {branch}, the head this"
@@ -397,6 +397,28 @@ def _spend(git, worktree, wo, run_id, model, tokens, cost, outcome, now):
     return None
 
 
+def spend_run(subject):
+    """The run id a spend commit's subject names, else None: the grammar
+    _spend writes, SPEND_SUBJECT + a run id (#771). A Worker's own
+    `chore(cost): ...` commit names no run id, so it is work, not
+    spend."""
+    if not subject.startswith(SPEND_SUBJECT):
+        return None
+    run = subject[len(SPEND_SUBJECT):]
+    return run if RUN_ID.fullmatch(run) else None
+
+
+def run_commits(git, branch, head=None):
+    """(the subjects of the branch's commits beyond origin/main, newest
+    first, problems): the one item-branch log read. `head` pins the
+    commit read (a sha inspected for a leased delete); it defaults to
+    the branch."""
+    out, problems = _git(git, ["log", "--format=%s",
+                               f"origin/main..{head or branch}"],
+                         f"reading {branch}'s commits")
+    return (None, problems) if problems else (out.splitlines(), [])
+
+
 def _prior_work(git, rows, item, step, branch):
     """(the brief's prior-work note, "" when there is none, problems): on
     a retry, the commits the stalled run of this step made, read from
@@ -406,17 +428,16 @@ def _prior_work(git, rows, item, step, branch):
     if not earlier or earlier[-1][0] is None:
         return "", []
     run, reason = earlier[-1]
-    out, problems = _git(git, ["log", "--format=%s",
-                               f"origin/main..{branch}"], "cd: git log")
+    subjects, problems = run_commits(git, branch)
     if problems:
-        return None, problems
-    subjects = out.splitlines()
-    spend = SPEND_SUBJECT + run["run_id"]
-    if spend not in subjects:
+        return None, [f"cd: {problem}" for problem in problems]
+    runs = [spend_run(subject) for subject in subjects]
+    if run["run_id"] not in runs:
         return "", []
     commits = []
-    for subject in subjects[subjects.index(spend) + 1:]:
-        if subject.startswith(SPEND_SUBJECT):
+    start = runs.index(run["run_id"]) + 1
+    for subject, spent in zip(subjects[start:], runs[start:]):
+        if spent is not None:
             break
         commits.append(f"- {subject}")
     if not commits:
@@ -449,7 +470,7 @@ def _left_unchecked(git, branch, briefed, wo):
     return None
 
 
-def ref_spend_rows(git, ref):
+def ref_rows(git, ref):
     """(the spend rows the ref's cost ledger holds, problems a retry may
     fix, problems it cannot). An absent ledger holds none (#708):
     nothing seeds docs/factory/costs.jsonl in a consumer repo, so its
@@ -489,7 +510,7 @@ def month_spend(git, rows, batch, now):
     entries = {}
     for ref in ["origin/main"] + [flow.item_branch(batch, item)
                                   for item in launched]:
-        found, problems, malformed = ref_spend_rows(git, ref)
+        found, problems, malformed = ref_rows(git, ref)
         if problems or malformed:
             return None, problems, malformed
         entries.update((cost_ledger.row_key(entry), entry)
@@ -509,7 +530,7 @@ def preflight(root, git, netrc):
     if not problems:
         problems = factory_config.resolve_cap(config)[1] \
             + factory_config.resolve_gate_command(config)[1]
-    _, unread, malformed = ref_spend_rows(git, "origin/main")
+    _, unread, malformed = ref_rows(git, "origin/main")
     return problems + unread + malformed + push_gaps(git, root, netrc)
 
 

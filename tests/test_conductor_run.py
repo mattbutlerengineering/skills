@@ -620,7 +620,7 @@ BUDGET_STOP = {"type": "result", "subtype": "error_max_budget_usd",
 SPEC_LOG = ("chore(cost): conductor-b1-12-spec-1\n"
             "docs(#12): breakdown\n"
             "docs(#12): prd and architecture\n"
-            "chore(cost): conductor-b1-12-older\n"
+            "chore(cost): conductor-b1-12-spec-0\n"
             "feat: not this run's\n")
 
 
@@ -656,6 +656,17 @@ class TestRetryAfterBudgetStop(RunCase):
             " only what is missing (at the least, write pr-body.md), and"
             " stop.\n", self.brief())
         self.assertNotIn("not this run's", self.brief())
+
+    def test_a_workers_own_cost_commit_is_prior_work(self):
+        # #771: only a commit naming a run id is a spend commit; a
+        # Worker's `chore(cost): ...` commit is work the run made.
+        log = ("chore(cost): conductor-b1-12-spec-1\n"
+               "chore(cost): raise the default monthly cap\n"
+               "docs(#12): breakdown\n")
+        self.run_step("#12", "spec", Harness(act=pr_body),
+                      git=Git(self.tmp.name, log=log), rows=self.RETRY)
+        self.assertIn("- chore(cost): raise the default monthly cap\n"
+                      "- docs(#12): breakdown\n", self.brief())
 
     def test_a_retry_with_nothing_committed_has_no_prior_work(self):
         self.run_step("#12", "spec", Harness(act=pr_body),
