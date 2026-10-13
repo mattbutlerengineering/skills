@@ -4,7 +4,6 @@ discipline: every external call (git, the pid probe) goes through an
 injected fake, and tests assert the EXACT problem strings.
 """
 import json
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -16,6 +15,7 @@ import conductor_flow as flow
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
+from fake_git import FakeGit  # noqa: E402
 
 LEDGER = "docs/factory/batches/b1/ledger.jsonl"
 AT = "2026-10-10T12:00:00Z"
@@ -545,16 +545,9 @@ class TestVerdict(unittest.TestCase):
 
 class TestGitFacts(unittest.TestCase):
     def git(self, changed, tree="", shows=None):
-        def run(args):
-            if args[0] == "diff":
-                return subprocess.CompletedProcess(args, 0, stdout=changed)
-            if args[0] == "ls-tree":
-                return subprocess.CompletedProcess(args, 0, stdout=tree)
-            if args[0] == "show":
-                return subprocess.CompletedProcess(
-                    args, 0, stdout=(shows or {})[args[1]])
-            raise AssertionError(args)
-        return run
+        return FakeGit({("diff",): changed, ("ls-tree",): tree,
+                        **{("show", spec): text
+                           for spec, text in (shows or {}).items()}})
 
     def test_gate_blobs_are_the_changed_gate_files_blob_ids(self):
         git = self.git(
@@ -579,10 +572,9 @@ class TestGitFacts(unittest.TestCase):
             "- [ ] **WO-0171** next", "- [ ] **WO-0172** later"], []))
 
     def test_a_failing_git_read_is_a_problem(self):
-        def git(args):
-            raise subprocess.CalledProcessError(128, args, stderr="bad ref")
+        git = FakeGit(failing=["diff"])
         self.assertEqual(flow.gate_blobs(git, "conductor/b1-12"), (None, [
-            "cd: git diff for conductor/b1-12 failed: bad ref"]))
+            "cd: git diff for conductor/b1-12 failed: fatal: rejected"]))
 
 
 class TestNextCli(unittest.TestCase):

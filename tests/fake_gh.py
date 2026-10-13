@@ -10,8 +10,9 @@ four, and it was wrong twice over — seven suites imported it, and
 test_work_queue kept two private runners the settlement below never
 reached, one of them recording and raising without computing. The list
 is derived instead, by tests/test_fake_gh.py, which reads every module
-under tests/ for a `__call__(self, args)` and fails when there is more
-than one.
+under tests/ for a `__call__(self, args)`, or a function taking only
+`args` that answers a gh command itself (#782 — test_conductor_plan's
+`fake_gh` was one, unseen), and fails when there is more than one.
 
 Four suites' private fakes had diverged on three behaviors; these are
 the declared choices:

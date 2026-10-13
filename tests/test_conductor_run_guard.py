@@ -2,7 +2,7 @@
 guard for the Worker's two known push gaps. pushInsteadOf skips a
 remote's explicit pushurl, and git's https transport reads ~/.netrc, so
 the runner refuses to launch a Worker while either could carry a
-credential. git is a fake or a scratch repo, gh is FakeGh, and the
+credential. git is FakeGit or a scratch repo, gh is FakeGh, and the
 harness never runs a model.
 """
 import subprocess
@@ -36,21 +36,6 @@ class GuardCase(RunCase):
         return summary, problems, harness
 
 
-def configured(tmp, out):
-    """The scratch Git port, answering `config --get-regexp` with
-    `out`."""
-    git = Git(tmp)
-
-    def run(args):
-        if "--get-regexp" in args:
-            git.calls.append(args)
-            return subprocess.CompletedProcess(args, 0, stdout=out,
-                                               stderr="")
-        return git(args)
-    run.calls = git.calls
-    return run
-
-
 class TestPushGuard(GuardCase):
     def assertRefused(self, result, problem):
         """Refused, and dispatch paused behind one batch-wide ask
@@ -69,7 +54,7 @@ class TestPushGuard(GuardCase):
 
     def test_an_explicit_pushurl_refuses_the_launch(self):
         self.assertRefused(
-            self.launch(configured(self.tmp.name, PUSHURL)),
+            self.launch(Git(self.tmp.name, pushurls=PUSHURL)),
             "cd: launch refused: remote origin has an explicit pushurl,"
             " which the Worker's push block does not rewrite; unset"
             " remote.origin.pushurl while a batch runs")

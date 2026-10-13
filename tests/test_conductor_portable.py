@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 import test_conductor_merge as tcm  # noqa: E402
 from test_conductor_plan import (AGENTS, CONFIG, clock,  # noqa: E402
-                                 fake_gh, fake_git, issue)
+                                 fake_git, issue, issues_gh)
 from test_conductor_run import Harness, RunCase, pr_body  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -547,7 +547,7 @@ class TestPlanCharters(unittest.TestCase):
             Path(tmp, ".github/factory.json").write_text(json.dumps(CONFIG))
             return cli_contract.capture(
                 conductor.main, argv, env={}, clock=clock, root=tmp,
-                run=fake_gh({12: issue(12)}), git=fake_git(checkout=tmp),
+                run=issues_gh({12: issue(12)}), git=fake_git(checkout=tmp),
                 netrc=Path(tmp) / "netrc")
 
     def test_plan_reads_charters_from_the_named_directory(self):
