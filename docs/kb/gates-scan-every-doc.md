@@ -1,7 +1,7 @@
 ---
 summary: Detectors C and I scan every repo markdown, fences included; an example PRD/ADR/WO id or a sample link fails gates.
 sources: gates.py, knowledge_plane.py
-verified: 55d5eae43e2f6c27dea78200aa71f5d3966bf434
+verified: 97507559df22791a05186404e7453a281b164bae
 related: pr-body-contract, manifest-regen
 ---
 
@@ -17,7 +17,11 @@ as text: fenced blocks and inline code are not skipped.
   An illustrative id in prose — a made-up work order in a research note,
   an example in a fix brief — is a dangling-token failure.
 - **I** requires every markdown link target that is not a URL or an
-  anchor to exist on disk, relative to the file. A sample layout in a
+  anchor to exist on disk, relative to the file (a leading `/` reads
+  from the repo root). Targets are read through
+  `knowledge_plane.local_link_targets`, the one link grammar kb lint and
+  kb drift share since #758: a `"title"` is dropped, an `<angle target>`
+  keeps its spaces, and `#fragment` and `?query` are ignored. A sample layout in a
   copied research note — a markdown link to an illustrative
   `pages/x.md` — is a stale link, even inside backticks.
 

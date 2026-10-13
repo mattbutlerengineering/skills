@@ -96,6 +96,18 @@ class TestPaths(Tree):
             " exist",
         ])
 
+    def test_root_and_query_links_to_missing_files_are_reported(self):
+        # issue #773: path_token read a leading slash or a ?query as "not
+        # a path", so these dangling links were never checked.
+        self.file("CLAUDE.md", "[a](/missing.md) [b](missing.md?raw=1)"
+                  " [ok](/src/app.py) [ok](src/app.py?raw=1#x)\n")
+        self.assertEqual(self.drift(), [
+            "drift: CLAUDE.md:1 names path 'missing.md', which does not"
+            " exist",
+            "drift: CLAUDE.md:1 names path 'missing.md', which does not"
+            " exist",
+        ])
+
     def test_placeholders_urls_globs_home_and_absolute_are_skipped(self):
         self.file("CLAUDE.md", "\n".join([
             "`docs/features/<slug>/run.md` `https://x.io/a.md`",
