@@ -345,6 +345,28 @@ class TestRunMine(unittest.TestCase):
         self.assertIn("0 of 2 issue timelines", body)
         self.assertIn("unreadable", body)
 
+    def test_a_dropped_unlabeled_event_is_a_problem_not_a_lost_rejection(
+            self):
+        """#740: label_events silently drops a flip whose created_at is
+        not a timestamp. Drop the `unlabeled` that closes a rejected stay
+        and completed_stays never sees the stay end, so the rejection
+        vanishes from the harvest. The miner cannot recover the event,
+        but it must say it lost one — as gate_digest and dashboard do."""
+        malformed = [
+            labeled("2026-08-10T09:00:00Z", "wo:needs-review"),
+            unlabeled("not-a-timestamp", "wo:needs-review"),
+            labeled("2026-08-11T09:00:00Z", "wo:failed"),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=[issue(7, "WO-0101: first")],
+                     timelines={7: malformed}, prs=[])
+            outputs, problems = rejection_mining.run_mine(
+                tree(tmp).root, run=run, clock=clock)
+        self.assertEqual(problems, ["rm: timeline for #7 refused"
+                                    " 1 malformed timestamp(s)"])
+        self.assertEqual(outputs["reason"],
+                         "rm: 0 candidate WO(s), 0 correction(s) mined")
+
     def test_a_full_pr_window_is_named_in_the_body(self):
         """The third way a harvest goes partial, and the one this run's own
         fix was blind to. gh_read leaves a full-window value USABLE and

@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, report, write_outputs
-from human_gates import gate_rejections, label_events
+from human_gates import gate_rejections, label_events, refused_timestamps
 from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root, sanitize
 
 # First line of the queue issue's body — how the weekly run finds its
@@ -146,7 +146,12 @@ def _timelines(mirrored, run, problems):
     """{issue number: label events} for every mirrored issue gh can
     answer for; a failed fetch is a problem, never a silently thinner
     harvest — the queue still posts, and next week's re-scan of the
-    same history catches up (the upsert is idempotent)."""
+    same history catches up (the upsert is idempotent).
+
+    A fetch that succeeds can still carry an event label_events refuses
+    for a malformed timestamp (#491, gate_digest's rule). Here the cost
+    is a lost rejection, not a missing age: a dropped `unlabeled` leaves
+    its stay open, and completed_stays never yields it (#740)."""
     events = {}
     for number in mirrored:
         path = f"repos/{{owner}}/{{repo}}/issues/{number}/timeline"
@@ -156,8 +161,12 @@ def _timelines(mirrored, run, problems):
         problems.extend(read.problems)
         if read.value is None:
             continue
-        events[number] = label_events(
-            [event for page in read.value for event in page])
+        raw = [event for page in read.value for event in page]
+        refused = refused_timestamps(raw)
+        if refused:
+            problems.append(f"rm: timeline for #{number} refused"
+                            f" {refused} malformed timestamp(s)")
+        events[number] = label_events(raw)
     return events
 
 
