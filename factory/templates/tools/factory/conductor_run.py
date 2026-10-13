@@ -237,21 +237,6 @@ def _git(git, args, what):
         return None, [f"{what} failed: {detail(err)}"]
 
 
-def _policy(rows, plan, entry, step):
-    """(band, model, effort, ceiling) for the step: the plan row's
-    snapshot, one band up after a retry-up answer."""
-    planned = next(s for s in entry["steps"] if s["step"] == step)
-    band, model, effort = planned["band"], planned["model"], \
-        planned["effort"]
-    resumed = item_view(rows, entry["item"])["resumed"]
-    if resumed and resumed["choice"] == "retry-up" \
-            and band in flow.BANDS[:-1]:
-        band = flow.BANDS[flow.BANDS.index(band) + 1]
-        model, _ = factory_config.resolve_model(band, plan["policy"])
-        effort, _ = factory_config.resolve_effort(band, plan["policy"])
-    return band, model, effort, planned["ceiling_usd"]
-
-
 def _issue(gh, item):
     result = gh_read(["issue", "view", item[1:], "--json", "title,body"],
                      f"gh issue view {item}", "cd", run=gh, expect=dict)
@@ -542,8 +527,7 @@ def _in_flight_usd(rows):
     for entry in read["plan"]["items"]:
         found = read["items"][entry["item"]]
         if found["in_flight"]:
-            total += next(s["ceiling_usd"] for s in entry["steps"]
-                          if s["step"] == found["state"])
+            total += found["steps"][found["state"]]["ceiling_usd"]
     return total
 
 
@@ -619,12 +603,11 @@ def _prepare(root, batch, item, step, git, gh, netrc, now):
     rows, problems = load(root, batch)
     if problems:
         return None, problems
-    plan = view(rows)["plan"] or {}
     found = item_view(rows, item)
     entry = found["entry"]
     if found["unknown"]:
         return None, [found["unknown"]]
-    if step not in [s["step"] for s in entry["steps"]]:
+    if step not in found["steps"]:
         return None, [f"cd: {item} has no {step} step"]
     problems = flow.transition_problems(rows, item, step, {})
     if problems:
@@ -659,10 +642,10 @@ def _prepare(root, batch, item, step, git, gh, netrc, now):
         head = out.strip()
     seq = 1 + sum(1 for r in found["states"]
                   if r["to"] == step and "run_id" in r)
-    return {"rows": rows, "plan": plan, "entry": entry, "wo": wo,
+    return {"rows": rows, "entry": entry, "wo": wo,
             "context": context, "body": body, "worktree": worktree,
             "block": found["reserved"], "briefed": briefed, "head": head,
-            "prior": prior,
+            "prior": prior, "policy": found["steps"][step],
             "run_id": make_run_id(batch, item, step, seq)}, []
 
 
@@ -683,8 +666,9 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
         return None, problems
     entry, run_id, worktree = ctx["entry"], ctx["run_id"], ctx["worktree"]
     branch = flow.item_branch(batch, item)
-    band, model, effort, ceiling = _policy(ctx["rows"], ctx["plan"], entry,
-                                           step)
+    policy = ctx["policy"]
+    band, model, effort, ceiling = (policy[field] for field in (
+        "band", "model", "effort", "ceiling_usd"))
     config, problems = factory_config.load(root)
     cap, found = factory_config.resolve_cap(config or {})
     gate, unusable = factory_config.resolve_gate_command(config or {})
@@ -727,11 +711,10 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     stall = stall or failed
     if stall is None and ctx["briefed"] is not None:
         stall = _left_unchecked(git, branch, ctx["briefed"], ctx["wo"])
-    charter = next(s["charter"] for s in entry["steps"]
-                   if s["step"] == step)
     _, problems = append(root, batch, lambda rows: ({
         "at": stamp(done), "kind": "run",
-        "item": item, "step": step, "charter": charter, "band": band,
+        "item": item, "step": step, "charter": policy["charter"],
+        "band": band,
         "model": model, "models_reported": reported, "effort": effort,
         "run_id": run_id, "pid": pid, "outcome": outcome}, []))
     if problems:

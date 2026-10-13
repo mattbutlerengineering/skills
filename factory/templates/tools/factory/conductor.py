@@ -96,6 +96,7 @@ from pathlib import Path
 # refused. The .gitignore the payload ships covers the untracked case.
 sys.dont_write_bytecode = True
 
+import factory_config  # noqa: E402
 from cli import gh_runner, report, runner  # noqa: E402
 from cost_ledger import ISSUE_KEY
 from knowledge_plane import repo_root
@@ -458,9 +459,34 @@ def _live_block(reserves):
     return {what: values for what, values in live.items() if values}
 
 
-def _item(item, entry, grouped, answered):
+def _steps(entry, policy, last, resumed):
+    """{step: {charter, band, model, effort, ceiling_usd, bumped}}: the
+    policy each of the plan entry's steps runs under — the plan row's
+    snapshot, and the step a retry-up answer resumed one band up, its
+    model and effort re-resolved through the plan row's `policy` (the
+    top band has none above it)."""
+    bands = factory_config.BANDS
+    up = last["from"] if resumed is not None \
+        and resumed["choice"] == "retry-up" else None
+    steps = {}
+    for planned in entry["steps"] if entry is not None else ():
+        band = planned["band"]
+        bumped = planned["step"] == up and band in bands[:-1]
+        if bumped:
+            band = bands[bands.index(band) + 1]
+        steps[planned["step"]] = {
+            "charter": planned["charter"], "band": band,
+            "model": (factory_config.resolve_model(band, policy)[0]
+                      if bumped else planned["model"]),
+            "effort": (factory_config.resolve_effort(band, policy)[0]
+                       if bumped else planned["effort"]),
+            "ceiling_usd": planned["ceiling_usd"], "bumped": bumped}
+    return steps
+
+
+def _item(item, entry, grouped, answered, policy):
     """One item's read-only view from its rows, grouped as
-    {field: ((position, row), ...)}."""
+    {field: ((position, row), ...)}, under the plan row's `policy`."""
     states = grouped.get("states", ())
     rows_of = {field: tuple(row for _, row in grouped.get(field, ()))
                for field in _ITEM_KINDS.values()}
@@ -490,7 +516,8 @@ def _item(item, entry, grouped, answered):
         "gate": _latest(answered, asks, "gate", -1),
         "author_runs": tuple(row["run_id"] for row in runs
                              if row["step"] != "review"),
-        "reserved": _live_block(rows_of["reserves"])}
+        "reserved": _live_block(rows_of["reserves"]),
+        "steps": _steps(entry, policy, last, resumed)}
 
 
 def view(rows):
@@ -503,7 +530,10 @@ def view(rows):
     `last` state row and `states`, `runs`, `asks`, `pending` ask, the
     `finishing` run of its last launch, `in_flight`, `completed`, the
     stall answer that `resumed` it, `retry`, its latest `gate` answer,
-    its `author_runs` and its live `reserved` block."""
+    its `author_runs`, its live `reserved` block and the policy each of
+    its `steps` runs under ({step: {charter, band, model, effort,
+    ceiling_usd, bumped}}, retry-up's one-band bump applied; a step off
+    the plan is absent)."""
     plan, answered, grouped = None, {}, {}
     for position, row in enumerate(rows):
         kind = row["kind"]
@@ -516,8 +546,9 @@ def view(rows):
                 _ITEM_KINDS[kind], []).append((position, row))
     entries = {entry["item"]: entry for entry in (plan or {}).get("items",
                                                                    [])}
+    policy = (plan or {}).get("policy", {})
     items = {item: _item(item, entries.get(item), grouped.get(item, {}),
-                         answered)
+                         answered, policy)
              for item in [*entries, *(i for i in grouped
                                       if i not in entries)]}
     asks = (row for row in rows if row["kind"] == "ask")
@@ -532,7 +563,7 @@ def item_view(rows, item):
     """One item's view (see view): an item with no rows and off the plan
     reads as `planned`, with `unknown` set."""
     found = view(rows)["items"].get(item)
-    return found if found is not None else _item(item, None, {}, {})
+    return found if found is not None else _item(item, None, {}, {}, {})
 
 
 def answers(rows):
