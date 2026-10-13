@@ -1,7 +1,7 @@
 ---
 summary: A PR body needs a WO id or a "No work order:" line plus Closes #N, or detector B fails on CI only — it skips locally.
 sources: gates.py, knowledge_plane.py, validator.py, .github/workflows/validator.yml
-verified: 55d5eae43e2f6c27dea78200aa71f5d3966bf434
+verified: 97507559df22791a05186404e7453a281b164bae
 related: gates-scan-every-doc
 ---
 
