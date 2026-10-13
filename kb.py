@@ -7,8 +7,9 @@ live in docs/kb/*.md, each with `summary`, `sources`, `verified` and
 summary (the line's one owner), into every always-loaded file present
 (CLAUDE.md, AGENTS.md) between managed markers, idempotently. `lint`
 returns label-prefixed problem strings: index over budget, missing
-frontmatter, broken sources/related/links, orphans, and stale pages —
-a cited source changed in git since the page's verified commit.
+frontmatter, an over-long summary, broken sources/related/links,
+orphans, and stale pages — a cited source changed in git since the
+page's verified commit (a renamed source names where it went).
 
   python3 kb.py index [root]   write the inline index
   python3 kb.py lint [root]    check the knowledge base
@@ -41,6 +42,10 @@ TARGETS = ("CLAUDE.md", "AGENTS.md")
 # turn of every session, so it is held to the ~2KB the evidence prices
 # (docs/research/knowledge-base-evidence.md, change 1).
 INDEX_BUDGET = 2048
+# Bytes of one summary. A single long line crowds the others out of the
+# budget; one sentence that says the fact fits (WeKnora's wiki holds its
+# page summaries to one sentence of 15-40 words).
+SUMMARY_CAP = 200
 FIELDS = ("summary", "sources", "verified", "related")
 # related may be empty; the others must say something.
 OPTIONAL_VALUE = ("related",)
@@ -105,10 +110,17 @@ def _budget_problems(block):
 def _field_problems(page):
     if page["fields"] is None:
         return [f"{LABEL}: {page['path']} has no frontmatter block"]
-    return [f"{LABEL}: {page['path']} is missing frontmatter field"
-            f" {field!r}" for field in FIELDS
-            if field not in page["fields"]
-            or (not page["fields"][field] and field not in OPTIONAL_VALUE)]
+    problems = [f"{LABEL}: {page['path']} is missing frontmatter field"
+                f" {field!r}" for field in FIELDS
+                if field not in page["fields"]
+                or (not page["fields"][field]
+                    and field not in OPTIONAL_VALUE)]
+    size = len(page["fields"].get("summary", "").encode("utf-8"))
+    if size > SUMMARY_CAP:
+        problems.append(f"{LABEL}: {page['path']} summary is {size} bytes,"
+                        f" over its {SUMMARY_CAP}-byte cap — say the one"
+                        " fact")
+    return problems
 
 
 def _write(path, block):
@@ -201,8 +213,23 @@ def _stale_problems(root, page, git):
                           *sources]).split()
     if not changed:
         return []
-    return [f"{label} is stale: {', '.join(changed)} changed since"
+    renamed = _renames(root, sha, git) if any(
+        not (root / path).exists() for path in changed) else {}
+    named = [f"{path} (renamed to {renamed[path]})" if path in renamed
+             else path for path in changed]
+    return [f"{label} is stale: {', '.join(named)} changed since"
             f" verified {sha[:7]} — re-verify it"]
+
+
+def _renames(root, sha, git):
+    """Old path -> new path for every rename git detects between sha and
+    HEAD, so a moved source reads as an UPDATE to `sources:`, not a
+    deletion. Whole-tree: a pathspec on the old path would hide the new
+    one from rename detection."""
+    out = git(["-C", str(root), "diff", "--name-status", "-M", sha, "HEAD"])
+    rows = [line.split("\t") for line in out.splitlines()]
+    return {row[1]: row[2] for row in rows
+            if len(row) == 3 and row[0].startswith("R")}
 
 
 def _git(args):

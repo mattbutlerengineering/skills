@@ -5,17 +5,31 @@ base. The agent drafts; a human promotes. Two failure modes shape every
 rule here: an unverified page becomes a prior that poisons later work,
 and whole-page rewrites erode detail a little more each time.
 
-## The four verbs
+## The verbs
 
 | Verb | When | What changes |
 |---|---|---|
 | ADD | The source teaches a non-inferable fact no page holds | A new claim on an existing page, or a new page |
 | UPDATE | A page's claim is now incomplete or wrong | The new claim is added; the old one is kept, marked superseded with the date |
 | DELETE | A claim is no longer true and nothing replaces it | The claim is removed; the proposal says what disproves it |
+| CONFLICT | The source contradicts a claim and it is not clear which is right | Nothing until the human rules — the proposal quotes both claims with their sources |
 | NOOP | Nothing in the source passes the page rubric | Nothing — say so in one line |
 
 NOOP is the most common right answer. A merged PR that did what its
 title says usually teaches nothing the code does not now show.
+
+Propose CONFLICT rather than guessing. An UPDATE asserts the new claim
+wins; when the code does not settle it, that verdict belongs to the
+human. They promote it as an UPDATE or DELETE, or as a note under the
+old claim — "Contradicted by <source> (<date>): <claim>" — that
+leaves both standing until someone checks.
+
+**Related is not the same.** Before an UPDATE, confirm the source is
+about the same subject as the page's claim, not a neighbouring one: two
+detectors, two flags, two environments. A fact about a neighbour is an
+ADD — to its own page, linked through `related:` — never folded into
+the nearest page. A wrong merge loses a fact quietly; a duplicate page
+only costs an index line.
 
 ## The proposal
 
@@ -26,7 +40,9 @@ Present it as a numbered list, one item per claim:
    source: path/to/file.py (changed in <sha>); supersedes the 2026-08 claim
 2. ADD docs/kb/<new-slug>.md — "<claim>"
    source: path/to/file.py; summary: "<one line>"
-3. NOOP — the rename in <PR> is visible in the code
+3. CONFLICT docs/kb/<slug>.md — "<page claim>" (source: a.py) vs
+   "<source claim>" (source: <PR>); the code does not settle it
+4. NOOP — the rename in <PR> is visible in the code
 ```
 
 Then stop and wait. Apply only the numbers the user promotes, exactly as
@@ -68,7 +84,8 @@ A candidate is a lead, never a claim. For each one:
    and the fix in one imperative line, the way the target's existing
    entries are worded.
 2. Dedupe. Grep the target for the check and its keywords; a near-match
-   is an UPDATE, not an ADD. A lesson this session already encoded in
+   on the same subject is an UPDATE, not an ADD — a neighbouring subject
+   is an ADD (see "Related is not the same"). A lesson this session already encoded in
    code, a test or a gate is NOOP — the code now shows it.
 3. Discard one-off failures with an obvious cause (a typo, a missing
    import the next edit fixed): NOOP. The rubric's question is whether

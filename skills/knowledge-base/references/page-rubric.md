@@ -42,7 +42,8 @@ related: other-slug, another-slug
 ---
 ```
 
-- `summary` — the only owner of the page's index line. "Detector C scans
+- `summary` — the only owner of the page's index line, one sentence of
+  at most 200 bytes (`kb.py lint` checks the cap). "Detector C scans
   run artifacts for WO tokens" beats "Notes about detector C".
 - `sources` — repo-relative paths the claims rest on. When any of them
   changes in git after `verified`, lint calls the page stale.
@@ -60,6 +61,8 @@ Lists may be bare (`a, b`) or bracketed (`[a, b]`).
 - One subject per page, short — a screen, not an essay. `kb.py stats`
   prints page lengths.
 - Claims as short paragraphs or bullets, each traceable to a source.
+- Compile, don't compose. Keep the source's own terms, add no filler or
+  framing, and never restructure a page while adding a claim to it.
 - A superseded claim stays, struck through or under a "Superseded"
   heading with the date and what replaced it — the history is part of
   the knowledge.

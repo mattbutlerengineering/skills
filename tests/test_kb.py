@@ -203,6 +203,20 @@ class TestLint(Tree):
                          f" {kb.INDEX_BUDGET}-byte budget — shorten"
                          " summaries or merge pages")
 
+    def test_summary_over_its_cap(self):
+        self.indexed("cache")
+        self.kb_page("long", summary="y" * (kb.SUMMARY_CAP + 1))
+        self.assertEqual(self.lint()[0],
+                         f"kb: docs/kb/long.md summary is"
+                         f" {kb.SUMMARY_CAP + 1} bytes, over its"
+                         f" {kb.SUMMARY_CAP}-byte cap — say the one fact")
+
+    def test_summary_at_its_cap_passes(self):
+        self.indexed("cache")
+        self.kb_page("long", summary="y" * kb.SUMMARY_CAP)
+        self.assertEqual(kb.index(self.root), [])
+        self.assertEqual(self.lint(), [])
+
     def test_broken_sources_related_and_links(self):
         self.kb_page("cache", sources="src/a.py, src/missing.py",
                      related="auth, nowhere",
@@ -264,6 +278,25 @@ class TestStale(unittest.TestCase):
         self.assertEqual(kb.lint(self.root), [
             f"kb: docs/kb/cache.md is stale: src/a.py changed since"
             f" verified {self.sha[:7]} — re-verify it"])
+
+    def test_renamed_source_names_where_it_went(self):
+        self.indexed(sources="src/a.py", verified=self.sha)
+        git(self.root, "mv", "src/a.py", "src/c.py")
+        git(self.root, "commit", "-qm", "rename")
+        self.assertEqual(kb.lint(self.root), [
+            "kb: docs/kb/cache.md cites source 'src/a.py', which does not"
+            " exist",
+            f"kb: docs/kb/cache.md is stale: src/a.py (renamed to"
+            f" src/c.py) changed since verified {self.sha[:7]} — re-verify"
+            " it"])
+
+    def test_deleted_source_has_no_rename_hint(self):
+        self.indexed(sources="src/a.py", verified=self.sha)
+        git(self.root, "rm", "-q", "src/a.py")
+        git(self.root, "commit", "-qm", "delete")
+        self.assertEqual(kb.lint(self.root)[1],
+                         f"kb: docs/kb/cache.md is stale: src/a.py changed"
+                         f" since verified {self.sha[:7]} — re-verify it")
 
     def test_unknown_verified_sha(self):
         self.indexed(verified="0" * 40)
