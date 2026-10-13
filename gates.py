@@ -733,10 +733,17 @@ def install_destination(rel):
     """Where a manifest key installs in a stamped repo, or None if it is not
     a plain path under templates/.
 
-    Mirrors factory_init.install_path's rule, pinned to it in lockstep by
-    tests/test_factory_init.py: factory_init.py is NOT in the payload, so a
-    stamped repo's gates.py cannot import the mapping it has to agree with.
+    A dual-home artifact's payload key installs at its installed home, read
+    from factory_config.ARTIFACT_HOMES — the table factory_init.INSTALL_MAP
+    derives from (ADR-0048), so the two cannot disagree on a mapped key
+    (#748). The strip rule below mirrors factory_init.install_path's, pinned
+    to it in lockstep by tests/test_factory_init.py: ADR-0048 keeps that rule
+    with the stamp, and factory_init.py is NOT in the payload, so a stamped
+    repo's gates.py cannot import it.
     """
+    for installed, payload in factory_config.ARTIFACT_HOMES.values():
+        if rel == payload:
+            return installed
     if not rel.startswith("templates/"):
         return None
     dest = rel[len("templates/"):]
