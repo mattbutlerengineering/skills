@@ -189,8 +189,10 @@ def scaffold_sync_fixture(root, rel="Makefile", payload="check:\n"):
     return path
 
 
-# The correctly curated state's Makefile: one lifecycle target, naming
-# the one label the fixtures below prune and restore.
+# The correctly curated state's Makefile: one lifecycle target in the
+# pre-verb `lifecycle --label` grammar (#859) — the form a stamped
+# Makefile keeps, since update never refreshes it — naming the one label
+# the fixtures below prune and restore.
 LABEL_WIRING_MAKEFILE = (
     "wo-merged:\n\tpython3 validator.py lifecycle --label wo:merged\n")
 

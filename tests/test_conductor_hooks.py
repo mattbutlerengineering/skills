@@ -10,6 +10,7 @@ import contextlib
 import io
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -19,6 +20,9 @@ from unittest import mock
 
 import conductor
 import conductor_plan
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import git_repo  # noqa: E402
 
 NO_HOOKS = ["-c", f"core.hooksPath={os.devnull}"]
 
@@ -72,7 +76,7 @@ class DefaultPortSkipsHooks(unittest.TestCase):
             hook = hooks / "pre-commit"
             hook.write_text("#!/bin/sh\necho 'hook ran' >&2\nexit 1\n")
             hook.chmod(0o755)
-            sh(tmp, "init", "-q", str(repo))
+            git_repo.init(repo)
             for key, value in (("user.email", "t@example.com"),
                                ("user.name", "t"),
                                ("commit.gpgsign", "false"),

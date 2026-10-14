@@ -101,7 +101,7 @@ the canonical vocabulary.
 | [0078](0078-a-project-knowledge-base-indexed-inline.md) | A project knowledge base, indexed inline in the always-loaded file | accepted |
 | [0079](0079-a-utility-skill-may-own-a-project-reference-file.md) | A utility skill may own a project reference file, by section | provisional |
 | [0080](0080-accepted-means-a-dispatched-order-whose-mirror-merged.md) | Accepted means a dispatched order whose mirror merged | accepted |
-| [0081](0081-plugin-eval-is-an-on-demand-harness.md) | `claude plugin eval` is an on-demand harness with its own tree | accepted |
+| [0081](0081-plugin-eval-is-an-on-demand-harness.md) | `claude plugin eval` is an on-demand harness with its own tree | superseded in part by ADR-0093 (the no-detector clause and the five-case count) |
 | [0082](0082-the-pipeline-writes-adrs-at-its-stages.md) | The pipeline writes ADRs at its stages, by one test | accepted |
 | [0083](0083-github-issues-are-the-only-tracker.md) | GitHub issues are the only tracker; beads is retired | accepted |
 | [0084](0084-the-cost-ledger-keys-a-run-by-issue-when-it-has-no-work-order.md) | The cost ledger keys a run by its issue when it has no work order | accepted |
@@ -113,3 +113,4 @@ the canonical vocabulary.
 | [0090](0090-the-gate-timeline-read-and-open-queues-join-human-gates.md) | The gate timeline read and the open queues join human_gates | accepted |
 | [0091](0091-the-restructure-blockers-re-measured-and-pinned.md) | The tools/factory restructure blockers, re-measured and pinned | accepted (Owner, 2026-10-13) |
 | [0092](0092-a-derived-trace-view-joins-the-knowledge-owners-over-time.md) | A derived trace view joins the knowledge owners over time | accepted (Owner, 2026-10-14) |
+| [0093](0093-every-plugin-eval-case-carries-its-skill-tag.md) | Every plugin-eval case carries its skill directory as a tag | accepted (Owner, 2026-10-14) |

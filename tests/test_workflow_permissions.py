@@ -19,7 +19,7 @@ battery green.
 
 Why a recorded table rather than a derivation from what each job runs:
 two things defeat the derivation. Jobs reach the tracker through `make`
-targets whose recipes pass a VERB (`validator.py lifecycle` writes issue
+targets whose recipes pass a VERB (`validator.py pr-merged` writes issue
 labels, `validator.py review` posts a PR comment), so module granularity
 over-approximates; and workflow comments mention `make` targets the job
 does not run, so text matching over-approximates again. Both directions

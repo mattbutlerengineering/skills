@@ -1367,14 +1367,18 @@ class TestLabelWiring(unittest.TestCase):
             tree, named = self.wired_tree(tmp)
             tree.write(".github/labels.json", self.taxonomy(
                 [name for name in named if name != "wo:merged"]))
-            # wo:merged is named twice over — the Makefile target that
-            # flips it and the human_gates entry that counts it — and both
-            # sites are reported, because both break
+            # wo:merged is named three times over — a pre-verb Makefile
+            # target that flips it, the human_gates entry that counts it,
+            # and the pr-merged verb that writes it — and every site is
+            # reported, because every one breaks
             self.assertEqual(gates.check_label_wiring(tree.root), [
                 "J: Makefile:2 names wo:merged but the taxonomy has no such"
                 " label (add it to .github/labels.json, or the flip fails"
                 " when CI runs it)",
                 "J: human_gates.py names wo:merged but the taxonomy has no"
+                " such label (add it to .github/labels.json, or the flip"
+                " fails when CI runs it)",
+                "J: validator.py names wo:merged but the taxonomy has no"
                 " such label (add it to .github/labels.json, or the flip"
                 " fails when CI runs it)"])
 
@@ -1536,12 +1540,11 @@ class TestLabelWiring(unittest.TestCase):
         self.assertEqual(declared_by("conductor_plan.py"),
                          ["size:L", "size:M", "size:S", "type:chore",
                           "type:defect", "type:feature"])
-        # every lifecycle target's --label argument, read off the Makefile
-        for label in ("wo:merged", "wo:in-progress", "wo:needs-review",
-                      "wo:failed"):
-            self.assertTrue(
-                any(site.startswith("Makefile") for site in
-                    named.get(label, [])), f"{label} not read off Makefile")
+        # the four labels the lifecycle verbs write, declared by the verbs'
+        # module rather than read off a Makefile recipe (#859)
+        self.assertEqual(declared_by("validator.py"),
+                         ["wo:failed", "wo:in-progress", "wo:merged",
+                          "wo:needs-review"])
 
     def test_the_shipped_taxonomy_wires_the_shipped_tools(self):
         """The live pin, and the one that would have caught the gap."""
@@ -2790,18 +2793,12 @@ class TestLockstep(unittest.TestCase):
     VALIDATOR_TARGETS = {
         "review": ["python3 validator.py review --findings $(FINDINGS)"
                    " --status $(STATUS)"],
-        # Both legs carry --uncited skip (ADR-0057): a PR naming no work
-        # order is a no-op on open AND on merge. Without it here, every
-        # housekeeping PR merged with a red post-merge run while the open
-        # leg passed the same body.
-        "wo-merged": ["python3 validator.py lifecycle --label wo:merged"
-                      " --uncited skip"],
-        "wo-in-progress": ["python3 validator.py lifecycle --label"
-                           " wo:in-progress --issue $(ISSUE)"],
-        "wo-needs-review": ["python3 validator.py lifecycle --label"
-                            " wo:needs-review --uncited skip"],
-        "wo-failed": ["python3 validator.py lifecycle --label wo:failed"
-                      " --issue $(ISSUE) --verdict skip"],
+        # One verb per leg: the label and the uncited rule (ADR-0057) are
+        # the verb's, pinned in tests/test_validator_legs.py (#859).
+        "wo-merged": ["python3 validator.py pr-merged"],
+        "wo-in-progress": ["python3 validator.py claim $(ISSUE)"],
+        "wo-needs-review": ["python3 validator.py pr-opened"],
+        "wo-failed": ["python3 validator.py fail $(ISSUE)"],
     }
 
     def recipes(self, path, target):
