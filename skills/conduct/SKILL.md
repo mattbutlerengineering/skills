@@ -272,6 +272,11 @@ In a session with no Owner present, print the two readings and stop.
   closing ask's answer through `conductor.py close <batch> --merge`.
 - One Conductor per batch. A second session on the same batch races the
   first.
+- A defect in this plugin's own tooling that the batch hits in a
+  consumer repo, and that does not reproduce in the plugin's repo, is
+  filed on the plugin's repo as a plain issue labelled `type:defect`
+  and `found:consumer`, never a work order. The second label makes the
+  class countable per period (`gh issue list --label found:consumer`).
 - Report Worker spend from the ledger the tool wrote, never from an
   estimate. The Conductor's own session is unmetered, and the scorecard
   says so.

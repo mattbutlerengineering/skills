@@ -120,6 +120,11 @@
     "description": "Intake provenance"
   },
   {
+    "name": "found:consumer",
+    "color": "fef2c0",
+    "description": "Defect origin: found only in a consumer repo"
+  },
+  {
     "name": "pipeline-intake",
     "color": "d876e3",
     "description": "Tracker intake: offered to capture as a defect-brief seed (ADR-0030)"
