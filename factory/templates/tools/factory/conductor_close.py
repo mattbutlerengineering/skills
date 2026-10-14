@@ -27,7 +27,8 @@ closing PR body and on its item's needs-human comment (#728, #771).
 `close <batch> --merge` merges the closing PR once the Owner answered
 its ask `merge`, first committing and pushing that answer row (#726).
 
-`calibrate` lives in conductor_calibrate.
+closed_batches is the one walk over closed ledgers that calibrate and
+rejection_mining read (#854); `calibrate` lives in conductor_calibrate.
 """
 import json
 import math
@@ -41,9 +42,9 @@ import cost_ledger
 import factory_config
 import label_sync
 from cli import CLI_FAILURES, detail, label_names
-from conductor import TERMINAL, answers, append, ask_row, batch_branch, \
-    batch_dir, current_state, is_text, item_view, load, numbered, parse, \
-    parsed_at, read_text, run_item, stamp, view
+from conductor import LEDGER, TERMINAL, answers, append, ask_row, \
+    batch_branch, batch_dir, current_state, is_text, item_view, load, \
+    numbered, parse, parsed_at, read_text, run_item, stamp, view
 
 SCORECARDS = "docs/factory/scorecards.jsonl"
 # Asks the Conductor raises beyond the planned spend, gate and merge
@@ -247,10 +248,37 @@ CLOSE_WHY = ("every item is merged or blocked, and the scorecard computed"
              " from the ledger")
 
 
+def is_closed(rows):
+    return any(row["kind"] == "close" for row in rows)
+
+
+def closed_batches(root):
+    """(closed, gaps): the one walk over every batch ledger under root,
+    in name order, that calibrate and the miner read (#854). closed is
+    [(batch, rows, line numbers)]; gaps is {"unreadable": [names],
+    "unclosed": n}. A ledger that will not load (or whose directory is no
+    batch name) and an unclosed one are gaps, never problems: ledgers on
+    main are append-only evidence, so one bad line must not fail every
+    reading after it (#837). It lives here, not beside conductor.LEDGER,
+    because conductor.py sits at its 800-line ceiling."""
+    closed, unreadable, unclosed = [], [], 0
+    for path in sorted(Path(root).glob(LEDGER.format(batch="*"))):
+        batch = path.parent.name
+        text, shown, problems = read_text(root, batch)
+        rows, _ = (None, problems) if problems else parse(text, shown)
+        if rows is None:
+            unreadable.append(batch)
+        elif is_closed(rows):
+            closed.append((batch, rows, [n for n, _ in numbered(text)]))
+        else:
+            unclosed += 1
+    return closed, {"unreadable": unreadable, "unclosed": unclosed}
+
+
 def _final_items(rows, batch):
     """({final state: [items]}, problems): refused unless the batch is
     open and every item is merged or blocked."""
-    if any(row["kind"] == "close" for row in rows):
+    if is_closed(rows):
         return None, [f"cd: close refused: batch {batch} is already closed"]
     finals = {state: [] for state in TERMINAL}
     for entry in (view(rows)["plan"] or {}).get("items", []):

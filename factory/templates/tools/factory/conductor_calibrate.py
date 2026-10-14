@@ -13,13 +13,12 @@ it writes no file of its own, and never writes factory.json.
 """
 import json
 import math
-from pathlib import Path
 
 import conductor_flow as flow
 import cost_ledger
 import factory_config
-from conductor import LEDGER, numbered, parse, parsed_at, read_text, view
-from conductor_close import PLACES
+from conductor import LEDGER, parsed_at, view
+from conductor_close import PLACES, closed_batches
 
 # The fewest samples calibrate suggests from. One real batch is all
 # there is today, so below it the verb prints n and suggests nothing.
@@ -178,27 +177,25 @@ def calibrate(rows, weights, floor=CALIBRATE_FLOOR):
 
 
 def closed_actuals(root):
-    """(actuals rows of every closed batch's ledger at `root`, problems).
-    A batch with no close row is skipped: its blocked items' spend rows
-    reach costs.jsonl only at close."""
+    """(actuals rows of every closed batch's ledger at `root`, the names
+    of the ledgers that do not load, problems), over
+    conductor_close.closed_batches, the walk the miner reads (#854). A batch with no close row is skipped: its blocked items'
+    spend rows reach costs.jsonl only at close. A ledger that does not
+    load is a gap the caller names, never a problem: ledgers on main are
+    append-only evidence, so one bad line must not refuse every reading
+    after it (#837)."""
     entries, problems = cost_ledger.read(root)
     if problems:
-        return None, problems
+        return None, [], problems
+    closed, gaps = closed_batches(root)
     found = []
-    for ledger in sorted(Path(root).glob(LEDGER.format(batch="*"))):
-        text, shown, problems = read_text(root, ledger.parent.name)
-        rows, problems = (None, problems) if problems \
-            else parse(text, shown)
+    for batch, rows, lines in closed:
+        rows, problems = actuals(rows, lines, LEDGER.format(batch=batch),
+                                 entries)
         if problems:
-            return None, problems
-        if not any(row["kind"] == "close" for row in rows):
-            continue
-        rows, problems = actuals(rows, [n for n, _ in numbered(text)],
-                                 shown, entries)
-        if problems:
-            return None, problems
+            return None, [], problems
         found += rows
-    return found, []
+    return found, gaps["unreadable"], []
 
 
 def calibrate_cli(root, args):
@@ -209,7 +206,11 @@ def calibrate_cli(root, args):
         else factory_config.resolve_step_weights(config)
     if problems:
         return problems
-    rows, problems = closed_actuals(root)
+    rows, unreadable, problems = closed_actuals(root)
     if rows is not None:
-        print(json.dumps(calibrate(rows, weights), indent=2))
+        card = calibrate(rows, weights)
+        refused = [f"ledgers: {name} does not load, so its runs are left"
+                   " out" for name in unreadable]
+        print(json.dumps({**card, "refused": refused + card["refused"]},
+                         indent=2))
     return problems

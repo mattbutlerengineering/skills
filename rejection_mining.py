@@ -21,8 +21,9 @@ A third stream lives in the tree, not on the dispatch plane (#800): a
 Conductor review that sends an item back is a batch-ledger state row,
 never a GitHub review. Every batch ledger in the checkout
 (docs/factory/batches/*/ledger.jsonl — on main, only closed batches,
-since a ledger lands with its closing PR) is read through conductor.load,
-which owns the row grammar, and conductor_flow.review_change says which
+since a ledger lands with its closing PR) is read through
+conductor_close.closed_batches, the one walk calibrate reads too, over
+conductor.py's row grammar, and conductor_flow.review_change says which
 rows are rework. An item that is a mirrored work order folds into that
 order's entry; any other item is entered by its issue key. A ledger that
 will not load, or that has no close row yet, is a gap the Sources line
@@ -49,9 +50,8 @@ counted gap in the queue body instead.
 import os
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
 
-import conductor
+import conductor_close
 from conductor_flow import CHANGES_AGAIN, review_change
 
 from cli import CLI_FAILURES as GH_FAILURES
@@ -124,20 +124,12 @@ def conductor_rework(root, mirror):
     Sources line and never problems (#817): ledgers on main are append-only
     closing evidence, so a problem would fail every weekly run until
     someone rewrote history by hand. An unclosed batch is not yet mineable
-    — its rework is final only at close."""
-    pattern = conductor.LEDGER.format(batch="*")
-    ledgers = sorted(Path(root).glob(pattern))
-    rework, read, unreadable, unclosed = {}, 0, [], 0
-    for path in ledgers:
-        batch = path.parent.name
-        rows, _ = conductor.load(root, batch)
-        if rows is None:
-            unreadable.append(sanitize(batch))
-            continue
-        if not any(row["kind"] == "close" for row in rows):
-            unclosed += 1
-            continue
-        read += 1
+    — its rework is final only at close. conductor_close.closed_batches
+    is the one walk that decides both (#854)."""
+    closed, gaps = conductor_close.closed_batches(root)
+    unreadable = [sanitize(batch) for batch in gaps["unreadable"]]
+    rework = {}
+    for batch, rows, _ in closed:
         for row in rows:
             if not review_change(row):
                 continue
@@ -148,7 +140,8 @@ def conductor_rework(root, mirror):
                    if row["reason"] == CHANGES_AGAIN
                    else "review sent back to build")
             rework.setdefault(key, []).append((batch, row["at"], how))
-    return rework, (read, len(ledgers), unreadable, unclosed)
+    found = len(closed) + len(unreadable) + gaps["unclosed"]
+    return rework, (len(closed), found, unreadable, gaps["unclosed"])
 
 
 def compose_queue(rejections_by_wo, requests_by_wo, day, sources=None,
