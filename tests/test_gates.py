@@ -1448,6 +1448,25 @@ class TestLabelWiring(unittest.TestCase):
             self.assertIn(f"L: .github/labels.json[{len(entries)}] entry"
                           " lacks color, description", found)
 
+    def test_every_tool_naming_the_ready_label_is_a_site_j_reads(self):
+        """J reads the ready label off its declarers only, so a tool that
+        types its own copy is invisible to it: the copy can drift, pass
+        every offline gate, and fail in the dispatch plane. Every root
+        tool whose code holds the literal must be one of J's sites — in
+        practice, the one owner (issue #750)."""
+        import ast
+        import assembler
+        ready = assembler.READY_LABEL
+
+        def names_it(path):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            return any(isinstance(node, ast.Constant) and node.value == ready
+                       for node in ast.walk(tree))
+
+        naming = sorted(path.name for path in self.REPO.glob("*.py")
+                        if names_it(path))
+        self.assertEqual(naming, gates.declared_labels(self.REPO)[ready])
+
     def test_the_extraction_actually_finds_the_shipped_labels(self):
         """A detector whose extraction silently stops matching is
         vacuously clean forever — worse than no detector. This pins that
