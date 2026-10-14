@@ -39,8 +39,10 @@ jobs:
         with:
           python-version: "3.12"
       # Harvest gate rejections and change-requested reviews for the
-      # mirrored work orders, then create-or-update the pinned
-      # toolsmith-queue issue.
+      # mirrored work orders, and Conductor review rework from the closed
+      # batch ledgers, then create-or-update the pinned toolsmith-queue
+      # issue. A ledger it cannot mine is a gap counted in the queue's
+      # Sources line, never a red run (#817).
       - name: Mine the correction stream into the toolsmith queue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

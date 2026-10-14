@@ -1,7 +1,7 @@
 ---
 summary: factory-init stamps CODEOWNERS, the Makefile, factory.json, labels.json, seeded ADRs and design docs outside FACTORY_OWNED; update never refreshes them, and only doctor checks most.
 sources: factory_init.py, factory_config.py, gates.py, skills/doctor/SKILL.md
-verified: 97507559df22791a05186404e7453a281b164bae
+verified: 3f4b8b6dd600af9479c41e9c164f8b6909c582e2
 related: manifest-regen
 ---
 
