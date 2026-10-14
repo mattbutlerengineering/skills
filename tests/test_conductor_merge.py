@@ -535,8 +535,8 @@ class TestReviewedTree(TurnCase):
                   " so it needs a re-review")
         self.assertEqual(summary["stall"], reason)
         self.assertEqual((self.rows[-2]["from"], self.rows[-2]["to"],
-                          self.rows[-2]["reason"]),
-                         ("ship", "stalled", reason))
+                          self.rows[-2]["reason"], self.rows[-2]["cause"]),
+                         ("ship", "stalled", reason, "merge-drift"))
         self.assertEqual(self.rows[-1]["recommended"], "block")
         self.assertFalse(self.calls("git", "fetch"))
         self.assertFalse(self.calls("git", "push"))
@@ -613,6 +613,7 @@ class TestMergeTurnStalls(TurnCase):
         self.assertEqual(summary["stall"], reason)
         self.assertEqual(self.rows[-2]["to"], "stalled")
         self.assertEqual(self.rows[-2]["reason"], reason)
+        self.assertEqual(self.rows[-2]["cause"], "merge-failed")
         self.assertEqual(self.rows[-1]["ask_kind"], "stall")
         self.assertEqual(self.head("origin/" + BRANCH), self.pushed)
 

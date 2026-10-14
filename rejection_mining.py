@@ -24,7 +24,9 @@ never a GitHub review. Every batch ledger in the checkout
 since a ledger lands with its closing PR) is read through conductor.load,
 which owns the row grammar, and conductor_flow.review_change says which
 rows are rework. An item that is a mirrored work order folds into that
-order's entry; any other item is entered by its issue key.
+order's entry; any other item is entered by its issue key. A ledger that
+will not load, or that has no close row yet, is a gap the Sources line
+counts, never a problem (#817).
 
 The harvest is upserted as one pinned, marker-tagged queue issue —
 the gate digest's tracker idiom (ADR-0035): created and pinned on
@@ -34,7 +36,9 @@ rule — one rejection is an anecdote — and the evidence is quoted
 (review bodies excerpted), never summarized into existence.
 
 Conventions match gate_digest.py: functions return rm:-prefixed problem
-strings; the CLI prints them and exits nonzero.
+strings; the CLI prints them and exits nonzero. Problems are the miner's
+own faults (a failed gh call or post); a batch ledger it cannot mine is a
+counted gap in the queue body instead.
 
   python3 rejection_mining.py mine
         Harvest gate rejections and change-requested reviews for the
@@ -109,19 +113,29 @@ def change_requests(listing, mirror):
     return mined
 
 
-def conductor_rework(root, mirror, problems):
-    """({key: [(batch, at, how)]}, ledgers read, ledgers found) for every
-    batch ledger under root. key is the item's work order when the item is
-    a mirrored issue, else its issue key. A ledger that will not load is a
-    problem and a counted gap, never a silently thinner harvest."""
+def conductor_rework(root, mirror):
+    """({key: [(batch, at, how)]}, (ledgers read, ledgers found,
+    unreadable batch names, unclosed count)) for every batch ledger under
+    root. key is the item's work order when the item is a mirrored issue,
+    else its issue key.
+
+    A ledger that will not load (bad rows, or a directory whose name is not
+    a batch) and a ledger with no close row are gaps, counted for the
+    Sources line and never problems (#817): ledgers on main are append-only
+    closing evidence, so a problem would fail every weekly run until
+    someone rewrote history by hand. An unclosed batch is not yet mineable
+    — its rework is final only at close."""
     pattern = conductor.LEDGER.format(batch="*")
     ledgers = sorted(Path(root).glob(pattern))
-    rework, read = {}, 0
+    rework, read, unreadable, unclosed = {}, 0, [], 0
     for path in ledgers:
         batch = path.parent.name
-        rows, failed = conductor.load(root, batch)
-        problems.extend(f"rm: {problem}" for problem in failed)
+        rows, _ = conductor.load(root, batch)
         if rows is None:
+            unreadable.append(sanitize(batch))
+            continue
+        if not any(row["kind"] == "close" for row in rows):
+            unclosed += 1
             continue
         read += 1
         for row in rows:
@@ -134,7 +148,7 @@ def conductor_rework(root, mirror, problems):
                    if row["reason"] == CHANGES_AGAIN
                    else "review sent back to build")
             rework.setdefault(key, []).append((batch, row["at"], how))
-    return rework, read, len(ledgers)
+    return rework, (read, len(ledgers), unreadable, unclosed)
 
 
 def compose_queue(rejections_by_wo, requests_by_wo, day, sources=None,
@@ -271,9 +285,13 @@ def _sources(mirrored, events_by_issue, requests, truncated, ledgers):
     gap = f" ({unread} unreadable)" if unread else ""
     rejections = (f"gate rejections from {len(events_by_issue)} of"
                   f" {len(mirrored)} issue timelines{gap}")
-    read, found = ledgers
-    unread_ledgers = found - read
-    ledger_gap = f" ({unread_ledgers} unreadable)" if unread_ledgers else ""
+    read, found, unreadable, unclosed = ledgers
+    gaps = []
+    if unreadable:
+        gaps.append(f"{len(unreadable)} unreadable: {', '.join(unreadable)}")
+    if unclosed:
+        gaps.append(f"{unclosed} not yet mineable: never closed")
+    ledger_gap = f" ({'; '.join(gaps)})" if gaps else ""
     rework = (f"review rework from {read} of {found} batch ledger(s)"
               f"{ledger_gap}.")
     if requests is None:
@@ -319,14 +337,13 @@ def run_mine(root, run=gh_runner, clock=None):
     for wo, number, excerpt in requests or ():
         requests_by_wo.setdefault(wo, []).append((number, excerpt))
 
-    rework_by_wo, read_ledgers, found_ledgers = conductor_rework(
-        root, mirror, problems)
+    rework_by_wo, ledgers = conductor_rework(root, mirror)
 
     body = compose_queue(rejections_by_wo, requests_by_wo,
                          now.date().isoformat(),
                          sources=_sources(mirrored, events_by_issue,
                                           requests, truncated,
-                                          (read_ledgers, found_ledgers)),
+                                          ledgers),
                          rework_by_wo=rework_by_wo)
     open_issues = [entry for entry in listing
                    if (entry.get("state") or "").upper() == "OPEN"]

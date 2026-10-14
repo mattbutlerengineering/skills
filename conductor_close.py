@@ -27,11 +27,7 @@ closing PR body and on its item's needs-human comment (#728, #771).
 `close <batch> --merge` merges the closing PR once the Owner answered
 its ask `merge`, first committing and pushing that answer row (#726).
 
-`calibrate` (#799) joins every closed batch's ledger with costs.jsonl
-into one actuals row per run (step, band, model, ceiling, cost, wall
-time, attempt, outcome) and prints suggested step weights and size
-budgets with their sample sizes. It reads the ledgers close already
-commits, so it writes no file of its own, and never writes factory.json.
+`calibrate` lives in conductor_calibrate.
 """
 import json
 import math
@@ -45,9 +41,9 @@ import cost_ledger
 import factory_config
 import label_sync
 from cli import CLI_FAILURES, detail, label_names
-from conductor import LEDGER, TERMINAL, answers, append, ask_row, batch_branch, \
-    batch_dir, current_state, item_view, load, numbered, parse, parsed_at, \
-    read_text, run_item, stamp, view
+from conductor import TERMINAL, answers, append, ask_row, batch_branch, \
+    batch_dir, current_state, is_text, item_view, load, numbered, parse, \
+    parsed_at, read_text, run_item, stamp, view
 
 SCORECARDS = "docs/factory/scorecards.jsonl"
 # Asks the Conductor raises beyond the planned spend, gate and merge
@@ -77,13 +73,17 @@ def _owner_wait_hours(rows):
                and row["ask"] in asked) / 3600
 
 
-def _review_changes(rows):
-    """Requests for changes: a review sent back to build, and a second
-    request that stalled the item."""
-    return sum(1 for row in rows if row["kind"] == "state"
-               and row["from"] == "review"
-               and (row["to"] == "build" or row["reason"]
-                    == flow.CHANGES_AGAIN))
+def _error_pct(metered, estimate):
+    return (round((metered - estimate) / estimate * 100, PLACES)
+            if estimate and metered is not None else None)
+
+
+def _by_cause(rows, to):
+    """{cause: count} of the state rows into `to` (#819); a row written
+    before causes existed counts as unrecorded."""
+    causes = sorted(row.get("cause", "unrecorded") for row in rows
+                    if row["kind"] == "state" and row["to"] == to)
+    return {cause: causes.count(cause) for cause in causes}
 
 
 def _ran_estimate(read):
@@ -138,16 +138,21 @@ def compute(rows, lines, shown, entries, now):
             sum(1 for row in rows if row["kind"] == "answer"), merged),
         "metered_usd": metered,
         "metered_usd_per_merged": _ratio(metered, merged),
-        "estimate_usd": plan["estimate_usd"], "ran_estimate_usd": estimate,
-        "estimate_error_pct": (round((metered - estimate) / estimate * 100,
-                                     PLACES) if estimate else None),
+        # #814: a changed meaning is a new key, never a reused one.
+        "estimate_usd": plan["estimate_usd"],
+        "estimate_error_pct": _error_pct(metered, plan["estimate_usd"]),
+        "ran_estimate_usd": estimate,
+        "ran_estimate_error_pct": _error_pct(metered, estimate),
         "collisions": sum(len(row.get("renumbered_from", []))
                           for row in rows if row["kind"] == "reserve"),
         "stalls": sum(1 for row in rows if row["kind"] == "state"
                       and row["to"] == "stalled"),
+        "stalls_by_cause": _by_cause(rows, "stalled"),
+        "blocked_by_cause": _by_cause(rows, "blocked"),
         "escalations": sum(1 for row in rows if row["kind"] == "ask"
                            and row["ask_kind"] in ESCALATIONS),
-        "review_changes_per_item": _ratio(_review_changes(rows), len(items)),
+        "review_changes_per_item": _ratio(
+            sum(map(flow.review_change, rows)), len(items)),
         "start_to_last_merge_s": (int((parsed_at(max(merges)) - parsed_at(plan["at"]))
                                       .total_seconds()) if merges else None),
         "merged_per_owner_wait_hour": _ratio(merged, wait),
@@ -340,13 +345,50 @@ def sort_blocked_branches(git, root, batch, blocked):
     return sorted_branches, []
 
 
+# A scorecard row's text fields and its cause tables (#814, #819); every
+# other field is a metric: a finite number, or null where it has none.
+SCORECARD_TEXT = ("batch", "at", "conductor_session")
+SCORECARD_COUNTS = ("stalls_by_cause", "blocked_by_cause")
+
+
+def scorecard_problems(row):
+    """Unlocated problems for one scorecard row (#814): the one shape its
+    writer (append_scorecard) and its reader (history) both check."""
+    if not isinstance(row, dict) or "batch" not in row:
+        return ["is not a scorecard row (a JSON object with a batch)"]
+    problems = []
+    for key, value in row.items():
+        if key in SCORECARD_TEXT:
+            valid, shape = is_text(value), "a non-empty string"
+        elif key in SCORECARD_COUNTS:
+            valid = isinstance(value, dict) and all(
+                type(n) is int and n >= 0 for n in value.values())
+            shape = "a map of cause to count"
+        else:
+            valid = _is_metric(value) and math.isfinite(value or 0)
+            shape = "a finite number or null"
+        if not valid:
+            problems.append(f"{key} {value!r} is not {shape}")
+    return problems
+
+
+def _by_meaning(row):
+    """A row written between #808 and #814 holds the ran steps' error
+    under estimate_error_pct: it reads as ran_estimate_error_pct, beside
+    the whole plan's from its own figures. Other rows read as written."""
+    if "ran_estimate_usd" not in row or "ran_estimate_error_pct" in row:
+        return row
+    return {**row, "estimate_error_pct": _error_pct(
+        row.get("metered_usd"), row.get("estimate_usd")),
+        "ran_estimate_error_pct": row.get("estimate_error_pct")}
+
+
 def history(root):
     """(scorecard rows in file order, problems): the reader of
     docs/factory/scorecards.jsonl (#797), beside its writer. No file is
-    no history. A line that does not parse, or is not a JSON object with
-    a batch, fails the read naming its line: never a partial history.
-    Rows written before a field existed are returned as written, so a
-    caller reads every shape the file has held."""
+    no history. A line that does not parse or breaks scorecard_problems
+    fails the read naming its line: never a partial history. A row reads
+    as written, every key in one meaning (_by_meaning)."""
     path = Path(root) / SCORECARDS
     if not path.is_file():
         return [], []
@@ -357,20 +399,24 @@ def history(root):
         except ValueError as err:
             return None, [f"cd: {SCORECARDS}:{lineno} is not valid JSON:"
                           f" {err}"]
-        if not isinstance(row, dict) or "batch" not in row:
-            return None, [f"cd: {SCORECARDS}:{lineno} is not a scorecard"
-                          " row (a JSON object with a batch)"]
-        rows.append(row)
+        problems = scorecard_problems(row)
+        if problems:
+            return None, [f"cd: {SCORECARDS}:{lineno} {problem}"
+                          for problem in problems]
+        rows.append(_by_meaning(row))
     return rows, []
 
 
 def append_scorecard(root, card):
     """(problems): append the batch's one scorecard row, unless a row
-    for the batch is already there. APPEND ONLY: never rewrites. The
-    read makes a close retried after a failed close-row write score the
-    batch once, not twice (review minor 6); batch names are never
-    reused, since `open` refuses one whose ledger is on main."""
-    rows, problems = history(root)
+    for the batch is already there, or one breaking scorecard_problems.
+    APPEND ONLY: never rewrites. The read makes a close retried after a
+    failed close-row write score the batch once, not twice (review minor
+    6); batch names are never reused, since `open` refuses one whose
+    ledger is on main."""
+    problems = [f"cd: not appended to {SCORECARDS}: {problem}"
+                for problem in scorecard_problems(card)]
+    rows, problems = (None, problems) if problems else history(root)
     if problems:
         return problems
     if any(row["batch"] == card["batch"] for row in rows):
@@ -607,154 +653,4 @@ def close_cli(root, args, clock, git, gh, sleep=None):
               f" {', '.join(summary['merged']) or 'none'}; blocked"
               f" {', '.join(summary['blocked']) or 'none'}; merge ask"
               f" {summary['ask']}")
-    return problems
-
-
-# --- per-step actuals and calibration (#799) ---------------------------
-
-# The fewest samples calibrate suggests from. One real batch is all
-# there is today, so below it the verb prints n and suggests nothing.
-CALIBRATE_FLOOR = 5
-
-
-def actuals(rows, lines, shown, entries):
-    """(one row per run, problems), PURE over the ledger's rows (each on
-    its line in `lines`) and the cost ledger's entries: the join a
-    recalibration needs, from the plan row (item type, size, the step's
-    ceiling), the run row (band, model, effort, outcome), its spend rows
-    and its launch state row (wall time; None for a run with none).
-    `attempt` counts the item's runs of that step so far. It fails with
-    no rows where the scorecard does: no plan row, or a run with no
-    spend row."""
-    plan = view(rows)["plan"]
-    if plan is None:
-        return None, [f"cd: {shown} has no plan row"]
-    spent = {}
-    for entry in entries:
-        spent[entry["run_id"]] = spent.get(entry["run_id"], 0) \
-            + entry["cost"]
-    runs = [(lineno, row) for lineno, row in zip(lines, rows)
-            if row["kind"] == "run"]
-    problems = [f"cd: {shown}:{lineno} run {row['run_id']} has no"
-                f" {cost_ledger.COST_LEDGER} row with its run_id"
-                for lineno, row in runs if row["run_id"] not in spent]
-    if problems:
-        return None, problems
-    launched = {row["run_id"]: row["at"] for row in rows
-                if row["kind"] == "state" and row["to"] == "launched"}
-    planned = {entry["item"]: entry for entry in plan["items"]}
-    found, seen = [], {}
-    for _, row in runs:
-        entry, key = planned[row["item"]], (row["item"], row["step"])
-        seen[key] = seen.get(key, 0) + 1
-        start = launched.get(row["run_id"])
-        found.append({
-            "batch": plan["batch"], "item": row["item"],
-            "type": entry["type"], "size": entry["size"],
-            "step": row["step"], "attempt": seen[key],
-            "run_id": row["run_id"], "band": row["band"],
-            "model": row["model"], "effort": row["effort"],
-            "ceiling_usd": next(step["ceiling_usd"] for step in entry["steps"]
-                                if step["step"] == row["step"]),
-            "cost_usd": round(spent[row["run_id"]], PLACES),
-            "wall_s": (int((parsed_at(row["at"]) - parsed_at(start))
-                           .total_seconds()) if start else None),
-            "outcome": row["outcome"]})
-    return found, []
-
-
-def _spread(samples):
-    return {"n": len(samples),
-            "mean_usd": round(sum(samples) / len(samples), 2),
-            "max_usd": round(max(samples), 2)}
-
-
-def _short(table, what, floor):
-    """[] when every entry of `table` has `floor` samples, else the one
-    refusal naming each n below it and what has it."""
-    under = {}
-    for name, figures in table.items():
-        if figures["n"] < floor:
-            under.setdefault(figures["n"], []).append(name)
-    if not under:
-        return []
-    return [f"{what}: " + "; ".join(f"n={n} for {', '.join(names)}"
-                                    for n, names in sorted(under.items()))
-            + f", below the floor of {floor}"]
-
-
-def calibrate(rows, floor=CALIBRATE_FLOOR):
-    """Suggested step weights and size budgets, PURE over actuals rows,
-    with every figure's sample size. A step's sample is one item's spend
-    on it over every attempt (ceiling_hits counts the attempts that spent
-    their ceiling); a size's is one item's whole spend. The weights are
-    each step's mean over the cheapest step's, suggested only when every
-    step has `floor` samples; a size's budget is its dearest item,
-    rounded up to the dollar, suggested only at `floor` items. It
-    suggests and never writes factory.json: model and pricing choices
-    stay the Owner's (PRD-0013, ADR-0034)."""
-    by_step, by_item, sizes, attempts, hits = {}, {}, {}, {}, {}
-    for row in rows:
-        item, step, cost = (row["batch"], row["item"]), row["step"], \
-            row["cost_usd"]
-        by_step.setdefault(step, {})[item] = \
-            by_step.get(step, {}).get(item, 0) + cost
-        by_item[item] = by_item.get(item, 0) + cost
-        sizes[item] = row["size"]
-        attempts[step] = attempts.get(step, 0) + 1
-        hits[step] = hits.get(step, 0) + (cost >= row["ceiling_usd"])
-    steps = {step: {**_spread(list(items.values())),
-                    "attempts": attempts[step], "ceiling_hits": hits[step]}
-             for step, items in by_step.items()}
-    totals = {}
-    for item, total in by_item.items():
-        totals.setdefault(sizes[item], []).append(total)
-    budgets = {size: _spread(spent) for size, spent in totals.items()}
-    for figures in budgets.values():
-        figures["budget_usd"] = (math.ceil(figures["max_usd"])
-                                 if figures["n"] >= floor else None)
-    weights_short = _short(steps, "step_weights", floor)
-    cheapest = min((figures["mean_usd"] for figures in steps.values()),
-                   default=0)
-    weights = None if weights_short or not cheapest else {
-        step: round(figures["mean_usd"] / cheapest, 1)
-        for step, figures in steps.items()}
-    refused = ([] if rows else
-               ["no closed batch has a run to calibrate from"])
-    return {"floor": floor, "steps": steps, "step_weights": weights,
-            "sizes": budgets,
-            "refused": refused + weights_short
-            + _short(budgets, "budgets_usd", floor)}
-
-
-def closed_actuals(root):
-    """(actuals rows of every closed batch's ledger at `root`, problems).
-    A batch with no close row is skipped: its blocked items' spend rows
-    reach costs.jsonl only at close."""
-    entries, problems = cost_ledger.read(root)
-    if problems:
-        return None, problems
-    found = []
-    for ledger in sorted(Path(root).glob(LEDGER.format(batch="*"))):
-        text, shown, problems = read_text(root, ledger.parent.name)
-        rows, problems = (None, problems) if problems \
-            else parse(text, shown)
-        if problems:
-            return None, problems
-        if not any(row["kind"] == "close" for row in rows):
-            continue
-        rows, problems = actuals(rows, [n for n, _ in numbered(text)],
-                                 shown, entries)
-        if problems:
-            return None, problems
-        found += rows
-    return found, []
-
-
-def calibrate_cli(root, args):
-    if args:
-        return None
-    rows, problems = closed_actuals(root)
-    if rows is not None:
-        print(json.dumps(calibrate(rows), indent=2))
     return problems

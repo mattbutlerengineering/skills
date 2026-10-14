@@ -780,6 +780,17 @@ class TestDispatched(unittest.TestCase):
         for row in self.rows() + ["not a row", {"outcome": 7}]:
             self.assertFalse(cost_ledger.owner_session(row), row)
 
+    def test_an_owner_session_marker_that_carries_a_cost_is_refused(self):
+        # #815: dispatched() drops markers from spend because ADR-0069
+        # says they cost $0. A paid row mislabelled as a marker would
+        # escape the monthly cap silently, so the $0 is a shape rule.
+        marker = entry("WO-0003", "s-1", "m", 0, 12.5,
+                       "owner-session:unmetered", "2026-10-13")
+        self.assertEqual(cost_ledger.line_problems(marker), [
+            "an owner-session marker must cost 0 (ADR-0069), not 12.5"])
+        self.assertEqual(
+            cost_ledger.line_problems(dict(marker, cost=0)), [])
+
 
 
 class TestIssueKeyedRows(unittest.TestCase):

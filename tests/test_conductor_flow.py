@@ -396,7 +396,7 @@ class TestSurveyWrites(unittest.TestCase):
             {"at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#14",
              "from": "build", "to": "stalled",
              "reason": "its runner (pid 4242) is gone with no finishing"
-                       " run row"},
+                       " run row", "cause": "runner-lost"},
             {"at": "2026-10-10T12:30:00Z", "kind": "ask", "item": "#14",
              "id": "ask-2", "ask_kind": "stall",
              "question": "#14 stalled in build: its runner (pid 4242) is"
@@ -418,7 +418,7 @@ class TestSurveyWrites(unittest.TestCase):
             "at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#14",
             "from": "merging", "to": "stalled",
             "reason": "its merge turn (pid 4242) is gone with no merged"
-                      " row"})
+                      " row", "cause": "runner-lost"})
         self.assertEqual((writes[1]["ask_kind"], writes[1]["recommended"]),
                          ("stall", "retry"))
         resumed = rows + writes + [answered(writes[1]["id"], "retry",
@@ -433,8 +433,9 @@ class TestSurveyWrites(unittest.TestCase):
         self.assertEqual(self.writes(rows, now=start + timedelta(
             minutes=180)), [])
         writes = self.writes(rows, now=start + timedelta(minutes=181))
-        self.assertEqual(writes[0]["reason"],
-                         "no state change for over 180 minutes")
+        self.assertEqual((writes[0]["reason"], writes[0]["cause"]),
+                         ("no state change for over 180 minutes",
+                          "runner-lost"))
 
     def test_a_top_band_step_offers_no_retry_up(self):
         rows = [launch("#12", "planned", "spec", pid=1)]
@@ -533,7 +534,8 @@ class TestVerdict(unittest.TestCase):
             ran("#14", "review", 2)]
         written, _ = self.verdict(again, "changes",
                                   reviewer=run_id("#14", "review", 2))
-        self.assertEqual(written[0]["to"], "stalled")
+        self.assertEqual((written[0]["to"], written[0]["cause"]),
+                         ("stalled", "changes-again"))
         self.assertEqual(written[1]["recommended"], "block")
         self.assertEqual(written[1]["why"], "a second request for changes"
                          " is evidence about the item")
@@ -633,8 +635,8 @@ class TestStallWording(unittest.TestCase):
     def ask(self, key):
         entry = flow.item_view(START, key)["entry"]
         rows = START + [launch(key, "planned", entry["steps"][0]["step"])]
-        written, problems = flow.stall_rows(rows, NOW, entry, "x", "retry",
-                                            "w")
+        written, problems = flow.stall_rows(rows, NOW, entry, "x",
+                                            "agent-failed", "retry", "w")
         self.assertEqual(problems, [])
         return written[1]
 
