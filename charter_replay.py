@@ -109,7 +109,8 @@ def _expectation_problems(case, expectation, label):
         return [f"{where} is not an object"]
     exp_id = expectation.get("id")
     return (
-        ([f"{where} {exp_id!r} has invalid scope "
+        ([f"{where} has no id"] if not exp_id else [])
+        + ([f"{where} {exp_id!r} has invalid scope "
           f"{expectation.get('scope')!r}"]
          if expectation.get("scope") not in SCOPES else [])
         + ([f"{where} {exp_id!r} has invalid mode "
@@ -171,6 +172,9 @@ def _case_problems(case, root, label):
         return problems + [f"{where} has no expectations"]
     for expectation in expectations:
         problems += _expectation_problems(case, expectation, label)
+    problems += eval_schema.duplicate_id_problems(
+        [e for e in expectations if isinstance(e, dict)], where,
+        noun="expectation")
     if not any(isinstance(e, dict) and e.get("mode") == "forbid"
                for e in expectations):
         problems.append(f"{where} has no forbid expectation (a regression"
@@ -387,9 +391,11 @@ def score_case(case, transcript):
 
     The evidence problem joins `failures`, which already drives all
     three. `failed` keeps meaning expectation ids, because that is what
-    names which trap tripped and what the degradation tests read.
+    names which trap tripped and what the degradation tests read; it is
+    the union of failed_forbids and failed_requires, which carry each
+    failure's mode so the control verdict never rebuilds it from ids.
     """
-    failures, failed = [], []
+    failures, failed, by_mode = [], [], {mode: [] for mode in MODES}
     unusable = replay_problem(transcript)
     if unusable:
         failures.append(unusable)
@@ -398,11 +404,14 @@ def score_case(case, transcript):
         if problem:
             failures.append(problem)
             failed.append(expectation["id"])
+            by_mode[expectation["mode"]].append(expectation["id"])
     return {
         "id": case["id"],
         "role": case["role"],
         "pass": not failures,
         "failed": failed,
+        "failed_forbids": by_mode["forbid"],
+        "failed_requires": by_mode["require"],
         "failures": failures,
         "tool_calls": len(transcript.get("tool_calls", [])),
         "error": transcript.get("error"),
@@ -474,8 +483,7 @@ def control_verdict(case, intact, degraded):
     intact_result = score_case(case, intact)
     degraded_result = score_case(case, degraded)
     unusable = replay_problem(degraded)
-    forbids = {e["id"] for e in case["expectations"] if e["mode"] == "forbid"}
-    tripped = [i for i in degraded_result["failed"] if i in forbids]
+    tripped = degraded_result["failed_forbids"]
     where = f"control: {case['id']}"
     if not intact_result["pass"]:
         verdict, problems = "inconclusive", [
