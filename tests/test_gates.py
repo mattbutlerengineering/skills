@@ -30,6 +30,8 @@ import cli_contract  # noqa: E402
 from factory_fixture import CONFIG  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 from make_parse import make_recipe, make_targets, phony_targets  # noqa: E402
+from test_work_orders import (  # noqa: E402
+    DUP_ISSUE, DUP_WO, NEWER, OLDER, Tree as WorkOrderTree)
 import workflow_parse  # noqa: E402
 
 
@@ -199,6 +201,16 @@ class TestLinkIntegrity(unittest.TestCase):
             tree.write("docs/adr/ADR-007-x.md", "# Short form\n")
             tree.write("README.md", "See ADR-0007.\n")
             self.assertEqual(gates.check_link_integrity(tree.root), [])
+
+    def test_a_duplicated_work_order_or_tracker_fails_at_pr_time(self):
+        # Issue #886: knowledge_plane.work_orders' duplicate problems had
+        # no production reader, so a copy-pasted row surfaced only as a
+        # refusal at dispatch or label-flip time. C reports them, in the
+        # one rule's own words, under its label.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = WorkOrderTree(tmp, OLDER, NEWER).root
+            self.assertEqual(gates.check_link_integrity(root),
+                             [f"C: {DUP_WO}", f"C: {DUP_ISSUE}"])
 
     def test_factory_templates_and_fixtures_stay_out_of_scope(self):
         # factory/templates/ is a seed tree checked against its OWN

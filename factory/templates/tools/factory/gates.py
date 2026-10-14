@@ -11,7 +11,8 @@ ai-tooling suite where the rule is the same idea):
   B PR-TRACEABILITY — PR body carries a WO id and a closing keyword
                      (event-payload; SKIP locally)
   C LINK-INTEGRITY — every PRD-####/ADR-####/WO-#### token resolves;
-                     duplicate PRD ids fail
+                     duplicate PRD ids fail, and so does a work order or
+                     tracker issue two breakdown rows claim
   D BLUEPRINT-DRIFT — the approved blueprint (docs/adr) is self-consistent:
                      every ADR reads, declares a known status and is
                      indexed with
@@ -92,7 +93,8 @@ from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
                              adr_record, breakdown_rows, fenced,
                              local_link_targets, parse_run, repo_root,
-                             resolve_link, run_dirs, status_head, unfenced)
+                             resolve_link, run_dirs, status_head, unfenced,
+                             work_orders)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
@@ -373,7 +375,10 @@ def collect_wo_rows(parsed):
 
 
 def check_link_integrity(root, parsed=None):
-    """C: typed cross-link tokens must resolve; duplicate PRD ids fail.
+    """C: typed cross-link tokens must resolve; duplicate PRD ids fail,
+    and so does a duplicated work order or tracker — in
+    knowledge_plane.work_orders' own words, the one duplicate rule the
+    dispatcher refuses on (issue #886).
 
     Pure over `parsed` (`root` only relativizes problem-string paths);
     `parsed` defaults to a fresh parse — including gates._scannable_files'
@@ -387,6 +392,10 @@ def check_link_integrity(root, parsed=None):
         if len(paths) > 1:
             listed = ", ".join(str(p) for p in paths)
             problems.append(f"C: duplicate PRD id {prd_id} in {listed}")
+    _, duplicates = work_orders(root, [
+        (entry["path"] / "breakdown.md", entry["breakdown"])
+        for entry in parsed["runs"] if entry["breakdown"] is not None])
+    problems.extend(f"C: {duplicate}" for duplicate in duplicates)
     adr_numbers = {adr_record(path, lines)["number"]
                    for path, lines in parsed["adr_files"]}
     wo_rows = collect_wo_rows(parsed)
