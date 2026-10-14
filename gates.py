@@ -88,9 +88,9 @@ import standards_index
 from cli import read_event, read_file, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             adr_record, fence_closes, fence_open,
-                             local_link_targets, parse_run, repo_root,
-                             resolve_link, row_done, row_pre_ledger,
+                             adr_record, fenced, local_link_targets,
+                             parse_run, repo_root, resolve_link, row_done,
+                             row_pre_ledger,
                              run_dirs, status_head, unfenced)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
@@ -489,20 +489,13 @@ def _architecture_drift(root, parsed):
         if entry["architecture"] is None:
             continue
         rel = (entry["path"] / "architecture.md").relative_to(root)
-        fence = None  # None | (marker char, marker length, is tree-claims)
-        for lineno, line in enumerate(entry["architecture"], 1):
-            if fence is not None:
-                if fence_closes(line, fence[0], fence[1]):
-                    fence = None
-                elif fence[2]:
-                    problems.extend(
-                        _declared_claims(root, rel, lineno, line))
-                continue
-            opened = fence_open(line)
-            if opened:
-                fence = (*opened, bool(ARCH_CLAIMS_FENCE.match(line)))
-                continue
-            problems.extend(_prose_claims(root, rel, lineno, line))
+        lines = entry["architecture"]
+        for lineno, line, fence in fenced(lines):
+            if fence is None:
+                problems.extend(_prose_claims(root, rel, lineno, line))
+            elif line is not None and ARCH_CLAIMS_FENCE.match(
+                    lines[fence.lineno - 1]):
+                problems.extend(_declared_claims(root, rel, lineno, line))
     return problems
 
 
@@ -1021,7 +1014,7 @@ def _walk_sections(lines, body_start):
         HEADING_LINE, or Setext via _is_setext_title; the underline that
         follows a Setext title is consumed, never yielded).
       ("line", lineno, (line, in_fence)) — ordinary content. `in_fence`
-        marks a line read while a fence opened by FENCE_OPEN is still
+        marks a line read while a fence (knowledge_plane.fenced) is still
         open, so a caller applies its own "is this evidence" or "is this
         body text" rule without re-deriving fence state itself. A line
         that OPENS or CLOSES a fence is itself never yielded — matching
@@ -1033,21 +1026,16 @@ def _walk_sections(lines, body_start):
     ("unclosed", lineno, None) with the fence's OWN opening line number —
     a caller that owes no such rule (M) may simply ignore the event, the
     same way H already reports it and nothing else has ever needed to."""
-    fence = None  # (marker char, marker length, opening line number)
     underlined = False
-    for lineno, line in enumerate(lines[body_start:], body_start + 1):
+    for lineno, line, fence in fenced(lines[body_start:], body_start + 1):
+        if line is None:
+            yield "unclosed", lineno, None
+            continue
         if fence is not None:
-            if fence_closes(line, fence[0], fence[1]):
-                fence = None
-            else:
-                yield "line", lineno, (line, True)
+            yield "line", lineno, (line, True)
             continue
         if underlined:  # the ===/--- under a Setext title, already consumed
             underlined = False
-            continue
-        opened = fence_open(line)
-        if opened:
-            fence = (opened[0], opened[1], lineno)
             continue
         heading = HEADING_LINE.match(line)
         if heading:
@@ -1058,8 +1046,6 @@ def _walk_sections(lines, body_start):
             underlined = True
             continue
         yield "line", lineno, (line, False)
-    if fence is not None:
-        yield "unclosed", fence[2], None
 
 
 def verification_sections(text):

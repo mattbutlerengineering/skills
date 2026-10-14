@@ -1154,26 +1154,6 @@ class TestArchitectureDrift(unittest.TestCase):
                        "```\n")
             self.assertEqual(gates.check_blueprint_drift(tree.root), [])
 
-    def test_a_tilde_line_inside_a_backtick_fence_is_content(self):
-        # Only a backtick marker at least as long closes a backtick fence,
-        # so the claim after the ~~~ line is still quoted.
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write(self.ARCH,
-                       "# Architecture\n\n```\n~~~\n"
-                       "`present.py` exists here\n```\n")
-            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
-
-    def test_a_quoted_fence_inside_a_longer_fence_is_content(self):
-        # defect.md's repro: a four-backtick block quoting a three-backtick
-        # one. The inner ``` lines neither open nor close anything.
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = FixtureTree(tmp)
-            tree.write(self.ARCH,
-                       "# A\n\n````markdown\n```\n"
-                       "`present.py` exists here\n```\n````\n")
-            self.assertEqual(gates.check_blueprint_drift(tree.root), [])
-
     def test_no_architecture_md_is_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
@@ -2300,56 +2280,7 @@ class TestEvidenceHonesty(unittest.TestCase):
             "Everything works; all criteria are comfortably met.\n"),
             [(1, self.BACKSTOP)])
 
-    # ---- the fence scanner (CommonMark, not a parity toggle) -----------
-
-    def test_longer_fence_quoting_a_shorter_one_stays_one_block(self):
-        """BYPASS 4a. A ```` fence quoting a ``` fence: the shorter marker is
-        content, not a delimiter. The parity toggle flipped on it and lost
-        the evidence, false-positiving on an author who DID paste output."""
-        self.assertEqual(gates.evidence_problems(
-            "### Skill doc renders\n\n"
-            "- Evidence:\n"
-            "  ````\n"
-            "  ```bash\n"
-            "  make check\n"
-            "  ```\n"
-            "  ````\n"
-            "- Result: PASS\n\n"
-            "### Router picks the model\n\n"
-            "- Result: PASS\n"),
-            [(13, self.claim("Router picks the model", "PASS"))])
-
-    def test_backtick_fence_inside_a_tilde_block_does_not_close_it(self):
-        """BYPASS 4b. A ``` line inside a ~~~ block is content — a closing
-        fence must use the SAME marker. The parity toggle desynced on it and
-        silently swallowed every later criterion."""
-        self.assertEqual(gates.evidence_problems(
-            "### Evidence quotes a snippet\n\n"
-            "- Evidence:\n"
-            "  ~~~\n"
-            "  The README starts with:\n"
-            "  ```bash\n"
-            "  make check\n"
-            "  ~~~\n"
-            "- Result: PASS\n\n"
-            "### Bare claim\n\n"
-            "- Result: PASS\n"),
-            [(13, self.claim("Bare claim", "PASS"))])
-
-    def test_info_string_line_does_not_close_a_fence(self):
-        """A closing fence carries NO info string, so ```bash inside a ```
-        block is content (CommonMark)."""
-        self.assertEqual(gates.evidence_problems(
-            "### Docs quote a shell block\n\n"
-            "- Evidence:\n"
-            "  ```\n"
-            "  ```bash\n"
-            "  make check\n"
-            "  ```\n"
-            "- Result: PASS\n\n"
-            "### Bare claim\n\n"
-            "- Result: PASS\n"),
-            [(12, self.claim("Bare claim", "PASS"))])
+    # ---- fences (the rule itself: test_knowledge_plane.TestFences) ----
 
     def test_unclosed_fence_is_flagged(self):
         """BYPASS 4c. An unclosed fence absorbed the tail of the artifact in

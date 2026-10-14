@@ -38,7 +38,7 @@ Added 2026-10-10 (from #650).
 - The needs-review-label job (`validator.py`'s uncited-skip gate) reads
   a four-digit `WO-` token as a **claim** unless it sits inside a fenced
   block or on a `>` blockquote line (`validator._unquoted`, fences by
-  `knowledge_plane.fence_open`/`fence_closes`). Inline backticks do
+  `knowledge_plane.unfenced`). Inline backticks do
   **not** quote it, so a body that merely mentions an order in prose
   makes the job try to flip that order's mirror.
 - That job runs only on `opened`/`reopened` or `workflow_dispatch`, not

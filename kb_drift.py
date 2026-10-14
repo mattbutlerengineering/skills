@@ -39,7 +39,7 @@ import re
 from pathlib import Path
 
 import cli
-from knowledge_plane import local_link_targets, resolve_link
+from knowledge_plane import fenced, local_link_targets, resolve_link
 from protocol import read_frontmatter
 
 LABEL = "drift"
@@ -69,7 +69,6 @@ COMMAND = re.compile(r"(?:^|\s)(?:python3?|node|bash|sh|zsh|bun|deno|"
                      r"ruby|tsx)\s+(\S+)")
 SLASH = re.compile(r"^/([a-z][a-z0-9_-]*)(?::([a-z][a-z0-9_-]*))?(?:\s|$)")
 IGNORE = re.compile(r"<!--\s*drift-ignore:\s*(.*?)\s*-->")
-FENCE = re.compile(r"^\s*(```|~~~)")
 LINE_SUFFIX = re.compile(r":\d+(?::\d+)?$")
 NOT_PATH = re.compile(r"[<>*{}$?\[\]|\"'=,()@\\]|://|^[~/-]")
 TABLE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
@@ -373,11 +372,11 @@ def _file_problems(disk, settings, path, text):
     rel = path.relative_to(disk.root).as_posix()
     ignored = {token for match in IGNORE.finditer(text)
                for token in match.group(1).split()}
-    lines, problems, in_fence = text.splitlines(), [], False
-    for number, line in enumerate(lines, 1):
-        if FENCE.match(line):
-            in_fence = not in_fence
+    lines, problems = text.splitlines(), []
+    for number, line, fence in fenced(lines):
+        if line is None:  # the unclosed event; its lines were read above
             continue
+        in_fence = fence is not None
         problems += _path_problems(disk, rel, number, line, in_fence,
                                    path, ignored)
         if not in_fence:
