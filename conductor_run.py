@@ -14,7 +14,6 @@ PR from the Worker's uncommitted pr-body.md, and append the run's one
 queues a stall ask; nothing retries. The Owner's 2026-10-10 answers
 (breakdown.md Notes) fix the branch names, tool list and defaults used.
 """
-import json
 import netrc as netrc_file
 import os
 import re
@@ -28,7 +27,7 @@ import cost_ledger
 import factory_config
 from assembler import PR_BODY_FILE
 from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
-    read_execution
+    prettier_json, read_execution
 from conductor import RUN_ID, RUNS, WORKER_ENV, answers, append, ask_row, \
     current_state, item_view, item_worktree, load, stamp, view
 from conductor import run_id as make_run_id
@@ -322,7 +321,7 @@ def _meter(root, batch, run_id, event, ended, ceiling, model):
         runs = Path(root) / RUNS.format(batch=batch)
         runs.mkdir(parents=True, exist_ok=True)
         kept = runs / f"{run_id}.json"
-        kept.write_text(json.dumps(event) + "\n", encoding="utf-8")
+        kept.write_text(prettier_json(event), encoding="utf-8")
         metered, error = read_execution(kept)
         if error is None:
             reported = sorted(event.get("modelUsage") or {})
