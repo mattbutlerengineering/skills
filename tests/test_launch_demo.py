@@ -249,6 +249,111 @@ class TestProbe(unittest.TestCase):
         self.assertEqual([entry[0] for entry in missing], ["piper"])
 
 
+def gif_recorder(**changes):
+    """A recorder registered in ADAPTERS and nowhere else."""
+    fields = {
+        "record": lambda plan, workdir, against, runner: (None, ["gif"]),
+        "driver": "demo.gif",
+        "tools": lambda which, runner: (
+            [] if which("gifski")
+            else [("gifski", "draws the gif", "brew install gifski")]),
+        "check_do": lambda do: (None if isinstance(do, dict)
+                                else "do must be an object"),
+        "check_against": lambda against: (
+            None if against.endswith(".gif") else "against must name a .gif"),
+        "precondition": lambda against, head: None,
+    }
+    return launch_demo.Recorder(**{**fields, **changes})
+
+
+class TestRecorderRegistry(unittest.TestCase):
+    """A recorder is defined in one place, its ADAPTERS record (#863):
+    one registered there and nowhere else is accepted by the config
+    grammar, holds against and each step's do to its own checks, is
+    probed for its own tools, and gates render on its own
+    precondition."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def registered(self, **changes):
+        return mock.patch.dict(launch_demo.ADAPTERS,
+                               {"gif": gif_recorder(**changes)})
+
+    def load(self, payload):
+        write_config(self.root, payload)
+        return launch_demo.load(self.root, platform="darwin")
+
+    def test_the_shipped_recorders(self):
+        self.assertEqual(
+            {name: record.driver
+             for name, record in launch_demo.ADAPTERS.items()},
+            {"terminal": "demo.tape", "browser": "demo.mjs"})
+
+    def test_the_config_grammar_accepts_a_registered_recorder(self):
+        with self.registered():
+            config, problems = self.load({**VALID, "recorder": "gif",
+                                          "against": "out.gif"})
+        self.assertEqual(problems, [])
+        self.assertEqual(config["recorder"], "gif")
+
+    def test_the_recorder_owns_its_against_check(self):
+        with self.registered():
+            self.assertEqual(
+                self.load({**VALID, "recorder": "gif"}),
+                (None, [f"{LABEL} against must name a .gif"]))
+
+    def test_an_unknown_recorder_names_every_registered_one(self):
+        with self.registered():
+            self.assertEqual(
+                self.load({**VALID, "recorder": "png"}),
+                (None, [f'{LABEL} recorder must be "terminal" or "browser"'
+                        ' or "gif"']))
+
+    def test_probe_asks_the_recorder_for_its_tools(self):
+        which = FakeWhich(ALL_TOOLS)
+        config = {**TERMINAL, "recorder": "gif"}
+        with self.registered():
+            missing, problems = launch_demo.probe(config, which,
+                                                  FakeRunners())
+        self.assertEqual((missing, problems),
+                         ([("gifski", "draws the gif",
+                            "brew install gifski")], []))
+        self.assertNotIn("vhs", which.asked)
+        self.assertNotIn("node", which.asked)
+
+    def test_steps_are_held_to_the_recorders_do_shape(self):
+        with self.registered():
+            problems = launch_demo.check_storyboard(STORYBOARD, COPY, "gif")
+        self.assertEqual(problems, [f"{SB} step 1 do must be an object",
+                                    f"{SB} step 2 do must be an object"])
+
+    def test_a_failed_precondition_is_copy_only_before_any_tool_runs(self):
+        write_config(self.root, {**VALID, "publish": "out"})
+        config, _ = launch_demo.load(self.root, platform="darwin")
+        slug_dir = self.root / "out" / "demo"
+        slug_dir.mkdir(parents=True)
+        (slug_dir / "launch.md").write_text(LAUNCH_MD, encoding="utf-8")
+        board = storyboard()
+        for step in board["steps"]:
+            step["do"] = {}
+        (slug_dir / "storyboard.json").write_text(json.dumps(board),
+                                                  encoding="utf-8")
+        runners = FakeRunners()
+        with self.registered(precondition=lambda against, head:
+                             f"launch-demo: no canvas at {against}"):
+            result = launch_demo.render(
+                self.root, {**config, "recorder": "gif",
+                            "against": "x.gif"},
+                "demo", FakeWhich({**ALL_TOOLS, "gifski": "/bin/gifski"}),
+                runners)
+        self.assertEqual(result, ("COPY-ONLY",
+                                  ["launch-demo: no canvas at x.gif"], []))
+        self.assertEqual(runners.calls, [])
+
+
 class CliMixin:
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -272,9 +377,28 @@ class TestConfigLeg(CliMixin, cli_contract.CliContract,
         write_config(self.root, VALID)
         return self.run_cli(["config"])
 
-    def test_a_valid_config_prints_the_summary_alone(self):
+    def test_a_ship_config_prints_the_ship_verdict(self):
         code, out = self.clean_cli()
-        self.assertEqual((code, out), (0, "launch-demo: 0 problem(s)\n"))
+        self.assertEqual((code, out),
+                         (0, "SHIP\nlaunch-demo: 0 problem(s)\n"))
+
+    def test_an_on_demand_config_prints_the_on_demand_verdict(self):
+        write_config(self.root, {**VALID, "when": "on-demand"})
+        self.assertEqual(self.run_cli(["config"]),
+                         (0, "ON-DEMAND\nlaunch-demo: 0 problem(s)\n"))
+
+    def test_a_config_ship_cannot_read_is_problems_and_no_verdict(self):
+        """Ship acts on the verdict alone, so a misspelt when or bytes
+        that are not JSON must reach it as problems, never as a quiet
+        nothing (#863)."""
+        for payload in ({**VALID, "when": "Ship"}, "{not json"):
+            with self.subTest(payload=payload):
+                write_config(self.root, payload)
+                code, out = self.run_cli(["config"])
+                self.assertEqual(code, 1)
+                self.assertNotIn("SHIP", out.splitlines())
+                self.assertEqual(out.splitlines()[-1],
+                                 "launch-demo: 1 problem(s)")
 
     def test_an_invalid_config_prints_each_problem_and_the_count(self):
         write_config(self.root, {"when": "always", "recorder": "gif"})
