@@ -33,7 +33,7 @@ import assembler
 import cost_ledger
 import factory_config
 from cli import gh_read, gh_runner, report
-from knowledge_plane import breakdown_files, breakdown_rows, repo_root
+from knowledge_plane import repo_root, work_orders
 
 # The ready label is assembler's (it is the one detector J reads), so the
 # listing cannot ask for a label the dispatch plane does not apply.
@@ -57,20 +57,17 @@ def _utcnow():
 def rows(root):
     """{work order: row facts} for every breakdown row.
 
-    One pass, one grammar (knowledge_plane's) — nothing downstream re-reads
-    or re-parses a row.
+    Read from knowledge_plane.work_orders' WO index (issue #885), so a
+    duplicated row resolves to the one the dispatcher resolves — the
+    first — and carries the same `clashes` it refuses on. Nothing
+    downstream re-reads or re-parses a row.
     """
-    fields = ("wo", "done", "size", "issue", "blockers", "unreadable")
-    found = {}
-    for path, lines in breakdown_files(root):
-        for row in breakdown_rows(lines):
-            if not row["wo"]:
-                continue
-            found[row["wo"]] = {
-                **{field: row[field] for field in fields},
-                "where": f"{path.relative_to(root)}:{row['lineno']}",
-            }
-    return found
+    fields = ("wo", "done", "size", "issue", "blockers", "unreadable",
+              "clashes")
+    index, _ = work_orders(root)
+    return {wo: {**{field: row[field] for field in fields},
+                 "where": f"{row['path'].relative_to(root)}:{row['lineno']}"}
+            for wo, row in index["wo"].items()}
 
 
 def eligible(found, ready_issues):
@@ -83,6 +80,11 @@ def eligible(found, ready_issues):
     """
     candidates, deferred = [], []
     for wo, row in sorted(found.items()):
+        if row["clashes"]:
+            # Checked off or not, the dispatcher refuses a row another row
+            # duplicates (issue #885) — the clash is what holds it back.
+            deferred.extend(f"{wo}: {clash}" for clash in row["clashes"])
+            continue
         if row["done"]:
             continue
         unmet = sorted(b for b in row["blockers"]

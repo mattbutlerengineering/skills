@@ -426,7 +426,7 @@ def breakdown_files(root):
                 encoding="utf-8").splitlines()
 
 
-def work_orders(root):
+def work_orders(root, files=None):
     """(index, problems): the row a work order or an issue owns (issue
     #857). index["wo"] maps a WO token, index["issue"] a tracker issue
     number, to its breakdown row record — breakdown_rows' fields plus
@@ -439,10 +439,14 @@ def work_orders(root):
     unlabelled problem, `<rel>:<lineno> <WO> duplicates the row at
     <rel>:<lineno>` (or `(tracker: #N)` in the WO's place). Each clash
     is also listed in the `clashes` of both rows it names, so a caller
-    that acts on one row — a dispatch, a label flip — can refuse it."""
+    that acts on one row — a dispatch, a label flip — can refuse it.
+
+    `files` is (breakdown path, lines) in breakdown_files order, default
+    a fresh breakdown_files(root): gates' detector C hands in the walk
+    parse_run already read rather than reading it again (issue #886)."""
     root = Path(root)
     index, problems = {"wo": {}, "issue": {}}, []
-    for path, lines in breakdown_files(root):
+    for path, lines in breakdown_files(root) if files is None else files:
         for row in breakdown_rows(lines):
             record = {**row, "path": path, "clashes": []}
             for kind, key, shown in (
