@@ -86,10 +86,30 @@ def _review_changes(rows):
                     == flow.CHANGES_AGAIN))
 
 
+def _ran_estimate(read):
+    """The plan's estimate of the steps that have a run row (#798): each
+    such step's ceiling_usd once, however many runs it took, and a build
+    at the build_usd of the gate ask its item's latest gate answer
+    approved, which re-priced it at one run per breakdown row. A step
+    never run is not in it: an item blocked after its spec step is
+    judged on its spec alone."""
+    total = 0
+    for item in read["items"].values():
+        gate = item["gate"]
+        build_usd = next((ask.get("build_usd") for ask in item["asks"]
+                          if gate is not None and ask["id"] == gate["ask"]),
+                         None)
+        for step in {row["step"] for row in item["runs"]}:
+            total += (build_usd if step == "build" and build_usd is not None
+                      else item["steps"][step]["ceiling_usd"])
+    return round(total, PLACES)
+
+
 def compute(rows, lines, shown, entries, now):
     """(scorecard row, problems), PURE over the ledger's rows (each on
     its line in `lines`) and the cost ledger's entries."""
-    plan = view(rows)["plan"]
+    read = view(rows)
+    plan = read["plan"]
     if plan is None:
         return None, [f"cd: {shown} has no plan row"]
     spent = {}
@@ -107,7 +127,7 @@ def compute(rows, lines, shown, entries, now):
     finals = [current_state(rows, item) for item in items]
     merged = finals.count("merged")
     metered = round(sum(spent[row["run_id"]] for _, row in runs), PLACES)
-    estimate = plan["estimate_usd"]
+    estimate = _ran_estimate(read)
     merges = [row["at"] for row in rows if row["kind"] == "state"
               and row["to"] == "merged"]
     wait = _owner_wait_hours(rows)
@@ -118,7 +138,7 @@ def compute(rows, lines, shown, entries, now):
             sum(1 for row in rows if row["kind"] == "answer"), merged),
         "metered_usd": metered,
         "metered_usd_per_merged": _ratio(metered, merged),
-        "estimate_usd": estimate,
+        "estimate_usd": plan["estimate_usd"], "ran_estimate_usd": estimate,
         "estimate_error_pct": (round((metered - estimate) / estimate * 100,
                                      PLACES) if estimate else None),
         "collisions": sum(len(row.get("renumbered_from", []))
@@ -160,6 +180,58 @@ def scorecard_cli(root, args, now):
     if card is not None:
         print(json.dumps(card, indent=2))
     return problems
+
+
+# How many batches `scorecards` compares when no N is given.
+TREND_BATCHES = 5
+
+
+def _is_metric(value):
+    return value is None or (isinstance(value, (int, float))
+                             and not isinstance(value, bool))
+
+
+def _shown(value):
+    return "-" if value is None else str(value)
+
+
+def trend(rows, total):
+    """The report lines comparing scorecard `rows` (oldest first), the
+    latest of `total` scored batches: each
+    metric (a field that is a number or null in every row holding it)
+    across the rows, then its change from the second-last row to the
+    last, or n/a when either is missing."""
+    keys = list(dict.fromkeys(key for row in rows[::-1] for key in row))
+    lines = [f"scorecards: the last {len(rows)} of {total} batch(es):"
+             f" {' -> '.join(row['batch'] for row in rows)}"]
+    for key in keys:
+        values = [row.get(key) for row in rows]
+        if not all(map(_is_metric, values)):
+            continue
+        line = f"  {key}: {' -> '.join(map(_shown, values))}"
+        if len(values) > 1:
+            last, before = values[-1], values[-2]
+            line += (" (n/a)" if None in (last, before)
+                     else f" ({round(last - before, PLACES):+})")
+        lines.append(line)
+    return lines
+
+
+def scorecards_cli(root, args):
+    """`scorecards [N]`: print each metric across the last N scored
+    batches (TREND_BATCHES by default) with its latest change."""
+    if len(args) > 1 or (args and not args[0].isdigit()) \
+            or (args and int(args[0]) < 1):
+        return None
+    rows, problems = history(root)
+    if problems:
+        return problems
+    if not rows:
+        print(f"scorecards: no batch scored yet in {SCORECARDS}")
+        return []
+    window = rows[-(int(args[0]) if args else TREND_BATCHES):]
+    print("\n".join(trend(window, len(rows))))
+    return []
 
 
 # --- closing a batch (WO-0163) -----------------------------------------
@@ -268,22 +340,42 @@ def sort_blocked_branches(git, root, batch, blocked):
     return sorted_branches, []
 
 
+def history(root):
+    """(scorecard rows in file order, problems): the reader of
+    docs/factory/scorecards.jsonl (#797), beside its writer. No file is
+    no history. A line that does not parse, or is not a JSON object with
+    a batch, fails the read naming its line: never a partial history.
+    Rows written before a field existed are returned as written, so a
+    caller reads every shape the file has held."""
+    path = Path(root) / SCORECARDS
+    if not path.is_file():
+        return [], []
+    rows = []
+    for lineno, line in numbered(path.read_text(encoding="utf-8")):
+        try:
+            row = json.loads(line)
+        except ValueError as err:
+            return None, [f"cd: {SCORECARDS}:{lineno} is not valid JSON:"
+                          f" {err}"]
+        if not isinstance(row, dict) or "batch" not in row:
+            return None, [f"cd: {SCORECARDS}:{lineno} is not a scorecard"
+                          " row (a JSON object with a batch)"]
+        rows.append(row)
+    return rows, []
+
+
 def append_scorecard(root, card):
     """(problems): append the batch's one scorecard row, unless a row
     for the batch is already there. APPEND ONLY: never rewrites. The
     read makes a close retried after a failed close-row write score the
     batch once, not twice (review minor 6); batch names are never
     reused, since `open` refuses one whose ledger is on main."""
+    rows, problems = history(root)
+    if problems:
+        return problems
+    if any(row["batch"] == card["batch"] for row in rows):
+        return []
     path = Path(root) / SCORECARDS
-    if path.is_file():
-        for lineno, line in numbered(path.read_text(encoding="utf-8")):
-            try:
-                row = json.loads(line)
-            except ValueError as err:
-                return [f"cd: {SCORECARDS}:{lineno} is not valid JSON:"
-                        f" {err}"]
-            if isinstance(row, dict) and row.get("batch") == card["batch"]:
-                return []
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(card) + "\n")

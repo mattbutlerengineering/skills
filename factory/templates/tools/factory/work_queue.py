@@ -29,6 +29,7 @@ import json
 import sys
 from datetime import datetime, timezone
 
+import assembler
 import cost_ledger
 import factory_config
 from cli import gh_read, gh_runner, report
@@ -37,9 +38,10 @@ from knowledge_plane import (breakdown_files, repo_root, row_blockers,
                              row_done, row_size, row_tracker_issue,
                              row_work_order)
 
-READY_LABEL = "wo:ready-for-agent"
-LIST_ARGS = ["issue", "list", "--label", READY_LABEL, "--state", "open",
-             "--json", "number"]
+# The ready label is assembler's (it is the one detector J reads), so the
+# listing cannot ask for a label the dispatch plane does not apply.
+LIST_ARGS = ["issue", "list", "--label", assembler.READY_LABEL,
+             "--state", "open", "--json", "number"]
 # How far back the ready listing can see. cli.gh_read owns the window —
 # the limit it sends gh and the truncation it reports are the same
 # number — so it can only be typed once, and the duplicate literal this
@@ -110,8 +112,8 @@ def eligible(found, ready_issues):
             # owns diagnosing that drift; this line points at it instead of
             # fetching the whole tracker to duplicate it.
             deferred.append(f"{wo}: no open issue #{row['issue']} carries"
-                            f" {READY_LABEL} — the owner applies that label,"
-                            " and it does nothing on a closed issue; the"
+                            f" {assembler.READY_LABEL} — the owner applies"
+                            " that label, and it does nothing on a closed issue; the"
                             " reconcile sweep reports a row whose issue was"
                             " closed")
         else:

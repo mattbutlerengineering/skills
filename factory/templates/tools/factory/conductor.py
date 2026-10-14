@@ -52,6 +52,10 @@ closing a batch).
         into one actuals row per run, and print as JSON the suggested
         step weights and size budgets with their sample sizes; below
         the floor it suggests nothing. Writes nothing (#799).
+  python3 conductor.py scorecards [N]
+        Print each metric of the last N (default 5) scorecards in
+        docs/factory/scorecards.jsonl, oldest first, with its change
+        from the batch before; appends nothing.
   python3 conductor.py close <batch>
         Once every item is merged or blocked: merge origin/main into
         conductor/<batch>, carry blocked items' spend rows over, append
@@ -718,6 +722,8 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
         problems = conductor_plan.plan_cli(root, argv[1:], now, run, git)
     elif argv[:1] == ["calibrate"]:
         problems = conductor_close.calibrate_cli(root, argv[1:])
+    elif argv[:1] == ["scorecards"]:
+        problems = conductor_close.scorecards_cli(root, argv[1:])
     elif argv[:1] == ["open"] and len(argv) >= 3:
         problems = conductor_plan.open_cli(root, argv[1:], now, run, git,
                                            netrc)
