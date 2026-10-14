@@ -183,17 +183,18 @@ def _choices(options):
     return said[0].upper() + said[1:] + "?"
 
 
-def stall_rows(rows, now, entry, reason, recommended, why):
+def stall_rows(rows, now, entry, reason, cause, recommended, why):
     """[state row, stall ask] for an item that stalls in its current
-    state. retry-up is offered only when the run leaving this state
-    (if any — a dead runner leaves none) was not already at the top
-    band: the planned band alone misses a prior retry-up bump (#732)."""
+    state, for `reason` of class `cause` (conductor.CAUSES, #819).
+    retry-up is offered only when the run leaving this state (if any — a
+    dead runner leaves none) was not already at the top band: the
+    planned band alone misses a prior retry-up bump (#732)."""
     item = entry["item"]
     found = item_view(rows, item)
     state, finishing = found["state"], found["finishing"]
     options = stall_options(finishing["band"] if finishing is not None
                             else found["steps"].get(state, {}).get("band"))
-    moved = state_row(now, item, state, "stalled", reason)
+    moved = state_row(now, item, state, "stalled", reason, cause=cause)
     asked, problems = ask_row(
         rows + [moved], now, item, "stall",
         f"{item} stalled in {state}: {reason}. {_choices(options)}",
@@ -242,14 +243,14 @@ def worker_advice(rows, entry, step, band, reason):
     return "retry", ATTEMPT_WHY.format(n=len(earlier) + 1, step=step)
 
 
-def queue_stall(root, batch, now, item, reason, recommended, why):
+def queue_stall(root, batch, now, item, reason, cause, recommended, why):
     """(rows written, problems): stall the item and queue its ask."""
     def build(rows):
         found = item_view(rows, item)
         if found["unknown"]:
             return None, [found["unknown"]]
-        return stall_rows(rows, now, found["entry"], reason, recommended,
-                          why)
+        return stall_rows(rows, now, found["entry"], reason, cause,
+                          recommended, why)
     return append(root, batch, build)
 
 
@@ -307,8 +308,8 @@ def record_verdict(root, batch, now, item, verdict, reviewer_run, head):
             reason = "the reviewer requested changes; one fix step"
             if "build" not in _successors(entry["type"], "review", rows,
                                           item):
-                return stall_rows(rows, now, entry, CHANGES_AGAIN, BLOCK,
-                                  CHANGES_WHY)
+                return stall_rows(rows, now, entry, CHANGES_AGAIN,
+                                  "changes-again", BLOCK, CHANGES_WHY)
         problems = transition_problems(rows, item, to, fields)
         if problems:
             return None, problems
@@ -429,7 +430,8 @@ def _in_flight(rows, now, entry, launched, alive):
         if idle <= limit:
             return True, []
         reason = f"no state change for over {limit} minutes"
-    written, _ = stall_rows(rows, now, entry, reason, "retry", IDLE_WHY)
+    written, _ = stall_rows(rows, now, entry, reason, "runner-lost",
+                            "retry", IDLE_WHY)
     return False, written
 
 
@@ -442,7 +444,7 @@ def _merge_gone(rows, now, entry, merging, alive):
         return []
     written, _ = stall_rows(
         rows, now, entry, f"its merge turn (pid {pid}) is gone with no"
-        " merged row", "retry", IDLE_WHY)
+        " merged row", "runner-lost", "retry", IDLE_WHY)
     return written
 
 
