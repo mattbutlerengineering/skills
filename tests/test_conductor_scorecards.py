@@ -121,5 +121,29 @@ class TestScorecardsCli(unittest.TestCase):
                 self.assertIn("python3 conductor.py scorecards [N]", out)
 
 
+class TestConductClosesWithARetro(unittest.TestCase):
+    """#818: the scorecards and calibrate verbs need a reader, so the
+    conduct skill's Close ends by reading them in the session that ran
+    the batch. The skill prose is the runtime interface (it ships in the
+    plugin), so the retro step is pinned here."""
+
+    def text(self):
+        path = Path(__file__).resolve().parents[1] / "skills" / "conduct" \
+            / "SKILL.md"
+        return " ".join(path.read_text(encoding="utf-8").split())
+
+    def test_close_ends_by_reading_the_trend_and_the_calibration(self):
+        text = self.text()
+        self.assertIn("### 7. Read the batch back", text)
+        self.assertIn("python3 conductor.py scorecards 5", text)
+        self.assertIn("python3 conductor.py calibrate", text)
+        self.assertIn("name the metric that moved", text)
+
+    def test_the_retro_names_where_each_finding_goes(self):
+        text = self.text()
+        self.assertIn("`conductor.step_weights` and `budgets_usd`", text)
+        self.assertIn("a plain issue with a `type:*` label", text)
+
+
 if __name__ == "__main__":
     unittest.main()
