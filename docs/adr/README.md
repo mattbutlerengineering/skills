@@ -112,3 +112,4 @@ the canonical vocabulary.
 | [0089](0089-an-enforced-standard-may-cite-a-standing-adr.md) | An enforced standard may cite a standing ADR | accepted |
 | [0090](0090-the-gate-timeline-read-and-open-queues-join-human-gates.md) | The gate timeline read and the open queues join human_gates | accepted |
 | [0091](0091-the-restructure-blockers-re-measured-and-pinned.md) | The tools/factory restructure blockers, re-measured and pinned | accepted (Owner, 2026-10-13) |
+| [0092](0092-a-derived-trace-view-joins-the-knowledge-owners-over-time.md) | A derived trace view joins the knowledge owners over time | accepted (Owner, 2026-10-14) |
