@@ -251,6 +251,8 @@ MIRRORS = (
     ("conductor_close.py", "tools/factory/conductor_close.py", identity),
     ("conductor_consent.py", "tools/factory/conductor_consent.py",
      identity),
+    ("conductor_calibrate.py", "tools/factory/conductor_calibrate.py",
+     identity),
     (".github/workflows/validator.yml",
      ".github/workflows/validator.yml", identity),
     (".github/workflows/assembler.yml",

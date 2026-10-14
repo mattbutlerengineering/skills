@@ -421,6 +421,11 @@ REWORK_LEDGER = "\n".join([
     ledger_row("#31", "review", "stalled", "2026-08-11T10:00:00Z",
                "the reviewer requested changes a second time"),
 ]) + "\n"
+# On main a ledger lands with its closing PR, so it ends in a close row.
+CLOSE_ROW = json.dumps({"at": "2026-08-12T10:00:00Z", "kind": "close",
+                        "item": None, "merged": ["#7"],
+                        "blocked": ["#31"]}) + "\n"
+CLOSED_LEDGER = REWORK_LEDGER + CLOSE_ROW
 
 
 class TestConductorRework(unittest.TestCase):
@@ -442,38 +447,75 @@ class TestConductorRework(unittest.TestCase):
             return outputs, problems, create[create.index("--body") + 1]
 
     def test_a_review_sent_back_to_build_is_mined(self):
-        outputs, problems, body = self.mine({"oct": REWORK_LEDGER})
+        outputs, problems, body = self.mine({"oct": CLOSED_LEDGER})
         self.assertEqual(problems, [])
         self.assertIn("- **WO-0101** — 1 correction(s)\n"
                       "  - batch oct review sent back to build at"
                       " 2026-08-10T10:00:00Z\n", body)
 
     def test_a_second_change_request_on_an_unmirrored_item_is_mined(self):
-        _, _, body = self.mine({"oct": REWORK_LEDGER})
+        _, _, body = self.mine({"oct": CLOSED_LEDGER})
         self.assertIn("- **#31** — 1 correction(s)\n"
                       "  - batch oct review stalled on a second change"
                       " request at 2026-08-11T10:00:00Z\n", body)
 
     def test_rework_counts_toward_the_reason_line(self):
-        outputs, _, _ = self.mine({"oct": REWORK_LEDGER})
+        outputs, _, _ = self.mine({"oct": CLOSED_LEDGER})
         self.assertEqual(outputs["reason"],
                          "rm: 2 candidate WO(s), 2 correction(s) mined")
 
     def test_the_sources_line_counts_the_batch_ledgers(self):
-        _, _, body = self.mine({"oct": REWORK_LEDGER})
+        _, _, body = self.mine({"oct": CLOSED_LEDGER})
         self.assertIn("review rework from 1 of 1 batch ledger(s).", body)
 
-    def test_an_unreadable_ledger_is_a_problem_and_counted(self):
+    def test_an_unreadable_ledger_is_a_counted_gap_not_a_problem(self):
+        """#817: closed ledgers on main are append-only evidence, so a
+        problem here would turn the weekly run red every week until
+        history is repaired by hand. The gap is named in Sources."""
         outputs, problems, body = self.mine(
-            {"oct": REWORK_LEDGER, "bad": "not json\n"})
-        self.assertEqual(len(problems), 1)
-        self.assertTrue(problems[0].startswith(
-            "rm: cd: docs/factory/batches/bad/ledger.jsonl:1 is not valid"
-            " JSON"), problems[0])
+            {"oct": CLOSED_LEDGER, "bad": "not json\n"})
+        self.assertEqual(problems, [])
         self.assertIn("review rework from 1 of 2 batch ledger(s)"
-                      " (1 unreadable).", body)
+                      " (1 unreadable: bad).", body)
         self.assertEqual(outputs["reason"],
                          "rm: 2 candidate WO(s), 2 correction(s) mined")
+
+    def test_a_directory_that_is_not_a_batch_is_a_counted_gap(self):
+        _, problems, body = self.mine(
+            {"oct": CLOSED_LEDGER, "oct-2": CLOSED_LEDGER})
+        self.assertEqual(problems, [])
+        self.assertIn("review rework from 1 of 2 batch ledger(s)"
+                      " (1 unreadable: oct-2).", body)
+
+    def test_an_unclosed_ledger_is_counted_not_yet_mineable(self):
+        """A batch's rework is final only once it closes; until then it
+        is shown as a gap the queue could not see, never mined."""
+        outputs, problems, body = self.mine(
+            {"oct": CLOSED_LEDGER, "nov": REWORK_LEDGER})
+        self.assertEqual(problems, [])
+        self.assertIn("review rework from 1 of 2 batch ledger(s)"
+                      " (1 not yet mineable: never closed).", body)
+        self.assertEqual(outputs["reason"],
+                         "rm: 2 candidate WO(s), 2 correction(s) mined")
+
+    def test_both_gaps_share_the_sources_line(self):
+        _, _, body = self.mine({"oct": CLOSED_LEDGER, "nov": REWORK_LEDGER,
+                                "bad": "not json\n"})
+        self.assertIn("review rework from 1 of 3 batch ledger(s)"
+                      " (1 unreadable: bad; 1 not yet mineable: never"
+                      " closed).", body)
+
+    def test_a_ledger_gap_never_fails_the_run(self):
+        """The rule 'gaps are reported, not fatal', on main()'s exit."""
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = tree(tmp)
+            fixture.write("docs/factory/batches/bad/ledger.jsonl",
+                          "not json\n")
+            code, out = cli_contract.capture(
+                rejection_mining.main, ["mine"], env={},
+                root=fixture.root, run=gh(), clock=clock)
+        self.assertEqual(code, 0, out)
+        self.assertIn("rejection_mining: 0 problem(s)", out)
 
 
 class TestWorkflowPermissions(unittest.TestCase):

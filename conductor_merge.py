@@ -714,7 +714,7 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
         return None, problems
     if drift is not None:
         _, problems = flow.queue_stall(root, batch, clock(), item, drift,
-                                       BLOCK, DRIFT_WHY)
+                                       "merge-drift", BLOCK, DRIFT_WHY)
         return {"item": item, "stall": drift}, problems
     # The turn's pid lets `next` stall a turn that died mid-way.
     _, problems = flow.move(root, batch, clock(), item, "merging",
@@ -728,7 +728,8 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
                                  gate, policy)
     except Stall as stall:
         _, problems = flow.queue_stall(
-            root, batch, clock(), item, stall.reason, stall.recommended,
+            root, batch, clock(), item, stall.reason, "merge-failed",
+            stall.recommended,
             RETRY_WHY if stall.recommended == RETRY else BLOCK_WHY)
         return {"item": item, "stall": stall.reason}, problems
     if problems:
