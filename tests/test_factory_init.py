@@ -303,38 +303,21 @@ class TestPayloadToolsImport(unittest.TestCase):
         its source rather than listed here.
 
         Two shapes exist and both are followed: a literal
-        `import_module("label_sync")`, and a loop variable bound from a
-        module-level table's `.items()`, whose keys are the module names
-        (LABEL_DECLARERS). A third shape is returned as unfollowed and
-        fails the test loudly rather than being silently skipped — a
-        derivation that quietly covers nothing is the same silence this
-        test exists to close.
+        `import_module("label_sync")`, and a loop variable bound by
+        `for <name> in label_declarers()` — modules detector J discovers
+        beside gates.py itself (issue #856), which therefore ship with it
+        by construction and add no name to check. A third shape is
+        returned as unfollowed and fails the test loudly rather than
+        being silently skipped — a derivation that quietly covers nothing
+        is the same silence this test exists to close.
         """
         tree = ast.parse((self.REPO / "gates.py").read_text(encoding="utf-8"))
-        tables = {t.id: node.value for node in tree.body
-                  if isinstance(node, ast.Assign)
-                  and isinstance(node.value, ast.Dict)
-                  for t in node.targets if isinstance(t, ast.Name)}
-
-        def table_keys(name):
-            """The module names a `for <name>, _ in TABLE.items()` binds,
-            or None when nothing in the tree binds it that way."""
-            for node in ast.walk(tree):
-                if not (isinstance(node, ast.For)
-                        and isinstance(node.target, ast.Tuple)
-                        and any(isinstance(e, ast.Name) and e.id == name
-                                for e in node.target.elts)):
-                    continue
-                for call in ast.walk(node.iter):
-                    if (isinstance(call, ast.Call)
-                            and isinstance(call.func, ast.Attribute)
-                            and call.func.attr == "items"
-                            and isinstance(call.func.value, ast.Name)
-                            and call.func.value.id in tables):
-                        return {k.value
-                                for k in tables[call.func.value.id].keys
-                                if isinstance(k, ast.Constant)}
-            return None
+        discovered = {node.target.id for node in ast.walk(tree)
+                      if isinstance(node, ast.For)
+                      and isinstance(node.target, ast.Name)
+                      and isinstance(node.iter, ast.Call)
+                      and isinstance(node.iter.func, ast.Name)
+                      and node.iter.func.id == "label_declarers"}
 
         names, unfollowed = set(), []
         for node in ast.walk(tree):
@@ -345,13 +328,9 @@ class TestPayloadToolsImport(unittest.TestCase):
             arg = node.args[0]
             if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                 names.add(arg.value)
-                continue
-            keys = table_keys(arg.id) if isinstance(arg, ast.Name) else None
-            if keys is None:
+            elif not (isinstance(arg, ast.Name) and arg.id in discovered):
                 unfollowed.append(f"gates.py:{node.lineno}"
                                   f" import_module({ast.unparse(arg)})")
-            else:
-                names |= keys
         return names, unfollowed
 
     def test_every_lazily_imported_module_ships(self):
