@@ -88,10 +88,9 @@ import standards_index
 from cli import read_event, read_file, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
-                             adr_record, fenced, local_link_targets,
-                             parse_run, repo_root, resolve_link, row_done,
-                             row_pre_ledger,
-                             run_dirs, status_head, unfenced)
+                             adr_record, breakdown_rows, fenced,
+                             local_link_targets, parse_run, repo_root,
+                             resolve_link, run_dirs, status_head, unfenced)
 from protocol import read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
@@ -309,11 +308,10 @@ def check_wo_citation(root, parsed=None):
         if entry["breakdown"] is None:
             continue
         rel = (entry["path"] / "breakdown.md").relative_to(root)
-        for lineno, line in enumerate(entry["breakdown"], 1):
-            wo = WO_TOKEN.search(line)
-            if wo and not PRD_TOKEN.search(line):
+        for row in breakdown_rows(entry["breakdown"]):
+            if row["wo"] and not row["prd_ids"]:
                 problems.append(
-                    f"A: {rel}:{lineno} work-order row {wo.group(0)}"
+                    f"A: {rel}:{row['lineno']} work-order row {row['wo']}"
                     " cites no PRD id")
     return problems
 
@@ -365,15 +363,11 @@ def collect_prd_ids(root, parsed):
 
 
 def collect_wo_rows(parsed):
-    """Set of WO tokens that appear in any breakdown.md row. Pure over
-    `parsed`."""
-    rows = set()
-    for entry in parsed["runs"]:
-        if entry["breakdown"] is None:
-            continue
-        for line in entry["breakdown"]:
-            rows.update(WO_TOKEN.findall(line))
-    return rows
+    """Set of work orders a breakdown.md row carries (knowledge_plane's
+    row record, issue #737). Pure over `parsed`."""
+    return {row["wo"] for entry in parsed["runs"]
+            if entry["breakdown"] is not None
+            for row in breakdown_rows(entry["breakdown"]) if row["wo"]}
 
 
 def check_link_integrity(root, parsed=None):
@@ -601,8 +595,8 @@ def check_blueprint_drift(root, parsed=None):
 def merged_wo_rows(root, parsed):
     """(breakdown path, lineno, WO token) for every checked breakdown row —
     the artifact-side record that a work order merged (ADR-0004). Rows
-    carrying the trailing (pre-ledger) annotation — knowledge_plane's
-    row_pre_ledger grammar — are excluded: they merged before the ledger
+    carrying the trailing (pre-ledger) annotation — the row record's
+    `pre_ledger` field — are excluded: they merged before the ledger
     existed and G owes them no ledger line (ADR-0043). Pure over `parsed`;
     `root` only relativizes the paths returned."""
     rows = []
@@ -610,11 +604,9 @@ def merged_wo_rows(root, parsed):
         if entry["breakdown"] is None:
             continue
         rel = (entry["path"] / "breakdown.md").relative_to(root)
-        for lineno, line in enumerate(entry["breakdown"], 1):
-            wo = WO_TOKEN.search(line)
-            if (row_done(line) and wo
-                    and not row_pre_ledger(line)):
-                rows.append((rel, lineno, wo.group(0)))
+        rows += [(rel, row["lineno"], row["wo"])
+                 for row in breakdown_rows(entry["breakdown"])
+                 if row["done"] and row["wo"] and not row["pre_ledger"]]
     return rows
 
 
@@ -1282,10 +1274,9 @@ def check_prd_coverage(root, parsed=None):
         if isinstance(date, str) and date < COVERAGE_ADOPTED:
             continue
         citations = [cited.strip().casefold()
-                     for line in entry["breakdown"]
-                     if WO_TOKEN.search(line) and prd_id in PRD_TOKEN.findall(
-                         line)
-                     for cited in SECTION_CITATION.findall(line)]
+                     for row in breakdown_rows(entry["breakdown"])
+                     if row["wo"] and prd_id in row["prd_ids"]
+                     for cited in SECTION_CITATION.findall(row["text"])]
         rel = (entry["path"] / "prd.md").relative_to(root)
         for lineno, title, waived in _prd_sections(entry["prd"]):
             if not waived and not _cites(citations, title):

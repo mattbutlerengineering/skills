@@ -80,20 +80,20 @@ import sys
 import tempfile
 from pathlib import Path
 
+import assembler
 import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, label_names, report, write_outputs
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             repo_root, row_tracker_issue, row_work_order,
-                             unfenced)
+                             breakdown_rows, repo_root, unfenced)
 
 LIFECYCLE_PREFIX = "wo:"
-# The dispatch-queue state (ADR-0032). The claim's idempotency verdict is
-# "did THIS event take the order out of ready" — so the label is named
-# here, not inferred from the taxonomy's ordering.
-READY_LABEL = "wo:ready-for-agent"
+# The dispatch-queue state (ADR-0032) is assembler.READY_LABEL. The
+# claim's idempotency verdict is "did THIS event take the order out of
+# ready" — so the label is named, not inferred from the taxonomy's
+# ordering, and named by its one owner, the declaration detector J reads.
 # The row and tracker-mirror grammars are knowledge_plane's — the same
 # rules the assembler dispatches with, so the two cannot diverge
 # (ADR-0039).
@@ -118,12 +118,11 @@ def tracker_issue(root, wo):
     breakdown row — ADR-0032: the dispatch mirror is one-way, so the
     knowledge plane, not the issue, says which issue a work order owns."""
     for _, lines in breakdown_files(root):
-        for line in lines:
-            if row_work_order(line) != wo:
+        for row in breakdown_rows(lines):
+            if row["wo"] != wo:
                 continue
-            issue = row_tracker_issue(line)
-            if issue is not None:
-                return issue, []
+            if row["issue"] is not None:
+                return row["issue"], []
             return None, [f"V: {wo} has no (tracker: #N) mirror on its"
                           " breakdown row"]
     return None, [f"V: {wo} has no breakdown row"]
@@ -489,11 +488,12 @@ def run_claim(root, label, issue, env, run=gh_runner):
     # The verdict is "did the flip take the order out of ready" — a
     # taxonomy that lost the ready label would make every verdict false
     # and silently stop all dispatch. Fail loudly instead.
+    ready = assembler.READY_LABEL
     removed, problems = _known_issue_flip(root, label, issue, run,
-                                          require=(READY_LABEL,))
+                                          require=(ready,))
     if problems:
         return problems
-    claimed = READY_LABEL in removed
+    claimed = ready in removed
     write_outputs(env, {"transitioned": "true" if claimed else "false"})
     return []
 

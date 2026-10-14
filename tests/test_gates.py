@@ -85,6 +85,19 @@ class TestWoCitation(unittest.TestCase):
             "A: docs/features/demo/breakdown.md:2 work-order row"
             " WO-0002 cites no PRD id"])
 
+    def test_a_prose_line_naming_a_work_order_is_not_a_row(self):
+        """A's roster says every work-order ROW cites a PRD id (issue
+        #737): a Notes sub-bullet or a prose line that merely names a
+        work order is not a row, so citing no PRD is not A's business."""
+        root = Path("/repo")
+        parsed = parsed_run(runs=[run_entry(
+            root / "docs/features/demo", breakdown=[
+                "- [x] WO-0001 do the thing (PRD-0001 §Solution)",
+                "  - Notes: WO-0001 follows on from WO-0002",
+                "WO-0002 shipped first.",
+                "- [x]WO-0003 no space after the box"])])
+        self.assertEqual(gates.check_wo_citation(root, parsed), [])
+
 
 class TestLinkIntegrity(unittest.TestCase):
     """C is pure over `parsed` (issue #442): its own logic never touches
@@ -463,9 +476,9 @@ class TestCostLedger(unittest.TestCase):
                 " WO-0002 has no line in docs/factory/costs.jsonl"])
 
     def test_a_row_no_other_accessor_can_parse_is_not_a_merged_order(self):
-        """G reaches row_done through a raw WO_TOKEN.search rather than
-        through a sibling accessor, so it is the one place the checked-row
-        grammar and the row grammar can disagree in production. A line
+        """G once reached row_done through a raw WO_TOKEN.search, the one
+        place the checked-row grammar and the row grammar could disagree
+        in production; it now reads the row record (issue #737). A line
         whose box has no trailing space is no row to work_queue, the
         reconcile sweep or the dashboard; it must be no merged work order
         here either, or G reports a WO id nothing else can see."""
@@ -1428,6 +1441,25 @@ class TestLabelWiring(unittest.TestCase):
             self.assertIn(f"L: .github/labels.json[{len(entries)}] entry"
                           " lacks color, description", found)
 
+    def test_every_tool_naming_the_ready_label_is_a_site_j_reads(self):
+        """J reads the ready label off its declarers only, so a tool that
+        types its own copy is invisible to it: the copy can drift, pass
+        every offline gate, and fail in the dispatch plane. Every root
+        tool whose code holds the literal must be one of J's sites — in
+        practice, the one owner (issue #750)."""
+        import ast
+        import assembler
+        ready = assembler.READY_LABEL
+
+        def names_it(path):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            return any(isinstance(node, ast.Constant) and node.value == ready
+                       for node in ast.walk(tree))
+
+        naming = sorted(path.name for path in self.REPO.glob("*.py")
+                        if names_it(path))
+        self.assertEqual(naming, gates.declared_labels(self.REPO)[ready])
+
     def test_the_extraction_actually_finds_the_shipped_labels(self):
         """A detector whose extraction silently stops matching is
         vacuously clean forever — worse than no detector. This pins that
@@ -1687,6 +1719,15 @@ class TestPrdCoverage(unittest.TestCase):
         rows = ["- [ ] **WO-0001** (PRD-0001 §Solution, §Out of scope)"]
         self.assertEqual(self.check(prd=prd, breakdown=rows), [
             "O: docs/features/demo/prd.md:12 PRD-0001 §Actors is"
+            " cited by no breakdown row and carries no coverage waiver"])
+
+    def test_a_prose_citation_naming_a_work_order_covers_nothing(self):
+        """Coverage is a work-order ROW's citation (issue #737): a Notes
+        sub-bullet carrying a WO token and a PRD citation is prose."""
+        rows = [self.ROWS[0],
+                "  - Notes: WO-0001 also touches PRD-0001 §Out of scope"]
+        self.assertEqual(self.check(breakdown=rows), [
+            "O: docs/features/demo/prd.md:17 PRD-0001 §Out of scope is"
             " cited by no breakdown row and carries no coverage waiver"])
 
     def test_a_row_citing_another_prd_covers_nothing_here(self):

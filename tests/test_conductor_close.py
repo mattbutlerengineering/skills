@@ -36,8 +36,19 @@ def at(hour, minute=0):
     return f"2026-10-10T{hour:02d}:{minute:02d}:00Z"
 
 
+# Each item's $10 estimate split across its steps as their ceilings,
+# which conductor_plan.ceilings makes sum to the item's estimate.
+CEILINGS = {"feature": {"spec": 2, "build": 4, "verify": 1, "review": 2,
+                        "ship": 1},
+            "order": {"build": 5, "verify": 2, "review": 2, "ship": 1}}
+CEILINGS["fix"] = CEILINGS["feature"]
+
+
 def plan_item(key, item_type):
-    return {"item": key, "type": item_type, "size": "M", "steps": [],
+    steps = [{"step": step, "charter": "c", "band": "implementation",
+              "model": "s", "effort": "medium", "ceiling_usd": ceiling}
+             for step, ceiling in CEILINGS[item_type].items()]
+    return {"item": key, "type": item_type, "size": "M", "steps": steps,
             "estimate_usd": 10, "after": []}
 
 
@@ -147,7 +158,7 @@ EXPECTED = {
     "batch": "b1", "at": "2026-10-10T16:00:00Z", "items": 3, "merged": 2,
     "blocked": 1, "owner_touches_per_merged": 2.0, "metered_usd": 11.0,
     "metered_usd_per_merged": 5.5, "estimate_usd": 40,
-    "estimate_error_pct": -72.5, "collisions": 2, "stalls": 1,
+    "ran_estimate_usd": 15, "estimate_error_pct": -26.6667, "collisions": 2, "stalls": 1,
     "escalations": 1, "review_changes_per_item": 0.6667,
     "start_to_last_merge_s": 18000, "merged_per_owner_wait_hour": 0.8,
     "policy_compliance": 0.6, "conductor_session": "unmetered"}
@@ -174,6 +185,44 @@ class TestScorecard(unittest.TestCase):
             {"merged": 0, "owner_touches_per_merged": None,
              "metered_usd_per_merged": None, "start_to_last_merge_s": None,
              "merged_per_owner_wait_hour": 0.0})
+
+    def test_estimate_error_is_over_the_steps_that_ran(self):
+        # #798: #13 blocks after its spec step, which cost exactly its $2
+        # ceiling. Its unrun build, verify, review and ship are not
+        # savings: the error is 0, and the whole plan's $40 stays in
+        # estimate_usd beside the $2 that ran.
+        rows = [PLAN, run("#13", "spec", "architecture_review", "f",
+                          "high", ["f"]),
+                state("#13", "spec", "blocked", at(12))]
+        card, problems = self.score(lines(rows), [
+            spend("conductor-b1-13-spec-1", 2.0, "#13")])
+        self.assertEqual(problems, [])
+        self.assertEqual(
+            {key: card[key] for key in ("metered_usd", "estimate_usd",
+                                        "ran_estimate_usd",
+                                        "estimate_error_pct")},
+            {"metered_usd": 2.0, "estimate_usd": 40,
+             "ran_estimate_usd": 2, "estimate_error_pct": 0.0})
+
+    def test_the_approved_gate_reprices_the_build_that_ran(self):
+        # The gate ask re-prices the build at one run per breakdown row
+        # (build_usd); the build that ran is judged against that price,
+        # not the plan's one-run ceiling.
+        gate = dict(ask("ask-2", "#12", "gate", at(11)), build_usd=12.0)
+        rows = [PLAN, run("#12", "spec", "architecture_review", "f",
+                          "high", ["f"]),
+                gate, answer("ask-2", "approve", at(12), "#12"),
+                run("#12", "build", "implementation", "s", "medium", ["s"])]
+        card, problems = self.score(lines(rows), SPEND[:2])
+        self.assertEqual(problems, [])
+        self.assertEqual((card["ran_estimate_usd"],
+                          card["estimate_error_pct"]), (14.0, -57.1429))
+
+    def test_nothing_run_has_no_estimate_error(self):
+        card, problems = self.score(lines([PLAN]), [])
+        self.assertEqual(problems, [])
+        self.assertEqual((card["ran_estimate_usd"],
+                          card["estimate_error_pct"]), (0, None))
 
     def test_a_line_that_does_not_parse_fails_naming_file_and_line(self):
         text = lines(ROWS[:2]) + "{not json\n" + lines(ROWS[2:])

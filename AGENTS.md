@@ -56,7 +56,9 @@ pre-pass, deliberately **not** a gate:
   reader/resolvers, `cost_ledger.py` cost-ledger shape), plus
   `human_gates.py` (ADR-0056 — what a gate is: its ledger name, its
   queue and passed labels, its digest heading, the label-event walk, and
-  the stay partition the digest and the miner divide between them) and
+  the stay partition the digest and the miner divide between them;
+  ADR-0090 — the one timeline read, through the injected gh runner, and
+  the open queues the digest and the dashboard render) and
   `plane_drift.py` (ADR-0060 — the ADR-0032 cross-plane drift rule the
   reconcile sweep files and the dashboard renders; `absent_is_drift` is
   the caller's claim about its own listing). A new shared module needs

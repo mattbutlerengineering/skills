@@ -13,7 +13,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import assembler
 import cli
 import validator
 
@@ -896,6 +898,23 @@ class TestRunClaim(unittest.TestCase):
                 "issue", "edit", "109",
                 "--add-label", "wo:in-progress",
                 "--remove-label", "wo:ready-for-agent"]])
+            self.assertEqual(self.outputs(env), "transitioned=true\n")
+
+    def test_the_claim_reads_the_ready_label_from_its_owner(self):
+        # assembler owns the dispatch-queue label (issue #750); a claim
+        # that kept its own copy would judge readiness by a label the
+        # dispatch plane no longer applies
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(
+                assembler, "READY_LABEL", "wo:queued"):
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", json.dumps(
+                [{"name": name, "color": "ededed", "description": "lifecycle"}
+                 for name in LIFECYCLE + ["wo:queued"]]))
+            env = self.env(tmp)
+            run = gh(labels=["wo:queued"])
+            problems = validator.run_claim(
+                tree.root, "wo:in-progress", "109", env=env, run=run)
+            self.assertEqual(problems, [])
             self.assertEqual(self.outputs(env), "transitioned=true\n")
 
     def test_a_repeat_claim_is_a_no_op_not_an_error(self):

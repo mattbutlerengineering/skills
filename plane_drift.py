@@ -29,7 +29,7 @@ strings for malformed input, and drift findings that are plain lines for
 the caller to render or file.
 """
 from cli import label_names
-from knowledge_plane import row_done, row_tracker_issue
+from knowledge_plane import breakdown_rows
 
 
 def issue_lifecycle(issue):
@@ -87,8 +87,8 @@ def reconcile_drift(rows, issues, absent_is_drift=True):
         index[issue["number"]] = issue
     drift, mirrored = [], {}
     for path, lines in rows:
-        for line in lines:
-            number = row_tracker_issue(line)
+        for row in breakdown_rows(lines):
+            number = row["issue"]
             if number is None:
                 continue
             mirrored.setdefault(number, []).append(path)
@@ -101,7 +101,7 @@ def reconcile_drift(rows, issues, absent_is_drift=True):
             labels = issue_lifecycle(issue)
             merged = "wo:merged" in labels
             state = str(issue.get("state") or "").lower()
-            if row_done(line):
+            if row["done"]:
                 if not merged:
                     drift.append(f"{path}: a checked row mirrors #{number},"
                                  f" which carries {_describe(labels)} — the"

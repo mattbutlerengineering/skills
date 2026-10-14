@@ -2,8 +2,6 @@
 the dispatch-plane row grammar, the run walk, and repo_root — asserted
 at the seam's own interface instead of once per caller suite.
 """
-import ast
-import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,10 +13,10 @@ from gates_selftest import (clean_repo_fixture,
                             wo_citation_defect_fixture)
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              PRD_TOKEN, ROW, WO_TOKEN, Fence,
-                             breakdown_files, fenced, local_link_targets,
-                             resolve_link, mirror_map, parse_run, repo_root, row_done,
-                             row_blockers, row_unreadable_blockers,
-                             row_work_order, run_dirs, sanitize, unfenced)
+                             breakdown_files, breakdown_rows, fenced,
+                             local_link_targets, mirror_map, parse_row,
+                             parse_run, repo_root, resolve_link, run_dirs,
+                             sanitize, unfenced)
 
 
 class TestTokens(unittest.TestCase):
@@ -39,33 +37,93 @@ class TestTokens(unittest.TestCase):
         self.assertIsNone(CLOSES_TOKEN.search("enclosed #12"))
 
 
-class TestRowGrammar(unittest.TestCase):
-    """One rule for 'is this a breakdown row, and whose is it' — the
-    grammar validator, assembler, and orientation_pack all dispatch on."""
+class TestParseRow(unittest.TestCase):
+    """The breakdown row as one parsed record (issue #737): every
+    dispatch-plane reader takes its fields from parse_row or
+    breakdown_rows, so 'is this a row, and what does it say' has one
+    answer — the per-line accessors it composes have no other caller."""
 
-    def test_first_token_is_the_work_order(self):
-        line = "- [ ] **WO-0002** thing (PRD-0001 §2) after WO-0001"
-        self.assertEqual(row_work_order(line), "WO-0002")
+    FULL = ("- [ ] **WO-0017** gate-queue digest — size:S,"
+            " blocked by: WO-0001, WO-0003 (PRD-0001 §Solution)"
+            " (tracker: #245)")
 
-    def test_checked_and_star_and_plus_bullets_are_rows(self):
-        for line in ("- [x] WO-0002 done", "* [ ] WO-0002 t",
-                     "+ [X] WO-0002 t", "  - [ ] WO-0002 indented"):
+    def test_a_full_row_parses_to_every_field(self):
+        self.assertEqual(parse_row(self.FULL), {
+            "text": self.FULL, "wo": "WO-0017", "done": False,
+            "issue": 245, "size": "S", "title": "gate-queue digest",
+            "blockers": ["WO-0001", "WO-0003"], "unreadable": None,
+            "pre_ledger": False, "prd_ids": ["PRD-0001"]})
+
+    def test_checked_rows_across_every_bullet_and_indent(self):
+        for line in ("- [x] WO-0002 done", "- [X] WO-0002 done",
+                     "-\t[x] WO-0002 done", "+ [x] WO-0002 done",
+                     "* [x] WO-0002 done", "  - [x] WO-0002 indented"):
             with self.subTest(line=line):
-                self.assertEqual(row_work_order(line), "WO-0002")
+                row = parse_row(line)
+                self.assertEqual((row["wo"], row["done"]), ("WO-0002", True))
+        self.assertFalse(parse_row("- [ ] WO-0002 open")["done"])
 
-    def test_prose_and_sub_bullets_are_not_rows(self):
+    def test_prose_sub_bullets_and_malformed_boxes_are_not_rows(self):
+        # ROW requires whitespace after the box, so a checked box glued
+        # to its text is no row — done or otherwise.
         for line in ("WO-0002 in prose", "  - Accept: cites WO-0002",
-                     "## WO-0002 heading", "- [ballot] WO-0002"):
+                     "  - Notes: WO-0002 (PRD-0001 §Solution) (tracker: #7)",
+                     "## WO-0002 heading", "- [ballot] WO-0002",
+                     "-[x] WO-0002 t", "text - [x] WO-0002 t", "",
+                     "- [x]a WO-0002 no space after the box",
+                     "- [x]**WO-0003** bold straight after the box",
+                     "A note about the mark. (pre-ledger)"):
             with self.subTest(line=line):
-                self.assertIsNone(row_work_order(line))
+                self.assertIsNone(parse_row(line))
 
-    def test_a_row_without_a_token_is_nobodys(self):
-        self.assertIsNone(row_work_order("- [ ] anonymous work"))
+    def test_the_first_token_is_the_work_order_and_may_be_absent(self):
+        line = "- [ ] **WO-0002** thing (PRD-0001 §2) after WO-0001"
+        self.assertEqual(parse_row(line)["wo"], "WO-0002")
+        self.assertEqual(parse_row(line)["blockers"], [])
+        self.assertIsNone(parse_row("- [ ] anonymous work")["wo"])
 
-    def test_bullet_needs_whitespace_before_the_box(self):
-        # -[x] is not a markdown checkbox; a tab is whitespace and is.
-        self.assertIsNone(row_work_order("-[x] WO-0002 t"))
-        self.assertEqual(row_work_order("-\t[x] WO-0002 t"), "WO-0002")
+    def test_unreadable_blockers_are_named_not_dropped(self):
+        def row(clause):
+            return parse_row(f"- [ ] **WO-0002** t — size:S, blocked by:"
+                             f" {clause} (PRD-0001 §2) (tracker: #7)")
+        for clause in ("WO-0001", "WO-0001, WO-0003", "WO-0001 and WO-0003",
+                       "WO-0001; WO-0003", "—", "-", ""):
+            with self.subTest(clause=clause):
+                self.assertIsNone(row(clause)["unreadable"])
+        for clause, unreadable, blockers in (
+                ("Export API", "Export API", []), ("WO-001", "WO-001", []),
+                ("WO-0001, Export API", "Export API", ["WO-0001"])):
+            with self.subTest(clause=clause):
+                self.assertEqual(
+                    (row(clause)["unreadable"], row(clause)["blockers"]),
+                    (unreadable, blockers))
+
+    def test_tracker_title_and_size_are_optional(self):
+        row = parse_row("- [ ] WO-0008 unmirrored row (PRD-0001 §Solution)")
+        self.assertEqual((row["issue"], row["title"], row["size"]),
+                         (None, None, None))
+        self.assertEqual(parse_row("- [x] **WO-0002** labels.json +"
+                                   " label-sync")["title"],
+                         "labels.json + label-sync")
+
+    def test_pre_ledger_is_a_trailing_mark_only(self):
+        for line, marked in (
+                ("- [x] **WO-0002** l — size:S (PRD-0001 §Solution)"
+                 " (tracker: #107) (pre-ledger)", True),
+                ("- [x] WO-0002 two (PRD-0001) (pre-ledger)  ", True),
+                ("- [x] WO-0020 document the (pre-ledger) annotation"
+                 " (PRD-0001 §Solution) (tracker: #150)", False),
+                ("- [x] WO-0001 one (PRD-0001) (tracker: #106)", False)):
+            with self.subTest(line=line):
+                self.assertEqual(parse_row(line)["pre_ledger"], marked)
+
+    def test_breakdown_rows_numbers_rows_and_skips_prose(self):
+        lines = ["# Breakdown", "- [x] WO-0001 one (PRD-0001 §A)",
+                 "  - Notes: WO-0001 follows WO-0009",
+                 "- [ ] anonymous", "- [ ] WO-0002 two"]
+        self.assertEqual(
+            [(row["lineno"], row["wo"]) for row in breakdown_rows(lines)],
+            [(2, "WO-0001"), (4, None), (5, "WO-0002")])
 
     def test_alignment_with_the_completion_grammar(self):
         # protocol._CHECKBOX is a separate owner by design — it captures
@@ -85,135 +143,15 @@ class TestRowGrammar(unittest.TestCase):
                 self.assertFalse(ROW.match(line))
                 self.assertFalse(protocol._CHECKBOX.search(line))
 
-
-class TestRowUnreadableBlockers(unittest.TestCase):
-    """row_blockers reads only WO tokens, so a blocked-by clause that
-    names a title or a mistyped id used to read as "no blockers", and the
-    planner could dispatch the row before its dependency (beads wo-o3l).
-    The seam now names what it could not read, so a caller can refuse to
-    guess."""
-
-    def line(self, clause):
-        return (f"- [ ] **WO-0002** thing — size:S, blocked by: {clause}"
-                " (PRD-0001 §2) (tracker: #7)")
-
-    def test_work_order_lists_and_nothing_read_cleanly(self):
-        for clause in ("WO-0001", "WO-0001, WO-0003", "WO-0001 and WO-0003",
-                       "WO-0001; WO-0003", "—", "-", ""):
-            with self.subTest(clause=clause):
-                self.assertIsNone(row_unreadable_blockers(self.line(clause)))
-
-    def test_a_title_is_unreadable(self):
-        line = self.line("Export API")
-        self.assertEqual(row_unreadable_blockers(line), "Export API")
-        self.assertEqual(row_blockers(line), [])
-
-    def test_a_mistyped_id_is_unreadable(self):
-        self.assertEqual(row_unreadable_blockers(self.line("WO-001")),
-                         "WO-001")
-
-    def test_the_readable_half_of_a_mixed_clause_still_counts(self):
-        line = self.line("WO-0001, Export API")
-        self.assertEqual(row_unreadable_blockers(line), "Export API")
-        self.assertEqual(row_blockers(line), ["WO-0001"])
-
-    def test_no_clause_and_non_rows_are_not_its_business(self):
-        self.assertIsNone(row_unreadable_blockers(
-            "- [ ] **WO-0002** thing (PRD-0001 §2)"))
-        self.assertIsNone(row_unreadable_blockers(
-            "  - Accept: blocked by: Export API"))
-
-
-class TestRowDone(unittest.TestCase):
-    """The checked-row grammar at its own interface (ADR-0058). Five call
-    sites ask this question — detector G, the reconcile sweep, the work
-    queue, and the dashboard twice — and they must get one answer."""
-
-    def test_checked_boxes_across_every_bullet_and_indent(self):
-        for line in ("- [x] WO-0002 done", "- [X] WO-0002 done",
-                     "-\t[x] WO-0002 done", "+ [x] WO-0002 done",
-                     "* [x] WO-0002 done", "  - [x] WO-0002 indented"):
-            with self.subTest(line=line):
-                self.assertTrue(row_done(line))
-
-    def test_unchecked_prose_and_malformed_bullets_are_not_done(self):
-        for line in ("- [ ] WO-0002 open", "-[x] WO-0002 t",
-                     "text - [x] WO-0002 t", "## WO-0002 heading", ""):
-            with self.subTest(line=line):
-                self.assertFalse(row_done(line))
-
-    def test_a_box_with_no_space_after_it_is_not_a_row_at_all(self):
-        # The whole point of the accessor family: ROW requires whitespace
-        # after the closing bracket, so a line without it is not a row —
-        # and row_done must say so too, or one module answers "is this a
-        # row" twice and differently.
-        for line in ("- [x]a WO-0002 no space after the box",
-                     "- [x]**WO-0003** bold straight after the box"):
-            with self.subTest(line=line):
-                self.assertIsNone(row_work_order(line))
-                self.assertFalse(row_done(line))
-
-    def test_row_done_never_disagrees_with_the_row_grammar(self):
-        # The property, not the cases: nothing row_done calls a checked
-        # row may fail ROW.match. Shapes drawn from this class's own
-        # checked/malformed fixtures plus the two above.
-        for line in ("- [x] WO-0002 done", "- [X] WO-0002 done",
-                     "-\t[x] WO-0002 done", "+ [x] WO-0002 done",
-                     "* [x] WO-0002 done", "  - [x] WO-0002 indented",
-                     "- [ ] WO-0002 open", "-[x] WO-0002 t",
-                     "text - [x] WO-0002 t", "## WO-0002 heading", "",
-                     "- [x]a WO-0002 no space", "- [x]**WO-0003** bold"):
-            with self.subTest(line=line):
-                if row_done(line):
-                    self.assertIsNotNone(ROW.match(line))
-
     def test_the_checked_row_grammar_has_one_owner(self):
         # ADR-0058 amends ADR-0039's roster from three owners to two.
-        # gates.MERGED_ROW was a fourth, added nineteen days after that
-        # roster was fixed and identical to this one in pattern AND
-        # flags. A re-added copy is the drift this pins.
+        # gates.MERGED_ROW was a fourth, identical to DONE_ROW in pattern
+        # AND flags. A re-added copy is the drift this pins.
         import gates
         self.assertFalse(
             hasattr(gates, "MERGED_ROW"),
             "gates.MERGED_ROW is back: the checked-row grammar has one"
             " owner, knowledge_plane.row_done (ADR-0058)")
-
-    def test_the_documented_call_sites_are_the_real_ones(self):
-        """row_done's docstring names its call sites, and a hand-typed
-        enumeration goes stale silently: the list said five and named
-        the reconcile sweep and the dashboard twice, months after
-        ADR-0060 folded both into plane_drift.reconcile_drift, which
-        asks once. Nothing failed. So the list is derived here from the
-        source and compared to the prose, in both directions."""
-        root = Path(__file__).resolve().parents[1]
-        actual = set()
-        for path in sorted(root.glob("*.py")):
-            if path.name == "knowledge_plane.py":
-                continue
-            for node in ast.walk(ast.parse(
-                    path.read_text(encoding="utf-8"))):
-                if not isinstance(node, ast.Call):
-                    continue
-                func = node.func
-                name = (func.id if isinstance(func, ast.Name)
-                        else func.attr if isinstance(func, ast.Attribute)
-                        else None)
-                if name == "row_done":
-                    actual.add(path.name)
-        # normalised first: the docstring rewraps whenever the prose
-        # around it changes, and a listing that only matches at one line
-        # width is a test that fails for the wrong reason
-        flat = " ".join(knowledge_plane.row_done.__doc__.split())
-        listing = re.search(r"Call sites\s*\(.*?\):(.*?)—", flat)
-        self.assertIsNotNone(
-            listing,
-            "row_done's docstring no longer carries a delimited"
-            " `Call sites (...): <modules> —` listing for this test to"
-            " check")
-        documented = set(re.findall(r"[a-z_]+\.py", listing.group(1)))
-        self.assertEqual(documented, actual)
-        self.assertTrue(actual, "no call sites found — the derivation"
-                                " itself is broken")
 
 
 class TestRunDirs(unittest.TestCase):
@@ -233,81 +171,6 @@ class TestRunDirs(unittest.TestCase):
     def test_a_tree_without_docs_walks_to_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(run_dirs(Path(tmp)), [])
-
-
-class TestRowTrackerIssue(unittest.TestCase):
-    """The WO<->issue mirror grammar, one home (ADR-0039): both mirror
-    directions (assembler issue#->row, validator row->issue#) read the
-    row's `(tracker: #N)` through this accessor."""
-
-    def test_a_mirrored_row_yields_its_issue_number(self):
-        row = ("- [ ] **WO-0004** validator.yml — size:M"
-               " (PRD-0001 §Solution) (tracker: #109)")
-        self.assertEqual(knowledge_plane.row_tracker_issue(row), 109)
-
-    def test_an_unmirrored_row_yields_none(self):
-        self.assertIsNone(knowledge_plane.row_tracker_issue(
-            "- [ ] WO-0008 unmirrored row (PRD-0001 §Solution)"))
-
-    def test_a_non_row_line_yields_none_even_with_a_marker(self):
-        # a Notes bullet is prose, not a row — the mirror never reads it
-        self.assertIsNone(knowledge_plane.row_tracker_issue(
-            "2026-07-12: a note naming WO-0005 (tracker: #110)"))
-
-
-class TestRowPreLedger(unittest.TestCase):
-    """The pre-ledger annotation is knowledge-plane grammar (ADR-0043): a
-    TRAILING mark ending a breakdown row, the way the annotated bootstrap
-    rows write it. A substring read would match the mark as prose anywhere
-    in a row — sibling of row_work_order and row_tracker_issue, the
-    grammar lives here and the skip policy (detector G) with the caller."""
-
-    def test_a_row_ending_with_the_mark_is_annotated(self):
-        self.assertTrue(knowledge_plane.row_pre_ledger(
-            "- [x] **WO-0002** labels.json + label-sync — size:S"
-            " (PRD-0001 §Solution) (tracker: #107) (pre-ledger)"))
-
-    def test_trailing_whitespace_after_the_mark_still_counts(self):
-        self.assertTrue(knowledge_plane.row_pre_ledger(
-            "- [x] WO-0002 two (PRD-0001) (pre-ledger)  "))
-
-    def test_the_mark_as_mid_row_prose_marks_nothing(self):
-        self.assertFalse(knowledge_plane.row_pre_ledger(
-            "- [x] WO-0020 document the (pre-ledger) annotation"
-            " (PRD-0001 §Solution) (tracker: #150)"))
-
-    def test_a_non_row_line_is_never_annotated(self):
-        for line in ("A note about the mark. (pre-ledger)",
-                     "  - Accept: rows may end with (pre-ledger)"):
-            with self.subTest(line=line):
-                self.assertFalse(knowledge_plane.row_pre_ledger(line))
-
-    def test_an_unannotated_row_is_not_annotated(self):
-        self.assertFalse(knowledge_plane.row_pre_ledger(
-            "- [x] WO-0001 one (PRD-0001) (tracker: #106)"))
-
-
-class TestRowTitle(unittest.TestCase):
-    """The row's human title — the text between its bold WO token and
-    the em-dash metadata clause — is row grammar, so it lives beside
-    row_work_order and row_tracker_issue (ADR-0037), read by the
-    dashboard's factory-output table."""
-
-    def test_the_title_sits_between_the_token_and_the_dash_clause(self):
-        self.assertEqual(knowledge_plane.row_title(
-            "- [ ] **WO-0017** gate-queue digest — size:S, blocked by: —"
-            " (PRD-0001 §Solution) (tracker: #245)"), "gate-queue digest")
-
-    def test_a_row_without_a_metadata_clause_titles_to_the_rest(self):
-        self.assertEqual(knowledge_plane.row_title(
-            "- [x] **WO-0002** labels.json + label-sync"),
-            "labels.json + label-sync")
-
-    def test_an_unbolded_token_or_non_row_line_yields_none(self):
-        for line in ("- [ ] WO-0008 unmirrored row (PRD-0001 §Solution)",
-                     "A note naming **WO-0005** mid-prose — size:S"):
-            with self.subTest(line=line):
-                self.assertIsNone(knowledge_plane.row_title(line))
 
 
 class TestBreakdownFiles(unittest.TestCase):
@@ -496,8 +359,8 @@ class TestParseRun(unittest.TestCase):
 
 class TestMirrorMap(unittest.TestCase):
     """The tracker mirror map, asserted at the seam that owns the rest of
-    the mirror grammar. It is built from three knowledge-plane names —
-    breakdown_files, row_work_order, row_tracker_issue — and names no
+    the mirror grammar. It is built from two knowledge-plane names —
+    breakdown_files and breakdown_rows — and names no
     gate, which is why it lives here rather than in the digest that
     happened to need it first.
 

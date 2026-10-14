@@ -762,6 +762,24 @@ class TestDispatched(unittest.TestCase):
                                       "2026-08-03T05:17:00Z")
         self.assertEqual(cost_ledger.dispatched([gate], "2026-08"), [])
 
+    def test_an_owner_session_marker_is_never_a_run(self):
+        # ADR-0069: an owner-session:unmetered row is "not a dispatch" —
+        # a $0 marker that the work was done in an owner session. It is
+        # no run, so no per-run or per-work-order figure divides by it.
+        marker = entry("WO-0003", "session-2026-08-04-wo-0003", "m", 0, 0.0,
+                       "owner-session:unmetered", "2026-08-04")
+        run, _gate, older = self.rows()
+        self.assertEqual(cost_ledger.dispatched(self.rows() + [marker]),
+                         [run, older])
+        self.assertEqual(cost_ledger.dispatched([marker], "2026-08"), [])
+
+    def test_owner_session_names_the_marker_row_only(self):
+        marker = entry("WO-0003", "s-1", "m", 0, 0.0,
+                       "owner-session:unmetered", "2026-08-04")
+        self.assertTrue(cost_ledger.owner_session(marker))
+        for row in self.rows() + ["not a row", {"outcome": 7}]:
+            self.assertFalse(cost_ledger.owner_session(row), row)
+
 
 
 class TestIssueKeyedRows(unittest.TestCase):

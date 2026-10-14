@@ -13,11 +13,15 @@ prose in a docstring, so nothing caught the day the two hand-written
 window tests stopped agreeing — now there is one window test, in
 completed_stays, and this asserts what it guarantees.
 """
+import json
 import unittest
+from datetime import datetime, timezone
 
-from human_gates import (GATES, completed_stays, gate_labels,
+from fake_gh import FakeGh
+from human_gates import (GATES, Waiting, completed_stays, gate_labels,
                          gate_passages, gate_rejections, label_events,
-                         refused_timestamps, waited_seconds, waiting_since)
+                         open_queues, read_timelines, waited_seconds,
+                         waiting_issues, waiting_since)
 
 
 def labeled(ts, name):
@@ -142,53 +146,168 @@ class TestLabelEvents(unittest.TestCase):
                          [("prd", 86400, "2026-08-02T00:00:00Z")])
 
 
-class TestRefusedTimestamps(unittest.TestCase):
-    """#491: label_events' third clause drops a malformed timestamp
-    silently — no crash (#326), but no count either. refused_timestamps
-    answers the count a gd:/dashboard: problem string needs, over the
-    same raw timeline, without label_events itself growing a problems
-    channel."""
+def timeline_gh(pages_by_issue=None, **kwargs):
+    """A FakeGh answering every timeline read in --slurp's
+    array-of-pages shape; pages_by_issue maps an issue number to its
+    pages, and an issue it does not name answers one empty page."""
+    canned = pages_by_issue or {}
 
-    def test_a_malformed_timestamp_is_refused(self):
-        timeline = [
+    def timeline(args):
+        number = int(args[1].split("/")[-2])
+        return json.dumps(canned.get(number, [[]]))
+
+    return FakeGh(answers={("api",): timeline}, **kwargs)
+
+
+class TestReadTimelines(unittest.TestCase):
+    """#740 (ADR-0090): the one timeline read — fetch, flatten the
+    pages, admit the label events, and say what admission refused —
+    behind the injected gh port, so no caller can take half of it. The
+    #491 refusal used to be a second call each caller had to remember;
+    rejection_mining forgot it (#791)."""
+
+    def test_pages_are_flattened_into_one_event_list(self):
+        run = timeline_gh({7: [
+            [labeled("2026-08-01T00:00:00Z", "wo:draft")],
+            [unlabeled("2026-08-02T00:00:00Z", "wo:draft")],
+        ]})
+        events, problems = read_timelines([7], run, "gd")
+        self.assertEqual(problems, [])
+        self.assertEqual(events, {7: [
+            ("2026-08-01T00:00:00Z", "labeled", "wo:draft"),
+            ("2026-08-02T00:00:00Z", "unlabeled", "wo:draft"),
+        ]})
+
+    def test_the_read_goes_through_the_slug_paginated_and_slurped(self):
+        run = timeline_gh()
+        read_timelines([7], run, "dashboard", slug="o/r")
+        read_timelines([8], run, "gd")
+        self.assertEqual(run.calls, [
+            ["api", "repos/o/r/issues/7/timeline", "--paginate",
+             "--slurp"],
+            ["api", "repos/{owner}/{repo}/issues/8/timeline",
+             "--paginate", "--slurp"],
+        ])
+
+    def test_a_read_timeline_with_no_events_is_present_and_empty(self):
+        self.assertEqual(read_timelines([7], timeline_gh(), "gd"),
+                         ({7: []}, []))
+
+    def test_a_failed_fetch_is_absent_and_a_labelled_problem(self):
+        events, problems = read_timelines(
+            [7, 8], timeline_gh(failing=["api"]), "rm")
+        self.assertEqual(events, {})
+        self.assertEqual(problems, [
+            "rm: gh api timeline for #7 failed: boom",
+            "rm: gh api timeline for #8 failed: boom"])
+
+    def test_an_unparseable_timeline_is_absent_not_empty(self):
+        events, problems = read_timelines(
+            [7], FakeGh(answers={("api",): "not json"}), "dashboard")
+        self.assertEqual(events, {})
+        self.assertEqual(problems, [
+            "dashboard: gh api timeline for #7 returned unparseable JSON:"
+            " Expecting value: line 1 column 1 (char 0)"])
+
+    def test_a_refused_timestamp_is_a_problem_under_every_label(self):
+        run = timeline_gh({7: [[
             labeled("2026-08-01T00:00:00Z", "wo:draft"),
             unlabeled("yesterday", "wo:draft"),
-        ]
-        self.assertEqual(refused_timestamps(timeline), 1)
-
-    def test_a_well_formed_timeline_refuses_nothing(self):
-        timeline = [
-            labeled("2026-08-01T00:00:00Z", "wo:draft"),
-            unlabeled("2026-08-02T00:00:00Z", "wo:draft"),
-        ]
-        self.assertEqual(refused_timestamps(timeline), 0)
+        ]]})
+        for label in ("gd", "rm", "dashboard"):
+            events, problems = read_timelines([7], run, label)
+            self.assertEqual(problems, [
+                f"{label}: timeline for #7 refused 1 malformed"
+                " timestamp(s)"])
+            # the refused event never reaches the walk
+            self.assertEqual(events, {7: [
+                ("2026-08-01T00:00:00Z", "labeled", "wo:draft")]})
 
     def test_a_naive_timestamp_is_refused_by_the_same_second_clause(self):
-        # "2026-08-01" parses but carries no UTC offset — label_events
-        # drops it on _is_timestamp's second clause, so it counts here
+        # "2026-08-01" parses but carries no UTC offset — admission
+        # drops it on _is_timestamp's second clause, so it is reported
         # too, not just the unparseable case.
-        timeline = [labeled("2026-08-01", "wo:draft")]
-        self.assertEqual(refused_timestamps(timeline), 1)
+        run = timeline_gh({7: [[labeled("2026-08-01", "wo:draft")]]})
+        self.assertEqual(read_timelines([7], run, "gd")[1], [
+            "gd: timeline for #7 refused 1 malformed timestamp(s)"])
 
-    def test_a_nameless_flip_is_not_a_refused_timestamp(self):
-        # Dropped by the first clause (no name), not the third — a
-        # different reason, so it must not inflate this count.
-        timeline = [{"event": "labeled", "label": {}}]
-        self.assertEqual(refused_timestamps(timeline), 0)
+    def test_a_nameless_flip_or_a_non_flip_is_not_a_refusal(self):
+        # Dropped by the first clause or not a flip at all — a
+        # different reason, so it must not raise this problem.
+        run = timeline_gh({7: [[
+            {"event": "labeled", "label": {}},
+            {"event": "commented", "created_at": "not-a-timestamp"},
+        ]]})
+        self.assertEqual(read_timelines([7], run, "gd"), ({7: []}, []))
 
-    def test_a_non_flip_event_is_not_a_refused_timestamp(self):
-        timeline = [{"event": "commented",
-                     "created_at": "not-a-timestamp"}]
-        self.assertEqual(refused_timestamps(timeline), 0)
+    def test_a_dropped_unlabeled_event_is_surfaced_to_the_miner(self):
+        """#740's defect at the interface: drop the `unlabeled` closing
+        a rejected stay and the rejection is lost, so the reader must
+        say so to every caller, the miner included."""
+        run = timeline_gh({7: [[
+            labeled("2026-08-10T09:00:00Z", "wo:needs-review"),
+            unlabeled("not-a-timestamp", "wo:needs-review"),
+            labeled("2026-08-11T09:00:00Z", "wo:failed"),
+        ]]})
+        events, problems = read_timelines([7], run, "rm")
+        self.assertEqual(gate_rejections(events[7]), [])
+        self.assertEqual(problems, [
+            "rm: timeline for #7 refused 1 malformed timestamp(s)"])
 
-    def test_the_refused_count_never_shows_up_in_label_events(self):
-        timeline = [
-            labeled("2026-08-01T00:00:00Z", "wo:draft"),
-            unlabeled("yesterday", "wo:draft"),
-        ]
-        self.assertEqual(label_events(timeline),
-                         [("2026-08-01T00:00:00Z", "labeled", "wo:draft")])
-        self.assertEqual(refused_timestamps(timeline), 1)
+
+NOW = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
+
+
+def open_issue(number, *labels):
+    return {"number": number, "title": f"WO #{number}", "state": "OPEN",
+            "labels": [{"name": name} for name in labels]}
+
+
+class TestOpenQueues(unittest.TestCase):
+    """#740 (ADR-0090): the open gate queues, built once. gate_digest
+    and dashboard each built them by hand, and the unreadable-age fix
+    (#665) had to be made in both."""
+
+    MIRROR = {7: "WO-0101", 8: "WO-0102", 9: "WO-0103"}
+
+    def test_every_gate_is_listed_in_pipeline_order_even_empty(self):
+        self.assertEqual(open_queues([], self.MIRROR, {}, NOW),
+                         [(gate, []) for gate in GATES])
+
+    def test_an_aged_item_is_aged_at_the_literal_now(self):
+        issue = open_issue(7, "wo:draft", "size:S")
+        queues = open_queues([issue], self.MIRROR, {7: [
+            ("2026-08-14T10:00:00Z", "labeled", "wo:draft")]}, NOW)
+        self.assertEqual(queues[0],
+                         (GATES[0], [Waiting(issue, 7200, True)]))
+
+    def test_an_unread_timeline_is_unaged_and_says_so(self):
+        issue = open_issue(7, "wo:draft")
+        queues = open_queues([issue], self.MIRROR, {}, NOW)
+        self.assertEqual(queues[0][1], [Waiting(issue, None, False)])
+
+    def test_a_read_timeline_with_no_arrival_is_unknown_not_unread(self):
+        issue = open_issue(7, "wo:draft")
+        queues = open_queues([issue], self.MIRROR, {7: []}, NOW)
+        self.assertEqual(queues[0][1], [Waiting(issue, None, True)])
+
+    def test_only_mirrored_issues_carrying_the_queue_label_wait(self):
+        issues = [open_issue(9, "wo:needs-review"),
+                  open_issue(8, "wo:needs-review"),
+                  open_issue(7, "wo:claimed"),
+                  open_issue(40, "wo:draft")]
+        queues = open_queues(issues, self.MIRROR, {}, NOW)
+        self.assertEqual([[w.issue["number"] for w in items]
+                          for _, items in queues], [[], [], [8, 9]])
+
+    def test_waiting_issues_names_who_open_queues_will_age(self):
+        # The reads a caller must make before open_queues can age
+        # anything — the same membership open_queues applies.
+        issues = [open_issue(9, "wo:needs-review"),
+                  open_issue(7, "wo:claimed"),
+                  open_issue(8, "wo:draft", "wo:needs-review"),
+                  open_issue(40, "wo:draft")]
+        self.assertEqual(waiting_issues(issues, self.MIRROR), [8, 9])
 
 
 class TestGatePassages(unittest.TestCase):
