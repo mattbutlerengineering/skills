@@ -23,7 +23,9 @@ mode that works "everything not done yet".
   three new things on top of it.
 - Open PRs come before new work. An unfinished PR is closer to value than
   a fresh work order, and merging it first is what keeps the batch's
-  branches from stacking conflicts.
+  branches from stacking conflicts. This is the protocol's "Open pull
+  requests first" pre-flight (`../../docs/pipeline-protocol.md`); the
+  merge stays the human's (ADR-0033 gate 3).
 
 ### 2. Plan the batch — never by hand
 

@@ -102,6 +102,16 @@ in `-<digits>`: item #N of batch `oct` runs on `conductor/oct-N`, so a
 batch named `oct-2` would share item #2's branch and worktree, and
 `open` refuses it.
 
+Before `open`, run the protocol's "Open pull requests first" pre-flight
+(`../../docs/pipeline-protocol.md`, relative to this skill's directory)
+on a new batch; a resumed batch's own item and closing pull requests are
+not new work. Report the open pull requests beside the plan, first any
+that touch a planned item's files, then the rest, so the Owner sees them
+before the spend ask. A green one is a merge the Owner answers, never one
+you make. A red one is named with what blocks it: the Conductor never
+writes code, so it does not fix one. The plan does not list them, so this
+is your report, not one of its deferral lines.
+
 Show the Owner the plan as printed: per item its type, steps, charter,
 band, model, effort and ceiling, its estimate and reserved number block,
 the batch estimate against what remains of the monthly cap, and every
