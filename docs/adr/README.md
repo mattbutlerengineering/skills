@@ -88,7 +88,7 @@ the canonical vocabulary.
 | [0065](0065-the-frontmatter-split-and-what-it-unblocks.md) | The frontmatter split, and what it does and does not unblock | superseded in part by ADR-0091 (the narrowed blocker and the split as a restructure step) |
 | [0066](0066-no-seam-for-ghs-silence.md) | No seam for gh's silence; the rule is shared, the meaning is local | provisional |
 | [0067](0067-codeowners-mirrors-through-product-codeowners.md) | CODEOWNERS mirrors through product_codeowners, not identity | accepted |
-| [0068](0068-parse-run-widens-the-knowledge-plane-walk.md) | parse_run widens the knowledge-plane walk (expand phase) | accepted |
+| [0068](0068-parse-run-widens-the-knowledge-plane-walk.md) | parse_run widens the knowledge-plane walk (expand phase) | amended by ADR-0094 (every run-artifact and ADR-index read guarded, reported by D) |
 | [0069](0069-autonomy-per-gate-wait-hour.md) | Autonomy per human-hour: accepted orders per gate-wait hour | superseded in part by ADR-0080 |
 | [0070](0070-github-merge-queue-composes-with-agent-merge.md) | Adopt GitHub's native merge queue, composing with agent-merge | accepted |
 | [0071](0071-needs-clarification-markers.md) | Inline [NEEDS CLARIFICATION] markers, CI-enforced | accepted |
@@ -114,3 +114,4 @@ the canonical vocabulary.
 | [0091](0091-the-restructure-blockers-re-measured-and-pinned.md) | The tools/factory restructure blockers, re-measured and pinned | accepted (Owner, 2026-10-13) |
 | [0092](0092-a-derived-trace-view-joins-the-knowledge-owners-over-time.md) | A derived trace view joins the knowledge owners over time | accepted (Owner, 2026-10-14) |
 | [0093](0093-every-plugin-eval-case-carries-its-skill-tag.md) | Every plugin-eval case carries its skill directory as a tag | accepted (Owner, 2026-10-14) |
+| [0094](0094-parse-run-reads-every-artifact-through-the-guarded-read.md) | parse_run reads every run artifact and the ADR index through the guarded read | accepted (Owner, 2026-10-14) |

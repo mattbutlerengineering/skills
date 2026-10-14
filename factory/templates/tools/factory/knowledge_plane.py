@@ -28,7 +28,7 @@ from collections import namedtuple
 from pathlib import Path
 
 from cli import read_file
-from protocol import read_frontmatter
+from protocol import parse_frontmatter
 
 PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
 ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
@@ -699,13 +699,12 @@ def parse_run(root, scannable=()):
          "verification_error": str | None}.
         "prd" and "prd_date" (the frontmatter `date:`) are what detectors
         N and O read (ADR-0071, ADR-0072).
-        A field is None when that run carries no such file.
-        verification_error carries str(err) when verification.md exists
-        but could not be decoded — check_evidence_honesty's own
-        "H: {rel} cannot be read: {err}" case — with verification then
-        None; every other artifact here except the ADRs is read the way
-        its current caller already reads it: uncaught, because no
-        current caller catches a read error there either.
+        A field is None when that run carries no such file, or when
+        cli.read_file could not read it (ADR-0094) — then named in
+        "artifact_problems". verification_error carries str(err) when
+        verification.md exists but could not be decoded —
+        check_evidence_honesty's own "H: {rel} cannot be read: {err}"
+        case — with verification then None.
       "adr_files": [(Path, [str]), ...] — read_adrs' files: every
         adr_paths file it could read, in that order — adr_record reads
         an entry. The ADRs alone are read guarded (issue #855), since
@@ -713,7 +712,10 @@ def parse_run(root, scannable=()):
         problem strings.
       "adr_problems": [str] — read_adrs' unlabelled problems, one per
         ADR left out of "adr_files"; detector D labels and reports them.
-      "adr_readme": [str] | None for docs/adr/README.md.
+      "adr_readme": [str] | None for docs/adr/README.md, read guarded.
+      "artifact_problems": [str] — unlabelled `cannot read <rel>: <err>`,
+        one per breakdown/PRD/architecture or index left None unread;
+        detector D reports them (ADR-0094).
       "scannable": [(Path, [str]), ...], one entry per path in
         `scannable` it could read, in that order — guarded by
         cli.read_file like the ADRs (issue #877), since one undecodable
@@ -724,11 +726,24 @@ def parse_run(root, scannable=()):
 
     Read-only: parse_run never writes.
     """
+    artifact_problems = []
+
+    def guarded_text(path):
+        """One guarded read (ADR-0094): the file's text, or None when it
+        is absent or unreadable — an unreadable one also named once in
+        artifact_problems."""
+        text, problem = read_file(path, path.relative_to(root).as_posix(),
+                                  str)
+        if problem:
+            artifact_problems.append(problem)
+        return text
+
+    def guarded_lines(path):
+        text = guarded_text(path)
+        return None if text is None else text.splitlines()
+
     runs = []
     for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        prd = run / "prd.md"
-        architecture = run / "architecture.md"
         verification = run / "verification.md"
         verification_text = None
         verification_error = None
@@ -737,26 +752,23 @@ def parse_run(root, scannable=()):
                 verification_text = verification.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError) as err:
                 verification_error = str(err)
-        prd_fields = (read_frontmatter(prd) or {}) if prd.is_file() else {}
+        breakdown = guarded_lines(run / "breakdown.md")
+        prd_text = guarded_text(run / "prd.md")
+        prd_fields = ((parse_frontmatter(prd_text) or {})
+                      if prd_text is not None else {})
         runs.append({
             "path": run,
-            "breakdown": (breakdown.read_text(encoding="utf-8").splitlines()
-                         if breakdown.is_file() else None),
+            "breakdown": breakdown,
             "prd_id": prd_fields.get("id"),
-            "prd": (prd.read_text(encoding="utf-8").splitlines()
-                    if prd.is_file() else None),
+            "prd": None if prd_text is None else prd_text.splitlines(),
             "prd_date": prd_fields.get("date"),
-            "architecture": (architecture.read_text(
-                encoding="utf-8").splitlines()
-                if architecture.is_file() else None),
+            "architecture": guarded_lines(run / "architecture.md"),
             "verification": verification_text,
             "verification_error": verification_error,
         })
 
     adr_files, adr_problems = read_adrs(root)
-    readme = root / "docs" / "adr" / "README.md"
-    adr_readme = (readme.read_text(encoding="utf-8").splitlines()
-                  if readme.is_file() else None)
+    adr_readme = guarded_lines(root / "docs" / "adr" / "README.md")
 
     scanned, scannable_problems = [], []
     for path in scannable:
@@ -769,7 +781,8 @@ def parse_run(root, scannable=()):
 
     return {"runs": runs, "adr_files": adr_files,
             "adr_problems": adr_problems, "adr_readme": adr_readme,
-            "scannable": scanned, "scannable_problems": scannable_problems}
+            "scannable": scanned, "scannable_problems": scannable_problems,
+            "artifact_problems": artifact_problems}
 
 
 def repo_root():

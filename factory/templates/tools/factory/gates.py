@@ -535,7 +535,8 @@ def check_blueprint_drift(root, parsed=None):
     # An ADR is also a scanned doc, so one undecodable ADR is the same
     # string in both lists; dict.fromkeys reports it once (issue #877).
     problems += [f"D: {problem}" for problem in dict.fromkeys(
-        parsed["adr_problems"] + parsed["scannable_problems"])]
+        parsed["adr_problems"] + parsed["artifact_problems"]
+        + parsed["scannable_problems"])]
     adr_dir = root / "docs" / "adr"
     # Equivalent to the pre-migration `if not adr_dir.is_dir(): return
     # problems` (see gates.py history): with no ADR files and no README,
@@ -563,7 +564,11 @@ def check_blueprint_drift(root, parsed=None):
             retired[number] = record["superseded_by"]
 
     readme_lines = parsed["adr_readme"]
-    if statuses and readme_lines is None:
+    # An index parse_run could not read is already a "cannot read"
+    # problem above (ADR-0094), not a missing one: only a live check
+    # tells the two apart.
+    if (statuses and readme_lines is None
+            and not (adr_dir / "README.md").is_file()):
         problems.append("D: docs/adr/README.md is missing"
                         " (ADR files present, no blueprint index)")
     elif readme_lines is not None:
