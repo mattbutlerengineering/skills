@@ -454,6 +454,68 @@ class TestSync(unittest.TestCase):
                 " HTTP 403: rate limit exceeded"])
 
 
+class TestEnsure(unittest.TestCase):
+    """ensure: the one way a tool creates a label it is about to write
+    (issue #856). Absent labels only, with the taxonomy's colour and
+    description when labels.json carries the label, bare otherwise — a
+    tools-only stamp has no labels.json (#726)."""
+
+    WANT = {"name": "needs-human", "color": "d93f0b",
+            "description": "Blocked: a human decides"}
+
+    def created(self, runner):
+        return [call for call in runner.calls if call[:2] == ["label",
+                                                              "create"]]
+
+    def test_an_absent_taxonomy_label_is_created_with_its_colour(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", json.dumps([self.WANT]))
+            runner = gh([{"name": "bug"}])
+            self.assertEqual(
+                label_sync.ensure(tree.root, ["needs-human"], run=runner), [])
+            self.assertEqual(self.created(runner), [
+                ["label", "create", "needs-human", "--force",
+                 "--color", "d93f0b",
+                 "--description", "Blocked: a human decides"]])
+
+    def test_a_label_the_taxonomy_lacks_is_created_bare(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = gh([])
+            self.assertEqual(
+                label_sync.ensure(Path(tmp), ["needs-human"], run=runner), [])
+            self.assertEqual(self.created(runner),
+                             [["label", "create", "needs-human"]])
+
+    def test_a_live_label_is_left_alone_even_when_it_drifted(self):
+        # drift on a live label stays the label-drift report's to surface
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write(".github/labels.json", json.dumps([self.WANT]))
+            runner = gh([{"name": "needs-human", "color": "ffffff",
+                          "description": "stale"}])
+            self.assertEqual(
+                label_sync.ensure(tree.root, ["needs-human"], run=runner), [])
+            self.assertEqual(self.created(runner), [])
+
+    def test_an_unusable_listing_creates_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = gh([], failing=("label", "list"))
+            self.assertEqual(
+                label_sync.ensure(Path(tmp), ["needs-human"], run=runner),
+                ["gh label list failed: boom"])
+            self.assertEqual(self.created(runner), [])
+
+    def test_a_failing_create_is_an_unprefixed_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = gh([], failing=("label", "create"))
+            self.assertEqual(
+                label_sync.ensure(Path(tmp), ["needs-human", "size:S"],
+                                  run=runner),
+                ["gh label create needs-human failed: boom",
+                 "gh label create size:S failed: boom"])
+
+
 class TestCli(cli_contract.CliContract, cli_contract.ReportContract,
               unittest.TestCase):
     usage_fragment = "label-sync"

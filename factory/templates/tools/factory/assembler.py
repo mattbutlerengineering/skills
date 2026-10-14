@@ -95,6 +95,10 @@ CHARTER_BY_TYPE = {
 }
 DEFAULT_CHARTER = "swe"
 
+# The labels this module reads; detector J checks the taxonomy carries
+# them (gates.declared_labels reads every module's LABELS).
+LABELS = (READY_LABEL, EXHAUSTED_LABEL, *CHARTER_BY_TYPE)
+
 
 def actor_is_owner(sender, owner):
     """(is-owner, reason). ADR-0032: only the repo owner may apply

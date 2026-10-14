@@ -31,6 +31,10 @@ STEP_CHARTERS = {"spec": "architect", "verify": "qa", "review": "reviewer",
                  "ship": "qa"}
 TYPE_BY_LABEL = {"type:feature": "feature", "type:defect": "fix",
                  "type:chore": "fix"}
+SIZE_LABELS = ("size:S", "size:M", "size:L")
+# The labels the default rules read; detector J checks the taxonomy
+# carries them (gates.declared_labels reads every module's LABELS).
+LABELS = (*TYPE_BY_LABEL, *SIZE_LABELS)
 # lean: fixed block sizes per item type. The ceiling is an item that
 # needs more numbers than its block; its Worker stops and says so. The
 # trigger to size blocks per item is a scorecard showing that stop fire.
@@ -202,7 +206,7 @@ def _size(labels, rules):
     table, default = rules.get("size_labels"), rules.get("default_size")
     if table is None:
         size = next((name[len("size:"):] for name in labels
-                     if name in ("size:S", "size:M", "size:L")), default)
+                     if name in SIZE_LABELS), default)
         return (size, None) if size else (None, "no size: label")
     if default and not any(name in table for name in labels):
         return default, None

@@ -51,10 +51,13 @@ GATES = (
 
 def gate_labels():
     """Every label the three gates name — each queue and each pass
-    label. Detector J's one reach into this module
-    (gates.LABEL_DECLARERS): the taxonomy must carry all of them, and
-    the detector should not know how many label fields a row has."""
+    label. Detector J's one reach into this module (LABELS below, which
+    gates.declared_labels reads): the taxonomy must carry all of them,
+    and the detector should not know how many label fields a row has."""
     return {label for gate in GATES for label in (gate.queue, gate.passed)}
+
+
+LABELS = tuple(sorted(gate_labels()))
 
 
 def _parse_ts(iso):

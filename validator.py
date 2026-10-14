@@ -111,6 +111,9 @@ FAILED_LABEL = "wo:failed"
 # queue, merging it is the pass. human_gates owns that vocabulary, so the
 # legs and the gate digest cannot name different labels.
 MERGE_GATE = next(gate for gate in GATES if gate.name == "merge")
+# Every label the lifecycle verbs write, for detector J
+# (gates.label_declarers): a taxonomy missing one fails a verb at CI time.
+LABELS = (CLAIM_LABEL, FAILED_LABEL, MERGE_GATE.queue, MERGE_GATE.passed)
 # The dispatch-queue state (ADR-0032) is assembler.READY_LABEL. The
 # claim's idempotency verdict is "did THIS event take the order out of
 # ready" — so the label is named, not inferred from the taxonomy's

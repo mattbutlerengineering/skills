@@ -33,7 +33,16 @@ the correct stage skill. This skill never produces an artifact itself.
    what exists, what's next, and why. Example: "Feature run `dark-mode`: PRD
    exists and declares a UI surface, no `ux.md` — next stage is UX Design."
 
-5. **Hand off.** Load the matching stage skill through the harness's
+5. **Hand off — open pull requests first.** When the repo has open pull
+   requests, run the protocol's "Open pull requests first" pre-flight
+   before the stage: present the green ones for the Owner's merge answer,
+   fix or name the red ones, surface the stale ones. The router runs it
+   itself; it is a protocol step, not a skill to route to. The stage
+   hand-off waits until nothing is left that is mergeable or fixable, and
+   a pull request waiting on the Owner is reported, not waited on. Never
+   merge without the Owner's answer.
+
+   Then load the matching stage skill through the harness's
    skill-loading mechanism (a skill tool where one exists, otherwise a read
    of the skill file) and follow it; naming the skill in prose does not
    load it.

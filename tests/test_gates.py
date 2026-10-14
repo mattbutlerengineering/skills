@@ -1337,14 +1337,18 @@ class TestLabelWiring(unittest.TestCase):
             tree, named = self.wired_tree(tmp)
             tree.write(".github/labels.json", self.taxonomy(
                 [name for name in named if name != "wo:merged"]))
-            # wo:merged is named twice over — the Makefile target that
-            # flips it and the human_gates entry that counts it — and both
-            # sites are reported, because both break
+            # wo:merged is named three times over — a pre-verb Makefile
+            # target that flips it, the human_gates entry that counts it,
+            # and the pr-merged verb that writes it — and every site is
+            # reported, because every one breaks
             self.assertEqual(gates.check_label_wiring(tree.root), [
                 "J: Makefile:2 names wo:merged but the taxonomy has no such"
                 " label (add it to .github/labels.json, or the flip fails"
                 " when CI runs it)",
                 "J: human_gates.py names wo:merged but the taxonomy has no"
+                " such label (add it to .github/labels.json, or the flip"
+                " fails when CI runs it)",
+                "J: validator.py names wo:merged but the taxonomy has no"
                 " such label (add it to .github/labels.json, or the flip"
                 " fails when CI runs it)"])
 
@@ -1357,6 +1361,27 @@ class TestLabelWiring(unittest.TestCase):
                 "J: assembler.py names wo:ready-for-agent but the taxonomy"
                 " has no such label (add it to .github/labels.json, or the"
                 " flip fails when CI runs it)"])
+
+    def test_a_pruned_conductor_label_is_reported(self):
+        # issue #856: the shipped taxonomy with the labels the Conductor
+        # writes pruned — a curated taxonomy dropping size:* defers every
+        # issue the conductor plans, and close mints needs-human bare
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            pruned = {"needs-human", "size:S", "size:M", "size:L"}
+            shipped = json.loads((self.REPO / "factory" / "templates"
+                                  / ".github" / "labels.json")
+                                 .read_text(encoding="utf-8"))
+            tree.write(".github/labels.json", json.dumps(
+                [label for label in shipped if label["name"] not in pruned]))
+            self.assertEqual(gates.check_label_wiring(tree.root), [
+                f"J: {site} names {label} but the taxonomy has no such"
+                " label (add it to .github/labels.json, or the flip fails"
+                " when CI runs it)"
+                for label, site in (("needs-human", "conductor_close.py"),
+                                    ("size:L", "conductor_plan.py"),
+                                    ("size:M", "conductor_plan.py"),
+                                    ("size:S", "conductor_plan.py"))])
 
     def test_an_unnamed_taxonomy_label_is_not_a_finding(self):
         # one direction only: wo:blocked is human-applied by design
@@ -1479,10 +1504,17 @@ class TestLabelWiring(unittest.TestCase):
         self.assertEqual(declared_by("human_gates.py"),
                          ["wo:blueprint-approved", "wo:draft", "wo:merged",
                           "wo:needs-review", "wo:prd-approved"])
-        # the dispatch legs' labels; the PR legs write the merge gate's,
-        # declared above by human_gates (#859)
+        # the Conductor's labels (issue #856): found by their LABELS
+        # declaration, not by a list in gates.py
+        self.assertEqual(declared_by("conductor_close.py"), ["needs-human"])
+        self.assertEqual(declared_by("conductor_plan.py"),
+                         ["size:L", "size:M", "size:S", "type:chore",
+                          "type:defect", "type:feature"])
+        # the four labels the lifecycle verbs write, declared by the verbs'
+        # module rather than read off a Makefile recipe (#859)
         self.assertEqual(declared_by("validator.py"),
-                         ["wo:failed", "wo:in-progress"])
+                         ["wo:failed", "wo:in-progress", "wo:merged",
+                          "wo:needs-review"])
 
     def test_the_shipped_taxonomy_wires_the_shipped_tools(self):
         """The live pin, and the one that would have caught the gap."""
