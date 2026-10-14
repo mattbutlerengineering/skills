@@ -33,7 +33,7 @@
     "templates/tools/factory/conductor_merge.py": "d3f92f6929601610140998af4160df480f97a05182d1cc65f6587d96f33b406f",
     "templates/tools/factory/conductor_plan.py": "b96ad0b860193b4c6c3482108a5a95aebd7e03f0f6a83c2c9133e28caf42b0ee",
     "templates/tools/factory/conductor_run.py": "06832a725d096e88d3a43f8d31e2d5a9636df5e6fd1b0e1bf1ac05c2443e16d3",
-    "templates/tools/factory/cost_ledger.py": "f6e343d6c2ffbff1cb06f9b7edbc0d03650a16b5d6d28ae6e4a4aed1c11c5fe4",
+    "templates/tools/factory/cost_ledger.py": "8982d34b1650a6e7f01b434bc5495511d01aa5aef9b9aad779c3f8c111467f64",
     "templates/tools/factory/cost_report.py": "6a828b5d1854fb2db4f3512f2febd1ea7672338bb82c2c6efd2150202a63a39d",
     "templates/tools/factory/factory_config.py": "04ea0ef8d59fb14eeb6c38671ae4d595c3150857cc8d52053c356f88e724bcfb",
     "templates/tools/factory/gate_digest.py": "648aadea80f1c7129a071d6aff1d3f5ec78b291eae84866fea08eac6a9eeb7f5",

@@ -131,8 +131,9 @@ def owner_session(entry):
 def dispatched(entries, month=None):
     """The rows that count as spend, in ledger order: never a
     gate-latency observation (ADR-0041 — a wait record, not a run), never
-    an owner-session marker (ADR-0069 — not a dispatch, and $0, so the
-    month's spend is the same with or without it), and when `month` ("YYYY-MM") is given only the rows in_month admits.
+    an owner-session marker (ADR-0069 — not a dispatch, and $0 by
+    line_problems' rule, so the month's spend is the same with or
+    without it), and when `month` ("YYYY-MM") is given only the rows in_month admits.
 
     The ONE row-selection rule behind both month-to-date figures — the
     weekly report's spend breakdown and the work queue's circuit-breaker
@@ -243,7 +244,8 @@ def line_problems(entry):
     `wo` is a WO-#### token or an ADR-0084 issue key):
     missing/unknown fields, per-field rules in LEDGER_FIELDS order, then
     the optional `at` rule (present means a valid ISO date; absent means a
-    legacy row and is never a problem). Callers prefix their own label and
+    legacy row and is never a problem). An owner-session marker must
+    cost 0 — the invariant dispatched()'s exclusion rests on. Callers prefix their own label and
     location — this is the single rule detector G and read() both apply."""
     problems = []
     missing = sorted(set(LEDGER_FIELDS) - set(entry))
@@ -276,6 +278,12 @@ def line_problems(entry):
             if isinstance(value, bool) or not isinstance(value, (int, float)) \
                     or value < 0:
                 problems.append("cost must be a non-negative number")
+            elif value != 0 and owner_session(entry):
+                # dispatched() drops markers from spend on the grounds
+                # that they are $0 (ADR-0069); a paid row mislabelled as
+                # one would escape the monthly cap unreported (#815).
+                problems.append("an owner-session marker must cost 0"
+                                f" (ADR-0069), not {value!r}")
     for field in LEDGER_OPTIONAL_FIELDS:
         if field not in entry:
             continue
