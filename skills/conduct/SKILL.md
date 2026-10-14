@@ -23,7 +23,10 @@ stamp). Do not improvise the tool's rules.
 
 The repo's `factory.json` (`.github/factory.json` when stamped) names
 its gate in `conductor.gate_command`; absent, it is `make check`.
-Workers may run that one command, and the merge turn runs it.
+Workers may run that one command, and the merge turn runs it. An
+optional `conductor.worktree_setup` argv (for example `["npm", "ci"]`)
+runs in each item worktree before every Worker run, never in the batch
+worktree; when it fails, the item stalls with cause `setup-failed`.
 
 An issue plans as a `feature` or a `fix` by its labels. Absent any other
 setting, the first `type:` label decides (`type:feature` is a feature,
