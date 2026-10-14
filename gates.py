@@ -839,8 +839,11 @@ def label_declarers():
             names.append(path.stem)
     return names
 
-# The Makefile's lifecycle targets hand validator.py the label to flip, so
-# the target line IS the declaration — there is no constant to read.
+
+# A stamped Makefile from before the lifecycle verbs (#859) hands
+# validator.py the label to flip, so its target line IS the declaration.
+# factory-init update never refreshes a stamped Makefile, so this stays
+# until no stamp carries the `lifecycle --label` alias.
 MAKEFILE_LABEL = re.compile(r"--label\s+([a-z][a-z0-9:._-]*)")
 
 
@@ -878,8 +881,9 @@ def check_label_wiring(root):
 
     The couplings are all runtime-only otherwise. assembler reads
     wo:ready-for-agent and budget-exhausted, human_gates counts the six
-    gate labels, and each Makefile lifecycle target hands validator.py one
-    to flip — and validator refuses a label the taxonomy does not carry
+    gate labels, validator's lifecycle verbs each flip one, and a
+    pre-verb Makefile lifecycle target hands validator.py one — and
+    validator refuses a label the taxonomy does not carry
     (`V: <label> is not a lifecycle label in the taxonomy`). So a taxonomy
     that loses a label passes every offline gate and fails in the dispatch
     plane, at merge or dispatch time, which is the worst moment to find
