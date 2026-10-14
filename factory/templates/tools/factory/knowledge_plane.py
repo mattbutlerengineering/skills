@@ -316,30 +316,52 @@ def row_unreadable_blockers(line):
 def row_done(line):
     """Whether a breakdown row is checked off.
 
-    The one owner of the checked-row grammar (ADR-0058). Call sites
-    (derived, not counted by hand — pinned in both directions by
-    test_the_documented_call_sites_are_the_real_ones): gates.py,
-    plane_drift.py, work_queue.py — nothing else asks. The reconcile
-    sweep and the dashboard reach this grammar THROUGH
-    plane_drift.reconcile_drift rather than directly (ADR-0060), which
-    is why neither appears above; an earlier hand-typed list still named
-    them, and their fold into one shared rule, and said five. Detector G
-    layers its own ADR-0043 pre-ledger exclusion on top at its call
-    site — that is the detector's rule, not the row grammar's, which is
-    why it is not here. Same alignment caveat as protocol._CHECKBOX:
-    change the bullet shape in one and the other must move with it.
+    The one owner of the checked-row grammar (ADR-0058). Its one caller
+    is parse_row below: every reader takes the answer as a row record's
+    `done` field (issue #737). Detector G layers its own ADR-0043
+    pre-ledger exclusion on top — that is the detector's rule, not the
+    row grammar's. Same alignment caveat as protocol._CHECKBOX: change
+    the bullet shape in one and the other must move with it.
 
     The ROW guard is the same one every sibling accessor opens with, and
     it is load-bearing rather than ceremonial: ROW requires whitespace
     after the closing bracket and DONE_ROW does not, so without it a
     checked box followed immediately by text is a checked row here and no
-    row at all to row_size, row_title and the rest. The one place that
-    difference escaped was detector G, which reaches this accessor
-    through a raw WO_TOKEN.search rather than through a sibling.
+    row at all to row_size, row_title and the rest.
     """
     if not ROW.match(line):
         return False
     return bool(DONE_ROW.match(line))
+
+
+def parse_row(line):
+    """The breakdown row a line is, as one record, or None when the line
+    is not a checkbox row (issue #737). The row_* accessors above are its
+    field grammar; readers take fields from the record, never re-match a
+    line, so prose — a Notes sub-bullet, a paragraph — naming a work
+    order is not a row to any of them. `wo` is None for a checkbox row
+    that names no work order: whether that matters is the caller's
+    policy. `prd_ids` is every PRD token the row cites, in order."""
+    if not ROW.match(line):
+        return None
+    return {
+        "text": line, "wo": row_work_order(line), "done": row_done(line),
+        "issue": row_tracker_issue(line), "size": row_size(line),
+        "title": row_title(line), "blockers": row_blockers(line),
+        "unreadable": row_unreadable_blockers(line),
+        "pre_ledger": row_pre_ledger(line),
+        "prd_ids": PRD_TOKEN.findall(line),
+    }
+
+
+def breakdown_rows(lines):
+    """Every row record in a breakdown's lines, in order, each carrying
+    its 1-based `lineno` — the walk A, C, G, O and the dispatch-plane
+    tools share instead of each re-reading every line."""
+    return [{**row, "lineno": lineno}
+            for lineno, row in ((n, parse_row(line))
+                                for n, line in enumerate(lines, 1))
+            if row is not None]
 
 
 def run_dirs(root):
@@ -358,8 +380,8 @@ def breakdown_files(root):
     The layout walk in one place: every dispatch-plane reader of
     work-order rows — the assembler, the validator, orientation_pack,
     and gates' detectors — opens the same files in the same run order.
-    Row and slice grammar stay with each caller (ADR-0037: this
-    concentrates layout knowledge, not row-reading policy).
+    Row grammar is breakdown_rows' (ADR-0039 put it here); slice and
+    row-reading policy stay with each caller (ADR-0037).
     """
     for run in run_dirs(root):
         breakdown = run / "breakdown.md"
@@ -374,18 +396,14 @@ def mirror_map(root):
     a row with no (tracker: #N) simply is not in any queue, and an issue
     with no row is not a work order.
 
-    The one composition of the three names above that the tracker-facing
+    The one composition of the two names above that the tracker-facing
     tools — the gate digest, the miner, the dashboard — all need, and
     the reason ADR-0039 put the mirror grammar here in the first place:
     it reads rows, and it names no gate."""
-    mapping = {}
-    for _, lines in breakdown_files(root):
-        for line in lines:
-            wo = row_work_order(line)
-            number = row_tracker_issue(line)
-            if wo and number is not None:
-                mapping[number] = wo
-    return mapping
+    return {row["issue"]: row["wo"]
+            for _, lines in breakdown_files(root)
+            for row in breakdown_rows(lines)
+            if row["wo"] and row["issue"] is not None}
 
 
 # The ADR record (issue #747): which files in docs/adr are decision

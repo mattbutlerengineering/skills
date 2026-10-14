@@ -50,8 +50,7 @@ import cost_report
 import factory_config
 from human_gates import open_queues, read_timelines, waiting_issues
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             mirror_map, row_size, row_title,
-                             row_tracker_issue, row_work_order, run_dirs)
+                             breakdown_rows, mirror_map, run_dirs)
 import plane_drift
 from protocol import (RUN_ARTIFACTS, next_stage, parse_backlog, run_ref)
 
@@ -209,9 +208,8 @@ def _output(root, by_number, prs, spend):
     order."""
     entries = []
     for _, lines in breakdown_files(root):
-        for line in lines:
-            number = row_tracker_issue(line)
-            wo = row_work_order(line)
+        for row in breakdown_rows(lines):
+            number, wo = row["issue"], row["wo"]
             if number is None or wo is None:
                 continue
             issue = by_number.get(number, {})
@@ -221,8 +219,8 @@ def _output(root, by_number, prs, spend):
             pr = (prs or {}).get(number)
             entries.append({
                 "wo": wo,
-                "title": row_title(line),
-                "size": row_size(line),
+                "title": row["title"],
+                "size": row["size"],
                 "state": lifecycle,
                 "pr": pr.get("number") if pr else None,
                 "url": (pr.get("url") if pr else None)
