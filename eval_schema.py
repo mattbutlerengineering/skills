@@ -151,17 +151,36 @@ def entries(data, key, label):
     return [e for e in raw if isinstance(e, dict)], problems
 
 
-def duplicate_id_problems(items, label, noun="case"):
-    """One "{label} has duplicate <noun> id" problem per repeated id.
+def valid_id(value):
+    """True when value is an eval id: a non-empty string or an int.
 
-    The sort key puts None-id duplicates after string ids and orders the
-    rest by string form, so mixed-type ids never hit an unorderable
-    comparison and problem order stays deterministic.
+    The one rule every eval collection shares (#887) — routing cases,
+    output evals, charter cases and their expectations. 0 is a value;
+    a bool, a float, '' or anything unhashable is not an id.
+    """
+    if isinstance(value, bool):
+        return False
+    return isinstance(value, int) or (isinstance(value, str) and value != "")
+
+
+def id_problems(items, label, noun="case"):
+    """Problem strings for the ids of a list of entry dicts.
+
+    One "{label} {noun} <id> has no id" per entry whose id fails
+    valid_id, then one "{label} has duplicate {noun} id <id>" per
+    repeated valid id. Duplicates are judged among valid ids only, so
+    nothing unhashable is ever hashed: validators return problem
+    strings, they never raise. Duplicates sort strings before ints, each
+    by string form, so the order is deterministic.
     """
     ids = [e.get("id") for e in items]
-    return [f"{label} has duplicate {noun} id {i!r}"
-            for i in sorted({i for i in ids if ids.count(i) > 1},
-                            key=lambda i: (i is None, str(i)))]
+    valid = [i for i in ids if valid_id(i)]
+    return (
+        [f"{label} {noun} {i!r} has no id" for i in ids if not valid_id(i)]
+        + [f"{label} has duplicate {noun} id {i!r}"
+           for i in sorted({i for i in valid if valid.count(i) > 1},
+                           key=lambda i: (isinstance(i, int), str(i)))]
+    )
 
 
 def load_case_set(path, label, validate):
@@ -191,7 +210,7 @@ def load_case_set(path, label, validate):
 def _output_field_missing(record, field):
     # expectations must be non-empty (an eval with none checks nothing);
     # any other field is missing only when absent or null — falsy values
-    # like id 0 are values, mirroring validate()'s is-None handling
+    # are values, mirroring validate()'s is-None handling
     if field == "expectations":
         return not record.get(field)
     return record.get(field) is None
@@ -231,10 +250,11 @@ def validate_output(data, slug, label):
         + ([f"{label} skill_name is {data.get('skill_name')!r}, "
             f"expected {slug!r}"]
            if data.get("skill_name") != slug else [])
-        + duplicate_id_problems(evals, label, "eval")
+        + id_problems(evals, label, "eval")
+        # id_problems owns the id; the loop checks every other field
         + [f"{label} eval {e.get('id')!r} missing field: {field}"
            for e in evals for field in OUTPUT_FIELDS
-           if _output_field_missing(e, field)]
+           if field != "id" and _output_field_missing(e, field)]
     )
 
 
@@ -254,7 +274,9 @@ def validate(data, skills, label):
 
     problems = (
         shape
-        + duplicate_id_problems(cases, label)
+        # every runner report subscripts case["id"], so an id-less case
+        # must be refused here, not become a KeyError mid-run
+        + id_problems(cases, label)
         + [f"{label} case {c.get('id')!r} has invalid "
            f"expected {c.get('expected')!r}"
            for c in cases
@@ -265,12 +287,6 @@ def validate(data, skills, label):
            for c in cases if c.get("kind") not in KINDS]
         + [f"{label} case {c.get('id')!r} has no query"
            for c in cases if not c.get("query")]
-        # id presence matters as much as query presence: every runner
-        # report subscripts case["id"], so an id-less case must be
-        # refused here, not become a KeyError mid-run. is-None mirrors
-        # the expected/OUTPUT_FIELDS handling: falsy ids are values.
-        + [f"{label} case {c.get('id')!r} has no id"
-           for c in cases if c.get("id") is None]
     )
 
     coverage = [c.get("expected") for c in cases]
