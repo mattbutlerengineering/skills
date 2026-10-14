@@ -19,6 +19,8 @@ rehearsal pins the ones that would recur only in a consumer:
   first.
 - #807: `close --merge` succeeds when the repo's auto-merge landed the
   closing PR after the Conductor pushed.
+- #850: factory.json's conductor.worktree_setup (here a no-op that
+  leaves a marker) runs in the item worktree, never the batch worktree.
 
 JSON formatting and labels are not asserted here (#832, #834). The
 husky hook dir is present but not installed (no core.hooksPath), as in
@@ -47,6 +49,7 @@ from test_conductor_run import Harness, pr_body  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 BATCH, OTHER = "b20261014", "b20261015"
+SETUP = [sys.executable, "-c", "open('setup-ran', 'w').close()"]
 CLOSING = conductor.batch_branch(BATCH)
 # The consumer's own files beside the stamp: a node toolchain it has not
 # installed, a husky hook dir, 3-digit ADRs and an auto-merge workflow.
@@ -136,7 +139,7 @@ class TestConsumerRehearsal(unittest.TestCase):
             (self.checkout / path).parent.mkdir(parents=True, exist_ok=True)
             (self.checkout / path).write_text(text)
         (self.checkout / ".github/factory.json").write_text(
-            json.dumps(CONFIG))
+            json.dumps(dict(CONFIG, conductor={"worktree_setup": SETUP})))
         self.git("add", "-A")
         self.git("commit", "-q", "-m", "chore: stamp the factory")
         self.git("remote", "add", "origin", str(self.origin))
@@ -214,6 +217,9 @@ class TestConsumerRehearsal(unittest.TestCase):
         run_id = conductor.run_id(BATCH, "#12", "spec", 1)
         self.assertEqual(out.splitlines()[0], f"cd: run {run_id} completed")
         self.assertEqual(len(harness.calls), 1)
+        item_wt = self.checkout / conductor.item_worktree(BATCH, "#12")
+        self.assertTrue((item_wt / "setup-ran").is_file())
+        self.assertFalse((batch_wt / "setup-ran").exists())
         item_branch = conductor.item_branch(BATCH, "#12")
         self.assertIn(run_id, self.git("show", f"{item_branch}:"
                                        "docs/factory/costs.jsonl"))

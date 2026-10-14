@@ -274,6 +274,13 @@ missing. That finding describes the chosen scope and is not a fault.
   `node_modules` or equivalent. So when the gate needs a dependency install
   first, ship a small gate script that installs and then checks, and point
   `gate_command` at it.
+- When the Worker's own commits meet hooks that need those dependencies
+  (husky, lefthook or pre-commit), set `conductor.worktree_setup` to the
+  install command as an argv list, for example `["npm", "ci"]`. Each Worker
+  run executes it in its item worktree before the Worker launches, under the
+  step's wall-clock limit, and never in the batch worktree. A failure stalls
+  the item with cause `setup-failed` and names the command. It is off when
+  absent (#850).
 - Open batches from the repo's own checkout, not a throwaway clone. The batch
   ledger is an uncommitted file in the batch worktree until `close` commits
   it (#704).

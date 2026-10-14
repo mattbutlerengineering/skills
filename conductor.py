@@ -157,7 +157,7 @@ ASK_KINDS = ("spend", "gate", "merge", "stall", "clarify")
 # ends a stall carries the stall's; owner-block blocks an unstalled item.
 CAUSES = ("ceiling", "timeout", "agent-failed", "delivery-failed",
           "runner-lost", "changes-again", "merge-drift", "merge-failed",
-          "owner-block")
+          "owner-block", "setup-failed")
 TERMINAL = ("merged", "blocked")
 # An answer with this choice blocks the ask's item (Owner, 2026-10-10):
 # the one path into `blocked`.

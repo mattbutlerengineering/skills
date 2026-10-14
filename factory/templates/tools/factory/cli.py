@@ -509,16 +509,16 @@ def read_execution(path):
 
 
 def runner(binary, timeout=None):
-    """A run(args, input=None) callable shelling out to `binary`,
-    returning the CompletedProcess. A failed or missing binary raises
-    CLI_FAILURES — the caller's concern, not this adapter's — as does
-    one still running after `timeout` seconds (None: wait forever).
-    `input` is the child's stdin text; both defaults leave every
-    earlier caller byte-for-byte unchanged."""
-    def run(args, input=None):
+    """A run(args, input=None, cwd=None) callable shelling out to
+    `binary`, returning the CompletedProcess. A failed or missing binary
+    raises CLI_FAILURES — the caller's concern, not this adapter's — as
+    does one still running after `timeout` seconds (None: wait forever).
+    `input` is the child's stdin text and `cwd` its working directory;
+    the defaults leave every earlier caller byte-for-byte unchanged."""
+    def run(args, input=None, cwd=None):
         return subprocess.run([binary, *args], check=True,
                               capture_output=True, text=True,
-                              timeout=timeout, input=input)
+                              timeout=timeout, input=input, cwd=cwd)
     return run
 
 
