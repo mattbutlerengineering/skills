@@ -316,7 +316,8 @@ class TestParseRun(unittest.TestCase):
             self.assertEqual(parse_run(Path(tmp)),
                              {"runs": [], "adr_files": [], "adr_problems": [],
                               "adr_readme": None, "scannable": [],
-                              "scannable_problems": []})
+                              "scannable_problems": [],
+                              "artifact_problems": []})
 
     def test_scannable_defaults_to_empty_and_pays_no_i_o(self):
         # No `scannable` argument: callers that never touch it (detectors
@@ -731,3 +732,29 @@ class TestGuardedAdrRead(unittest.TestCase):
         self.assertEqual([path.name for path, _ in parsed["scannable"]],
                          ["0002-ok.md"])
         self.assertEqual(parsed["scannable_problems"], [self.problem])
+
+    def test_parse_run_reports_undecodable_run_artifacts_and_index(self):
+        # Issue #881 (ADR-0094): every run artifact and the ADR index go
+        # through the same guarded read; each unreadable one is None in
+        # its field and one artifact_problems string.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp)
+            run = root / "docs" / "features" / "cafe"
+            run.mkdir(parents=True)
+            for name in ("breakdown.md", "prd.md", "architecture.md"):
+                (run / name).write_bytes(self.UNDECODABLE)
+            (root / "docs" / "adr" / "README.md").write_bytes(
+                self.UNDECODABLE)
+            parsed = parse_run(root)
+        entry = parsed["runs"][0]
+        self.assertEqual(
+            [entry[key] for key in ("breakdown", "prd", "prd_id",
+                                    "prd_date", "architecture")],
+            [None] * 5)
+        self.assertIsNone(parsed["adr_readme"])
+        self.assertEqual(parsed["artifact_problems"], [
+            self.problem.replace("docs/adr/0001-cafe.md", rel)
+            for rel in ("docs/features/cafe/breakdown.md",
+                        "docs/features/cafe/prd.md",
+                        "docs/features/cafe/architecture.md",
+                        "docs/adr/README.md")])
