@@ -37,8 +37,7 @@ import sys
 from pathlib import Path
 
 import cli
-from knowledge_plane import (FENCE_OPEN, fence_closes, fence_open,
-                             local_link_targets, resolve_link)
+from knowledge_plane import fenced, local_link_targets, resolve_link
 
 LABEL = "md-claims"
 USAGE = "usage: md_claims.py check|extract [root] [path ...]"
@@ -105,24 +104,26 @@ def claims_in(text):
     lines = text.splitlines()
     ignored = {n for n, line in enumerate(lines, 1) if IGNORE in line}
     ignored |= {n + 1 for n in ignored}
-    found, fence, block = [], None, []
-    for number, line in enumerate(lines, 1):
-        if fence:
-            if fence_closes(line, fence[0], fence[1]):
-                found += _block_claims(*fence[2:], block)
-                fence, block = None, []
-            else:
-                block.append((number, line))
-            continue
-        opened = fence_open(line)
-        if opened:
-            info = FENCE_OPEN.match(line).group("info").strip().lower()
-            lang = info.split()[0] if info else ""
-            fence = (*opened, lang, number in ignored)
-            continue
-        if number not in ignored:
+    found, inside, block = [], None, []
+    for number, line, fence in fenced(lines):
+        if fence is not inside:
+            found += _fence_claims(inside, ignored, block)
+            inside, block = fence, []
+        if line is None:  # an unclosed fence's block is never read
+            return found
+        if fence is not None:
+            block.append((number, line))
+        elif number not in ignored:
             found += _prose_claims(number, line)
-    return found
+    return found + _fence_claims(inside, ignored, block)
+
+
+def _fence_claims(fence, ignored, block):
+    """The claims in one closed fenced block (none outside a fence)."""
+    if fence is None:
+        return []
+    lang = fence.info.lower().split()[0] if fence.info else ""
+    return _block_claims(lang, fence.lineno in ignored, block)
 
 
 def _prose_claims(number, line):
