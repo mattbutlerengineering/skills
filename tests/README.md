@@ -50,6 +50,8 @@
 - `test_open_pr_preflight.py` — cross-cutting: the protocol's "Open pull
   requests first" section and the five work-starting skills that recite it
 - `test_orientation_pack.py` — orientation_pack.py, the dispatch prompt
+- `test_plugin_eval_tags.py` — cross-cutting: every plugin-evals/ case is
+  tagged with its skill directory (ADR-0093)
 - `test_protocol_backlog.py` — protocol.py backlog-entry grammar
 - `test_protocol_conformance.py` — protocol.py stage tables vs
   docs/pipeline-protocol.md prose

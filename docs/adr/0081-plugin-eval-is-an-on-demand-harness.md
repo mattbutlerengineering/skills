@@ -1,6 +1,6 @@
 # `claude plugin eval` is an on-demand harness with its own tree
 
-- Status: accepted
+- Status: superseded in part by ADR-0093 (the no-detector clause and the five-case count)
 - Date: 2026-10-10
 
 Amends no record. ADR-0012 and ADR-0019 stand: a skill graduates past
