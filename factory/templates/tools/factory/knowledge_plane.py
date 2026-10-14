@@ -414,8 +414,8 @@ def breakdown_files(root):
     """(breakdown path, its lines) per run that has a breakdown.md.
 
     The layout walk in one place: every dispatch-plane reader of
-    work-order rows — the assembler, the validator, orientation_pack,
-    and gates' detectors — opens the same files in the same run order.
+    work-order rows — the assembler, the validator and gates'
+    detectors — opens the same files in the same run order.
     Row grammar is breakdown_rows' (ADR-0039 put it here); slice and
     row-reading policy stay with each caller (ADR-0037).
     """

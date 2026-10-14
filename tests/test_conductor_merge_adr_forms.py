@@ -93,6 +93,13 @@ class TestConsumerWidth(unittest.TestCase):
         self.assertEqual(self.fields, [{"what": "adr", "values": [30],
                                         "renumbered_from": [27]}])
 
+    def test_the_commit_names_the_adr_at_its_written_width(self):
+        # #890: the message is one more place the width is written.
+        self.assertEqual(
+            self.git.called("-C", str(self.wt), "commit"),
+            [["-C", str(self.wt), "commit", "-m",
+              "chore(conductor): renumber ADR-027 to ADR-030"]])
+
     def test_citations_are_rewritten_at_the_width_they_are_written(self):
         self.assertEqual(
             (self.wt / "docs/adr/ADR-030-redis.md").read_text(),
