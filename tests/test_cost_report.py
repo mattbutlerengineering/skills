@@ -116,6 +116,25 @@ class TestAggregate(unittest.TestCase):
             "by_wo": {"WO-0001": 12.50},
         })
 
+    def test_owner_session_markers_are_not_runs(self):
+        # 131 of the real ledger's 170 rows are $0 owner-session:unmetered
+        # markers (ADR-0069: not a dispatch). Counted as runs, they cut
+        # the dashboard's cost_per_wo about twentyfold. The total, and so
+        # the month-to-date cap figure, is unchanged: markers cost $0.
+        entries = [
+            entry("WO-0001", "r-1", "m", 1000, 12.50, "merged", "2026-07-06"),
+            entry("WO-0002", "s-2", "m", 0, 0.0, "owner-session:unmetered",
+                  "2026-07-07"),
+            entry("WO-0001", "s-3", "m", 0, 0.0, "owner-session:unmetered",
+                  "2026-07-08"),
+        ]
+        self.assertEqual(cost_report.aggregate(entries, month="2026-07"), {
+            "total_cost": 12.50,
+            "total_tokens": 1000,
+            "run_count": 1,
+            "by_wo": {"WO-0001": 12.50},
+        })
+
     def test_a_month_window_counts_only_that_months_rows(self):
         entries = [
             entry("WO-0001", "r-1", "m", 1000, 12.50, "merged", "2026-07-06"),
