@@ -19,6 +19,8 @@
 - `test_budget_guard.py` — budget_guard.py, the dollar-budget stop
 - `test_charter_replay.py` — charter_replay.py below the model: decode,
   score, verdict
+- `test_charter_expectation_shape.py` — a charter expectation's id
+  and mode, validated to the shape the scorer and control verdict read
 - `test_cli.py` — cli.py seam: failure vocabulary, harness IO,
   harness_run lifecycle
 - `test_cli_process_reaping.py` — cli.harness_run's group-kill contract
@@ -45,6 +47,8 @@
 - `test_model_routing.py` — WO-0007 acceptance evidence across two
   modules: type label → charter band (assembler) → model id
   (factory_config), against the real factory.json and charter stubs
+- `test_open_pr_preflight.py` — cross-cutting: the protocol's "Open pull
+  requests first" section and the five work-starting skills that recite it
 - `test_orientation_pack.py` — orientation_pack.py, the dispatch prompt
 - `test_protocol_backlog.py` — protocol.py backlog-entry grammar
 - `test_protocol_conformance.py` — protocol.py stage tables vs

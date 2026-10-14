@@ -41,7 +41,7 @@ import conductor_run
 import cost_ledger
 import factory_config
 import label_sync
-from cli import CLI_FAILURES, detail, label_names
+from cli import CLI_FAILURES, detail
 from conductor import LEDGER, TERMINAL, answers, append, ask_row, \
     batch_branch, batch_dir, current_state, is_text, item_view, load, \
     numbered, parse, parsed_at, read_text, run_item, stamp, view
@@ -243,6 +243,9 @@ def scorecards_cli(root, args):
 # --- closing a batch (WO-0163) -----------------------------------------
 
 NEEDS_HUMAN = "needs-human"
+# The labels close writes; detector J checks the taxonomy carries
+# them (gates.declared_labels reads every module's LABELS).
+LABELS = (NEEDS_HUMAN,)
 CLOSE_OPTIONS = ["merge", "hold"]
 CLOSE_WHY = ("every item is merged or blocked, and the scorecard computed"
              " from the ledger")
@@ -491,19 +494,6 @@ def _record_close(root, batch, now, finals):
     return (written[1]["id"] if written else None), problems
 
 
-def _missing_label(gh):
-    """(True when the repo lacks needs-human, problems). A tools-only
-    stamp never syncs labels.json, so the one label close writes may not
-    exist (#726). Checked here, where it is written, rather than at
-    `open`: a label deleted mid-batch, and a batch opened before this
-    check, are caught too. A missing label is created bare; label_sync
-    --apply gives it the taxonomy's colour where labels.json exists."""
-    listing, problems = label_sync.live_labels(gh)
-    if listing is None:
-        return None, problems
-    return NEEDS_HUMAN not in label_names(listing), []
-
-
 def _publish(root, batch, git, gh, finals, reasons, branches):
     """Commit, push (never forced), open the closing PR, label each
     blocked item, then delete its spend-only branches from origin: only
@@ -524,15 +514,18 @@ def _publish(root, batch, git, gh, finals, reasons, branches):
         if problems:
             return [f"cd: close: {problems[0]}; finish the push, the PR and"
                     " the needs-human labels by hand"]
-    calls = [["pr", "create", "--head", branch, "--base", "main", "--title",
-              f"conductor batch {batch}: ledger and scorecard", "--body",
-              pr_body(batch, finals, branches["keep"])]]
+    # A tools-only stamp never syncs labels.json, so the one label close
+    # writes may not exist (#726). Ensured here, where it is written,
+    # rather than at `open`: a label deleted mid-batch, and a batch
+    # opened before this check, are caught too.
     if finals["blocked"]:
-        missing, problems = _missing_label(gh)
+        problems = label_sync.ensure(root, LABELS, gh)
         if problems:
             return [f"cd: close: {problems[0]}; finish the PR and the"
                     " needs-human labels by hand"]
-        calls += [["label", "create", NEEDS_HUMAN]] if missing else []
+    calls = [["pr", "create", "--head", branch, "--base", "main", "--title",
+              f"conductor batch {batch}: ledger and scorecard", "--body",
+              pr_body(batch, finals, branches["keep"])]]
     for item in finals["blocked"]:
         calls += [["issue", "edit", item[1:], "--add-label", NEEDS_HUMAN],
                   ["issue", "comment", item[1:], "--body",
