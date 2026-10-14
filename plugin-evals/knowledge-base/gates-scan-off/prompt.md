@@ -1,7 +1,7 @@
 ---
 description: >-
   Knowledge-base paired test, arm off (docs/kb and its inline index removed). Passes when the answer warns that example typed ids inside a code fence still fail the gates.
-tags: [kb-off]
+tags: [knowledge-base, kb-off]
 max_turns: 25
 timeout_seconds: 600
 allowed_tools: [Read, Glob, Grep]
