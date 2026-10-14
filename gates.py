@@ -13,7 +13,8 @@ ai-tooling suite where the rule is the same idea):
   C LINK-INTEGRITY — every PRD-####/ADR-####/WO-#### token resolves;
                      duplicate PRD ids fail
   D BLUEPRINT-DRIFT — the approved blueprint (docs/adr) is self-consistent:
-                     every ADR declares a known status and is indexed with
+                     every ADR reads, declares a known status and is
+                     indexed with
                      that status in docs/adr/README.md, and no artifact
                      outside docs/adr builds on a superseded decision
   E SCAFFOLD-SYNC  — factory/manifest.json checksums match the template
@@ -43,7 +44,7 @@ ai-tooling suite where the rule is the same idea):
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
   K STANDARDS-DRIFT — docs/standards.json's ADR-derived entries match a
-                     fresh standards_index.build_index(root) regen, and
+                     fresh standards_index.build_index regen, and
                      every `enforced`-status entry's source ADR is
                      in force (ADR-0073, ADR-0089)
   M CAPTURE-COMPLETENESS — every docs/fixes/<slug>/defect.md that exists
@@ -522,6 +523,7 @@ def check_blueprint_drift(root, parsed=None):
     if parsed is None:
         parsed = parse_run(root, scannable=_scannable_files(root))
     problems = _architecture_drift(root, parsed)
+    problems += [f"D: {problem}" for problem in parsed["adr_problems"]]
     adr_dir = root / "docs" / "adr"
     # Equivalent to the pre-migration `if not adr_dir.is_dir(): return
     # problems` (see gates.py history): with no ADR files and no README,
@@ -1345,7 +1347,8 @@ def check_standards_drift(root, parsed=None):
 
     (1) the committed file's ADR-derived entries (every entry whose
         `source` is NOT a standards_index.HAND_CURATED_PREFIX entry)
-        disagree with a fresh standards_index.build_index(root) regen,
+        disagree with a fresh standards_index.build_index regen over
+        parsed["adr_files"],
         compared on every field EXCEPT `status` (see _DRIFT_FIELDS —
         `status` can never "drift" from an ADR regen by definition, since
         an ADR bullet never states one).
@@ -1386,7 +1389,8 @@ def check_standards_drift(root, parsed=None):
 
     if parsed is None:
         parsed = parse_run(root)
-    fresh, build_problems = standards_index.build_index(root)
+    fresh, build_problems = standards_index.build_index(
+        root, parsed["adr_files"])
     problems = [f"K: {p}" for p in build_problems]
 
     committed_adr = sorted(

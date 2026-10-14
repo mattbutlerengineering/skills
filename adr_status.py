@@ -29,32 +29,28 @@ import cli
 from knowledge_plane import adr_records
 
 
-def _title(path):
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if line.startswith("# "):
-            return line[2:].strip()
-    return None
-
-
 def _entry(root, record):
     path, by = record["path"], record["superseded_by"]
     return {"id": f"ADR-{record['number']}",
             "file": path.relative_to(root).as_posix(),
-            "title": _title(path),
+            "title": record["title"],
             "status": record["status"],
             "standing": record["standing"],
             "superseded_by": f"ADR-{by}" if by else None}
 
 
 def gather(root):
-    """(model, problems). The one problem is a root that is not a
-    directory; everything else is a fact inside the model."""
+    """(model, problems). The problems are a root that is not a
+    directory and an ADR that cannot be read (knowledge_plane.read_adrs,
+    issue #855); everything else is a fact inside the model."""
     root = Path(root)
     if not root.is_dir():
         return None, [f"adr-status: {root} is not a directory"]
-    records = sorted(adr_records(root),
-                     key=lambda record: (int(record["number"]),
-                                         record["path"]))
+    records, problems = adr_records(root)
+    if problems:
+        return None, [f"adr-status: {problem}" for problem in problems]
+    records = sorted(records, key=lambda record: (int(record["number"]),
+                                                  record["path"]))
     return {"adrs": [_entry(root, record) for record in records]}, []
 
 

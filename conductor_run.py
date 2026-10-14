@@ -32,7 +32,7 @@ from conductor import RUN_ID, RUNS, WORKER_ENV, answers, append, ask_row, \
     current_state, item_view, item_worktree, load, stamp, view
 from conductor import run_id as make_run_id
 from conductor_plan import main_checkout, span
-from knowledge_plane import WO_TOKEN
+from knowledge_plane import WO_TOKEN, work_orders
 from orientation_pack import orientation_pack
 from protocol import read_frontmatter
 
@@ -250,15 +250,20 @@ def _work(rows, entry, step, git, gh, batch, worktree):
         return item, "", (issue or {}).get("body"), problems
     if step != "build":
         return item, "", None, []
+    index, _ = work_orders(worktree)
     if entry["type"] == "order":
-        issue, problems = _issue(gh, item)
-        if problems:
-            return None, None, None, problems
-        found = WO_TOKEN.search(issue.get("title") or "")
-        if not found:
-            return None, None, None, [f"cd: {item}'s title names no work"
-                                      " order"]
-        wo, row = found.group(0), issue["title"]
+        # The row, not the issue title, names the work order (ADR-0032,
+        # issue #857): the same index the dispatcher resolves through.
+        record = index["issue"].get(int(item[1:]))
+        if record is None:
+            return None, None, None, [f"cd: no breakdown row mirrors {item}"]
+        if record["clashes"]:
+            return None, None, None, [f"cd: {clash}"
+                                      for clash in record["clashes"]]
+        if not record["wo"]:
+            return None, None, None, [f"cd: {item}'s breakdown row names no"
+                                      " work order"]
+        wo, row = record["wo"], record["block"]
     else:
         pending, problems = flow.unchecked_rows(
             git, flow.item_branch(batch, item))
@@ -270,7 +275,9 @@ def _work(rows, entry, step, git, gh, batch, worktree):
         row = pending[0]
         found = WO_TOKEN.search(row)
         wo = found.group(0) if found else item
-    return wo, f"{row}\n\n{orientation_pack(worktree, wo, row)}", None, []
+    record = index["wo"].get(wo)
+    block = record["block"] if record else row
+    return wo, f"{row}\n\n{orientation_pack(worktree, wo, block)}", None, []
 
 
 def worktree_path(git, batch, item):

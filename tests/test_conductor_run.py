@@ -70,10 +70,18 @@ def pr_body(path):
     (path / "pr-body.md").write_text("Body\n")
 
 
+# The breakdown every item worktree checks out: the order #14 resolves
+# through (issue #857), with the Accept line its block carries.
+ORDER_ROW = "- [ ] **WO-0180** order — size:S, blocked by: — (tracker: #14)"
+BREAKDOWN = f"# Breakdown\n\n{ORDER_ROW}\n  - Accept: the order lands.\n"
+
+
 def add_worktree(args):
     """A FakeGit answer: `worktree add -b <branch> <path>` makes the
-    directory, as git does, and prints nothing."""
-    Path(args[4]).mkdir(parents=True)
+    directory, as git does, checks out the breakdown, and prints
+    nothing."""
+    Path(args[4], "docs").mkdir(parents=True)
+    Path(args[4], "docs", "breakdown.md").write_text(BREAKDOWN)
     return ""
 
 
@@ -488,6 +496,25 @@ class TestCompletedRun(RunCase):
                       gh=Gh(title="WO-0180: order"), rows=rows)
         self.assertEqual(self.rows[-1]["run_id"], "conductor-b1-14-build-2")
         self.assertEqual(self.spend("#14")[0]["wo"], "WO-0180")
+
+    def test_an_order_is_briefed_from_its_breakdown_row_not_its_title(self):
+        # Issue #857: the order leg resolves #14 through the work_orders
+        # index the dispatcher reads; the issue title names nothing.
+        self.run_step("#14", "build", Harness(act=pr_body),
+                      gh=Gh(title="WO-9999: a title naming another order"))
+        brief = self.harness.calls[0]["cmd"][2]
+        self.assertIn(f"{ORDER_ROW}\n  - Accept: the order lands.", brief)
+        self.assertNotIn("WO-9999", brief)
+        self.assertEqual(self.spend("#14")[0]["wo"], "WO-0180")
+
+    def test_an_order_no_breakdown_row_mirrors_is_not_launched(self):
+        with unittest.mock.patch.dict(globals(),
+                                      {"BREAKDOWN": "# Breakdown\n"}):
+            summary, problems = self.run_step(
+                "#14", "build", Harness(act=pr_body),
+                gh=Gh(title="WO-0180: order"))
+        self.assertEqual(problems, ["cd: no breakdown row mirrors #14"])
+        self.assertEqual(self.harness.calls, [])
 
     def test_retry_up_runs_one_band_up(self):
         rows = BASE + [launch("#14", "planned", "build"),

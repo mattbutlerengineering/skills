@@ -305,6 +305,23 @@ class TestCalibrateCli(unittest.TestCase):
                " docs/factory/costs.jsonl row with its run_id\n"
                "cd: 1 problem(s)\n"))
 
+    def test_an_unreadable_ledger_is_refused_not_a_failure(self):
+        # #854: one bad ledger on main is append-only evidence; calibrate
+        # names it under refused and reads every other closed batch, as
+        # the miner counts it (#837), so conduct's read-back still runs.
+        with tempfile.TemporaryDirectory() as tmp:
+            write(tmp, {BATCH: ROWS + [CLOSED]}, SPEND)
+            bad = Path(tmp) / conductor.LEDGER.format(batch="good")
+            bad.parent.mkdir(parents=True)
+            bad.write_text("not json\n", encoding="utf-8")
+            code, out = self.main(tmp, ["calibrate"])
+        card = cal.calibrate(ACTUALS, WEIGHTS)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out[:out.rindex("}") + 1]), {
+            **card, "refused": [
+                "ledgers: good does not load, so its runs are left out",
+                *card["refused"]]})
+
     def test_extra_arguments_print_usage(self):
         with tempfile.TemporaryDirectory() as tmp:
             code, out = self.main(tmp, ["calibrate", "x"])

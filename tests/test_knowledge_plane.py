@@ -314,8 +314,8 @@ class TestParseRun(unittest.TestCase):
     def test_a_tree_without_docs_parses_to_an_empty_structure(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(parse_run(Path(tmp)),
-                             {"runs": [], "adr_files": [], "adr_readme": None,
-                              "scannable": []})
+                             {"runs": [], "adr_files": [], "adr_problems": [],
+                              "adr_readme": None, "scannable": []})
 
     def test_scannable_defaults_to_empty_and_pays_no_i_o(self):
         # No `scannable` argument: callers that never touch it (detectors
@@ -643,7 +643,9 @@ class TestAdrRecord(unittest.TestCase):
             "path": Path("docs/adr/0001-old.md"),
             "lineno": 3, "status": "superseded by ADR-0002 (all of it)",
             "head": "superseded by ADR-0002", "standing": "retired",
-            "superseded_by": "0002"})
+            "superseded_by": "0002", "title": "Old",
+            "lines": ["# Old", "", "- Status: superseded by ADR-0002"
+                      " (all of it)"]})
 
     def test_the_number_is_four_digits_whatever_the_file_wrote(self):
         record = knowledge_plane.adr_record(
@@ -679,6 +681,42 @@ class TestAdrRecord(unittest.TestCase):
             adr_dir.mkdir(parents=True)
             (adr_dir / "0062.md").write_text(
                 "# X\n\n- Status: accepted\n", encoding="utf-8")
-            [record] = knowledge_plane.adr_records(root)
-        self.assertEqual((record["number"], record["standing"]),
-                         ("0062", "active"))
+            [record], problems = knowledge_plane.adr_records(root)
+        self.assertEqual(problems, [])
+        self.assertEqual((record["number"], record["standing"],
+                          record["title"], record["lines"]),
+                         ("0062", "active", "X",
+                          ["# X", "", "- Status: accepted"]))
+
+
+class TestGuardedAdrRead(unittest.TestCase):
+    """Issue #855: one guarded ADR read (cli.read_file, ADR-0075) under
+    every reader — adr_records, parse_run's adr_files and, through them,
+    adr_status, the standards index and detectors C, D and K."""
+
+    UNDECODABLE = "# Caf\xe9\n\n- Status: accepted\n".encode("latin-1")
+
+    def tree(self, tmp):
+        adr_dir = Path(tmp) / "docs" / "adr"
+        adr_dir.mkdir(parents=True)
+        (adr_dir / "0001-cafe.md").write_bytes(self.UNDECODABLE)
+        (adr_dir / "0002-ok.md").write_text("# Ok\n\n- Status: accepted\n",
+                                            encoding="utf-8")
+        try:
+            self.UNDECODABLE.decode("utf-8")
+        except UnicodeDecodeError as err:
+            self.problem = f"cannot read docs/adr/0001-cafe.md: {err}"
+        return Path(tmp)
+
+    def test_adr_records_reports_an_undecodable_adr_and_reads_the_rest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            records, problems = knowledge_plane.adr_records(self.tree(tmp))
+        self.assertEqual([record["number"] for record in records], ["0002"])
+        self.assertEqual(problems, [self.problem])
+
+    def test_parse_run_carries_the_read_problem_beside_the_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            parsed = parse_run(self.tree(tmp))
+        self.assertEqual([path.name for path, _ in parsed["adr_files"]],
+                         ["0002-ok.md"])
+        self.assertEqual(parsed["adr_problems"], [self.problem])

@@ -173,6 +173,105 @@ def detect_fired(events, name_to_slug):
     return None
 
 
+def _flush_block(block, calls, texts):
+    """Close one partial-frame content block into a message."""
+    kind, name, buffer = block
+    if kind != "tool_use":
+        if buffer:
+            texts.append(buffer)
+        return
+    try:
+        parsed = json.loads(buffer) if buffer else {}
+    except json.JSONDecodeError:
+        # A timeout can cut the stream mid-input: keep the raw text so
+        # transcript-scoped expectations still see what was firing —
+        # dropping it would silently un-fire a forbid.
+        parsed = {"raw": buffer}
+    calls.append({"name": name, "input": parsed})
+
+
+def _consume_frame(se, block, calls, texts):
+    """One stream_event frame into the partial-frame state machine;
+    returns the open [kind, name, buffer] block, or None."""
+    se_type = se.get("type")
+    if se_type == "content_block_start":
+        cb = se.get("content_block", {})
+        if cb.get("type") in ("tool_use", "text"):
+            return [cb["type"], cb.get("name", ""), ""]
+        return None
+    if se_type == "content_block_delta" and block:
+        delta = se.get("delta", {})
+        if delta.get("type") == "input_json_delta":
+            return [block[0], block[1], block[2] + delta.get("partial_json",
+                                                             "")]
+        if delta.get("type") == "text_delta":
+            return [block[0], block[1], block[2] + delta.get("text", "")]
+        return block
+    if se_type == "content_block_stop" and block:
+        _flush_block(block, calls, texts)
+        return None
+    return block
+
+
+def claude_messages(events):
+    """Decoded claude stream-json events in, one record per assistant
+    message out: {id, parent_tool_use_id, tool_calls, texts}, in order
+    of first appearance. Pure, like detect_fired.
+
+    The CLI emits two shapes for one message under
+    --include-partial-messages: stream_event partial frames (opened by
+    message_start, which names the id) and the legacy full assistant
+    message (which carries message.id). They are collected apart and
+    the frames win per message id when they hold anything — never
+    summed, and never chosen for the whole run, so a message the CLI
+    sent in one shape only (a subagent's, say) is still read while its
+    neighbours are framed. A message with no id (older output) shares
+    the None key. A block still open at the end (a timeout cut) is
+    flushed into the message it belongs to."""
+    frames, legacy, parents, order = {}, {}, {}, []
+
+    def slot(table, key, parent):
+        if key not in parents:
+            order.append(key)
+            parents[key] = None
+        if parents[key] is None:
+            parents[key] = parent
+        return table.setdefault(key, ([], []))
+
+    current, block = None, None
+    for event in events:
+        etype = event.get("type")
+        if etype == "stream_event":
+            se = event.get("event", {})
+            if se.get("type") == "message_start":
+                current = se.get("message", {}).get("id")
+            if se.get("type") in ("message_start", "content_block_start"):
+                slot(frames, current, event.get("parent_tool_use_id"))
+            # an open block was started under current, so its slot exists
+            block = _consume_frame(se, block,
+                                   *frames.get(current, ([], [])))
+        elif etype == "assistant":
+            message = event.get("message", {})
+            calls, texts = slot(legacy, message.get("id"),
+                                event.get("parent_tool_use_id"))
+            for item in message.get("content", []):
+                if item.get("type") == "tool_use":
+                    calls.append({"name": item.get("name", ""),
+                                  "input": item.get("input", {})})
+                elif item.get("type") == "text" and item.get("text"):
+                    texts.append(item["text"])
+    if block:
+        _flush_block(block, *slot(frames, current, None))
+    records = []
+    for key in order:
+        calls, texts = frames.get(key, ([], []))
+        if not (calls or texts):
+            calls, texts = legacy.get(key, ([], []))
+        records.append({"id": key, "parent_tool_use_id": parents[key],
+                        "tool_calls": calls, "texts": texts})
+    return records
+
+
 def _omp_call_slug(tool_name, arguments, name_to_slug):
     """Fired slug for one completed omp tool call, or None.
 
@@ -271,16 +370,19 @@ def _omp_invocation(query, descriptions, run_id, model, isolate):
 # (project_dir, cmd) can only come from the tested path; detect is the
 # matching stream detector; decode names the stream's line framing
 # (cli.decode_events — the shared JSON-lines decode) for consumers that
-# hold raw lines themselves. Keys are pinned to eval_schema.HARNESSES,
-# the vocabulary owner, by test.
+# hold raw lines themselves; messages reads decoded events as one
+# record per assistant message (charter replay's transcript), or is
+# None for a harness with no reader yet. Keys are pinned to
+# eval_schema.HARNESSES, the vocabulary owner, by test.
 Harness = namedtuple("Harness",
-                     ("binary", "command", "invocation", "detect", "decode"))
+                     ("binary", "command", "invocation", "detect", "decode",
+                      "messages"))
 
 HARNESSES = {
     "claude": Harness("claude", _claude_command, _claude_invocation,
-                      detect_fired, cli.decode_events),
+                      detect_fired, cli.decode_events, claude_messages),
     "omp": Harness("omp", _omp_command, _omp_invocation,
-                   detect_omp_fired, cli.decode_events),
+                   detect_omp_fired, cli.decode_events, None),
 }
 
 

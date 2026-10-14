@@ -264,10 +264,8 @@ class TestScorecard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             write(tmp, lines(closed), lines(SPEND))
             card, problems = close.scorecard(tmp, "b1", NOW)
-            rework, (read, found, _, _) = rejection_mining.conductor_rework(
-                tmp, {})
+            rework, _ = rejection_mining.conductor_rework(tmp, {})
         self.assertEqual(problems, [])
-        self.assertEqual((read, found), (1, 1))
         self.assertEqual(
             round(card["review_changes_per_item"] * card["items"]),
             sum(map(len, rework.values())))
