@@ -30,11 +30,13 @@ import cli_contract  # noqa: E402
 from factory_fixture import CONFIG  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 from make_parse import make_recipe, make_targets, phony_targets  # noqa: E402
+from test_work_orders import (  # noqa: E402
+    DUP_ISSUE, DUP_WO, NEWER, OLDER, Tree as WorkOrderTree)
 import workflow_parse  # noqa: E402
 
 
 def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=(),
-               adr_problems=(), scannable_problems=()):
+               adr_problems=(), scannable_problems=(), artifact_problems=()):
     """An in-memory knowledge_plane.parse_run()-shaped dict, built by hand
     rather than through a real tempdir tree (issue #442). The detectors
     whose gates.ROSTER row declares a parsed input read only this shape
@@ -44,7 +46,8 @@ def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=(),
     return {"runs": list(runs), "adr_files": list(adr_files),
             "adr_problems": list(adr_problems),
             "adr_readme": adr_readme, "scannable": list(scannable),
-            "scannable_problems": list(scannable_problems)}
+            "scannable_problems": list(scannable_problems),
+            "artifact_problems": list(artifact_problems)}
 
 
 def run_entry(path, breakdown=None, prd_id=None, architecture=None,
@@ -199,6 +202,16 @@ class TestLinkIntegrity(unittest.TestCase):
             tree.write("docs/adr/ADR-007-x.md", "# Short form\n")
             tree.write("README.md", "See ADR-0007.\n")
             self.assertEqual(gates.check_link_integrity(tree.root), [])
+
+    def test_a_duplicated_work_order_or_tracker_fails_at_pr_time(self):
+        # Issue #886: knowledge_plane.work_orders' duplicate problems had
+        # no production reader, so a copy-pasted row surfaced only as a
+        # refusal at dispatch or label-flip time. C reports them, in the
+        # one rule's own words, under its label.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = WorkOrderTree(tmp, OLDER, NEWER).root
+            self.assertEqual(gates.check_link_integrity(root),
+                             [f"C: {DUP_WO}", f"C: {DUP_ISSUE}"])
 
     def test_factory_templates_and_fixtures_stay_out_of_scope(self):
         # factory/templates/ is a seed tree checked against its OWN
@@ -2739,6 +2752,33 @@ class TestRunAll(unittest.TestCase):
             [p for p in problems if "cannot read" in p],
             [f"D: cannot read docs/adr/0099-cafe.md: {error}",
              f"D: cannot read docs/cafe.md: {error}"])
+
+    def test_an_undecodable_run_artifact_or_adr_index_is_a_d_problem(self):
+        """Issue #881 (ADR-0094): a latin-1 prd.md, breakdown.md or
+        docs/adr/README.md raised UnicodeDecodeError out of parse_run's
+        run-level read, before the scannable read could report it. Now
+        each is one D problem, and the unreadable index is not also
+        called missing."""
+        undecodable = "# Caf\xe9\n".encode("latin-1")
+        try:
+            undecodable.decode("utf-8")
+        except UnicodeDecodeError as err:
+            error = err
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixtures.clean_repo_fixture(root)
+            run = root / "docs" / "features" / "cafe"
+            run.mkdir(parents=True)
+            (run / "prd.md").write_bytes(undecodable)
+            (run / "breakdown.md").write_bytes(undecodable)
+            (root / "docs" / "adr").mkdir(parents=True, exist_ok=True)
+            (root / "docs" / "adr" / "README.md").write_bytes(undecodable)
+            problems = gates.run_all(root, env={})
+        self.assertEqual(
+            [p for p in problems if "cannot read" in p or "missing" in p],
+            [f"D: cannot read docs/features/cafe/breakdown.md: {error}",
+             f"D: cannot read docs/features/cafe/prd.md: {error}",
+             f"D: cannot read docs/adr/README.md: {error}"])
 
 class TestLockstep(unittest.TestCase):
     """Makefile <-> CI lockstep (origin: WO-0003, tightened by WO-0004).

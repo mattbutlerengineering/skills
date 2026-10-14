@@ -133,13 +133,23 @@ def load(root, platform=sys.platform):
     """(config, []) — docs/launch-demo.json, its voice defaulted by platform
     and shlex-split once into the argv template probe and narrate share —
     or (None, problems): one exact string per field, in field order, each
-    prefixed `launch-demo: `. Absence is the missing problem here."""
+    prefixed `launch-demo: `. Absence is the missing problem here, where
+    probe and render stop on it; the config leg reads it as NONE."""
+    config, problems = _read_config(root, platform)
+    if config is None and not problems:
+        return None, [f"{LABEL}: missing {CONFIG}"]
+    return config, problems
+
+
+def _read_config(root, platform):
+    """load's pair, except absence is (None, []) — no config is a fact,
+    and only the caller knows whether it is a stop."""
     shown = f"{LABEL}: {CONFIG}"
     raw, problem = cli.read_file(Path(root) / CONFIG, CONFIG, dict)
     if problem:
         return None, [f"{LABEL}: {problem}"]
     if raw is None:
-        return None, [f"{LABEL}: missing {CONFIG}"]
+        return None, []
     problems = []
     for field, check in _FIELD_CHECKS.items():
         if field not in raw:
@@ -647,9 +657,11 @@ def main(argv, root=None, which=shutil.which, runner=cli.runner,
     (exit 0); unrecognised argv is usage (exit 2)."""
     root = Path(root or ".")
     if argv == ["config"]:
-        config, problems = load(root, platform)
+        config, problems = _read_config(root, platform)
         if config:  # the verdict Ship acts on: SHIP or ON-DEMAND
             print(config["when"].upper())
+        elif not problems:  # no config at all: the usual repo
+            print("NONE")
         return cli.report(LABEL, problems)
     if argv == ["probe"]:
         config, problems = load(root, platform)

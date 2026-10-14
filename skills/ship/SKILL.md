@@ -43,9 +43,8 @@ branch.
    otherwise a read of the skill file), run it for this run, commit what
    it wrote on the branch, and add one numbered Release-log entry
    quoting the tool's reason line(s) and its verdict verbatim. If it
-   prints `ON-DEMAND`, or its one problem is
-   `launch-demo: missing docs/launch-demo.json`, do nothing and write
-   nothing. Any other problem exit means the config exists but cannot
+   prints `ON-DEMAND` or `NONE` (no config in this repo), do nothing
+   and write nothing. A problem exit means the config exists but cannot
    be read. Add one numbered Release-log entry quoting those problem
    lines verbatim, so a malformed config is never silently skipped. The
    hook never blocks a release: a COPY-ONLY verdict and a problem exit

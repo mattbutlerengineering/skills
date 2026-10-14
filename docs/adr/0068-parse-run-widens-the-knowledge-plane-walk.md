@@ -1,6 +1,6 @@
 # parse_run widens the knowledge-plane walk (expand phase)
 
-- Status: accepted
+- Status: amended by ADR-0094 (every run-artifact and ADR-index read guarded, reported by D)
 - Date: 2026-09-21
 
 Amends ADR-0039's carve-out, restated from ADR-0037: `knowledge_plane`

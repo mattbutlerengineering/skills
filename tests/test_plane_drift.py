@@ -178,13 +178,14 @@ class TestReconcileDrift(unittest.TestCase):
             ["docs/features/demo/breakdown.md: a row mirrors #109, which is"
              " not in the issue listing"])
 
-    def test_two_rows_mirroring_one_issue(self):
+    def test_two_rows_mirroring_one_issue_is_not_drift(self):
+        """A duplicated tracker is the knowledge plane disagreeing with
+        itself, not with the dispatch plane: knowledge_plane.work_orders
+        owns that rule and gates' detector C reports it (issue #886)."""
         other = self.ROW.replace("WO-0004", "WO-0005")
         drift = self.drift(rows(self.ROW, other),
                            [issue(109, "OPEN", ["wo:in-progress"])])
-        self.assertEqual(drift, [
-            "#109 is mirrored by 2 rows (docs/features/demo/breakdown.md)"
-            " — an issue mirrors one work order"])
+        self.assertEqual(drift, [])
 
     def test_an_issue_on_two_lifecycle_labels_at_once(self):
         self.assertEqual(
