@@ -216,9 +216,10 @@ class FakeEvents:
 class TestTheStrippedCharterReachesTheModel(unittest.TestCase):
     def test_the_runner_prompts_with_the_charter_it_is_given(self):
         prompts = []
-        adapter = mock.Mock()
-        adapter.command.side_effect = (
-            lambda prompt, model, partial: prompts.append(prompt) or ["x"])
+        # the real adapter, so its message reader builds the transcript
+        adapter = charter_replay.HARNESSES["claude"]._replace(
+            command=lambda prompt, model, partial: prompts.append(prompt)
+            or ["x"])
         case = golden_cases()[0]
         with mock.patch.dict(charter_replay.HARNESSES, {"claude": adapter}), \
                 mock.patch.object(charter_replay.cli, "harness_run",
