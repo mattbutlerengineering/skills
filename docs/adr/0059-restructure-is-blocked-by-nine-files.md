@@ -1,6 +1,6 @@
 # The tools/factory restructure is blocked by nine files, not one
 
-- Status: accepted
+- Status: superseded in part by ADR-0091 (the blocker table and the provisional note)
 - Date: 2026-08-22
 
 Amends ADR-0046, which deferred the `tools/factory/` restructure on the

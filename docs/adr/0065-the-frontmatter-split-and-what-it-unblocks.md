@@ -1,6 +1,6 @@
 # The frontmatter split, and what it does and does not unblock
 
-- Status: provisional
+- Status: superseded in part by ADR-0091 (the narrowed blocker and the split as a restructure step)
 - Date: 2026-09-21
 
 ## Context
