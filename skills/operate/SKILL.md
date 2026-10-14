@@ -65,5 +65,8 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
 - Outcomes over activity: "we shipped it" is not an outcome; "it gets used
   for X" or "nobody used it" is.
 - The retro judges the process and the bet, not the people.
+- Feedback written outside the run directory (a feedback issue, a journal
+  comment) cites the run ref or typed id it concerns (ADR-0092), so the
+  trace view can tie it to the run.
 - Don't skip seeding: a retro that produces no next-idea seeds usually means
   the outcome questions weren't really answered.

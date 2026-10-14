@@ -57,6 +57,7 @@ VERBS = {
     "rejection-mining": ("rejection_mining", "argv"),
     "standards-index": ("standards_index", "argv"),
     "sweeps": ("sweeps", "argv"),
+    "trace": ("trace", "argv"),
     "trigger-eval": ("trigger_eval", "bare"),
     "validator": ("validator", "argv"),
     "work-queue": ("work_queue", "argv"),
