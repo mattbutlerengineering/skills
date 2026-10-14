@@ -257,12 +257,15 @@ class TestScorecard(unittest.TestCase):
 
     def test_review_rework_is_counted_by_the_miners_rule(self):
         # #816: the scorecard and the toolsmith queue's Conductor
-        # corrections count the same events, read by one rule.
+        # corrections count the same events, read by one rule. The miner
+        # reads only closed ledgers (#817), as every ledger on main is.
+        closed = ROWS + [{"at": at(16), "kind": "close", "item": None,
+                          "merged": ["#12", "#14"], "blocked": ["#13"]}]
         with tempfile.TemporaryDirectory() as tmp:
-            write(tmp, lines(ROWS), lines(SPEND))
+            write(tmp, lines(closed), lines(SPEND))
             card, problems = close.scorecard(tmp, "b1", NOW)
-            rework, read, found = rejection_mining.conductor_rework(
-                tmp, {}, [])
+            rework, (read, found, _, _) = rejection_mining.conductor_rework(
+                tmp, {})
         self.assertEqual(problems, [])
         self.assertEqual((read, found), (1, 1))
         self.assertEqual(
