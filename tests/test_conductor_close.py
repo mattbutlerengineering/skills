@@ -630,8 +630,10 @@ CLOSED = ROWS + [
     ask("ask-5", None, "merge", at(16), ("merge", "hold"))]
 CHECKS = ("api", "repos/{owner}/{repo}/commits/c105ed/check-runs"
           "?per_page=100")
+MERGED_LIST = ("pr", "list", "--head", "conductor/b1", "--state", "merged")
 GREEN_GH = {
     ("pr", "list", "--head", "conductor/b1"): json.dumps([{"number": 6}]),
+    MERGED_LIST: "[]",
     CHECKS: json.dumps({"check_runs": [{"name": "ci", "status": "completed",
                                          "conclusion": "success"}]}),
     ("api", "graphql"): json.dumps(
