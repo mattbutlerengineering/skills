@@ -462,6 +462,7 @@ class TestDecodeEvents(unittest.TestCase):
 FAKE_EMITTER = """#!/bin/sh
 echo 'not json'
 echo '{"type": "result", "result": "ok"}'
+: > "$READY_FILE"
 """
 
 # The fakes publish the PID file by rename, never by writing it in
@@ -674,11 +675,19 @@ class TestHarnessRun(unittest.TestCase):
         self.assert_grandchild_reaped()
 
     def test_events_stream_decoded_with_junk_lines_skipped(self):
+        # The timeout clock starts once the fake has written its lines,
+        # not at the spawn: a spawn stalled past a spawn-counted timeout
+        # under load left the reader abandoning the run before either
+        # line existed, reading [] (issue #803). The happy path never
+        # reaches the timeout — it returns at EOF.
+        ready = self.dir / "ready"
         cmd = [self.script(FAKE_EMITTER)]
-        with cli.harness_run(cmd, cwd=self.dir, timeout=10,
-                             env=self.env()) as events:
-            self.assertEqual(list(events),
-                             [{"type": "result", "result": "ok"}])
+        env = {**self.env(), "READY_FILE": str(ready)}
+        with mock.patch.object(cli, "time", ReadinessGatedClock(ready)):
+            with cli.harness_run(cmd, cwd=self.dir, timeout=10,
+                                 env=env) as events:
+                self.assertEqual(list(events),
+                                 [{"type": "result", "result": "ok"}])
         self.assertFalse(events.timed_out)
 
     def gated_on_the_grandchild(self):

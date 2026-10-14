@@ -275,6 +275,14 @@ CHANGES_WHY = "a second request for changes is evidence about the item"
 CHANGES_AGAIN = "the reviewer requested changes a second time"
 
 
+def review_change(row):
+    """True for a ledger row recording a request for changes: a review
+    sent back to build, or a second request that stalled the item. The
+    rule rejection_mining reads Conductor rework by (#800)."""
+    return (row["kind"] == "state" and row["from"] == "review"
+            and (row["to"] == "build" or row["reason"] == CHANGES_AGAIN))
+
+
 def record_verdict(root, batch, now, item, verdict, reviewer_run, head):
     """(rows written, problems): the review step's verdict. pass writes
     `reviewed` with the item's author runs (every run but a review) and
