@@ -523,7 +523,10 @@ def check_blueprint_drift(root, parsed=None):
     if parsed is None:
         parsed = parse_run(root, scannable=_scannable_files(root))
     problems = _architecture_drift(root, parsed)
-    problems += [f"D: {problem}" for problem in parsed["adr_problems"]]
+    # An ADR is also a scanned doc, so one undecodable ADR is the same
+    # string in both lists; dict.fromkeys reports it once (issue #877).
+    problems += [f"D: {problem}" for problem in dict.fromkeys(
+        parsed["adr_problems"] + parsed["scannable_problems"])]
     adr_dir = root / "docs" / "adr"
     # Equivalent to the pre-migration `if not adr_dir.is_dir(): return
     # problems` (see gates.py history): with no ADR files and no README,
