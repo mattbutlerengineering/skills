@@ -24,8 +24,7 @@ import ast
 import re
 from pathlib import Path
 
-from knowledge_plane import (ADR_TOKEN, adr_paths, breakdown_files,
-                             row_work_order)
+from knowledge_plane import ADR_TOKEN, adr_paths, breakdown_files, parse_row
 
 # Bare filenames a breakdown row names in prose ("assembler.yml + guards",
 # "budget_guard.py + handoff.py + cost ledger") — a best-effort scan of the
@@ -33,11 +32,17 @@ from knowledge_plane import (ADR_TOKEN, adr_paths, breakdown_files,
 # real repo path.
 FILENAME_TOKEN = re.compile(r"\b[\w-]+\.(?:py|yml|yaml|md|json)\b")
 
-# The row grammar is knowledge_plane.row_work_order — the WO a row's FIRST
+# The row grammar is knowledge_plane.parse_row — the WO a row's FIRST
 # token names owns the block that follows until the next work-order row.
 # The Accept:/Notes sub-bullets under a row are NOT checkbox rows, so they
 # belong to their work order's block, which is where this repo's rows
 # actually cite ADRs (the bullet line cites only the PRD section).
+
+
+def _row_wo(line):
+    """The work order a breakdown line is the row of, or None."""
+    row = parse_row(line)
+    return row["wo"] if row else None
 
 
 def wo_block(root, wo):
@@ -54,11 +59,11 @@ def wo_block(root, wo):
     new, attacker-reachable input."""
     for _, lines in breakdown_files(root):
         for index, line in enumerate(lines):
-            if row_work_order(line) != wo:
+            if _row_wo(line) != wo:
                 continue
             block = [line]
             for nxt in lines[index + 1:]:
-                if row_work_order(nxt) or nxt.startswith("#"):
+                if _row_wo(nxt) or nxt.startswith("#"):
                     break
                 block.append(nxt)
             return "\n".join(block).strip()

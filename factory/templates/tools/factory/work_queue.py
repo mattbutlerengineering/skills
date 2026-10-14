@@ -32,10 +32,7 @@ from datetime import datetime, timezone
 import cost_ledger
 import factory_config
 from cli import gh_read, gh_runner, report
-from knowledge_plane import (breakdown_files, repo_root, row_blockers,
-                             row_unreadable_blockers,
-                             row_done, row_size, row_tracker_issue,
-                             row_work_order)
+from knowledge_plane import breakdown_files, breakdown_rows, repo_root
 
 READY_LABEL = "wo:ready-for-agent"
 LIST_ARGS = ["issue", "list", "--label", READY_LABEL, "--state", "open",
@@ -61,18 +58,15 @@ def rows(root):
     One pass, one grammar (knowledge_plane's) — nothing downstream re-reads
     or re-parses a row.
     """
+    fields = ("wo", "done", "size", "issue", "blockers", "unreadable")
     found = {}
     for path, lines in breakdown_files(root):
-        for lineno, line in enumerate(lines, 1):
-            wo = row_work_order(line)
-            if not wo:
+        for row in breakdown_rows(lines):
+            if not row["wo"]:
                 continue
-            found[wo] = {
-                "wo": wo, "done": row_done(line), "size": row_size(line),
-                "issue": row_tracker_issue(line),
-                "blockers": row_blockers(line),
-                "unreadable": row_unreadable_blockers(line),
-                "where": f"{path.relative_to(root)}:{lineno}",
+            found[row["wo"]] = {
+                **{field: row[field] for field in fields},
+                "where": f"{path.relative_to(root)}:{row['lineno']}",
             }
     return found
 

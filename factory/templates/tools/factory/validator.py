@@ -86,8 +86,8 @@ from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, label_names, report, write_outputs
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             fence_closes, fence_open, repo_root,
-                             row_tracker_issue, row_work_order)
+                             breakdown_rows, fence_closes, fence_open,
+                             repo_root)
 
 LIFECYCLE_PREFIX = "wo:"
 # The dispatch-queue state (ADR-0032). The claim's idempotency verdict is
@@ -118,12 +118,11 @@ def tracker_issue(root, wo):
     breakdown row — ADR-0032: the dispatch mirror is one-way, so the
     knowledge plane, not the issue, says which issue a work order owns."""
     for _, lines in breakdown_files(root):
-        for line in lines:
-            if row_work_order(line) != wo:
+        for row in breakdown_rows(lines):
+            if row["wo"] != wo:
                 continue
-            issue = row_tracker_issue(line)
-            if issue is not None:
-                return issue, []
+            if row["issue"] is not None:
+                return row["issue"], []
             return None, [f"V: {wo} has no (tracker: #N) mirror on its"
                           " breakdown row"]
     return None, [f"V: {wo} has no breakdown row"]

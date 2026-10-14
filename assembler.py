@@ -48,8 +48,7 @@ from pathlib import Path
 import factory_config
 import orientation_pack
 from cli import gh_read, gh_runner, read_event, report, write_outputs
-from knowledge_plane import (CLOSES_TOKEN, breakdown_files, repo_root,
-                             row_tracker_issue, row_work_order)
+from knowledge_plane import CLOSES_TOKEN, breakdown_files, parse_row, repo_root
 from protocol import read_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
@@ -141,9 +140,10 @@ def resolve_row(root, issue_number):
     ran ahead of the breakdown, which ADR-0032 forbids) — say so."""
     for _, lines in breakdown_files(root):
         for index, line in enumerate(lines):
-            if row_tracker_issue(line) != issue_number:
+            row = parse_row(line)
+            if row is None or row["issue"] != issue_number:
                 continue
-            wo = row_work_order(line)
+            wo = row["wo"]
             if not wo:
                 return None, None, [
                     f"asm: issue #{issue_number}'s breakdown row names no"
