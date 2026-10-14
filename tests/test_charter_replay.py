@@ -230,55 +230,12 @@ def block_delta(delta):
     return stream_event({"type": "content_block_delta", "delta": delta})
 
 
-def block_stop():
-    return stream_event({"type": "content_block_stop"})
-
-
 class TestTranscriptAssembly(unittest.TestCase):
     """Decoded stream-json events -> the transcript the scorer reads.
 
-    Both CLI output shapes must build a transcript: the current
-    stream_event partial frames (--include-partial-messages) and the
-    legacy full assistant messages. Depending on either alone is the
-    fail-open ADR-0053 kills: a shape the CLI stops emitting would
-    replay every forbid expectation against an empty transcript and
-    pass the suite while testing nothing."""
-
-    def test_partial_message_frames_build_the_transcript(self):
-        events = [
-            block_start({"type": "text"}),
-            block_delta({"type": "text_delta", "text": "plan"}),
-            block_delta({"type": "text_delta", "text": "ning"}),
-            block_stop(),
-            block_start({"type": "tool_use", "name": "Bash"}),
-            block_delta({"type": "input_json_delta",
-                         "partial_json": '{"command": '}),
-            block_delta({"type": "input_json_delta",
-                         "partial_json": '"git status"}'}),
-            block_stop(),
-            {"type": "result", "result": "done"},
-        ]
-        built = charter_replay.transcript_from_events(events)
-        self.assertEqual(built["tool_calls"],
-                         [{"name": "Bash",
-                           "input": {"command": "git status"}}])
-        self.assertIn("planning", built["text"])
-        self.assertIn("done", built["text"])
-
-    def test_full_message_duplicates_of_frames_are_not_double_counted(self):
-        # --include-partial-messages emits BOTH shapes for one message;
-        # counting each once per shape would double every tool call.
-        events = [
-            block_start({"type": "tool_use", "name": "Bash"}),
-            block_delta({"type": "input_json_delta",
-                         "partial_json": '{"command": "git status"}'}),
-            block_stop(),
-            {"type": "assistant", "message": {"content": [
-                {"type": "tool_use", "name": "Bash",
-                 "input": {"command": "git status"}}]}},
-        ]
-        built = charter_replay.transcript_from_events(events)
-        self.assertEqual(len(built["tool_calls"]), 1)
+    The frame-versus-legacy choice belongs to the registry's message
+    reader and is pinned in tests/test_claude_messages.py, with the real
+    recordings; these pin what the transcript adds on top of it."""
 
     def test_a_truncated_tool_input_still_reaches_the_scorer(self):
         # A timeout can cut the stream mid-block: the unterminated
@@ -416,7 +373,7 @@ class TestAVerdictNeedsEvidence(unittest.TestCase):
         self.assertTrue(result["failures"])
 
     def test_whitespace_is_not_text(self):
-        """_flush_block keeps any truthy buffer, so a stream whose only
+        """The message reader keeps any truthy text buffer, so a stream whose only
         text delta is blank yields text that is present and says
         nothing."""
         result = charter_replay.score_case(self.forbid_only(),
