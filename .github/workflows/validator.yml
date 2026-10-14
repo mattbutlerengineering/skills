@@ -137,8 +137,9 @@ jobs:
   # PR open flips the cited work order to wo:needs-review — the merge
   # gate's queue-entry event (ADR-0033 gate 3; ADR-0041's latency rows
   # measure its passage, and without this flip the digest's review-queue
-  # math never sees an entry). --uncited skip: a PR that cites no work
-  # order (human housekeeping) is normal traffic, not an error. A push to
+  # math never sees an entry). The job runs the validator's pr-opened
+  # verb, which owns the uncited rule: a PR that cites no work order
+  # (human housekeeping) is normal traffic, not an error. A push to
   # an open PR (synchronize) must not re-flip an order a human already
   # moved along; a REOPENED PR re-enters the queue deliberately — it is
   # again awaiting review. Fork PRs are skipped for the same reason as the

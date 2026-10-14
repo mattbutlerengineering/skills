@@ -705,8 +705,8 @@ class TestStalenessLinkGrammar(unittest.TestCase):
 
 class TestStandardsDrift(unittest.TestCase):
     """K (ADR-0073): docs/standards.json's ADR-derived entries must match
-    a fresh standards_index.build_index(root) regen, and an `enforced`
-    entry's source ADR must be `accepted`."""
+    a fresh standards_index.build_index(root, adr_files) regen, and an
+    `enforced` entry's source ADR must be `accepted`."""
 
     def adr(self, tree, rel, status, bullet=None):
         body = f"# X\n\n- Status: {status}\n"

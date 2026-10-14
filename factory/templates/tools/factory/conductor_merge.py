@@ -306,6 +306,18 @@ def _adr_file(path):
     return adr_file_number(where.name)
 
 
+def _width(kind, number, new_paths):
+    """The digits NUMBER is written at in a message: an ADR at the width
+    of the item's ADR file of NUMBER (#860, #890), anything else at the
+    4-digit grammar."""
+    if kind == "adr":
+        for path in new_paths:
+            found = _adr_file(path)
+            if found and int(found[0]) == number:
+                return found[1]
+    return "0000"
+
+
 def _used(held, files, new_paths):
     """{kind: numbers} of the item's block it actually used: cited in a
     line it added, or naming an ADR file it added."""
@@ -323,7 +335,7 @@ def _used(held, files, new_paths):
     return used
 
 
-def _allocate(rows, on_main, collided):
+def _allocate(rows, on_main, collided, new_paths):
     """{kind: {old: new}}: each collided number moves to the next number
     above everything on origin/main and every block in the batch."""
     moves = {}
@@ -335,7 +347,9 @@ def _allocate(rows, on_main, collided):
         for number in numbers:
             top += 1
             if top > 9999:
-                raise Stall(f"{PREFIXES[kind]}-{number:04d} is taken on"
+                written = _width(kind, number, new_paths)
+                raise Stall(f"{PREFIXES[kind]}-"
+                            f"{adr_digits(number, written)} is taken on"
                             " origin/main and cannot be renumbered:"
                             f" {PREFIXES[kind]}-{top} would leave the"
                             " 4-digit grammar")
@@ -384,10 +398,11 @@ def _renumber(git, worktree, files, new_paths, moves):
             touched.append(target)
     _git(git, worktree, ["add", "--", *sorted(set(touched))],
          "staging the renumber")
-    spans = ", ".join(f"{PREFIXES[kind]}-{old:04d} to"
-                      f" {PREFIXES[kind]}-{new:04d}"
-                      for kind, pairs in moves.items()
-                      for old, new in pairs.items())
+    spans = ", ".join(
+        f"{PREFIXES[kind]}-{adr_digits(old, written)} to"
+        f" {PREFIXES[kind]}-{adr_digits(new, written)}"
+        for kind, pairs in moves.items() for old, new in pairs.items()
+        for written in [_width(kind, old, new_paths)])
     _git(git, worktree, ["commit", "-m", f"chore(conductor): renumber {spans}"],
          "committing the renumber")
 
@@ -418,7 +433,7 @@ def confirm_reservations(rows, item, git, worktree, branch):
                 if numbers}
     if not collided:
         return []
-    moves = _allocate(rows, on_main, collided)
+    moves = _allocate(rows, on_main, collided, new_paths)
     _renumber(git, worktree, files, new_paths, moves)
     return [{"what": kind, "values": list(pairs.values()),
              "renumbered_from": list(pairs)}
