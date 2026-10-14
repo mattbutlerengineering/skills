@@ -331,7 +331,7 @@ class TestRunMine(unittest.TestCase):
 
     def test_an_unreadable_timeline_is_counted_not_hidden(self):
         """The stream the seed did not name. A timeline fetch that fails
-        thins the harvest, and `_timelines` is explicit that this must be a
+        thins the harvest, and run_mine is explicit that this must be a
         problem rather than a silently thinner result — true of the problem
         list, and not of the body it feeds until now."""
         issues = [issue(7, "WO-0101: first"), issue(8, "WO-0102: second")]
@@ -407,6 +407,73 @@ class TestRunMine(unittest.TestCase):
             f" {rejection_mining.LIST_WINDOW}-entry window — older entries"
             " are invisible; raise the window or narrow the query"])
         self.assertIn("TRUNCATED: the issue listing", body)
+
+
+def ledger_row(item, frm, to, when, reason):
+    return json.dumps({"at": when, "kind": "state", "item": item,
+                       "from": frm, "to": to, "reason": reason})
+
+
+REWORK_LEDGER = "\n".join([
+    ledger_row("#7", "build", "review", "2026-08-10T09:00:00Z", "built"),
+    ledger_row("#7", "review", "build", "2026-08-10T10:00:00Z",
+               "the reviewer requested changes; one fix step"),
+    ledger_row("#31", "review", "stalled", "2026-08-11T10:00:00Z",
+               "the reviewer requested changes a second time"),
+]) + "\n"
+
+
+class TestConductorRework(unittest.TestCase):
+    """#800: a Conductor review that sends an item back is a batch-ledger
+    state row, not a CHANGES_REQUESTED review, so the harvest never saw
+    it. Closed batch ledgers on main are the queue's third source."""
+
+    def mine(self, ledgers):
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = tree(tmp)
+            for batch, text in ledgers.items():
+                fixture.write(f"docs/factory/batches/{batch}/ledger.jsonl",
+                              text)
+            run = gh(issues=[issue(7, "WO-0101: first")])
+            outputs, problems = rejection_mining.run_mine(
+                fixture.root, run=run, clock=clock)
+            create = next(c for c in run.calls if c[:2] ==
+                          ["issue", "create"])
+            return outputs, problems, create[create.index("--body") + 1]
+
+    def test_a_review_sent_back_to_build_is_mined(self):
+        outputs, problems, body = self.mine({"oct": REWORK_LEDGER})
+        self.assertEqual(problems, [])
+        self.assertIn("- **WO-0101** — 1 correction(s)\n"
+                      "  - batch oct review sent back to build at"
+                      " 2026-08-10T10:00:00Z\n", body)
+
+    def test_a_second_change_request_on_an_unmirrored_item_is_mined(self):
+        _, _, body = self.mine({"oct": REWORK_LEDGER})
+        self.assertIn("- **#31** — 1 correction(s)\n"
+                      "  - batch oct review stalled on a second change"
+                      " request at 2026-08-11T10:00:00Z\n", body)
+
+    def test_rework_counts_toward_the_reason_line(self):
+        outputs, _, _ = self.mine({"oct": REWORK_LEDGER})
+        self.assertEqual(outputs["reason"],
+                         "rm: 2 candidate WO(s), 2 correction(s) mined")
+
+    def test_the_sources_line_counts_the_batch_ledgers(self):
+        _, _, body = self.mine({"oct": REWORK_LEDGER})
+        self.assertIn("review rework from 1 of 1 batch ledger(s).", body)
+
+    def test_an_unreadable_ledger_is_a_problem_and_counted(self):
+        outputs, problems, body = self.mine(
+            {"oct": REWORK_LEDGER, "bad": "not json\n"})
+        self.assertEqual(len(problems), 1)
+        self.assertTrue(problems[0].startswith(
+            "rm: cd: docs/factory/batches/bad/ledger.jsonl:1 is not valid"
+            " JSON"), problems[0])
+        self.assertIn("review rework from 1 of 2 batch ledger(s)"
+                      " (1 unreadable).", body)
+        self.assertEqual(outputs["reason"],
+                         "rm: 2 candidate WO(s), 2 correction(s) mined")
 
 
 class TestWorkflowPermissions(unittest.TestCase):

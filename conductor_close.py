@@ -26,8 +26,15 @@ closing PR body and on its item's needs-human comment (#728, #771).
 
 `close <batch> --merge` merges the closing PR once the Owner answered
 its ask `merge`, first committing and pushing that answer row (#726).
+
+`calibrate` (#799) joins every closed batch's ledger with costs.jsonl
+into one actuals row per run (step, band, model, ceiling, cost, wall
+time, attempt, outcome) and prints suggested step weights and size
+budgets with their sample sizes. It reads the ledgers close already
+commits, so it writes no file of its own, and never writes factory.json.
 """
 import json
+import math
 import time
 from pathlib import Path
 
@@ -38,7 +45,7 @@ import cost_ledger
 import factory_config
 import label_sync
 from cli import CLI_FAILURES, detail, label_names
-from conductor import TERMINAL, answers, append, ask_row, batch_branch, \
+from conductor import LEDGER, TERMINAL, answers, append, ask_row, batch_branch, \
     batch_dir, current_state, item_view, load, numbered, parse, parsed_at, \
     read_text, run_item, stamp, view
 
@@ -79,10 +86,30 @@ def _review_changes(rows):
                     == flow.CHANGES_AGAIN))
 
 
+def _ran_estimate(read):
+    """The plan's estimate of the steps that have a run row (#798): each
+    such step's ceiling_usd once, however many runs it took, and a build
+    at the build_usd of the gate ask its item's latest gate answer
+    approved, which re-priced it at one run per breakdown row. A step
+    never run is not in it: an item blocked after its spec step is
+    judged on its spec alone."""
+    total = 0
+    for item in read["items"].values():
+        gate = item["gate"]
+        build_usd = next((ask.get("build_usd") for ask in item["asks"]
+                          if gate is not None and ask["id"] == gate["ask"]),
+                         None)
+        for step in {row["step"] for row in item["runs"]}:
+            total += (build_usd if step == "build" and build_usd is not None
+                      else item["steps"][step]["ceiling_usd"])
+    return round(total, PLACES)
+
+
 def compute(rows, lines, shown, entries, now):
     """(scorecard row, problems), PURE over the ledger's rows (each on
     its line in `lines`) and the cost ledger's entries."""
-    plan = view(rows)["plan"]
+    read = view(rows)
+    plan = read["plan"]
     if plan is None:
         return None, [f"cd: {shown} has no plan row"]
     spent = {}
@@ -100,7 +127,7 @@ def compute(rows, lines, shown, entries, now):
     finals = [current_state(rows, item) for item in items]
     merged = finals.count("merged")
     metered = round(sum(spent[row["run_id"]] for _, row in runs), PLACES)
-    estimate = plan["estimate_usd"]
+    estimate = _ran_estimate(read)
     merges = [row["at"] for row in rows if row["kind"] == "state"
               and row["to"] == "merged"]
     wait = _owner_wait_hours(rows)
@@ -111,7 +138,7 @@ def compute(rows, lines, shown, entries, now):
             sum(1 for row in rows if row["kind"] == "answer"), merged),
         "metered_usd": metered,
         "metered_usd_per_merged": _ratio(metered, merged),
-        "estimate_usd": estimate,
+        "estimate_usd": plan["estimate_usd"], "ran_estimate_usd": estimate,
         "estimate_error_pct": (round((metered - estimate) / estimate * 100,
                                      PLACES) if estimate else None),
         "collisions": sum(len(row.get("renumbered_from", []))
@@ -153,6 +180,58 @@ def scorecard_cli(root, args, now):
     if card is not None:
         print(json.dumps(card, indent=2))
     return problems
+
+
+# How many batches `scorecards` compares when no N is given.
+TREND_BATCHES = 5
+
+
+def _is_metric(value):
+    return value is None or (isinstance(value, (int, float))
+                             and not isinstance(value, bool))
+
+
+def _shown(value):
+    return "-" if value is None else str(value)
+
+
+def trend(rows, total):
+    """The report lines comparing scorecard `rows` (oldest first), the
+    latest of `total` scored batches: each
+    metric (a field that is a number or null in every row holding it)
+    across the rows, then its change from the second-last row to the
+    last, or n/a when either is missing."""
+    keys = list(dict.fromkeys(key for row in rows[::-1] for key in row))
+    lines = [f"scorecards: the last {len(rows)} of {total} batch(es):"
+             f" {' -> '.join(row['batch'] for row in rows)}"]
+    for key in keys:
+        values = [row.get(key) for row in rows]
+        if not all(map(_is_metric, values)):
+            continue
+        line = f"  {key}: {' -> '.join(map(_shown, values))}"
+        if len(values) > 1:
+            last, before = values[-1], values[-2]
+            line += (" (n/a)" if None in (last, before)
+                     else f" ({round(last - before, PLACES):+})")
+        lines.append(line)
+    return lines
+
+
+def scorecards_cli(root, args):
+    """`scorecards [N]`: print each metric across the last N scored
+    batches (TREND_BATCHES by default) with its latest change."""
+    if len(args) > 1 or (args and not args[0].isdigit()) \
+            or (args and int(args[0]) < 1):
+        return None
+    rows, problems = history(root)
+    if problems:
+        return problems
+    if not rows:
+        print(f"scorecards: no batch scored yet in {SCORECARDS}")
+        return []
+    window = rows[-(int(args[0]) if args else TREND_BATCHES):]
+    print("\n".join(trend(window, len(rows))))
+    return []
 
 
 # --- closing a batch (WO-0163) -----------------------------------------
@@ -261,22 +340,42 @@ def sort_blocked_branches(git, root, batch, blocked):
     return sorted_branches, []
 
 
+def history(root):
+    """(scorecard rows in file order, problems): the reader of
+    docs/factory/scorecards.jsonl (#797), beside its writer. No file is
+    no history. A line that does not parse, or is not a JSON object with
+    a batch, fails the read naming its line: never a partial history.
+    Rows written before a field existed are returned as written, so a
+    caller reads every shape the file has held."""
+    path = Path(root) / SCORECARDS
+    if not path.is_file():
+        return [], []
+    rows = []
+    for lineno, line in numbered(path.read_text(encoding="utf-8")):
+        try:
+            row = json.loads(line)
+        except ValueError as err:
+            return None, [f"cd: {SCORECARDS}:{lineno} is not valid JSON:"
+                          f" {err}"]
+        if not isinstance(row, dict) or "batch" not in row:
+            return None, [f"cd: {SCORECARDS}:{lineno} is not a scorecard"
+                          " row (a JSON object with a batch)"]
+        rows.append(row)
+    return rows, []
+
+
 def append_scorecard(root, card):
     """(problems): append the batch's one scorecard row, unless a row
     for the batch is already there. APPEND ONLY: never rewrites. The
     read makes a close retried after a failed close-row write score the
     batch once, not twice (review minor 6); batch names are never
     reused, since `open` refuses one whose ledger is on main."""
+    rows, problems = history(root)
+    if problems:
+        return problems
+    if any(row["batch"] == card["batch"] for row in rows):
+        return []
     path = Path(root) / SCORECARDS
-    if path.is_file():
-        for lineno, line in numbered(path.read_text(encoding="utf-8")):
-            try:
-                row = json.loads(line)
-            except ValueError as err:
-                return [f"cd: {SCORECARDS}:{lineno} is not valid JSON:"
-                        f" {err}"]
-            if isinstance(row, dict) and row.get("batch") == card["batch"]:
-                return []
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(card) + "\n")
@@ -487,4 +586,154 @@ def close_cli(root, args, clock, git, gh, sleep=None):
               f" {', '.join(summary['merged']) or 'none'}; blocked"
               f" {', '.join(summary['blocked']) or 'none'}; merge ask"
               f" {summary['ask']}")
+    return problems
+
+
+# --- per-step actuals and calibration (#799) ---------------------------
+
+# The fewest samples calibrate suggests from. One real batch is all
+# there is today, so below it the verb prints n and suggests nothing.
+CALIBRATE_FLOOR = 5
+
+
+def actuals(rows, lines, shown, entries):
+    """(one row per run, problems), PURE over the ledger's rows (each on
+    its line in `lines`) and the cost ledger's entries: the join a
+    recalibration needs, from the plan row (item type, size, the step's
+    ceiling), the run row (band, model, effort, outcome), its spend rows
+    and its launch state row (wall time; None for a run with none).
+    `attempt` counts the item's runs of that step so far. It fails with
+    no rows where the scorecard does: no plan row, or a run with no
+    spend row."""
+    plan = view(rows)["plan"]
+    if plan is None:
+        return None, [f"cd: {shown} has no plan row"]
+    spent = {}
+    for entry in entries:
+        spent[entry["run_id"]] = spent.get(entry["run_id"], 0) \
+            + entry["cost"]
+    runs = [(lineno, row) for lineno, row in zip(lines, rows)
+            if row["kind"] == "run"]
+    problems = [f"cd: {shown}:{lineno} run {row['run_id']} has no"
+                f" {cost_ledger.COST_LEDGER} row with its run_id"
+                for lineno, row in runs if row["run_id"] not in spent]
+    if problems:
+        return None, problems
+    launched = {row["run_id"]: row["at"] for row in rows
+                if row["kind"] == "state" and row["to"] == "launched"}
+    planned = {entry["item"]: entry for entry in plan["items"]}
+    found, seen = [], {}
+    for _, row in runs:
+        entry, key = planned[row["item"]], (row["item"], row["step"])
+        seen[key] = seen.get(key, 0) + 1
+        start = launched.get(row["run_id"])
+        found.append({
+            "batch": plan["batch"], "item": row["item"],
+            "type": entry["type"], "size": entry["size"],
+            "step": row["step"], "attempt": seen[key],
+            "run_id": row["run_id"], "band": row["band"],
+            "model": row["model"], "effort": row["effort"],
+            "ceiling_usd": next(step["ceiling_usd"] for step in entry["steps"]
+                                if step["step"] == row["step"]),
+            "cost_usd": round(spent[row["run_id"]], PLACES),
+            "wall_s": (int((parsed_at(row["at"]) - parsed_at(start))
+                           .total_seconds()) if start else None),
+            "outcome": row["outcome"]})
+    return found, []
+
+
+def _spread(samples):
+    return {"n": len(samples),
+            "mean_usd": round(sum(samples) / len(samples), 2),
+            "max_usd": round(max(samples), 2)}
+
+
+def _short(table, what, floor):
+    """[] when every entry of `table` has `floor` samples, else the one
+    refusal naming each n below it and what has it."""
+    under = {}
+    for name, figures in table.items():
+        if figures["n"] < floor:
+            under.setdefault(figures["n"], []).append(name)
+    if not under:
+        return []
+    return [f"{what}: " + "; ".join(f"n={n} for {', '.join(names)}"
+                                    for n, names in sorted(under.items()))
+            + f", below the floor of {floor}"]
+
+
+def calibrate(rows, floor=CALIBRATE_FLOOR):
+    """Suggested step weights and size budgets, PURE over actuals rows,
+    with every figure's sample size. A step's sample is one item's spend
+    on it over every attempt (ceiling_hits counts the attempts that spent
+    their ceiling); a size's is one item's whole spend. The weights are
+    each step's mean over the cheapest step's, suggested only when every
+    step has `floor` samples; a size's budget is its dearest item,
+    rounded up to the dollar, suggested only at `floor` items. It
+    suggests and never writes factory.json: model and pricing choices
+    stay the Owner's (PRD-0013, ADR-0034)."""
+    by_step, by_item, sizes, attempts, hits = {}, {}, {}, {}, {}
+    for row in rows:
+        item, step, cost = (row["batch"], row["item"]), row["step"], \
+            row["cost_usd"]
+        by_step.setdefault(step, {})[item] = \
+            by_step.get(step, {}).get(item, 0) + cost
+        by_item[item] = by_item.get(item, 0) + cost
+        sizes[item] = row["size"]
+        attempts[step] = attempts.get(step, 0) + 1
+        hits[step] = hits.get(step, 0) + (cost >= row["ceiling_usd"])
+    steps = {step: {**_spread(list(items.values())),
+                    "attempts": attempts[step], "ceiling_hits": hits[step]}
+             for step, items in by_step.items()}
+    totals = {}
+    for item, total in by_item.items():
+        totals.setdefault(sizes[item], []).append(total)
+    budgets = {size: _spread(spent) for size, spent in totals.items()}
+    for figures in budgets.values():
+        figures["budget_usd"] = (math.ceil(figures["max_usd"])
+                                 if figures["n"] >= floor else None)
+    weights_short = _short(steps, "step_weights", floor)
+    cheapest = min((figures["mean_usd"] for figures in steps.values()),
+                   default=0)
+    weights = None if weights_short or not cheapest else {
+        step: round(figures["mean_usd"] / cheapest, 1)
+        for step, figures in steps.items()}
+    refused = ([] if rows else
+               ["no closed batch has a run to calibrate from"])
+    return {"floor": floor, "steps": steps, "step_weights": weights,
+            "sizes": budgets,
+            "refused": refused + weights_short
+            + _short(budgets, "budgets_usd", floor)}
+
+
+def closed_actuals(root):
+    """(actuals rows of every closed batch's ledger at `root`, problems).
+    A batch with no close row is skipped: its blocked items' spend rows
+    reach costs.jsonl only at close."""
+    entries, problems = cost_ledger.read(root)
+    if problems:
+        return None, problems
+    found = []
+    for ledger in sorted(Path(root).glob(LEDGER.format(batch="*"))):
+        text, shown, problems = read_text(root, ledger.parent.name)
+        rows, problems = (None, problems) if problems \
+            else parse(text, shown)
+        if problems:
+            return None, problems
+        if not any(row["kind"] == "close" for row in rows):
+            continue
+        rows, problems = actuals(rows, [n for n, _ in numbered(text)],
+                                 shown, entries)
+        if problems:
+            return None, problems
+        found += rows
+    return found, []
+
+
+def calibrate_cli(root, args):
+    if args:
+        return None
+    rows, problems = closed_actuals(root)
+    if rows is not None:
+        print(json.dumps(calibrate(rows), indent=2))
     return problems

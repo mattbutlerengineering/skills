@@ -66,7 +66,7 @@ the canonical vocabulary.
 | [0043](0043-pre-ledger-rows-are-annotated-in-the-knowledge-plane.md) | Pre-ledger rows are annotated in the knowledge plane | accepted |
 | [0044](0044-daily-improvement-routine.md) | A daily routine drives the factory's improvement loop | superseded in part by ADR-0083 (the queue is read from GitHub issues, not the beads export) |
 | [0045](0045-lifecycle-label-writers.md) | Every lifecycle label has a named writer; wo:blocked's is a human | accepted |
-| [0046](0046-tools-factory-symmetry-deferred.md) | tools/factory root symmetry deferred — flat root is load-bearing | amended by ADR-0059 (deferral stands; diagnosis replaced; blocker narrowed by ADR-0065) |
+| [0046](0046-tools-factory-symmetry-deferred.md) | tools/factory root symmetry deferred — flat root is load-bearing | superseded in part by ADR-0091 (the blocker diagnosis; amended by ADR-0059 and ADR-0065) |
 | [0047](0047-factory-roles-seam.md) | Factory roles seam: factory_roles.py owns the role vocabulary | accepted |
 | [0048](0048-artifact-path-grammar-joins-factory-config.md) | The installed-vs-payload path grammar joins factory_config | accepted |
 | [0049](0049-row-identity-joins-the-cost-ledger.md) | The row identity joins the cost ledger | accepted |
@@ -76,16 +76,16 @@ the canonical vocabulary.
 | [0053](0053-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
 | [0054](0054-front-door-routes-humans.md) | The front door routes humans, not files | accepted |
 | [0055](0055-deferred-stops-and-payload-charters.md) | The budget hook and payload charters stay deferred | accepted |
-| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | amended by ADR-0074 (a confirmed stay ends at its pass label) |
+| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | amended by ADR-0090 (and earlier by ADR-0074) |
 | [0057](0057-lifecycle-legs-agree-about-an-uncited-pr.md) | Both lifecycle legs treat an uncited PR the same way | amended by ADR-0064 |
 | [0058](0058-checkbox-regex-roster-is-two-owners.md) | The checkbox-regex roster is two owners, not three | accepted |
-| [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | accepted |
+| [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | superseded in part by ADR-0091 (the blocker table and the provisional note) |
 | [0060](0060-one-cross-plane-drift-rule.md) | One cross-plane drift rule; the caller declares what absence means | accepted |
 | [0061](0061-a-carve-out-lives-at-the-definition-site.md) | A carve-out lives at the definition site and must pay rent | provisional |
 | [0062](0062-a-skill-that-states-repo-facts-runs-a-shipped-tool.md) | A skill that states repo facts runs a shipped tool | accepted |
 | [0063](0063-a-terminal-verdict-requires-having-looked.md) | A terminal verdict requires having looked | provisional |
 | [0064](0064-a-quoted-token-is-not-a-claim.md) | A quoted work-order token is not a claim | provisional |
-| [0065](0065-the-frontmatter-split-and-what-it-unblocks.md) | The frontmatter split, and what it does and does not unblock | provisional |
+| [0065](0065-the-frontmatter-split-and-what-it-unblocks.md) | The frontmatter split, and what it does and does not unblock | superseded in part by ADR-0091 (the narrowed blocker and the split as a restructure step) |
 | [0066](0066-no-seam-for-ghs-silence.md) | No seam for gh's silence; the rule is shared, the meaning is local | provisional |
 | [0067](0067-codeowners-mirrors-through-product-codeowners.md) | CODEOWNERS mirrors through product_codeowners, not identity | accepted |
 | [0068](0068-parse-run-widens-the-knowledge-plane-walk.md) | parse_run widens the knowledge-plane walk (expand phase) | accepted |
@@ -110,3 +110,5 @@ the canonical vocabulary.
 | [0087](0087-a-queue-profile-may-opt-in-to-implement-queue-auto-merge.md) | A queue profile may opt in to implement-queue auto-merge | amended by ADR-0088 |
 | [0088](0088-a-fast-path-classification-is-the-review-for-auto-merge.md) | A fast-path classification is the review for auto-merge | accepted |
 | [0089](0089-an-enforced-standard-may-cite-a-standing-adr.md) | An enforced standard may cite a standing ADR | accepted |
+| [0090](0090-the-gate-timeline-read-and-open-queues-join-human-gates.md) | The gate timeline read and the open queues join human_gates | accepted |
+| [0091](0091-the-restructure-blockers-re-measured-and-pinned.md) | The tools/factory restructure blockers, re-measured and pinned | accepted (Owner, 2026-10-13) |

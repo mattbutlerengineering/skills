@@ -296,43 +296,22 @@ class TestQueues(unittest.TestCase):
             "dashboard: gh api timeline for #7 failed: boom",
             "dashboard: gh api timeline for #8 failed: boom"])
 
-    def test_an_unparseable_timeline_is_unreadable_not_empty(self):
-        """#665: unparseable JSON is a failed read, like a failed fetch."""
-        from fake_gh import FakeGh
-        with tempfile.TemporaryDirectory() as tmp:
-            factory_repo(tmp)
-            canned = queue_gh().answers
-            gh = FakeGh(answers={**canned, ("api",): "not json"})
-            state = dashboard.gather(tmp, run=gh, git=git_remote(),
-                                     clock=clock)
-        self.assertEqual([(q["waited_s"], q["aged"])
-                          for q in state["queues"]],
-                         [(None, False), (None, False)])
-        self.assertEqual(state["problems"], [
-            "dashboard: gh api timeline for #7 returned unparseable JSON:"
-            " Expecting value: line 1 column 1 (char 0)",
-            "dashboard: gh api timeline for #8 returned unparseable JSON:"
-            " Expecting value: line 1 column 1 (char 0)"])
-
-    def test_a_read_timeline_with_no_arrival_is_aged_not_unreadable(self):
-        """#665: a timeline that was read and holds no arrival at the
-        gate has an unknown age, not an unreadable one — the distinction
-        gate_digest._queues keeps (absent vs present-and-empty)."""
+    def test_only_waiting_issues_have_their_timelines_read(self):
+        """The page ages nothing else, so a closed or unqueued mirrored
+        issue costs no timeline read (#9 is closed)."""
         with tempfile.TemporaryDirectory() as tmp:
             factory_repo(tmp)
             gh = queue_gh()
-            state = dashboard.gather(tmp, run=gh, git=git_remote(),
-                                     clock=clock)
-        self.assertEqual(state["problems"], [])
-        self.assertEqual([(q["waited_s"], q["aged"])
-                          for q in state["queues"]],
-                         [(None, True), (None, True)])
+            dashboard.gather(tmp, run=gh, git=git_remote(), clock=clock)
+        self.assertEqual([call[1] for call in gh.calls
+                          if call[0] == "api"],
+                         ["repos/o/r/issues/7/timeline",
+                          "repos/o/r/issues/8/timeline"])
 
     def test_a_malformed_timestamp_is_refused_not_swallowed(self):
-        """#491: a labeled event whose created_at does not read as a
-        timestamp is silently dropped by label_events (#326), with no
-        signal that anything was refused. The fetch itself succeeded, so
-        read.problems says nothing — the refusal needs its own line."""
+        """#491, now human_gates.read_timelines' (ADR-0090): the caller
+        check is that the refusal reaches the page under the
+        dashboard: label."""
         with tempfile.TemporaryDirectory() as tmp:
             factory_repo(tmp)
             gh = queue_gh(timelines={

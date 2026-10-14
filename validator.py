@@ -80,6 +80,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+import assembler
 import gates
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
@@ -90,10 +91,10 @@ from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              repo_root)
 
 LIFECYCLE_PREFIX = "wo:"
-# The dispatch-queue state (ADR-0032). The claim's idempotency verdict is
-# "did THIS event take the order out of ready" — so the label is named
-# here, not inferred from the taxonomy's ordering.
-READY_LABEL = "wo:ready-for-agent"
+# The dispatch-queue state (ADR-0032) is assembler.READY_LABEL. The
+# claim's idempotency verdict is "did THIS event take the order out of
+# ready" — so the label is named, not inferred from the taxonomy's
+# ordering, and named by its one owner, the declaration detector J reads.
 # The row and tracker-mirror grammars are knowledge_plane's — the same
 # rules the assembler dispatches with, so the two cannot diverge
 # (ADR-0039).
@@ -503,11 +504,12 @@ def run_claim(root, label, issue, env, run=gh_runner):
     # The verdict is "did the flip take the order out of ready" — a
     # taxonomy that lost the ready label would make every verdict false
     # and silently stop all dispatch. Fail loudly instead.
+    ready = assembler.READY_LABEL
     removed, problems = _known_issue_flip(root, label, issue, run,
-                                          require=(READY_LABEL,))
+                                          require=(ready,))
     if problems:
         return problems
-    claimed = READY_LABEL in removed
+    claimed = ready in removed
     write_outputs(env, {"transitioned": "true" if claimed else "false"})
     return []
 

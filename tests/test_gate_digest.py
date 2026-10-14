@@ -394,23 +394,6 @@ class TestRunDaily(unittest.TestCase):
                 " are invisible; raise the window or narrow the query"])
             self.assertEqual(len(run.called("issue", "create")), 1)
 
-    def test_an_unparseable_timeline_still_posts_the_digest(self):
-        # The same traffic gh() cans, but the timeline endpoint answers
-        # raw non-JSON.
-        with tempfile.TemporaryDirectory() as tmp:
-            run = gh(issues=[issue(123, "WO-0018 rejection mining",
-                                   labels=["wo:draft"])])
-            run.answers[("api",)] = "not json"
-            outputs, problems = gate_digest.run_daily(
-                tree(tmp).root, run=run, clock=clock)
-            self.assertEqual(problems, [
-                "gd: gh api timeline for #123 returned unparseable"
-                " JSON: Expecting value: line 1 column 1 (char 0)"])
-            (create,) = run.called("issue", "create")
-            body = create[create.index("--body") + 1]
-            self.assertIn("- #123 WO-0018 rejection mining — age"
-                          " unknown (timeline unreadable)\n", body)
-
     def test_a_failing_timeline_still_posts_the_digest(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = gh(
@@ -468,11 +451,10 @@ class TestRunDaily(unittest.TestCase):
                       partial)
 
     def test_a_malformed_closing_timestamp_is_refused_not_swallowed(self):
-        """#491, defect.md §1 shape: a completed, confirmed stay whose
-        closing timestamp is not ISO no longer crashes (#326) — but the
-        refusal itself must still be a gd: problem string, not silence.
-        The stay never completes (the closing event is dropped), so no
-        gate-latency row lands either."""
+        """#491, defect.md §1 shape, now human_gates.read_timelines'
+        (ADR-0090): the caller check is that the refusal reaches run_daily
+        as a gd: problem, and that the stay it left open lands no
+        gate-latency row."""
         with tempfile.TemporaryDirectory() as tmp:
             fixture = tree(tmp)
             timelines = {123: [
@@ -488,26 +470,6 @@ class TestRunDaily(unittest.TestCase):
             self.assertEqual(problems, [
                 "gd: timeline for #123 refused 1 malformed timestamp(s)"])
             self.assertEqual(outputs["changed"], "false")
-
-    def test_a_malformed_labeled_timestamp_is_refused_not_swallowed(self):
-        """#491, defect.md §3 shape: an OPEN stay whose only labeled
-        event carries a malformed timestamp needs no completed stay at
-        all — waiting_since returns None once label_events drops the
-        event, so the item lists with no age and, before this fix, no
-        signal that anything was dropped."""
-        with tempfile.TemporaryDirectory() as tmp:
-            fixture = tree(tmp)
-            timelines = {123: [labeled("not-a-timestamp", "wo:draft")]}
-            issues = [issue(123, "WO-0018 rejection mining",
-                            labels=["wo:draft"])]
-            run = gh(issues=issues, timelines=timelines)
-            outputs, problems = gate_digest.run_daily(
-                fixture.root, run=run, clock=clock)
-            self.assertEqual(problems, [
-                "gd: timeline for #123 refused 1 malformed timestamp(s)"])
-            (create,) = run.called("issue", "create")
-            body = create[create.index("--body") + 1]
-            self.assertIn("- #123 WO-0018 rejection mining\n", body)
 
 
 class TestMain(cli_contract.ReportContract, unittest.TestCase):
