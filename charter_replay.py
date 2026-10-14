@@ -214,84 +214,26 @@ def load_cases(path, root, label):
 
 # ------------------------------------------------------------- transcripts
 
-def _flush_block(block, calls, texts):
-    """Close one partial-frame content block into the transcript."""
-    kind, name, buffer = block
-    if kind != "tool_use":
-        if buffer:
-            texts.append(buffer)
-        return
-    try:
-        parsed = json.loads(buffer) if buffer else {}
-    except json.JSONDecodeError:
-        # A timeout can cut the stream mid-input: keep the raw text so
-        # transcript-scoped expectations still see what was firing —
-        # dropping it would silently un-fire a forbid.
-        parsed = {"raw": buffer}
-    calls.append({"name": name, "input": parsed})
-
-
-def _consume_frame(se, block, calls, texts):
-    """One stream_event frame into the partial-frame state machine;
-    returns the open [kind, name, buffer] block, or None."""
-    se_type = se.get("type")
-    if se_type == "content_block_start":
-        cb = se.get("content_block", {})
-        if cb.get("type") in ("tool_use", "text"):
-            return [cb["type"], cb.get("name", ""), ""]
-        return None
-    if se_type == "content_block_delta" and block:
-        delta = se.get("delta", {})
-        if delta.get("type") == "input_json_delta":
-            return [block[0], block[1], block[2] + delta.get("partial_json",
-                                                             "")]
-        if delta.get("type") == "text_delta":
-            return [block[0], block[1], block[2] + delta.get("text", "")]
-        return block
-    if se_type == "content_block_stop" and block:
-        _flush_block(block, calls, texts)
-        return None
-    return block
-
-
 def transcript_from_events(events):
     """Decoded stream-json events in, transcript out. Pure — no process,
     pipe, or clock — so recorded events replay through the same path a
     live run takes.
 
-    Both CLI output shapes build the transcript: the current
-    stream_event partial frames (--include-partial-messages, the
-    registry invocation) and the legacy full assistant messages. The
-    CLI emits both for one message, so the shapes are collected apart
-    and the frames win when present — never summed — while a stream
-    carrying only one shape still yields its full transcript. Depending
-    on a single shape is the fail-open ADR-0053 kills: a shape the CLI
-    stops emitting would score every forbid against an empty transcript
-    and pass the suite while testing nothing."""
-    frame_calls, frame_texts = [], []
-    legacy_calls, legacy_texts = [], []
-    result_texts = []
-    block = None
-    for event in events:
-        etype = event.get("type")
-        if etype == "stream_event":
-            block = _consume_frame(event.get("event", {}), block,
-                                   frame_calls, frame_texts)
-        elif etype == "assistant":
-            for item in event.get("message", {}).get("content", []):
-                if item.get("type") == "tool_use":
-                    legacy_calls.append({"name": item.get("name", ""),
-                                         "input": item.get("input", {})})
-                elif item.get("type") == "text" and item.get("text"):
-                    legacy_texts.append(item["text"])
-        elif etype == "result" and event.get("result"):
-            result_texts.append(str(event["result"]))
-    if block:
-        _flush_block(block, frame_calls, frame_texts)  # timeout-cut block
-    calls, texts = ((frame_calls, frame_texts)
-                    if frame_calls or frame_texts
-                    else (legacy_calls, legacy_texts))
-    return {"tool_calls": calls, "text": "\n".join(texts + result_texts)}
+    The registry's claude message reader (trigger_eval.HARNESSES,
+    issue #861) owns the event shape: it reads both CLI output shapes
+    and picks frames over the legacy copy per message, so a message the
+    CLI sent in one shape only still reaches the scorer. Depending on a
+    single shape is the fail-open ADR-0053 kills: a shape the CLI stops
+    emitting would score every forbid against an empty transcript and
+    pass the suite while testing nothing. The transcript is every
+    message flattened, then the result text."""
+    events = list(events)
+    records = HARNESSES["claude"].messages(events)
+    calls = [call for record in records for call in record["tool_calls"]]
+    texts = [text for record in records for text in record["texts"]]
+    texts += [str(event["result"]) for event in events
+              if event.get("type") == "result" and event.get("result")]
+    return {"tool_calls": calls, "text": "\n".join(texts)}
 
 
 def _strings(value):

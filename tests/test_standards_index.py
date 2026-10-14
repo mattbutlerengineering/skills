@@ -136,20 +136,20 @@ class TestAdrNumber(unittest.TestCase):
 class TestBuildIndex(unittest.TestCase):
     def test_no_adr_directory_is_empty_and_clean(self):
         with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(standards_index.build_index(tmp), ([], []))
+            self.assertEqual(standards_index.index_tree(tmp), ([], []))
 
     def test_an_adr_with_no_normative_heading_contributes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             adr_file(tmp, "0001", "# Real\n\n- Status: accepted\n\n"
                                   "## Decision\n\nSomething MUST happen.\n")
-            self.assertEqual(standards_index.build_index(tmp), ([], []))
+            self.assertEqual(standards_index.index_tree(tmp), ([], []))
 
     def test_a_well_formed_bullet_becomes_an_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
             adr_file(tmp, "0032",
                      "# One-way mirror\n\n- Status: accepted\n\n"
                      "## Normative statements\n\n" + VALID_BULLET + "\n")
-            entries, problems = standards_index.build_index(tmp)
+            entries, problems = standards_index.index_tree(tmp)
             self.assertEqual(problems, [])
             self.assertEqual(entries, [{
                 "slug": "adr0032-one-way-mirror",
@@ -169,7 +169,7 @@ class TestBuildIndex(unittest.TestCase):
             path.write_text("# One-way mirror\n\n- Status: accepted\n\n"
                             "## Normative statements\n\n" + VALID_BULLET
                             + "\n", encoding="utf-8")
-            entries, problems = standards_index.build_index(tmp)
+            entries, problems = standards_index.index_tree(tmp)
             self.assertEqual(problems, [])
             self.assertEqual([entry["source"] for entry in entries],
                              ["adr/0032#adr0032-one-way-mirror"])
@@ -180,7 +180,7 @@ class TestBuildIndex(unittest.TestCase):
                      "# X\n\n## Normative statements\n\n"
                      "- **zzz-last** (docs): It MUST be last.\n"
                      "- **aaa-first** (docs): It MUST be first.\n")
-            entries, problems = standards_index.build_index(tmp)
+            entries, problems = standards_index.index_tree(tmp)
             self.assertEqual(problems, [])
             self.assertEqual([e["slug"] for e in entries],
                              ["aaa-first", "zzz-last"])
@@ -192,7 +192,7 @@ class TestBuildIndex(unittest.TestCase):
                      + VALID_BULLET + "\n\n## Consequences\n\n"
                      "- **not-collected** (docs): This MUST NOT be read"
                      " as a statement.\n")
-            entries, problems = standards_index.build_index(tmp)
+            entries, problems = standards_index.index_tree(tmp)
             self.assertEqual(problems, [])
             self.assertEqual([e["slug"] for e in entries],
                              ["adr0032-one-way-mirror"])
@@ -202,7 +202,7 @@ class TestBuildIndex(unittest.TestCase):
             adr_file(tmp, "0001",
                      "# X\n\n## Normative statements\n\n"
                      "- **some-slug** (factory): No keyword here.\n")
-            entries, problems = standards_index.build_index(tmp)
+            entries, problems = standards_index.index_tree(tmp)
             self.assertEqual(entries, [])
             self.assertEqual(problems, [
                 "docs/adr/0001-x.md:5 statement carries no RFC-2119"
@@ -216,7 +216,7 @@ class TestBuildIndex(unittest.TestCase):
             adr_file(tmp, "0002",
                      "# Y\n\n## Normative statements\n\n" + VALID_BULLET
                      + "\n")
-            entries, problems = standards_index.build_index(tmp)
+            entries, problems = standards_index.index_tree(tmp)
             self.assertEqual(len(entries), 1)
             self.assertEqual(problems, [
                 "docs/adr/0002-x.md:5 slug 'adr0032-one-way-mirror'"
@@ -227,9 +227,43 @@ class TestBuildIndex(unittest.TestCase):
             adr_file(tmp, "0001",
                      "# X\n\n## Normative statements\n\n"
                      + VALID_BULLET + "\n\n\n")
-            entries, problems = standards_index.build_index(tmp)
+            entries, problems = standards_index.index_tree(tmp)
             self.assertEqual(problems, [])
             self.assertEqual(len(entries), 1)
+
+
+class TestBuildIndexFromLines(unittest.TestCase):
+    """build_index reads the lines it is handed — parse_run's adr_files
+    — and never re-reads the tree (issue #855: detector K's read-once
+    claim)."""
+
+    def test_the_index_comes_from_the_lines_not_the_disk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "docs" / "adr" / "0032-x.md"  # never written
+            lines = ["# One-way mirror", "", "- Status: accepted", "",
+                     "## Normative statements", "", VALID_BULLET]
+            entries, problems = standards_index.build_index(
+                tmp, [(path, lines)])
+        self.assertEqual(problems, [])
+        self.assertEqual([entry["source"] for entry in entries],
+                         ["adr/0032#adr0032-one-way-mirror"])
+
+    def test_update_reports_an_undecodable_adr_and_writes_nothing(self):
+        data = "# Caf\xe9\n".encode("latin-1")
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError as err:
+            reason = str(err)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "docs" / "adr" / "0001-cafe.md"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(data)
+            problems = standards_index.update(tmp)
+            written = (Path(tmp) / standards_index.STANDARDS_PATH).exists()
+        self.assertEqual(problems, [
+            "standards-index: cannot read docs/adr/0001-cafe.md: "
+            + reason])
+        self.assertFalse(written)
 
 
 class TestForeignEntries(unittest.TestCase):

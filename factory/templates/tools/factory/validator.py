@@ -97,14 +97,14 @@ from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, label_names, report, write_outputs
 from human_gates import GATES
-from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             breakdown_rows, repo_root, unfenced)
+from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, repo_root, unfenced,
+                             work_orders)
 
 LIFECYCLE_PREFIX = "wo:"
 # The labels the two dispatch legs write — the assembler's claim and its
 # failure report (ADR-0045). Named here, by the verbs that write them, so
-# detector J reads them off this module (gates.LABEL_DECLARERS) rather
-# than off a Makefile recipe.
+# detector J reads them off this module (LABELS, below) rather than off a
+# Makefile recipe.
 CLAIM_LABEL = "wo:in-progress"
 FAILED_LABEL = "wo:failed"
 # The two PR legs write the merge gate's labels: opening a PR enters its
@@ -140,16 +140,19 @@ def lifecycle_labels(root):
 def tracker_issue(root, wo):
     """(the work order's mirrored issue number, problems), read from its
     breakdown row — ADR-0032: the dispatch mirror is one-way, so the
-    knowledge plane, not the issue, says which issue a work order owns."""
-    for _, lines in breakdown_files(root):
-        for row in breakdown_rows(lines):
-            if row["wo"] != wo:
-                continue
-            if row["issue"] is not None:
-                return row["issue"], []
-            return None, [f"V: {wo} has no (tracker: #N) mirror on its"
-                          " breakdown row"]
-    return None, [f"V: {wo} has no breakdown row"]
+    knowledge plane, not the issue, says which issue a work order owns.
+    Read from knowledge_plane.work_orders (issue #857): a row another
+    row duplicates names no issue to act on."""
+    index, _ = work_orders(root)
+    row = index["wo"].get(wo)
+    if row is None:
+        return None, [f"V: {wo} has no breakdown row"]
+    if row["clashes"]:
+        return None, [f"V: {clash}" for clash in row["clashes"]]
+    if row["issue"] is None:
+        return None, [f"V: {wo} has no (tracker: #N) mirror on its"
+                      " breakdown row"]
+    return row["issue"], []
 
 
 def transition(current, lifecycle, label):

@@ -35,13 +35,19 @@ branch.
      words of the protocol's Pull request body section, so `release.md`
      and the PR body make the same call.
 
-4. **Launch brief.** If `docs/launch-demo.json` exists in the repo and
-   its `when` field is `ship`, load the `launch-demo` skill through the
+4. **Launch brief.** Ask the tool that owns the repo's launch-demo
+   config; never read the config yourself. From the repo root run
+   `python3 <this skill's directory>/../../launch_demo.py config`. If it
+   prints the verdict `SHIP`, load the `launch-demo` skill through the
    harness's skill-loading mechanism (a skill tool where one exists,
    otherwise a read of the skill file), run it for this run, commit what
    it wrote on the branch, and add one numbered Release-log entry
-   quoting the tool's reason line(s) and its verdict verbatim. With no
-   config file, or any other `when`, do nothing and write nothing. The
+   quoting the tool's reason line(s) and its verdict verbatim. If it
+   prints `ON-DEMAND`, or its one problem is
+   `launch-demo: missing docs/launch-demo.json`, do nothing and write
+   nothing. Any other problem exit means the config exists but cannot
+   be read. Add one numbered Release-log entry quoting those problem
+   lines verbatim, so a malformed config is never silently skipped. The
    hook never blocks a release: a COPY-ONLY verdict and a problem exit
    are each one log line, and the release proceeds.
 

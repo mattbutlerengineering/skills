@@ -22,7 +22,8 @@ same checkout, and is run from the repo root:
     python3 <this skill's directory>/../../launch_demo.py render <slug>
 
 Each prints lines prefixed `launch-demo: `, then a verdict word alone
-(`READY` or `COPY-ONLY` for `probe`; `PRODUCED` or `COPY-ONLY` for
+(`SHIP` or `ON-DEMAND` for `config`, the `when` that Ship acts on;
+`READY` or `COPY-ONLY` for `probe`; `PRODUCED` or `COPY-ONLY` for
 `render`), then `launch-demo: N problem(s)`. A nonzero exit is problems,
 quoted and stopped on; a `COPY-ONLY` verdict exits 0 and is a reason
 line to report, never a failure to work around.
