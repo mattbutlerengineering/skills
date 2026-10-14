@@ -130,6 +130,13 @@ that is the run artifacts, which belong to one run; a knowledge-base page
 outlives every run and cites the code it rests on.
 _Avoid_: knowledge plane (taken), wiki, memory bank
 
+**Trace view**:
+The dated, chronological report that joins one run's tickets,
+requirements, decisions and feedback, derived on demand from their
+owners by `trace.py` and never committed (ADR-0092). A reader, not a
+store: it owns no fact.
+_Avoid_: timeline index, knowledge graph, trace log
+
 **Dispatch plane**:
 The work queue — work-order issues plus the dependency graph — mirrored
 one-way from breakdown rows and never authoritative over the knowledge
