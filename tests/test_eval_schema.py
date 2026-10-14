@@ -75,22 +75,6 @@ class TestValidate(unittest.TestCase):
         self.assertIn("evals/routing.json case 'next-0' has no query",
                       problems)
 
-    def test_missing_id(self):
-        # The runner subscripts case["id"] everywhere it reports; an
-        # id-less case must be refused here with lint's diagnostics, not
-        # surface as a KeyError mid-run (ADR-0022's whole point)
-        data = valid_data()
-        del data["cases"][0]["id"]
-        problems = eval_schema.validate(data, SKILLS, LABEL)
-        self.assertIn("evals/routing.json case None has no id", problems)
-
-    def test_falsy_present_id_is_a_value_not_a_gap(self):
-        # id 0 mirrors validate_output's is-None handling
-        data = valid_data()
-        data["cases"][0]["id"] = 0
-        self.assertNotIn("evals/routing.json case 0 has no id",
-                         eval_schema.validate(data, SKILLS, LABEL))
-
     def test_thin_skill_coverage(self):
         data = valid_data()
         data["cases"] = [c for c in data["cases"] if c["id"] != "idea-0"]
@@ -123,17 +107,61 @@ class TestValidate(unittest.TestCase):
         self.assertIn("evals/routing.json cases entry #0 is not an object",
                       problems)
 
-    def test_mixed_none_and_string_duplicate_ids_sort_safely(self):
-        # two id-less cases put None in the duplicate set alongside a
-        # duplicated string id — sorted() must not compare None < str
+
+class TestIdProblems(unittest.TestCase):
+    """One rule for what an eval id is (#887): a non-empty string or an
+    int (never a bool). Anything else "has no id"; duplicates are judged
+    among valid ids only, so nothing unhashable is ever hashed."""
+
+    def test_valid_ids_have_no_problems(self):
+        for ident in ("a", 0, 7):
+            with self.subTest(ident=ident):
+                self.assertEqual(
+                    eval_schema.id_problems([{"id": ident}], "L"), [])
+
+    def test_a_missing_or_unusable_id_has_no_id(self):
+        for item, shown in (({}, "None"), ({"id": None}, "None"),
+                            ({"id": ""}, "''"), ({"id": True}, "True"),
+                            ({"id": 1.5}, "1.5"), ({"id": ["a"]}, "['a']"),
+                            ({"id": {"a": 1}}, "{'a': 1}")):
+            with self.subTest(item=item):
+                self.assertEqual(
+                    eval_schema.id_problems([item], "L", "eval"),
+                    [f"L eval {shown} has no id"])
+
+    def test_duplicates_are_reported_once_per_id_in_order(self):
+        items = [{"id": "b"}, {"id": 2}, {"id": "b"}, {"id": 2},
+                 {"id": "a"}, {"id": "a"}, {"id": "b"}]
+        self.assertEqual(eval_schema.id_problems(items, "L"),
+                         ["L has duplicate case id 'a'",
+                          "L has duplicate case id 'b'",
+                          "L has duplicate case id 2"])
+
+    def test_unhashable_duplicates_are_diagnosed_not_raised(self):
+        self.assertEqual(
+            eval_schema.id_problems([{"id": ["a"]}, {"id": ["a"]}], "L"),
+            ["L case ['a'] has no id", "L case ['a'] has no id"])
+
+    def test_two_id_less_items_are_not_a_duplicate(self):
+        self.assertEqual(eval_schema.id_problems([{}, {}], "L"),
+                         ["L case None has no id", "L case None has no id"])
+
+    def test_routing_set_with_unhashable_duplicate_ids_does_not_raise(self):
         data = valid_data()
-        data["cases"][1]["id"] = data["cases"][0]["id"]
-        data["cases"] += [{}, {}]
+        data["cases"][0]["id"] = ["a"]
+        data["cases"][1]["id"] = ["a"]
         problems = eval_schema.validate(data, SKILLS, LABEL)
-        self.assertIn("evals/routing.json has duplicate case id 'next-0'",
-                      problems)
-        self.assertIn("evals/routing.json has duplicate case id None",
-                      problems)
+        self.assertEqual(problems.count(
+            "evals/routing.json case ['a'] has no id"), 2)
+
+    def test_output_evals_with_unhashable_duplicate_ids_do_not_raise(self):
+        data = valid_output_data()
+        data["evals"] = [valid_output_record(id={"k": 1}),
+                         valid_output_record(id={"k": 1})]
+        self.assertEqual(
+            eval_schema.validate_output(data, "idea",
+                                        "evals/output/idea.json"),
+            ["evals/output/idea.json eval {'k': 1} has no id"] * 2)
 
 
 class TestLoad(unittest.TestCase):
@@ -224,14 +252,14 @@ class TestValidateOutput(unittest.TestCase):
                                         self.LABEL), [])
 
     def test_every_documented_field_is_required(self):
-        for field in eval_schema.OUTPUT_FIELDS:
+        # the id is judged by id_problems (TestIdProblems)
+        for field in [f for f in eval_schema.OUTPUT_FIELDS if f != "id"]:
             with self.subTest(field=field):
                 data = valid_output_data()
                 del data["evals"][0][field]
                 problems = eval_schema.validate_output(data, "idea",
                                                        self.LABEL)
-                expected_id = None if field == "id" else 1
-                self.assertIn(f"evals/output/idea.json eval {expected_id!r} "
+                self.assertIn(f"evals/output/idea.json eval 1 "
                               f"missing field: {field}", problems)
 
     def test_falsy_present_values_are_not_missing(self):

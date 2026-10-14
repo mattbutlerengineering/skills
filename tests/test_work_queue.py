@@ -18,6 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
+from test_work_orders import (  # noqa: E402
+    DUP_ISSUE, DUP_WO, NEWER, OLDER, Tree as WorkOrderTree)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import cli  # noqa: E402
@@ -28,10 +30,11 @@ CONFIG = {"budgets_usd": {"S": 5, "M": 15, "L": 40},
 
 
 def row(wo, done=False, size="S", issue=1, blockers="—", where="b.md:1",
-        unreadable=None):
+        unreadable=None, clashes=()):
     return {"wo": wo, "done": done, "size": size, "issue": issue,
             "blockers": [] if blockers == "—" else blockers,
-            "unreadable": unreadable, "where": where}
+            "unreadable": unreadable, "where": where,
+            "clashes": list(clashes)}
 
 
 def found(*rows):
@@ -295,6 +298,38 @@ class TestRowsAndSpend(unittest.TestCase):
             found_rows = work_queue.rows(tree.root)
             self.assertEqual(found_rows["WO-0002"]["unreadable"],
                              "Export API")
+
+    def test_a_duplicated_row_is_deferred_as_the_dispatcher_refuses_it(self):
+        # Issue #885: rows() kept its own walk and let the last duplicate
+        # win, so the queue planned #9 as WO-0001 while the dispatcher
+        # refuses both clashing rows. It now reads work_orders' index.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = WorkOrderTree(tmp, OLDER, NEWER).root
+            found_rows = work_queue.rows(root)
+            self.assertEqual(found_rows["WO-0001"]["issue"], 5)
+            self.assertEqual(found_rows["WO-0001"]["where"],
+                             "docs/breakdown.md:3")
+            candidates, deferred = work_queue.eligible(found_rows, {5, 9})
+        self.assertEqual(candidates, [])
+        self.assertEqual(deferred, [f"WO-0001: {DUP_WO}",
+                                    f"WO-0002: {DUP_ISSUE}"])
+
+    def test_a_blocker_reads_the_done_the_dispatcher_sees(self):
+        # Issue #885's reproduction: the first WO-0001 row is checked
+        # off, so WO-0002 is unblocked; the open copy is deferred.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/features/demo/breakdown.md",
+                       "- [x] **WO-0001** first (tracker: #5) size:S\n"
+                       "- [ ] **WO-0001** copy (tracker: #9) size:L\n"
+                       "- [ ] **WO-0002** next (tracker: #7) size:S,"
+                       " blocked by: WO-0001\n")
+            candidates, deferred = work_queue.eligible(
+                work_queue.rows(tree.root), {5, 7, 9})
+        self.assertEqual([c["wo"] for c in candidates], ["WO-0002"])
+        self.assertEqual(deferred, [
+            "WO-0001: docs/features/demo/breakdown.md:2 WO-0001"
+            " duplicates the row at docs/features/demo/breakdown.md:1"])
 
     def test_month_to_date_counts_only_this_month(self):
         with tempfile.TemporaryDirectory() as tmp:

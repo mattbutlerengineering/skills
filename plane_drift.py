@@ -85,13 +85,13 @@ def reconcile_drift(rows, issues, absent_is_drift=True):
                             " usable number")
             continue
         index[issue["number"]] = issue
-    drift, mirrored = [], {}
+    drift, mirrored = [], set()
     for path, lines in rows:
         for row in breakdown_rows(lines):
             number = row["issue"]
             if number is None:
                 continue
-            mirrored.setdefault(number, []).append(path)
+            mirrored.add(number)
             issue = index.get(number)
             if issue is None:
                 if absent_is_drift:
@@ -117,11 +117,9 @@ def reconcile_drift(rows, issues, absent_is_drift=True):
                 drift.append(f"{path}: an unchecked row mirrors #{number},"
                              f" which is closed carrying {_describe(labels)}"
                              " — the row says the work is outstanding")
-    for number, paths in sorted(mirrored.items()):
-        if len(paths) > 1:
-            drift.append(f"#{number} is mirrored by {len(paths)} rows"
-                         f" ({', '.join(sorted(set(paths)))}) — an issue"
-                         " mirrors one work order")
+    # A tracker two rows mirror is the knowledge plane disagreeing with
+    # itself, not drift: knowledge_plane.work_orders owns that rule and
+    # gates' detector C reports it at PR time (issue #886).
     for number, issue in sorted(index.items()):
         labels = issue_lifecycle(issue)
         if not labels:
