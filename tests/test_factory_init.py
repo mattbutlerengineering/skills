@@ -701,9 +701,11 @@ class TestInstallDestinationLockstep(unittest.TestCase):
     lands it). The mapping is therefore stated twice, and only a test can
     keep the two statements from drifting.
 
-    Scoped to the keys E actually compares (gates.PRISTINE_PREFIXES): a
-    future INSTALL_MAP entry redirecting a tool or a workflow still fails
-    here, while gates stays free of a mapping it has no use for.
+    Scoped to the keys E actually compares (gates.PRISTINE_PREFIXES), plus
+    every INSTALL_MAP key: both sides read the mapped keys from
+    factory_config.ARTIFACT_HOMES (ADR-0048), and pinning them here keeps a
+    mapping only one side knows from hiding outside the pristine scope
+    (#748).
     """
 
     def pristine_keys(self):
@@ -735,6 +737,21 @@ class TestInstallDestinationLockstep(unittest.TestCase):
                              "templates/.github/CODEOWNERS",
                              "templates/.github/labels.json")
              if rel.startswith(gates.PRISTINE_PREFIXES)], [])
+
+    def test_both_agree_on_every_install_map_key(self):
+        # The pristine scoping above hid a real disagreement (#748): gates
+        # stripped templates/factory.json to factory.json while the stamp
+        # lands it at .github/factory.json. Every mapped key is pinned here,
+        # pristine or not, so a mapping only one side knows cannot hide.
+        self.assertTrue(factory_init.INSTALL_MAP, "INSTALL_MAP is empty")
+        for rel in sorted(factory_init.INSTALL_MAP):
+            with self.subTest(rel=rel):
+                self.assertEqual(gates.install_destination(rel),
+                                 factory_init.install_path(rel)[0])
+
+    def test_factory_json_installs_under_dot_github_for_gates_too(self):
+        self.assertEqual(gates.install_destination("templates/factory.json"),
+                         ".github/factory.json")
 
     def test_both_refuse_the_same_malformed_keys(self):
         for rel in ("../../evil.sh", "/tmp/evil", "templates/../../etc/evil",
