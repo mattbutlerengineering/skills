@@ -25,6 +25,19 @@ def write(path, text):
     path.write_text(text, encoding="utf-8")
 
 
+# A latin-1 accent: valid text, invalid UTF-8 — a consumer repo's ADR
+# written by an editor that never asked (issue #855).
+UNDECODABLE = "# Caf\xe9\n\n- Status: accepted\n".encode("latin-1")
+
+
+def decode_error(data):
+    try:
+        data.decode("utf-8")
+    except UnicodeDecodeError as err:
+        return str(err)
+    raise AssertionError("fixture decodes as UTF-8")
+
+
 def adr(root, name, title, status_line):
     write(Path(root) / "docs" / "adr" / name,
           f"# {title}\n\n{status_line}\n- Date: 2026-01-01\n\n## Decision\n")
@@ -60,6 +73,19 @@ class TestGather(unittest.TestCase):
              "title": "New way", "status": "accepted",
              "standing": "active", "superseded_by": None},
         ])
+
+    def test_an_undecodable_adr_is_a_problem_string_not_a_traceback(self):
+        # Issue #855: adr_status promises problem strings, and runs
+        # against arbitrary target repos.
+        with tempfile.TemporaryDirectory() as tmp:
+            adr(tmp, "0002-new.md", "New way", "- Status: accepted")
+            path = Path(tmp) / "docs/adr/0001-cafe.md"
+            path.write_bytes(UNDECODABLE)
+            model, problems = adr_status.gather(tmp)
+        self.assertIsNone(model)
+        self.assertEqual(problems, [
+            "adr-status: cannot read docs/adr/0001-cafe.md: "
+            + decode_error(UNDECODABLE)])
 
     def test_frontmatter_status_is_read_when_no_status_line(self):
         """Repos outside this grammar keep status in frontmatter; the raw

@@ -33,7 +33,8 @@ from make_parse import make_recipe, make_targets, phony_targets  # noqa: E402
 import workflow_parse  # noqa: E402
 
 
-def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=()):
+def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=(),
+               adr_problems=()):
     """An in-memory knowledge_plane.parse_run()-shaped dict, built by hand
     rather than through a real tempdir tree (issue #442). The detectors
     whose gates.ROSTER row declares a parsed input read only this shape
@@ -41,6 +42,7 @@ def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=()):
     below builds one "runs" entry; a fixture builder that only needs one
     run can skip it and pass a single-element `runs` list directly."""
     return {"runs": list(runs), "adr_files": list(adr_files),
+            "adr_problems": list(adr_problems),
             "adr_readme": adr_readme, "scannable": list(scannable)}
 
 
@@ -254,6 +256,16 @@ class TestBlueprintDrift(unittest.TestCase):
     def test_no_adr_dir_is_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(gates.check_blueprint_drift(Path(tmp)), [])
+
+    def test_an_adr_the_parse_could_not_read_is_a_d_problem(self):
+        # Issue #855: parse_run's guarded ADR read hands its problems
+        # beside the files; D, the ADR-file detector, reports them.
+        with tempfile.TemporaryDirectory() as tmp:
+            parsed = parsed_run(
+                adr_problems=["cannot read docs/adr/0001-cafe.md: bad"])
+            self.assertEqual(
+                gates.check_blueprint_drift(Path(tmp), parsed),
+                ["D: cannot read docs/adr/0001-cafe.md: bad"])
 
     def test_a_three_digit_adr_file_is_indexed_at_four_digits(self):
         # Issue #774: the index row grammar is four digits, so the
@@ -703,6 +715,23 @@ class TestStandardsDrift(unittest.TestCase):
 
     def standards(self, tree, entries):
         tree.write("docs/standards.json", json.dumps(entries))
+
+    def test_k_reads_the_adr_lines_it_is_handed_not_the_tree(self):
+        # Issue #855: run_all threads one parse through K, so K must not
+        # re-read docs/adr — the bullet here exists only in `parsed`.
+        bullet = "- **some-slug** (factory): Something MUST happen."
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.standards(tree, [
+                {"slug": "some-slug", "statement": "Something MUST"
+                 " happen.", "level": "MUST", "source": "adr/0001#some-slug",
+                 "status": "advisory", "domain": "factory"}])
+            parsed = parsed_run(adr_files=[(
+                tree.root / "docs/adr/0001-x.md",
+                ["# X", "", "- Status: accepted", "",
+                 "## Normative statements", "", bullet])])
+            self.assertEqual(
+                gates.check_standards_drift(tree.root, parsed), [])
 
     def test_an_absent_index_is_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
