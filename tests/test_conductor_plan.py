@@ -61,9 +61,22 @@ def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", on_main=(),
             (Path(args[4]) / path).write_text("{}\n")
         return ""
 
+    def ls_tree(args):
+        # As real git lists: a path named outright, or a directory's
+        # immediate children when the pathspec ends in "/".
+        listed = []
+        for path in on_main:
+            for spec in args[args.index("--") + 1:]:
+                if path == spec:
+                    listed.append(path)
+                elif spec.endswith("/") and path.startswith(spec):
+                    child = spec + path[len(spec):].split("/")[0]
+                    if child not in listed:
+                        listed.append(child)
+        return "".join(f"{path}\n" for path in listed)
+
     answers = {("grep",): grep, ("worktree", "add"): check_out,
-               ("ls-tree",): lambda args: "".join(
-                   f"{path}\n" for path in on_main if path in args)}
+               ("ls-tree",): ls_tree}
     if checkout is not None:
         answers[("rev-parse",)] = f"{Path(checkout) / '.git'}\n"
     return FakeGit(answers)
@@ -112,18 +125,95 @@ def plan(issues, config=CONFIG, spent=0.0, highest=HIGHEST):
                                 AGENTS)
 
 
+def batch_ledger(checkout, batch, reserves):
+    """Write an open batch's ledger in its batch worktree under the main
+    checkout, one reserve row per (what, values)."""
+    worktree = Path(checkout) / conductor.batch_worktree(batch)
+    ledger = worktree / conductor.LEDGER.format(batch=batch)
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text("".join(
+        json.dumps({"at": AT, "kind": "reserve", "item": "#1",
+                    "what": what, "values": values}) + "\n"
+        for what, values in reserves))
+    return worktree
+
+
 class TestIdsInUse(unittest.TestCase):
+    def ids(self, grep="PRD-0013\nWO-0152\nWO-0007\n",
+            on_main=("docs/adr/0083-x.md",), batches=()):
+        with tempfile.TemporaryDirectory() as tmp:
+            for batch, reserves in batches:
+                batch_ledger(tmp, batch, reserves)
+            git = fake_git(grep=grep, on_main=on_main, checkout=tmp)
+            return conductor_plan.ids_in_use(git), git.calls
+
     def test_the_highest_of_each_kind_on_origin_main(self):
-        git = fake_git()
-        self.assertEqual(conductor_plan.ids_in_use(git), (HIGHEST, []))
-        self.assertEqual(git.calls, [["grep", "-h", "-o", "-E",
-                                      "(PRD|ADR|WO)-[0-9]{4}", "origin/main",
-                                      "--", "docs"]])
+        found, calls = self.ids()
+        self.assertEqual(found, (HIGHEST, []))
+        self.assertEqual(calls, [
+            ["grep", "-h", "-o", "-E", "(PRD|WO)-[0-9]{4}", "origin/main",
+             "--", "docs"],
+            ["ls-tree", "--name-only", "origin/main", "--", "docs/adr/"],
+            ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+            ["ls-tree", "--name-only", "origin/main", "--",
+             "docs/factory/batches/"]])
 
     def test_no_ids_at_all_is_zero(self):
         # git grep finding nothing exits 1, as FakeGit's does.
-        self.assertEqual(conductor_plan.ids_in_use(FakeGit()),
+        self.assertEqual(self.ids(grep="", on_main=())[0],
                          ({"prd": 0, "adr": 0, "wo": 0}, []))
+
+    def test_adrs_are_the_consumers_adr_files_at_any_width(self):
+        # #821: a consumer doc citing the plugin's ADR-0087 reserved ADR
+        # 88-90 in a repo whose ADRs are ADR-020..ADR-026.
+        found, _ = self.ids(
+            grep="PRD-0013\nADR-0087\nWO-0152\n",
+            on_main=("docs/adr/ADR-020-a.md", "docs/adr/ADR-026-b.md",
+                     "docs/adr/README.md", "docs/agents/contract.md"))
+        self.assertEqual(found, ({"prd": 13, "adr": 26, "wo": 152}, []))
+
+    def test_an_open_batchs_reservations_are_taken(self):
+        # #821: b20261012 and b20261013 both reserved PRD-1 and
+        # overlapping WOs: an unmerged ledger's blocks were invisible.
+        found, _ = self.ids(grep="", on_main=(), batches=[
+            ("b20261012", [("prd", [1]), ("wo", list(range(1, 11)))]),
+            ("b20261013", [("adr", [3])])])
+        self.assertEqual(found, ({"prd": 1, "adr": 3, "wo": 10}, []))
+
+    def test_an_item_worktree_holds_no_batch_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            item = Path(tmp) / conductor.item_worktree("b1", "#5")
+            ledger = item / conductor.LEDGER.format(batch="b1-5")
+            ledger.parent.mkdir(parents=True)
+            ledger.write_text("not json\n")
+            found = conductor_plan.ids_in_use(
+                fake_git(grep="", checkout=tmp))
+        self.assertEqual(found, ({"prd": 0, "adr": 0, "wo": 0}, []))
+
+    def test_a_merged_batchs_ledger_holds_nothing(self):
+        # Its used numbers are on origin/main; the rest are free again.
+        found, _ = self.ids(grep="", on_main=(
+            conductor.LEDGER.format(batch="b20261012"),), batches=[
+            ("b20261012", [("prd", [1]), ("wo", [1, 2])])])
+        self.assertEqual(found, ({"prd": 0, "adr": 0, "wo": 0}, []))
+
+    def test_an_unreadable_open_ledger_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            worktree = batch_ledger(tmp, "b1", [])
+            (worktree / conductor.LEDGER.format(batch="b1")).write_text(
+                "not json\n")
+            found = conductor_plan.ids_in_use(
+                fake_git(grep="", checkout=tmp))
+        self.assertEqual(found, (None, [
+            "cd: docs/factory/batches/b1/ledger.jsonl:1 is not valid JSON:"
+            " Expecting value: line 1 column 1 (char 0)"]))
+
+    def test_a_failing_adr_listing_is_a_problem(self):
+        git = fake_git(grep="")
+        git.failing = ["ls-tree"]
+        self.assertEqual(
+            conductor_plan.ids_in_use(git),
+            (None, ["cd: git ls-tree origin/main failed: fatal: rejected"]))
 
     def test_a_failing_grep_is_a_problem(self):
         bad = subprocess.CalledProcessError(

@@ -777,7 +777,8 @@ class TestReservations(TurnCase):
 
     def test_a_number_that_cannot_be_renumbered_stalls(self):
         self.item(self.ITEM)
-        self.main_moves(dict(self.MAIN, **{"docs/x.md": "ADR-9999\n"}))
+        self.main_moves(dict(self.MAIN,
+                             **{"docs/adr/9999-last.md": "# last\n"}))
         summary, _ = self.turn(adr_rows())
         self.assertEqual(summary["stall"], "ADR-0091 is taken on origin/main"
                          " and cannot be renumbered: ADR-10000 would leave"
