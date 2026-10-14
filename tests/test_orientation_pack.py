@@ -17,6 +17,7 @@ from pathlib import Path
 
 import assembler
 import orientation_pack
+from knowledge_plane import work_orders
 
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling fixture_tree import
@@ -56,8 +57,8 @@ REALISTIC_BREAKDOWN = (
     "- [ ] **WO-0092** later row — size:S, blocked by: WO-0091"
     " (PRD-0001 §Solution) (tracker: #992)\n"
 )
-# WO-0091's bullet line ALONE — what resolve_row hands assemble_prompt as the
-# prompt substrate. It carries no ADR token; the citation is in the block.
+# WO-0091's bullet line ALONE. It carries no ADR token; the citation is in
+# the block knowledge_plane.work_orders resolves (issue #857).
 BULLET_0091 = (
     "- [ ] **WO-0091** dispatch guard — size:S, blocked by: WO-0090"
     " (PRD-0001 §Solution) (tracker: #991)")
@@ -86,36 +87,6 @@ class TestCitedAdrs(unittest.TestCase):
     def test_duplicate_citations_are_deduplicated_in_citation_order(self):
         row = "(ADR-0032) something (ADR-0033) again (ADR-0032)"
         self.assertEqual(orientation_pack.cited_adrs(row), ["0032", "0033"])
-
-
-class TestWoBlock(unittest.TestCase):
-    """The work order's full breakdown block — bullet PLUS its Accept:/Notes
-    sub-bullets — is where this repo's rows cite ADRs, so wo_block is what
-    makes ADR-bundling fire under the real grammar."""
-
-    def tree(self, tmp):
-        tree = FixtureTree(tmp)
-        tree.write("docs/features/demo/breakdown.md", REALISTIC_BREAKDOWN)
-        return tree
-
-    def test_the_block_includes_the_accept_sub_bullet(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            block = orientation_pack.wo_block(self.tree(tmp).root, "WO-0091")
-        self.assertIn("dispatch guard", block)
-        self.assertIn("ADR-0032", block)
-
-    def test_the_block_stops_before_the_next_work_order(self):
-        """WO-0090's Accept sub-bullet cites ADR-0033; WO-0091's block must
-        NOT absorb it, or it would bundle a neighbour's ADR."""
-        with tempfile.TemporaryDirectory() as tmp:
-            block = orientation_pack.wo_block(self.tree(tmp).root, "WO-0091")
-        self.assertNotIn("ADR-0033", block)
-        self.assertNotIn("later row", block)
-
-    def test_an_unknown_work_order_has_no_block(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            self.assertIsNone(
-                orientation_pack.wo_block(self.tree(tmp).root, "WO-9999"))
 
 
 class TestAdrPath(unittest.TestCase):
@@ -229,17 +200,20 @@ class TestOrientationPack(unittest.TestCase):
 
     def test_bundles_adrs_cited_in_the_accept_sub_bullet_not_the_bullet(self):
         """The acceptance criterion under the REAL row grammar: the ADR lives
-        in WO-0091's Accept sub-bullet, and the bullet `row` handed in
-        (BULLET_0091) carries no ADR token — yet the pack still bundles
-        ADR-0032, because it scans the work order's full breakdown block. It
-        must NOT bundle ADR-0033, which belongs to the neighbouring WO-0090's
-        block."""
+        in WO-0091's Accept sub-bullet, and the bullet (BULLET_0091) carries
+        no ADR token — yet the pack bundles ADR-0032, because the caller
+        hands it the work order's full block, resolved by
+        knowledge_plane.work_orders. It must NOT bundle ADR-0033, which
+        belongs to the neighbouring WO-0090's block."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).orientation()
             tree.write("docs/features/demo/breakdown.md", REALISTIC_BREAKDOWN)
+            index, _ = work_orders(tree.root)
+            block = index["wo"]["WO-0091"]["block"]
             pack = orientation_pack.orientation_pack(
-                tree.root, "WO-0091", BULLET_0091)
+                tree.root, "WO-0091", block)
         self.assertNotIn("ADR-0032", BULLET_0091)  # guard: bullet is clean
+        self.assertTrue(block.startswith(BULLET_0091))
         self.assertIn("### ADR-0032", pack)
         self.assertIn("Factory dispatch plane", pack)
         self.assertNotIn("### ADR-0033", pack)

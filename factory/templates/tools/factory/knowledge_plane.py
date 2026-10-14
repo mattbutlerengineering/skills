@@ -27,6 +27,7 @@ import re
 from collections import namedtuple
 from pathlib import Path
 
+from cli import read_file
 from protocol import read_frontmatter
 
 PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
@@ -374,13 +375,28 @@ def parse_row(line):
     }
 
 
+def _row_block(lines, index):
+    """The block the row at lines[index] owns (issue #857): the row,
+    stripped, plus the lines under it — indented sub-bullets, blank
+    lines between them included (a loose list) — up to the next row or
+    the first unindented line, prose or heading. Trailing blank lines
+    are not the block's."""
+    block = [lines[index].strip()]
+    for line in lines[index + 1:]:
+        if ROW.match(line) or (line.strip() and not line[:1].isspace()):
+            break
+        block.append(line.rstrip())
+    return "\n".join(block).rstrip()
+
+
 def breakdown_rows(lines):
     """Every row record in a breakdown's lines, in order, each carrying
-    its 1-based `lineno` — the walk A, C, G, O and the dispatch-plane
-    tools share instead of each re-reading every line."""
-    return [{**row, "lineno": lineno}
-            for lineno, row in ((n, parse_row(line))
-                                for n, line in enumerate(lines, 1))
+    its 1-based `lineno` and its `block` (_row_block) — the walk A, C,
+    G, O and the dispatch-plane tools share instead of each re-reading
+    every line."""
+    return [{**row, "lineno": index + 1, "block": _row_block(lines, index)}
+            for index, row in ((n, parse_row(line))
+                               for n, line in enumerate(lines))
             if row is not None]
 
 
@@ -410,20 +426,57 @@ def breakdown_files(root):
                 encoding="utf-8").splitlines()
 
 
+def work_orders(root):
+    """(index, problems): the row a work order or an issue owns (issue
+    #857). index["wo"] maps a WO token, index["issue"] a tracker issue
+    number, to its breakdown row record — breakdown_rows' fields plus
+    `path` (the breakdown.md) and `clashes`. Every lookup in either
+    direction (ADR-0039: each caller keeps its own) reads this one
+    index, so they cannot disagree.
+
+    One duplicate policy: the first row in breakdown_files order owns
+    the key, and a later row naming the same WO or tracker issue is an
+    unlabelled problem, `<rel>:<lineno> <WO> duplicates the row at
+    <rel>:<lineno>` (or `(tracker: #N)` in the WO's place). Each clash
+    is also listed in the `clashes` of both rows it names, so a caller
+    that acts on one row — a dispatch, a label flip — can refuse it."""
+    root = Path(root)
+    index, problems = {"wo": {}, "issue": {}}, []
+    for path, lines in breakdown_files(root):
+        for row in breakdown_rows(lines):
+            record = {**row, "path": path, "clashes": []}
+            for kind, key, shown in (
+                    ("wo", row["wo"], row["wo"]),
+                    ("issue", row["issue"], f"(tracker: #{row['issue']})")):
+                if key is None:
+                    continue
+                first = index[kind].setdefault(key, record)
+                if first is record:
+                    continue
+                clash = (f"{path.relative_to(root)}:{row['lineno']} {shown}"
+                         f" duplicates the row at"
+                         f" {first['path'].relative_to(root)}"
+                         f":{first['lineno']}")
+                problems.append(clash)
+                first["clashes"].append(clash)
+                record["clashes"].append(clash)
+    return index, problems
+
+
 def mirror_map(root):
     """{tracker issue number: WO token} from the breakdown rows. The
     knowledge plane is authoritative and the mirror one-way (ADR-0032):
     a row with no (tracker: #N) simply is not in any queue, and an issue
-    with no row is not a work order.
+    with no row is not a work order. Read from work_orders, so a
+    duplicated tracker maps to the row every other lookup resolves.
 
     The one composition of the two names above that the tracker-facing
     tools — the gate digest, the miner, the dashboard — all need, and
     the reason ADR-0039 put the mirror grammar here in the first place:
     it reads rows, and it names no gate."""
-    return {row["issue"]: row["wo"]
-            for _, lines in breakdown_files(root)
-            for row in breakdown_rows(lines)
-            if row["wo"] and row["issue"] is not None}
+    index, _ = work_orders(root)
+    return {number: row["wo"] for number, row in index["issue"].items()
+            if row["wo"]}
 
 
 # The ADR record (issue #747): which files in docs/adr are decision
@@ -525,11 +578,11 @@ def _declared_status(lines):
 
 def adr_record(path, lines):
     """One ADR, read once: {number, written, path, lineno, status, head,
-    standing, superseded_by}. PATH must be an adr_paths file; LINES are
-    its lines (a parse_run adr_files entry). number and written are
-    adr_file_number's pair. lineno is the line the status was read
+    standing, superseded_by, title, lines}. PATH must be an adr_paths
+    file; LINES are its lines (a read_adrs entry). number and written
+    are adr_file_number's pair. lineno is the line the status was read
     from, 0 when it declares none; superseded_by is the retiring ADR's
-    number, or None."""
+    number, or None; title is the first `# ` heading's text, or None."""
     lineno, text = _declared_status(lines)
     match = ADR_STATUS.match(text or "")
     number, written = adr_file_number(path.name)
@@ -541,13 +594,35 @@ def adr_record(path, lines):
             "head": match.group(1) if match else None,
             "standing": standing(text),
             "superseded_by": (match.group("by")
-                              if match and match.group("retired") else None)}
+                              if match and match.group("retired") else None),
+            "title": next((line[2:].strip() for line in lines
+                           if line.startswith("# ")), None),
+            "lines": lines}
+
+
+def read_adrs(root):
+    """([(Path, [str])], problems): every adr_paths file under ROOT with
+    its lines, in that order — the one ADR read (issue #855), guarded by
+    cli.read_file (ADR-0075). A file that cannot be read is left out
+    and named in an unlabelled problem string, `cannot read
+    docs/adr/<name>: <err>`, which each caller labels."""
+    root = Path(root)
+    files, problems = [], []
+    for _, path in adr_paths(root):
+        text, problem = read_file(path, path.relative_to(root).as_posix(),
+                                  str)
+        if problem:
+            problems.append(problem)
+        elif text is not None:
+            files.append((path, text.splitlines()))
+    return files, problems
 
 
 def adr_records(root):
-    """adr_record for every adr_paths file under ROOT, in that order."""
-    return [adr_record(path, path.read_text(encoding="utf-8").splitlines())
-            for _, path in adr_paths(root)]
+    """(records, problems): adr_record for every file read_adrs reads
+    under ROOT, in that order, and its read problems."""
+    files, problems = read_adrs(root)
+    return [adr_record(path, lines) for path, lines in files], problems
 
 
 def parse_run(root, scannable=()):
@@ -609,11 +684,16 @@ def parse_run(root, scannable=()):
         verification_error carries str(err) when verification.md exists
         but could not be decoded — check_evidence_honesty's own
         "H: {rel} cannot be read: {err}" case — with verification then
-        None; every other artifact here is read the way its current
-        caller already reads it: uncaught, because no current caller
-        catches a read error there either.
-      "adr_files": [(Path, [str]), ...] for every adr_paths file, in
-        that order — adr_record reads an entry.
+        None; every other artifact here except the ADRs is read the way
+        its current caller already reads it: uncaught, because no
+        current caller catches a read error there either.
+      "adr_files": [(Path, [str]), ...] — read_adrs' files: every
+        adr_paths file it could read, in that order — adr_record reads
+        an entry. The ADRs alone are read guarded (issue #855), since
+        adr_status and the standards index share this read and promise
+        problem strings.
+      "adr_problems": [str] — read_adrs' unlabelled problems, one per
+        ADR left out of "adr_files"; detector D labels and reports them.
       "adr_readme": [str] | None for docs/adr/README.md.
       "scannable": [(Path, [str]), ...], one entry per path in
         `scannable`, in that order — read uncaught, same as every other
@@ -650,8 +730,7 @@ def parse_run(root, scannable=()):
             "verification_error": verification_error,
         })
 
-    adr_files = [(path, path.read_text(encoding="utf-8").splitlines())
-                 for _, path in adr_paths(root)]
+    adr_files, adr_problems = read_adrs(root)
     readme = root / "docs" / "adr" / "README.md"
     adr_readme = (readme.read_text(encoding="utf-8").splitlines()
                   if readme.is_file() else None)
@@ -659,7 +738,8 @@ def parse_run(root, scannable=()):
     scanned = [(path, path.read_text(encoding="utf-8").splitlines())
               for path in scannable]
 
-    return {"runs": runs, "adr_files": adr_files, "adr_readme": adr_readme,
+    return {"runs": runs, "adr_files": adr_files,
+            "adr_problems": adr_problems, "adr_readme": adr_readme,
             "scannable": scanned}
 
 
