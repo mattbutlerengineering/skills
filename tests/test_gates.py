@@ -34,7 +34,7 @@ import workflow_parse  # noqa: E402
 
 
 def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=(),
-               adr_problems=()):
+               adr_problems=(), scannable_problems=()):
     """An in-memory knowledge_plane.parse_run()-shaped dict, built by hand
     rather than through a real tempdir tree (issue #442). The detectors
     whose gates.ROSTER row declares a parsed input read only this shape
@@ -43,7 +43,8 @@ def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=(),
     run can skip it and pass a single-element `runs` list directly."""
     return {"runs": list(runs), "adr_files": list(adr_files),
             "adr_problems": list(adr_problems),
-            "adr_readme": adr_readme, "scannable": list(scannable)}
+            "adr_readme": adr_readme, "scannable": list(scannable),
+            "scannable_problems": list(scannable_problems)}
 
 
 def run_entry(path, breakdown=None, prd_id=None, architecture=None,
@@ -1366,14 +1367,18 @@ class TestLabelWiring(unittest.TestCase):
             tree, named = self.wired_tree(tmp)
             tree.write(".github/labels.json", self.taxonomy(
                 [name for name in named if name != "wo:merged"]))
-            # wo:merged is named twice over — the Makefile target that
-            # flips it and the human_gates entry that counts it — and both
-            # sites are reported, because both break
+            # wo:merged is named three times over — a pre-verb Makefile
+            # target that flips it, the human_gates entry that counts it,
+            # and the pr-merged verb that writes it — and every site is
+            # reported, because every one breaks
             self.assertEqual(gates.check_label_wiring(tree.root), [
                 "J: Makefile:2 names wo:merged but the taxonomy has no such"
                 " label (add it to .github/labels.json, or the flip fails"
                 " when CI runs it)",
                 "J: human_gates.py names wo:merged but the taxonomy has no"
+                " such label (add it to .github/labels.json, or the flip"
+                " fails when CI runs it)",
+                "J: validator.py names wo:merged but the taxonomy has no"
                 " such label (add it to .github/labels.json, or the flip"
                 " fails when CI runs it)"])
 
@@ -1535,12 +1540,11 @@ class TestLabelWiring(unittest.TestCase):
         self.assertEqual(declared_by("conductor_plan.py"),
                          ["size:L", "size:M", "size:S", "type:chore",
                           "type:defect", "type:feature"])
-        # every lifecycle target's --label argument, read off the Makefile
-        for label in ("wo:merged", "wo:in-progress", "wo:needs-review",
-                      "wo:failed"):
-            self.assertTrue(
-                any(site.startswith("Makefile") for site in
-                    named.get(label, [])), f"{label} not read off Makefile")
+        # the four labels the lifecycle verbs write, declared by the verbs'
+        # module rather than read off a Makefile recipe (#859)
+        self.assertEqual(declared_by("validator.py"),
+                         ["wo:failed", "wo:in-progress", "wo:merged",
+                          "wo:needs-review"])
 
     def test_the_shipped_taxonomy_wires_the_shipped_tools(self):
         """The live pin, and the one that would have caught the gap."""
@@ -2714,6 +2718,28 @@ class TestRunAll(unittest.TestCase):
             self.assertEqual(parse_run.call_count, 1)
 
 
+    def test_an_undecodable_markdown_file_is_one_d_problem(self):
+        """Issue #877: a latin-1 doc in _scannable_files' selection raised
+        UnicodeDecodeError out of run_all. Now D, which already reports
+        the ADRs it could not read (#855), reports each unreadable doc
+        once — the ADR read twice (as an ADR and as a scanned doc) too."""
+        undecodable = "# Caf\xe9\n".encode("latin-1")
+        try:
+            undecodable.decode("utf-8")
+        except UnicodeDecodeError as err:
+            error = err
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixtures.clean_repo_fixture(root)
+            (root / "docs" / "adr").mkdir(parents=True, exist_ok=True)
+            (root / "docs" / "adr" / "0099-cafe.md").write_bytes(undecodable)
+            (root / "docs" / "cafe.md").write_bytes(undecodable)
+            problems = gates.run_all(root, env={})
+        self.assertEqual(
+            [p for p in problems if "cannot read" in p],
+            [f"D: cannot read docs/adr/0099-cafe.md: {error}",
+             f"D: cannot read docs/cafe.md: {error}"])
+
 class TestLockstep(unittest.TestCase):
     """Makefile <-> CI lockstep (origin: WO-0003, tightened by WO-0004).
 
@@ -2767,18 +2793,12 @@ class TestLockstep(unittest.TestCase):
     VALIDATOR_TARGETS = {
         "review": ["python3 validator.py review --findings $(FINDINGS)"
                    " --status $(STATUS)"],
-        # Both legs carry --uncited skip (ADR-0057): a PR naming no work
-        # order is a no-op on open AND on merge. Without it here, every
-        # housekeeping PR merged with a red post-merge run while the open
-        # leg passed the same body.
-        "wo-merged": ["python3 validator.py lifecycle --label wo:merged"
-                      " --uncited skip"],
-        "wo-in-progress": ["python3 validator.py lifecycle --label"
-                           " wo:in-progress --issue $(ISSUE)"],
-        "wo-needs-review": ["python3 validator.py lifecycle --label"
-                            " wo:needs-review --uncited skip"],
-        "wo-failed": ["python3 validator.py lifecycle --label wo:failed"
-                      " --issue $(ISSUE) --verdict skip"],
+        # One verb per leg: the label and the uncited rule (ADR-0057) are
+        # the verb's, pinned in tests/test_validator_legs.py (#859).
+        "wo-merged": ["python3 validator.py pr-merged"],
+        "wo-in-progress": ["python3 validator.py claim $(ISSUE)"],
+        "wo-needs-review": ["python3 validator.py pr-opened"],
+        "wo-failed": ["python3 validator.py fail $(ISSUE)"],
     }
 
     def recipes(self, path, target):

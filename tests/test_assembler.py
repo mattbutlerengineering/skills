@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from factory_fixture import FixtureTree as FactoryFixtureTree  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
+import git_repo  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -984,9 +985,8 @@ class TestBundleCannotReachMain(unittest.TestCase):
 
     def test_a_tag_in_the_bundle_cannot_carry_agent_commits_onto_main(self):
         origin = self.tmp / "origin.git"
-        self.git(self.tmp, "init", "-q", "--bare", "-b", "main", str(origin))
-        agent = self.tmp / "agent"
-        self.git(self.tmp, "clone", "-q", str(origin), str(agent))
+        git_repo.init(origin, "--bare", "-b", "main", env=self.env)
+        agent = git_repo.clone(origin, self.tmp / "agent", env=self.env)
         ledger = agent / "docs" / "factory" / "costs.jsonl"
         ledger.parent.mkdir(parents=True)
         ledger.write_text('{"row": "old"}\n', encoding="utf-8")
@@ -1002,8 +1002,7 @@ class TestBundleCannotReachMain(unittest.TestCase):
         self.git(agent, "bundle", "create", str(handoff / "handoff.bundle"),
                  "refs/heads/wo-0001", "refs/tags/origin/main", "^" + base)
 
-        deliver = self.tmp / "deliver"
-        self.git(self.tmp, "clone", "-q", str(origin), str(deliver))
+        deliver = git_repo.clone(origin, self.tmp / "deliver", env=self.env)
         fetch = [line for line in step_script(
             self.deliver(), "Push the order's branch and open its PR"
         ).splitlines() if line.startswith("git fetch")]

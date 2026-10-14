@@ -48,16 +48,16 @@ pr-event:
 	python3 tools/factory/validator.py pr-event --pr $(PR) --out $(EVENT)
 
 wo-merged:
-	python3 tools/factory/validator.py lifecycle --label wo:merged --uncited skip
+	python3 tools/factory/validator.py pr-merged
 
 wo-in-progress:
-	python3 tools/factory/validator.py lifecycle --label wo:in-progress --issue $(ISSUE)
+	python3 tools/factory/validator.py claim $(ISSUE)
 
 wo-needs-review:
-	python3 tools/factory/validator.py lifecycle --label wo:needs-review --uncited skip
+	python3 tools/factory/validator.py pr-opened
 
 wo-failed:
-	python3 tools/factory/validator.py lifecycle --label wo:failed --issue $(ISSUE) --verdict skip
+	python3 tools/factory/validator.py fail $(ISSUE)
 
 # Set by the assembler workflow's record step: the dispatched run's spend,
 # machine-written to the append-only cost ledger (issue #222; ADR-0034).

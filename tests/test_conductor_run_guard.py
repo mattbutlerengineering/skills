@@ -15,6 +15,7 @@ import conductor
 import conductor_run
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import git_repo  # noqa: E402
 from test_conductor_run import BASE, Gh, Git, Harness, RunCase, \
     pr_body  # noqa: E402
 
@@ -98,7 +99,7 @@ class TestPushGapsOnARealRepo(unittest.TestCase):
     def test_a_real_repo_with_and_without_a_pushurl(self):
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp) / "w"
-            subprocess.run(["git", "init", "-q", str(work)], check=True)
+            git_repo.init(work)
 
             def git(args):
                 return subprocess.run(["git", *args], check=True,

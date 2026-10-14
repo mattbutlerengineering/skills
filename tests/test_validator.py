@@ -698,55 +698,11 @@ class TestRunLifecycle(unittest.TestCase):
                     tree.root, "wo:merged", env=self.env(tmp), run=run),
                 ["V: gh issue view 109 failed: gh: not found"])
 
-    def test_uncited_skip_silences_a_pr_with_no_work_order(self):
-        # The PR-open leg (wo:needs-review) labels every WO PR, but a
-        # human housekeeping PR cites no work order — that is normal
-        # traffic, not an error. Nothing is resolved, nothing is called.
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.tree(tmp)
-            run = gh()
-            problems = validator.run_lifecycle(
-                tree.root, "wo:needs-review",
-                env=self.env(tmp, body="chore: housekeeping"), run=run,
-                uncited="skip")
-            self.assertEqual(problems, [])
-            self.assertEqual(run.calls, [])
-
-    def test_uncited_skip_keeps_a_malformed_citation_loud(self):
-        # The skip is exactly the no-citation case. A body that NAMES a
-        # work order but resolves to none is a malformed WO PR — silently
-        # not labelling it would lose the queue-entry event with nothing
-        # ever retrying it (the job fires on opened/reopened only).
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.tree(tmp)
-            run = gh()
-            problems = validator.run_lifecycle(
-                tree.root, "wo:needs-review",
-                env=self.env(tmp, body="Implements WO-0004."), run=run,
-                uncited="skip")
-            self.assertEqual(problems, [
-                "V: PR body has no Closes #N link, so the work order it"
-                " implements cannot be told from the ones it only"
-                " mentions"])
-            self.assertEqual(run.calls, [])
-
-    def test_uncited_skip_still_flips_a_cited_work_order(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.tree(tmp)
-            run = gh(labels=["wo:in-progress"])
-            problems = validator.run_lifecycle(
-                tree.root, "wo:needs-review", env=self.env(tmp), run=run,
-                uncited="skip")
-            self.assertEqual(problems, [])
-            self.assertEqual(run.called("issue", "edit"), [[
-                "issue", "edit", "109",
-                "--add-label", "wo:needs-review",
-                "--remove-label", "wo:in-progress"]])
-
     def test_the_relaxation_must_be_asked_for(self):
         # The FUNCTION default stays strict, so no caller gets the
-        # relaxation by accident. Both Makefile targets ask for it
-        # (ADR-0057) — TestLockstep in test_gates pins that they do.
+        # relaxation by accident. Both PR verbs ask for it (ADR-0057) —
+        # test_validator_legs pins that they do; only the legacy
+        # `lifecycle --label` alias still reaches this default.
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             run = gh()
@@ -755,38 +711,6 @@ class TestRunLifecycle(unittest.TestCase):
                 env=self.env(tmp, body="chore: housekeeping"), run=run)
             self.assertEqual(
                 problems, ["V: PR body cites no work-order id"])
-
-    def test_the_merged_leg_skips_an_uncited_pr_too(self):
-        # ADR-0057: the two legs agreed about a malformed citation and
-        # disagreed about no citation, which left a housekeeping PR with
-        # no body that could satisfy both — naming a work order failed
-        # the open leg, naming none failed the merged leg.
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.tree(tmp)
-            run = gh()
-            problems = validator.run_lifecycle(
-                tree.root, "wo:merged",
-                env=self.env(tmp, body="chore: housekeeping"), run=run,
-                uncited="skip")
-            self.assertEqual(problems, [])
-            self.assertEqual(run.calls, [])
-
-    def test_the_merged_leg_keeps_a_malformed_citation_loud(self):
-        # The relaxation is gated on the body naming NO work order, so
-        # it cannot widen into the case the strictness actually exists
-        # for: a body that names one which resolves to none.
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.tree(tmp)
-            run = gh()
-            problems = validator.run_lifecycle(
-                tree.root, "wo:merged",
-                env=self.env(tmp, body="Implements WO-0004."), run=run,
-                uncited="skip")
-            self.assertEqual(problems, [
-                "V: PR body has no Closes #N link, so the work order it"
-                " implements cannot be told from the ones it only"
-                " mentions"])
-            self.assertEqual(run.calls, [])
 
     def test_a_token_only_inside_a_fence_is_not_a_claim(self):
         """ADR-0064. The body pastes the detector output it is fixing;
@@ -1136,10 +1060,11 @@ class TestClaimOutputLockstep(unittest.TestCase):
 
 
 class TestParseLifecycle(unittest.TestCase):
-    """The four lifecycle invocations (ADR-0032, ADR-0045): the merged leg
-    (--label alone), the dispatch claim (--label --issue N), the failure
-    leg (--label --issue N --verdict skip), and the PR-open leg (--label
-    --uncited skip). Anything else is usage."""
+    """The pre-verb `lifecycle --label` grammar, kept as an alias for
+    stamped Makefiles that update never refreshes (#859): --label alone,
+    the claim form (--label --issue N), the failure form (--label --issue
+    N --verdict skip), and the PR form (--label --uncited skip). Anything
+    else is usage. The verbs that replace it: test_validator_legs."""
 
     def test_the_bare_label_form_still_parses(self):
         self.assertEqual(

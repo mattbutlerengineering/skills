@@ -315,7 +315,8 @@ class TestParseRun(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(parse_run(Path(tmp)),
                              {"runs": [], "adr_files": [], "adr_problems": [],
-                              "adr_readme": None, "scannable": []})
+                              "adr_readme": None, "scannable": [],
+                              "scannable_problems": []})
 
     def test_scannable_defaults_to_empty_and_pays_no_i_o(self):
         # No `scannable` argument: callers that never touch it (detectors
@@ -720,3 +721,13 @@ class TestGuardedAdrRead(unittest.TestCase):
         self.assertEqual([path.name for path, _ in parsed["adr_files"]],
                          ["0002-ok.md"])
         self.assertEqual(parsed["adr_problems"], [self.problem])
+
+    def test_parse_run_leaves_out_an_undecodable_scannable_doc(self):
+        # Issue #877: the scannable read is guarded the same way.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.tree(tmp)
+            adrs = sorted((root / "docs" / "adr").iterdir())
+            parsed = parse_run(root, scannable=adrs)
+        self.assertEqual([path.name for path, _ in parsed["scannable"]],
+                         ["0002-ok.md"])
+        self.assertEqual(parsed["scannable_problems"], [self.problem])

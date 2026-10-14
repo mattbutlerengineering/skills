@@ -50,6 +50,8 @@
 - `test_open_pr_preflight.py` — cross-cutting: the protocol's "Open pull
   requests first" section and the five work-starting skills that recite it
 - `test_orientation_pack.py` — orientation_pack.py, the dispatch prompt
+- `test_plugin_eval_tags.py` — cross-cutting: every plugin-evals/ case is
+  tagged with its skill directory (ADR-0093)
 - `test_protocol_backlog.py` — protocol.py backlog-entry grammar
 - `test_protocol_conformance.py` — protocol.py stage tables vs
   docs/pipeline-protocol.md prose
@@ -79,6 +81,8 @@
 - `factory_fixture.py` — canonical factory-config fixture (CONFIG + writer)
 - `fake_gh.py` — the one fake gh at cli.gh_runner's seam
 - `fixture_tree.py` — shared temp fixture-tree builder
+- `git_repo.py` — the one way a suite makes a real temp git repo
+  (init/clone with auto-gc and auto-maintenance off, #874)
 - `harness_contract.py` — RunEvalContract mixin for the run_eval twins
 - `make_parse.py` — Makefile text extraction for the lockstep tests
 - `workflow_parse.py` — workflow text extraction for the run-step tests

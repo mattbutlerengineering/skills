@@ -30,6 +30,7 @@ import knowledge_plane
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
+import git_repo  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -1283,9 +1284,7 @@ class TestAcceptanceStampRealRepo(unittest.TestCase):
         # #705: a consumer ran conductor.py plan, and the commit that
         # followed carried tools/factory/__pycache__/*.pyc.
         with tempfile.TemporaryDirectory() as tmp:
-            target = Path(tmp) / "product"
-            target.mkdir()
-            subprocess.run(["git", "init", "-q"], cwd=target, check=True)
+            target = git_repo.init(Path(tmp) / "product")
             self.assertEqual(factory_init.stamp(REPO_ROOT, target), [])
             subprocess.run([sys.executable, "-c", "import conductor"],
                            cwd=target / "tools" / "factory", check=True,

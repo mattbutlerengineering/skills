@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fake_gh import FakeGh  # noqa: E402
+import git_repo  # noqa: E402
 
 # Loaded by path: the stdlib has a `trace` module, and a plain import
 # would take whichever one sys.path or sys.modules reached first.
@@ -64,7 +65,7 @@ class Repo(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)
-        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        git_repo.init(self.root)
         run = self.root / "docs" / "features" / "demo"
         self.run_dir = run
         write(run / "idea.md", "---\nstage: idea\n---\n\n# Idea\n")

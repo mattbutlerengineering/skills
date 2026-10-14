@@ -23,6 +23,7 @@ import conductor_plan
 import conductor_run
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import git_repo  # noqa: E402
 from test_conductor_plan import CONFIG, clock, issue, \
     issues_gh  # noqa: E402
 from test_conductor_run import BASE, MAIN_COSTS, RESULT, Git, \
@@ -54,7 +55,7 @@ class TestAbsentLedger(RunCase):
             def sh(*args):
                 return subprocess.run(["git", "-C", tmp, *args], check=True,
                                       capture_output=True, text=True)
-            sh("init", "-q")
+            git_repo.init(tmp)
             sh("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
                "--allow-empty", "-m", "seed")
             sh("update-ref", "refs/remotes/origin/main", "HEAD")

@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
 from fake_git import FakeGit  # noqa: E402
+import git_repo  # noqa: E402
 from test_conductor_flow import (BUDGET, PLAN, START,  # noqa: E402
                                  answered, failed, launch, moved, ran,
                                  run_id, stall_ask)
@@ -243,7 +244,7 @@ class TestWorkerEnv(unittest.TestCase):
         # is rewritten to a local path that cannot exist.
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp) / "w"
-            subprocess.run(["git", "init", "-q", str(work)], check=True)
+            git_repo.init(work)
             for key, value in (("user.email", "t@example.com"),
                                ("user.name", "t"),
                                ("commit.gpgsign", "false")):
@@ -271,7 +272,7 @@ class TestWorkerEnv(unittest.TestCase):
         # refuses a launch while one is configured.
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp) / "w"
-            subprocess.run(["git", "init", "-q", str(work)], check=True)
+            git_repo.init(work)
             for key, value in (("user.email", "t@example.com"),
                                ("user.name", "t"),
                                ("commit.gpgsign", "false"),
@@ -294,10 +295,8 @@ class TestWorkerEnv(unittest.TestCase):
         # Worker's `make check` must still pass them.
         with tempfile.TemporaryDirectory() as tmp:
             origin, work = Path(tmp) / "origin.git", Path(tmp) / "w"
-            subprocess.run(["git", "init", "-q", "--bare", str(origin)],
-                           check=True)
-            subprocess.run(["git", "clone", "-q", str(origin), str(work)],
-                           check=True, capture_output=True)
+            git_repo.init(origin, "--bare")
+            git_repo.clone(origin, work)
             for key, value in (("user.email", "t@example.com"),
                                ("user.name", "t"),
                                ("commit.gpgsign", "false")):

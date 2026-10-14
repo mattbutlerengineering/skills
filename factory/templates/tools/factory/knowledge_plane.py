@@ -711,8 +711,12 @@ def parse_run(root, scannable=()):
         ADR left out of "adr_files"; detector D labels and reports them.
       "adr_readme": [str] | None for docs/adr/README.md.
       "scannable": [(Path, [str]), ...], one entry per path in
-        `scannable`, in that order — read uncaught, same as every other
-        entry above.
+        `scannable` it could read, in that order — guarded by
+        cli.read_file like the ADRs (issue #877), since one undecodable
+        doc anywhere in the tree otherwise crashes a full gates run.
+      "scannable_problems": [str] — unlabelled `cannot read <rel>: <err>`
+        problems, one per `scannable` path left out; detector D labels and
+        reports them beside adr_problems.
 
     Read-only: parse_run never writes.
     """
@@ -750,12 +754,18 @@ def parse_run(root, scannable=()):
     adr_readme = (readme.read_text(encoding="utf-8").splitlines()
                   if readme.is_file() else None)
 
-    scanned = [(path, path.read_text(encoding="utf-8").splitlines())
-              for path in scannable]
+    scanned, scannable_problems = [], []
+    for path in scannable:
+        text, problem = read_file(path, path.relative_to(root).as_posix(),
+                                  str)
+        if problem:
+            scannable_problems.append(problem)
+        elif text is not None:
+            scanned.append((path, text.splitlines()))
 
     return {"runs": runs, "adr_files": adr_files,
             "adr_problems": adr_problems, "adr_readme": adr_readme,
-            "scannable": scanned}
+            "scannable": scanned, "scannable_problems": scannable_problems}
 
 
 def repo_root():
