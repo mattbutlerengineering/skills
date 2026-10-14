@@ -31,6 +31,7 @@ import handoff
 # added for the sibling factory_fixture import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from factory_fixture import CONFIG, FixtureTree  # noqa: E402
+import git_repo  # noqa: E402
 import cli_contract  # noqa: E402
 
 
@@ -163,8 +164,9 @@ class TestPushWip(unittest.TestCase):
 def scratch_repo(path):
     """A real, initialised git repo at `path` with a commit and NO remote —
     the normal hard-stopped state, where `git push` exits 128."""
-    path.mkdir(parents=True)
-    for args in (["init"], ["config", "user.email", "t@example.com"],
+    path.parent.mkdir(parents=True, exist_ok=True)
+    git_repo.init(path)
+    for args in (["config", "user.email", "t@example.com"],
                  ["config", "user.name", "Tester"],
                  ["commit", "--allow-empty", "-m", "root"]):
         subprocess.run(["git", "-C", str(path), *args],
