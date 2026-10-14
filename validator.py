@@ -33,37 +33,47 @@ problem strings; the CLI prints them and exits nonzero.
         job: failing the build is the check job's work, and a reviewer that
         goes silent on red is useless.
 
-  python3 validator.py lifecycle --label wo:merged --uncited skip
-        The merge leg. Make <label> the only wo: lifecycle label on the
+  python3 validator.py pr-merged
+        The merge leg. Make wo:merged the only wo: lifecycle label on the
         work order's mirrored issue (ADR-0032: exactly one at a time). The
         issue number comes from the breakdown row, never from the issue
         itself — the knowledge plane is authoritative and the mirror is
         one-way.
 
-  python3 validator.py lifecycle --label wo:needs-review --uncited skip
-        The PR-open leg: same PR-shaped resolution.
+  python3 validator.py pr-opened
+        The PR-open leg: wo:needs-review, the same PR-shaped resolution.
 
-        Both legs pass --uncited skip (ADR-0057), so a PR citing no work
+        Both PR legs skip an uncited PR (ADR-0057), so a PR citing no work
         order is a silent no-op on each — human housekeeping PRs are
         normal traffic, not errors. "Citing" means naming one OUTSIDE
         quoted material (ADR-0064): a token in a fenced block or a
         blockquote is something the PR is discussing. A PR that NAMES a
         work order in its own prose and resolves none stays a problem on
-        both.
+        both. The rule is the verb's, not the caller's: there is no flag
+        to forget (#302-#306 were a recipe that forgot one).
 
-  python3 validator.py lifecycle --label wo:in-progress --issue <N>
-        The dispatch claim: flip a KNOWN issue (no PR to resolve) and
-        write transitioned=true/false to $GITHUB_OUTPUT — true only when
-        the flip took the order out of wo:ready-for-agent, which is the
-        assembler's idempotency verdict (a repeat label event gets false
-        and the paid agent step is skipped).
+  python3 validator.py claim <N>
+        The dispatch claim: flip KNOWN issue N (no PR to resolve) to
+        wo:in-progress and write transitioned=true/false to
+        $GITHUB_OUTPUT — true only when the flip took the order out of
+        wo:ready-for-agent, which is the assembler's idempotency verdict
+        (a repeat label event gets false and the paid agent step is
+        skipped).
 
-  python3 validator.py lifecycle --label wo:failed --issue <N> --verdict skip
-        The dispatch failure leg: the same KNOWN-issue flip, writing no
-        verdict. The assembler runs it from a failure() step, so an order
-        whose agent run died lands on wo:failed instead of sitting on
-        wo:in-progress forever — the state both the gate digest and the
-        improvement routine read as work still in flight.
+  python3 validator.py fail <N>
+        The dispatch failure leg: the same KNOWN-issue flip, to wo:failed,
+        writing no verdict. The assembler runs it from a failure() step,
+        so an order whose agent run died lands on wo:failed instead of
+        sitting on wo:in-progress forever — the state both the gate digest
+        and the improvement routine read as work still in flight.
+
+  python3 validator.py lifecycle --label <label> [--issue <N> [--verdict skip]
+                                                  | --uncited skip]
+        The grammar before the verbs, where the recipe named the label and
+        a flag picked the leg. Kept as an alias because factory-init
+        update never refreshes a stamped Makefile
+        (docs/kb/stamp-outside-payload.md); remove it once stamped
+        Makefiles call the verbs.
 
 Which lifecycle labels machinery writes, and which it deliberately does
 not (ADR-0045). The assembler claims (wo:in-progress) and reports its own
@@ -86,10 +96,21 @@ import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, label_names, report, write_outputs
+from human_gates import GATES
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              breakdown_rows, repo_root, unfenced)
 
 LIFECYCLE_PREFIX = "wo:"
+# The labels the two dispatch legs write — the assembler's claim and its
+# failure report (ADR-0045). Named here, by the verbs that write them, so
+# detector J reads them off this module (gates.LABEL_DECLARERS) rather
+# than off a Makefile recipe.
+CLAIM_LABEL = "wo:in-progress"
+FAILED_LABEL = "wo:failed"
+# The two PR legs write the merge gate's labels: opening a PR enters its
+# queue, merging it is the pass. human_gates owns that vocabulary, so the
+# legs and the gate digest cannot name different labels.
+MERGE_GATE = next(gate for gate in GATES if gate.name == "merge")
 # The dispatch-queue state (ADR-0032) is assembler.READY_LABEL. The
 # claim's idempotency verdict is "did THIS event take the order out of
 # ready" — so the label is named, not inferred from the taxonomy's
@@ -419,7 +440,9 @@ def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     ADR-0045 already puts disagreements of this kind.
 
     The function default stays strict so a caller must ask for the
-    relaxation; the Makefile targets are the callers that do."""
+    relaxation; pr_opened and pr_merged are the callers that do. Only
+    the legacy `lifecycle --label` alias can still reach the strict
+    default."""
     lifecycle, problems = lifecycle_labels(root)
     if problems:
         return problems
@@ -498,6 +521,30 @@ def run_claim(root, label, issue, env, run=gh_runner):
     return []
 
 
+def pr_opened(root, env, run=gh_runner):
+    """The PR-open leg: the cited work order enters the merge gate's
+    queue. An uncited PR is a no-op (ADR-0057)."""
+    return run_lifecycle(root, MERGE_GATE.queue, env, run=run,
+                         uncited="skip")
+
+
+def pr_merged(root, env, run=gh_runner):
+    """The merge leg: the cited work order passes the merge gate. An
+    uncited PR is a no-op here too (ADR-0057) — the legs agree."""
+    return run_lifecycle(root, MERGE_GATE.passed, env, run=run,
+                         uncited="skip")
+
+
+def claim(root, issue, env, run=gh_runner):
+    """The dispatch claim of KNOWN issue `issue`, with its verdict."""
+    return run_claim(root, CLAIM_LABEL, issue, env, run=run)
+
+
+def fail(root, issue, run=gh_runner):
+    """The dispatch failure leg for KNOWN issue `issue`: no verdict."""
+    return run_outcome(root, FAILED_LABEL, issue, run=run)
+
+
 # The action a dispatch stands in for. GitHub suppresses the real
 # pull_request event for a PR the factory's own token opened (WO-0030), so
 # the synthetic one says "opened". Nothing reads the word back out of this
@@ -538,11 +585,25 @@ def write_pr_event(number, path, env, run=gh_runner):
     return []
 
 
+# The lifecycle verbs, one per leg; each leg names its own label and its
+# own uncited rule, so no argument can pair a leg with another's.
+PR_VERBS = {"pr-opened": pr_opened, "pr-merged": pr_merged}
+ISSUE_VERBS = ("claim", "fail")
+
+
 def parse(argv):
     """(command, options) for a well-formed invocation, else (None, None)."""
     if not argv:
         return None, None
     command, rest, options = argv[0], argv[1:], {}
+    # The lifecycle verbs: a leg's only argument is its issue, if it has
+    # one. isascii(): str.isdigit() is true for '\u00b2'.
+    if command in PR_VERBS:
+        return (command, {}) if not rest else (None, None)
+    if command in ISSUE_VERBS:
+        if len(rest) == 1 and rest[0].isascii() and rest[0].isdigit():
+            return command, {"issue": rest[0]}
+        return None, None
     while rest:
         if not rest[0].startswith("--") or len(rest) < 2:
             return None, None
@@ -559,6 +620,8 @@ def parse(argv):
         return command, {"findings": options.get("findings", "findings.txt"),
                          "status": int(status)}
     if command == "lifecycle":
+        # The pre-verb alias. Its forms parse exactly as they did,
+        # mis-pairings included: a stamped Makefile is never refreshed.
         if set(options) == {"label"}:
             return command, options
         if (set(options) == {"label", "issue"}
@@ -584,6 +647,12 @@ def main(argv, env=None, run=gh_runner):
     elif command == "review":
         problems = run_review(root, options["findings"], options["status"],
                               env=env, run=run)
+    elif command in PR_VERBS:
+        problems = PR_VERBS[command](root, env=env, run=run)
+    elif command == "claim":
+        problems = claim(root, options["issue"], env=env, run=run)
+    elif command == "fail":
+        problems = fail(root, options["issue"], run=run)
     elif command == "lifecycle" and "verdict" in options:
         problems = run_outcome(root, options["label"], options["issue"],
                                run=run)

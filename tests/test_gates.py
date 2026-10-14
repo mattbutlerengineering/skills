@@ -1479,12 +1479,10 @@ class TestLabelWiring(unittest.TestCase):
         self.assertEqual(declared_by("human_gates.py"),
                          ["wo:blueprint-approved", "wo:draft", "wo:merged",
                           "wo:needs-review", "wo:prd-approved"])
-        # every lifecycle target's --label argument, read off the Makefile
-        for label in ("wo:merged", "wo:in-progress", "wo:needs-review",
-                      "wo:failed"):
-            self.assertTrue(
-                any(site.startswith("Makefile") for site in
-                    named.get(label, [])), f"{label} not read off Makefile")
+        # the dispatch legs' labels; the PR legs write the merge gate's,
+        # declared above by human_gates (#859)
+        self.assertEqual(declared_by("validator.py"),
+                         ["wo:failed", "wo:in-progress"])
 
     def test_the_shipped_taxonomy_wires_the_shipped_tools(self):
         """The live pin, and the one that would have caught the gap."""
@@ -2711,18 +2709,12 @@ class TestLockstep(unittest.TestCase):
     VALIDATOR_TARGETS = {
         "review": ["python3 validator.py review --findings $(FINDINGS)"
                    " --status $(STATUS)"],
-        # Both legs carry --uncited skip (ADR-0057): a PR naming no work
-        # order is a no-op on open AND on merge. Without it here, every
-        # housekeeping PR merged with a red post-merge run while the open
-        # leg passed the same body.
-        "wo-merged": ["python3 validator.py lifecycle --label wo:merged"
-                      " --uncited skip"],
-        "wo-in-progress": ["python3 validator.py lifecycle --label"
-                           " wo:in-progress --issue $(ISSUE)"],
-        "wo-needs-review": ["python3 validator.py lifecycle --label"
-                            " wo:needs-review --uncited skip"],
-        "wo-failed": ["python3 validator.py lifecycle --label wo:failed"
-                      " --issue $(ISSUE) --verdict skip"],
+        # One verb per leg: the label and the uncited rule (ADR-0057) are
+        # the verb's, pinned in tests/test_validator_legs.py (#859).
+        "wo-merged": ["python3 validator.py pr-merged"],
+        "wo-in-progress": ["python3 validator.py claim $(ISSUE)"],
+        "wo-needs-review": ["python3 validator.py pr-opened"],
+        "wo-failed": ["python3 validator.py fail $(ISSUE)"],
     }
 
     def recipes(self, path, target):

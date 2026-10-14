@@ -10,7 +10,7 @@
     "templates/.github/workflows/gate-digest.yml": "5abc8a86c8bcebc0ab41e217f13b32843dcb91eb0d90390ca3a5f6b892539552",
     "templates/.github/workflows/toolsmith-mine.yml": "5a53428847c14bc2d112a6c50dfcf4b51008baff1d5baba523aeb0ee4bbe2168",
     "templates/.github/workflows/validator.yml": "0a7321b2a98968f8f96f1e88923c40fcd9b7349b1c1b203a174b9643ab8eb296",
-    "templates/Makefile": "63c045193a7d1b7ff050b7292160fcd7c6845296bbab0f93a28b34b40a2527b7",
+    "templates/Makefile": "53174c03ab59953b583fedf56f5ed0543d6a6bcdd56b93143d08c9b2819d61f5",
     "templates/docs/adr/0001-decisions-are-recorded-here.md": "2dda45634398a0a29d04f073fadaf51ecbdf7c1ccbb3795583355396382c02e5",
     "templates/docs/adr/0002-artifacts-are-the-state.md": "78b63944832b8421bbc1d635b53bfcab739748b65d74bfb2d0ac822981d41bf9",
     "templates/docs/adr/0003-soft-gating.md": "5c47715cc5da80c411efb48498c132d773b7bea9d26acd17262d0df17af43705",
@@ -38,8 +38,8 @@
     "templates/tools/factory/cost_report.py": "6a828b5d1854fb2db4f3512f2febd1ea7672338bb82c2c6efd2150202a63a39d",
     "templates/tools/factory/factory_config.py": "04ea0ef8d59fb14eeb6c38671ae4d595c3150857cc8d52053c356f88e724bcfb",
     "templates/tools/factory/gate_digest.py": "648aadea80f1c7129a071d6aff1d3f5ec78b291eae84866fea08eac6a9eeb7f5",
-    "templates/tools/factory/gates.py": "e15d3a1d1738b1d2e53f1872eecfc55145f330161cc762cb1dbeff063fdc2fa6",
-    "templates/tools/factory/gates_selftest.py": "03e5437081dc48bac9cd63793a0ee3f35e10c0cec591d890ccaaf360053bede2",
+    "templates/tools/factory/gates.py": "f72e1135ee5562e0fdd69d46ba580bff419350be9ebb0be853518f74477c626e",
+    "templates/tools/factory/gates_selftest.py": "620a081bd24ed17340fc2dac5a2dd5fd57ca95c581efe40966d26bf28a20f49a",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/human_gates.py": "97aaaf4b0f0ec5884d26721b682e5f8f5b2067500d8c3ec421113d2b37afadae",
     "templates/tools/factory/knowledge_plane.py": "1590f20c6919808b1434b6b197e9b376c62a1af71b707f84351023e2f9010b9c",
@@ -48,7 +48,7 @@
     "templates/tools/factory/protocol.py": "a89bdd5321d47e1bf02ee20d899e0c85c58338ae843e1a31fb18c2e8b9c8b453",
     "templates/tools/factory/rejection_mining.py": "b9e88a73052978d527f68931f83bddb95e8b0a964b500de79a1dd35b7b25cc56",
     "templates/tools/factory/standards_index.py": "315fd1e6d1df6fc2580ffb36d1014d7e8190afa4e8885118e4a66527df0db824",
-    "templates/tools/factory/validator.py": "43b12e2056cdd3e1f63d331c6f456f14abbfe0d564a3d1456d4064e39b52f156",
+    "templates/tools/factory/validator.py": "401fbf4498172a3fed9c16ed1ad3f5c905edaac3eecd0b690fafb7857d7d65f3",
     "templates/tools/factory/work_queue.py": "4944cf4db22d8f626b26bd9e0e284db61faa346c8c32d9e951375c2d16eafff5"
   }
 }
