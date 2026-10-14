@@ -503,6 +503,21 @@ def adr_file_number(name):
     return f"{int(written):04d}", written
 
 
+def adr_digits(number, written):
+    """NUMBER's digits at the width WRITTEN (adr_file_number's `written`,
+    or a citation's digits) has, so a renumbered `ADR-027` stays 3-digit
+    (issue #860)."""
+    return f"{int(number):0{len(written)}d}"
+
+
+def adr_citation(number):
+    """A citation of ADR NUMBER at whatever width it is written, its
+    digits in group `num`: `ADR-027` and `ADR-0027` both cite 27. Only
+    the renumberer reads this; ADR_TOKEN stays the gates' 4-digit
+    grammar (#774, #821)."""
+    return re.compile(rf"\bADR-(?P<num>0*{int(number)})\b")
+
+
 # The status vocabulary (docs/adr/README.md), as a status head plus an
 # optional free-text annotation: "accepted (shipped by ...)" is accepted.
 # Only full supersession retires a decision — "superseded in part by" and

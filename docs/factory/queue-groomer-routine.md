@@ -32,12 +32,39 @@ This file is the minimum needed to run once (issue #438 defers full
 protocol rigor to the routine's own first runs); it grows by PR from
 what those runs report.
 
+## Markers on GitHub
+
+The cloud environment may reach GitHub only through the GitHub MCP
+tools, with no `gh` CLI (#844). Each `gh` command this file names
+states the intent; carry it out with whichever is present. Over MCP, a
+written `<!--` and `-->` have been stored HTML-escaped as `&lt;!--` and
+`--&gt;`, which hides the marker from every later lookup: the queue
+groomer missed its journal and opened a duplicate, and most of the
+improvement journal's state markers went unread. Every marker this file
+names obeys three rules:
+
+1. **Find by both forms.** A marker is matched in its raw form
+   (`<!-- … -->`) and in its HTML-escaped form (`&lt;!-- … --&gt;`).
+   Search by the marker's name, which both forms contain, then check
+   the start of the body or comment against both. An escaped match
+   counts as found, and is repaired by rule 2.
+2. **Write raw, then verify.** Write the marker as literal `<!--` and
+   `-->`, never pre-escaped. After every write that carries one (issue
+   body, journal comment, PR body), re-read what GitHub stored; if it
+   holds the escaped form, update that body or comment to the raw form
+   and re-read again. Still escaped after the update → say so in the
+   run's report and carry on.
+3. **Never create on doubt.** Create a journal only when the marker
+   search succeeded and matched no open issue in either form. If the
+   search errored, or matched more than one open issue, create nothing:
+   report it under Health in the session log and stop.
+
 ## 1 Preconditions and degrade ladder
 
 Check in order; the first hit sets the run mode.
 
-1. `gh auth status` fails → record the failure in the session log and
-   stop.
+1. GitHub is unreachable — `gh auth status` fails and no GitHub MCP
+   tool answers → record the failure in the session log and stop.
 2. `FACTORY_PAUSED` is `true` (`gh variable list`) → **propose-only
    mode**: orient, survey and journal; no branch, no PR. A paused
    factory's queue is expected to look stale — say so rather than
@@ -134,8 +161,9 @@ Verification, and the §6 report.
 
 This routine keeps its own journal issue, titled **Factory queue-groomer
 journal**, body starting `<!-- factory-queue-groomer-journal -->`. Find
-it by marker; create it if absent. It is not pinned by default: GitHub
-allows three pinned issues per repo and those slots are already
+it by marker, in either form (§Markers on GitHub); create it only
+when that search succeeded and found none. It is not pinned by default:
+GitHub allows three pinned issues per repo and those slots are already
 contended. Marker lookup never depends on the pin.
 
 Exactly one journal comment per run:
@@ -194,9 +222,12 @@ this file. The trigger takes ADR-0044's shape:
 - **Cadence:** weekly — Wednesday 13:17 UTC (`17 13 * * 3`), off the
   daily routine's slot and the other roster routines' days.
 - **Model:** Sonnet (`claude-sonnet-5-5`).
-- **Connectors:** none — no MCP connectors; `gh` and `git` only. The
-  create call attaches every account connector by default; they were
-  cleared at 04:11:48 UTC, before any run.
+- **Connectors:** none — no account MCP connectors. The create call
+  attaches every account connector by default; they were cleared at
+  04:11:48 UTC, before any run.
+- **Environment:** `git`, and GitHub through the GitHub MCP tools; the
+  `gh` CLI may be absent (the 2026-10-14 run had none, #844). Markers
+  follow §Markers on GitHub.
 - **Prompt:** a thin pointer to this file, plus duplicated hard limits
   as defense in depth: one PR, never merge, never relabel a work order,
   no self-edit. A change to any of those updates prompt and playbook

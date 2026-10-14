@@ -43,7 +43,7 @@ from cli import CLI_FAILURES, detail, gh_read
 from conductor import BLOCK, append, current_state, is_text, \
     item_view, load, stamp
 from cost_ledger import ISSUE_KEY
-from knowledge_plane import ADR_FILE
+from knowledge_plane import adr_citation, adr_digits, adr_file_number
 
 def _refused(text):
     return [f"cd: merge refused: {text}"]
@@ -289,16 +289,21 @@ def added_marks(main_lines, head_lines):
 
 
 def _token(kind, number):
-    return re.compile(rf"\b{PREFIXES[kind]}-{number:04d}\b")
+    """A citation of NUMBER, its digits in group `num`: an ADR at any
+    width it is written (#860), a PRD or WO at its 4 digits."""
+    if kind == "adr":
+        return adr_citation(number)
+    return re.compile(rf"\b{PREFIXES[kind]}-(?P<num>{number:04d})\b")
 
 
 def _adr_file(path):
-    """The ADR_FILE match for a repo-relative PATH in the ADR file set
-    knowledge_plane.adr_paths reads (docs/adr/*.md), else None."""
+    """adr_file_number's (number, written) for a repo-relative PATH in
+    the ADR file set knowledge_plane.adr_paths reads (docs/adr/*.md),
+    else None."""
     where = PurePosixPath(path)
     if str(where.parent) != "docs/adr" or where.suffix != ".md":
         return None
-    return ADR_FILE.match(where.name)
+    return adr_file_number(where.name)
 
 
 def _used(held, files, new_paths):
@@ -311,7 +316,7 @@ def _used(held, files, new_paths):
                         for lines, marks in files.values()
                         for line, added in zip(lines, marks) if added)
             named = kind == "adr" and any(
-                _adr_file(path) and int(_adr_file(path).group("num")) == number
+                _adr_file(path) and int(_adr_file(path)[0]) == number
                 for path in new_paths)
             if cited or named:
                 used.setdefault(kind, []).append(number)
@@ -341,8 +346,10 @@ def _allocate(rows, on_main, collided):
 def _rewrite(line, moves, stems):
     for kind, pairs in moves.items():
         for old, new in pairs.items():
-            line = _token(kind, old).sub(f"{PREFIXES[kind]}-{new:04d}",
-                                         line)
+            # Each citation keeps the width it is written at (#860).
+            line = _token(kind, old).sub(
+                lambda cited, kind=kind, new=new:
+                f"{PREFIXES[kind]}-{adr_digits(new, cited['num'])}", line)
     for old, new in stems.items():
         line = line.replace(old, new)
     return line
@@ -353,13 +360,13 @@ def _renumber(git, worktree, files, new_paths, moves):
     commit. Lines that are origin/main's are never touched."""
     renames = {}
     for path in new_paths:
-        found = _adr_file(path)
-        number = int(found.group("num")) if found else None
-        if number in moves.get("adr", {}):
-            name = PurePosixPath(path).name
-            renames[path] = (f"docs/adr/{name[:found.start('num')]}"
-                             f"{moves['adr'][number]:04d}"
-                             f"{name[found.end('num'):]}")
+        number, written = _adr_file(path) or (None, None)
+        if number is not None and int(number) in moves.get("adr", {}):
+            # The name's first digits are its number (ADR_FILE's prefix
+            # holds none), renamed at the width they are written (#860).
+            new = adr_digits(moves["adr"][int(number)], written)
+            renames[path] = ("docs/adr/" + PurePosixPath(path).name
+                             .replace(written, new, 1))
     for old, new in renames.items():
         if (worktree / new).exists():
             raise Stall(f"{old} cannot be renumbered: {new} already exists")

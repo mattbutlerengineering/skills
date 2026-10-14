@@ -638,10 +638,36 @@ class TestClose(unittest.TestCase):
         summary, problems = self.close(ROWS, gh=gh)
         self.assertEqual(problems, [])
         self.assertEqual([call[:3] for call in gh.calls], [
-            LABEL_LIST_CALL[:3], ["pr", "create", "--head"],
-            ["label", "create", "needs-human"],
+            LABEL_LIST_CALL[:3], ["label", "create", "needs-human"],
+            ["pr", "create", "--head"],
             ["issue", "edit", "13"], ["issue", "comment", "13"]])
-        self.assertEqual(gh.calls[2], ["label", "create", "needs-human"])
+        self.assertEqual(gh.calls[1], ["label", "create", "needs-human"])
+
+    def test_a_missing_needs_human_takes_the_taxonomy_colour(self):
+        # #856: where labels.json carries the label, close creates it
+        # with the taxonomy's colour and description, not bare — the
+        # drift no detector in a stamped repo would otherwise report
+        taxonomy = self.root / ".github" / "labels.json"
+        taxonomy.parent.mkdir(parents=True)
+        taxonomy.write_text(json.dumps([
+            {"name": "needs-human", "color": "d93f0b",
+             "description": "Flag: agent escalation"}]), encoding="utf-8")
+        gh = FakeGh({LABEL_LIST: json.dumps([{"name": "bug"}])})
+        summary, problems = self.close(ROWS, gh=gh)
+        self.assertEqual(problems, [])
+        self.assertEqual(gh.calls[1], [
+            "label", "create", "needs-human", "--force", "--color", "d93f0b",
+            "--description", "Flag: agent escalation"])
+
+    def test_a_failing_label_create_opens_no_pr(self):
+        gh = FakeGh({LABEL_LIST: json.dumps([{"name": "bug"}])},
+                    failing=["label", "create"])
+        summary, problems = self.close(ROWS, gh=gh)
+        self.assertEqual(problems, [
+            "cd: close: gh label create needs-human failed: boom; finish"
+            " the PR and the needs-human labels by hand"])
+        self.assertNotIn(["pr", "create"],
+                         [call[:2] for call in gh.calls])
 
     def test_no_blocked_item_reads_no_labels(self):
         rows = [row for row in ROWS if row.get("item") != "#13"]

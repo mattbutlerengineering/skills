@@ -46,6 +46,13 @@ becomes a logged assumption, never a silent guess.
    into the run directory as `autorun-brief.md`. The brief is not an
    artifact: it never counts toward orientation or active-run discovery.
 
+   Before the first stage, run the protocol's "Open pull requests first"
+   pre-flight once. The brief never answers a merge: a green pull request
+   waits for the Owner's own answer and is reported, never merged. A red
+   or conflicting one is fixed or named as blocked before the first
+   dispatch. In a session with no Owner present, report the list and go
+   on.
+
 2. **Orient.** Apply the protocol's orientation rules to the run
    directory fixed in step 1, exactly as the `next` router would. The
    next stage is the first incomplete one; a fresh run starts at Idea.

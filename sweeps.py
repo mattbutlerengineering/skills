@@ -60,7 +60,7 @@ from pathlib import Path
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import gh_read, label_names, report
+from cli import gh_read, report
 from knowledge_plane import WO_TOKEN, breakdown_files, repo_root, sanitize
 from plane_drift import reconcile_drift
 from cli import gh_runner
@@ -299,32 +299,18 @@ def ensure_labels(root, run=gh_runner):
     front of a human. And it creates only labels that are ABSENT: a live label
     whose color or description has drifted can still be stamped, so that drift
     stays the label-drift sweep's to report. One-way, like label_sync: nothing
-    is ever deleted or renamed."""
+    is ever deleted or renamed. The creating is label_sync.ensure's; what
+    is the sweep's own is refusing a triage label the taxonomy lacks,
+    which ensure would create bare."""
     desired, problems = label_sync.load_labels(root)
     if problems:
         return problems
-    want = {label["name"]: label for label in desired}
-    listing, suffixes = label_sync.live_labels(run)
-    problems = [f"sweeps: {suffix}" for suffix in suffixes]
-    if listing is None:
-        return problems
-    live = set(label_names(listing))
-    for name in TRIAGE_LABELS:
-        if name in live:
-            continue
-        label = want.get(name)
-        if label is None:
-            problems.append(f"sweeps: triage label {name} is not in the"
-                            " label taxonomy")
-            continue
-        try:
-            run(["label", "create", name, "--force",
-                 "--color", label["color"],
-                 "--description", label["description"]])
-        except GH_FAILURES as err:
-            problems.append(f"sweeps: gh label create {name} failed:"
-                            f" {gh_detail(err)}")
-    return problems
+    known = {label["name"] for label in desired}
+    problems = [f"sweeps: triage label {name} is not in the label taxonomy"
+                for name in TRIAGE_LABELS if name not in known]
+    return problems + [
+        f"sweeps: {suffix}" for suffix in label_sync.ensure(
+            root, [name for name in TRIAGE_LABELS if name in known], run)]
 
 
 def screen(root, intakes):

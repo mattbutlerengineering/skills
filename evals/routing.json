@@ -785,6 +785,27 @@
       "notes": "start-a-run without naming a stage routes to next, not idea"
     },
     {
+      "id": "router-open-prs-1",
+      "kind": "router",
+      "expected": "next",
+      "query": "Continue the pipeline. Three PRs from yesterday's wave are still open, so deal with those before the next stage",
+      "notes": "issue #845: open PRs send next to the protocol's open-PR pre-flight ahead of the hand-off; the router runs it, it routes to no skill"
+    },
+    {
+      "id": "next-vs-apr-open-prs-1",
+      "kind": "near-miss",
+      "expected": "next",
+      "query": "What's next for the dark-mode run? A couple of PRs are still open from the last stage",
+      "notes": "adjacency: next vs address-pr-review — open PRs mentioned while asking what's next is the router's pre-flight, not acting on reviewer feedback"
+    },
+    {
+      "id": "next-vs-idea-open-prs-1",
+      "kind": "near-miss",
+      "expected": "next",
+      "query": "I want to start a new feature run, but there are open pull requests sitting unmerged in this repo",
+      "notes": "adjacency: next vs idea — starting a run with open PRs waiting goes through next's open-PR pre-flight first"
+    },
+    {
       "id": "distractor-1",
       "kind": "distractor",
       "expected": null,
