@@ -24,6 +24,7 @@ parse_run the already-selected path list to read once, alongside
 everything else this function already reads once.
 """
 import re
+from collections import namedtuple
 from pathlib import Path
 
 from protocol import read_frontmatter
@@ -86,14 +87,20 @@ def sanitize(value, limit=FIELD_LIMIT):
 # fence is indented to the item's content column. We do not track containers,
 # and false-positiving on honest nested evidence is the worse error.
 # One owner: deciding that a line is quoted rather than asserted is this
-# rule, and every caller (gates' H, M, N, O and D, validator's skip gate)
-# reads it from here rather than keeping a looser copy of its own.
+# rule, and every caller (gates' H, M, N, O and D, validator's skip gate,
+# md_claims, kb_drift) reads it from here, through `fenced`, rather than
+# keeping a looser copy of its own.
 FENCE_OPEN = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})(?P<info>.*)$")
 FENCE_CLOSE = re.compile(r"^\s*(?P<marker>`{3,}|~{3,})[ \t]*$")
 
 
-def fence_open(line):
-    """(marker char, marker length) if `line` opens a fence, else None."""
+# An open fence: its marker character and length, its info string
+# (stripped), and the 1-based line number of the line that opened it.
+Fence = namedtuple("Fence", "char length info lineno")
+
+
+def _fence_open(line, lineno):
+    """The Fence `line` opens, else None."""
     match = FENCE_OPEN.match(line)
     if not match:
         return None
@@ -101,32 +108,45 @@ def fence_open(line):
     # CommonMark: a backtick fence's info string may not contain a backtick.
     if marker[0] == "`" and "`" in info:
         return None
-    return marker[0], len(marker)
+    return Fence(marker[0], len(marker), info.strip(), lineno)
 
 
-def fence_closes(line, char, length):
-    """Does `line` close a fence opened with `length` copies of `char`?"""
+def _fence_closes(line, fence):
+    """Does `line` close `fence`?"""
     match = FENCE_CLOSE.match(line)
     if not match:
         return False
     marker = match.group("marker")
-    return marker[0] == char and len(marker) >= length
+    return marker[0] == fence.char and len(marker) >= fence.length
+
+
+def fenced(lines, start=1):
+    """(lineno, line, fence) for every line that is not itself a fence
+    marker, numbered from `start`; `fence` is the open Fence the line sits
+    inside, or None outside every fence. If the input ends inside a fence,
+    the last item is (fence.lineno, None, fence) — the unclosed event."""
+    fence = None
+    for lineno, line in enumerate(lines, start):
+        if fence is not None:
+            if _fence_closes(line, fence):
+                fence = None
+            else:
+                yield lineno, line, fence
+            continue
+        fence = _fence_open(line, lineno)
+        if fence is None:
+            yield lineno, line, None
+    if fence is not None:
+        yield fence.lineno, None, fence
 
 
 def unfenced(lines):
     """(lineno, line) for every line outside a fenced code block — fenced
     content is quoted, not asserted. An unterminated fence swallows the
     rest of the input."""
-    fence = None
-    for lineno, line in enumerate(lines, 1):
-        if fence is not None:
-            if fence_closes(line, fence[0], fence[1]):
-                fence = None
-            continue
-        fence = fence_open(line)
+    for lineno, line, fence in fenced(lines):
         if fence is None:
             yield lineno, line
-
 
 
 # A markdown inline link's destination, per CommonMark: optional leading

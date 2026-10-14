@@ -87,8 +87,7 @@ from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, label_names, report, write_outputs
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             breakdown_rows, fence_closes, fence_open,
-                             repo_root)
+                             breakdown_rows, repo_root, unfenced)
 
 LIFECYCLE_PREFIX = "wo:"
 # The dispatch-queue state (ADR-0032) is assembler.READY_LABEL. The
@@ -367,7 +366,7 @@ def _flip(number, label, lifecycle, run):
 
 
 # What "quoted" means to the skip gate below: a fenced region (the one
-# fence rule, knowledge_plane.fence_open/fence_closes), and a blockquote
+# fence rule, knowledge_plane.unfenced), and a blockquote
 # line. NOT inline code — backticks around an id are how this repo writes
 # identifiers in ordinary prose, genuine claims included, so treating them
 # as quotation would silence real work-order PRs (ADR-0064).
@@ -392,23 +391,8 @@ def _unquoted(body):
     unterminated fence swallows the rest of the body, which biases the
     gate toward skipping, and a skip is a no-op rather than a mutation of
     an issue nobody named."""
-    kept = []
-    fence = None
-    for line in body.splitlines():
-        if fence is not None:
-            # Inside a fence, only its OWN marker, at least as long, closes
-            # it: a ~~~ line within a backtick block is content, and so is
-            # a ``` line within a ```` block.
-            if fence_closes(line, fence[0], fence[1]):
-                fence = None
-            continue
-        fence = fence_open(line)
-        if fence is not None:
-            continue
-        if line.lstrip().startswith(">"):
-            continue
-        kept.append(line)
-    return "\n".join(kept)
+    return "\n".join(line for _, line in unfenced(body.splitlines())
+                     if not line.lstrip().startswith(">"))
 
 
 def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):

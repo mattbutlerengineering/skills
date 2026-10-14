@@ -207,6 +207,12 @@ class CommandClaims(Tree):
             "md-claims: README.md:4: command runs 'gone.py', which does"
             " not exist"])
 
+    def test_a_closed_block_counts_though_a_later_fence_never_closes(self):
+        self.readme(shell("python3 gone.py") + FENCE + "\n")
+        self.assertEqual(self.check(), [
+            "md-claims: README.md:2: command runs 'gone.py', which does"
+            " not exist"])
+
     def test_only_shell_fences_hold_commands(self):
         self.readme(shell("python3 gone.py", lang="python"))
         self.assertEqual(self.check(), [])

@@ -86,6 +86,18 @@ class TestPaths(Tree):
             " not exist",
         ])
 
+    def test_a_fence_quoting_a_shorter_fence_stays_quoted(self):
+        # issue #742: a parity toggle closed the ````md block at the
+        # quoted ``` line and read the quoted link below it as a claim.
+        self.file("CLAUDE.md", "\n".join([
+            "````md",
+            "```",
+            "x",
+            "[x](docs/nowhere-quoted.md)",
+            "````",
+        ]) + "\n")
+        self.assertEqual(self.drift(), [])
+
     def test_titled_and_angle_bracket_dangling_links(self):
         self.file("CLAUDE.md", '[a](docs/a.md "Title") [b](<docs/b.md>)'
                   ' [ok](<src/app.py> "App")\n')

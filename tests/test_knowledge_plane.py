@@ -12,8 +12,8 @@ from gates_selftest import (clean_repo_fixture,
                             link_integrity_defect_fixture,
                             wo_citation_defect_fixture)
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
-                             PRD_TOKEN, ROW, WO_TOKEN, breakdown_files,
-                             breakdown_rows, fence_closes, fence_open,
+                             PRD_TOKEN, ROW, WO_TOKEN, Fence,
+                             breakdown_files, breakdown_rows, fenced,
                              local_link_targets, mirror_map, parse_row,
                              parse_run, repo_root, resolve_link, run_dirs,
                              sanitize, unfenced)
@@ -455,45 +455,68 @@ class TestSanitize(unittest.TestCase):
 
 
 class TestFences(unittest.TestCase):
-    """The one fence rule: CommonMark closing (same character, at least as
-    long as the opener, no info string) plus the backtick-info rule. Every
-    caller that asks "is this line quoted?" reads it from here."""
+    """The one fence rule, asserted once at the walker (issue #742):
+    CommonMark closing (same character, at least as long as the opener,
+    no info string) plus the backtick-info rule. Every caller that asks
+    "is this line quoted?" reads it from `fenced`."""
+
+    def walk(self, text):
+        return list(fenced(text.split("\n")))
 
     def kept(self, text):
         return [line for _, line in unfenced(text.split("\n"))]
 
+    def test_walker_yields_the_info_string_and_opener_line(self):
+        fence = Fence("`", 3, "bash", 2)
+        self.assertEqual(self.walk("a\n```bash \nls\n```\nb"),
+                         [(1, "a", None), (3, "ls", fence), (5, "b", None)])
+
     def test_tilde_inside_backtick_fence_is_content(self):
+        fence = Fence("`", 3, "", 2)
+        self.assertEqual(self.walk("a\n```\n~~~\nquoted\n```\nb"),
+                         [(1, "a", None), (3, "~~~", fence),
+                          (4, "quoted", fence), (6, "b", None)])
+
+    def test_longer_fence_quoting_a_shorter_one_is_content(self):
+        fence = Fence("`", 4, "md", 2)
         self.assertEqual(
-            self.kept("a\n```\n~~~\nquoted\n```\nb"), ["a", "b"])
+            self.walk("a\n````md\n```\nquoted\n```\n````\nb"),
+            [(1, "a", None), (3, "```", fence), (4, "quoted", fence),
+             (5, "```", fence), (7, "b", None)])
 
-    def test_three_backticks_inside_four_is_content(self):
-        self.assertEqual(
-            self.kept("a\n````\n```\nquoted\n```\n````\nb"), ["a", "b"])
+    def test_a_longer_closer_closes_and_an_info_line_does_not(self):
+        self.assertEqual(self.kept("a\n```\nquoted\n`````\nb"),
+                         ["a", "b"])
+        self.assertEqual(self.kept("a\n```\n```bash\n```\nb"),
+                         ["a", "b"])
+        self.assertEqual(self.kept("a\n```\n``\n```\nb"), ["a", "b"])
 
-    def test_a_longer_closer_closes(self):
-        self.assertEqual(self.kept("a\n```\nquoted\n`````\nb"), ["a", "b"])
-        self.assertTrue(fence_closes("`````", "`", 3))
-        self.assertFalse(fence_closes("``", "`", 3))
-        self.assertFalse(fence_closes("~~~", "`", 3))
-        self.assertFalse(fence_closes("``` bash", "`", 3))
-
-    def test_backtick_info_with_a_backtick_does_not_open(self):
-        self.assertIsNone(fence_open("``` a`b"))
-        self.assertEqual(fence_open("~~~ a`b"), ("~", 3))
-        self.assertEqual(self.kept("``` a`b\nb"), ["``` a`b", "b"])
+    def test_backtick_in_info_string_is_not_an_opener(self):
+        self.assertEqual(self.walk("``` a`b\nb"),
+                         [(1, "``` a`b", None), (2, "b", None)])
+        self.assertEqual(self.walk("~~~ a`b\nx\n~~~"),
+                         [(2, "x", Fence("~", 3, "a`b", 1))])
 
     def test_leading_whitespace_is_allowed(self):
-        self.assertEqual(fence_open("    ```bash"), ("`", 3))
-        self.assertTrue(fence_closes("    ```  ", "`", 3))
-        self.assertEqual(self.kept("- x\n  ```\n  quoted\n  ```\nb"),
+        self.assertEqual(self.kept("- x\n  ```\n  quoted\n  ```  \nb"),
                          ["- x", "b"])
 
-    def test_unterminated_fence_swallows_the_rest(self):
-        self.assertEqual(self.kept("a\n````\nquoted\n```\nb"), ["a"])
+    def test_unterminated_fence_yields_unclosed_with_its_opener_line(self):
+        fence = Fence("`", 4, "", 2)
+        self.assertEqual(self.walk("a\n````\nquoted\n```\nb"),
+                         [(1, "a", None), (3, "quoted", fence),
+                          (4, "```", fence), (5, "b", fence),
+                          (2, None, fence)])
 
-    def test_line_numbers_are_one_based(self):
+    def test_start_numbers_lines_like_enumerate(self):
+        self.assertEqual(list(fenced(["```", "x"], start=7)),
+                         [(8, "x", Fence("`", 3, "", 7)),
+                          (7, None, Fence("`", 3, "", 7))])
+
+    def test_unfenced_keeps_only_lines_outside_every_fence(self):
         self.assertEqual(list(unfenced(["a", "```", "x", "```", "b"])),
                          [(1, "a"), (5, "b")])
+        self.assertEqual(self.kept("a\n````\nquoted\n```\nb"), ["a"])
 
 
 class TestLocalLinkTargets(unittest.TestCase):
