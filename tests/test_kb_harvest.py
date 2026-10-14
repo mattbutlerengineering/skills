@@ -20,7 +20,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests"))
 
+import git_repo  # noqa: E402
 import kb  # noqa: E402
 import kb_harvest  # noqa: E402
 
@@ -141,7 +143,7 @@ class TestLinkedWorktree(Tree):
         super().setUp()
         base = Path(self._tmp.name).resolve()
         self.main, self.linked = base / "main", base / "linked"
-        real_git(base, "init", "-q", "-b", "main", str(self.main))
+        git_repo.init(self.main, "-b", "main")
         real_git(self.main, "commit", "-q", "--allow-empty", "-m", "seed")
         real_git(self.main, "worktree", "add", "-q", str(self.linked))
         self.main_dir = self.projects / kb_harvest.slug(self.main)

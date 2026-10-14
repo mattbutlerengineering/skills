@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
 from fake_git import FakeGit  # noqa: E402
+import git_repo  # noqa: E402
 
 AT = "2026-10-10T12:00:00Z"
 
@@ -103,7 +104,7 @@ def linked_worktree(tmp):
     its one commit, and a `git worktree add` of it beside it."""
     main = Path(tmp).resolve() / "main"
     linked = Path(tmp).resolve() / "linked"
-    real_git(tmp, "init", "-q", "-b", "main", str(main))
+    git_repo.init(main, "-b", "main")
     real_git(main, "commit", "-q", "--allow-empty", "-m", "seed")
     real_git(main, "update-ref", "refs/remotes/origin/main", "HEAD")
     real_git(main, "worktree", "add", "-q", str(linked))

@@ -18,7 +18,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tests"))
 
+import git_repo  # noqa: E402
 import kb  # noqa: E402
 
 
@@ -253,7 +255,7 @@ class TestStale(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
-        git(self.root, "init", "-q")
+        git_repo.init(self.root)
         write(self.root / "CLAUDE.md", "# Notes\n")
         write(self.root / "src" / "a.py", "x = 1\n")
         write(self.root / "src" / "b.py", "y = 1\n")

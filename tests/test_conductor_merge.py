@@ -20,6 +20,7 @@ import conductor_merge as merge
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fake_gh import FakeGh  # noqa: E402
+import git_repo  # noqa: E402
 from test_conductor_flow import (AT, NOW, START, alive, answered,  # noqa: E402
                                  launch, moved, ran, run_id, stall_ask)
 
@@ -289,16 +290,12 @@ class TurnCase(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(tmp.name)
-        seed = self.tmp / "seed"
-        seed.mkdir()
-        sh(seed, "init", "-q", "-b", "main")
+        seed = git_repo.init(self.tmp / "seed", "-b", "main")
         self.configure(seed)
         commit(seed, SEED)
-        subprocess.run(["git", "clone", "-q", "--bare", str(seed),
-                        str(self.tmp / "origin.git")], check=True)
-        self.repo = self.tmp / "repo"
-        subprocess.run(["git", "clone", "-q", str(self.tmp / "origin.git"),
-                        str(self.repo)], check=True)
+        git_repo.clone(seed, self.tmp / "origin.git", "--bare")
+        self.repo = git_repo.clone(self.tmp / "origin.git",
+                                   self.tmp / "repo")
         self.configure(self.repo)
         self.wt = self.repo / ".claude/worktrees/conductor-b1-12"
         sh(self.repo, "worktree", "add", "-q", "-b", BRANCH, str(self.wt),

@@ -41,6 +41,7 @@ import factory_init
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fake_gh import FakeGh  # noqa: E402
+import git_repo  # noqa: E402
 from test_conductor_plan import AGENTS, CONFIG, OWNER, clock, issue  # noqa: E402,E501
 from test_conductor_run import Harness, pr_body  # noqa: E402
 
@@ -128,10 +129,8 @@ class TestConsumerRehearsal(unittest.TestCase):
         os.environ.pop(conductor.WORKER_ENV, None)
         self.origin = self.tmp / "origin.git"
         self.checkout = self.tmp / "consumer"
-        self.git("init", "-q", "--bare", "-b", "main", str(self.origin),
-                 cwd=self.tmp)
-        self.git("init", "-q", "-b", "main", str(self.checkout),
-                 cwd=self.tmp)
+        git_repo.init(self.origin, "--bare", "-b", "main")
+        git_repo.init(self.checkout, "-b", "main")
         self.assertEqual(factory_init.stamp(REPO, self.checkout), [])
         for path, text in CONSUMER.items():
             (self.checkout / path).parent.mkdir(parents=True, exist_ok=True)

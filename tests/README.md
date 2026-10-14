@@ -79,6 +79,8 @@
 - `factory_fixture.py` — canonical factory-config fixture (CONFIG + writer)
 - `fake_gh.py` — the one fake gh at cli.gh_runner's seam
 - `fixture_tree.py` — shared temp fixture-tree builder
+- `git_repo.py` — the one way a suite makes a real temp git repo
+  (init/clone with auto-gc and auto-maintenance off, #874)
 - `harness_contract.py` — RunEvalContract mixin for the run_eval twins
 - `make_parse.py` — Makefile text extraction for the lockstep tests
 - `workflow_parse.py` — workflow text extraction for the run-step tests
