@@ -144,6 +144,26 @@ class TestRowGrammar(unittest.TestCase):
                    pid=4242)
         self.assertEqual(conductor.row_problems(row), [])
 
+    def test_a_stall_or_block_may_carry_a_cause_from_the_closed_set(self):
+        # #819: why an item stalled or blocked, as a class the scorecard
+        # counts. Optional, so a ledger written before it stays valid.
+        for to in ("stalled", "blocked"):
+            for cause in conductor.CAUSES:
+                row = dict(MINIMAL["state"], to=to, cause=cause)
+                self.assertEqual(conductor.row_problems(row), [], cause)
+            self.assertEqual(conductor.row_problems(
+                dict(MINIMAL["state"], to=to)), [])
+
+    def test_a_cause_outside_the_set_or_off_a_stall_is_a_problem(self):
+        self.assertEqual(conductor.row_problems(
+            dict(MINIMAL["state"], to="stalled", cause="vibes")), [
+            "cause 'vibes' is not one of ceiling, timeout, agent-failed,"
+            " delivery-failed, runner-lost, changes-again, merge-drift,"
+            " merge-failed, owner-block"])
+        self.assertEqual(conductor.row_problems(
+            dict(MINIMAL["state"], cause="ceiling")), [
+            "cause is only for a state row to stalled or blocked"])
+
     def test_an_ask_may_carry_a_train_and_gate_blobs(self):
         row = dict(ask_row("ask-1"), covers=["#12", "#13"],
                    gate_blobs={"docs/adr/0090-x.md": "abc123"})
@@ -391,7 +411,27 @@ class TestAnswer(unittest.TestCase):
         self.assertEqual(row["choice"], "block")
         self.assertEqual(rows[-2:], [row, {
             "at": AT, "kind": "state", "item": "#12", "from": "spec",
-            "to": "blocked", "reason": "answer to ask-1: block (flaky)"}])
+            "to": "blocked", "reason": "answer to ask-1: block (flaky)",
+            "cause": "owner-block"}])
+
+    def test_a_block_ending_a_stall_carries_the_stalls_cause(self):
+        # #819: blocked_by_cause says what to fix, so a block that ends a
+        # stall is counted by why the item stalled; one off a stall row
+        # written before causes existed records none.
+        for stalled, cause in (
+                (dict(MINIMAL["state"], to="stalled", cause="merge-drift"),
+                 {"cause": "merge-drift"}),
+                (dict(MINIMAL["state"], to="stalled"), {})):
+            with tempfile.TemporaryDirectory() as tmp:
+                write_ledger(tmp, PLAN, MINIMAL["state"], stalled,
+                             ask_row("ask-1", options=("retry", "block")))
+                conductor.answer(tmp, "b1", clock(), "ask-1", "block", "",
+                                 env={})
+                rows, _ = conductor.load(tmp, "b1")
+            self.assertEqual(rows[-1], {
+                "at": AT, "kind": "state", "item": "#12", "from": "stalled",
+                "to": "blocked", "reason": "answer to ask-1: block",
+                **cause})
 
     def test_a_block_answer_on_a_batch_ask_moves_no_item(self):
         with tempfile.TemporaryDirectory() as tmp:
