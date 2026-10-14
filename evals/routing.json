@@ -1182,6 +1182,18 @@
       "query": "Our docs/kb pages cite files that have changed a lot since. Which of them are stale, and what needs re-checking?"
     },
     {
+      "id": "knowledge-base-5",
+      "kind": "situational",
+      "expected": "knowledge-base",
+      "query": "Walk me through the history of the orchestrator feature: the tickets, what the PRD asked for, which decisions it leaned on, and what feedback came back, with dates"
+    },
+    {
+      "id": "knowledge-base-6",
+      "kind": "situational",
+      "expected": "knowledge-base",
+      "query": "Issue #688 came up in standup. What run does it belong to, and how have the requirements and decisions behind it changed over time?"
+    },
+    {
       "id": "knowledge-base-vs-audit-1",
       "kind": "near-miss",
       "expected": "knowledge-base",

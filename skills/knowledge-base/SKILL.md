@@ -1,6 +1,6 @@
 ---
 name: knowledge-base
-description: Use when the ask is to set up, feed, or check a project knowledge base — "set up a knowledge base for this repo", "write down the gotchas an agent keeps tripping over", "capture what this PR taught us so the next session knows", "is our project knowledge stale". Keeps only non-inferable facts in docs/kb/ — invariants, gotchas, cross-module flows, the why with its ADR — never overviews or restated code. The shipped kb.py tool writes a compressed index of page summaries inline into CLAUDE.md or AGENTS.md, so every session sees it. Ingest proposes itemised page edits — from a source handed in, or harvested from session transcripts — and a human promotes them; nothing is filed automatically. Lint flags stale pages, orphans, broken links, an over-budget index, and instruction-file drift in CLAUDE.md, AGENTS.md and .claude/rules. Not audit (find defects), deepen (module shape), doctor (pipeline install) or automate (which hooks to add). Owns no run artifact and is never routed to.
+description: Use when the ask is to set up, feed, or check a project knowledge base — "set up a knowledge base for this repo", "write down the gotchas an agent keeps tripping over", "capture what this PR taught us so the next session knows", "is our project knowledge stale". Keeps only non-inferable facts in docs/kb/ — invariants, gotchas, cross-module flows, the why with its ADR — never overviews or restated code. The shipped kb.py tool writes a compressed index of page summaries inline into CLAUDE.md or AGENTS.md, so every session sees it. Ingest proposes itemised page edits, from a source or from session transcripts, and a human promotes them. Trace prints what was asked, decided and heard back about a run or issue over time. Lint flags stale pages, orphans, broken links, an over-budget index, and instruction-file drift in CLAUDE.md, AGENTS.md and .claude/rules. Not audit (find defects), deepen (module shape), doctor (pipeline install) or automate (which hooks to add). Owns no run artifact and is never routed to.
 ---
 
 # Knowledge Base
@@ -27,6 +27,7 @@ artifact. The run artifacts are the **knowledge plane**; this is the
 | "What did the last sessions keep tripping over?" | **Ingest from transcripts** — step 2a |
 | "Is it still true?", or before trusting a page | **Lint and maintain** — step 3 |
 | "Are CLAUDE.md / AGENTS.md / the rules still right?" | **Instruction-file drift** — step 4 |
+| "What did we ask for, decide and hear back about X, and when?" | **Trace** — step 5 |
 
 ## The tool
 
@@ -165,6 +166,36 @@ itself a proposed edit. Never rewrite instruction prose for style.
 
 Done when: `kb.py drift` prints `drift: 0 problem(s)`, or every
 remaining finding was shown to the user and declined.
+
+## 5. Trace — one dated view over time
+
+Run the shipped trace tool, from the same directory as `kb.py` (or
+`tools/factory/trace.py` in a factory-stamped repo):
+
+    python3 <this skill's directory>/../../trace.py <key> [--since YYYY-MM-DD] [--budget BYTES] [--json] [--root DIR]
+
+A key is a run ref (`feature:<slug>`, `maintenance:<slug>`), a typed
+id, an issue number (`#N`) or a `docs/kb/<slug>.md` page. The tool
+resolves it to one run and prints TICKETS, REQUIREMENTS, DECISIONS and
+FEEDBACK as dated lists, then CHANGES SINCE. It is a derived view
+(ADR-0092): never save or commit what it prints, and never add a
+store, index or tracker to hold it.
+
+Report only what the tool printed. When it says issue history was not
+read (offline, gh unauthenticated, or CI set), say so; do not fill the
+gap from memory or by guessing. When it prints a problem string, the
+key did not resolve: pass the string on and ask for another key. When
+the report ends with a cut marker, rerun with a larger `--budget` or a
+later `--since` rather than summarising past the cut.
+
+The citation rule (ADR-0092): feedback about a requirement or decision
+(a retro note, a review finding, a feedback issue, a journal comment)
+cites the run ref or typed id it concerns. That is what lets the trace
+tie it to its run. When this skill writes or proposes such feedback, it
+cites one. It is a convention, not a gate.
+
+Done when: the user has the tool's output, or its problem string, and
+nothing else was stated as a repo fact.
 
 ## Graduation
 
