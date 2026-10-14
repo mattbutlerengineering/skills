@@ -152,6 +152,11 @@ def transition_problems(rows, item, to, fields):
     return []
 
 
+# The reason a launch state row carries: its `to` is the step launched,
+# and the row names the Worker's run_id (conductor_run._launch).
+LAUNCHED = "launched"
+
+
 def state_row(now, item, frm, to, reason, **fields):
     return {"at": stamp(now), "kind": "state", "item": item, "from": frm,
             "to": to, "reason": reason, **fields}

@@ -593,7 +593,7 @@ def _launch(root, batch, now, launch, spent, cap):
         month = spent + _in_flight_usd(rows) + ceiling
         if month <= cap:
             return flow.state_row(now, item, current_state(rows, item),
-                                  step, "launched", **launch["fields"]), []
+                                  step, flow.LAUNCHED, **launch["fields"]), []
         what = (f"{item} {step} (${ceiling:.2f} ceiling) would put the"
                 f" month at ${month:.2f} against its ${cap:.2f} cap")
         pending, written, problems = _pause(
