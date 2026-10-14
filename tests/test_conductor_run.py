@@ -423,6 +423,7 @@ class TestCompletedRun(RunCase):
                          " unchecked")
         self.assertEqual([r["kind"] for r in self.rows[-3:]],
                          ["run", "state", "ask"])
+        self.assertEqual(self.rows[-2]["cause"], "agent-failed")
         self.assertEqual(self.rows[-1]["ask_kind"], "stall")
 
     def test_the_harness_runs_bound_by_policy_in_the_item_worktree(self):
@@ -530,6 +531,7 @@ class TestFailedRun(RunCase):
         run = [r for r in self.rows if r["kind"] == "run"][-1]
         self.assertEqual(run["outcome"], "agent-failed")
         self.assertEqual(self.stalled(), ("stalled", "stall"))
+        self.assertEqual(self.rows[-2]["cause"], "agent-failed")
         self.assertEqual(len(self.harness.calls), 1)
 
     def test_a_wall_clock_kill_records_the_ceiling_and_stalls(self):
@@ -537,8 +539,9 @@ class TestFailedRun(RunCase):
         self.assertEqual(self.spend("#12")[0]["cost"], 3.0)
         self.assertEqual(self.spend("#12")[0]["outcome"],
                          "killed:cost-at-ceiling")
-        self.assertEqual(self.rows[-2]["reason"],
-                         "killed at its 90-minute wall-clock limit")
+        self.assertEqual((self.rows[-2]["reason"], self.rows[-2]["cause"]),
+                         ("killed at its 90-minute wall-clock limit",
+                          "timeout"))
 
     def test_an_unaccountable_result_records_the_ceiling_and_stalls(self):
         bad = dict(RESULT, total_cost_usd="lots")
@@ -550,8 +553,9 @@ class TestFailedRun(RunCase):
 
     def test_a_completed_run_without_pr_body_stalls(self):
         self.run_step("#12", "spec", Harness())
-        self.assertEqual(self.rows[-2]["reason"],
-                         "the run completed but left no pr-body.md")
+        self.assertEqual((self.rows[-2]["reason"], self.rows[-2]["cause"]),
+                         ("the run completed but left no pr-body.md",
+                          "agent-failed"))
 
     def test_rows_written_after_the_run_carry_the_time_it_ended(self):
         # Review minor 1: stamped with the launch time, a stall ask after
@@ -591,13 +595,15 @@ class TestFailedRun(RunCase):
                           "-C", str(self.worktree("#12")), "push"]))
         self.assertTrue(self.rows[-2]["reason"].startswith(
             "pushing conductor/b1-12 failed: fatal: rejected"))
+        self.assertEqual(self.rows[-2]["cause"], "delivery-failed")
         self.assertFalse([c for c in self.gh.calls if c[0] == "pr"])
 
     def test_a_failed_pr_open_stalls(self):
         self.run_step("#12", "spec", Harness(act=pr_body),
                       gh=Gh(fail=["pr", "create"]))
-        self.assertEqual(self.rows[-2]["reason"],
-                         "opening or updating the PR failed: HTTP 422")
+        self.assertEqual((self.rows[-2]["reason"], self.rows[-2]["cause"]),
+                         ("opening or updating the PR failed: HTTP 422",
+                          "delivery-failed"))
 
     def test_a_launch_the_state_machine_refuses_spawns_nothing(self):
         summary, problems = self.run_step("#12", "verify", Harness())
@@ -644,7 +650,8 @@ class TestRetryAfterBudgetStop(RunCase):
         row = self.spend("#12")[0]
         self.assertEqual((row["tokens"], row["cost"], row["outcome"]),
                          (969040, 3.064511, "agent-failed"))
-        self.assertEqual(self.rows[-2]["reason"], BUDGET)
+        self.assertEqual((self.rows[-2]["reason"], self.rows[-2]["cause"]),
+                         (BUDGET, "ceiling"))
 
     def test_a_retry_is_briefed_with_the_work_already_committed(self):
         self.run_step("#12", "spec", Harness(act=pr_body),

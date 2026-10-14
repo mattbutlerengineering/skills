@@ -10,8 +10,8 @@ file past the 800-line ceiling live in sibling modules that import its
 row grammar (breakdown assumption 6): conductor_plan (plan, open),
 conductor_flow (the item state machine and the stall rule in next),
 conductor_run (the Worker runner), conductor_merge (the merge
-precondition and the merge turn) and conductor_close (the scorecard and
-closing a batch).
+precondition and the merge turn), conductor_close (the scorecard and
+closing a batch) and conductor_calibrate (calibrate).
 
   python3 conductor.py plan [--agents DIR] <#N>...
         Price and order a batch of issues and show each item's reserved
@@ -135,7 +135,7 @@ ROW_FIELDS = {
     "reserve": (("what", "values"), ("renumbered_from",)),
     "state": (("from", "to", "reason"),
               ("verdict", "author_runs", "reviewer_run", "reviewed_head",
-               "pr", "sha", "checks", "run_id", "pid")),
+               "pr", "sha", "checks", "run_id", "pid", "cause")),
     "run": (("step", "charter", "band", "model", "models_reported",
              "effort", "run_id", "pid", "outcome"), ()),
     "ask": (("id", "ask_kind", "question", "options", "recommended",
@@ -152,6 +152,12 @@ COMMON_FIELDS = ("at", "kind", "item")
 STATE_FIELDS = {"reviewed": ("author_runs", "reviewer_run", "verdict"),
                 "merged": ("checks", "pr", "sha")}
 ASK_KINDS = ("spend", "gate", "merge", "stall", "clarify")
+# Why an item stalled or blocked (#819): a state row into either may
+# carry one, so the scorecard counts causes, not reasons. A block that
+# ends a stall carries the stall's; owner-block blocks an unstalled item.
+CAUSES = ("ceiling", "timeout", "agent-failed", "delivery-failed",
+          "runner-lost", "changes-again", "merge-drift", "merge-failed",
+          "owner-block")
 TERMINAL = ("merged", "blocked")
 # An answer with this choice blocks the ask's item (Owner, 2026-10-10):
 # the one path into `blocked`.
@@ -277,6 +283,14 @@ def _consent_row_problems(row):
     return problems
 
 
+def _cause_problems(row):
+    if row["to"] not in ("stalled", "blocked"):
+        return ["cause is only for a state row to stalled or blocked"]
+    if row["cause"] not in CAUSES:
+        return [f"cause {row['cause']!r} is not one of {', '.join(CAUSES)}"]
+    return []
+
+
 def _at_problems(value):
     valid = isinstance(value, str) and AT.fullmatch(value)
     if valid:
@@ -319,6 +333,8 @@ def row_problems(row):
         if absent:
             problems.append(f"state row to {row['to']} is missing"
                             f" field(s): {', '.join(absent)}")
+    if kind == "state" and "cause" in row:
+        problems += _cause_problems(row)
     if kind == "ask":
         problems += _ask_problems(row)
     if kind == "answer":
@@ -650,9 +666,12 @@ def answer(root, batch, now, ask_id, choice, note, env):
             return row, []
         reason = f"answer to {ask_id}: {BLOCK}" + (f" ({note})" if note
                                                     else "")
+        last = item_view(rows, asked["item"])["last"]
+        cause = ({"cause": "owner-block"} if state != "stalled"
+                 else {"cause": last["cause"]} if "cause" in last else {})
         return [row, {"at": row["at"], "kind": "state",
                       "item": asked["item"], "from": state,
-                      "to": "blocked", "reason": reason}], []
+                      "to": "blocked", "reason": reason, **cause}], []
     written, problems = append(root, batch, build)
     if isinstance(written, list):
         written = written[0]
@@ -712,6 +731,7 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
     git = git or runner("git")
     # The capability siblings import this module's row grammar, so they
     # are imported here, not at the top: one owner, no import cycle.
+    import conductor_calibrate
     import conductor_close
     import conductor_flow
     import conductor_merge
@@ -721,7 +741,7 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
     if argv[:1] == ["plan"]:
         problems = conductor_plan.plan_cli(root, argv[1:], now, run, git)
     elif argv[:1] == ["calibrate"]:
-        problems = conductor_close.calibrate_cli(root, argv[1:])
+        problems = conductor_calibrate.calibrate_cli(root, argv[1:])
     elif argv[:1] == ["scorecards"]:
         problems = conductor_close.scorecards_cli(root, argv[1:])
     elif argv[:1] == ["open"] and len(argv) >= 3:

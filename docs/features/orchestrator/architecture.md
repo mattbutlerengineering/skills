@@ -240,7 +240,7 @@ batch-level row).
 |---|---|
 | `plan` | `batch`, `items`: [{`item`, `type` (feature / fix / order), `size`, `steps`: [{`step`, `charter`, `band`, `model`, `effort`, `ceiling_usd`}], `estimate_usd`, `after`}], `policy` (a snapshot of `routing` and `effort`), `estimate_usd`, `month_to_date_usd`, `cap_usd` |
 | `reserve` | `what` (prd / adr / wo / plugin-version), `values`, `renumbered_from` (only on a merge-turn collision) |
-| `state` | `from`, `to`, `reason`; when `to` is `reviewed`: `verdict`, `author_runs`, `reviewer_run`; when `to` is `merged`: `pr`, `sha`, `checks` |
+| `state` | `from`, `to`, `reason`; when `to` is `reviewed`: `verdict`, `author_runs`, `reviewer_run`; when `to` is `merged`: `pr`, `sha`, `checks`; when `to` is `stalled` or `blocked`, optionally `cause`, one of `conductor.CAUSES` (#819) |
 | `run` | `step`, `charter`, `band`, `model` (passed), `models_reported`, `effort`, `run_id`, `pid`, `outcome` |
 | `ask` | `id`, `kind` (spend / gate / merge / stall / clarify), `question`, `options`, `recommended`, `why`, `covers` (ordered items, for a merge train), `gate_blobs` (for a gate ask) |
 | `answer` | `ask`, `choice`, `note` |
@@ -305,11 +305,15 @@ A blocked item's rows ride the closing PR instead, so all spend reaches
 
 `batch`, `at`, `items`, `merged`, `blocked`, `owner_touches_per_merged`,
 `metered_usd`, `metered_usd_per_merged`, `estimate_usd`,
-`estimate_error_pct`, `collisions`, `stalls`, `escalations`,
+`estimate_error_pct` (against the whole plan), `ran_estimate_usd`,
+`ran_estimate_error_pct` (against the steps that ran), `collisions`,
+`stalls`, `stalls_by_cause`, `blocked_by_cause`, `escalations`,
 `review_changes_per_item`, `start_to_last_merge_s`,
 `merged_per_owner_wait_hour`, `policy_compliance`. The Conductor's own
 session is outside every dollar figure, and the row says so with
-`conductor_session: "unmetered"`.
+`conductor_session: "unmetered"`. A changed meaning is a new key, never
+a reused one, and `conductor_close.scorecard_problems` is the row's one
+shape, checked on write and on read (#814).
 
 ### Policy (`factory.json`)
 

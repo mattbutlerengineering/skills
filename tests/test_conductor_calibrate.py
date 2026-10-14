@@ -1,4 +1,4 @@
-"""conductor_close.py's per-step actuals and `calibrate` (#799): one row
+"""conductor_calibrate.py's per-step actuals and `calibrate` (#799): one row
 per run joined from the batch ledger and the cost ledger, and pricing
 suggestions over those rows that print their sample sizes and refuse
 below a floor. The fixture is consumer batch b20261013 (#6367, size M,
@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import conductor
-import conductor_close as close
+import conductor_calibrate as cal
 import conductor_flow as flow
 import factory_config
 
@@ -144,25 +144,25 @@ def write(root, ledgers, costs):
 
 class TestActuals(unittest.TestCase):
     def test_one_row_per_run_joins_plan_launch_run_and_spend(self):
-        self.assertEqual(close.actuals(ROWS, range(1, len(ROWS) + 1),
+        self.assertEqual(cal.actuals(ROWS, range(1, len(ROWS) + 1),
                                        "L", SPEND), (ACTUALS, []))
 
     def test_a_run_with_no_spend_row_fails_naming_its_line(self):
-        self.assertEqual(close.actuals(ROWS, range(1, len(ROWS) + 1), "L",
+        self.assertEqual(cal.actuals(ROWS, range(1, len(ROWS) + 1), "L",
                                        SPEND[1:]),
                          (None, [f"cd: L:3 run {run_id('spec', 1)} has no"
                                  " docs/factory/costs.jsonl row with its"
                                  " run_id"]))
 
     def test_wall_time_reads_the_launch_row_the_conductor_writes(self):
-        found, _ = close.actuals(ROWS, range(1, len(ROWS) + 1), "L", SPEND)
+        found, _ = cal.actuals(ROWS, range(1, len(ROWS) + 1), "L", SPEND)
         self.assertEqual([row["wall_s"] for row in found],
                          [2400, 1800, 1200, 600, 1800, 1800])
 
     def test_a_run_for_an_item_the_plan_does_not_hold_fails(self):
         stray = {**ROWS[-1], "item": "#9"}
         rows = ROWS + [stray]
-        self.assertEqual(close.actuals(rows, range(1, len(rows) + 1), "L",
+        self.assertEqual(cal.actuals(rows, range(1, len(rows) + 1), "L",
                                        SPEND),
                          (None, [f"cd: L:{len(rows)} run"
                                  f" {run_id('review', 2)} is for #9, which"
@@ -171,14 +171,14 @@ class TestActuals(unittest.TestCase):
     def test_a_run_of_a_step_the_plan_does_not_give_its_item_fails(self):
         stray = {**ROWS[-1], "step": "deploy"}
         rows = ROWS + [stray]
-        self.assertEqual(close.actuals(rows, range(1, len(rows) + 1), "L",
+        self.assertEqual(cal.actuals(rows, range(1, len(rows) + 1), "L",
                                        SPEND),
                          (None, [f"cd: L:{len(rows)} run"
                                  f" {run_id('review', 2)} is a deploy run,"
                                  " a step the plan does not give #6367"]))
 
     def test_a_missing_plan_row_fails(self):
-        self.assertEqual(close.actuals(ROWS[1:], range(1, len(ROWS)), "L",
+        self.assertEqual(cal.actuals(ROWS[1:], range(1, len(ROWS)), "L",
                                        SPEND),
                          (None, ["cd: L has no plan row"]))
 
@@ -206,7 +206,7 @@ def actuals_of(costs, build_rows=1, batches=5):
     rows = []
     for n in range(1, batches + 1):
         ledger, spent = batch_of(f"b{n}", f"#{n}", costs, build_rows)
-        found, problems = close.actuals(
+        found, problems = cal.actuals(
             ledger, range(1, len(ledger) + 1), "L", spent)
         assert problems == [], problems
         rows += found
@@ -215,7 +215,7 @@ def actuals_of(costs, build_rows=1, batches=5):
 
 class TestCalibrate(unittest.TestCase):
     def test_below_the_floor_it_prints_n_and_suggests_nothing(self):
-        self.assertEqual(close.calibrate(ACTUALS, WEIGHTS), {
+        self.assertEqual(cal.calibrate(ACTUALS, WEIGHTS), {
             "floor": 5,
             "steps": {
                 "spec": {"n": 1, "attempts": 1, "ceiling_hits": 0,
@@ -236,14 +236,14 @@ class TestCalibrate(unittest.TestCase):
                         "budgets_usd: n=1 for M, below the floor of 5"]})
 
     def test_steps_spending_their_ceilings_suggest_the_weights_in_force(self):
-        card = close.calibrate(actuals_of(CEILINGS), WEIGHTS)
+        card = cal.calibrate(actuals_of(CEILINGS), WEIGHTS)
         self.assertEqual(card["step_weights"], WEIGHTS)
         self.assertEqual(card["refused"], [])
 
     def test_weights_scale_each_step_by_its_spend_over_its_ceiling(self):
         costs = {"spec": 6.44, "build": 2.14, "verify": 1.07,
                  "review": 4.28, "ship": 1.07}
-        card = close.calibrate(actuals_of(costs), WEIGHTS)
+        card = cal.calibrate(actuals_of(costs), WEIGHTS)
         self.assertEqual(card["step_weights"], {
             "spec": 3.0, "build": 1.0, "verify": 0.5, "review": 2.0,
             "ship": 0.5})
@@ -251,14 +251,14 @@ class TestCalibrate(unittest.TestCase):
             "n": 5, "mean_usd": 15.0, "max_usd": 15.0, "budget_usd": 15}})
 
     def test_a_build_sample_is_one_breakdown_rows_run(self):
-        card = close.calibrate(actuals_of(CEILINGS, build_rows=5), WEIGHTS)
+        card = cal.calibrate(actuals_of(CEILINGS, build_rows=5), WEIGHTS)
         self.assertEqual(card["steps"]["build"], {
             "n": 25, "attempts": 25, "ceiling_hits": 25,
             "mean_usd": 2.14, "max_usd": 2.14})
         self.assertEqual(card["step_weights"]["build"], 1.0)
 
     def test_a_retried_row_is_one_sample_over_its_attempts(self):
-        found, _ = close.actuals(ROWS, range(1, len(ROWS) + 1), "L", SPEND)
+        found, _ = cal.actuals(ROWS, range(1, len(ROWS) + 1), "L", SPEND)
         self.assertEqual([(row["step"], row["attempt"]) for row in found],
                          [("spec", 1), ("build", 1), ("build", 2),
                           ("verify", 1), ("review", 1), ("review", 2)])
@@ -266,14 +266,14 @@ class TestCalibrate(unittest.TestCase):
     def test_a_zero_ceiling_refuses_rather_than_dividing(self):
         rows = [{**row, "ceiling_usd": 0} if row["step"] == "verify" else row
                 for row in actuals_of(CEILINGS)]
-        card = close.calibrate(rows, WEIGHTS)
+        card = cal.calibrate(rows, WEIGHTS)
         self.assertIsNone(card["step_weights"])
         self.assertEqual(card["refused"], [
             "step_weights: verify has a $0 ceiling to scale its weight"
             " from"])
 
     def test_no_rows_suggests_nothing(self):
-        self.assertEqual(close.calibrate([], WEIGHTS), {
+        self.assertEqual(cal.calibrate([], WEIGHTS), {
             "floor": 5, "steps": {}, "step_weights": None, "sizes": {},
             "refused": ["no closed batch has a run to calibrate from"]})
 
@@ -293,7 +293,7 @@ class TestCalibrateCli(unittest.TestCase):
             self.assertEqual(sorted(Path(tmp).rglob("*")), before)
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out[:out.rindex("}") + 1]),
-                         close.calibrate(ACTUALS, WEIGHTS))
+                         cal.calibrate(ACTUALS, WEIGHTS))
 
     def test_a_closed_batch_with_an_unmetered_run_reports_no_number(self):
         shown = conductor.LEDGER.format(batch=BATCH)

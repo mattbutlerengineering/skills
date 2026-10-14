@@ -17,6 +17,7 @@ import conductor
 import conductor_close as close
 import conductor_flow as flow
 import conductor_run
+import rejection_mining
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
@@ -111,10 +112,12 @@ ROWS = [
         outcome="agent-failed"),
     state("#13", "review", "build", at(11), "the reviewer requested"
           " changes; one fix step"),
-    state("#13", "review", "stalled", at(12), flow.CHANGES_AGAIN),
+    state("#13", "review", "stalled", at(12), flow.CHANGES_AGAIN,
+          cause="changes-again"),
     ask("ask-3", "#13", "stall", at(12), ("retry", "retry-up", "block")),
     answer("ask-3", "block", at(12, 30), "#13"),
-    state("#13", "stalled", "blocked", at(12, 30), "answer to ask-3: block"),
+    state("#13", "stalled", "blocked", at(12, 30), "answer to ask-3: block",
+          cause="changes-again"),
     ask("ask-4", None, "merge", at(13), ("train", "one-by-one"),
         covers=["#14", "#12"]),
     answer("ask-4", "train", at(13, 30)),
@@ -158,7 +161,10 @@ EXPECTED = {
     "batch": "b1", "at": "2026-10-10T16:00:00Z", "items": 3, "merged": 2,
     "blocked": 1, "owner_touches_per_merged": 2.0, "metered_usd": 11.0,
     "metered_usd_per_merged": 5.5, "estimate_usd": 40,
-    "ran_estimate_usd": 15, "estimate_error_pct": -26.6667, "collisions": 2, "stalls": 1,
+    "estimate_error_pct": -72.5, "ran_estimate_usd": 15,
+    "ran_estimate_error_pct": -26.6667, "collisions": 2, "stalls": 1,
+    "stalls_by_cause": {"changes-again": 1},
+    "blocked_by_cause": {"changes-again": 1},
     "escalations": 1, "review_changes_per_item": 0.6667,
     "start_to_last_merge_s": 18000, "merged_per_owner_wait_hour": 0.8,
     "policy_compliance": 0.6, "conductor_session": "unmetered"}
@@ -186,11 +192,12 @@ class TestScorecard(unittest.TestCase):
              "metered_usd_per_merged": None, "start_to_last_merge_s": None,
              "merged_per_owner_wait_hour": 0.0})
 
-    def test_estimate_error_is_over_the_steps_that_ran(self):
-        # #798: #13 blocks after its spec step, which cost exactly its $2
-        # ceiling. Its unrun build, verify, review and ship are not
-        # savings: the error is 0, and the whole plan's $40 stays in
-        # estimate_usd beside the $2 that ran.
+    def test_each_estimate_has_its_own_error_field(self):
+        # #798, #814: #13 blocks after its spec step, which cost exactly
+        # its $2 ceiling. Its unrun build, verify, review and ship are
+        # not savings: the error over the steps that ran is 0, under its
+        # own key, and estimate_error_pct keeps its first meaning, the
+        # whole plan's $40, so old and new rows compare key by key.
         rows = [PLAN, run("#13", "spec", "architecture_review", "f",
                           "high", ["f"]),
                 state("#13", "spec", "blocked", at(12))]
@@ -199,10 +206,12 @@ class TestScorecard(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(
             {key: card[key] for key in ("metered_usd", "estimate_usd",
+                                        "estimate_error_pct",
                                         "ran_estimate_usd",
-                                        "estimate_error_pct")},
+                                        "ran_estimate_error_pct")},
             {"metered_usd": 2.0, "estimate_usd": 40,
-             "ran_estimate_usd": 2, "estimate_error_pct": 0.0})
+             "estimate_error_pct": -95.0, "ran_estimate_usd": 2,
+             "ran_estimate_error_pct": 0.0})
 
     def test_the_approved_gate_reprices_the_build_that_ran(self):
         # The gate ask re-prices the build at one run per breakdown row
@@ -216,13 +225,56 @@ class TestScorecard(unittest.TestCase):
         card, problems = self.score(lines(rows), SPEND[:2])
         self.assertEqual(problems, [])
         self.assertEqual((card["ran_estimate_usd"],
-                          card["estimate_error_pct"]), (14.0, -57.1429))
+                          card["ran_estimate_error_pct"]), (14.0, -57.1429))
 
     def test_nothing_run_has_no_estimate_error(self):
         card, problems = self.score(lines([PLAN]), [])
         self.assertEqual(problems, [])
         self.assertEqual((card["ran_estimate_usd"],
-                          card["estimate_error_pct"]), (0, None))
+                          card["ran_estimate_error_pct"],
+                          card["estimate_error_pct"]), (0, None, -100.0))
+
+    def test_stalls_and_blocks_are_counted_by_cause(self):
+        # #819: a ledger written before causes existed counts its stalls
+        # and blocks as unrecorded, never as a guessed class.
+        rows = [PLAN,
+                state("#12", "spec", "stalled", at(11), cause="ceiling"),
+                state("#12", "stalled", "spec", at(11, 30)),
+                state("#12", "spec", "stalled", at(12), cause="ceiling"),
+                state("#12", "stalled", "blocked", at(12, 30),
+                      cause="ceiling"),
+                state("#13", "ship", "stalled", at(12), "old reason"),
+                state("#13", "stalled", "blocked", at(12, 30)),
+                state("#14", "build", "blocked", at(13),
+                      cause="owner-block")]
+        card, problems = self.score(lines(rows), [])
+        self.assertEqual(problems, [])
+        self.assertEqual(
+            (card["stalls"], card["stalls_by_cause"],
+             card["blocked"], card["blocked_by_cause"]),
+            (3, {"ceiling": 2, "unrecorded": 1},
+             3, {"ceiling": 1, "owner-block": 1, "unrecorded": 1}))
+
+    def test_review_rework_is_counted_by_the_miners_rule(self):
+        # #816: the scorecard and the toolsmith queue's Conductor
+        # corrections count the same events, read by one rule. The miner
+        # reads only closed ledgers (#817), as every ledger on main is.
+        closed = ROWS + [{"at": at(16), "kind": "close", "item": None,
+                          "merged": ["#12", "#14"], "blocked": ["#13"]}]
+        with tempfile.TemporaryDirectory() as tmp:
+            write(tmp, lines(closed), lines(SPEND))
+            card, problems = close.scorecard(tmp, "b1", NOW)
+            rework, (read, found, _, _) = rejection_mining.conductor_rework(
+                tmp, {})
+        self.assertEqual(problems, [])
+        self.assertEqual((read, found), (1, 1))
+        self.assertEqual(
+            round(card["review_changes_per_item"] * card["items"]),
+            sum(map(len, rework.values())))
+        with unittest.mock.patch.object(flow, "review_change",
+                                        lambda row: row["kind"] == "run"):
+            card, _ = self.score(lines(ROWS))
+        self.assertEqual(card["review_changes_per_item"], round(5 / 3, 4))
 
     def test_a_line_that_does_not_parse_fails_naming_file_and_line(self):
         text = lines(ROWS[:2]) + "{not json\n" + lines(ROWS[2:])

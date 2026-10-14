@@ -535,8 +535,8 @@ class TestReviewedTree(TurnCase):
                   " so it needs a re-review")
         self.assertEqual(summary["stall"], reason)
         self.assertEqual((self.rows[-2]["from"], self.rows[-2]["to"],
-                          self.rows[-2]["reason"]),
-                         ("ship", "stalled", reason))
+                          self.rows[-2]["reason"], self.rows[-2]["cause"]),
+                         ("ship", "stalled", reason, "merge-drift"))
         self.assertEqual(self.rows[-1]["recommended"], "block")
         self.assertFalse(self.calls("git", "fetch"))
         self.assertFalse(self.calls("git", "push"))
@@ -613,6 +613,7 @@ class TestMergeTurnStalls(TurnCase):
         self.assertEqual(summary["stall"], reason)
         self.assertEqual(self.rows[-2]["to"], "stalled")
         self.assertEqual(self.rows[-2]["reason"], reason)
+        self.assertEqual(self.rows[-2]["cause"], "merge-failed")
         self.assertEqual(self.rows[-1]["ask_kind"], "stall")
         self.assertEqual(self.head("origin/" + BRANCH), self.pushed)
 
@@ -777,7 +778,8 @@ class TestReservations(TurnCase):
 
     def test_a_number_that_cannot_be_renumbered_stalls(self):
         self.item(self.ITEM)
-        self.main_moves(dict(self.MAIN, **{"docs/x.md": "ADR-9999\n"}))
+        self.main_moves(dict(self.MAIN,
+                             **{"docs/adr/9999-last.md": "# last\n"}))
         summary, _ = self.turn(adr_rows())
         self.assertEqual(summary["stall"], "ADR-0091 is taken on origin/main"
                          " and cannot be renumbered: ADR-10000 would leave"

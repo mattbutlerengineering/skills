@@ -442,6 +442,17 @@ def _verdict(git, worktree, branch):
     return None
 
 
+def _stall_cause(stall, ended, failed):
+    """The class of a run's stall (conductor.CAUSES, #819): a wall-clock
+    kill, a budget stop, a failed spend commit, push or PR (`failed`),
+    else the Worker's own failure."""
+    if ended == "timeout":
+        return "timeout"
+    if stall == flow.BUDGET_REASON:
+        return "ceiling"
+    return "delivery-failed" if stall == failed else "agent-failed"
+
+
 def _left_unchecked(git, branch, briefed, wo):
     """A stall reason when a completed build run left the breakdown row
     it was briefed with unchecked on the branch, else None: without it,
@@ -729,8 +740,9 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     if stall is not None:
         recommended, why = flow.worker_advice(ctx["rows"], entry, step,
                                               band, stall)
-        _, problems = flow.queue_stall(root, batch, done, item, stall,
-                                       recommended, why)
+        _, problems = flow.queue_stall(
+            root, batch, done, item, stall,
+            _stall_cause(stall, ended, failed), recommended, why)
     return {"run_id": run_id, "outcome": outcome, "stall": stall}, problems
 
 
