@@ -1,6 +1,6 @@
 # The three human gates get a module of their own
 
-- Status: amended by ADR-0074 (a confirmed stay ends at its pass label)
+- Status: amended by ADR-0090 (accepted by the Owner, 2026-10-13: the timeline read and the open queues join human_gates; and earlier by ADR-0074: a confirmed stay ends at its pass label)
 - Date: 2026-08-18
 
 ## Context

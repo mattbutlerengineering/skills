@@ -53,7 +53,7 @@ from conductor_flow import CHANGES_AGAIN, review_change
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, gh_runner, report, write_outputs
-from human_gates import gate_rejections, label_events, refused_timestamps
+from human_gates import gate_rejections, read_timelines
 from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root, sanitize
 
 # First line of the queue issue's body — how the weekly run finds its
@@ -194,34 +194,6 @@ def compose_queue(rejections_by_wo, requests_by_wo, day, sources=None,
     return "\n".join(lines) + "\n"
 
 
-def _timelines(mirrored, run, problems):
-    """{issue number: label events} for every mirrored issue gh can
-    answer for; a failed fetch is a problem, never a silently thinner
-    harvest — the queue still posts, and next week's re-scan of the
-    same history catches up (the upsert is idempotent).
-
-    A fetch that succeeds can still carry an event label_events refuses
-    for a malformed timestamp (#491, gate_digest's rule). Here the cost
-    is a lost rejection, not a missing age: a dropped `unlabeled` leaves
-    its stay open, and completed_stays never yields it (#740)."""
-    events = {}
-    for number in mirrored:
-        path = f"repos/{{owner}}/{{repo}}/issues/{number}/timeline"
-        read = gh_read(["api", path, "--paginate", "--slurp"],
-                       f"gh api timeline for #{number}", label="rm",
-                       run=run)
-        problems.extend(read.problems)
-        if read.value is None:
-            continue
-        raw = [event for page in read.value for event in page]
-        refused = refused_timestamps(raw)
-        if refused:
-            problems.append(f"rm: timeline for #{number} refused"
-                            f" {refused} malformed timestamp(s)")
-        events[number] = label_events(raw)
-    return events
-
-
 def _change_requests(mirror, run, problems, truncated):
     """change_requests over a live pr listing, or None when the listing
     failed; a failed listing is a problem plus a MISSING stream, never a
@@ -332,7 +304,11 @@ def run_mine(root, run=gh_runner, clock=None):
 
     mirrored = sorted(entry["number"] for entry in listing
                       if entry.get("number") in mirror)
-    events_by_issue = _timelines(mirrored, run, problems)
+    # A failed read is a problem, never a silently thinner harvest: the
+    # queue still posts, _sources counts the gap, and next week's
+    # re-scan catches up (the upsert is idempotent).
+    events_by_issue, read_problems = read_timelines(mirrored, run, "rm")
+    problems.extend(read_problems)
     rejections_by_wo = {}
     for number, events in sorted(events_by_issue.items()):
         for rejection in gate_rejections(events):

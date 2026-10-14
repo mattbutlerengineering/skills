@@ -76,7 +76,7 @@ the canonical vocabulary.
 | [0053](0053-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
 | [0054](0054-front-door-routes-humans.md) | The front door routes humans, not files | accepted |
 | [0055](0055-deferred-stops-and-payload-charters.md) | The budget hook and payload charters stay deferred | accepted |
-| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | amended by ADR-0074 (a confirmed stay ends at its pass label) |
+| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | amended by ADR-0090 (and earlier by ADR-0074) |
 | [0057](0057-lifecycle-legs-agree-about-an-uncited-pr.md) | Both lifecycle legs treat an uncited PR the same way | amended by ADR-0064 |
 | [0058](0058-checkbox-regex-roster-is-two-owners.md) | The checkbox-regex roster is two owners, not three | accepted |
 | [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | superseded in part by ADR-0091 (the blocker table and the provisional note) |
@@ -110,4 +110,5 @@ the canonical vocabulary.
 | [0087](0087-a-queue-profile-may-opt-in-to-implement-queue-auto-merge.md) | A queue profile may opt in to implement-queue auto-merge | amended by ADR-0088 |
 | [0088](0088-a-fast-path-classification-is-the-review-for-auto-merge.md) | A fast-path classification is the review for auto-merge | accepted |
 | [0089](0089-an-enforced-standard-may-cite-a-standing-adr.md) | An enforced standard may cite a standing ADR | accepted |
+| [0090](0090-the-gate-timeline-read-and-open-queues-join-human-gates.md) | The gate timeline read and the open queues join human_gates | accepted |
 | [0091](0091-the-restructure-blockers-re-measured-and-pinned.md) | The tools/factory restructure blockers, re-measured and pinned | accepted (Owner, 2026-10-13) |

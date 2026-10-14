@@ -48,8 +48,7 @@ from cli import read_file, report, runner
 import cost_ledger
 import cost_report
 import factory_config
-from human_gates import (GATES, label_events, refused_timestamps,
-                         waiting_since)
+from human_gates import open_queues, read_timelines, waiting_issues
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
                              mirror_map, row_size, row_title,
                              row_tracker_issue, row_work_order, run_dirs)
@@ -116,41 +115,6 @@ def remote_slug(repo_path, git=git_runner):
     return match.group(1), []
 
 
-def _age_seconds(since, now):
-    """Whole seconds from a GitHub timestamp to now. Not
-    human_gates.waited_seconds: that one takes two GitHub timestamps,
-    this takes a live datetime for `now`, and the rendering is the
-    dashboard's. The Z-suffix replace is the same documented compat
-    quirk (fromisoformat accepts Z only from 3.11)."""
-    then = datetime.fromisoformat(since.replace("Z", "+00:00"))
-    return int((now - then).total_seconds())
-
-
-def _timeline(slug, number, run, problems):
-    """One issue's label events, None on a failed or unparseable fetch —
-    the item still lists, just without an age (the gate_digest rule:
-    a failed fetch is a problem, never a lost queue item). None, not
-    []: [] is a timeline that was read and holds nothing, and _queues
-    must tell an unreadable age from an unknown one (#665).
-
-    A fetch that succeeds can still carry an event label_events refuses
-    for a malformed timestamp — reported here, since a successful read
-    leaves read.problems silent about it (#491)."""
-    path = f"repos/{slug}/issues/{number}/timeline"
-    read = gh_read(["api", path, "--paginate", "--slurp"],
-                   f"gh api timeline for #{number}", label="dashboard",
-                   run=run)
-    problems.extend(read.problems)
-    if read.value is None:
-        return None
-    raw = [event for page in read.value for event in page]
-    refused = refused_timestamps(raw)
-    if refused:
-        problems.append(f"dashboard: timeline for #{number} refused"
-                        f" {refused} malformed timestamp(s)")
-    return label_events(raw)
-
-
 def _listing(slug, run, problems):
     """The one windowed issue listing (--state all) both dispatch-plane
     sections read — the queues filter it to open issues, the drift
@@ -166,30 +130,24 @@ def _listing(slug, run, problems):
 
 def _queues(slug, listing, mirror, run, now, problems):
     """The open mirrored issues waiting at each human gate, in gate
-    then issue order, aged from the current stay's labeled event when
-    the timeline yields one. `aged` says whether the timeline could be
-    read at all — the difference between an unknown age (read, no
-    arrival) and an unreadable one (fetch failed), the same fact
-    gate_digest's Item carries under the same name."""
-    entries = []
-    for gate, queue_label, _, _ in GATES:
-        for issue in sorted(listing, key=lambda e: e.get("number") or 0):
-            number = issue.get("number")
-            if number not in mirror or \
-                    (issue.get("state") or "").upper() != "OPEN" or \
-                    queue_label not in label_names(issue):
-                continue
-            events = _timeline(slug, number, run, problems)
-            since = waiting_since(events or [], queue_label)
-            entries.append({
-                "gate": gate,
-                "issue": number,
-                "title": issue.get("title") or "",
-                "waited_s": _age_seconds(since, now) if since else None,
-                "aged": events is not None,
-                "url": issue.get("url") or "",
-            })
-    return entries
+    then issue order — human_gates.open_queues' rows (ADR-0090),
+    flattened into the page's dicts. Only the waiting issues' timelines
+    are read, since the page ages nothing else; an unreadable one lists
+    with `aged` False (#665)."""
+    open_issues = [issue for issue in listing
+                   if (issue.get("state") or "").upper() == "OPEN"]
+    events, read_problems = read_timelines(
+        waiting_issues(open_issues, mirror), run, "dashboard", slug=slug)
+    problems.extend(read_problems)
+    return [{"gate": gate.name,
+             "issue": wait.issue["number"],
+             "title": wait.issue.get("title") or "",
+             "waited_s": wait.waited,
+             "aged": wait.aged,
+             "url": wait.issue.get("url") or ""}
+            for gate, waiting in open_queues(open_issues, mirror, events,
+                                             now)
+            for wait in waiting]
 
 
 def _pr_by_issue(slug, run, problems):

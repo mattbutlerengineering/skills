@@ -331,7 +331,7 @@ class TestRunMine(unittest.TestCase):
 
     def test_an_unreadable_timeline_is_counted_not_hidden(self):
         """The stream the seed did not name. A timeline fetch that fails
-        thins the harvest, and `_timelines` is explicit that this must be a
+        thins the harvest, and run_mine is explicit that this must be a
         problem rather than a silently thinner result — true of the problem
         list, and not of the body it feeds until now."""
         issues = [issue(7, "WO-0101: first"), issue(8, "WO-0102: second")]
