@@ -26,7 +26,7 @@
     "templates/tools/factory/assembler.py": "6973d1d76e65605ab393318db265954dc836e54a9f71dbb495e21c624865f44f",
     "templates/tools/factory/budget_guard.py": "cf8d2d23e3d59d866878cbabdaaf121f6a159429f11f8bcb71e45464e3d0da29",
     "templates/tools/factory/cli.py": "78a767eea32cc88fec7eadffbd92108beafaf5cb4da3bef8cc28c629bf31757a",
-    "templates/tools/factory/conductor.py": "dda632ded39b42a15d16b303b05145496d21639c25d5d4e4ffc629487e8df42d",
+    "templates/tools/factory/conductor.py": "dad99d4008e4b7a3d07e75b3667e62b61b0280f87b83b0b8520fa9f9d004b682",
     "templates/tools/factory/conductor_calibrate.py": "1894f3ad067dabd36d778a65446ae1eec2bd721b5c6c8aa4ea788aaab8896907",
     "templates/tools/factory/conductor_close.py": "1cee2fd7e95aea92e40aec164b8d0dfc57183654b581d31422a32b7c94519416",
     "templates/tools/factory/conductor_consent.py": "4adbe2d8c385c847435128bef51113887135d4fa2671c0d9659b6c01aef274b6",
