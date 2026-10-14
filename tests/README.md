@@ -47,6 +47,8 @@
 - `test_model_routing.py` — WO-0007 acceptance evidence across two
   modules: type label → charter band (assembler) → model id
   (factory_config), against the real factory.json and charter stubs
+- `test_open_pr_preflight.py` — cross-cutting: the protocol's "Open pull
+  requests first" section and the five work-starting skills that recite it
 - `test_orientation_pack.py` — orientation_pack.py, the dispatch prompt
 - `test_protocol_backlog.py` — protocol.py backlog-entry grammar
 - `test_protocol_conformance.py` — protocol.py stage tables vs

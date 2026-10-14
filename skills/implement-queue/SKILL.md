@@ -66,7 +66,9 @@ file's Rules section.
 2. List open PRs. Unfinished PRs come before new issues: green ones go
    to the Phase 2 gate, pending ones wait, failed ones get fixed or
    their issue labelled `agent-failed`. Claim nothing new while an open
-   PR is failed.
+   PR is failed. This is the protocol's "Open pull requests first"
+   pre-flight (`../../docs/pipeline-protocol.md`) with this skill's
+   mechanics; merges still follow the Merge policy below.
 
 ## Phase 1: Claim a batch
 

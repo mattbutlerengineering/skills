@@ -54,11 +54,46 @@ seeds a run, and orientation inside an active run still reads run artifacts
 alone. The concrete command that lists work awaiting review is packaging's,
 like the tracker CLI — the shape of the check is what lives here.
 
-A related rule, deliberately not the same one: a skill that starts *many*
-work orders at once also prefers finishing open review work before opening
-more, to keep branches from stacking conflicts. That one is about order and
-this one is about duplication; they agree about what to look at and not
-about why.
+A related rule, deliberately not the same one, is the next section's: open
+pull requests are drained before new work starts, to keep branches from
+stacking conflicts. That one is about order and this one is about
+duplication; they agree about what to look at and not about why.
+
+### Open pull requests first
+
+Open PRs come before new work. An unfinished pull request is closer to
+value than a fresh one, and merging it first is what keeps new branches
+from stacking conflicts. Unmerged pull requests left to pile up get merged
+one at a time later, and a pair that each passed CI alone breaks together.
+
+So every skill that starts new work runs this pre-flight first: `next`
+before it hands off to a stage, `autorun` before its first stage, `conduct`
+before it asks the Owner to approve a batch's spend, and the two queue
+skills, `work-queue` and `implement-queue`, in their own preflight, which
+adds their mechanics (labels, checks) to it.
+
+1. **List** the repo's open pull requests, oldest first. The concrete
+   command is packaging's, like the tracker CLI's (`gh pr list --state
+   open` on GitHub).
+2. **Green and approved** — present it for merge. Every merge still needs
+   the Owner's explicit answer, or the standing consent they wrote down in
+   advance where a skill's own policy defines one. The pre-flight never
+   merges on its own, and a recommendation is not an answer.
+3. **Red or conflicting** — fix it (update it from the base branch,
+   resolve, re-run the repo's checks), or name why it is blocked.
+4. **Stale, with no one driving it** — surface it to close.
+5. **Optional, when two or more are mergeable** — simulate merging them
+   together before the first one lands: chain-merge them in a detached
+   worktree, then run the repo's checks on the result. Per-PR CI cannot
+   see a pair that merges clean and goes red; this plugin's repo records
+   the cases in `docs/kb/cross-pr-merge-hazards.md`.
+
+New work starts only when nothing is left that is mergeable or fixable. A
+pull request waiting on the Owner's decision does not block new work; it
+gets reported. As with the in-flight guard, the outcome is always visible:
+no open pull requests, the list that was worked, or that the check could
+not run (no review surface, no credentials, no network) — never silence
+that reads as a clean result.
 
 ## Artifacts are the state
 
