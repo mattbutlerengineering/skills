@@ -1358,6 +1358,27 @@ class TestLabelWiring(unittest.TestCase):
                 " has no such label (add it to .github/labels.json, or the"
                 " flip fails when CI runs it)"])
 
+    def test_a_pruned_conductor_label_is_reported(self):
+        # issue #856: the shipped taxonomy with the labels the Conductor
+        # writes pruned — a curated taxonomy dropping size:* defers every
+        # issue the conductor plans, and close mints needs-human bare
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            pruned = {"needs-human", "size:S", "size:M", "size:L"}
+            shipped = json.loads((self.REPO / "factory" / "templates"
+                                  / ".github" / "labels.json")
+                                 .read_text(encoding="utf-8"))
+            tree.write(".github/labels.json", json.dumps(
+                [label for label in shipped if label["name"] not in pruned]))
+            self.assertEqual(gates.check_label_wiring(tree.root), [
+                f"J: {site} names {label} but the taxonomy has no such"
+                " label (add it to .github/labels.json, or the flip fails"
+                " when CI runs it)"
+                for label, site in (("needs-human", "conductor_close.py"),
+                                    ("size:L", "conductor_plan.py"),
+                                    ("size:M", "conductor_plan.py"),
+                                    ("size:S", "conductor_plan.py"))])
+
     def test_an_unnamed_taxonomy_label_is_not_a_finding(self):
         # one direction only: wo:blocked is human-applied by design
         # (ADR-0045) and the approval labels are the gates' to set, so
@@ -1479,6 +1500,12 @@ class TestLabelWiring(unittest.TestCase):
         self.assertEqual(declared_by("human_gates.py"),
                          ["wo:blueprint-approved", "wo:draft", "wo:merged",
                           "wo:needs-review", "wo:prd-approved"])
+        # the Conductor's labels (issue #856): found by their LABELS
+        # declaration, not by a list in gates.py
+        self.assertEqual(declared_by("conductor_close.py"), ["needs-human"])
+        self.assertEqual(declared_by("conductor_plan.py"),
+                         ["size:L", "size:M", "size:S", "type:chore",
+                          "type:defect", "type:feature"])
         # every lifecycle target's --label argument, read off the Makefile
         for label in ("wo:merged", "wo:in-progress", "wo:needs-review",
                       "wo:failed"):

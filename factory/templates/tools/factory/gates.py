@@ -73,6 +73,7 @@ The knowledge plane's shared grammar (typed-ID tokens, run_dirs,
 repo_root) lives in knowledge_plane.py, and the cost ledger's shape in
 cost_ledger.py (ADR-0037) — this module keeps only the detectors.
 """
+import ast
 import hashlib
 import importlib
 import json
@@ -802,20 +803,39 @@ def check_scaffold_sync(root):
     return problems + stamped_destination_problems(root, files)
 
 
-# Where the factory's label literals are declared: module name -> a
-# callable pulling the labels that module names out of its own constants.
-# Read the declaration, never the source text — a regex over source stops
-# matching the moment a literal is reformatted, and stops SILENTLY, which
-# is the exact failure a detector exists to prevent.
+# Where the factory's label literals are declared: every module beside
+# gates.py that assigns LABELS at module scope declares the labels it
+# names there (issue #856). J discovers the declarers rather than keeping
+# a list of them, so a tool that ships a label is covered by declaring
+# it — a hand-kept list had already fallen three modules behind. The
+# source is parsed only to FIND a declarer; the labels are read off the
+# imported module, never the source text — a regex over source stops
+# matching the moment a literal is reformatted, and stops SILENTLY,
+# which is the exact failure a detector exists to prevent.
 #
-# sweeps.py is absent on purpose: it is factory-repo-only (never stamped)
-# and its TRIAGE labels are bootstrap-created by ensure_labels before any
-# sweep runs, so they are wired by construction rather than by taxonomy.
-LABEL_DECLARERS = {
-    "assembler": lambda mod: ({mod.READY_LABEL, mod.EXHAUSTED_LABEL}
-                              | set(mod.CHARTER_BY_TYPE)),
-    "human_gates": lambda mod: mod.gate_labels(),
-}
+# sweeps.py declares no LABELS on purpose: it is factory-repo-only (never
+# stamped) and its TRIAGE labels are bootstrap-created by ensure_labels
+# before any sweep runs, so they are wired by construction rather than
+# by taxonomy.
+LABELS_NAME = "LABELS"
+
+
+def label_declarers():
+    """Sorted names of the modules beside gates.py that assign LABELS at
+    module scope. Beside gates.py is the factory repo's root and a
+    stamped repo's tools/factory/, so a declarer J finds is a module
+    that ships with it — by construction, not by a list."""
+    names = []
+    for path in sorted(Path(__file__).resolve().parent.glob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            continue  # an unparseable sibling fails its own import first
+        if any(isinstance(target, ast.Name) and target.id == LABELS_NAME
+               for node in tree.body if isinstance(node, ast.Assign)
+               for target in node.targets):
+            names.append(path.stem)
+    return names
 
 # The Makefile's lifecycle targets hand validator.py the label to flip, so
 # the target line IS the declaration — there is no constant to read.
@@ -834,12 +854,12 @@ def declared_labels(root):
     not the place to discover that.
     """
     named = {}
-    for name, pull in sorted(LABEL_DECLARERS.items()):
+    for name in label_declarers():
         try:
             module = importlib.import_module(name)
         except ImportError:
             continue
-        for label in pull(module):
+        for label in getattr(module, LABELS_NAME):
             named.setdefault(label, set()).add(f"{name}.py")
     makefile = root / "Makefile"
     if makefile.is_file():
