@@ -277,6 +277,9 @@ missing. That finding describes the chosen scope and is not a fault.
 - Open batches from the repo's own checkout, not a throwaway clone. The batch
   ledger is an uncommitted file in the batch worktree until `close` commits
   it (#704).
+- The Conductor's own git calls skip the repo's hooks, because they commit
+  only generated evidence and `land_branch` waits for green CI on the pushed
+  head (#833).
 
 Worked example: mattbutlerengineering/mattbutlerengineering#6364 adds
 `tools/factory/`, `.github/factory.json` and a `scripts/conductor-gate.sh`

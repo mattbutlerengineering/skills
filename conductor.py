@@ -722,13 +722,25 @@ def _answer_cli(root, batch, args, now, env):
     return problems
 
 
+# Every git call the Conductor makes itself skips the repo's hooks (#833):
+# it commits only generated evidence (ledger, spend rows, scorecards, a
+# merge of a checked main, a mechanical renumber), and land_branch waits
+# for green CI on the pushed head. The Worker's item commits run in its
+# harness, a separate process, and still meet the hooks.
+NO_HOOKS = ("-c", f"core.hooksPath={os.devnull}")
+
+
+def _skip_hooks(run):
+    return lambda args, **kwargs: run([*NO_HOOKS, *args], **kwargs)
+
+
 def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
          alive=None, harness=None, tool=None, sleep=None, netrc=None):
     env = os.environ if env is None else env
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
     root = root or repo_root()
-    git = git or runner("git")
+    git = git or _skip_hooks(runner("git"))
     # The capability siblings import this module's row grammar, so they
     # are imported here, not at the top: one owner, no import cycle.
     import conductor_calibrate
