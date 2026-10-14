@@ -16,7 +16,7 @@ Offline: the full suite, lint, gates and the gates selftest are green, every
 conductor test module passes, and 14 breakdown acceptance rows (0153 to
 0164) pass on their pinned tests. An offline CLI demonstration shows the
 decision queue's refusals and a scorecard that fails with a problem string.
-**Against the PRD: 0 of 7 success criteria met, 0 failed, 7 unmet.** Every
+**Against the PRD as of the offline run: 0 of 7 met, 0 failed, 7 unmet.** On the two real consumer batches recorded below (2026-10-12/13), the result is 3 pass, 2 fail and 2 unmet, on batches smaller than the four issues the PRD requires. Every
 one is pending a real batch of at least four issues. That batch needs the
 Owner's spend consent, and it has not happened. The mechanism behind each
 criterion is built and tested with fakes. Whether the criteria hold on real
@@ -129,6 +129,50 @@ work is still unknown.
   and `merged_per_owner_wait_hour` is null. That is the tool's rule for a
   zero denominator, not a defect.
 - Result: PASS, for the mechanism only.
+
+## Real consumer batches (2026-10-12 and 2026-10-13)
+
+Two paid batches ran in mattbutlerengineering/mattbutlerengineering, with
+the Owner's spend consent in session (#688). Their ledgers and scorecards
+are on that repo's main: `docs/factory/batches/b20261012/ledger.jsonl`
+(30 rows), `docs/factory/batches/b20261013/ledger.jsonl` (42 rows) and
+`docs/factory/scorecards.jsonl`.
+
+```text
+b20261012  items 2  merged 0  blocked 2  metered $9.33   estimate $30  estimate_error_pct -68.9  collisions 0  stalls 3  escalations 4  policy_compliance 1.0
+b20261013  items 1  merged 0  blocked 1  metered $21.64  estimate $15  estimate_error_pct +44.3  collisions 0  stalls 3  escalations 3  policy_compliance 1.0
+```
+
+**Neither batch met the PRD's condition of at least four issues** (they had
+2 and 1), because the consumer had no four workable issues. Everything
+below is measured on those undersized batches, so none of it can be called
+met against the PRD as written. The Owner chose to record these results and
+close #688, and to track a batch of at least four items separately.
+
+| Criterion | Result on the real batches | Evidence |
+|---|---|---|
+| SC 1: every Owner action is a queued answer | **FAIL** | All 12 asks were answered from the queue. But the batches also needed Owner merges outside it: the tools-only stamp (#6364) and its re-stamp (#6527), plus hand workarounds at close (prettier on the run evidence, `HUSKY=0`, a `needs-human` label, closing a superseded blueprint PR). |
+| SC 2: zero shared-number collisions | **UNMET** (nothing merged) | The scorecards show 0 collisions, but no item merged, so no reservation reached a merged file. The reservations themselves were wrong for this consumer: b20261013 reserved ADR 88-90 in a repo whose ADRs are `ADR-020`..`ADR-026`, and both batches reserved PRD-1 and overlapping WO numbers. |
+| SC 3: every run metered; estimate within ±50% | **FAIL** | All 13 Worker runs wrote a spend row. b20261013 is within ±50% (+44.3%), but b20261012 is not (-68.9%, three spec runs at the even-split $3 ceiling). |
+| SC 4: timestamped state rows; final state matches GitHub | **PASS** (on these batches) | 23 state rows, all timestamped. Both #5995 and #6367 are blocked in the ledger and open with `needs-human` on GitHub. |
+| SC 5: merged items have writer + distinct reviewer, green merge | **UNMET** (nothing merged) | 0 items merged. #6367's review stalled twice at the $2.14 ceiling. |
+| SC 6: every Worker on the policy's model and effort | **PASS** | `policy_compliance` 1.0 in both scorecards. Every run row names the band's model and effort. |
+| SC 7: scorecard from ledger rows alone, appended, fails loudly | **PASS** | Both scorecards were computed at close and appended to the consumer's `scorecards.jsonl`. The malformed-row refusal is pinned offline (`test_conductor_close`). |
+
+**Tally on the real batches: 3 pass, 2 fail, 2 unmet.** Each failure and
+each unmet criterion was filed and fixed through plugin 0.14.0:
+- spec pricing (#724, then weighted ceilings)
+- retries blind to committed work (#725)
+- close hardening (#726, #728)
+- launch refusals (#708, #709)
+- worktree anchoring (#710)
+- defer labels (#711)
+- landing on a checked head (#770)
+- spend identity (#771, #772)
+
+Still open: the closing-merge race with a consumer's own auto-merge (#807),
+and the reservation scan reading the payload's own ADR citations (filed
+with this change).
 
 ## Criteria & evidence: PRD-0013 success criteria
 
