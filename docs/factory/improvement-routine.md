@@ -80,6 +80,12 @@ Read, in order:
    that kept the pass out of `make check`. The tool exits nonzero
    whenever it finds anything, so a nonzero exit here is normal and is
    not a failure of the run.
+10. The toolsmith queue: the open issue whose body starts with
+    `<!-- factory-toolsmith-queue -->`, found by marker like the gate
+    digest. `rejection_mining.py` rewrites it weekly: gate rejections,
+    change-requested reviews, and Conductor review rework, each
+    correction stamped with its time. Read-only intel, consumed in §6.
+    Missing → note it under Health and carry on.
 
 ## 3 Health sweep
 
@@ -179,6 +185,11 @@ Harvest the correction stream since last-scan:
   `architecture.md`, `docs/design/**`) — these are gate 1/2 rejections
   (ADR-0033).
 - Issues labeled `wo:failed`, `needs-human`, or `budget-exhausted`.
+- Every toolsmith-queue entry inside the window (§2 item 10): each
+  correction whose timestamp falls after last-scan is one correction
+  event, quoted as the queue states it, with the queue issue's
+  permalink. A queue line and a harvested comment that record the same
+  rejection are one event, not two.
 
 Rules, all from the toolsmith charter:
 
@@ -191,6 +202,10 @@ Rules, all from the toolsmith charter:
 - **Escalate, never apply.** A pattern implying a gate change, scope
   change, or autonomy graduation is human-only (ADR-0033); it goes
   under Proposals, and nowhere else.
+- **Read the queue, never write it.** The routine never edits or
+  comments on the toolsmith queue: `rejection_mining.py` owns its body.
+  A queue entry reaches a PR only the way any correction does, as
+  evidence for a candidate that clears the count (§4 rung 3).
 
 ## 7 Report and journal
 
@@ -252,3 +267,13 @@ the harness scheduler. The schedule prompt deliberately duplicates four
 hard limits (one PR, never merge, no paid evals, no self-edit) as
 defense in depth for the day this file is unreadable; a change to any
 of those must update prompt and playbook together.
+
+## Decisions
+
+**2026-10-14: the daily routine reads the toolsmith queue, by owner
+decision** (#818). The queue's other reader, the
+[retro-reflect routine](retro-reflect-routine.md), has no trigger (its
+deferral stands), so until it runs the daily routine reads the queue
+(§2 item 10, §6) within its existing powers: queue entries are
+correction events like any other, and the queue itself stays
+`rejection_mining.py`'s to write.

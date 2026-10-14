@@ -229,6 +229,30 @@ the answer that authorised its merge, then waits for green checks and
 merges that pull request, and nothing else.
 A failing scorecard is a problem to report, never a number to estimate.
 
+### 7. Read the batch back
+
+Once the closing pull request has merged, read the batch's outcome in
+the session that produced it:
+
+    python3 conductor.py scorecards 5
+    python3 conductor.py calibrate
+
+Both print and write nothing. From `scorecards`, name the metric that
+moved most from the batch before, and which way; when none moved, say
+so. From `calibrate`, report the suggested step weights and size budgets
+with their sample sizes, or the floor it refused at. Then point each
+finding at where it goes, and file nothing yourself:
+
+- A suggested weight or budget is the Owner's to adopt, as their own
+  edit to `factory.json`'s `conductor.step_weights` and `budgets_usd`.
+  Model and pricing choices stay the Owner's; never edit them.
+- A metric that moved the wrong way and that the Owner wants chased
+  becomes a plain issue with a `type:*` label, never a work order.
+- Rework the batch saw reaches the toolsmith queue through
+  `rejection_mining.py`'s weekly harvest, never by hand.
+
+In a session with no Owner present, print the two readings and stop.
+
 ## Rules
 
 - The tool decides. Never re-derive, widen, reorder or second-guess a
