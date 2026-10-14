@@ -554,6 +554,47 @@ def land_branch(git, gh, worktree, branch, base, clock, sleep):
     return pr, land(gh, pr, head, queued, clock, sleep), checks
 
 
+def _on_main(git, worktree, head):
+    """True when `head` is an ancestor of a freshly fetched origin/main;
+    `merge-base --is-ancestor` exits 1 for not, any other failure stalls."""
+    _git(git, worktree, ["fetch", "origin", "main"], "fetching origin/main",
+         RETRY)
+    try:
+        git(["-C", str(worktree), "merge-base", "--is-ancestor", head,
+             "origin/main"])
+    except CLI_FAILURES as err:
+        if getattr(err, "returncode", None) == 1:
+            return False
+        raise Stall("reading whether origin/main holds"
+                    f" {head[:12]} failed: {detail(err)}", RETRY)
+    return True
+
+
+def landed_by_repo(git, gh, worktree, branch):
+    """(pr, sha) when the repo itself (its auto-merge) already merged
+    `branch`'s PR carrying the head this worktree pushed, None when no PR
+    of the branch merged (#807). Its head is that head (a squash), or
+    that head is on origin/main (a merge commit); a PR merged without it
+    stalls naming the gap."""
+    listed = _read(gh, ["pr", "list", "--head", branch, "--state", "merged",
+                        "--json", "number,headRefOid,mergeCommit"],
+                   "gh pr list --state merged", expect=list)
+    if not listed:
+        return None
+    merged = listed[0] if isinstance(listed[0], dict) else {}
+    pr, at = merged.get("number"), merged.get("headRefOid")
+    sha = (merged.get("mergeCommit") or {}).get("oid")
+    if not (isinstance(pr, int) and is_text(at) and is_text(sha)):
+        raise Stall(f"gh pr list named an unreadable merged PR of {branch}",
+                    RETRY)
+    head = _git(git, worktree, ["rev-parse", "HEAD"], "reading HEAD").strip()
+    if at != head and not _on_main(git, worktree, head):
+        raise Stall(f"PR #{pr} was merged by the repo at {at[:12]}, without"
+                    f" {head[:12]}, the head the Conductor pushed: what"
+                    " that head adds is missing from main")
+    return pr, sha
+
+
 def _reserve(root, batch, clock, item, fields):
     _, problems = append(root, batch, lambda rows: (
         [{"at": stamp(clock()), "kind": "reserve", "item": item, **one}

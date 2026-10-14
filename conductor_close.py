@@ -540,7 +540,9 @@ def merge_closing(root, batch, clock, git, gh, sleep):
     is committed and pushed first (#726): the ledger that merges holds
     the answer that authorised its merge. Then origin/main is merged in
     and conductor_merge.land_branch lands it, as the merge turn does
-    (#770): checks on that head, main held unless queued."""
+    (#770): checks on that head, main held unless queued. A landing that
+    stalls because the repo's own auto-merge already merged the PR with
+    the pushed head succeeds as merged `by` the repo (#807)."""
     rows, problems = load(root, batch)
     problems = problems or _closing_answer(rows, batch)
     if problems:
@@ -566,15 +568,34 @@ def merge_closing(root, batch, clock, git, gh, sleep):
         pr, sha, _ = conductor_merge.land_branch(git, gh, root, branch, base,
                                                  clock, sleep)
     except conductor_merge.Stall as stall:
-        return None, [f"cd: closing merge: {stall.reason}"]
+        return _landed_by_repo(git, gh, root, batch, stall)
     return {"batch": batch, "pr": pr, "sha": sha}, []
+
+
+def _landed_by_repo(git, gh, root, batch, stall):
+    """(summary, problems) for a closing merge whose landing stalled: a
+    success when the repo already merged the PR with the pushed head, a
+    gap named when it merged without it, else the stall itself."""
+    try:
+        landed = conductor_merge.landed_by_repo(git, gh, root,
+                                                batch_branch(batch))
+    except conductor_merge.Stall as gap:
+        return None, [f"cd: closing merge: {gap.reason}"]
+    if landed is None:
+        return None, [f"cd: closing merge: {stall.reason}"]
+    pr, sha = landed
+    return {"batch": batch, "pr": pr, "sha": sha, "by": "repo"}, []
 
 
 def close_cli(root, args, clock, git, gh, sleep=None):
     if args[1:] == ["--merge"]:
         summary, problems = merge_closing(root, args[0], clock, git, gh,
                                           sleep or time.sleep)
-        if summary is not None:
+        if summary is not None and summary.get("by") == "repo":
+            print(f"cd: batch {summary['batch']}'s closing PR"
+                  f" #{summary['pr']} was already merged by the repo as"
+                  f" {summary['sha']}")
+        elif summary is not None:
             print(f"cd: merged batch {summary['batch']}'s closing PR"
                   f" #{summary['pr']} as {summary['sha']}")
         return problems
