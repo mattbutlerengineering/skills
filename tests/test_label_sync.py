@@ -25,8 +25,8 @@ import cli_contract  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = REPO_ROOT / "factory" / "templates" / ".github" / "labels.json"
 
-# The full 27-label work-order taxonomy, pinned by name: 9 wo:*, 3 size:*,
-# 3 risk:*, 5 type:*, 4 source:*, 3 flags.
+# The full 29-label work-order taxonomy, pinned by name: 9 wo:*, 3 size:*,
+# 3 risk:*, 5 type:*, 4 source:*, 1 found:*, pipeline-intake, 3 flags.
 EXPECTED_NAMES = {
     "wo:draft", "wo:prd-approved", "wo:blueprint-approved",
     "wo:ready-for-agent", "wo:in-progress", "wo:needs-review",
@@ -36,6 +36,7 @@ EXPECTED_NAMES = {
     "type:feature", "type:defect", "type:chore", "type:support",
     "type:sweep",
     "source:human", "source:sentry", "source:validator", "source:sweep",
+    "found:consumer",
     "pipeline-intake",
     "budget-exhausted", "needs-human", "blueprint-drift",
 }
@@ -56,9 +57,9 @@ def gh(listing, **kwargs):
 
 
 class TestTaxonomyTemplate(unittest.TestCase):
-    def test_template_parses_with_exactly_the_28_names(self):
+    def test_template_parses_with_exactly_the_29_names(self):
         labels = taxonomy()
-        self.assertEqual(len(labels), 28)
+        self.assertEqual(len(labels), 29)
         self.assertEqual({label["name"] for label in labels}, EXPECTED_NAMES)
         for label in labels:
             self.assertEqual(sorted(label), ["color", "description", "name"],
@@ -66,6 +67,19 @@ class TestTaxonomyTemplate(unittest.TestCase):
             for field in ("name", "color", "description"):
                 self.assertIsInstance(label[field], str)
                 self.assertTrue(label[field], f"empty {field} in {label}")
+
+    def test_consumer_only_defects_are_a_countable_class(self):
+        # Issue #834: a defect found from inside a consumer batch carries
+        # found:consumer, so `gh issue list --label found:consumer` counts
+        # the class per period. The conduct skill is the label's writer,
+        # so it must name a label the taxonomy actually carries.
+        [found] = [label for label in taxonomy()
+                   if label["name"] == "found:consumer"]
+        self.assertEqual(found["description"],
+                         "Defect origin: found only in a consumer repo")
+        skill = REPO_ROOT / "skills" / "conduct" / "SKILL.md"
+        text = " ".join(skill.read_text(encoding="utf-8").split())
+        self.assertIn("`type:defect` and `found:consumer`", text)
 
 
 class TestLoadLabels(unittest.TestCase):
@@ -266,7 +280,7 @@ class TestPlan(unittest.TestCase):
         problems = label_sync.plan([], desired)
         self.assertEqual(problems, [f"L: missing label {label['name']}"
                                     for label in desired])
-        self.assertEqual(len(problems), 28)
+        self.assertEqual(len(problems), 29)
 
     def test_tampered_color_yields_exact_mismatch_line(self):
         desired = taxonomy()
@@ -466,9 +480,9 @@ class TestCli(cli_contract.CliContract, cli_contract.ReportContract,
         code, out = self.run_cli([], gh([]))
         self.assertEqual(code, 1)
         lines = out.splitlines()
-        self.assertEqual(len(lines), 29)
+        self.assertEqual(len(lines), 30)
         self.assertEqual(lines[0], "L: missing label wo:draft")
-        self.assertEqual(lines[-1], "label-sync: 28 problem(s)")
+        self.assertEqual(lines[-1], "label-sync: 29 problem(s)")
 
 
 

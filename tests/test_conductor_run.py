@@ -403,7 +403,13 @@ class TestCompletedRun(RunCase):
             "wo": "WO-0171", "run_id": rid, "model": "m", "tokens": 120,
             "cost": 1.25, "outcome": "completed", "at": "2026-10-10"}])
         kept = self.root / "docs/factory/batches/b1/runs" / f"{rid}.json"
-        self.assertEqual(json.loads(kept.read_text()), RESULT)
+        # #832: the indented form a consumer's prettier check accepts.
+        self.assertEqual(kept.read_text(), (
+            '{\n  "type": "result",\n  "subtype": "success",\n'
+            '  "is_error": false,\n  "total_cost_usd": 1.25,\n'
+            '  "usage": {\n    "input_tokens": 100,\n'
+            '    "output_tokens": 20\n  },\n'
+            '  "modelUsage": {\n    "m": {}\n  }\n}\n'))
         self.assertEqual(summary["outcome"], "completed")
 
     def test_a_build_that_leaves_its_row_unchecked_stalls(self):
@@ -623,6 +629,8 @@ class TestFailedRun(RunCase):
 # counts only per model.
 BUDGET_STOP = {"type": "result", "subtype": "error_max_budget_usd",
                "is_error": True, "total_cost_usd": 3.064511,
+               "errors": ["Reached maximum budget ($3.06)"],
+               "permission_denials": [],
                "usage": {"input_tokens": 0, "output_tokens": 0},
                "modelUsage": {"m": {"inputTokens": 40, "outputTokens": 9000,
                                     "cacheReadInputTokens": 900000,
@@ -652,6 +660,25 @@ class TestRetryAfterBudgetStop(RunCase):
                          (969040, 3.064511, "agent-failed"))
         self.assertEqual((self.rows[-2]["reason"], self.rows[-2]["cause"]),
                          (BUDGET, "ceiling"))
+
+    def test_a_budget_stop_is_kept_as_prettier_would_write_it(self):
+        # #832: a consumer's prettier check rewrote compact runs/*.json,
+        # and would rewrite plain indent=2 too: it keeps a short array on
+        # one line.
+        self.run_step("#12", "spec", Harness(events=[BUDGET_STOP]))
+        [kept] = (self.root / "docs/factory/batches/b1/runs").glob("*.json")
+        self.assertEqual(kept.read_text(), (
+            '{\n  "type": "result",\n'
+            '  "subtype": "error_max_budget_usd",\n'
+            '  "is_error": true,\n  "total_cost_usd": 3.064511,\n'
+            '  "errors": ["Reached maximum budget ($3.06)"],\n'
+            '  "permission_denials": [],\n'
+            '  "usage": {\n    "input_tokens": 0,\n'
+            '    "output_tokens": 0\n  },\n'
+            '  "modelUsage": {\n    "m": {\n      "inputTokens": 40,\n'
+            '      "outputTokens": 9000,\n'
+            '      "cacheReadInputTokens": 900000,\n'
+            '      "cacheCreationInputTokens": 60000\n    }\n  }\n}\n'))
 
     def test_a_retry_is_briefed_with_the_work_already_committed(self):
         self.run_step("#12", "spec", Harness(act=pr_body),

@@ -70,7 +70,7 @@ pristine mirror it was stamped from. `factory/manifest.json` is the authority.
 | `tools/factory/` | 28 | the detector suite, the tools the workflows call, the Conductor's batch tool, and a `.gitignore` for their bytecode |
 | `docs/adr/` | 8 | the seeded ADR set, the convention, and the template |
 | `.github/workflows/` | 6 | validator, assembler, design, cost-report, gate-digest, toolsmith-mine |
-| `.github/` | 3 | `factory.json` (budgets, routing bands, WIP cap, monthly cap), `labels.json` (the 28-label taxonomy), `CODEOWNERS` (the code-owner gate) |
+| `.github/` | 3 | `factory.json` (budgets, routing bands, WIP cap, monthly cap), `labels.json` (the 29-label taxonomy), `CODEOWNERS` (the code-owner gate) |
 | `docs/design/` | 2 | the design-system seed and its template |
 | `Makefile` | 1 | `make check` = detectors + selftest + tests, exactly what CI runs |
 
@@ -114,7 +114,7 @@ a factory change that adds one leaves a Makefile that has never heard of it.
 
 ## 5. Sync the label taxonomy
 
-The 28-label taxonomy backs the work-order lifecycle machine, the gate digest,
+The 29-label taxonomy backs the work-order lifecycle machine, the gate digest,
 and the sweeps' triage:
 
 ```
