@@ -7,6 +7,7 @@ assert the EXACT problem strings and rows.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -286,17 +287,31 @@ def replies(*values):
 
 
 class TurnCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        """Build the seeded origin and its configured clone once per
+        subclass; each test copies them (#902), so no test sees another's
+        pushes or commits."""
+        template = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(template.cleanup)
+        cls.template = Path(template.name)
+        seed = git_repo.init(cls.template / "seed", "-b", "main")
+        cls.configure(seed)
+        commit(seed, SEED)
+        git_repo.clone(seed, cls.template / "origin.git", "--bare")
+        cls.configure(git_repo.clone(cls.template / "origin.git",
+                                     cls.template / "repo"))
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(tmp.name)
-        seed = git_repo.init(self.tmp / "seed", "-b", "main")
-        self.configure(seed)
-        commit(seed, SEED)
-        git_repo.clone(seed, self.tmp / "origin.git", "--bare")
-        self.repo = git_repo.clone(self.tmp / "origin.git",
-                                   self.tmp / "repo")
-        self.configure(self.repo)
+        for name in ("origin.git", "repo"):
+            shutil.copytree(self.template / name, self.tmp / name,
+                            symlinks=True)
+        self.repo = self.tmp / "repo"
+        sh(self.repo, "remote", "set-url", "origin",
+           str(self.tmp / "origin.git"))
         self.wt = self.repo / ".claude/worktrees/conductor-b1-12"
         sh(self.repo, "worktree", "add", "-q", "-b", BRANCH, str(self.wt),
            "origin/main")
@@ -387,6 +402,31 @@ class TurnCase(unittest.TestCase):
 
     def head(self, ref=BRANCH):
         return sh(self.repo, "rev-parse", ref).strip()
+
+
+class TestFixtureIsolation(TurnCase):
+    """The shared template is copied per test (#902): a push or commit in
+    one test is invisible to the next, whichever runs first."""
+
+    def seed_head(self):
+        return sh(self.template / "origin.git", "rev-parse", "main").strip()
+
+    def test_a_origin_starts_at_the_seed(self):
+        self.assertEqual(sh(self.tmp / "origin.git", "rev-parse",
+                            "main").strip(), self.seed_head())
+
+    def test_b_a_push_to_origin_lands_in_this_test_only(self):
+        self.main_moves({"pushed.txt": "p\n"})
+        self.assertNotEqual(sh(self.tmp / "origin.git", "rev-parse",
+                               "main").strip(), self.seed_head())
+        self.item({"item.txt": "i\n"})
+        self.assertFalse((self.template / "repo/pushed.txt").exists())
+
+    def test_c_origin_is_back_at_the_seed(self):
+        self.assertEqual(sh(self.tmp / "origin.git", "rev-parse",
+                            "main").strip(), self.seed_head())
+        self.assertEqual(sh(self.repo, "rev-parse", "HEAD").strip(),
+                         self.seed_head())
 
 
 SHIPPED = feature_shipped({}) + own("ask-2", "#12")
