@@ -457,13 +457,15 @@ class TestMergeGate(tcm.TurnCase):
 
 class ConsumerTurnCase(tcm.TurnCase):
     """The scratch repo as a consumer repo: a plugin.json of its own, a
-    stamped manifest, and no factory_init.py at its root."""
+    stamped manifest, and no factory_init.py at its root. The seed is
+    committed once per subclass (#902), so the patch wraps setUpClass."""
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
         consumer = {path: text for path, text in tcm.SEED.items()
                     if path != "factory_init.py"}
         with mock.patch.dict(tcm.SEED, consumer, clear=True):
-            super().setUp()
+            super().setUpClass()
 
 
 class TestConsumerMerge(ConsumerTurnCase):

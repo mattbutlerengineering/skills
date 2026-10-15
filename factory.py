@@ -55,6 +55,7 @@ VERBS = {
     "md-claims": ("md_claims", "argv"),
     "one-owner": ("one_owner", "argv"),
     "rejection-mining": ("rejection_mining", "argv"),
+    "run-tests": ("run_tests", "argv"),
     "standards-index": ("standards_index", "argv"),
     "sweeps": ("sweeps", "argv"),
     "trace": ("trace", "argv"),

@@ -14,10 +14,15 @@ window tests stopped agreeing — now there is one window test, in
 completed_stays, and this asserts what it guarantees.
 """
 import json
+import sys
 import unittest
 from datetime import datetime, timezone
+from pathlib import Path
 
-from fake_gh import FakeGh
+# discover puts tests/ on sys.path; selective package-style runs need it
+# added for the sibling helper import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fake_gh import FakeGh  # noqa: E402
 from human_gates import (GATES, Waiting, completed_stays, gate_labels,
                          gate_passages, gate_rejections, label_events,
                          open_queues, read_timelines, waited_seconds,
