@@ -4,7 +4,8 @@ The protocol for the `factory-hourly-improvement` scheduled cloud
 routine: one bounded improvement to the factory's own process per hour,
 taken from evidence to merged `main` inside a single run. Each run is
 an [implement-queue](../../skills/implement-queue/SKILL.md) pass over
-one issue the run files itself, under this repo's
+one issue, filed by the run or claimed from the queue, under this
+repo's
 [queue profile](../../.claude/implement-queue.md) and ADR-0096, which
 is the Owner's standing consent for the merge it performs. It is built
 on the mechanism ADR-0044 decided for the
@@ -63,7 +64,9 @@ Check in order; the first hit sets the run mode.
    is that PR. Take it through the gate (§6). Review comments on it
    are addressed on its branch. A PR that cannot be made green with
    one small fix is closed with a comment naming the failing job; its
-   issue stays open and gains `needs-human`.
+   issue stays open and gains `needs-human`. A hold label on that PR
+   or its issue parks the routine: the gate ends at its hold step
+   (§6 step 2), nothing new is picked, and only a human clears it.
 5. `main` is red — any verify command fails on an untouched checkout,
    or the latest `check` run on `main` failed → the fix is this run's
    work (§4 rung 1).
@@ -110,8 +113,8 @@ pick is report material:
    run with an escalation at the top of the journal comment.
 2. **A ready queue item.** An open issue that is not a work order (no
    `wo:*` label), not a permanent-state issue (a journal, digest,
-   queue or cost report), not labelled `ready-for-human`,
-   `needs-human` or `needs-info`, not blocked by an open issue, not
+   queue or cost report), not labelled `ready-for-human` or
+   `needs-human`, not blocked by an open issue, not
    covered by an open PR, and not one whose own text asks for Owner
    design or Owner spend consent; oldest first. Only if it fits the
    size bound.
@@ -163,15 +166,20 @@ If scoping reveals more, don't start; propose the split.
   list, and the pick's evidence; the routine session itself writes no
   code, so the agent that merges is never the agent that wrote the
   change. When dispatch is unavailable the routine implements
-  directly, and §6 step 4 then governs.
+  directly and is the author: it may then merge only a change the
+  fast path classifies low-risk, where the Owner's written
+  classification is the review (ADR-0088), and otherwise stops at the
+  PR (§6 step 4).
 - Failing test first, then the change. Full verify suite green before
   push; if the change turned it red and the fix isn't obvious, abandon
   the branch and report honestly.
 - Conventional-commit title, matching repo history.
-- File the run's issue — a plain issue with a `type:*` label, no
-  `wo:*` label and no work-order id (ADR-0032) — carrying the
-  evidence, the acceptance criteria the reviewer will check, and the
-  line `Carrier: the hourly improvement routine`. Then open the PR.
+- File the run's issue unless rung 2 supplied one — a plain issue
+  with a `type:*` label, no `wo:*` label and no work-order id
+  (ADR-0032) — carrying the evidence, the acceptance criteria the
+  reviewer will check, and the line `Carrier: the hourly improvement
+  routine`. Then open the PR; it `Closes` whichever issue the pick
+  names.
 
 PR body skeleton (the `No work order:` line and the `Closes #` line
 together satisfy detector B's traceability contract):
@@ -214,8 +222,10 @@ Implement-queue's gate, run for this one PR under the profile:
    voids the verdict. An error or timeout is `error`, re-dispatched
    once and then held. A `flag` gets one fix on the same branch by a
    new worker and one more gate; a second `flag` labels the issue
-   `needs-human`, comments the reviewer's output on the PR, and ends
-   the run with no merge. When the routine authored the change itself
+   `needs-review`, the profile's hold label, comments the reviewer's
+   output on the PR, and ends the run with no merge; the hold parks
+   the routine (§1) until a human looks. When the routine authored
+   the change itself
    and the fast path did not apply, there is no distinct reviewer to
    dispatch: stop at the PR and report it **awaiting review**; the
    merge train's Phase 0 reviews it.
@@ -224,8 +234,9 @@ Implement-queue's gate, run for this one PR under the profile:
    at the PR.
 6. **Merge.** If the branch is behind `main`, run the `update-branch`
    hook and wait for a green `check` on the new head
-   (`docs/kb/cross-pr-merge-hazards.md`). Re-check steps 1, 2 and 5 on
-   that head, then run the `merge-command` hook. A merge the runtime
+   (`docs/kb/cross-pr-merge-hazards.md`). Re-check steps 1 to 5 on
+   that head — a label or a review can change while the run waits —
+   then run the `merge-command` hook. A merge the runtime
    denies is reported as **awaiting a human merge** with the denial,
    and is never retried by another route in this run (ADR-0087). Wait
    for the merge to land and for `main`'s `check` to finish; a red
@@ -244,13 +255,18 @@ either form (§Markers on GitHub); create it only when that search
 succeeded and found none. It is not pinned: GitHub allows three pinned
 issues per repo and those slots are already contended.
 
-A quiet run with green health leaves only the session log, so the
-previous state marker stands and the next window simply extends.
-Every other run writes exactly one journal comment:
+A quiet run with green health, and a finish-first run that found its
+PR held, leave only the session log, so the previous state marker
+stands and the next window simply extends. Every other run writes
+exactly one journal comment. Its header names the outcome: `merged`;
+`pr-open` for any run that left its PR open (awaiting CI, review or a
+human merge, or PR-only mode); `finished-prior` for a finish-first run
+that merged or closed the earlier PR; `red-main` for a run whose rung
+1 did not fit the size bound; `report-only`; `stopped`.
 
 ```
 <!-- hourly-improvement-state last-scan=<this run's start, ISO-8601 UTC> -->
-**YYYY-MM-DD HH:MM — <merged | pr-open | finished-prior | report-only | stopped>**: <one line>
+**YYYY-MM-DD HH:MM — <merged | pr-open | finished-prior | red-main | report-only | stopped>**: <one line>
 - Pick: <what and why, with the evidence — or which rung ended the search>
 - Health: <verify suite, main CI, open PRs with age>
 - Gate: <check result, fast path or reviewer verdict, merge result or denial>
@@ -284,9 +300,9 @@ Re-read before the first push and again before the merge.
   `docs/factory/improvement-routine.md`, the queue profile, any
   schedule, another routine's journal, or the version in
   `.claude-plugin/plugin.json` (ADR-0095).
-- Caps: one issue, one PR, one merge, S size, branch prefix `hourly/`,
-  body marker `<!-- hourly-improvement-routine -->`,
-  conventional-commit titles.
+- Caps: one issue, one PR, one `update-branch`, one merge, S size,
+  branch prefix `hourly/`, body marker
+  `<!-- hourly-improvement-routine -->`, conventional-commit titles.
 
 ## 9 Amending this playbook
 
