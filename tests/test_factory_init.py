@@ -388,6 +388,13 @@ class TestProductForm(unittest.TestCase):
             factory_init.product_form("python3 -m unittest discover tests"),
             "python3 -m unittest discover -q tests")
 
+    def test_the_root_only_parallel_runner_becomes_the_serial_discover(self):
+        """#904: run_tests.py is root-only, so the payload Makefile keeps
+        the discover command a stamped repo always ran, byte-identical."""
+        self.assertEqual(
+            factory_init.product_form("python3 run_tests.py"),
+            "python3 -m unittest discover -q tests")
+
     def test_a_path_agnostic_command_is_untouched(self):
         command = "npx --yes playwright@1.62.1 test"
         self.assertEqual(factory_init.product_form(command), command)

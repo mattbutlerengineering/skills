@@ -11,7 +11,12 @@
   marking: `python3 -m unittest discover tests` only collects
   `test_*.py`, so un-prefixed files are scaffolding, never suites.
 - Flat directory, no subpackages: the discover invocation is pinned in
-  the Makefile and CI, and helpers are imported by bare module name.
+  the payload Makefile and CI, and helpers are imported by bare module
+  name. The root Makefile runs `python3 run_tests.py`, one `python3 -m
+  unittest tests.<module>` child per module, so a suite that imports a
+  helper adds its own directory to `sys.path` first (the two-line
+  pattern every such suite carries); under the runner, a suite that
+  forgets fails to import.
 
 ## Suites (filename → what it pins)
 
@@ -61,6 +66,8 @@
   maintenance rows, against tests/fixtures/maintenance-orientation/
 - `test_protocol_orientation.py` — protocol.next_stage, product rows,
   against tests/fixtures/orientation/
+- `test_run_tests.py` — run_tests.py, the parallel per-module runner,
+  through a fake spawn port
 - `test_sweeps.py` — sweeps.py, the intake sweeps
 - `test_trigger_eval.py` — trigger_eval.run_single_query's per-run
   project-dir cleanup
@@ -86,5 +93,8 @@
 - `harness_contract.py` — RunEvalContract mixin for the run_eval twins
 - `make_parse.py` — Makefile text extraction for the lockstep tests
 - `workflow_parse.py` — workflow text extraction for the run-step tests
+- `timings.json` — each suite's last recorded wall time, which
+  `run_tests.py` schedules longest-first from; rewritten by
+  `python3 run_tests.py --record` after a clean run
 - `fixtures/` — committed fixture trees and recorded transcripts (each
   transcript family has its own README)

@@ -42,7 +42,7 @@ check:
 	python3 lint.py
 	python3 gates.py
 	python3 gates.py --selftest
-	python3 -m unittest discover tests
+	python3 run_tests.py
 
 review:
 	python3 validator.py review --findings $(FINDINGS) --status $(STATUS)

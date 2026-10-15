@@ -7,7 +7,12 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
 ## Verify (CI runs all three on every push/PR)
 
-- `python3 -m unittest discover tests`
+- `python3 run_tests.py` — the full suite, one `python3 -m unittest
+  tests.<module>` child per module across `os.cpu_count()` workers
+  (`-j N` overrides), longest-first from `tests/timings.json`
+  (`--record` rewrites it after a clean run); exit 0 only when every
+  module passes. `python3 -m unittest discover tests` is the same suite
+  serially, and what a stamped repo runs.
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
 - `python3 gates.py && python3 gates.py --selftest` — factory drift
   detectors (roster in `gates.py`'s module docstring; B skips locally
