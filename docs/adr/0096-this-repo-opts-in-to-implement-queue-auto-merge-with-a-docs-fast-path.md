@@ -1,8 +1,9 @@
 # This repo opts in to implement-queue auto-merge, with a docs fast path
 
-- Status: provisional
+- Status: accepted (Owner, 2026-10-15)
 - Date: 2026-10-14
 
+The Owner accepted this on 2026-10-15, in session, with ADR-0095.
 Applies ADR-0087 (a queue profile may opt in to `implement-queue`
 auto-merge) and ADR-0088 (a fast-path classification is the review for
 auto-merge) to this repo. Recorded by the `faster-sdlc` feature run

@@ -1,8 +1,9 @@
 # The plugin version moves only in a release PR or at a Conductor merge
 
-- Status: provisional
+- Status: accepted (Owner, 2026-10-15)
 - Date: 2026-10-14
 
+The Owner accepted this on 2026-10-15, in session, with ADR-0096.
 Recorded by the `faster-sdlc` feature run (`docs/features/faster-sdlc/
 breakdown.md`, Milestone 2; issue #906). It supersedes no ADR: the rule
 it replaces lives only in CLAUDE.md and AGENTS.md, as the bullet "Bump
