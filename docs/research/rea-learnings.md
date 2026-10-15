@@ -202,9 +202,10 @@ above).
 5. **Make the plugin version move mechanically, and make staleness visible.**
    - *Adopt:* rea releases from conventional commits (release-please) and
      tells every bug reporter to update first. This repo's equivalent pain is
-     documented: CLAUDE.md's "bump plugin.json's version with any skills/
-     change" is enforced only by memory (issue #653; `lint.py` checks only that
-     the field exists). Two parts: (a) a PR-event check, in the style of
+     documented: CLAUDE.md's old per-branch bump rule for plugin.json (every
+     skills/ change bumped; replaced by ADR-0095's release-PR bump) was
+     enforced only by memory (issue #653; `lint.py` checks only that the
+     field exists). Two parts: (a) a PR-event check, in the style of
      detector B, that fails when a PR touches `skills/` and leaves
      `.claude-plugin/plugin.json`'s version unchanged against the base; (b)
      `doctor` reports the installed plugin cache version beside the repo
