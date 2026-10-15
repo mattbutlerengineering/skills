@@ -45,6 +45,7 @@ VERBS = {
     "cost-report": ("cost_report", "argv"),
     "dashboard": ("dashboard", "argv"),
     "factory-init": ("factory_init", "argv"),
+    "fast-path": ("fast_path", "argv"),
     "gate-digest": ("gate_digest", "argv"),
     "gates": ("gates", "argv"),
     "handoff": ("handoff", "argv"),

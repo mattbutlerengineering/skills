@@ -115,6 +115,10 @@ pre-pass, deliberately **not** a gate:
   protocols (ADR-0044's pattern); only the queue groomer's trigger
   exists (created 2026-09-29 as the pilot), and the retro/reflect and
   doc-gardener triggers are deferred by owner decision
+- `docs/factory/merge-train-routine.md` — the scheduled
+  implement-queue pass over open PRs only (Phase 0 verdicts, Phase 3
+  train) under `.claude/implement-queue.md` and ADR-0096; its trigger
+  is deferred to the Owner (recommendation: every 4 hours)
 
 ## Issue tracking
 
