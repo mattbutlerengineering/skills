@@ -9,7 +9,7 @@
     "templates/.github/workflows/design.yml": "1d717103b2e18cc5a2c291ad5cc8cc91e8c091c2e19657e194c2645eeef107ce",
     "templates/.github/workflows/gate-digest.yml": "5abc8a86c8bcebc0ab41e217f13b32843dcb91eb0d90390ca3a5f6b892539552",
     "templates/.github/workflows/toolsmith-mine.yml": "5a53428847c14bc2d112a6c50dfcf4b51008baff1d5baba523aeb0ee4bbe2168",
-    "templates/.github/workflows/validator.yml": "a346b2cc4d804fa5ae4c44d5f9a0d535162c560c8921aebeac2e4819ef0c0e1e",
+    "templates/.github/workflows/validator.yml": "4fe3c786e50347f0ee213c181ea9cb156f3544c1f61fa2f724d0efc8d1924d71",
     "templates/Makefile": "53174c03ab59953b583fedf56f5ed0543d6a6bcdd56b93143d08c9b2819d61f5",
     "templates/docs/adr/0001-decisions-are-recorded-here.md": "2dda45634398a0a29d04f073fadaf51ecbdf7c1ccbb3795583355396382c02e5",
     "templates/docs/adr/0002-artifacts-are-the-state.md": "78b63944832b8421bbc1d635b53bfcab739748b65d74bfb2d0ac822981d41bf9",
@@ -49,7 +49,7 @@
     "templates/tools/factory/rejection_mining.py": "38330731af6fc1cb7e5ab0102689e91c174f05d377de64c77917626119012437",
     "templates/tools/factory/standards_index.py": "c605153119c8ce5ee28f5647c3d75ab94684cda4026c4bac69b3e5cf2420e2e4",
     "templates/tools/factory/trace.py": "eda41380d3b6dea5280682b494b59331a8cedb8b4b86d67a8333f5b91c410694",
-    "templates/tools/factory/validator.py": "515f1c345c6067b284243d023b3684c9fe212cb93a3d754a56a8d26a584f2c52",
+    "templates/tools/factory/validator.py": "48b91e0940fc6fd92a27a87a4069049720022df318808d766fe5a1414ab93e52",
     "templates/tools/factory/work_queue.py": "8bf1204f3b68861e696d7f2dc7155b0e81c023ef5ca7af71c9e84a50f016ef39"
   }
 }

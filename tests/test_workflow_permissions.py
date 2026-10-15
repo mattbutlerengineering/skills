@@ -95,9 +95,10 @@ EXPECTED = {
     "validator.yml": {
         "check": ({"contents": "read", "pull-requests": "read"},
                   "runs `make check`; reads the dispatched PR to synthesize"
-                  " its event"),
+                  " its event, and hands its findings to review"),
         "review": ({"contents": "read", "pull-requests": "write"},
-                   "posts the review comment on the PR"),
+                   "posts the review comment from a base checkout; runs no"
+                   " PR code"),
         "needs-review-label": ({"contents": "read", "issues": "write",
                                 "pull-requests": "read"},
                                "applies wo:needs-review to the issue; reads"
