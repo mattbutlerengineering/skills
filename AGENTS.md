@@ -42,9 +42,12 @@ pre-pass, deliberately **not** a gate:
 
 - **Stdlib only.** Every script is standalone Python 3 standard library.
   No third-party dependencies.
-- **Bump `.claude-plugin/plugin.json`'s version with any `skills/`
-  change.** Installed plugin caches refresh only when the version moves,
-  and `lint.py` checks only that the field exists.
+- **Feature and fix branches never touch `.claude-plugin/plugin.json`'s
+  version** (ADR-0095). A wave's `chore(release)` PR bumps it once after
+  the wave lands, and a Conductor merge bumps it at merge step 3
+  (`conductor_merge.bump_version`). Installed plugin caches refresh only
+  when the version moves, so a payload-only wave still gets its release
+  PR; `lint.py` checks only that the field exists.
 - **Seam modules, everything else thin callers**: `protocol.py`
   (ADR-0021 — taxonomy, artifact table, frontmatter, next-stage),
   `eval_schema.py` (ADR-0022, ADR-0024 — all eval knowledge: routing

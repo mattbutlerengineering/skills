@@ -115,3 +115,5 @@ the canonical vocabulary.
 | [0092](0092-a-derived-trace-view-joins-the-knowledge-owners-over-time.md) | A derived trace view joins the knowledge owners over time | accepted (Owner, 2026-10-14) |
 | [0093](0093-every-plugin-eval-case-carries-its-skill-tag.md) | Every plugin-eval case carries its skill directory as a tag | accepted (Owner, 2026-10-14) |
 | [0094](0094-parse-run-reads-every-artifact-through-the-guarded-read.md) | parse_run reads every run artifact and the ADR index through the guarded read | accepted (Owner, 2026-10-14) |
+| [0095](0095-the-plugin-version-moves-only-in-a-release-pr-or-at-a-conductor-merge.md) | The plugin version moves only in a release PR or at a Conductor merge | provisional |
+| [0096](0096-this-repo-opts-in-to-implement-queue-auto-merge-with-a-docs-fast-path.md) | This repo opts in to implement-queue auto-merge, with a docs fast path | provisional |
