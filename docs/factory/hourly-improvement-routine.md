@@ -5,10 +5,9 @@ routine: one bounded improvement to the factory's own process per hour,
 taken from evidence to merged `main` inside a single run. Each run is
 an [implement-queue](../../skills/implement-queue/SKILL.md) pass over
 one issue, filed by the run or claimed from the queue, under this
-repo's
-[queue profile](../../.claude/implement-queue.md) and ADR-0096, which
-is the Owner's standing consent for the merge it performs. It is built
-on the mechanism ADR-0044 decided for the
+repo's [queue profile](../../.claude/implement-queue.md) and ADR-0096,
+which is the Owner's standing consent for the merge it performs. It is
+built on the mechanism ADR-0044 decided for the
 [daily routine](improvement-routine.md) (a harness schedule, a
 versioned playbook, a journal found by marker) and takes the
 [toolsmith charter](../../factory/charters/toolsmith/CHARTER.md)'s
@@ -113,11 +112,11 @@ pick is report material:
    run with an escalation at the top of the journal comment.
 2. **A ready queue item.** An open issue that is not a work order (no
    `wo:*` label), not a permanent-state issue (a journal, digest,
-   queue or cost report), not labelled `ready-for-human` or
-   `needs-human`, not blocked by an open issue, not
-   covered by an open PR, and not one whose own text asks for Owner
-   design or Owner spend consent; oldest first. Only if it fits the
-   size bound.
+   queue or cost report), not labelled `ready-for-human`,
+   `needs-human` or any of the profile's `hold_labels`, not blocked by
+   an open issue, not covered by an open PR, and not one whose own
+   text asks for Owner design or Owner spend consent; oldest first.
+   Only if it fits the size bound.
 3. **A process gap with evidence.** The sources, in order, each
    reproduced in this run before it counts:
    - *An unenforced stated rule.* A rule written in `CLAUDE.md`, a
@@ -225,8 +224,8 @@ Implement-queue's gate, run for this one PR under the profile:
    `needs-review`, the profile's hold label, comments the reviewer's
    output on the PR, and ends the run with no merge; the hold parks
    the routine (§1) until a human looks. When the routine authored
-   the change itself
-   and the fast path did not apply, there is no distinct reviewer to
+   the change itself and the fast path did not apply, there is no
+   distinct reviewer to
    dispatch: stop at the PR and report it **awaiting review**; the
    merge train's Phase 0 reviews it.
 5. **Gate paths.** Re-check the diff against the profile's
