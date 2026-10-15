@@ -30,6 +30,13 @@
   harness_run lifecycle
 - `test_cli_process_reaping.py` — cli.harness_run's group-kill contract
   composed with real subprocesses (driven via trigger_eval)
+- `test_conductor_merge.py` — conductor_merge.py, the merge precondition
+  and the merge turn against a scratch repo with a bare origin; its
+  `TurnCase` harness is what the facets below import
+- `test_conductor_merge_stalls.py` — the merge turn's stalls (facet of
+  the above, split so the real-git suites run as parallel modules, #916)
+- `test_conductor_merge_reservations.py` — ADR-number reservations at
+  the merge turn (facet, same split)
 - `test_cost_ledger.py` — cost_ledger.py, the cost-ledger seam
 - `test_cost_report.py` — cost_report.py, weekly rollup + circuit breaker
 - `test_design_pipeline.py` — cross-cutting: design.yml workflow, the
