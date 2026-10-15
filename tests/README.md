@@ -40,6 +40,8 @@
 - `test_factory_config.py` — factory_config.py reader and resolvers
 - `test_factory_init.py` — factory_init.py stamping + payload↔root mirror
 - `test_factory_roles.py` — factory_roles.py, the role-vocabulary seam
+- `test_fast_path.py` — fast_path.py, ADR-0096's fast-path classifier,
+  through the fake git port
 - `test_fixture_recorders.py` — tests/fixtures/*/record.py stay
   importable callers of the cli seam
 - `test_gate_digest.py` — gate_digest.py, digest + gate-latency capture

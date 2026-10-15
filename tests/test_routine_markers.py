@@ -22,6 +22,7 @@ JOURNAL_LOOKUP = {
     "queue-groomer-routine.md": _WEEKLY_LOOKUP,
     "retro-reflect-routine.md": _WEEKLY_LOOKUP,
     "doc-gardener-routine.md": _WEEKLY_LOOKUP,
+    "merge-train-routine.md": _WEEKLY_LOOKUP,
     "improvement-routine.md":
         "Find it by marker among open issues, in either form (§Markers on"
         " GitHub); create and pin it only when that search succeeded and"
