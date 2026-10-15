@@ -31,7 +31,8 @@ JOURNAL_LOOKUP = {
 
 ROUTINES_WITH_TRIGGER = ("queue-groomer-routine.md",
                          "retro-reflect-routine.md",
-                         "doc-gardener-routine.md")
+                         "doc-gardener-routine.md",
+                         "merge-train-routine.md")
 
 
 def text(name):

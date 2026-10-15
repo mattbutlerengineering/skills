@@ -175,20 +175,27 @@ by the human.
 
 ## Trigger
 
-**Deferred; the Owner's decision.** A scheduled trigger is recurring
-paid spend, and nothing in this file authorizes creating, editing or
-running one; no agent or routine does so on the strength of this
-file. When the Owner creates it, it takes ADR-0044's shape, as the
-queue groomer's does:
+**Created 2026-10-15.** A scheduled trigger is recurring paid spend,
+and the Owner explicitly approved this one on 2026-10-15, in session
+("Create it: every 4h, Sonnet, no connectors"). Nothing in this file
+authorizes creating, editing or running a trigger, and no agent or
+routine does so on the strength of this file. It takes ADR-0044's
+shape, as the queue groomer's does:
 
 - **Name:** `factory-merge-train`.
-- **Cadence (recommendation):** every 4 hours (`0 */4 * * *`), so a
+- **Trigger id:** `trig_01HHqUqPCVA4ZuaaN1fHm5qH`, created 2026-10-15
+  20:38 UTC. First scheduled run 2026-10-16 00:38 UTC; the two-week
+  read for the merge-wait record (#912) starts there.
+- **Cadence:** every 4 hours, stored as `38 */4 * * *` UTC (the
+  recommendation was `0 */4 * * *`; the server set the minute), so a
   green PR waits at most one slot rather than for the next Owner
   session; the breakdown's merge-wait baseline is p90 13.5h.
 - **Model:** Sonnet (`claude-sonnet-5-5`); the run reads state and
   calls hooks, and the reviewer dispatch uses the skill's model.
-- **Connectors:** none — clear every account connector at create
-  time, as the queue groomer's creation did.
+- **Connectors:** none — the create call attached every account
+  connector despite an empty `mcp_connections`, as it did for the queue
+  groomer; they were cleared at 20:38:51 UTC, before any run, and the
+  read-back shows `[]`.
 - **Environment:** `git`, and GitHub through the GitHub MCP tools; the
   `gh` CLI may be absent. Markers follow §Markers on GitHub. The
   `merge-command` hook needs the session permission ADR-0096 names.

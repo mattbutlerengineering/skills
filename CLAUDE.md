@@ -128,7 +128,7 @@ pre-pass, deliberately **not** a gate:
 - `docs/factory/merge-train-routine.md` — the scheduled
   implement-queue pass over open PRs only (Phase 0 verdicts, Phase 3
   train) under `.claude/implement-queue.md` and ADR-0096; its trigger
-  is deferred to the Owner (recommendation: every 4 hours)
+  `factory-merge-train` exists (created 2026-10-15, every 4 hours)
 
 ## Issue tracking
 
