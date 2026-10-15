@@ -2826,9 +2826,11 @@ class TestLockstep(unittest.TestCase):
 
     # The one canonical check set. `lint.py` is the plugin's structural lint
     # and has no product-repo counterpart, so only the root Makefile runs it.
+    # The parallel runner is root-only too, but product_form respells its
+    # line to the serial discover command rather than dropping it (#904).
     CANONICAL_CHECK = ["python3 gates.py",
                        "python3 gates.py --selftest",
-                       "python3 -m unittest discover tests"]
+                       "python3 run_tests.py"]
     ROOT_ONLY_CHECK = ["python3 lint.py"]
     VALIDATOR_TARGETS = {
         "review": ["python3 validator.py review --findings $(FINDINGS)"
