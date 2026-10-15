@@ -269,19 +269,17 @@ class TestPidAlivePredicate(unittest.TestCase):
     def zombie(self):
         """A pid that has exited and has NOT been collected.
 
-        The pipe is the synchronisation: the child's write end closes
-        only when it exits, so the parent's read returning EOF proves
-        termination without `wait()`ing — which would collect it and
-        destroy the very state under test.
+        `waitid(WEXITED | WNOWAIT)` is the synchronisation: it returns
+        once the child has terminated and leaves it waitable, so the
+        table entry under test survives. The earlier sync, a pipe EOF,
+        arrives when exit closes the child's fds, which on Linux is
+        before the task is marked a zombie, so under load the predicate
+        read the still-exiting child as alive (PR #913's CI run).
         """
-        read_fd, write_fd = os.pipe()
         pid = os.fork()
         if pid == 0:                      # child
-            os.close(read_fd)
             os._exit(0)
-        os.close(write_fd)
-        self.assertEqual(os.read(read_fd, 1), b"", "child did not exit")
-        os.close(read_fd)
+        os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)
         self.addCleanup(self._collect, pid)
         return pid
 
