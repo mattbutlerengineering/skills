@@ -119,6 +119,11 @@ pre-pass, deliberately **not** a gate:
   implement-queue pass over open PRs only (Phase 0 verdicts, Phase 3
   train) under `.claude/implement-queue.md` and ADR-0096; its trigger
   `factory-merge-train` exists (created 2026-10-15, every 4 hours)
+- `docs/factory/hourly-improvement-routine.md` — the hourly
+  self-merging improvement pass: one evidenced, S-sized process fix
+  per run, from issue to PR to merge under `.claude/implement-queue.md`
+  and ADR-0096; its trigger `factory-hourly-improvement` exists
+  (created 2026-10-15, every hour)
 
 ## Issue tracking
 
