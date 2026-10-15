@@ -118,3 +118,4 @@ the canonical vocabulary.
 | [0095](0095-the-plugin-version-moves-only-in-a-release-pr-or-at-a-conductor-merge.md) | The plugin version moves only in a release PR or at a Conductor merge | accepted (Owner, 2026-10-15) |
 | [0096](0096-this-repo-opts-in-to-implement-queue-auto-merge-with-a-docs-fast-path.md) | This repo opts in to implement-queue auto-merge, with a docs fast path | accepted (Owner, 2026-10-15) |
 | [0097](0097-fast-path-joins-the-root-only-importers-of-cli.md) | fast_path joins the root-only importers of cli.py | provisional |
+| [0098](0098-the-reviewer-credential-never-meets-pr-code.md) | The reviewer's credential never meets the pull request's code | provisional |

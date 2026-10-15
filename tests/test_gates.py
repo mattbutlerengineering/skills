@@ -2954,8 +2954,8 @@ class TestLockstep(unittest.TestCase):
         # added later.
         text = self.WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("(github.event.action == 'opened'\n"
-                      "           || github.event.action == 'reopened'\n"
-                      "           || github.event.action == 'synchronize')",
+                      "               || github.event.action == 'reopened'\n"
+                      "               || github.event.action == 'synchronize')",
                       text)
         self.assertNotIn("&& github.event.action != 'closed'\n"
                          "      && github.event.pull_request.head.repo",
@@ -3249,9 +3249,19 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             'git config user.name "github-actions[bot]"',
         ),
         "validator.yml": (
-            # shell glue capturing `make check`'s findings and exit code
-            # for the review step; the command underneath is still make
-            "set +e",
+            # shell glue capturing `make check`'s output for the review
+            # job; the command underneath is still make, and pipefail keeps
+            # its exit code the gate's (ADR-0098)
+            "set -o pipefail",
+            # the check job's hand-off (ADR-0098): file glue writing the
+            # captured output as the job's one output under a random
+            # delimiter — no repo tool, nothing to move into make
+            "delim=\"findings-$(od -An -N16 -tx1 /dev/urandom"
+            " | tr -d ' \\n')\"",
+            # the review job's data step (ADR-0098): writes the handed-over
+            # text to a file in a step with no secret, deliberately not a
+            # make target — make imports its env as make variables
+            "printf '%s' \"$HANDED_OVER\" > \"$RUNNER_TEMP/findings.txt\"",
             # the dispatched-PR path (WO-0030): synthesizes the webhook
             # payload from the REST API so the make steps read
             # GITHUB_EVENT_PATH identically on both trigger paths — a gh

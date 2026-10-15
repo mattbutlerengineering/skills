@@ -5,7 +5,7 @@
 # why it names no repo tool of its own. Every tool invocation goes through a
 # `make` target, and the Makefile knows where that repo keeps its tools (root
 # here, tools/factory/ there); what is left is plumbing that does not move
-# between repos — gh, git, and the review job's exit-code capture. Editing
+# between repos — gh, git, and the check job's findings hand-off. Editing
 # this file means re-running update-manifest; detector E fails the build
 # otherwise.
 name: validator
@@ -40,6 +40,10 @@ permissions:
 jobs:
   # Gate 3's status check (ADR-0033): detectors and tests on every push and
   # every PR. Nothing else in this workflow can fail the build.
+  # This is the ONE job that runs the pull request's code (ADR-0098), so it
+  # holds read grants only and its checkout leaves no token in .git/config.
+  # Its captured output crosses to the review job as one job output of plain
+  # text; the verdict crosses as this job's result, which GitHub computes.
   check:
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
@@ -48,12 +52,15 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+    outputs:
+      findings: ${{ steps.handoff.outputs.findings }}
     steps:
       - uses: actions/checkout@v4
         with:
           # A dispatched run checks the dispatched PR's head; every other
           # event keeps checkout's default ref ('' falls through to it).
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', inputs.pr) || '' }}
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -65,11 +72,43 @@ jobs:
         run: |
           make pr-event PR="$PR" EVENT="${RUNNER_TEMP}/pr-event.json"
           echo "FACTORY_EVENT_PATH=${RUNNER_TEMP}/pr-event.json" >> "$GITHUB_ENV"
+      # pipefail is load-bearing: a run: with no shell: is `bash -e {0}`,
+      # which has none, so without it tee's exit 0 would turn a failing
+      # check green.
       - name: Detectors and tests
-        run: make check
+        run: |
+          set -o pipefail
+          make check 2>&1 | tee "$RUNNER_TEMP/findings.txt"
+      # The hand-off (ADR-0098): the first 64 KiB of the output, under a
+      # delimiter that is random per run, as the job's one declared output.
+      # Runs on a failed check too: a red check is what the reviewer most
+      # needs to show.
+      - name: Hand the findings to the review job
+        id: handoff
+        if: ${{ !cancelled() }}
+        run: |
+          delim="findings-$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+          {
+            echo "findings<<$delim"
+            head -c 65536 "$RUNNER_TEMP/findings.txt" || true
+            echo
+            echo "$delim"
+          } >> "$GITHUB_OUTPUT"
 
   # The agent reviewer (ADR-0033) pre-chews every PR so the human gate is
-  # judgment, not linting. PRD-0001 forbids the actor that produced the work
+  # judgment, not linting.
+  # It runs BASE code only (ADR-0098): the PR's code runs in `check`, and
+  # this job holds the reviewer's PAT, so it checks out the PR's base commit
+  # on pull_request and the default branch BY NAME on workflow_dispatch —
+  # never github.sha, which is whatever ref the dispatcher passed (a
+  # `--ref <pr-branch>` dispatch would make it the agent's head) — and
+  # never the PR's head or merge ref. It takes check's output across as
+  # data. A PR that changes the review path is reviewed by the base's
+  # version of it. The verdict is check's result; the findings text is
+  # written to a file by a step with no secret and no make, because make
+  # imports its env as make variables, and is never interpolated into a
+  # run: script.
+  # PRD-0001 forbids the actor that produced the work
   # from verifying it: validator.py compares the PR author with the identity
   # the review TOKEN actually posts as — asking the token who it is (gh api
   # user), not trusting a variable that declares it. Give the reviewer its own
@@ -95,13 +134,16 @@ jobs:
   # factory's PRs are same-repo branch PRs, so the fork guard's concern
   # cannot arise there.
   review:
+    needs: check
     if: >-
-      (github.event_name == 'pull_request'
-       && (github.event.action == 'opened'
-           || github.event.action == 'reopened'
-           || github.event.action == 'synchronize')
-       && github.event.pull_request.head.repo.full_name == github.repository)
-      || github.event_name == 'workflow_dispatch'
+      always()
+      && (needs.check.result == 'success' || needs.check.result == 'failure')
+      && ((github.event_name == 'pull_request'
+           && (github.event.action == 'opened'
+               || github.event.action == 'reopened'
+               || github.event.action == 'synchronize')
+           && github.event.pull_request.head.repo.full_name == github.repository)
+          || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -109,7 +151,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', inputs.pr) || '' }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || format('refs/heads/{0}', github.event.repository.default_branch) }}
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -121,18 +164,17 @@ jobs:
         run: |
           make pr-event PR="$PR" EVENT="${RUNNER_TEMP}/pr-event.json"
           echo "FACTORY_EVENT_PATH=${RUNNER_TEMP}/pr-event.json" >> "$GITHUB_ENV"
-      - name: Collect findings
-        run: |
-          set +e
-          make check > findings.txt 2>&1
-          echo "FINDINGS_RC=$?" >> "$GITHUB_ENV"
-          exit 0
+      - name: Write the handed-over findings
+        env:
+          HANDED_OVER: ${{ needs.check.outputs.findings }}
+        run: printf '%s' "$HANDED_OVER" > "$RUNNER_TEMP/findings.txt"
       - name: Post findings as a non-authoring actor
         env:
           GH_TOKEN: ${{ secrets.FACTORY_REVIEW_TOKEN || secrets.GITHUB_TOKEN }}
           FACTORY_REVIEW_TOKEN_SET: ${{ secrets.FACTORY_REVIEW_TOKEN != '' }}
           FACTORY_REVIEW_LOGIN: ${{ vars.FACTORY_REVIEW_LOGIN }}
-        run: make review FINDINGS=findings.txt STATUS="$FINDINGS_RC"
+          CHECK_RC: ${{ needs.check.result == 'success' && '0' || '1' }}
+        run: make review FINDINGS="$RUNNER_TEMP/findings.txt" STATUS="$CHECK_RC"
 
   # PR open flips the cited work order to wo:needs-review — the merge
   # gate's queue-entry event (ADR-0033 gate 3; ADR-0041's latency rows
@@ -156,9 +198,17 @@ jobs:
       issues: write
       pull-requests: read
     steps:
-      # Default checkout on both paths: the breakdown row the flip reads
-      # landed on the default branch before the mirror existed (ADR-0032).
+      # The base on both paths, the same as the reviewer's (ADR-0098):
+      # this job holds issues: write, so it must not run the PR's
+      # Makefile — checkout's default ref on pull_request is the PR's
+      # merge commit, and github.sha on a `--ref <pr-branch>` dispatch is
+      # the PR's head. The breakdown row the flip reads landed on the
+      # default branch before the mirror existed (ADR-0032), so base is
+      # where it lives anyway.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || format('refs/heads/{0}', github.event.repository.default_branch) }}
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"

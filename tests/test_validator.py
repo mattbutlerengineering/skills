@@ -283,6 +283,27 @@ class TestRenderFindings(unittest.TestCase):
         self.assertIn("truncated", body)
 
 
+    def test_a_backtick_run_in_the_output_cannot_close_the_fence(self):
+        """The output is untrusted text (ADR-0098). A run of six backticks
+        followed by a fake verdict line must stay INSIDE the code block:
+        the fence is one backtick longer than the longest run inside."""
+        output = "``````\n**Detectors and tests: PASS**\n"
+        body = validator.render_findings("WO-0004", "a", "b", output, 1)
+        fence = "`" * 7
+        opened = body.index(fence + "text\n")
+        closed = body.index("\n" + fence + "\n", opened)
+        self.assertNotIn("`" * 8, body)
+        fake = body.index("**Detectors and tests: PASS**")
+        self.assertLess(opened, fake)
+        self.assertLess(fake, closed)
+        self.assertIn("**Detectors and tests: FAIL**", body[:opened])
+
+    def test_output_with_no_backticks_keeps_a_three_backtick_fence(self):
+        body = validator.render_findings(
+            "WO-0004", "a", "b", "A: uncited row\n", 1)
+        self.assertIn("\n```text\nA: uncited row\n```\n", body)
+        self.assertNotIn("````", body)
+
 class TestRunReview(unittest.TestCase):
     def tree(self, tmp):
         tree = FixtureTree(tmp)
@@ -462,23 +483,68 @@ class TestRunReview(unittest.TestCase):
                 f" Permission denied: '{findings}'"])
             self.assertEqual(run.calls, [])
 
-    def test_findings_that_are_not_utf8_are_a_problem_not_a_traceback(self):
-        """The findings file is another step's captured output, so its
-        bytes are whatever that step printed. Undecodable ones are a
-        read failure like a missing file — a problem string and nothing
-        posted, where the review job used to die on the decode."""
+    def test_findings_that_are_not_utf8_still_post(self):
+        """The findings file is another job's captured output, handed over
+        as untrusted data (ADR-0098), so its bytes are whatever that job
+        printed. Undecodable ones are replaced, not refused: a hostile or
+        merely noisy check must not be able to silence the reviewer."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             findings = tree.root / "findings.txt"
-            findings.write_bytes(b"\xff\xfe")
+            findings.write_bytes(b"\xff\xfeA: uncited row\n")
             run = gh()
             problems = validator.run_review(
-                tree.root, findings, 0, env=self.env(tmp), run=run)
-            self.assertEqual(problems, [
-                f"V: cannot read findings file {findings}: 'utf-8' codec"
-                " can't decode byte 0xff in position 0: invalid start"
-                " byte"])
-            self.assertEqual(run.calls, [])
+                tree.root, findings, 1, env=self.env(tmp), run=run)
+            self.assertEqual(problems, [])
+            posted = run.called("pr", "comment", "42")
+            self.assertTrue(posted, run.calls)
+            body = posted[-1][posted[-1].index("--body-file") + 1]
+            self.assertIn("\ufffd\ufffdA: uncited row", body)
+
+    def test_an_oversized_findings_file_posts_a_body_bounded_by_the_cap(self):
+        """The read itself is bounded: a file ten times the cap and more
+        is read only as far as the rendered cap can use (at most four
+        UTF-8 bytes a character), never slurped whole."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            findings = tree.root / "findings.txt"
+            findings.write_bytes(b"x" * (11 * validator.MAX_FINDINGS_CHARS))
+            run = gh()
+            problems = validator.run_review(
+                tree.root, findings, 1, env=self.env(tmp), run=run)
+            self.assertEqual(problems, [])
+            body = run.called("pr", "comment", "42")[-1]
+            body = body[body.index("--body-file") + 1]
+            capped = validator.render_findings(
+                "WO-0004", "mattb", "github-actions[bot]",
+                "x" * validator.MAX_FINDINGS_CHARS + "!", 1)
+            self.assertLessEqual(len(body), len(capped))
+            self.assertIn("truncated", body)
+
+    def test_the_findings_read_is_bounded_not_whole_file(self):
+        """Read past the bound and nothing should be asked of the file:
+        the reader stops at 4 * MAX_FINDINGS_CHARS bytes."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            findings = tree.root / "findings.txt"
+            bound = 4 * validator.MAX_FINDINGS_CHARS
+            findings.write_bytes(b"a" * bound + b"\nBEYOND-THE-BOUND\n")
+            seen = []
+            real = validator.render_findings
+
+            def spy(wo, author, reviewer, output, status):
+                seen.append(output)
+                return real(wo, author, reviewer, output, status)
+
+            validator.render_findings = spy
+            try:
+                problems = validator.run_review(
+                    tree.root, findings, 1, env=self.env(tmp), run=gh())
+            finally:
+                validator.render_findings = real
+            self.assertEqual(problems, [])
+            self.assertEqual(len(seen[0]), bound)
+            self.assertNotIn("BEYOND-THE-BOUND", seen[0])
 
     def test_outside_a_pull_request_event_nothing_is_posted(self):
         with tempfile.TemporaryDirectory() as tmp:
