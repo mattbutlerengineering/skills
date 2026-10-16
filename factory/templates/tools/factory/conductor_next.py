@@ -10,9 +10,11 @@ closed item behind a clarify ask before anything spends on it; the
 bookkeeping turn that redoes a finished run's spend commit, push and
 PR instead of relaunching its Worker (one consumer spec completed three
 times for $12.53 before this); the survey; the lost-run charge (#937);
-and the same issue read for every step about to launch. It also owns
-the delivery a runner ends with (push, PR; #954's refusals), which the
-bookkeeping turn shares.
+and the same issue read for every step about to launch. Before the
+lock, one `gh pr list --state merged` per due item (#938): a PR the
+repo merged outside the batch is a fact the survey stalls on. It also
+owns the delivery a runner ends with (push, PR; #954's refusals), which
+the bookkeeping turn shares and which names such a PR.
 """
 import json
 import os
@@ -20,12 +22,13 @@ from pathlib import Path
 
 import conductor_consent as consent
 import conductor_flow as flow
+import conductor_landed as landed
 import cost_ledger
 import factory_config
 from assembler import PR_BODY_FILE
 from cli import CLI_FAILURES, detail, gh_read, read_execution
-from conductor import (BLOCK, RUNS, append, ask_row, item_branch, load,
-                       next_ask, view)
+from conductor import (BLOCK, RUNS, append, ask_row, is_text, item_branch,
+                       load, next_ask, view)
 from conductor_spend import (commit_spend, git_call, record_lost,
                              record_spend, run_commits, spend_run,
                              worktree_path)
@@ -51,6 +54,34 @@ UNREAD_WHY = ("a read that fails once is usually transient; proceed re-reads"
 # sequence pass over it.
 RESUMED = ("bookkeeping retried for {run_id}: the Worker's run completed;"
            " its spend row, push and PR were redone")
+# A PR merged outside the batch (#938), as a fresh PR's body and a
+# refused PR's stall name it.
+MERGED_FIELDS = "number,mergeCommit"
+CONTINUED = ("Continues after PR #{pr}, which merged outside conductor batch"
+             " {batch} with this item's earlier work.")
+LANDED_NOTE = " (PR #{pr} merged outside the batch)"
+
+
+def merged_pr(gh, branch):
+    """({"pr", "sha"} of the latest merged PR of `branch`, or None,
+    problems): one `gh pr list --state merged` (#938), the read `next`
+    makes of each due item, deliver of a head with no open PR, and
+    close of each blocked item."""
+    operation = f"gh pr list --head {branch} --state merged"
+    listed = gh_read(["pr", "list", "--head", branch, "--state", "merged",
+                      "--json", MERGED_FIELDS], operation, run=gh,
+                     expect=list)
+    if listed.problems:
+        return None, listed.problems
+    if not listed.value:
+        return None, []
+    found = listed.value[0] if isinstance(listed.value[0], dict) else {}
+    commit = found.get("mergeCommit")
+    pr = found.get("number")
+    sha = commit.get("oid") if isinstance(commit, dict) else None
+    if type(pr) is not int or not is_text(sha):
+        return None, [f"{operation} named an unreadable merged PR"]
+    return {"pr": pr, "sha": sha}, []
 
 
 def issue_state(gh, item):
@@ -113,11 +144,22 @@ def pr_create_refusal(git, gh, branch, item):
     return None
 
 
+def _body_args(body, landed, batch):
+    """The new PR's body: the file as written, or, after a PR merged
+    outside the batch (#938), that PR named above it."""
+    if landed is None:
+        return ["--body-file", str(body)]
+    return ["--body", CONTINUED.format(pr=landed["pr"], batch=batch)
+            + "\n\n" + body.read_text(encoding="utf-8")]
+
+
 def deliver(git, gh, worktree, branch, item, batch):
     """Push the item branch (never forced) and open or update its PR from
     pr-body.md. A stall reason on failure, else None. A new PR is refused
     when the issue is already closed or its feature directory is already
-    on main; an open PR is still updated."""
+    on main; an open PR is still updated. With no open PR, a merged one
+    on the head (#938) is named: in the refusal, or in the new PR's
+    body, so a second PR never repeats the first's title unexplained."""
     _, problems = git_call(git, ["-C", str(worktree), "push", "-u",
                                  "origin", branch], f"pushing {branch}")
     if problems:
@@ -134,12 +176,16 @@ def deliver(git, gh, worktree, branch, item, batch):
             gh(["api", "-X", "PATCH", "repos/{owner}/{repo}/pulls/"
                 f"{listed.value[0]['number']}", "-F", f"body=@{body}"])
         else:
+            landed, problems = merged_pr(gh, branch)
+            if problems:
+                raise OSError(problems[0])
             refusal = pr_create_refusal(git, gh, branch, item)
             if refusal:
-                return refusal
+                return refusal + (LANDED_NOTE.format(pr=landed["pr"])
+                                  if landed else "")
             gh(["pr", "create", "--head", branch, "--base", "main",
                 "--title", f"{item}: conductor batch {batch}",
-                "--body-file", str(body)])
+                *_body_args(body, landed, batch)])
     except CLI_FAILURES as err:
         return f"opening or updating the PR failed: {detail(err)}"
     return None
@@ -311,10 +357,23 @@ def standing_facts(gh, rows, facts, policy):
     return verdicts, []
 
 
+def landed_facts(gh, batch, rows):
+    """({item: {"merged_pr": {"pr", "sha"} or None}}, problems): the
+    merged PR of each item conductor_landed.due names (#938), one read
+    each; a failed read fails the tick, as any fact's does."""
+    facts = {}
+    for item in landed.due(rows):
+        found, problems = merged_pr(gh, item_branch(batch, item))
+        if problems:
+            return None, [f"cd: {problems[0]}"]
+        facts[item] = {"merged_pr": found}
+    return facts, []
+
+
 def _facts(git, gh, batch, rows, policy):
-    """(the branch, shipped and standing facts the survey reads,
-    problems). An item whose bookkeeping is due reads its branch facts
-    now, so the same tick advances it once resumed (#939)."""
+    """(the branch, shipped, standing and merged-PR facts the survey
+    reads, problems). An item whose bookkeeping is due reads its branch
+    facts now, so the same tick advances it once resumed (#939)."""
     pending = [found["item"] for found, step, _ in bookkeeping_due(rows)
                if step in ("spec", "build")]
     facts, problems = flow.branch_facts(git, batch,
@@ -330,6 +389,11 @@ def _facts(git, gh, batch, rows, policy):
         return None, problems
     for item, verdict in standing.items():
         facts.setdefault(item, {})["standing"] = verdict
+    landed, problems = landed_facts(gh, batch, rows)
+    if problems:
+        return None, problems
+    for item, fact in landed.items():
+        facts.setdefault(item, {}).update(fact)
     return facts, []
 
 

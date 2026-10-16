@@ -159,7 +159,8 @@ def write(root, ledger=None, costs=None):
 
 EXPECTED = {
     "batch": "b1", "at": "2026-10-10T16:00:00Z", "items": 3, "merged": 2,
-    "blocked": 1, "owner_touches_per_merged": 2.0, "metered_usd": 11.0,
+    "blocked": 1, "merged_outside": 0, "owner_touches_per_merged": 2.0,
+    "metered_usd": 11.0,
     "metered_usd_per_merged": 5.5, "estimate_usd": 40,
     "estimate_error_pct": -72.5, "ran_estimate_usd": 15,
     "ran_estimate_error_pct": -26.6667, "collisions": 2, "stalls": 1,
@@ -168,6 +169,17 @@ EXPECTED = {
     "escalations": 1, "review_changes_per_item": 0.6667,
     "start_to_last_merge_s": 18000, "merged_per_owner_wait_hour": 0.8,
     "policy_compliance": 0.6, "conductor_session": "unmetered"}
+# #938 (consumer b20261013): the Owner merged #13's PR by hand after its
+# block. close reconciles it as merged outside the batch, and the
+# scorecard counts it as merged, under its own key too (#814: a new
+# meaning is a new key).
+LANDED_ROW = state("#13", "blocked", "merged", at(16),
+                   "merged outside the batch as PR #6541", pr=6541,
+                   sha="f00d", checks={})
+EXPECTED_LANDED = dict(
+    EXPECTED, merged=3, blocked=0, merged_outside=1,
+    owner_touches_per_merged=1.3333, metered_usd_per_merged=3.6667,
+    start_to_last_merge_s=21600, merged_per_owner_wait_hour=1.2)
 
 
 class TestScorecard(unittest.TestCase):
@@ -191,6 +203,10 @@ class TestScorecard(unittest.TestCase):
             {"merged": 0, "owner_touches_per_merged": None,
              "metered_usd_per_merged": None, "start_to_last_merge_s": None,
              "merged_per_owner_wait_hour": 0.0})
+
+    def test_a_merge_outside_the_batch_counts_under_its_own_key(self):
+        self.assertEqual(self.score(lines(ROWS + [LANDED_ROW])),
+                         (EXPECTED_LANDED, []))
 
     def test_each_estimate_has_its_own_error_field(self):
         # #798, #814: #13 blocks after its spec step, which cost exactly
@@ -349,6 +365,13 @@ LABEL_LIST = ("label", "list")
 LABEL_LIST_CALL = ["label", "list", "--json", "name,color,description",
                    "--limit", "1000"]
 HAS_NEEDS_HUMAN = json.dumps([{"name": "bug"}, {"name": "needs-human"}])
+# The read close makes of each blocked item's branch first (#938): a
+# merged PR there is the item merged outside the batch.
+MERGED_READ = ("pr", "list", "--head", "conductor/b1-13", "--state", "merged")
+MERGED_CALL = [*MERGED_READ, "--json", "number,mergeCommit"]
+NO_LANDED = {MERGED_READ: "[]"}
+LANDED_GH = {MERGED_READ: json.dumps([{"number": 6541,
+                                       "mergeCommit": {"oid": "f00d"}}])}
 # Git's whole stderr for a merge a dirty tracked file refuses (#726):
 # its last line alone, "Aborting", hides the reason.
 DIRTY_MERGE = subprocess.CalledProcessError(
@@ -401,7 +424,7 @@ class TestClose(unittest.TestCase):
             ls_call(self.root): COSTS + "\n",
             head_call(self.root): BRANCH_SHA + "\n",
             log_call(self.root): branch_log})
-        self.gh = gh or FakeGh({LABEL_LIST: HAS_NEEDS_HUMAN})
+        self.gh = gh or FakeGh({**NO_LANDED, LABEL_LIST: HAS_NEEDS_HUMAN})
         return close.close_batch(self.root, "b1", lambda: NOW,
                                  self.git, self.gh)
 
@@ -423,7 +446,8 @@ class TestClose(unittest.TestCase):
         summary, problems = self.close(ROWS)
         self.assertEqual(problems, [])
         self.assertEqual(summary, {"batch": "b1", "merged": ["#12", "#14"],
-                                   "blocked": ["#13"], "ask": "ask-5"})
+                                   "blocked": ["#13"], "ask": "ask-5",
+                                   "landed": []})
         self.assertEqual((self.root / COSTS).read_text(),
                          lines(SPEND[:4] + SPEND[5:]))
         self.assertEqual(self.run_file_ids(), [
@@ -459,6 +483,7 @@ class TestClose(unittest.TestCase):
             here + ["push", "-u", "origin", "conductor/b1"],
             here + LEASED_DELETE])
         self.assertEqual(self.gh.calls, [
+            MERGED_CALL,
             LABEL_LIST_CALL,
             ["pr", "create", "--head", "conductor/b1", "--base", "main",
              "--title", "conductor batch b1: ledger and scorecard",
@@ -470,6 +495,48 @@ class TestClose(unittest.TestCase):
             ["issue", "comment", "13", "--body", "Blocked in conductor"
              " batch b1: answer to ask-3: block"]])
 
+    def test_a_blocked_item_whose_pr_merged_is_reconciled_as_merged(self):
+        # #938: its PR merged after the block, so #13 is merged outside
+        # the batch: no spend carry, no label, a Closes line, and the
+        # scorecard counts what shipped.
+        gh = FakeGh(LANDED_GH)
+        summary, problems = self.close(ROWS, costs=SPEND, gh=gh)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary, {
+            "batch": "b1", "merged": ["#12", "#13", "#14"], "blocked": [],
+            "ask": "ask-5", "landed": ["#13"]})
+        self.assertEqual(self.ledger()[len(ROWS):-1], [
+            LANDED_ROW,
+            {"at": "2026-10-10T16:00:00Z", "kind": "close", "item": None,
+             "merged": ["#12", "#13", "#14"], "blocked": []}])
+        self.assertEqual(self.ledger()[-1]["id"], "ask-5")
+        cards = (self.root / close.SCORECARDS).read_text().splitlines()
+        self.assertEqual(json.loads(cards[1]), EXPECTED_LANDED)
+        self.assertEqual(self.run_file_ids(), [])
+        here = ["-C", str(self.root)]
+        self.assertEqual(self.git.calls, [
+            here + ["fetch", "origin", "main"],
+            here + ["merge", "--no-edit", "origin/main"],
+            here + ["add", "--", "docs/factory/batches/b1", COSTS,
+                    close.SCORECARDS],
+            here + ["commit", "-m", "chore(conductor): close batch b1"],
+            here + ["push", "-u", "origin", "conductor/b1"]])
+        self.assertEqual(gh.calls, [
+            MERGED_CALL,
+            ["pr", "create", "--head", "conductor/b1", "--base", "main",
+             "--title", "conductor batch b1: ledger and scorecard",
+             "--body", "Conductor batch b1's closing PR: its batch"
+             " ledger, run evidence, scorecard, and the spend rows of its"
+             " blocked items (none).\n\nCloses #12\nCloses #13\nCloses #14"
+             "\n\nNo work order: the Conductor's closing PR for batch b1."]])
+
+    def test_an_unreadable_merged_pr_refuses_the_close(self):
+        gh = FakeGh(failing=list(MERGED_READ))
+        self.assertEqual(self.close(ROWS, gh=gh), (None, [
+            "cd: close refused: gh pr list --head conductor/b1-13 --state"
+            " merged failed: boom"]))
+        self.assertEqual((self.ledger(), self.git.calls), (ROWS, []))
+
     def test_a_branch_holding_real_work_is_kept_and_named(self):
         # #728 item 2: a branch with a blueprint is worth keeping, and
         # the Owner is told where it is.
@@ -477,7 +544,7 @@ class TestClose(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(self.git.called("-C", str(self.root), "push",
                                          LEASED_DELETE[1]), [])
-        self.assertEqual(self.gh.calls[1][-1], "Conductor batch b1's closing"
+        self.assertEqual(self.gh.calls[2][-1], "Conductor batch b1's closing"
                          " PR: its batch ledger, run evidence, scorecard,"
                          " and the spend rows of its blocked items (#13)."
                          "\n\nKept on origin, holding work beyond spend"
@@ -494,7 +561,7 @@ class TestClose(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(self.git.called("-C", str(self.root), "push",
                                          LEASED_DELETE[1]), [])
-        self.assertNotIn("Kept on origin", self.gh.calls[1][-1])
+        self.assertNotIn("Kept on origin", self.gh.calls[2][-1])
 
     def test_an_unreadable_branch_log_refuses_the_close(self):
         fake = FakeGit({("-C", str(self.root), "show",
@@ -530,7 +597,7 @@ class TestClose(unittest.TestCase):
             "cd: close: deleting origin's conductor/b1-13 failed:"
             " ! [rejected] (stale info); delete it by hand"])
         self.assertEqual([call[:2] for call in self.gh.calls],
-                         [list(LABEL_LIST), ["pr", "create"],
+                         [["pr", "list"], list(LABEL_LIST), ["pr", "create"],
                           ["issue", "edit"], ["issue", "comment"]])
 
     def test_a_prefix_sharing_batchs_spend_row_is_not_carried(self):
@@ -553,7 +620,7 @@ class TestClose(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(self.git.called("-C", str(self.root), "push",
                                          LEASED_DELETE[1]), [])
-        self.assertIn("Kept on origin", self.gh.calls[1][-1])
+        self.assertIn("Kept on origin", self.gh.calls[2][-1])
 
     def test_another_batchs_spend_commit_keeps_the_branch(self):
         # #771: carry does not carry that run's rows, so they are not on
@@ -589,7 +656,7 @@ class TestClose(unittest.TestCase):
                          CARD.encode())
         self.assertEqual(self.ledger(), ROWS)
         self.assertEqual(self.git.called("-C", str(self.root), "commit"), [])
-        self.assertEqual(self.gh.calls, [])
+        self.assertEqual(self.gh.calls, [MERGED_CALL])
 
     def test_a_batch_with_an_item_in_flight_is_refused(self):
         rows = ROWS[:-1] + [state("#12", "ship", "merging", at(15))]
@@ -665,14 +732,15 @@ class TestClose(unittest.TestCase):
     def test_a_missing_needs_human_label_is_created_before_use(self):
         # #726: a tools-only stamp never syncs labels.json, so the label
         # close writes may not exist; gh issue edit then fails.
-        gh = FakeGh({LABEL_LIST: json.dumps([{"name": "bug"}])})
+        gh = FakeGh({**NO_LANDED, LABEL_LIST: json.dumps([{"name": "bug"}])})
         summary, problems = self.close(ROWS, gh=gh)
         self.assertEqual(problems, [])
         self.assertEqual([call[:3] for call in gh.calls], [
-            LABEL_LIST_CALL[:3], ["label", "create", "needs-human"],
+            MERGED_CALL[:3], LABEL_LIST_CALL[:3],
+            ["label", "create", "needs-human"],
             ["pr", "create", "--head"],
             ["issue", "edit", "13"], ["issue", "comment", "13"]])
-        self.assertEqual(gh.calls[1], ["label", "create", "needs-human"])
+        self.assertEqual(gh.calls[2], ["label", "create", "needs-human"])
 
     def test_a_missing_needs_human_takes_the_taxonomy_colour(self):
         # #856: where labels.json carries the label, close creates it
@@ -683,15 +751,15 @@ class TestClose(unittest.TestCase):
         taxonomy.write_text(json.dumps([
             {"name": "needs-human", "color": "d93f0b",
              "description": "Flag: agent escalation"}]), encoding="utf-8")
-        gh = FakeGh({LABEL_LIST: json.dumps([{"name": "bug"}])})
+        gh = FakeGh({**NO_LANDED, LABEL_LIST: json.dumps([{"name": "bug"}])})
         summary, problems = self.close(ROWS, gh=gh)
         self.assertEqual(problems, [])
-        self.assertEqual(gh.calls[1], [
+        self.assertEqual(gh.calls[2], [
             "label", "create", "needs-human", "--force", "--color", "d93f0b",
             "--description", "Flag: agent escalation"])
 
     def test_a_failing_label_create_opens_no_pr(self):
-        gh = FakeGh({LABEL_LIST: json.dumps([{"name": "bug"}])},
+        gh = FakeGh({**NO_LANDED, LABEL_LIST: json.dumps([{"name": "bug"}])},
                     failing=["label", "create"])
         summary, problems = self.close(ROWS, gh=gh)
         self.assertEqual(problems, [
@@ -710,12 +778,12 @@ class TestClose(unittest.TestCase):
                          [["pr", "create"]])
 
     def test_an_unreadable_label_list_opens_no_pr(self):
-        gh = FakeGh(failing=["label", "list"])
+        gh = FakeGh(NO_LANDED, failing=["label", "list"])
         summary, problems = self.close(ROWS, gh=gh)
         self.assertEqual(problems, [
             "cd: close: gh label list failed: boom; finish the PR and the"
             " needs-human labels by hand"])
-        self.assertEqual(gh.calls, [LABEL_LIST_CALL])
+        self.assertEqual(gh.calls, [MERGED_CALL, LABEL_LIST_CALL])
 
     def test_a_failed_push_is_reported_after_the_close_is_recorded(self):
         fake = FakeGit({("-C", str(self.root), "show",
@@ -730,7 +798,7 @@ class TestClose(unittest.TestCase):
             " the"
             " push, the PR and the needs-human labels by hand"])
         self.assertEqual(self.ledger()[-2]["kind"], "close")
-        self.assertEqual(self.gh.calls, [])
+        self.assertEqual(self.gh.calls, [MERGED_CALL])
 
 
 CLOSED = ROWS + [
@@ -878,11 +946,23 @@ class TestCloseCli(unittest.TestCase):
             fake = FakeGit({head_call(tmp): BRANCH_SHA + "\n"})
             code, out = cli_contract.capture(
                 conductor.main, ["close", "b1"], env={}, clock=lambda: NOW,
-                root=tmp, run=FakeGh({LABEL_LIST: HAS_NEEDS_HUMAN}),
+                root=tmp, run=FakeGh({**NO_LANDED,
+                                      LABEL_LIST: HAS_NEEDS_HUMAN}),
                 git=fake)
             self.assertEqual((code, out), (0, (
                 "cd: closed batch b1: merged #12, #14; blocked #13;"
                 " merge ask ask-5\ncd: 0 problem(s)\n")))
+
+    def test_close_names_the_items_merged_outside_the_batch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(tmp, lines(ROWS), lines(SPEND))
+            code, out = cli_contract.capture(
+                conductor.main, ["close", "b1"], env={}, clock=lambda: NOW,
+                root=tmp, run=FakeGh(LANDED_GH), git=FakeGit())
+            self.assertEqual((code, out), (0, (
+                "cd: closed batch b1: merged #12, #13, #14 (#13 outside the"
+                " batch); blocked none; merge ask ask-5\n"
+                "cd: 0 problem(s)\n")))
 
 
 if __name__ == "__main__":

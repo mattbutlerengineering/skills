@@ -13,6 +13,7 @@ from pathlib import Path
 
 import conductor
 import conductor_flow as flow
+import conductor_landed as landed
 import conductor_next as nxt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -48,14 +49,26 @@ def delivery_failed(key="#13", frm="planned", step="spec", seq=1,
             answered(ask_id, choice, key)]
 
 
-def gh(state="OPEN", prs=(), fail=None, closed=()):
+def gh(state="OPEN", prs=(), fail=None, closed=(), landed=()):
     """The fake gh: every issue reads `state`, the numbers in `closed`
-    read CLOSED, and `pr list` names `prs`."""
+    read CLOSED, `pr list --state open` names `prs`, and `--state
+    merged` names `landed` as (number, merge commit) pairs."""
+    def listed(args):
+        if "merged" in args:
+            return json.dumps([{"number": n, "mergeCommit": {"oid": sha}}
+                               for n, sha in landed])
+        return json.dumps([{"number": n} for n in prs])
     answers = {("issue", "view"): json.dumps({"state": state}),
-               ("pr", "list"): json.dumps([{"number": n} for n in prs])}
+               ("pr", "list"): listed}
     for number in closed:
         answers[("issue", "view", number)] = json.dumps({"state": "CLOSED"})
     return FakeGh(answers, failing=fail)
+
+
+MERGED_CALL = ["pr", "list", "--head", "conductor/b1-13", "--state", "merged",
+               "--json", "number,mergeCommit"]
+CONTINUED = ("Continues after PR #6667, which merged outside conductor batch"
+             " b1 with this item's earlier work.\n\nBody\n")
 
 
 class NextCase(unittest.TestCase):
@@ -360,6 +373,140 @@ class TestBookkeepingDue(unittest.TestCase):
                          answered("ask-2", "retry", "#13")]):
             with self.subTest(rows=rows[-1]):
                 self.assertEqual(nxt.bookkeeping_due(rows), [])
+
+
+# #13's spec completed: its PR is due a read before build launches.
+SPECCED = START + [launch("#13", "planned", "spec"), ran("#13", "spec")]
+LANDED_STALL = [
+    moved("#13", "spec", "stalled", reason="PR #6667 merged outside the"
+          " batch", cause="merge-drift", pr=6667),
+    stall_ask("ask-2", "#13", options=("retry", "merged", "block"))]
+
+
+class TestLandedRead(NextCase):
+    """#938: `next` reads each due item's merged PR every tick, through
+    the injected gh, and stalls an item whose PR the repo merged
+    outside the batch; a `merged` answer then records that PR."""
+
+    def test_a_merged_pr_stalls_the_item_and_names_it(self):
+        got = self.next(SPECCED, gh_=gh(landed=((6667, "abc"),)))
+        self.assertEqual(got["code"], 0, got["out"])
+        self.assertEqual(self.gh_.called("pr", "list"), [MERGED_CALL])
+        self.assertEqual(got["rows"], [
+            {"at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#13",
+             "from": "spec", "to": "stalled",
+             "reason": "PR #6667 merged outside the batch",
+             "cause": "merge-drift", "pr": 6667},
+            {"at": "2026-10-10T12:30:00Z", "kind": "ask", "item": "#13",
+             "id": "ask-2", "ask_kind": "stall",
+             "question": "#13 stalled in spec: PR #6667 merged outside the"
+                         " batch. Retry, treat it as merged, or block?",
+             "options": ["retry", "merged", "block"],
+             "recommended": "retry",
+             "why": landed.REST_WHY.format(pr=6667)}])
+        self.assertEqual(got["payload"]["ready"],
+                         [{"item": "#12", "step": "spec"},
+                          {"item": "#14", "step": "build"}])
+        self.assertEqual(got["payload"]["ask"]["id"], "ask-2")
+
+    def test_no_merged_pr_launches_as_before(self):
+        got = self.next(SPECCED)
+        self.assertEqual(self.gh_.called("pr", "list"), [MERGED_CALL])
+        self.assertIn({"item": "#13", "step": "build"},
+                      got["payload"]["ready"])
+        self.assertEqual(got["rows"], [])
+
+    def test_a_merged_answer_writes_the_merge_from_the_read(self):
+        rows = SPECCED + LANDED_STALL + [answered("ask-2", "merged", "#13")]
+        got = self.next(rows, gh_=gh(landed=((6667, "abc"),)))
+        self.assertEqual(got["code"], 0, got["out"])
+        self.assertEqual(got["rows"], [
+            {"at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#13",
+             "from": "stalled", "to": "merged",
+             "reason": "merged outside the batch as PR #6667",
+             "pr": 6667, "sha": "abc", "checks": {}}])
+        self.assertNotIn("#13", [e["item"] for e in got["payload"]["ready"]])
+
+    def test_a_retry_answer_resumes_without_a_read(self):
+        rows = SPECCED + LANDED_STALL + [answered("ask-2", "retry", "#13")]
+        got = self.next(rows, gh_=gh(landed=((6667, "abc"),)))
+        self.assertEqual(got["code"], 0, got["out"])
+        self.assertEqual(self.gh_.called("pr", "list"), [])
+        self.assertIn({"item": "#13", "step": "spec"},
+                      got["payload"]["ready"])
+
+    def test_a_failed_read_is_the_problem_and_nothing_is_written(self):
+        got = self.next(SPECCED, gh_=gh(fail=["pr", "list"]))
+        self.assertEqual((got["code"], got["out"]), (1, (
+            "cd: gh pr list --head conductor/b1-13 --state merged failed:"
+            " boom\ncd: 1 problem(s)\n")))
+        self.assertEqual(got["rows"], [])
+
+
+class TestMergedPr(unittest.TestCase):
+    def test_reads_the_latest_merged_prs_number_and_commit(self):
+        gh_ = gh(landed=((6667, "abc"), (6600, "old")))
+        self.assertEqual(nxt.merged_pr(gh_, "conductor/b1-13"),
+                         ({"pr": 6667, "sha": "abc"}, []))
+        self.assertEqual(gh_.calls, [MERGED_CALL])
+
+    def test_no_merged_pr_is_none_with_no_problem(self):
+        self.assertEqual(nxt.merged_pr(gh(), "conductor/b1-13"), (None, []))
+
+    def test_a_failed_read_is_the_problem(self):
+        self.assertEqual(
+            nxt.merged_pr(gh(fail=["pr", "list"]), "conductor/b1-13"),
+            (None, ["gh pr list --head conductor/b1-13 --state merged"
+                    " failed: boom"]))
+
+    def test_an_unreadable_entry_is_the_problem(self):
+        gh_ = FakeGh({("pr", "list"): json.dumps([{"number": "6667"}])})
+        self.assertEqual(nxt.merged_pr(gh_, "conductor/b1-13"), (None, [
+            "gh pr list --head conductor/b1-13 --state merged named an"
+            " unreadable merged PR"]))
+
+
+class TestDeliverNamesTheMergedPr(NextCase):
+    """#938: with no open PR on the head, deliver looks for a merged one
+    before creating a new one, and names it."""
+
+    def deliver(self, gh_):
+        self.body()
+        self.git_ = FakeGit()
+        return nxt.deliver(self.git_, gh_, self.wt, "conductor/b1-13",
+                           "#13", "b1")
+
+    def test_a_fresh_pr_names_the_merged_one_in_its_body(self):
+        gh_ = gh(landed=((6667, "abc"),))
+        self.assertIsNone(self.deliver(gh_))
+        self.assertEqual(gh_.calls[-1], [
+            "pr", "create", "--head", "conductor/b1-13", "--base", "main",
+            "--title", "#13: conductor batch b1", "--body", CONTINUED])
+
+    def test_without_one_the_body_file_is_sent_as_before(self):
+        gh_ = gh()
+        self.assertIsNone(self.deliver(gh_))
+        self.assertEqual(gh_.calls[-1][-2:], ["--body-file", "Body\n"])
+
+    def test_a_refusal_names_the_merged_pr(self):
+        gh_ = gh(state="CLOSED", landed=((6667, "abc"),))
+        self.assertEqual(self.deliver(gh_), (
+            "refusing to open a PR for #13: the issue is already closed"
+            " (PR #6667 merged outside the batch)"))
+        self.assertEqual(gh_.called("pr", "create"), [])
+
+    def test_an_open_pr_is_updated_without_the_merged_read(self):
+        gh_ = gh(prs=(7,), landed=((6667, "abc"),))
+        self.assertIsNone(self.deliver(gh_))
+        self.assertEqual(gh_.called("pr", "list"), [
+            ["pr", "list", "--head", "conductor/b1-13", "--state", "open",
+             "--json", "number"]])
+
+    def test_a_failed_merged_read_is_the_delivery_failure(self):
+        gh_ = gh(fail=MERGED_CALL[:6])
+        self.assertEqual(self.deliver(gh_), (
+            "opening or updating the PR failed: gh pr list --head"
+            " conductor/b1-13 --state merged failed: boom"))
 
 
 if __name__ == "__main__":

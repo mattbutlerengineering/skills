@@ -35,7 +35,7 @@ NEWER_READ = dict(NEWER, estimate_error_pct=-27.8667,
                   ran_estimate_error_pct=8.2)
 # A row as today's writer writes it.
 CURRENT = {"batch": "b3", "at": "2026-10-14T16:00:00Z", "merged": 1,
-           "metered_usd": 12.0, "estimate_usd": 10,
+           "merged_outside": 0, "metered_usd": 12.0, "estimate_usd": 10,
            "estimate_error_pct": 20.0, "ran_estimate_usd": 12,
            "ran_estimate_error_pct": 0.0, "stalls": 1,
            "stalls_by_cause": {"ceiling": 1}, "blocked_by_cause": {},

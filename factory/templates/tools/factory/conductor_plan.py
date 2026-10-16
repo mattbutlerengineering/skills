@@ -55,6 +55,12 @@ BATCHES = str(PurePosixPath(batch_dir("b")).parent) + "/"
 BATCH_LIST = ["ls-tree", "--name-only", "origin/main", "--", BATCHES]
 ISSUE_FIELDS = "number,state,author,labels"
 SPEND_OPTIONS = ["approve", "decline"]
+# Workflows on origin/main that merge pull requests on their own (#938):
+# `open` names them, since an item PR may then merge before its build
+# is done, which `next` reads each tick.
+AUTO_MERGE_GREP = ["grep", "-l", "-i", "-E",
+                   "pr merge|auto[-_]?merge|enablePullRequestAutoMerge",
+                   "origin/main", "--", ".github/workflows/"]
 
 
 def _listed(git, args):
@@ -553,6 +559,30 @@ def plan_cli(root, args, now, run, git):
     return problems
 
 
+def auto_merge_lines(git):
+    """The advisory lines `open` prints about the workflows on
+    origin/main that merge pull requests themselves (#938): the files,
+    or the read that failed. Never a refusal; grep's exit 1 is "no
+    match"."""
+    try:
+        text = git(AUTO_MERGE_GREP).stdout
+    except subprocess.CalledProcessError as err:
+        if err.returncode == 1:
+            return []
+        return [f"cd: auto-merge check unread: git grep origin/main failed:"
+                f" {detail(err)}"]
+    except CLI_FAILURES as err:
+        return [f"cd: auto-merge check unread: git grep origin/main failed:"
+                f" {detail(err)}"]
+    files = [line.split(":", 1)[1] for line in text.splitlines()
+             if ":" in line]
+    if not files:
+        return []
+    return [f"cd: auto-merge on origin/main: {', '.join(files)}; an item PR"
+            " can merge before its build is done, and next stalls the item"
+            " when one has"]
+
+
 def open_cli(root, args, now, run, git, netrc=None):
     """`open`, refused before the batch exists while conductor_run's
     preflight finds a launch refusal no retry fixes: the spend ask is the
@@ -571,6 +601,8 @@ def open_cli(root, args, now, run, git, netrc=None):
     if plan is None:
         return problems
     print(_report(root, plan))
+    for line in auto_merge_lines(git):
+        print(line)
     problems = conductor_run.preflight(
         root, git, Path.home() / ".netrc" if netrc is None else netrc)
     if problems:

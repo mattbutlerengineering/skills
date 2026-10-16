@@ -123,16 +123,23 @@ def Git(tmp, changed="", shows=None, failing=None, log="", heads=None,
         failing=failing)
 
 
-def Gh(prs=(), body="Spec this.", title="t", fail=None, state="open"):
+def Gh(prs=(), body="Spec this.", title="t", fail=None, state="open",
+       landed=()):
     """The one fake gh, answering issue view and pr list; `fail` is the
     argv prefix whose call is rejected with HTTP 422. `state` is what
     `gh issue view --json state` reports; a create is refused when it is
-    closed."""
+    closed. `prs` are the head's open PRs, `landed` its merged ones as
+    (number, merge commit) pairs (#938)."""
+    def listed(args):
+        if "merged" in args:
+            return json.dumps([{"number": n, "mergeCommit": {"oid": sha}}
+                               for n, sha in landed])
+        return json.dumps([{"number": n} for n in prs])
     return FakeGh(
         answers={("issue", "view"): json.dumps({"title": title,
                                                 "body": body,
                                                 "state": state}),
-                 ("pr", "list"): json.dumps([{"number": n} for n in prs])},
+                 ("pr", "list"): listed},
         failing=fail,
         error=subprocess.CalledProcessError(1, "gh", stderr="HTTP 422"))
 
@@ -575,6 +582,19 @@ class TestCompletedRun(RunCase):
                        f"body=@{body}"], self.gh.calls)
         self.assertFalse([c for c in self.gh.calls if c[:2] == ["pr",
                                                                 "create"]])
+
+    def test_a_pr_merged_outside_the_batch_is_named_by_the_fresh_one(self):
+        # #938: the consumer's merge train merged the item PR mid-build;
+        # the next run's PR says so instead of duplicating its title.
+        summary, problems = self.run_step(
+            "#12", "spec", Harness(act=pr_body), gh=Gh(landed=[(6662, "a")]))
+        self.assertEqual((problems, summary["stall"]), ([], None))
+        self.assertIn(["pr", "create", "--head", "conductor/b1-12",
+                       "--base", "main", "--title",
+                       "#12: conductor batch b1", "--body",
+                       "Continues after PR #6662, which merged outside"
+                       " conductor batch b1 with this item's earlier work."
+                       "\n\nBody\n"], self.gh.calls)
 
     def test_the_issue_body_reaches_only_a_spec_brief(self):
         self.run_step("#12", "spec", Harness(act=pr_body),
