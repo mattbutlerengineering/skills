@@ -72,6 +72,7 @@ EXPECTED_RELS = {
     "templates/tools/factory/conductor_close.py",
     "templates/tools/factory/conductor_consent.py",
     "templates/tools/factory/conductor_calibrate.py",
+    "templates/tools/factory/trace.py",
 }
 
 SEEDED_ADRS = REPO_ROOT / "factory" / "templates" / "docs" / "adr"
@@ -385,6 +386,13 @@ class TestProductForm(unittest.TestCase):
     def test_the_stamped_test_run_is_quiet(self):
         self.assertEqual(
             factory_init.product_form("python3 -m unittest discover tests"),
+            "python3 -m unittest discover -q tests")
+
+    def test_the_root_only_parallel_runner_becomes_the_serial_discover(self):
+        """#904: run_tests.py is root-only, so the payload Makefile keeps
+        the discover command a stamped repo always ran, byte-identical."""
+        self.assertEqual(
+            factory_init.product_form("python3 run_tests.py"),
             "python3 -m unittest discover -q tests")
 
     def test_a_path_agnostic_command_is_untouched(self):

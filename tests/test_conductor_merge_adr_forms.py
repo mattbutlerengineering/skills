@@ -17,12 +17,14 @@ from pathlib import Path
 import conductor_merge as merge
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import test_conductor_merge as merge_tests  # noqa: E402
+import test_conductor_merge_reservations as reservation_tests  # noqa: E402
 from fake_git import FakeGit  # noqa: E402
-from test_conductor_merge import TurnCase, adr_rows  # noqa: E402
+from test_conductor_flow import AT  # noqa: E402
+from test_conductor_merge import TurnCase  # noqa: E402
+from test_conductor_merge_reservations import adr_rows  # noqa: E402
 
 # Imported by attribute: a TestCase bound here would be run twice.
-MAIN = merge_tests.TestReservations.MAIN
+MAIN = reservation_tests.TestReservations.MAIN
 
 
 class TestRenumberForms(TurnCase):
@@ -81,7 +83,7 @@ class TestConsumerWidth(unittest.TestCase):
                         for name in CONSUMER_MAIN + ["README.md"]),
             ("diff", "--name-only"): f"{ITEM_ADR}\ndocs/adr/README.md\n",
             ("show", "origin/main:docs/adr/README.md"): CONSUMER_INDEX})
-        rows = [{"at": merge_tests.AT, "kind": "reserve", "item": "#12",
+        rows = [{"at": AT, "kind": "reserve", "item": "#12",
                  "what": "adr", "values": [27, 28, 29]}]
         self.fields = merge.confirm_reservations(rows, "#12", self.git,
                                                  self.wt, "item-branch")
@@ -92,6 +94,13 @@ class TestConsumerWidth(unittest.TestCase):
                            "docs/adr/ADR-030-redis.md"]])
         self.assertEqual(self.fields, [{"what": "adr", "values": [30],
                                         "renumbered_from": [27]}])
+
+    def test_the_commit_names_the_adr_at_its_written_width(self):
+        # #890: the message is one more place the width is written.
+        self.assertEqual(
+            self.git.called("-C", str(self.wt), "commit"),
+            [["-C", str(self.wt), "commit", "-m",
+              "chore(conductor): renumber ADR-027 to ADR-030"]])
 
     def test_citations_are_rewritten_at_the_width_they_are_written(self):
         self.assertEqual(

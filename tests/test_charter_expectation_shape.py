@@ -40,13 +40,6 @@ class TestValidation(unittest.TestCase):
             encoding="utf-8")
         return charter_replay.load_cases(self.path, ROOT, LABEL)
 
-    def test_an_id_less_expectation_is_a_problem(self):
-        idless = {k: v for k, v in expectation().items() if k != "id"}
-        cases, problems = self.load([idless, REQUIRE])
-        self.assertEqual(cases, [])
-        self.assertEqual(problems,
-                         [f"{LABEL} case 'c1' expectation has no id"])
-
     def test_a_duplicate_expectation_id_is_a_problem(self):
         cases, problems = self.load(
             [expectation(exp_id="wo"), {**REQUIRE, "id": "wo"}])
@@ -54,6 +47,21 @@ class TestValidation(unittest.TestCase):
         self.assertEqual(problems,
                          [f"{LABEL} case 'c1' has duplicate expectation"
                           " id 'wo'"])
+
+
+    def test_unhashable_duplicate_expectation_ids_do_not_raise(self):
+        cases, problems = self.load(
+            [expectation(exp_id=["wo"]), {**REQUIRE, "id": ["wo"]}])
+        self.assertEqual(cases, [])
+        self.assertEqual(problems,
+                         [f"{LABEL} case 'c1' expectation ['wo'] has no id"]
+                         * 2)
+
+    def test_unhashable_duplicate_case_ids_do_not_raise(self):
+        problems = charter_replay.validate(
+            {"version": 1, "cases": [case(case_id=["c"]),
+                                     case(case_id=["c"])]}, ROOT, LABEL)
+        self.assertEqual(problems.count(f"{LABEL} case ['c'] has no id"), 2)
 
 
 class TestFailuresCarryTheirMode(unittest.TestCase):

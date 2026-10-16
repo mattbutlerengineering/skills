@@ -7,7 +7,12 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
 ## Verify (CI runs all three on every push/PR)
 
-- `python3 -m unittest discover tests`
+- `python3 run_tests.py` — the full suite, one `python3 -m unittest
+  tests.<module>` child per module across `os.cpu_count()` workers
+  (`-j N` overrides), longest-first from `tests/timings.json`
+  (`--record` rewrites it after a clean run); exit 0 only when every
+  module passes. `python3 -m unittest discover tests` is the same suite
+  serially, and what a stamped repo runs.
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
 - `python3 gates.py && python3 gates.py --selftest` — factory drift
   detectors (roster in `gates.py`'s module docstring; B skips locally
@@ -42,9 +47,12 @@ pre-pass, deliberately **not** a gate:
 
 - **Stdlib only.** Every script is standalone Python 3 standard library.
   No third-party dependencies.
-- **Bump `.claude-plugin/plugin.json`'s version with any `skills/`
-  change.** Installed plugin caches refresh only when the version moves,
-  and `lint.py` checks only that the field exists.
+- **Feature and fix branches never touch `.claude-plugin/plugin.json`'s
+  version** (ADR-0095). A wave's `chore(release)` PR bumps it once after
+  the wave lands, and a Conductor merge bumps it at merge step 3
+  (`conductor_merge.bump_version`). Installed plugin caches refresh only
+  when the version moves, so a payload-only wave still gets its release
+  PR; `lint.py` checks only that the field exists.
 - **Seam modules, everything else thin callers**: `protocol.py`
   (ADR-0021 — taxonomy, artifact table, frontmatter, next-stage),
   `eval_schema.py` (ADR-0022, ADR-0024 — all eval knowledge: routing
@@ -107,6 +115,15 @@ pre-pass, deliberately **not** a gate:
   protocols (ADR-0044's pattern); only the queue groomer's trigger
   exists (created 2026-09-29 as the pilot), and the retro/reflect and
   doc-gardener triggers are deferred by owner decision
+- `docs/factory/merge-train-routine.md` — the scheduled
+  implement-queue pass over open PRs only (Phase 0 verdicts, Phase 3
+  train) under `.claude/implement-queue.md` and ADR-0096; its trigger
+  `factory-merge-train` exists (created 2026-10-15, every 4 hours)
+- `docs/factory/hourly-improvement-routine.md` — the hourly
+  self-merging improvement pass: one evidenced, S-sized process fix
+  per run, from issue to PR to merge under `.claude/implement-queue.md`
+  and ADR-0096; its trigger `factory-hourly-improvement` exists
+  (created 2026-10-15, every hour)
 
 ## Issue tracking
 

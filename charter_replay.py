@@ -109,8 +109,7 @@ def _expectation_problems(case, expectation, label):
         return [f"{where} is not an object"]
     exp_id = expectation.get("id")
     return (
-        ([f"{where} has no id"] if not exp_id else [])
-        + ([f"{where} {exp_id!r} has invalid scope "
+        ([f"{where} {exp_id!r} has invalid scope "
           f"{expectation.get('scope')!r}"]
          if expectation.get("scope") not in SCOPES else [])
         + ([f"{where} {exp_id!r} has invalid mode "
@@ -155,8 +154,6 @@ def _case_problems(case, root, label):
     case_id = case.get("id")
     where = f"{label} case {case_id!r}"
     problems = []
-    if not case_id:
-        problems.append(f"{label} has a case with no id")
     if case.get("role") not in factory_roles.ROLES:
         problems.append(f"{where} has invalid role {case.get('role')!r}")
     fixture = case.get("fixture")
@@ -172,7 +169,7 @@ def _case_problems(case, root, label):
         return problems + [f"{where} has no expectations"]
     for expectation in expectations:
         problems += _expectation_problems(case, expectation, label)
-    problems += eval_schema.duplicate_id_problems(
+    problems += eval_schema.id_problems(
         [e for e in expectations if isinstance(e, dict)], where,
         noun="expectation")
     if not any(isinstance(e, dict) and e.get("mode") == "forbid"
@@ -195,7 +192,7 @@ def validate(data, root, label):
     if "version" not in data:
         return [f"{label} missing 'version' field"]
     cases, problems = eval_schema.entries(data, "cases", label)
-    problems += eval_schema.duplicate_id_problems(cases, label)
+    problems += eval_schema.id_problems(cases, label)
     for case in cases:
         problems += _case_problems(case, root, label)
     return problems

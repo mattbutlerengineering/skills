@@ -159,7 +159,7 @@ class TestRowGrammar(unittest.TestCase):
             dict(MINIMAL["state"], to="stalled", cause="vibes")), [
             "cause 'vibes' is not one of ceiling, timeout, agent-failed,"
             " delivery-failed, runner-lost, changes-again, merge-drift,"
-            " merge-failed, owner-block"])
+            " merge-failed, owner-block, setup-failed"])
         self.assertEqual(conductor.row_problems(
             dict(MINIMAL["state"], cause="ceiling")), [
             "cause is only for a state row to stalled or blocked"])

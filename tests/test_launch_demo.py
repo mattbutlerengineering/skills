@@ -387,6 +387,12 @@ class TestConfigLeg(CliMixin, cli_contract.CliContract,
         self.assertEqual(self.run_cli(["config"]),
                          (0, "ON-DEMAND\nlaunch-demo: 0 problem(s)\n"))
 
+    def test_no_config_prints_the_none_verdict(self):
+        """Most repos have no config; Ship branches on verdict words
+        alone, so absence is a verdict here, never a problem (#888)."""
+        self.assertEqual(self.run_cli(["config"]),
+                         (0, "NONE\nlaunch-demo: 0 problem(s)\n"))
+
     def test_a_config_ship_cannot_read_is_problems_and_no_verdict(self):
         """Ship acts on the verdict alone, so a misspelt when or bytes
         that are not JSON must reach it as problems, never as a quiet

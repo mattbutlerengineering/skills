@@ -22,7 +22,8 @@ same checkout, and is run from the repo root:
     python3 <this skill's directory>/../../launch_demo.py render <slug>
 
 Each prints lines prefixed `launch-demo: `, then a verdict word alone
-(`SHIP` or `ON-DEMAND` for `config`, the `when` that Ship acts on;
+(`SHIP` or `ON-DEMAND` for `config`, the `when` that Ship acts on, or
+`NONE` when the repo has no config;
 `READY` or `COPY-ONLY` for `probe`; `PRODUCED` or `COPY-ONLY` for
 `render`), then `launch-demo: N problem(s)`. A nonzero exit is problems,
 quoted and stopped on; a `COPY-ONLY` verdict exits 0 and is a reason
@@ -59,8 +60,9 @@ Work these in order. Each stops where it says.
 ### 1. Validate the config
 
 Run the `config` leg. Problems are quoted verbatim and the work stops
-there — a missing `docs/launch-demo.json` is one such problem, with the
-reference's field table as the fix. Nothing is written.
+there; so does a `NONE` verdict, which means there is no
+`docs/launch-demo.json` — report it with the reference's field table as
+the fix. Nothing is written.
 
 ### 2. Probe the toolchain
 

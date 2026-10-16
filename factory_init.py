@@ -70,10 +70,14 @@ def product_form(command):
     name` skips the Makefile, whose payload home IS its root home. The
     replacement uses MIRRORS' own destination, so a tool mirrored
     somewhere other than tools/factory/ would follow it there. The
-    remaining respelling is the stamped test run, which is quiet."""
+    remaining respelling is the stamped test run, which is quiet and
+    serial: the root's parallel runner (run_tests.py) is root-only, so
+    its line becomes the discover command a stamped repo always ran."""
     for name, rel, _ in MIRRORS:
         if "/" not in name and rel != name:
             command = command.replace(f"python3 {name}", f"python3 {rel}")
+    command = command.replace("python3 run_tests.py",
+                              "python3 -m unittest discover tests")
     return command.replace("unittest discover tests",
                            "unittest discover -q tests")
 
@@ -253,6 +257,7 @@ MIRRORS = (
      identity),
     ("conductor_calibrate.py", "tools/factory/conductor_calibrate.py",
      identity),
+    ("trace.py", "tools/factory/trace.py", identity),
     (".github/workflows/validator.yml",
      ".github/workflows/validator.yml", identity),
     (".github/workflows/assembler.yml",

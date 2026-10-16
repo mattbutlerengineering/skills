@@ -5,9 +5,10 @@
 per step of one item, in that item's own worktree.
 
 In order: launch (a state row carrying the run id and this runner's
-pid), compose the brief and every harness flag, run under
-cli.harness_run with the size's wall-clock limit, keep the result event
-as runs/<run_id>.json, meter it with cli.read_execution, commit one
+pid), run factory.json's conductor.worktree_setup if set (#850),
+compose the brief and every harness flag, run under cli.harness_run
+with the size's wall-clock limit, keep the result event as
+runs/<run_id>.json, meter it with cli.read_execution, commit one
 spend row on the item branch, push it (never forced), open or update its
 PR from the Worker's uncommitted pr-body.md, and append the run's one
 `run` row. Any outcome but a completed run with its expected output
@@ -27,7 +28,7 @@ import cost_ledger
 import factory_config
 from assembler import PR_BODY_FILE
 from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
-    prettier_json, read_execution
+    prettier_json, read_execution, runner
 from conductor import RUN_ID, RUNS, WORKER_ENV, answers, append, ask_row, \
     current_state, item_view, item_worktree, load, stamp, view
 from conductor import run_id as make_run_id
@@ -299,6 +300,17 @@ def _worktree(git, batch, item):
                                  flow.item_branch(batch, item), str(path),
                                  "origin/main"], "cd: git worktree add")
     return path, problems
+
+
+def _setup(setup, argv, worktree, minutes):
+    """The stall reason when factory.json's conductor.worktree_setup
+    fails in the item worktree under the step's limit (#850), else None.
+    It is not git, so the Conductor's hook-skipping git port is not it."""
+    try:
+        setup(argv[0], timeout=minutes * 60)(argv[1:], cwd=str(worktree))
+    except CLI_FAILURES as err:
+        return f"worktree setup `{shlex.join(argv)}` failed: {detail(err)}"
+    return None
 
 
 def _harness(harness, cmd, worktree, minutes, batch):
@@ -667,7 +679,7 @@ def _prepare(root, batch, item, step, git, gh, netrc, now):
 
 
 def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
-             pid=None, netrc=None):
+             pid=None, netrc=None, setup=runner):
     """(summary, problems): one Worker run. problems only when nothing
     was launched or a ledger write failed; a failed run is a stall, and
     a launch refusal no retry fixes pauses dispatch (hold_dispatch). The
@@ -689,6 +701,7 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     config, problems = factory_config.load(root)
     cap, found = factory_config.resolve_cap(config or {})
     gate, unusable = factory_config.resolve_gate_command(config or {})
+    setup_argv, _ = factory_config.resolve_worktree_setup(config or {})
     refusals = problems or found or unusable
     if not refusals:
         spent, problems, refusals = month_spend(git, ctx["rows"], batch,
@@ -704,19 +717,27 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     # pr-body.md is this step's output only (review minor 7): one left by
     # an earlier step would satisfy the expected-output check.
     (worktree / PR_BODY_FILE).unlink(missing_ok=True)
+    minutes = flow.WALL_CLOCK_MINUTES[entry["size"]]
+    stall = setup_argv and _setup(setup, setup_argv, worktree, minutes)
+    if stall:
+        recommended, why = flow.worker_advice(ctx["rows"], entry, step,
+                                              band, stall)
+        _, problems = flow.queue_stall(root, batch, clock(), item, stall,
+                                       "setup-failed", recommended, why)
+        return {"run_id": run_id, "outcome": "setup-failed",
+                "stall": stall}, problems
     tools = allowed_tools(gate)
     brief = compose_brief(step, item, entry["type"], worktree, branch,
                           ctx["block"], ctx["wo"], ctx["context"],
                           ctx["body"], ceiling, tools, ctx["prior"])
     event, ended, _ = _harness(
         harness, harness_command(brief, model, effort, ceiling, tools),
-        worktree, flow.WALL_CLOCK_MINUTES[entry["size"]], batch)
+        worktree, minutes, batch)
     done = clock()
     tokens, cost, outcome, reported, stall = _meter(
         root, batch, run_id, event, ended, ceiling, model)
     if ended == "timeout":
-        stall = (f"killed at its {flow.WALL_CLOCK_MINUTES[entry['size']]}"
-                 "-minute wall-clock limit")
+        stall = f"killed at its {minutes}-minute wall-clock limit"
     spent_model = model if model in reported or not reported \
         else reported[0]
     failed = _spend(git, worktree, ctx["wo"], run_id, spent_model, tokens,

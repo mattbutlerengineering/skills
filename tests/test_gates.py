@@ -30,11 +30,13 @@ import cli_contract  # noqa: E402
 from factory_fixture import CONFIG  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
 from make_parse import make_recipe, make_targets, phony_targets  # noqa: E402
+from test_work_orders import (  # noqa: E402
+    DUP_ISSUE, DUP_WO, NEWER, OLDER, Tree as WorkOrderTree)
 import workflow_parse  # noqa: E402
 
 
 def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=(),
-               adr_problems=()):
+               adr_problems=(), scannable_problems=(), artifact_problems=()):
     """An in-memory knowledge_plane.parse_run()-shaped dict, built by hand
     rather than through a real tempdir tree (issue #442). The detectors
     whose gates.ROSTER row declares a parsed input read only this shape
@@ -43,7 +45,9 @@ def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=(),
     run can skip it and pass a single-element `runs` list directly."""
     return {"runs": list(runs), "adr_files": list(adr_files),
             "adr_problems": list(adr_problems),
-            "adr_readme": adr_readme, "scannable": list(scannable)}
+            "adr_readme": adr_readme, "scannable": list(scannable),
+            "scannable_problems": list(scannable_problems),
+            "artifact_problems": list(artifact_problems)}
 
 
 def run_entry(path, breakdown=None, prd_id=None, architecture=None,
@@ -198,6 +202,16 @@ class TestLinkIntegrity(unittest.TestCase):
             tree.write("docs/adr/ADR-007-x.md", "# Short form\n")
             tree.write("README.md", "See ADR-0007.\n")
             self.assertEqual(gates.check_link_integrity(tree.root), [])
+
+    def test_a_duplicated_work_order_or_tracker_fails_at_pr_time(self):
+        # Issue #886: knowledge_plane.work_orders' duplicate problems had
+        # no production reader, so a copy-pasted row surfaced only as a
+        # refusal at dispatch or label-flip time. C reports them, in the
+        # one rule's own words, under its label.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = WorkOrderTree(tmp, OLDER, NEWER).root
+            self.assertEqual(gates.check_link_integrity(root),
+                             [f"C: {DUP_WO}", f"C: {DUP_ISSUE}"])
 
     def test_factory_templates_and_fixtures_stay_out_of_scope(self):
         # factory/templates/ is a seed tree checked against its OWN
@@ -704,8 +718,8 @@ class TestStalenessLinkGrammar(unittest.TestCase):
 
 class TestStandardsDrift(unittest.TestCase):
     """K (ADR-0073): docs/standards.json's ADR-derived entries must match
-    a fresh standards_index.build_index(root) regen, and an `enforced`
-    entry's source ADR must be `accepted`."""
+    a fresh standards_index.build_index(root, adr_files) regen, and an
+    `enforced` entry's source ADR must be `accepted`."""
 
     def adr(self, tree, rel, status, bullet=None):
         body = f"# X\n\n- Status: {status}\n"
@@ -2717,6 +2731,55 @@ class TestRunAll(unittest.TestCase):
             self.assertEqual(parse_run.call_count, 1)
 
 
+    def test_an_undecodable_markdown_file_is_one_d_problem(self):
+        """Issue #877: a latin-1 doc in _scannable_files' selection raised
+        UnicodeDecodeError out of run_all. Now D, which already reports
+        the ADRs it could not read (#855), reports each unreadable doc
+        once — the ADR read twice (as an ADR and as a scanned doc) too."""
+        undecodable = "# Caf\xe9\n".encode("latin-1")
+        try:
+            undecodable.decode("utf-8")
+        except UnicodeDecodeError as err:
+            error = err
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixtures.clean_repo_fixture(root)
+            (root / "docs" / "adr").mkdir(parents=True, exist_ok=True)
+            (root / "docs" / "adr" / "0099-cafe.md").write_bytes(undecodable)
+            (root / "docs" / "cafe.md").write_bytes(undecodable)
+            problems = gates.run_all(root, env={})
+        self.assertEqual(
+            [p for p in problems if "cannot read" in p],
+            [f"D: cannot read docs/adr/0099-cafe.md: {error}",
+             f"D: cannot read docs/cafe.md: {error}"])
+
+    def test_an_undecodable_run_artifact_or_adr_index_is_a_d_problem(self):
+        """Issue #881 (ADR-0094): a latin-1 prd.md, breakdown.md or
+        docs/adr/README.md raised UnicodeDecodeError out of parse_run's
+        run-level read, before the scannable read could report it. Now
+        each is one D problem, and the unreadable index is not also
+        called missing."""
+        undecodable = "# Caf\xe9\n".encode("latin-1")
+        try:
+            undecodable.decode("utf-8")
+        except UnicodeDecodeError as err:
+            error = err
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixtures.clean_repo_fixture(root)
+            run = root / "docs" / "features" / "cafe"
+            run.mkdir(parents=True)
+            (run / "prd.md").write_bytes(undecodable)
+            (run / "breakdown.md").write_bytes(undecodable)
+            (root / "docs" / "adr").mkdir(parents=True, exist_ok=True)
+            (root / "docs" / "adr" / "README.md").write_bytes(undecodable)
+            problems = gates.run_all(root, env={})
+        self.assertEqual(
+            [p for p in problems if "cannot read" in p or "missing" in p],
+            [f"D: cannot read docs/features/cafe/breakdown.md: {error}",
+             f"D: cannot read docs/features/cafe/prd.md: {error}",
+             f"D: cannot read docs/adr/README.md: {error}"])
+
 class TestLockstep(unittest.TestCase):
     """Makefile <-> CI lockstep (origin: WO-0003, tightened by WO-0004).
 
@@ -2763,9 +2826,11 @@ class TestLockstep(unittest.TestCase):
 
     # The one canonical check set. `lint.py` is the plugin's structural lint
     # and has no product-repo counterpart, so only the root Makefile runs it.
+    # The parallel runner is root-only too, but product_form respells its
+    # line to the serial discover command rather than dropping it (#904).
     CANONICAL_CHECK = ["python3 gates.py",
                        "python3 gates.py --selftest",
-                       "python3 -m unittest discover tests"]
+                       "python3 run_tests.py"]
     ROOT_ONLY_CHECK = ["python3 lint.py"]
     VALIDATOR_TARGETS = {
         "review": ["python3 validator.py review --findings $(FINDINGS)"
@@ -2889,8 +2954,8 @@ class TestLockstep(unittest.TestCase):
         # added later.
         text = self.WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("(github.event.action == 'opened'\n"
-                      "           || github.event.action == 'reopened'\n"
-                      "           || github.event.action == 'synchronize')",
+                      "               || github.event.action == 'reopened'\n"
+                      "               || github.event.action == 'synchronize')",
                       text)
         self.assertNotIn("&& github.event.action != 'closed'\n"
                          "      && github.event.pull_request.head.repo",
@@ -3184,9 +3249,19 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             'git config user.name "github-actions[bot]"',
         ),
         "validator.yml": (
-            # shell glue capturing `make check`'s findings and exit code
-            # for the review step; the command underneath is still make
-            "set +e",
+            # shell glue capturing `make check`'s output for the review
+            # job; the command underneath is still make, and pipefail keeps
+            # its exit code the gate's (ADR-0098)
+            "set -o pipefail",
+            # the check job's hand-off (ADR-0098): file glue writing the
+            # captured output as the job's one output under a random
+            # delimiter — no repo tool, nothing to move into make
+            "delim=\"findings-$(od -An -N16 -tx1 /dev/urandom"
+            " | tr -d ' \\n')\"",
+            # the review job's data step (ADR-0098): writes the handed-over
+            # text to a file in a step with no secret, deliberately not a
+            # make target — make imports its env as make variables
+            "printf '%s' \"$HANDED_OVER\" > \"$RUNNER_TEMP/findings.txt\"",
             # the dispatched-PR path (WO-0030): synthesizes the webhook
             # payload from the REST API so the make steps read
             # GITHUB_EVENT_PATH identically on both trigger paths — a gh

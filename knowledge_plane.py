@@ -28,7 +28,7 @@ from collections import namedtuple
 from pathlib import Path
 
 from cli import read_file
-from protocol import read_frontmatter
+from protocol import parse_frontmatter
 
 PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
 ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
@@ -414,8 +414,8 @@ def breakdown_files(root):
     """(breakdown path, its lines) per run that has a breakdown.md.
 
     The layout walk in one place: every dispatch-plane reader of
-    work-order rows — the assembler, the validator, orientation_pack,
-    and gates' detectors — opens the same files in the same run order.
+    work-order rows — the assembler, the validator and gates'
+    detectors — opens the same files in the same run order.
     Row grammar is breakdown_rows' (ADR-0039 put it here); slice and
     row-reading policy stay with each caller (ADR-0037).
     """
@@ -426,7 +426,7 @@ def breakdown_files(root):
                 encoding="utf-8").splitlines()
 
 
-def work_orders(root):
+def work_orders(root, files=None):
     """(index, problems): the row a work order or an issue owns (issue
     #857). index["wo"] maps a WO token, index["issue"] a tracker issue
     number, to its breakdown row record — breakdown_rows' fields plus
@@ -439,10 +439,14 @@ def work_orders(root):
     unlabelled problem, `<rel>:<lineno> <WO> duplicates the row at
     <rel>:<lineno>` (or `(tracker: #N)` in the WO's place). Each clash
     is also listed in the `clashes` of both rows it names, so a caller
-    that acts on one row — a dispatch, a label flip — can refuse it."""
+    that acts on one row — a dispatch, a label flip — can refuse it.
+
+    `files` is (breakdown path, lines) in breakdown_files order, default
+    a fresh breakdown_files(root): gates' detector C hands in the walk
+    parse_run already read rather than reading it again (issue #886)."""
     root = Path(root)
     index, problems = {"wo": {}, "issue": {}}, []
-    for path, lines in breakdown_files(root):
+    for path, lines in breakdown_files(root) if files is None else files:
         for row in breakdown_rows(lines):
             record = {**row, "path": path, "clashes": []}
             for kind, key, shown in (
@@ -695,13 +699,12 @@ def parse_run(root, scannable=()):
          "verification_error": str | None}.
         "prd" and "prd_date" (the frontmatter `date:`) are what detectors
         N and O read (ADR-0071, ADR-0072).
-        A field is None when that run carries no such file.
-        verification_error carries str(err) when verification.md exists
-        but could not be decoded — check_evidence_honesty's own
-        "H: {rel} cannot be read: {err}" case — with verification then
-        None; every other artifact here except the ADRs is read the way
-        its current caller already reads it: uncaught, because no
-        current caller catches a read error there either.
+        A field is None when that run carries no such file, or when
+        cli.read_file could not read it (ADR-0094) — then named in
+        "artifact_problems". verification_error carries str(err) when
+        verification.md exists but could not be decoded —
+        check_evidence_honesty's own "H: {rel} cannot be read: {err}"
+        case — with verification then None.
       "adr_files": [(Path, [str]), ...] — read_adrs' files: every
         adr_paths file it could read, in that order — adr_record reads
         an entry. The ADRs alone are read guarded (issue #855), since
@@ -709,18 +712,38 @@ def parse_run(root, scannable=()):
         problem strings.
       "adr_problems": [str] — read_adrs' unlabelled problems, one per
         ADR left out of "adr_files"; detector D labels and reports them.
-      "adr_readme": [str] | None for docs/adr/README.md.
+      "adr_readme": [str] | None for docs/adr/README.md, read guarded.
+      "artifact_problems": [str] — unlabelled `cannot read <rel>: <err>`,
+        one per breakdown/PRD/architecture or index left None unread;
+        detector D reports them (ADR-0094).
       "scannable": [(Path, [str]), ...], one entry per path in
-        `scannable`, in that order — read uncaught, same as every other
-        entry above.
+        `scannable` it could read, in that order — guarded by
+        cli.read_file like the ADRs (issue #877), since one undecodable
+        doc anywhere in the tree otherwise crashes a full gates run.
+      "scannable_problems": [str] — unlabelled `cannot read <rel>: <err>`
+        problems, one per `scannable` path left out; detector D labels and
+        reports them beside adr_problems.
 
     Read-only: parse_run never writes.
     """
+    artifact_problems = []
+
+    def guarded_text(path):
+        """One guarded read (ADR-0094): the file's text, or None when it
+        is absent or unreadable — an unreadable one also named once in
+        artifact_problems."""
+        text, problem = read_file(path, path.relative_to(root).as_posix(),
+                                  str)
+        if problem:
+            artifact_problems.append(problem)
+        return text
+
+    def guarded_lines(path):
+        text = guarded_text(path)
+        return None if text is None else text.splitlines()
+
     runs = []
     for run in run_dirs(root):
-        breakdown = run / "breakdown.md"
-        prd = run / "prd.md"
-        architecture = run / "architecture.md"
         verification = run / "verification.md"
         verification_text = None
         verification_error = None
@@ -729,33 +752,37 @@ def parse_run(root, scannable=()):
                 verification_text = verification.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError) as err:
                 verification_error = str(err)
-        prd_fields = (read_frontmatter(prd) or {}) if prd.is_file() else {}
+        breakdown = guarded_lines(run / "breakdown.md")
+        prd_text = guarded_text(run / "prd.md")
+        prd_fields = ((parse_frontmatter(prd_text) or {})
+                      if prd_text is not None else {})
         runs.append({
             "path": run,
-            "breakdown": (breakdown.read_text(encoding="utf-8").splitlines()
-                         if breakdown.is_file() else None),
+            "breakdown": breakdown,
             "prd_id": prd_fields.get("id"),
-            "prd": (prd.read_text(encoding="utf-8").splitlines()
-                    if prd.is_file() else None),
+            "prd": None if prd_text is None else prd_text.splitlines(),
             "prd_date": prd_fields.get("date"),
-            "architecture": (architecture.read_text(
-                encoding="utf-8").splitlines()
-                if architecture.is_file() else None),
+            "architecture": guarded_lines(run / "architecture.md"),
             "verification": verification_text,
             "verification_error": verification_error,
         })
 
     adr_files, adr_problems = read_adrs(root)
-    readme = root / "docs" / "adr" / "README.md"
-    adr_readme = (readme.read_text(encoding="utf-8").splitlines()
-                  if readme.is_file() else None)
+    adr_readme = guarded_lines(root / "docs" / "adr" / "README.md")
 
-    scanned = [(path, path.read_text(encoding="utf-8").splitlines())
-              for path in scannable]
+    scanned, scannable_problems = [], []
+    for path in scannable:
+        text, problem = read_file(path, path.relative_to(root).as_posix(),
+                                  str)
+        if problem:
+            scannable_problems.append(problem)
+        elif text is not None:
+            scanned.append((path, text.splitlines()))
 
     return {"runs": runs, "adr_files": adr_files,
             "adr_problems": adr_problems, "adr_readme": adr_readme,
-            "scannable": scanned}
+            "scannable": scanned, "scannable_problems": scannable_problems,
+            "artifact_problems": artifact_problems}
 
 
 def repo_root():

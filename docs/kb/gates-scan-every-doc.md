@@ -1,7 +1,7 @@
 ---
 summary: Detectors C and I scan every repo markdown, fences included; an example PRD/ADR/WO id or a sample link fails gates.
 sources: gates.py, knowledge_plane.py
-verified: 3f4b8b6dd600af9479c41e9c164f8b6909c582e2
+verified: 7087916156e5638540ec65abba468fbc89ec27f9
 related: pr-body-contract, manifest-regen
 ---
 
@@ -24,6 +24,9 @@ as text: fenced blocks and inline code are not skipped.
   keeps its spaces, and `#fragment` and `?query` are ignored. A sample layout in a
   copied research note — a markdown link to an illustrative
   `pages/x.md` — is a stale link, even inside backticks.
+
+A doc that does not decode as UTF-8 is not scanned at all: detector D
+reports it as `cannot read <path>` (#882), so fix the encoding first.
 
 What works: placeholders that cannot match (`WO-####`, `WO-00xx`, ids
 with fewer than four digits) and URL-shaped sample links. Run

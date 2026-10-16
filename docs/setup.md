@@ -61,13 +61,13 @@ checks in section 4 apply to them as they stand: a kept `labels.json` must
 carry the labels detector J names, and a kept `CODEOWNERS` needs the factory's
 gate paths added by hand.
 
-97 files land: the 48-file payload installed to its destinations, plus the
+99 files land: the 49-file payload installed to its destinations, plus the
 pristine mirror it was stamped from. `factory/manifest.json` is the authority.
 
 | Group | Count | What |
 |-------|-------|------|
-| `factory/` | 49 | the manifest and the pristine mirror the stamped detectors check themselves against |
-| `tools/factory/` | 28 | the detector suite, the tools the workflows call, the Conductor's batch tool, and a `.gitignore` for their bytecode |
+| `factory/` | 50 | the manifest and the pristine mirror the stamped detectors check themselves against |
+| `tools/factory/` | 29 | the detector suite, the tools the workflows call, the Conductor's batch tool, the trace view, and a `.gitignore` for their bytecode |
 | `docs/adr/` | 8 | the seeded ADR set, the convention, and the template |
 | `.github/workflows/` | 6 | validator, assembler, design, cost-report, gate-digest, toolsmith-mine |
 | `.github/` | 3 | `factory.json` (budgets, routing bands, WIP cap, monthly cap), `labels.json` (the 29-label taxonomy), `CODEOWNERS` (the code-owner gate) |
@@ -274,6 +274,13 @@ missing. That finding describes the chosen scope and is not a fault.
   `node_modules` or equivalent. So when the gate needs a dependency install
   first, ship a small gate script that installs and then checks, and point
   `gate_command` at it.
+- When the Worker's own commits meet hooks that need those dependencies
+  (husky, lefthook or pre-commit), set `conductor.worktree_setup` to the
+  install command as an argv list, for example `["npm", "ci"]`. Each Worker
+  run executes it in its item worktree before the Worker launches, under the
+  step's wall-clock limit, and never in the batch worktree. A failure stalls
+  the item with cause `setup-failed` and names the command. It is off when
+  absent (#850).
 - Open batches from the repo's own checkout, not a throwaway clone. The batch
   ledger is an uncommitted file in the batch worktree until `close` commits
   it (#704).

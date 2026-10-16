@@ -7,6 +7,7 @@ assert the EXACT problem strings and rows.
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -286,17 +287,31 @@ def replies(*values):
 
 
 class TurnCase(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        """Build the seeded origin and its configured clone once per
+        subclass; each test copies them (#902), so no test sees another's
+        pushes or commits."""
+        template = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(template.cleanup)
+        cls.template = Path(template.name)
+        seed = git_repo.init(cls.template / "seed", "-b", "main")
+        cls.configure(seed)
+        commit(seed, SEED)
+        git_repo.clone(seed, cls.template / "origin.git", "--bare")
+        cls.configure(git_repo.clone(cls.template / "origin.git",
+                                     cls.template / "repo"))
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.tmp = Path(tmp.name)
-        seed = git_repo.init(self.tmp / "seed", "-b", "main")
-        self.configure(seed)
-        commit(seed, SEED)
-        git_repo.clone(seed, self.tmp / "origin.git", "--bare")
-        self.repo = git_repo.clone(self.tmp / "origin.git",
-                                   self.tmp / "repo")
-        self.configure(self.repo)
+        for name in ("origin.git", "repo"):
+            shutil.copytree(self.template / name, self.tmp / name,
+                            symlinks=True)
+        self.repo = self.tmp / "repo"
+        sh(self.repo, "remote", "set-url", "origin",
+           str(self.tmp / "origin.git"))
         self.wt = self.repo / ".claude/worktrees/conductor-b1-12"
         sh(self.repo, "worktree", "add", "-q", "-b", BRANCH, str(self.wt),
            "origin/main")
@@ -311,14 +326,23 @@ class TurnCase(unittest.TestCase):
             sh(cwd, "config", key, value)
 
     def item(self, files, message="item"):
-        """Commit on the item branch and push it (the runner's work)."""
+        """Commit on the item branch (the runner's work). The turn's own
+        step pushes it; a push here cost six git processes per test for
+        a state the turn recreates (#916)."""
         commit(self.wt, files, message)
+
+    def push_item(self):
+        """The item branch as the runner pushed it, for a case that reads
+        origin's copy before the turn's own push (a stall)."""
         sh(self.wt, "push", "-q", "-u", "origin", BRANCH)
 
     def main_moves(self, files):
-        """Another merge lands on origin/main."""
+        """Another merge lands on origin/main: committed in the clone and
+        fetched into the bare origin, which is three git processes to a
+        push's six (#916). The turn fetches origin/main itself."""
         commit(self.repo, files, "main")
-        sh(self.repo, "push", "-q", "origin", "main")
+        sh(self.tmp / "origin.git", "fetch", "-q", str(self.repo),
+           "main:main")
 
     def ledger(self, rows):
         path = self.root / LEDGER
@@ -387,6 +411,31 @@ class TurnCase(unittest.TestCase):
 
     def head(self, ref=BRANCH):
         return sh(self.repo, "rev-parse", ref).strip()
+
+
+class TestFixtureIsolation(TurnCase):
+    """The shared template is copied per test (#902): a push or commit in
+    one test is invisible to the next, whichever runs first."""
+
+    def seed_head(self):
+        return sh(self.template / "origin.git", "rev-parse", "main").strip()
+
+    def test_a_origin_starts_at_the_seed(self):
+        self.assertEqual(sh(self.tmp / "origin.git", "rev-parse",
+                            "main").strip(), self.seed_head())
+
+    def test_b_a_push_to_origin_lands_in_this_test_only(self):
+        self.main_moves({"pushed.txt": "p\n"})
+        self.assertNotEqual(sh(self.tmp / "origin.git", "rev-parse",
+                               "main").strip(), self.seed_head())
+        self.item({"item.txt": "i\n"})
+        self.assertFalse((self.template / "repo/pushed.txt").exists())
+
+    def test_c_origin_is_back_at_the_seed(self):
+        self.assertEqual(sh(self.tmp / "origin.git", "rev-parse",
+                            "main").strip(), self.seed_head())
+        self.assertEqual(sh(self.repo, "rev-parse", "HEAD").strip(),
+                         self.seed_head())
 
 
 SHIPPED = feature_shipped({}) + own("ask-2", "#12")
@@ -545,6 +594,7 @@ class TestReviewedTree(TurnCase):
         self.item({"skills/x/SKILL.md": "x\n"})
         reviewed_at = self.head()
         self.item({"docs/features/x/release.md": "notes\n"})
+        self.push_item()
         write(self.wt, {"factory/templates/unreviewed.yml": "x: 1\n"})
         summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
         self.assertEqual(problems, [])
@@ -603,195 +653,6 @@ class TestReviewedTree(TurnCase):
                           answered("ask-3", "retry", "#12")]
         summary, problems = self.turn(rows, reviewed_at=reviewed_at)
         self.assertEqual((problems, summary["stall"]), ([], None))
-
-
-class TestMergeTurnStalls(TurnCase):
-    def assertStalled(self, summary, reason):
-        self.assertEqual(summary["stall"], reason)
-        self.assertEqual(self.rows[-2]["to"], "stalled")
-        self.assertEqual(self.rows[-2]["reason"], reason)
-        self.assertEqual(self.rows[-2]["cause"], "merge-failed")
-        self.assertEqual(self.rows[-1]["ask_kind"], "stall")
-        self.assertEqual(self.head("origin/" + BRANCH), self.pushed)
-
-    def item(self, files, message="item"):
-        super().item(files, message)
-        self.pushed = self.head()
-
-    def test_a_non_mechanical_conflict_stalls_and_aborts(self):
-        self.item({"README.md": "item\n"})
-        self.main_moves({"README.md": "main\n"})
-        summary, problems = self.turn(SHIPPED)
-        self.assertEqual(problems, [])
-        self.assertStalled(summary, f"merging origin/main into {BRANCH}"
-                           " conflicts in README.md")
-        self.assertEqual(self.head(), self.pushed)
-        self.assertFalse((self.repo / ".git/worktrees/conductor-b1-12/"
-                          "MERGE_HEAD").exists())
-        self.assertFalse(self.calls("git", "push"))
-        self.assertEqual(self.rows[-1]["recommended"], "block")
-
-    def test_a_dirty_tracked_file_stalls_with_gits_whole_reason(self):
-        # #726: a merge refused before it starts has nothing to abort,
-        # and its reason sits above the last stderr line, "Aborting".
-        self.item({"src.txt": "x\n"})
-        self.main_moves({"README.md": "main\n"})
-        write(self.wt, {"README.md": "dirty\n"})
-        # A retried turn: from `ship`, the clean-worktree check would
-        # stall first.
-        rows = SHIPPED + [moved("#12", "ship", "merging"),
-                          moved("#12", "merging", "stalled"),
-                          stall_ask("ask-3", "#12"),
-                          answered("ask-3", "retry", "#12")]
-        summary, problems = self.turn(rows)
-        self.assertEqual(problems, [])
-        # The refused merge changed nothing, so re-running it yields the
-        # same stderr; its wording varies by git version (newer ones add
-        # a strategy line after "Aborting").
-        again = subprocess.run(["git", "-C", str(self.wt), "merge",
-                                "--no-edit", "origin/main"],
-                               capture_output=True, text=True)
-        lines = [line.strip() for line in again.stderr.splitlines()
-                 if line.strip()]
-        self.assertIn("README.md", lines)
-        self.assertIn("Aborting", lines)
-        self.assertStalled(summary, f"merging origin/main into {BRANCH}"
-                           f" failed: {' | '.join(lines)}")
-
-    def test_a_red_make_check_stalls_before_any_push(self):
-        self.item({"src.txt": "x\n"})
-        summary, _ = self.turn(SHIPPED, tool=self.tool(fail="check"))
-        self.assertStalled(summary, f"make check failed on {BRANCH}:"
-                           " make: *** [check] Error 1")
-        self.assertFalse(self.calls("git", "push"))
-
-    def test_a_red_check_run_stalls_without_merging(self):
-        self.item({"src.txt": "x\n"})
-        red = dict(GREEN_RUN, conclusion="failure")
-        summary, _ = self.turn(SHIPPED, gh=self.fake_gh(checks=[[red]]))
-        self.assertStalled(summary,
-                           f"checks failed on {self.head()[:12]}: validate")
-        self.assertFalse(self.gh.fake.called("pr", "merge"))
-
-    def test_checks_that_never_finish_time_out_after_30_minutes(self):
-        self.item({"src.txt": "x\n"})
-        pending = dict(GREEN_RUN, status="in_progress", conclusion=None)
-        summary, _ = self.turn(SHIPPED, gh=self.fake_gh(checks=[[pending]]))
-        self.assertStalled(summary, f"checks on {self.head()[:12]} did not"
-                           " finish within 30 minutes")
-        self.assertEqual(sum(self.clock.slept), 30 * 60)
-        self.assertEqual(self.rows[-1]["recommended"], "retry")
-        self.assertFalse(self.gh.fake.called("pr", "merge"))
-
-    def test_pending_checks_are_waited_for(self):
-        self.item({"src.txt": "x\n"})
-        pending = dict(GREEN_RUN, status="queued", conclusion=None)
-        summary, _ = self.turn(SHIPPED, gh=self.fake_gh(
-            checks=[[], [pending], [GREEN_RUN]]))
-        self.assertEqual(summary["sha"], "m1")
-        self.assertEqual(self.clock.slept, [30, 30])
-
-    def test_a_queue_is_used_when_main_has_one(self):
-        self.item({"src.txt": "x\n"})
-        summary, _ = self.turn(SHIPPED, gh=self.fake_gh(
-            queue={"id": "q"}, views=[
-                {"state": "OPEN", "isInMergeQueue": True},
-                {"state": "MERGED", "mergeCommit": {"oid": "q1"}}]))
-        self.assertEqual(summary["sha"], "q1")
-        self.assertEqual(self.rows[-1]["to"], "merged")
-
-    def test_an_ejection_from_the_queue_stalls(self):
-        self.item({"src.txt": "x\n"})
-        summary, _ = self.turn(SHIPPED, gh=self.fake_gh(
-            queue={"id": "q"}, views=[
-                {"state": "OPEN", "isInMergeQueue": True},
-                {"state": "OPEN", "isInMergeQueue": False}]))
-        self.assertStalled(summary,
-                           "PR #44 was ejected from the merge queue")
-
-    def test_a_queue_that_never_merges_times_out(self):
-        self.item({"src.txt": "x\n"})
-        summary, _ = self.turn(SHIPPED, gh=self.fake_gh(
-            queue={"id": "q"}, views=[{"state": "OPEN",
-                                       "isInMergeQueue": True}]))
-        self.assertStalled(summary, "PR #44 did not merge from the queue"
-                           " within 30 minutes")
-
-    def test_a_stalled_merge_resumes_as_a_merge(self):
-        rows = START + SHIPPED + [moved("#12", "ship", "merging"),
-                                  moved("#12", "merging", "stalled"),
-                                  stall_ask("ask-3", "#12"),
-                                  answered("ask-3", "retry", "#12")]
-        ready, _, _ = flow.survey(rows, NOW, 3, lambda pid: True, {})
-        self.assertIn({"item": "#12", "step": "merge"}, ready)
-        self.assertEqual(merge.merge_problems(rows, "#12", {}), [])
-
-
-def adr_rows(blobs=None):
-    """#12 holds ADRs 90-92; covered by its own answer, or a train."""
-    reserve = {"at": AT, "kind": "reserve", "item": "#12", "what": "adr",
-               "values": [90, 91, 92]}
-    other = dict(reserve, item="#13", values=[93])
-    cover = own("ask-2", "#12") if blobs is None else train("ask-2",
-                                                            ["#12"])
-    return [reserve, other] + feature_shipped(blobs or {}) + cover
-
-
-class TestReservations(TurnCase):
-    ITEM = {"docs/adr/0091-item.md": "# ADR-0091 item\n",
-            "docs/adr/README.md": SEED["docs/adr/README.md"]
-            + "- [ADR-0091](0091-item.md) item\n"}
-    # Main's index row lands far enough from the item's to merge cleanly.
-    MAIN = {"docs/adr/0091-main.md": "# ADR-0091 main\n",
-            "docs/adr/README.md": SEED["docs/adr/README.md"].replace(
-                "The index.\n", "The index.\n- [ADR-0091](0091-main.md)"
-                " main\n")}
-
-    def test_a_free_number_is_confirmed_untouched(self):
-        self.item(self.ITEM)
-        self.assertEqual(self.turn(adr_rows())[1], [])
-        self.assertTrue((self.wt / "docs/adr/0091-item.md").is_file())
-        self.assertFalse([r for r in self.rows if "renumbered_from" in r])
-
-    def test_a_number_taken_on_main_is_renumbered_mechanically(self):
-        self.item(self.ITEM)
-        self.main_moves(self.MAIN)
-        summary, problems = self.turn(adr_rows())
-        self.assertEqual((problems, summary["stall"]), ([], None))
-        self.assertEqual(sorted(p.name for p in (self.wt / "docs/adr")
-                                .iterdir()),
-                         ["0091-main.md", "0094-item.md", "README.md"])
-        self.assertEqual((self.wt / "docs/adr/0094-item.md").read_text(),
-                         "# ADR-0094 item\n")
-        index = (self.wt / "docs/adr/README.md").read_text()
-        self.assertIn("- [ADR-0091](0091-main.md) main\n", index)
-        self.assertIn("- [ADR-0094](0094-item.md) item\n", index)
-        self.assertIn({"at": "2026-10-10T12:30:00Z", "kind": "reserve",
-                       "item": "#12", "what": "adr", "values": [94],
-                       "renumbered_from": [91]}, self.rows)
-        self.assertEqual(self.rows[-1]["to"], "merged")
-        self.assertLess(self.first("git", "grep"), self.first("tool",
-                                                               "check"))
-
-    def test_a_number_that_cannot_be_renumbered_stalls(self):
-        self.item(self.ITEM)
-        self.main_moves(dict(self.MAIN,
-                             **{"docs/adr/9999-last.md": "# last\n"}))
-        summary, _ = self.turn(adr_rows())
-        self.assertEqual(summary["stall"], "ADR-0091 is taken on origin/main"
-                         " and cannot be renumbered: ADR-10000 would leave"
-                         " the 4-digit grammar")
-        self.assertFalse(self.calls("git", "push"))
-
-    def test_a_renumbered_gate_file_no_longer_rides_a_train(self):
-        self.item(self.ITEM)
-        blobs = {path: sh(self.repo, "rev-parse", f"{BRANCH}:{path}").strip()
-                 for path in self.ITEM}
-        self.main_moves(self.MAIN)
-        summary, _ = self.turn(adr_rows(blobs))
-        self.assertTrue(summary["stall"].startswith(
-            "merge refused: #12's gate file docs/adr/"), summary)
-        self.assertFalse(self.calls("git", "push"))
 
 
 if __name__ == "__main__":

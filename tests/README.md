@@ -11,7 +11,12 @@
   marking: `python3 -m unittest discover tests` only collects
   `test_*.py`, so un-prefixed files are scaffolding, never suites.
 - Flat directory, no subpackages: the discover invocation is pinned in
-  the Makefile and CI, and helpers are imported by bare module name.
+  the payload Makefile and CI, and helpers are imported by bare module
+  name. The root Makefile runs `python3 run_tests.py`, one `python3 -m
+  unittest tests.<module>` child per module, so a suite that imports a
+  helper adds its own directory to `sys.path` first (the two-line
+  pattern every such suite carries); under the runner, a suite that
+  forgets fails to import.
 
 ## Suites (filename → what it pins)
 
@@ -25,6 +30,13 @@
   harness_run lifecycle
 - `test_cli_process_reaping.py` — cli.harness_run's group-kill contract
   composed with real subprocesses (driven via trigger_eval)
+- `test_conductor_merge.py` — conductor_merge.py, the merge precondition
+  and the merge turn against a scratch repo with a bare origin; its
+  `TurnCase` harness is what the facets below import
+- `test_conductor_merge_stalls.py` — the merge turn's stalls (facet of
+  the above, split so the real-git suites run as parallel modules, #916)
+- `test_conductor_merge_reservations.py` — ADR-number reservations at
+  the merge turn (facet, same split)
 - `test_cost_ledger.py` — cost_ledger.py, the cost-ledger seam
 - `test_cost_report.py` — cost_report.py, weekly rollup + circuit breaker
 - `test_design_pipeline.py` — cross-cutting: design.yml workflow, the
@@ -35,6 +47,8 @@
 - `test_factory_config.py` — factory_config.py reader and resolvers
 - `test_factory_init.py` — factory_init.py stamping + payload↔root mirror
 - `test_factory_roles.py` — factory_roles.py, the role-vocabulary seam
+- `test_fast_path.py` — fast_path.py, ADR-0096's fast-path classifier,
+  through the fake git port
 - `test_fixture_recorders.py` — tests/fixtures/*/record.py stay
   importable callers of the cli seam
 - `test_gate_digest.py` — gate_digest.py, digest + gate-latency capture
@@ -61,6 +75,8 @@
   maintenance rows, against tests/fixtures/maintenance-orientation/
 - `test_protocol_orientation.py` — protocol.next_stage, product rows,
   against tests/fixtures/orientation/
+- `test_run_tests.py` — run_tests.py, the parallel per-module runner,
+  through a fake spawn port
 - `test_sweeps.py` — sweeps.py, the intake sweeps
 - `test_trigger_eval.py` — trigger_eval.run_single_query's per-run
   project-dir cleanup
@@ -86,5 +102,8 @@
 - `harness_contract.py` — RunEvalContract mixin for the run_eval twins
 - `make_parse.py` — Makefile text extraction for the lockstep tests
 - `workflow_parse.py` — workflow text extraction for the run-step tests
+- `timings.json` — each suite's last recorded wall time, which
+  `run_tests.py` schedules longest-first from; rewritten by
+  `python3 run_tests.py --record` after a clean run
 - `fixtures/` — committed fixture trees and recorded transcripts (each
   transcript family has its own README)
