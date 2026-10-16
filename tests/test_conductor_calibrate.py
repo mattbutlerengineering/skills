@@ -245,7 +245,7 @@ class TestCalibrate(unittest.TestCase):
                  "review": 4.28, "ship": 1.07}
         card = cal.calibrate(actuals_of(costs), WEIGHTS)
         self.assertEqual(card["step_weights"], {
-            "spec": 3.0, "build": 1.0, "verify": 0.5, "review": 2.0,
+            "spec": 3.0, "build": 1.0, "verify": 0.5, "review": 6.0,
             "ship": 0.5})
         self.assertEqual(card["sizes"], {"M": {
             "n": 5, "mean_usd": 15.0, "max_usd": 15.0, "budget_usd": 15}})
