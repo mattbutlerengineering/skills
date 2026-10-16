@@ -119,3 +119,4 @@ the canonical vocabulary.
 | [0096](0096-this-repo-opts-in-to-implement-queue-auto-merge-with-a-docs-fast-path.md) | This repo opts in to implement-queue auto-merge, with a docs fast path | accepted (Owner, 2026-10-15) |
 | [0097](0097-fast-path-joins-the-root-only-importers-of-cli.md) | fast_path joins the root-only importers of cli.py | provisional |
 | [0098](0098-the-reviewer-credential-never-meets-pr-code.md) | The reviewer's credential never meets the pull request's code | provisional |
+| [0099](0099-a-stamp-may-be-tools-only-and-its-manifest-says-so.md) | A stamp may be tools-only, and its manifest says so | provisional |

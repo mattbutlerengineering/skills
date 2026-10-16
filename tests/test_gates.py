@@ -1294,6 +1294,40 @@ class TestScaffoldSync(unittest.TestCase):
                     gates.check_scaffold_sync(tree.root),
                     ["E: factory/manifest.json is not a JSON object"])
 
+    def tools_only_tree(self, tmp, marker=True):
+        """A tools-only stamp's shape (#941): one stamped tool, a manifest
+        listing it, and no factory/templates/ at all."""
+        tree = FixtureTree(tmp)
+        path = tree.write("tools/factory/gates.py", "G = 1\n")
+        manifest = {"files": {"templates/tools/factory/gates.py":
+                              hashlib.sha256(path.read_bytes()).hexdigest()}}
+        if marker:
+            manifest = {gates.INSTALL_KEY: gates.TOOLS_ONLY, **manifest}
+        tree.write("factory/manifest.json", json.dumps(manifest))
+        return tree
+
+    def test_a_tools_only_manifest_stands_the_mirror_half_down(self):
+        """A tools-only stamp has no mirror by design and its manifest
+        says so: E asks for no factory/templates/ there, and its stamped
+        half still checks every tool the manifest lists."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tools_only_tree(tmp)
+            self.assertEqual(gates.check_scaffold_sync(tree.root), [])
+            tree.write("tools/factory/gates.py", "G = 2\n")
+            self.assertEqual(gates.check_scaffold_sync(tree.root), [
+                "E: tools/factory/gates.py does not match"
+                " factory/templates/tools/factory/gates.py (hand-edited"
+                " stamped file — restore it from the mirror or re-stamp,"
+                " never keep the edit)"])
+
+    def test_without_the_marker_a_missing_mirror_is_still_reported(self):
+        # the marker is the only thing that stands the mirror half down
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tools_only_tree(tmp, marker=False)
+            self.assertEqual(gates.check_scaffold_sync(tree.root), [
+                "E: manifest lists missing file"
+                " factory/templates/tools/factory/gates.py"])
+
     @unittest.skipIf(os.geteuid() == 0, "root reads a mode-000 file")
     def test_a_manifest_the_process_may_not_read_is_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
