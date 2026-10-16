@@ -50,9 +50,17 @@ branch.
    hook never blocks a release: a COPY-ONLY verdict and a problem exit
    are each one log line, and the release proceeds.
 
-5. **Release.** Execute the project's release mechanism step by step,
-   recording each command/action and its result as it happens. Version and
-   tag according to the project's convention.
+5. **Release.** If `release.md` already records `outcome: prepared`, this
+   pass is the write-back, not a new release: read the pull request
+   `pending-merge:` names and record what it reached, per the protocol's
+   "The Ship outcome" section, then go to step 8. Otherwise execute the
+   project's release mechanism step by step, recording each
+   command/action and its result as it happens. Version and tag
+   according to the project's convention. Without release authorization
+   — an unattended run's prepare-and-stop default — push the branch,
+   open the pull request, and stop there: the artifact records
+   `outcome: prepared` and `pending-merge: <PR url>`, and the run stays
+   at Ship until the merge is written back.
 
 6. **Post-release.** Check the shipped thing actually works where users get
    it (smoke check the deployed surface, install the published package).
@@ -64,7 +72,10 @@ branch.
      started" (the protocol's tracker-mirror section).
 
 7. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
-   into the run directory as `release.md` with protocol frontmatter.
+   into the run directory as `release.md` with protocol frontmatter,
+   including the `outcome:` the release actually reached — `released`,
+   `rolled-back`, or `prepared` with its `pending-merge:` — as the
+   protocol's "The Ship outcome" section defines them.
 
 8. **Hand off.** Next stage is Operate. Commit the artifact on the run's
    branch — the protocol's "Commit at the stage boundary" section owns the
@@ -76,7 +87,8 @@ branch.
 - Record what actually happened, including hiccups; a clean-looking release
   log that omits the retry is a lie to the next release.
 - If the release fails midway, the rollback plan runs and the artifact
-  records both — a failed ship is a valid, complete `release.md`.
+  records both — a failed ship is a valid, complete `release.md`
+  (`outcome: rolled-back`).
 - **Maintenance runs**: scale per the protocol's Run scale section — a
   scoped fix may be a single commit merge; a refactor or upgrade gets
   the full pre-flight. The rollback plan is always present, even when

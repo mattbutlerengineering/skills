@@ -2,6 +2,9 @@
 stage: ship
 run: product | feature:<slug>
 date: YYYY-MM-DD
+outcome: released | rolled-back | prepared
+pending-merge: <PR url, while prepared>
+released-at: <YYYY-MM-DD, once the pull request merges>
 ---
 
 # Release: <title / version>
@@ -36,4 +39,5 @@ section)
 
 ## Outcome
 
-<Shipped cleanly / shipped with hiccups (listed) / rolled back (why).>
+<Shipped cleanly / shipped with hiccups (listed) / rolled back (why) /
+prepared and stopped — waiting on the pull request `pending-merge:` names.>
