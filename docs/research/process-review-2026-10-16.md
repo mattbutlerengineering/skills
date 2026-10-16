@@ -115,17 +115,23 @@ others, plus this note's PR. Each adopted item got its own plain issue
 (`type:chore`) because detector B requires a `Closes #N` per PR and
 #956 closes only with this note.
 
+As of this note's own PR, #960, #962 and #966 had merged and #964 was
+open with `origin/main` merged in after #967 (no conflicts, payload
+unchanged, `make check` green on the merged tree).
+
 - #960 — `feat(github)`: `.github/PULL_REQUEST_TEMPLATE.md`, fail-closed
   (an unedited `No work order:` and `Closes #` both fail detector B),
   with the house sections and the provenance block. Closes #959. A gate
-  path, so a human merges it.
+  path, so a human merged it.
 - #962 — `docs(kb)`: the four pages #957 made stale re-verified against
   `a364649`; the two about the stamp and the manifest now say what a
   tools-only target does (ADR-0099). Closes #961. `kb: 0 problem(s)` on
-  the branch — and stale again the moment #967 touched `factory_init.py`
-  and `gates.py` after it, which is the pin mechanism working as
-  designed: the hourly routine's rung 3 re-verifies, and re-pinning in
-  a loop from a PR is exactly the squash-merge problem above.
+  the branch. Merged behind #967, which had touched `factory_init.py`
+  again, so `manifest-regen` and `stamp-outside-payload` were stale on
+  `main` the moment it landed (`kb: 2 problem(s)` at 4c607af). That is
+  the pin mechanism working as designed: the hourly routine's rung 3
+  re-verifies, and re-pinning in a loop from a PR is exactly the
+  squash-merge problem above.
 - #964 — `feat(make)`: `python3 kb.py drift` after `lint.py` in `check`,
   dropped from the stamped twin by `product_makefile` (payload
   byte-identical), pinned by the lockstep and transform tests, listed
