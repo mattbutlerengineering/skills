@@ -174,6 +174,74 @@ Still open: the closing-merge race with a consumer's own auto-merge (#807),
 and the reservation scan reading the payload's own ADR citations (filed
 with this change).
 
+## Real consumer batches, round 2 (2026-10-13 to 2026-10-16)
+
+The second consumer round (#946, the Owner's write-up, read against the
+consumer's `conductor/*` ledgers, `docs/factory/costs.jsonl` and
+`runs/*.json`) covers four batches in mattbutlerengineering/mattbutlerengineering
+on three payload versions: b20261013 (tools 0.12.2, one item), b20261014
+(0.15.0, one item), b20261014c (0.19.0, five items) and sdlc-ci (0.19.0,
+three items). b20261014c is the first batch at PRD-0013's stated size.
+None of the four has closed yet (see the standing tracker below), so no
+scorecard row exists for them and nothing here re-scores SC 1-7.
+
+### What worked, and where it is protected
+
+- **The `cause` taxonomy (#819)** made every stall in four ledgers
+  classifiable by grep; every finding below was found that way.
+  `conductor.CAUSES` is the one vocabulary and every new stall path flows
+  through it (`tests/test_conductor_flow.py`, `tests/test_conductor_next.py`).
+- **`NO_HOOKS` (#833)** removed the husky stall class at one port; the
+  0.19.0 batches show none.
+- **The ledger-as-state design held through a 20-hour dead session.**
+  sdlc-ci's three spec runners were lost at 04:47Z; `next` found them at
+  01:09Z the next day, asked once per item, and the retries completed in
+  about a minute each because #725's retry note told the Worker its
+  artifacts were already committed. State was never in doubt. The money
+  was: see #937 below.
+- **Gate re-pricing told the truth before build spent it**: every M item
+  re-priced from $15 to $21-26 at the gate, and the Owner saw the number
+  first. The estimate was wrong (#940); the honesty was right.
+- **The manifest's sha256 entries doubled as an upgrade check** for a
+  tools-only install; #941 made that a command.
+- **`kb.py harvest` from a worktree finds the main checkout (#710)**,
+  verified by use.
+- **Five items ran concurrently to the WIP cap**, asks arriving one at a
+  time in finishing order: the one-question interaction model from #713
+  still holds at that size.
+
+### What was fixed from this round
+
+| Finding | Issue | Fixed by | What changed |
+|---|---|---|---|
+| Review priced at verify's slice, so review never completed | #936 | #953 | review weighs three shares like spec; the gate ask states the review ceiling; a first budget stop that never let the Worker start recommends retry-up or block |
+| A lost runner left its spend unmetered | #937 | #967 | `next` writes the run row and charges the step's ceiling through the one spend path (`conductor_spend`); fail-closed |
+| An item PR merged outside the batch was invisible | #938 | #973 | `next` reads the PR every tick; `deliver` finds a merged PR before opening another; close and scorecards reconcile as merged outside the batch |
+| A stall after the Worker finished relaunched the Worker | #939 | #972 (and #954) | a `delivery-failed` retry redoes only the spend commit, push and PR (`conductor_next`); stall reasons carry stderr; a closed issue stalls with a clarify ask before any launch |
+| `calibrate` silent below the floor | #940 | #971 | per-step ceiling warnings at any sample size, repeated by `plan`; `conductor.calibrate_floor`; pre-work-order build rows set aside |
+| No update path for a tools-only install | #941 | #957 | `factory-init stamp/update --tools-only`; `conductor.py --version` |
+| A prepared release never written back; Ship complete on file existence | #942 | #968 | `release.md` records `outcome:` and `pending-merge:`; Ship completes on a reached outcome; Operate resolves or stops |
+| Stage artifacts left uncommitted for nine days | #943 | #958 | every stage commits its artifact at its boundary; autorun refuses to advance past an uncommitted one |
+| A run's own Review deferrals read as post-ship feedback | #944 | #970 | `retro.md` carries `users-observed:` and `signal-source:`; the run's own debt is listed, never counted; autorun briefs get an `operate:` section |
+| GraphQL-backed `gh` calls fail in Claude Code Remote | #945 | #951 | every such call in skill text names its `gh api` REST twin |
+
+The Owner's one-line reading of the round stands: the Conductor
+delivered real code (b20261014c merged four item PRs within 90 minutes
+of plan) and lost money in three ways. Ceilings that could not fit the
+model they priced are #953 and #971; runs that died unmetered are #967;
+retries that relaunched finished work are #972. #938 is what makes the
+scorecard agree with GitHub.
+
+### The standing tracker
+
+#822 stays open by the Owner's decision. The next step is the Owner's:
+upgrade the consumer's tools to the release carrying the fixes above
+(`factory-init update --tools-only`), run `next` on b20261014,
+b20261014c and sdlc-ci so the bookkeeping retries commit and push the
+spend rows `close` refused on, close the batches, then
+`conductor.py scorecards` and `conductor.py calibrate`, and re-score
+SC 1-7 here from those rows.
+
 ## Criteria & evidence: PRD-0013 success criteria
 
 All seven read "Checked on a real batch of at least four issues in one
