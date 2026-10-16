@@ -752,6 +752,23 @@ class TestRetryAfterBudgetStop(RunCase):
                      " as about the agent, so nothing retries without your"
                      " answer"))
 
+    def test_a_first_budget_stop_that_never_started_recommends_block(self):
+        # #936: the harness's result event carries num_turns and the
+        # per-model output tokens, so a ceiling that went before the
+        # Worker started is read from the run, not from a second stop.
+        stopped = dict(BUDGET_STOP, num_turns=5, modelUsage={"m": {
+            "inputTokens": 40, "outputTokens": 531,
+            "cacheReadInputTokens": 113162,
+            "cacheCreationInputTokens": 93373}})
+        self.run_step("#12", "spec", Harness(events=[stopped]))
+        asked = self.rows[-1]
+        self.assertEqual((asked["options"], asked["recommended"],
+                          asked["why"]), (
+            ["retry", "block"], "block",
+            "a first budget stop on spec at its $3.00 ceiling after 5"
+            " turn(s) and 531 output tokens: the ceiling never let the"
+            " Worker start, so a plain retry spends it again; block it"))
+
     def test_a_second_budget_stop_at_the_top_band_recommends_block(self):
         self.run_step("#12", "spec", Harness(events=[BUDGET_STOP]),
                       git=Git(self.tmp.name, log=SPEC_LOG), rows=self.RETRY)

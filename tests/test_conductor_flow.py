@@ -352,9 +352,11 @@ class TestSurveyWrites(unittest.TestCase):
             {"at": "2026-10-10T12:30:00Z", "kind": "ask", "item": "#12",
              "id": "ask-2", "ask_kind": "gate",
              "question": "#12's spec is ready for its gate: approve these"
-                         " gate files and its build of 0 breakdown row(s)"
-                         " at up to $3.00 each ($0.00), re-pricing #12 at"
-                         " $12.00 against its $15.00 plan estimate?",
+                         " gate files, its build of 0 breakdown row(s)"
+                         " at up to $3.00 each ($0.00) and its review of"
+                         " what those rows produce at up to $3.00,"
+                         " re-pricing #12 at $12.00 against its $15.00"
+                         " plan estimate?",
              "options": ["approve", "block"], "recommended": "approve",
              "why": "the spec step completed; the gate files are"
                     " docs/features/x/prd.md",
@@ -363,16 +365,40 @@ class TestSurveyWrites(unittest.TestCase):
     def test_the_gate_ask_reprices_the_build_from_its_rows(self):
         # Review major 2: build runs once per breakdown row at the build
         # step's full ceiling, so the gate answer is the build's spend
-        # consent and names its price.
+        # consent and names its price. #936: the review that reads what
+        # those rows produce is priced beside it, at its own ceiling.
         rows = [launch("#12", "planned", "spec"), ran("#12", "spec")]
         writes = self.writes(rows, facts={
             "#12": {"gate_blobs": {}, "unchecked": 4}})
         self.assertEqual(writes[1]["question"],
                          "#12's spec is ready for its gate: approve these"
-                         " gate files and its build of 4 breakdown row(s)"
-                         " at up to $3.00 each ($12.00), re-pricing #12 at"
-                         " $24.00 against its $15.00 plan estimate?")
+                         " gate files, its build of 4 breakdown row(s)"
+                         " at up to $3.00 each ($12.00) and its review of"
+                         " what those rows produce at up to $3.00,"
+                         " re-pricing #12 at $24.00 against its $15.00"
+                         " plan estimate?")
         self.assertEqual(writes[1]["build_usd"], 12.0)
+
+    def test_the_gate_ask_prices_the_review_at_its_own_ceiling(self):
+        # The review runs once under its ceiling, which the plan estimate
+        # already holds: the figure is stated, not added to the re-price.
+        rows = [launch("#13", "planned", "spec"), ran("#13", "spec")]
+        plan = dict(PLAN, items=[dict(item("#13", "fix", "S"), steps=[
+            dict(s, ceiling_usd=(5.0 if s["step"] == "review" else 1.0))
+            for s in FEATURE_STEPS])])
+        _, writes, problems = flow.survey(
+            [plan] + START[1:] + rows, NOW, 3, alive,
+            {"#13": {"gate_blobs": {"docs/adr/0090-x.md": "b"},
+                     "unchecked": 2}})
+        self.assertEqual(problems, [])
+        self.assertEqual(writes[1]["question"],
+                         "#13's spec is ready for its gate: approve these"
+                         " gate files, its build of 2 breakdown row(s)"
+                         " at up to $1.00 each ($2.00) and its review of"
+                         " what those rows produce at up to $5.00,"
+                         " re-pricing #13 at $16.00 against its $15.00"
+                         " plan estimate?")
+        self.assertNotIn("review_usd", writes[1])
 
     def test_a_feature_gates_even_with_no_gate_files(self):
         rows = [launch("#12", "planned", "spec"), ran("#12", "spec")]
@@ -617,6 +643,9 @@ if __name__ == "__main__":
 
 
 BUDGET = "the Worker run ended error_max_budget_usd"
+# The result event of a budget stop that never let the Worker start
+# (#936): single-digit turns, output tokens in the hundreds.
+NEVER_STARTED = {"num_turns": 5, "usage": {"output_tokens": 1072}}
 
 
 def failed(key, frm, name, seq=1, band="implementation",
@@ -657,9 +686,10 @@ class TestWorkerAdvice(unittest.TestCase):
     runs of the step have failed in a row, and a repeat budget stop at
     the same ceiling recommends no plain retry."""
 
-    def advice(self, rows, key, name, band, reason=BUDGET):
+    def advice(self, rows, key, name, band, reason=BUDGET, result=None):
         entry = flow.item_view(START, key)["entry"]
-        return flow.worker_advice(START + rows, entry, name, band, reason)
+        return flow.worker_advice(START + rows, entry, name, band, reason,
+                                  result)
 
     def test_a_first_failure_recommends_retry(self):
         self.assertEqual(
@@ -667,6 +697,59 @@ class TestWorkerAdvice(unittest.TestCase):
             ("retry", "a first failure is evidence about the item as often"
                       " as about the agent, so nothing retries without your"
                       " answer"))
+
+    def test_a_first_budget_stop_that_never_started_recommends_block(self):
+        # #936: review-1 of consumer batch b20261013 ended
+        # error_max_budget_usd after 5 turns and 1,072 output tokens — the
+        # ceiling went on loading the brief and the tree, so a plain retry
+        # spends it again; at the top band there is no band to go up to.
+        self.assertEqual(
+            self.advice([], "#12", "spec", "architecture_review",
+                        result=NEVER_STARTED),
+            ("block", "a first budget stop on spec at its $3.00 ceiling"
+                      " after 5 turn(s) and 1072 output tokens: the ceiling"
+                      " never let the Worker start, so a plain retry spends"
+                      " it again; block it"))
+
+    def test_a_never_started_stop_below_the_top_recommends_retry_up(self):
+        self.assertEqual(
+            self.advice([], "#14", "build", "implementation",
+                        result=NEVER_STARTED),
+            ("retry-up", "a first budget stop on build at its $3.00 ceiling"
+                         " after 5 turn(s) and 1072 output tokens: the"
+                         " ceiling never let the Worker start, so a plain"
+                         " retry spends it again; retry it one band up, on"
+                         " a stronger model"))
+
+    def test_a_zeroed_usage_reads_the_per_model_output_tokens(self):
+        # A budget stop zeroes usage and leaves its counts in modelUsage
+        # (#725).
+        result = {"num_turns": 5, "usage": {"output_tokens": 0},
+                  "modelUsage": {"m": {"outputTokens": 500},
+                                 "n": {"outputTokens": 31}}}
+        self.assertEqual(
+            self.advice([], "#12", "spec", "architecture_review",
+                        result=result)[1],
+            "a first budget stop on spec at its $3.00 ceiling after 5"
+            " turn(s) and 531 output tokens: the ceiling never let the"
+            " Worker start, so a plain retry spends it again; block it")
+
+    def test_a_first_budget_stop_that_started_recommends_retry(self):
+        # Ten turns or two thousand output tokens is a Worker that ran; a
+        # missing event, or one with no num_turns count, is no evidence.
+        for result in ({"num_turns": 10, "usage": {"output_tokens": 1999}},
+                       {"num_turns": 9, "usage": {"output_tokens": 2000}},
+                       {"usage": {"output_tokens": 12}}, {}, None):
+            with self.subTest(result=result):
+                self.assertEqual(
+                    self.advice([], "#12", "spec", "architecture_review",
+                                result=result)[0], "retry")
+
+    def test_a_tiny_run_that_was_not_a_budget_stop_still_retries(self):
+        self.assertEqual(
+            self.advice([], "#12", "spec", "architecture_review",
+                        reason="the run completed but left no pr-body.md",
+                        result=NEVER_STARTED)[0], "retry")
 
     def test_a_completed_earlier_run_does_not_count(self):
         rows = [launch("#14", "planned", "build"), ran("#14", "build")]

@@ -3,8 +3,10 @@ split across its steps by weight, not evenly. The spec step writes
 every stage artifact from idea to breakdown at the top band, and an
 even $3 share of a size-M item ran out of budget 3 times out of 3.
 The default weights live in factory_config; factory.json's optional
-conductor.step_weights overrides a step's weight. Tests assert the
-EXACT ceilings and problem strings.
+conductor.step_weights overrides a step's weight. Review runs at spec's
+band and reads everything the build rows produce, so it takes spec's
+three shares too (#936). Tests assert the EXACT ceilings and problem
+strings.
 """
 import json
 import sys
@@ -37,17 +39,17 @@ def weighted(**weights):
 
 
 class TestDefaultWeights(unittest.TestCase):
-    def test_the_default_gives_spec_three_shares(self):
+    def test_the_default_gives_the_top_band_steps_three_shares(self):
         self.assertEqual(factory_config.resolve_step_weights({}), (
-            {"spec": 3, "build": 1, "verify": 1, "review": 1, "ship": 1},
+            {"spec": 3, "build": 1, "verify": 1, "review": 3, "ship": 1},
             []))
 
-    def test_a_feature_items_spec_gets_the_larger_share(self):
+    def test_a_feature_items_spec_and_review_get_the_larger_shares(self):
         result, problems = plan([issue(12)])
         self.assertEqual(problems, [])
         self.assertEqual(ceilings(result["items"][0]), [
-            ("spec", 6.44), ("build", 2.14), ("verify", 2.14),
-            ("review", 2.14), ("ship", 2.14)])
+            ("spec", 4.99), ("build", 1.67), ("verify", 1.67),
+            ("review", 5.0), ("ship", 1.67)])
 
     def test_the_ceilings_sum_to_the_item_estimate(self):
         for labels in (("type:feature", "size:M"), ("type:defect", "size:S"),
@@ -60,11 +62,11 @@ class TestDefaultWeights(unittest.TestCase):
                     sum(s["ceiling_usd"] for s in item["steps"]),
                     item["estimate_usd"], places=9)
 
-    def test_an_order_with_no_spec_splits_evenly(self):
+    def test_an_order_with_no_spec_gives_review_the_larger_share(self):
         result, _ = plan([issue(1, ("wo:ready-for-agent", "size:M"))])
         self.assertEqual(ceilings(result["items"][0]), [
-            ("build", 3.75), ("verify", 3.75), ("review", 3.75),
-            ("ship", 3.75)])
+            ("build", 2.5), ("verify", 2.5), ("review", 7.5),
+            ("ship", 2.5)])
 
     def test_the_batch_estimate_stays_the_size_budget(self):
         result, _ = plan([issue(1), issue(2, ("type:defect", "size:S"))])
@@ -76,20 +78,22 @@ class TestDefaultWeights(unittest.TestCase):
         result, _ = plan([issue(12)])
         lines = conductor_plan.compose_plan(result)
         self.assertEqual(lines[2], "    spec    architect  architecture_review"
-                         "  fable  high  $6.44")
+                         "  fable  high  $4.99")
         self.assertEqual(lines[3], "    build   swe        implementation     "
-                         "  sonnet  medium  $2.14")
+                         "  sonnet  medium  $1.67")
+        self.assertEqual(lines[5], "    review  reviewer   architecture_review"
+                         "  fable  high  $5.00")
 
 
 class TestConfiguredWeights(unittest.TestCase):
     def test_a_configured_weight_replaces_that_steps_default(self):
         self.assertEqual(factory_config.resolve_step_weights(
             {"conductor": {"step_weights": {"spec": 1, "build": 2.5}}}),
-            ({"spec": 1, "build": 2.5, "verify": 1, "review": 1,
+            ({"spec": 1, "build": 2.5, "verify": 1, "review": 3,
               "ship": 1}, []))
 
     def test_equal_weights_restore_the_even_split(self):
-        result, problems = plan([issue(12)], weighted(spec=1))
+        result, problems = plan([issue(12)], weighted(spec=1, review=1))
         self.assertEqual(problems, [])
         self.assertEqual(ceilings(result["items"][0]), [
             ("spec", 3.0), ("build", 3.0), ("verify", 3.0),

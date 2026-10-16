@@ -766,7 +766,7 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
                                               verdict, run_id, ctx["head"])
     if stall is not None:
         recommended, why = flow.worker_advice(ctx["rows"], entry, step,
-                                              band, stall)
+                                              band, stall, event)
         _, problems = flow.queue_stall(
             root, batch, done, item, stall,
             _stall_cause(stall, ended, failed), recommended, why)
