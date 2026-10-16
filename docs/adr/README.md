@@ -121,3 +121,4 @@ the canonical vocabulary.
 | [0098](0098-the-reviewer-credential-never-meets-pr-code.md) | The reviewer's credential never meets the pull request's code | provisional |
 | [0099](0099-a-stamp-may-be-tools-only-and-its-manifest-says-so.md) | A stamp may be tools-only, and its manifest says so | provisional |
 | [0100](0100-every-stage-commits-its-artifact-at-its-boundary.md) | Every stage commits its artifact at its boundary | provisional |
+| [0101](0101-ship-completes-on-the-outcome-it-recorded.md) | Ship completes on the outcome it recorded, not on release.md existing | provisional |
