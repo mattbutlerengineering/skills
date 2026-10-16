@@ -42,6 +42,13 @@ becomes a logged assumption, never a silent guess.
    - **release authorization**: the project's release mechanism and
      versioning convention, and whether this run may execute it. Absent
      an explicit yes, the default is prepare-and-stop (see step 5).
+   - **operate**: an explicit `operate:` section — `wait: <N days>`
+     before a retro, `minimum-signal: <what must exist first>` (one
+     independent user report, an error-budget read), or `skip` (no retro
+     this run). Operate runs on this section, never Ship's authorization,
+     and the brief never supplies the count: `users-observed:` is counted
+     from signal the stage finds, and `0` is the honest count when there
+     is none (the protocol's "The Operate population" section).
    If the user has supplied these, confirm only the gaps. Write the brief
    into the run directory as `autorun-brief.md` and commit it on the
    run's branch the way a stage commits its artifact (the protocol's
@@ -99,8 +106,12 @@ becomes a logged assumption, never a silent guess.
    run stays at Ship until the merge is written back. And regardless of
    what the brief
    authorizes, never release unattended past unfixed critical review
-   findings — stop and surface instead. Run operate only when feedback
-   already exists to capture. A `stop-after: <stage>` line in
+   findings — stop and surface instead. Run operate only as the brief's
+   `operate:` section says: after its `wait`, once its `minimum-signal`
+   exists, or not at all on `skip` — a protocol-sanctioned skip, recorded
+   in the report, that leaves the run active until someone has feedback.
+   A brief with no `operate:` section does not run operate; say so. A
+   `stop-after: <stage>` line in
    `autorun-brief.md` ends the loop earlier: stop once that stage's
    artifact or recorded skip exists, without starting the next stage,
    and go to step 6. A spec Worker uses it to drive a run up to a human
@@ -112,7 +123,9 @@ becomes a logged assumption, never a silent guess.
    request it waits on), and each ADR
    written unattended (status `provisional`, per the protocol). Aggregate
    every assumption from the artifacts' frontmatter into one list; note
-   that the run was autorun-driven. Ship, or the brief's `stop-after:`
+   that the run was autorun-driven and, when the brief said `skip` or
+   its `operate:` condition was not yet met, that operate did not run
+   and the run stays active. Ship, or the brief's `stop-after:`
    stage, is where autorun stops: the run stays active until `retro.md`
    exists, and operate remains available once there is feedback to
    capture.

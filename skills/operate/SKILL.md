@@ -27,11 +27,21 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
    return once there's real usage to reflect on — a retro written an hour
    after shipping reflects hopes, not outcomes.
 
-4. **Capture outcomes.** Against `prd.md`'s success criteria and `idea.md`'s
-   success-in-one-sentence: what actually happened? Gather whatever signal
-   exists — user feedback, your own usage, error reports, the absence of
-   complaints. Label the strength of each signal honestly (anecdote vs.
-   pattern).
+4. **Count the population, then capture outcomes.** First the population
+   line: `users-observed:` — how many people used the shipped thing — and
+   `signal-source:` — where that count came from — go in the frontmatter.
+   `0` is a valid answer, and with it no outcome may read as landing,
+   adopted or used: its signal is `unobserved` and "what happened"
+   records state, not use. Then, against `prd.md`'s success criteria and
+   `idea.md`'s success-in-one-sentence: what actually happened? Gather
+   whatever signal exists — user feedback, your own usage, error reports,
+   the absence of complaints — and label the strength of each honestly
+   (anecdote vs. pattern). The run's own debt is never counted as
+   feedback: an issue created before the run's merge, or whose body says
+   it was deferred from the Review stage or cites the run's `review.md`
+   or `verification.md`, is the run's own — list it under Open debt and
+   count it toward nothing. The protocol's "The Operate population"
+   section owns both rules.
 
 5. **Retrospect on the run itself.** Walk the stages: where did the pipeline
    help, where did it drag, which artifact earned its keep, which stage got
@@ -63,8 +73,8 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
    section, creating the file if absent — never rewrite existing lines.
 
 8. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
-   into the run directory as `retro.md` with protocol frontmatter. This
-   completes the run. Commit the artifact on the run's branch — the
+   into the run directory as `retro.md` with protocol frontmatter, the
+   population line included. This completes the run. Commit the artifact on the run's branch — the
    protocol's "Commit at the stage boundary" section owns the rule and the
    commit subject.
 
