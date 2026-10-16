@@ -232,7 +232,11 @@ its steps as their ceilings by step weight (#724): by default `spec` and
 plans spec at $4.99, review at $5.00 and each other step at $1.67.
 `step_weights` maps any of those steps to a positive number that
 replaces its default weight; the batch estimate stays the size budget.
-Detector F checks the table. `work-queue` still
+`calibrate_floor` is the fewest samples `calibrate` suggests a weight or
+budget from, a positive integer, 5 when absent (#940); below it
+`calibrate` still warns about a step whose attempts spent their ceiling
+half the time or more, and `plan` repeats that warning when it prices
+from the same weights. Detector F checks the table. `work-queue` still
 fans out ready work orders through one stage, and `autorun` still drives
 one run end to end. One step needs no Conductor: turn on the merge queue
 ADR-0070 already chose, if the repo's plan allows it; the merge turn uses

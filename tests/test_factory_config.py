@@ -379,5 +379,47 @@ class TestResolveCap(unittest.TestCase):
                     " monthly_cap_usd"]))
 
 
+class TestCalibrateFloor(unittest.TestCase):
+    """conductor.calibrate_floor (#940): the fewest samples `calibrate`
+    suggests a weight or budget from — 5 when absent, a positive integer
+    when set — validated in the one home of the conductor table's value
+    grammar, so detector F and the resolver agree on it."""
+    PROBLEM = "conductor.calibrate_floor must be a positive integer"
+
+    def test_absent_is_five(self):
+        self.assertEqual(factory_config.DEFAULT_CALIBRATE_FLOOR, 5)
+        self.assertEqual(factory_config.resolve_calibrate_floor(CONFIG),
+                         (5, []))
+
+    def test_a_configured_floor_replaces_the_default(self):
+        config = dict(CONFIG, conductor={"calibrate_floor": 2})
+        self.assertEqual(factory_config.config_problems(config), [])
+        self.assertEqual(factory_config.resolve_calibrate_floor(config),
+                         (2, []))
+
+    def test_the_key_is_in_the_conductor_vocabulary(self):
+        # An unknown key is its own problem; the floor must not be one.
+        self.assertIn("calibrate_floor", factory_config.CONDUCTOR_KEYS)
+
+    def test_a_malformed_floor_is_an_exact_problem(self):
+        for value in (0, -1, True, "5", 2.5, None):
+            with self.subTest(value=value):
+                config = dict(CONFIG, conductor={"calibrate_floor": value})
+                self.assertEqual(factory_config.config_problems(config),
+                                 [self.PROBLEM])
+                self.assertEqual(
+                    factory_config.resolve_calibrate_floor(config),
+                    (None, [f"config: factory.json {self.PROBLEM}"]))
+
+    def test_detector_f_reports_a_bad_floor_through_the_one_grammar(self):
+        import gates
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, ".github").mkdir()
+            Path(tmp, ".github/factory.json").write_text(json.dumps(
+                dict(CONFIG, conductor={"calibrate_floor": 0})))
+            self.assertEqual(gates.check_config_shape(Path(tmp)), [
+                f"F: .github/factory.json {self.PROBLEM}"])
+
+
 if __name__ == "__main__":
     unittest.main()

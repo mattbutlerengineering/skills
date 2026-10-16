@@ -6,8 +6,10 @@ spec weighted 3): spec spent $5.83 of its $6.44 ceiling, build passed
 its $2.14 ceiling once then completed, review spent its ceiling twice
 and the item was blocked. Its launch rows are built by
 conductor_flow.state_row, the writer conductor_run launches through, so
-the fixture cannot invent a row shape no writer emits (#829). Tests
-assert the EXACT rows, suggestions and problem strings.
+the fixture cannot invent a row shape no writer emits (#829). Its build
+rows carry the item in `wo`, as that batch's tools wrote them (#940), so
+they are attempts and hits but no build sample. Tests assert the EXACT
+rows, suggestions, warnings and problem strings.
 """
 import json
 import sys
@@ -128,11 +130,11 @@ def lines(rows):
     return "".join(json.dumps(row) + "\n" for row in rows)
 
 
-def write(root, ledgers, costs):
+def write(root, ledgers, costs, config=None):
     root = Path(root)
-    config = root / ".github/factory.json"
-    config.parent.mkdir(parents=True, exist_ok=True)
-    config.write_text("{}\n", encoding="utf-8")
+    path = root / ".github/factory.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config or {}) + "\n", encoding="utf-8")
     for batch, rows in ledgers.items():
         path = root / conductor.LEDGER.format(batch=batch)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -213,6 +215,15 @@ def actuals_of(costs, build_rows=1, batches=5):
     return rows
 
 
+BUILD_ASIDE = ("build: 2 run(s) set aside from the sample: their spend row"
+               " names the item, not a work order (older tools, or a runner"
+               " lost before it metered); they still count as attempts")
+BUILD_WARNING = ("build: 1 of 2 attempts spent the ceiling; the weight is"
+                 " too low")
+REVIEW_WARNING = ("review: 2 of 2 attempts spent the ceiling; the weight is"
+                  " too low")
+
+
 class TestCalibrate(unittest.TestCase):
     def test_below_the_floor_it_prints_n_and_suggests_nothing(self):
         self.assertEqual(cal.calibrate(ACTUALS, WEIGHTS), {
@@ -220,8 +231,8 @@ class TestCalibrate(unittest.TestCase):
             "steps": {
                 "spec": {"n": 1, "attempts": 1, "ceiling_hits": 0,
                          "mean_usd": 5.83, "max_usd": 5.83},
-                "build": {"n": 1, "attempts": 2, "ceiling_hits": 1,
-                          "mean_usd": 3.47, "max_usd": 3.47},
+                "build": {"n": 0, "attempts": 2, "ceiling_hits": 1,
+                          "mean_usd": None, "max_usd": None},
                 "verify": {"n": 1, "attempts": 1, "ceiling_hits": 0,
                            "mean_usd": 0.9, "max_usd": 0.9},
                 "review": {"n": 1, "attempts": 2, "ceiling_hits": 2,
@@ -229,11 +240,25 @@ class TestCalibrate(unittest.TestCase):
             "step_weights": None,
             "sizes": {"M": {"n": 1, "mean_usd": 14.48, "max_usd": 14.48,
                             "budget_usd": None}},
-            "refused": ["step_weights: no run of ship to scale its weight"
+            "warnings": [BUILD_WARNING, REVIEW_WARNING],
+            "set_aside": [BUILD_ASIDE],
+            "refused": ["step_weights: no run of build to scale its weight"
                         " from",
-                        "step_weights: n=1 for spec, build, verify, review,"
-                        " below the floor of 5",
+                        "step_weights: no run of ship to scale its weight"
+                        " from",
+                        "step_weights: n=0 for build; n=1 for spec, verify,"
+                        " review, below the floor of 5",
                         "budgets_usd: n=1 for M, below the floor of 5"]})
+
+    def test_the_floor_is_the_callers(self):
+        # #940: five is many batches for a single-owner repo.
+        card = cal.calibrate(ACTUALS, WEIGHTS, floor=1)
+        self.assertEqual(card["floor"], 1)
+        self.assertEqual(card["sizes"]["M"]["budget_usd"], 15)
+        self.assertEqual(card["refused"], [
+            "step_weights: no run of build to scale its weight from",
+            "step_weights: no run of ship to scale its weight from",
+            "step_weights: n=0 for build, below the floor of 1"])
 
     def test_steps_spending_their_ceilings_suggest_the_weights_in_force(self):
         card = cal.calibrate(actuals_of(CEILINGS), WEIGHTS)
@@ -275,13 +300,161 @@ class TestCalibrate(unittest.TestCase):
     def test_no_rows_suggests_nothing(self):
         self.assertEqual(cal.calibrate([], WEIGHTS), {
             "floor": 5, "steps": {}, "step_weights": None, "sizes": {},
+            "warnings": [], "set_aside": [],
             "refused": ["no closed batch has a run to calibrate from"]})
+
+
+def spec_rows(costs):
+    """One spec row per batch, each spent `costs[i]` of the $6.44
+    ceiling: a step's attempts across batches."""
+    return [{**actual("spec", 1, "architecture_review", "f", "high", cost,
+                      600, "completed"), "batch": f"b{n}", "item": f"#{n}",
+             "wo": f"#{n}"} for n, cost in enumerate(costs, 1)]
+
+
+class TestCeilingWarnings(unittest.TestCase):
+    """#940: below the floor the counters still give a verdict. A step
+    whose attempts spent their ceiling half the time or more, at two
+    attempts or more, is underweighted; the suggestion cannot say so,
+    because a run that stopped at its ceiling scales a weight down, not
+    up."""
+
+    def test_half_the_attempts_or_more_at_two_or_more_warns(self):
+        self.assertEqual(cal.calibrate(ACTUALS, WEIGHTS)["warnings"],
+                         [BUILD_WARNING, REVIEW_WARNING])
+
+    def test_one_attempt_never_warns(self):
+        card = cal.calibrate(spec_rows([6.44]), WEIGHTS)
+        self.assertEqual(card["steps"]["spec"]["ceiling_hits"], 1)
+        self.assertEqual(card["warnings"], [])
+
+    def test_under_half_the_attempts_does_not_warn(self):
+        self.assertEqual(
+            cal.calibrate(spec_rows([6.44, 5.0, 5.0]), WEIGHTS)["warnings"],
+            [])
+        self.assertEqual(
+            cal.calibrate(spec_rows([6.44, 5.0, 6.44, 5.0]),
+                          WEIGHTS)["warnings"],
+            ["spec: 2 of 4 attempts spent the ceiling; the weight is too"
+             " low"])
+
+    def test_it_warns_above_the_floor_too_where_the_suggestion_cannot(self):
+        # Every run stopped at its ceiling: the scaled suggestion keeps
+        # every weight (#830), and only the warning says they are low.
+        card = cal.calibrate(actuals_of(CEILINGS), WEIGHTS)
+        self.assertEqual(card["step_weights"], WEIGHTS)
+        self.assertEqual(card["warnings"], [
+            f"{step}: 5 of 5 attempts spent the ceiling; the weight is too"
+            " low" for step in CEILINGS])
+
+    def test_a_lost_runners_ceiling_row_is_a_hit(self):
+        # #967: a runner lost before it metered is charged its step's
+        # full ceiling, under the item, not a work order. The ceiling was
+        # spent, whoever spent it.
+        lost = [{**actual("review", 1, "architecture_review", "f", "high",
+                          2.14, None, "runner-lost:cost-at-ceiling"),
+                 "batch": f"b{n}", "item": f"#{n}", "wo": f"#{n}"}
+                for n in (1, 2)]
+        card = cal.calibrate(lost, WEIGHTS)
+        self.assertEqual(card["steps"]["review"],
+                         {"n": 2, "attempts": 2, "ceiling_hits": 2,
+                          "mean_usd": 2.14, "max_usd": 2.14})
+        self.assertEqual(card["warnings"], [REVIEW_WARNING])
+
+
+class TestSetAside(unittest.TestCase):
+    """#940: a build row keyed by its item, not a work order (older tools
+    wrote the item into `wo`; a lost runner's row names the item, #967),
+    collapses every such row of a batch into one unit against one row's
+    ceiling. It is an attempt, and a hit when it spent the ceiling, but
+    no unit of the sample, and the output says how many and why."""
+
+    def rows(self):
+        found = actuals_of(CEILINGS, build_rows=5)
+        return [{**row, "wo": row["item"]}
+                if row["step"] == "build" and row["batch"] == "b1" else row
+                for row in found]
+
+    def test_pre_work_order_build_rows_leave_the_sample_not_the_counts(self):
+        card = cal.calibrate(self.rows(), WEIGHTS)
+        self.assertEqual(card["steps"]["build"], {
+            "n": 20, "attempts": 25, "ceiling_hits": 25,
+            "mean_usd": 2.14, "max_usd": 2.14})
+        self.assertEqual(card["step_weights"]["build"], 1.0)
+        self.assertEqual(card["set_aside"], [
+            "build: 5 run(s) set aside from the sample: their spend row"
+            " names the item, not a work order (older tools, or a runner"
+            " lost before it metered); they still count as attempts"])
+
+    def test_their_spend_still_counts_toward_the_items_budget(self):
+        self.assertEqual(cal.calibrate(self.rows(), WEIGHTS)["sizes"],
+                         cal.calibrate(actuals_of(CEILINGS, build_rows=5),
+                                       WEIGHTS)["sizes"])
+
+    def test_a_lost_build_run_is_set_aside_and_a_hit(self):
+        rows = [{**row, "wo": row["item"],
+                 "outcome": "runner-lost:cost-at-ceiling"}
+                if row["step"] == "build" and row["batch"] == "b1" else row
+                for row in actuals_of(CEILINGS, build_rows=2)]
+        card = cal.calibrate(rows, WEIGHTS)
+        self.assertEqual(card["steps"]["build"],
+                         {"n": 8, "attempts": 10, "ceiling_hits": 10,
+                          "mean_usd": 2.14, "max_usd": 2.14})
+        self.assertEqual(card["set_aside"][0][:34],
+                         "build: 2 run(s) set aside from the")
+
+    def test_a_step_keyed_by_its_item_is_never_set_aside(self):
+        # Every step but build runs once per item under the item's key.
+        card = cal.calibrate(actuals_of(CEILINGS), WEIGHTS)
+        self.assertEqual(card["set_aside"], [])
+        self.assertEqual(card["steps"]["spec"]["n"], 5)
+
+
+class TestWarningLines(unittest.TestCase):
+    """#940: `plan` prices the next batch from the same weights, so it
+    repeats the warnings as its own lines. Advisory: a closed batch that
+    does not join its spend rows is one line, never a problem."""
+
+    def test_the_lines_plan_prints(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(tmp, {BATCH: ROWS + [CLOSED]}, SPEND)
+            self.assertEqual(cal.warning_lines(tmp), [
+                f"cd: {BUILD_WARNING}", f"cd: {REVIEW_WARNING}"])
+
+    def test_no_closed_batch_prints_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(cal.warning_lines(tmp), [])
+
+    def test_a_batch_that_does_not_join_is_one_line_never_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(tmp, {BATCH: ROWS + [CLOSED]}, SPEND[1:])
+            self.assertEqual(cal.warning_lines(tmp), [
+                "cd: ceiling warnings unread: a closed batch does not join"
+                " its spend rows (conductor.py calibrate names the problem)"])
 
 
 class TestCalibrateCli(unittest.TestCase):
     def main(self, root, argv):
         return cli_contract.capture(conductor.main, argv, env={},
                                     clock=lambda: NOW, root=root)
+
+    def test_the_floor_is_read_from_factory_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(tmp, {BATCH: ROWS + [CLOSED]}, SPEND,
+                  config={"conductor": {"calibrate_floor": 1}})
+            code, out = self.main(tmp, ["calibrate"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out[:out.rindex("}") + 1]),
+                         cal.calibrate(ACTUALS, WEIGHTS, floor=1))
+
+    def test_a_bad_floor_is_refused_before_any_ledger_is_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            write(tmp, {BATCH: ROWS + [CLOSED]}, SPEND,
+                  config={"conductor": {"calibrate_floor": "5"}})
+            code, out = self.main(tmp, ["calibrate"])
+        self.assertEqual((code, out), (
+            1, "config: factory.json conductor.calibrate_floor must be a"
+               " positive integer\ncd: 1 problem(s)\n"))
 
     def test_reads_every_closed_batch_and_writes_nothing(self):
         # open1 has no close row and no spend rows: it is not read.

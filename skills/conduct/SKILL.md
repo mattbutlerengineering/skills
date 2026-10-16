@@ -267,11 +267,17 @@ the session that produced it:
 Both print and write nothing. From `scorecards`, name the metric that
 moved most from the batch before, and which way; when none moved, say
 so. From `calibrate`, report the suggested step weights and size budgets
-with their sample sizes, or the floor it refused at. Then point each
-finding at where it goes, and file nothing yourself:
+with their sample sizes, or the floor it refused at
+(`conductor.calibrate_floor`, 5 unless set); then every `warnings` line
+as printed — a step whose attempts spent their ceiling half the time or
+more is underweighted, floor or no floor, and `plan` repeats the line
+until the weight moves — and every `set_aside` line, which says how
+many build rows left the sample and why. Then point each finding at
+where it goes, and file nothing yourself:
 
 - A suggested weight or budget is the Owner's to adopt, as their own
-  edit to `factory.json`'s `conductor.step_weights` and `budgets_usd`.
+  edit to `factory.json`'s `conductor.step_weights` and `budgets_usd`;
+  so are the floor and the weight a warning names, and by how much.
   Model and pricing choices stay the Owner's; never edit them.
 - A metric that moved the wrong way and that the Owner wants chased
   becomes a plain issue with a `type:*` label, never a work order.

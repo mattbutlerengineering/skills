@@ -527,6 +527,18 @@ def version_cli(root):
     return []
 
 
+def _report(root, plan):
+    """The plan as printed: its report lines, then the ceiling warnings
+    the closed batches give the weights it priced from (#940, owned by
+    conductor_calibrate and advisory there), then the payload line."""
+    # Imported here: conductor_calibrate reaches this module through
+    # conductor_close and conductor_spend (main_checkout).
+    import conductor_calibrate
+    return "\n".join([*compose_plan(plan),
+                      *conductor_calibrate.warning_lines(root),
+                      version_line(root)])
+
+
 def plan_cli(root, args, now, run, git):
     agents, args = _agents(args)
     numbers = _issue_numbers(args)
@@ -537,7 +549,7 @@ def plan_cli(root, args, now, run, git):
         return repeated
     plan, problems = _plan(root, numbers, now, run, git, agents)
     if plan is not None:
-        print("\n".join([*compose_plan(plan), version_line(root)]))
+        print(_report(root, plan))
     return problems
 
 
@@ -558,7 +570,7 @@ def open_cli(root, args, now, run, git, netrc=None):
     plan, problems = _plan(root, numbers, now, run, git, agents)
     if plan is None:
         return problems
-    print("\n".join([*compose_plan(plan), version_line(root)]))
+    print(_report(root, plan))
     problems = conductor_run.preflight(
         root, git, Path.home() / ".netrc" if netrc is None else netrc)
     if problems:
