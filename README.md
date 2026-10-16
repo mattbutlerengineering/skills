@@ -15,6 +15,18 @@ consumes; the artifacts themselves are the pipeline state.
 /plugin install idea-to-prod@skills
 ```
 
+Then verify it: run `/idea-to-prod:doctor`. A plugin-only install that is
+wired up ends its report with
+
+```
+doctor: 0 problem(s) — tier 0 ok, tier 1 skipped (no tools/factory/ — plugin-only install), tier 2 not run (networked, ask to include it)
+```
+
+(captured from a run of the skill at version 0.19.0 against an empty
+repository, 2026-10-16). "tier 1 skipped" is the factory not being
+stamped, which is the normal state at this point; anything else on the
+line names the problem and its fix.
+
 **Grok:** the same marketplace. Grok reads `.claude-plugin/` directly
 ([ADR-0076](docs/adr/0076-grok-supported-harness.md)).
 
