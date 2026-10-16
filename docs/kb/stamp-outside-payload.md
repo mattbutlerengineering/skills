@@ -1,7 +1,7 @@
 ---
 summary: factory-init stamps CODEOWNERS, the Makefile, factory.json, labels.json, seeded ADRs and design docs outside FACTORY_OWNED; update never refreshes them, and only doctor checks most.
 sources: factory_init.py, factory_config.py, gates.py, skills/doctor/SKILL.md
-verified: 7087916156e5638540ec65abba468fbc89ec27f9
+verified: a3646495c45676187012917340c964b441e057a2
 related: manifest-regen
 ---
 
@@ -17,19 +17,33 @@ else the stamp lands belongs to the product repo:
   `factory_config.ARTIFACT_HOMES`) and `.github/labels.json`
 - seeded ADRs and design docs
 
+A tools-only stamp (`stamp --tools-only`, ADR-0099) lands
+`factory_init.TOOLS_ONLY_DESTINATIONS` — `tools/factory/` and
+`.github/factory.json` — so of this set it writes `factory.json` alone:
+no CODEOWNERS, Makefile, `labels.json` or seeds, and its manifest
+carries `"install": "tools-only"`.
+
 Consequences an agent gets wrong:
 
-- **`factory_init.py update` never writes over these files.** A fix to
-  their templates does not reach an already-stamped repo, so `update`
-  succeeding does not mean the Makefile or CODEOWNERS is current.
+- **`factory_init.py update` never writes over these files**, whichever
+  stamp kind: it refreshes `FACTORY_OWNED` destinations and anything
+  absent, and keeps an existing file outside that set that differs from
+  the payload (reported as `kept`). A fix to their templates does not
+  reach an already-stamped repo, so `update` succeeding does not mean
+  the Makefile or CODEOWNERS is current. On a tools-only target `update`
+  refreshes only what its manifest lists and skips the make-target
+  report below.
 - **Few offline gates check them.** Detector F checks `factory.json`'s
   shape. Detector J (`gates.check_label_wiring`) checks `labels.json`:
   every label the tools and the Makefile name must still be in it, and
   an unreadable file is reported. Nothing offline checks the rest of
   this set. `doctor` is the reporter: its checks cover the Makefile's
   full target set and an unsubstituted CODEOWNERS (`@<owner>` still
-  present). Re-read doctor's steps rather than citing step numbers,
-  because they move.
+  present), and on a tools-only target it declares those steps not
+  applicable rather than reporting the files missing. `update` on a
+  full stamp also reports make targets the stamped workflows call that
+  the Makefile lacks (`factory_init.missing_make_targets`). Re-read
+  doctor's steps rather than citing step numbers, because they move.
 
 ## Superseded
 
