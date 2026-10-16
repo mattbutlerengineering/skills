@@ -830,5 +830,80 @@ class TestIssueKeyedRows(unittest.TestCase):
                 (0.75, []))
 
 
+class TestIsolatedRun(unittest.TestCase):
+    """A conductor run writes its own file. The shared aggregate is the
+    historical ledger, and read() sees both. An explicit ledger_path does
+    not scan the runs directory."""
+
+    def row(self, run_id="conductor-b1-12-spec-1", wo="#12", cost=1.25):
+        return entry(wo, run_id, "m", 10, cost, "completed", "2026-10-10")
+
+    def test_record_isolated_writes_only_the_run_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.row()
+            self.assertEqual(cost_ledger.record_isolated(tmp, row), [])
+            path = Path(tmp) / cost_ledger.run_ledger_path(row["run_id"])
+            self.assertEqual(path.read_text(encoding="utf-8"),
+                             json.dumps(row) + "\n")
+            self.assertFalse((Path(tmp) / cost_ledger.COST_LEDGER).exists())
+            entries, problems = cost_ledger.read(tmp)
+            self.assertEqual((entries, problems), ([row], []))
+
+    def test_a_duplicate_row_key_is_refused_and_skip_existing_is_quiet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.row()
+            self.assertEqual(cost_ledger.record_isolated(tmp, row), [])
+            again = cost_ledger.record_isolated(tmp, row)
+            self.assertIn("already in the ledger", again[0])
+            self.assertEqual(cost_ledger.record_isolated(
+                tmp, row, skip_existing=True), [])
+            path = Path(tmp) / cost_ledger.run_ledger_path(row["run_id"])
+            self.assertEqual(path.read_text(encoding="utf-8").count("\n"), 1)
+
+    def test_a_row_already_in_the_aggregate_is_not_written_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.row()
+            cost_ledger.append(tmp, row)
+            self.assertIn("already in the ledger",
+                          cost_ledger.record_isolated(tmp, row)[0])
+            self.assertFalse((Path(tmp) / cost_ledger.RUNS_DIR).exists())
+
+    def test_an_unsafe_run_id_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for run_id in ("../x", "a/b", ".hidden", "has space"):
+                row = self.row(run_id=run_id)
+                problems = cost_ledger.record_isolated(tmp, row)
+                self.assertTrue(problems, run_id)
+                self.assertIn("safe ledger filename", problems[0])
+            self.assertFalse((Path(tmp) / cost_ledger.RUNS_DIR).exists())
+
+    def test_a_bad_shape_is_refused_before_any_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.row()
+            row["cost"] = -1
+            self.assertTrue(cost_ledger.record_isolated(tmp, row))
+            self.assertFalse((Path(tmp) / cost_ledger.RUNS_DIR).exists())
+
+    def test_an_explicit_ledger_path_does_not_scan_run_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            row = self.row()
+            cost_ledger.record_isolated(tmp, row)
+            custom = Path(tmp) / "custom.jsonl"
+            other = self.row(run_id="conductor-b1-12-build-1", cost=2.0)
+            custom.write_text(json.dumps(other) + "\n", encoding="utf-8")
+            entries, problems = cost_ledger.read(tmp, ledger_path=custom)
+            self.assertEqual((entries, problems), ([other], []))
+
+    def test_the_same_run_id_with_a_different_wo_appends(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = self.row(wo="#12")
+            second = self.row(wo="#99")
+            self.assertEqual(cost_ledger.record_isolated(tmp, first), [])
+            self.assertEqual(cost_ledger.record_isolated(tmp, second), [])
+            entries, problems = cost_ledger.read(tmp)
+            self.assertEqual(problems, [])
+            self.assertEqual(entries, [first, second])
+
+
 if __name__ == "__main__":
     unittest.main()
