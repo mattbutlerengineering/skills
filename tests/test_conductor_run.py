@@ -100,6 +100,13 @@ def Git(tmp, changed="", shows=None, failing=None, log="", heads=None,
     def listed(args):
         return args[-1] + "\n" if f"{args[2]}:{args[-1]}" in shows else ""
 
+    def listed_runs(args):
+        ref, path = args[3], args[-1]
+        prefix = f"{ref}:{path}/"
+        kids = sorted(key[len(ref) + 1:] for key in shows
+                      if key.startswith(prefix))
+        return "".join(kid + "\n" for kid in kids)
+
     def in_a_checkout(args):
         return pushurls if "--get-regexp" in args else ""
     return FakeGit({
@@ -109,17 +116,21 @@ def Git(tmp, changed="", shows=None, failing=None, log="", heads=None,
             f"{Path(tmp) / '.git'}\n",
         ("worktree", "add"): add_worktree, ("log",): log,
         ("diff",): changed, ("ls-tree", "--name-only"): listed,
+        ("ls-tree", "-r", "--name-only"): listed_runs,
         # Read at call time: a Worker's commit changes what a ref holds.
         ("show",): lambda args: shows.get(args[-1], "")},
         failing=failing)
 
 
-def Gh(prs=(), body="Spec this.", title="t", fail=None):
+def Gh(prs=(), body="Spec this.", title="t", fail=None, state="open"):
     """The one fake gh, answering issue view and pr list; `fail` is the
-    argv prefix whose call is rejected with HTTP 422."""
+    argv prefix whose call is rejected with HTTP 422. `state` is what
+    `gh issue view --json state` reports; a create is refused when it is
+    closed."""
     return FakeGh(
         answers={("issue", "view"): json.dumps({"title": title,
-                                                "body": body}),
+                                                "body": body,
+                                                "state": state}),
                  ("pr", "list"): json.dumps([{"number": n} for n in prs])},
         failing=fail,
         error=subprocess.CalledProcessError(1, "gh", stderr="HTTP 422"))
@@ -165,8 +176,14 @@ class RunCase(unittest.TestCase):
         return Path(self.tmp.name) / WORKTREE.format(n=item[1:])
 
     def spend(self, item):
-        path = self.worktree(item) / "docs/factory/costs.jsonl"
-        return [json.loads(line) for line in path.read_text().splitlines()]
+        runs = self.worktree(item) / "docs/factory/costs/runs"
+        rows = []
+        if runs.is_dir():
+            for path in sorted(runs.glob("*.jsonl")):
+                rows.extend(json.loads(line)
+                            for line in path.read_text().splitlines()
+                            if line.strip())
+        return rows
 
 
 class TestHarnessCommand(unittest.TestCase):
@@ -458,8 +475,12 @@ class TestCompletedRun(RunCase):
     def test_the_branch_is_committed_pushed_and_its_pr_opened(self):
         self.run_step("#12", "spec", Harness(act=pr_body))
         wt = str(self.worktree("#12"))
-        self.assertIn(["-C", wt, "add", "docs/factory/costs.jsonl"],
-                      self.git.calls)
+        rel = "docs/factory/costs/runs/conductor-b1-12-spec-1.jsonl"
+        self.assertIn(["-C", wt, "add", rel], self.git.calls)
+        self.assertNotIn(["-C", wt, "add", "docs/factory/costs.jsonl"],
+                         self.git.calls)
+        self.assertFalse((self.worktree("#12")
+                          / "docs/factory/costs.jsonl").exists())
         self.assertIn(["-C", wt, "commit", "-m",
                        "chore(cost): conductor-b1-12-spec-1"],
                       self.git.calls)
@@ -471,6 +492,79 @@ class TestCompletedRun(RunCase):
                        "--base", "main", "--title",
                        "#12: conductor batch b1", "--body-file", "Body\n"],
                       self.gh.calls)
+
+    def test_a_closed_issue_does_not_open_a_pr(self):
+        summary, problems = self.run_step(
+            "#12", "spec", Harness(act=pr_body), gh=Gh(state="CLOSED"))
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"],
+                         "refusing to open a PR for #12: the issue is"
+                         " already closed")
+        self.assertFalse([c for c in self.gh.calls if c[:2] == ["pr",
+                                                                "create"]])
+
+    def test_an_unreadable_issue_state_does_not_open_a_pr(self):
+        gh = FakeGh(
+            answers={("issue", "view"): json.dumps(
+                {"title": "t", "body": "Spec this.", "state": "open"}),
+                     ("pr", "list"): "[]"},
+            failing=["issue", "view", "12", "--json", "state"],
+            error=subprocess.CalledProcessError(
+                1, "gh", stderr="HTTP 502"))
+        summary, problems = self.run_step(
+            "#12", "spec", Harness(act=pr_body), gh=gh)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"],
+                         "refusing to open a PR for #12: cd: gh issue view"
+                         " #12 failed: HTTP 502")
+        self.assertFalse([c for c in gh.calls if c[:2] == ["pr", "create"]])
+
+    def test_a_missing_issue_state_does_not_open_a_pr(self):
+        gh = FakeGh(answers={
+            ("issue", "view", "12", "--json", "state"): "{}",
+            ("issue", "view"): json.dumps(
+                {"title": "t", "body": "Spec this.", "state": "open"}),
+            ("pr", "list"): "[]"})
+        summary, problems = self.run_step(
+            "#12", "spec", Harness(act=pr_body), gh=gh)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"],
+                         "refusing to open a PR for #12: its issue state"
+                         " could not be read")
+        self.assertFalse([c for c in gh.calls if c[:2] == ["pr", "create"]])
+
+    def test_an_existing_feature_directory_does_not_open_a_pr(self):
+        git = Git(self.tmp.name,
+                  changed="docs/features/ship-pr/breakdown.md\n",
+                  shows={"origin/main:docs/features/ship-pr": ""})
+        summary, problems = self.run_step(
+            "#12", "spec", Harness(act=pr_body), git=git)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"],
+                         "refusing to open a PR for #12:"
+                         " docs/features/ship-pr already exists on"
+                         " origin/main")
+        self.assertFalse([c for c in self.gh.calls if c[:2] == ["pr",
+                                                                "create"]])
+
+    def test_a_new_feature_directory_still_opens_a_pr(self):
+        git = Git(self.tmp.name,
+                  changed="docs/features/brand-new/breakdown.md\n")
+        summary, problems = self.run_step(
+            "#12", "spec", Harness(act=pr_body), git=git)
+        self.assertEqual(problems, [])
+        self.assertIsNone(summary["stall"])
+        self.assertTrue([c for c in self.gh.calls if c[:2] == ["pr",
+                                                               "create"]])
+
+    def test_an_open_pr_is_updated_even_when_the_issue_is_closed(self):
+        summary, problems = self.run_step(
+            "#12", "spec", Harness(act=pr_body),
+            gh=Gh(prs=[44], state="closed"))
+        self.assertEqual(problems, [])
+        self.assertIsNone(summary["stall"])
+        self.assertFalse([c for c in self.gh.calls if c[:2] == ["pr",
+                                                                "create"]])
 
     def test_an_open_pr_is_updated_not_duplicated(self):
         self.run_step("#12", "spec", Harness(act=pr_body), gh=Gh(prs=[44]))
@@ -833,6 +927,21 @@ class TestMonthlyCap(RunCase):
             MAIN_COSTS: spend_line("a", 2.0) + "\n",
             # main's rows again on the branch count once
             branch: spend_line("a", 2.0) + "\n" + line + "\n"})
+        self.assertEqual(problems, [
+            "cd: launching #12 spec ($3.00 ceiling) would put the month at"
+            " $10.50 against its $10.00 cap; dispatch is paused behind"
+            " ask-2"])
+
+    def test_item_branch_spend_in_a_run_file_counts(self):
+        run = "conductor-b1-13-spec-1"
+        rows = BASE + [launch("#13", "planned", "spec"),
+                       ran("#13", "spec"),
+                       launch("#14", "planned", "build")]
+        line = spend_line(run, 2.5, wo="#13")
+        _, problems = self.over(rows=rows, shows={
+            MAIN_COSTS: spend_line("a", 2.0) + "\n",
+            f"conductor/b1-13:docs/factory/costs/runs/{run}.jsonl":
+                line + "\n"})
         self.assertEqual(problems, [
             "cd: launching #12 spec ($3.00 ceiling) would put the month at"
             " $10.50 against its $10.00 cap; dispatch is paused behind"
