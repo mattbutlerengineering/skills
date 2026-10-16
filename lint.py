@@ -532,17 +532,20 @@ def check_router(root):
     return problems
 
 
-# The router's three frontmatter conditionals (issue #444; the Ship
-# outcome, issue #942): the field it names, the file that field lives
-# in, and the protocol.py function that actually reads it. A rename on
-# either side — the prose or the code — must go red; deriving these from
-# protocol.py's own source (below) means neither side is hand-typed
-# against the other, without turning the router's prose into generated
-# output (that fork was raised and declined — a five-line human-facing
-# paragraph is not a good codegen target).
+# The router's four frontmatter conditionals (issue #444; the Ship
+# outcome, issue #942; the Operate population, issue #944): the field
+# it names, the file that field lives in, and the protocol.py function
+# that actually reads it. A rename on either side — the prose or the
+# code — must go red; deriving these from protocol.py's own source
+# (below) means neither side is hand-typed against the other, without
+# turning the router's prose into generated output (that fork was
+# raised and declined — a five-line human-facing paragraph is not a
+# good codegen target).
 ROUTER_CONDITIONALS = (("ux", "prd.md", protocol._ux_skipped),
                       ("re-entry", "defect.md", protocol._re_entry_architect),
-                      ("outcome", "release.md", protocol._ship_reached))
+                      ("outcome", "release.md", protocol._ship_reached),
+                      ("users-observed", "retro.md",
+                       protocol._retro_populated))
 
 # "the `<field>:` field in `<file>`" — the phrase this repo's own prose
 # already uses everywhere it names one of these conditionals. Requiring
@@ -580,9 +583,10 @@ def _code_literals(func):
 
 def check_router_conditionals(root):
     """check_router pins the hand-off list; this pins the sentence beside
-    it (step 3) that names the router's four conditionals — the `ux:`
-    field, the `re-entry:` field, the `outcome:` field, and the Implement
-    checkbox rule. Those are English, restating protocol._stage_complete /
+    it (step 3) that names the router's five conditionals — the `ux:`
+    field, the `re-entry:` field, the `outcome:` field, the
+    `users-observed:` field, and the Implement checkbox rule. Those are
+    English, restating protocol._stage_complete /
     _maintenance_stage_complete, and nothing checked that the restatement
     still says what the code does.
 

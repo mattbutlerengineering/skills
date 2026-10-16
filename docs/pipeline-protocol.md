@@ -21,8 +21,9 @@ Verify → Review → Ship → Operate
 
 **Run discovery:** candidate run directories are `docs/` plus every
 `docs/features/*/` and every `docs/fixes/*/`. A run is *complete* when
-`retro.md` exists; *active* when it has at least one artifact and is not
-complete. If the user named a feature or fix, use (or create) its directory.
+`retro.md` exists and carries its population line (The Operate
+population, below); *active* when it has at least one artifact and is
+not complete. If the user named a feature or fix, use (or create) its directory.
 If exactly one run is active, use it. Otherwise, list the candidates and ask
 which one.
 
@@ -111,7 +112,7 @@ which artifacts exist in the run directory:
 | Verify | `verification.md` | file exists |
 | Review | `review.md` | file exists |
 | Ship | `release.md` | file exists and its `outcome:` is one the stage reached — `prepared` leaves Ship pending (see The Ship outcome below) |
-| Operate | `retro.md` | file exists (run complete) |
+| Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; see The Operate population below) |
 
 **Next stage = the first stage in order that is not complete.**
 
@@ -200,13 +201,43 @@ for a maintenance run is:
 | Verify | `verification.md` | file exists — **never skippable**; the regression test is the point |
 | Review | `review.md` | file exists |
 | Ship | `release.md` | file exists and its `outcome:` is one the stage reached — `prepared` leaves Ship pending (The Ship outcome, above) |
-| Operate | `retro.md` | file exists (run complete) |
+| Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; see The Operate population below) |
 
 **Where the breakdown lives:** with `re-entry: implement`, the breakdown is
 inline in `defect.md` as checkboxes — no separate `breakdown.md`. With
 `re-entry: architect`, the run uses the normal `architecture.md` +
 `breakdown.md` chain, and checkboxes live in `breakdown.md`. There is no
 third option.
+
+### The Operate population
+
+A retro counts the people it observed. `retro.md` frontmatter carries
+the population line — `users-observed:`, a count, and
+`signal-source:`, where the count came from — and Operate completes
+on it (ADR-0102): a count of zero or more with a named source
+completes the stage; a placeholder, a bad count, or either field
+without the other leaves Operate pending, and `next` routes back to
+`operate` to count. A `retro.md` with neither field predates the line
+and still counts as complete, as every retro written before ADR-0102
+does.
+
+`0` is a valid count, and the honest one for most runs on the day they
+close. It changes the retro's verdict vocabulary, not its validity:
+nothing is landing, adopted or used with no one there, so every
+outcome's signal is `unobserved` and "what happened" records state,
+not use. The seeds then carry what to measure, and the run stays
+closed.
+
+The run's own debt is never counted as feedback. An issue is the run's
+own when it was created before the run's merge (the pull request
+`release.md` names, or the release log's date), or its body says it
+was deferred from the Review stage, or it cites the run's `review.md`
+or `verification.md` — a Review deferral, a Verify carry-forward.
+`operate` lists those under Open debt, where they stay visible, and
+counts them toward nothing. Under `autorun` the brief's `operate:`
+section — wait, minimum signal, or skip — decides whether the stage
+runs at all, never Ship's authorization; the brief never supplies the
+count.
 
 ### Tracker mirror (optional)
 
@@ -330,6 +361,8 @@ date: 2026-07-01
 #                         duplicates of the same defect join intake-duplicates: [...]
 # outcome: released | rolled-back | prepared   (release.md, at ship time — ADR-0101)
 # pending-merge: <PR url> while prepared; released-at: YYYY-MM-DD once written back
+# users-observed: <N>     retro.md's population line (ADR-0102) — 0 is a valid count;
+# signal-source: <where>  the two fields complete Operate together
 # assumptions: [...]      any decision made without live user input
 ---
 ```

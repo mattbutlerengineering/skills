@@ -5,7 +5,8 @@ implementation. It owns the stage/skill taxonomy, the artifact tables
 (product/feature and maintenance, ADR-0025), artifact-frontmatter
 reading, the skill-file contract (path shape and frontmatter rules,
 ADR-0052), the UX conditional, the re-entry conditional, the Ship
-outcome (ADR-0101), the checkbox rule, the retro short-circuit, and
+outcome (ADR-0101), the checkbox rule, the Operate population
+(ADR-0102), the retro short-circuit, and
 next-stage derivation (ADR-0021).
 Tools — the structural lint, the trigger-eval runner — are thin
 callers.
@@ -242,6 +243,34 @@ def _all_boxes_checked(path):
     return total > 0 and checked == total
 
 
+# Operate's population line (ADR-0102): how many people the retro
+# actually observed, from a named source, in retro.md frontmatter. `0`
+# is a valid count — it changes the retro's verdict vocabulary, never
+# its validity.
+RETRO_POPULATION_FIELDS = ("users-observed", "signal-source")
+_COUNT = re.compile(r"[0-9]+")
+
+
+def _retro_populated(run_dir):
+    """Operate is complete when retro.md carries its population line
+    (ADR-0102): `users-observed:` a count of zero or more and
+    `signal-source:` naming where it came from. A placeholder, a
+    negative or non-integer count, or either field without the other
+    leaves the stage pending. A retro.md with neither field predates
+    the line and still counts, as every retro written before ADR-0102
+    does — otherwise every finished run would reopen as active."""
+    retro = run_dir / "retro.md"
+    if not retro.is_file():
+        return False
+    fields = read_frontmatter(retro) or {}
+    count = fields.get("users-observed")
+    source = fields.get("signal-source")
+    if count is None and source is None:
+        return True
+    return (count is not None and _COUNT.fullmatch(count) is not None
+            and bool(source))
+
+
 def run_ref(root, run_dir):
     """The protocol run-ref for a run directory: docs/ is the product
     run; docs/features/<slug> and docs/fixes/<slug> carry their scale
@@ -300,6 +329,8 @@ def _stage_complete(stage, artifact, run_dir):
         return (run_dir / artifact).is_file() or _ux_skipped(run_dir)
     if stage == "ship":
         return _ship_reached(run_dir)
+    if stage == "operate":
+        return _retro_populated(run_dir)
     return (run_dir / artifact).is_file()
 
 
@@ -311,18 +342,22 @@ def _maintenance_stage_complete(stage, artifact, run_dir):
                 or not _re_entry_architect(run_dir))
     if stage == "ship":
         return _ship_reached(run_dir)
+    if stage == "operate":
+        return _retro_populated(run_dir)
     return (run_dir / artifact).is_file()
 
 
 def next_stage(run_dir):
-    """First stage in pipeline order that is not complete. retro.md marks
-    the whole run complete regardless of earlier gaps (the protocol's
-    run-discovery rule and the router's step 6 both key on it alone).
-    Maintenance runs walk their own rows (ADR-0025); every other run
-    walks the product/feature table."""
+    """First stage in pipeline order that is not complete. A populated
+    retro.md marks the whole run complete regardless of earlier gaps
+    (the protocol's run-discovery rule and the router's step 6 both
+    key on it); a retro.md without its population line is Operate not
+    yet complete, whatever lies before it (ADR-0102). Maintenance runs
+    walk their own rows (ADR-0025); every other run walks the
+    product/feature table."""
     run_dir = Path(run_dir)
     if (run_dir / "retro.md").is_file():
-        return "complete"
+        return "complete" if _retro_populated(run_dir) else "operate"
     if is_maintenance_run(run_dir):
         rows = MAINTENANCE_STAGE_ARTIFACTS
         complete = _maintenance_stage_complete
@@ -368,14 +403,14 @@ def stage_states(run_dir):
         rows = STAGE_ARTIFACTS
         complete = _stage_complete
         skipped = _stage_skipped
-    current_seen = (run_dir / "retro.md").is_file()
+    current = next_stage(run_dir)  # "complete" matches no row
     states = []
     for stage, artifact in rows:
         if complete(stage, artifact, run_dir):
             state = ("skipped" if skipped(stage, artifact, run_dir)
                      else "done")
-        elif not current_seen:
-            state, current_seen = "current", True
+        elif stage == current:
+            state = "current"
         else:
             state = "ahead"
         states.append((stage, state))

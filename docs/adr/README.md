@@ -122,3 +122,4 @@ the canonical vocabulary.
 | [0099](0099-a-stamp-may-be-tools-only-and-its-manifest-says-so.md) | A stamp may be tools-only, and its manifest says so | provisional |
 | [0100](0100-every-stage-commits-its-artifact-at-its-boundary.md) | Every stage commits its artifact at its boundary | provisional |
 | [0101](0101-ship-completes-on-the-outcome-it-recorded.md) | Ship completes on the outcome it recorded, not on release.md existing | provisional |
+| [0102](0102-a-retro-counts-its-population.md) | A retro counts its population, and a run is complete once it has | provisional |
