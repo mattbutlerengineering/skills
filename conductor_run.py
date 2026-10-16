@@ -29,10 +29,12 @@ import factory_config
 from assembler import PR_BODY_FILE
 from cli import CLI_FAILURES, child_env, detail, gh_read, harness_run, \
     prettier_json, read_execution, runner
-from conductor import RUN_ID, RUNS, WORKER_ENV, answers, append, ask_row, \
-    current_state, item_view, item_worktree, load, stamp, view
+from conductor import RUNS, WORKER_ENV, answers, append, ask_row, \
+    current_state, item_view, load, stamp, view
 from conductor import run_id as make_run_id
-from conductor_plan import main_checkout, span
+from conductor_plan import span
+from conductor_spend import CEILING_OUTCOME, record_spend, ref_rows, \
+    run_commits, spend_run, worktree_path
 from knowledge_plane import WO_TOKEN, work_orders
 from orientation_pack import orientation_pack
 from protocol import read_frontmatter
@@ -68,15 +70,10 @@ NO_PUSH = "/dev/null/conductor-worker-may-not-push/"
 WORKER_GIT_CONFIG = ((f"url.{NO_PUSH}.pushInsteadOf", "https://"),
                      (f"url.{NO_PUSH}.pushInsteadOf", "http://"),
                      ("credential.helper", ""))
-CEILING_OUTCOME = {"timeout": "killed:cost-at-ceiling",
-                   "unaccounted": "unaccounted:cost-at-ceiling"}
 CAP_WHY = ("the monthly cap is ADR-0034's breaker; raise monthly_cap_usd in"
            " factory.json first, or a resumed launch asks again")
 REFUSAL_WHY = ("a retry meets the same refusal until the setting it names"
                " changes; change it, then resume")
-# The subject of the spend commit each run ends with (_spend): it bounds
-# one run's own commits on the item branch, and spend_run reads it back.
-SPEND_SUBJECT = "chore(cost): "
 PRIOR_WORK = ("The previous {step} run, {run_id}, ended: {reason}. These"
               " commits it made are already on {branch}, the head this"
               " worktree is at:\n{commits}\nDo not repeat that work. Check"
@@ -281,14 +278,6 @@ def _work(rows, entry, step, git, gh, batch, worktree):
     return wo, f"{row}\n\n{orientation_pack(worktree, wo, block)}", None, []
 
 
-def worktree_path(git, batch, item):
-    """(the item worktree's path under the main checkout, problems)."""
-    checkout, problems = main_checkout(git)
-    if problems:
-        return None, problems
-    return checkout / item_worktree(batch, item), []
-
-
 def _worktree(git, batch, item):
     """(the item worktree, problems), created from origin/main by the
     item's first runner."""
@@ -436,48 +425,6 @@ def _deliver(git, gh, worktree, branch, item, batch):
     return None
 
 
-def _spend(git, worktree, wo, run_id, model, tokens, cost, outcome, now):
-    """Commit the run's one spend row on the item branch, as its own file
-    under docs/factory/costs/runs/ (cost_ledger.record_isolated). The
-    shared aggregate is not touched, so parallel item branches do not
-    conflict on it. A stall reason on failure, else None."""
-    refused = cost_ledger.record_isolated(worktree, cost_ledger.entry(
-        wo, run_id, model, tokens, cost, outcome, now.strftime("%Y-%m-%d")))
-    if refused:
-        return (f"refusing to record the spend row of {run_id}: "
-                + "; ".join(refused))
-    rel = cost_ledger.run_ledger_path(run_id)
-    for args in (["add", rel],
-                 ["commit", "-m", f"{SPEND_SUBJECT}{run_id}"]):
-        _, problems = _git(git, ["-C", str(worktree), *args],
-                           f"committing the spend row of {run_id}")
-        if problems:
-            return problems[0]
-    return None
-
-
-def spend_run(subject):
-    """The run id a spend commit's subject names, else None: the grammar
-    _spend writes, SPEND_SUBJECT + a run id (#771). A Worker's own
-    `chore(cost): ...` commit names no run id, so it is work, not
-    spend."""
-    if not subject.startswith(SPEND_SUBJECT):
-        return None
-    run = subject[len(SPEND_SUBJECT):]
-    return run if RUN_ID.fullmatch(run) else None
-
-
-def run_commits(git, branch, head=None):
-    """(the subjects of the branch's commits beyond origin/main, newest
-    first, problems): the one item-branch log read. `head` pins the
-    commit read (a sha inspected for a leased delete); it defaults to
-    the branch."""
-    out, problems = _git(git, ["log", "--format=%s",
-                               f"origin/main..{head or branch}"],
-                         f"reading {branch}'s commits")
-    return (None, problems) if problems else (out.splitlines(), [])
-
-
 def _prior_work(git, rows, item, step, branch):
     """(the brief's prior-work note, "" when there is none, problems): on
     a retry, the commits the stalled run of this step made, read from
@@ -538,50 +485,6 @@ def _left_unchecked(git, branch, briefed, wo):
     if briefed in pending:
         return f"the build run completed but left {wo} unchecked"
     return None
-
-
-def _ref_entries(git, ref, path, recursive=False):
-    """(rows, problems a retry may fix, problems it cannot) for one path
-    on `ref`. An absent path holds none. A directory is listed with -r so
-    the blobs under it are shown, not the tree itself. A malformed file
-    is never read as empty, and it fails before any later file."""
-    args = ["ls-tree", *(["-r"] if recursive else []), "--name-only", ref,
-            "--", path]
-    listed, problems = _git(git, args, f"cd: git ls-tree {ref}")
-    if problems:
-        return None, problems, []
-    names = [line.strip() for line in listed.splitlines() if line.strip()]
-    if not recursive:
-        names = [path] if names else []
-    entries = []
-    for name in names:
-        shown = f"{ref}:{name}"
-        text, problems = _git(git, ["show", shown], f"cd: git show {shown}")
-        if problems:
-            return None, problems, []
-        for lineno, entry, suffixes in cost_ledger.parse(text):
-            if suffixes:
-                return None, [], [f"cd: {shown}:{lineno} {suffixes[0]}"]
-            entries.append(entry)
-    return entries, [], []
-
-
-def ref_rows(git, ref):
-    """(the spend rows the ref's cost ledger holds, problems a retry may
-    fix, problems it cannot). The aggregate and every per-run file count.
-    An absent aggregate holds none (#708): nothing seeds
-    docs/factory/costs.jsonl in a consumer repo, so its first run finds
-    none on main. A malformed aggregate fails before the run files are
-    read, and a malformed run file is never read as empty."""
-    entries, problems, malformed = _ref_entries(
-        git, ref, cost_ledger.COST_LEDGER)
-    if problems or malformed:
-        return None, problems, malformed
-    runs, problems, malformed = _ref_entries(
-        git, ref, cost_ledger.RUNS_DIR, recursive=True)
-    if problems or malformed:
-        return None, problems, malformed
-    return entries + runs, [], []
 
 
 def month_spend(git, rows, batch, now):
@@ -815,8 +718,8 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
         stall = f"killed at its {minutes}-minute wall-clock limit"
     spent_model = model if model in reported or not reported \
         else reported[0]
-    failed = _spend(git, worktree, ctx["wo"], run_id, spent_model, tokens,
-                    cost, outcome, done)
+    failed = record_spend(git, worktree, ctx["wo"], run_id, spent_model,
+                          tokens, cost, outcome, done)
     if stall is None and not (worktree / PR_BODY_FILE).is_file():
         stall = "the run completed but left no pr-body.md"
     failed = failed or _deliver(git, gh, worktree, branch, item, batch)

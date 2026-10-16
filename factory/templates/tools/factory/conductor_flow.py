@@ -27,6 +27,7 @@ from cli import CLI_FAILURES, detail
 from conductor import (BLOCK, COMPLETED, TERMINAL, answers, append,
                        ask_row, current_state, item_branch, item_view, load,
                        next_ask, parsed_at, stamp, view)
+from conductor_spend import LOST, record_lost
 
 STEPS = ("spec", "build", "verify", "review", "ship")
 SEQUENCE = ("planned", "spec", "awaiting-gate", "build", "verify",
@@ -486,19 +487,38 @@ def _after_step(rows, now, entry, launched, facts, policy):
 
 def _in_flight(rows, now, entry, launched, alive):
     """(True when the launched step's runner is still running, stall
-    rows when it has died or idled)."""
-    pid = launched["pid"]
+    rows when it has died or idled). A dead runner's run gets its run
+    row first (#937): outcome LOST, under the policy it was launched
+    with, so the stall offers retry-up by the band it ran at (#732) and
+    the spend row `next` charges joins it like any failed run's. An
+    idle runner is alive and may yet write its own."""
+    pid, lost = launched["pid"], []
     if not alive(pid):
         reason = f"its runner (pid {pid}) is gone with no finishing run row"
+        lost = [lost_run_row(rows, now, entry, launched)]
     else:
         limit = 2 * WALL_CLOCK_MINUTES[entry["size"]]
         idle = (now - parsed_at(launched["at"])).total_seconds() / 60
         if idle <= limit:
             return True, []
         reason = f"no state change for over {limit} minutes"
-    written, _ = stall_rows(rows, now, entry, reason, "runner-lost",
+    written, _ = stall_rows(rows + lost, now, entry, reason, "runner-lost",
                             "retry", IDLE_WHY)
-    return False, written
+    return False, lost + written
+
+
+def lost_run_row(rows, now, entry, launched):
+    """The run row of a run whose runner died (#937): the launch row's
+    run id and pid, the step's policy as the rows before that launch
+    resolved it (a retry-up's bump included, as the runner read it),
+    no model reported, and outcome LOST."""
+    item, step = entry["item"], launched["to"]
+    policy = item_view(rows[:rows.index(launched)], item)["steps"][step]
+    return {"at": stamp(now), "kind": "run", "item": item, "step": step,
+            "charter": policy["charter"], "band": policy["band"],
+            "model": policy["model"], "models_reported": [],
+            "effort": policy["effort"], "run_id": launched["run_id"],
+            "pid": launched["pid"], "outcome": LOST}
 
 
 def _merge_gone(rows, now, entry, merging, alive):
@@ -717,8 +737,13 @@ def advance(root, batch, now, wip_cap, alive, git, gh=None, policy=None):
     def build(rows):
         ready, writes, problems = survey(rows, now, wip_cap, alive, facts,
                                          policy)
+        if not problems:
+            # The lost runs' ceilings land on their item branches before
+            # their rows land here (#937): a failed charge writes nothing,
+            # so the item stays in flight and its ceiling stays counted.
+            problems = record_lost(git, batch, rows, writes, now)
         outcome.update(ready=ready, writes=writes or [], rows=rows)
-        return writes, problems
+        return (None, problems) if problems else (writes, [])
     _, problems = append(root, batch, build)
     if problems:
         return None, problems

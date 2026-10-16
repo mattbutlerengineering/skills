@@ -24,7 +24,9 @@ closing a batch), conductor_calibrate (calibrate) and conductor_consent
         conductor/<batch> branch and worktree from origin/main, write the
         plan and reserve rows, and queue the spend ask.
   python3 conductor.py next <batch>
-        Record any new stall and gate asks, then print as JSON the oldest
+        Record any new stall and gate asks (a runner found dead gets its
+        run row, and a spend row at its full ceiling on its item
+        branch), then print as JSON the oldest
         unanswered ask, the steps ready to launch under wip_cap (a
         `merge` step once an answer covers a shipped item), the ids of
         the asks just recorded, and the shipped items waiting for a
