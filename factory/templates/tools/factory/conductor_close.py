@@ -38,7 +38,9 @@ import time
 from pathlib import Path
 
 import conductor_flow as flow
+import conductor_landed
 import conductor_merge
+import conductor_next
 import conductor_spend
 import cost_ledger
 import factory_config
@@ -137,6 +139,11 @@ def compute(rows, lines, shown, entries, now):
     return {
         "batch": plan["batch"], "at": stamp(now), "items": len(items),
         "merged": merged, "blocked": finals.count("blocked"),
+        # #938: a merge the Conductor's turn did not make (from stalled
+        # or blocked) counts under merged, and here (ADR-0105).
+        "merged_outside": sum(1 for row in rows if row["kind"] == "state"
+                              and row["to"] == "merged"
+                              and row["from"] != "merging"),
         "owner_touches_per_merged": _ratio(
             sum(1 for row in rows if row["kind"] == "answer"), merged),
         "metered_usd": metered,
@@ -558,16 +565,53 @@ def _publish(root, batch, git, gh, finals, reasons, branches):
     return []
 
 
+def reconcile_landed(gh, root, batch, now, blocked):
+    """(the blocked items whose PR merged after the block, in item
+    order, problems): each is moved blocked → merged as merged outside
+    the batch (#938, ADR-0105), before the close reads its finals,
+    carries spend or labels anything — its branch merged, so its spend
+    rows reached main on that PR, and it needs no needs-human label.
+    Every branch is read before any row is written: a read that fails
+    refuses the close with nothing written."""
+    landed = {}
+    for item in blocked:
+        found, problems = conductor_next.merged_pr(
+            gh, flow.item_branch(batch, item))
+        if problems:
+            return None, _refused(problems)
+        if found is not None:
+            landed[item] = found
+    for item, found in landed.items():
+        reason, fields = conductor_landed.merge(found)
+        _, problems = flow.move(root, batch, now, item,
+                                conductor_landed.MERGED, reason, **fields)
+        if problems:
+            return None, problems
+    return list(landed), []
+
+
 def close_batch(root, batch, clock, git, gh):
     """(summary, problems): close the batch. Nothing is appended to
     scorecards.jsonl, and no close row is written, unless the scorecard
-    computes."""
+    computes. A blocked item whose PR merged since is reconciled first
+    (reconcile_landed); its merged rows stay if a later step refuses."""
     rows, problems = load(root, batch)
     if problems:
         return None, problems
     finals, problems = _final_items(rows, batch)
     if problems:
         return None, problems
+    now = clock()
+    landed, problems = reconcile_landed(gh, root, batch, now,
+                                        finals["blocked"])
+    if problems:
+        return None, problems
+    if landed:
+        rows, problems = load(root, batch)
+        finals, problems = (None, problems) if problems \
+            else _final_items(rows, batch)
+        if problems:
+            return None, problems
     problems = (update_from_main(git, root, batch_branch(batch))
                 or carry_blocked_spend(git, root, batch, finals["blocked"]))
     if problems:
@@ -576,7 +620,6 @@ def close_batch(root, batch, clock, git, gh):
                                                finals["blocked"])
     if problems:
         return None, problems
-    now = clock()
     card, problems = scorecard(root, batch, now)
     if problems:
         return None, problems
@@ -588,8 +631,8 @@ def close_batch(root, batch, clock, git, gh):
         return None, problems
     reasons = {item: item_view(rows, item)["last"]["reason"]
                for item in finals["blocked"]}
-    return {"batch": batch, **finals, "ask": ask_id}, _publish(
-        root, batch, git, gh, finals, reasons, branches)
+    return {"batch": batch, **finals, "ask": ask_id, "landed": landed}, \
+        _publish(root, batch, git, gh, finals, reasons, branches)
 
 
 def _closing_answer(rows, batch):
@@ -678,8 +721,10 @@ def close_cli(root, args, clock, git, gh, sleep=None):
         return None
     summary, problems = close_batch(root, args[0], clock, git, gh)
     if summary is not None:
+        outside = (f" ({', '.join(summary['landed'])} outside the batch)"
+                   if summary["landed"] else "")
         print(f"cd: closed batch {summary['batch']}: merged"
-              f" {', '.join(summary['merged']) or 'none'}; blocked"
+              f" {', '.join(summary['merged']) or 'none'}{outside}; blocked"
               f" {', '.join(summary['blocked']) or 'none'}; merge ask"
               f" {summary['ask']}")
     return problems

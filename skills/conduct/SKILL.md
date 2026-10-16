@@ -115,6 +115,13 @@ in `-<digits>`: item #N of batch `oct` runs on `conductor/oct-N`, so a
 batch named `oct-2` would share item #2's branch and worktree, and
 `open` refuses it.
 
+`open` also prints a `cd: auto-merge on origin/main:` line naming the
+workflows that merge pull requests on their own (an `auto-merge`
+setting, `gh pr merge`, a merge train). It is advisory, never a
+refusal: tell the Owner that such a repo can merge an item's pull
+request before its build is done, and that `next` then stalls the item
+with the ask below rather than building on.
+
 Before `open`, run the protocol's "Open pull requests first" pre-flight
 (`../../docs/pipeline-protocol.md`, relative to this skill's directory)
 on a new batch; a resumed batch's own item and closing pull requests are
@@ -165,8 +172,13 @@ gate ask after an item's spec step (`approve` / `block`, over the gate
 files it lists and the build's price: one run per breakdown row, so
 this answer is the build's spend consent, with the ceiling of the review
 that reads those rows' work stated beside it), stall asks (`retry`,
-`retry-up`, `block`; and `resume` / `stop` for a batch-wide pause), a
-clarify ask (`block` / `proceed`) when an item's issue is closed on
+`retry-up`, `block`; and `resume` / `stop` for a batch-wide pause), the
+stall `next` raises when the repo merged an item's pull request outside
+the batch (cause `merge-drift`; `retry` continues the remaining
+breakdown rows on a fresh pull request that names the merged one,
+`merged` records that pull request as the item's merge, `block` blocks
+it — the tool recommends `merged` once no breakdown row is unchecked),
+a clarify ask (`block` / `proceed`) when an item's issue is closed on
 GitHub, or its state cannot be read, before a launch — block the item,
 or reopen the issue and proceed; nothing launches until it reads open —
 and a monthly-cap pause (`resume` / `stop`) when a launch would pass
@@ -250,11 +262,16 @@ When every item is merged or blocked:
 
     python3 conductor.py close <batch>
 
-It carries blocked items' spend rows, appends the scorecard to
-`docs/factory/scorecards.jsonl` only when the scorecard computes, opens
-the batch's closing pull request, queues its merge ask, and labels each
-blocked issue `needs-human` with its reason. Present the closing ask
-like any other; on `merge`, record the answer, then:
+It first reads each blocked item's pull request: one merged since the
+block (by the Owner's hand, or the repo's own merge train) makes the
+item merged outside the batch — it counts as merged, gets a `Closes`
+line and no `needs-human` label, and the printed summary names it.
+Then it carries the still-blocked items' spend rows, appends the
+scorecard to `docs/factory/scorecards.jsonl` only when the scorecard
+computes (its `merged_outside` counts those merges), opens the batch's
+closing pull request, queues its merge ask, and labels each blocked
+issue `needs-human` with its reason. Present the closing ask like any
+other; on `merge`, record the answer, then:
 
     python3 conductor.py close <batch> --merge
 

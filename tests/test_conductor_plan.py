@@ -49,12 +49,13 @@ def issues_gh(issues, owner=OWNER, fail=None):
 
 
 def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", on_main=(),
-             checkout=None):
+             checkout=None, workflows=None, failing=None, error=None):
     """FakeGit over origin/main: `grep` is what git grep prints, and
     `on_main` names the files origin/main holds — ls-tree lists them,
     and a worktree added from it checks them out. `checkout` is the main
     checkout whose .git rev-parse names as the common dir. No checkout
-    has a pushurl, so open's launch preflight (#708) passes."""
+    has a pushurl, so open's launch preflight (#708) passes. `workflows`
+    is what open's auto-merge grep (`git grep -l`, #938) prints."""
     def check_out(args):
         Path(args[4]).mkdir(parents=True)
         for path in on_main:
@@ -80,7 +81,9 @@ def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", on_main=(),
                ("ls-tree",): ls_tree}
     if checkout is not None:
         answers[("rev-parse",)] = f"{Path(checkout) / '.git'}\n"
-    return FakeGit(answers)
+    if workflows is not None:
+        answers[("grep", "-l")] = workflows
+    return FakeGit(answers, failing=failing, error=error)
 
 
 def real_git(cwd, *args):
@@ -538,7 +541,8 @@ def closed_batch(spend):
 
 
 class TestPlanCli(unittest.TestCase):
-    def run_cli(self, argv, issues, fail=None, setup=None):
+    def run_cli(self, argv, issues, fail=None, setup=None, workflows=None,
+                git_failing=None, git_error=None):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, ".github").mkdir()
             Path(tmp, ".github/factory.json").write_text(json.dumps(CONFIG))
@@ -548,7 +552,10 @@ class TestPlanCli(unittest.TestCase):
                 setup(tmp)
             return cli_contract.capture(
                 conductor.main, argv, env={}, clock=clock, root=tmp,
-                run=issues_gh(issues, fail=fail), git=fake_git(checkout=tmp))
+                run=issues_gh(issues, fail=fail),
+                git=fake_git(checkout=tmp, workflows=workflows,
+                             failing=git_failing, error=git_error),
+                netrc=Path(tmp) / "netrc")
 
     def test_plan_prints_the_plan(self):
         code, out = self.run_cli(["plan", "#12"], {12: issue(12)})
@@ -611,6 +618,65 @@ class TestPlanCli(unittest.TestCase):
     def test_an_issue_argument_must_be_an_issue_key(self):
         code, out = self.run_cli(["plan", "12"], {12: issue(12)})
         self.assertEqual(code, 2)
+
+    def test_open_names_the_workflows_that_merge_pull_requests(self):
+        # #938: the consumer's own merge train merged item PRs mid-build.
+        # The line is advisory, after the plan and before the open.
+        code, out = self.run_cli(
+            ["open", "b1", "#12"], {12: issue(12)},
+            workflows="origin/main:.github/workflows/merge-train.yml\n"
+                      "origin/main:.github/workflows/release.yml\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-3], (
+            "cd: auto-merge on origin/main: .github/workflows/merge-train.yml,"
+            " .github/workflows/release.yml; an item PR can merge before its"
+            " build is done, and next stalls the item when one has"))
+        self.assertTrue(out.splitlines()[-2].startswith("cd: opened "))
+
+    def test_open_without_such_a_workflow_says_nothing(self):
+        code, out = self.run_cli(["open", "b1", "#12"], {12: issue(12)})
+        self.assertEqual(code, 0, out)
+        self.assertFalse([line for line in out.splitlines()
+                          if line.startswith("cd: auto-merge")])
+
+    def test_plan_does_not_look(self):
+        code, out = self.run_cli(
+            ["plan", "#12"], {12: issue(12)},
+            workflows="origin/main:.github/workflows/merge-train.yml\n")
+        self.assertEqual(code, 0, out)
+        self.assertFalse([line for line in out.splitlines()
+                          if line.startswith("cd: auto-merge")])
+
+    def test_an_unreadable_auto_merge_check_never_refuses_the_open(self):
+        code, out = self.run_cli(
+            ["open", "b1", "#12"], {12: issue(12)},
+            git_failing=["grep", "-l"],
+            git_error=subprocess.CalledProcessError(
+                128, "git", stderr="fatal: bad revision 'origin/main'\n"))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-3], (
+            "cd: auto-merge check unread: git grep origin/main failed:"
+            " fatal: bad revision 'origin/main'"))
+        self.assertTrue(out.splitlines()[-2].startswith("cd: opened "))
+
+
+class TestAutoMergeAdvisory(unittest.TestCase):
+    def test_names_the_matching_workflows_from_one_grep(self):
+        git = fake_git(workflows="origin/main:.github/workflows/train.yml\n")
+        self.assertEqual(conductor_plan.auto_merge_lines(git), [
+            "cd: auto-merge on origin/main: .github/workflows/train.yml; an"
+            " item PR can merge before its build is done, and next stalls"
+            " the item when one has"])
+        self.assertEqual(git.calls, [[
+            "grep", "-l", "-i", "-E",
+            "pr merge|auto[-_]?merge|enablePullRequestAutoMerge",
+            "origin/main", "--", ".github/workflows/"]])
+
+    def test_greps_no_match_is_no_line(self):
+        git = fake_git(failing=["grep", "-l"],
+                       error=subprocess.CalledProcessError(1, "git",
+                                                           stderr=""))
+        self.assertEqual(conductor_plan.auto_merge_lines(git), [])
 
 
 if __name__ == "__main__":

@@ -125,3 +125,4 @@ the canonical vocabulary.
 | [0102](0102-a-retro-counts-its-population.md) | A retro counts its population, and a run is complete once it has | provisional |
 | [0103](0103-calibrate-warns-below-its-floor-and-the-floor-is-a-setting.md) | Calibrate warns below its floor, and the floor is a setting | provisional |
 | [0104](0104-a-finished-runs-retry-redoes-its-bookkeeping.md) | A finished run's retry redoes its bookkeeping, and a launch re-reads its issue | provisional |
+| [0105](0105-a-pull-request-merged-outside-the-batch-is-the-items-merge.md) | A pull request merged outside the batch is the item's merge | provisional |

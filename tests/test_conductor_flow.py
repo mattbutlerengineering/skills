@@ -12,6 +12,7 @@ from pathlib import Path
 
 import conductor
 import conductor_flow as flow
+import conductor_landed as landed
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
@@ -1028,3 +1029,140 @@ class TestDeliveryFailedRetry(unittest.TestCase):
             ("retry", "the Worker finished; only its spend commit, push or"
                       " PR failed, so a retry redoes that bookkeeping in"
                       " your session and launches no run"))
+
+
+# --- a PR merged outside the batch (#938) ------------------------------
+
+LANDED = {"pr": 6667, "sha": "abc"}
+# A fix mid-build: its spec and one build run completed.
+BUILT = [launch("#13", "planned", "spec"), ran("#13", "spec"),
+         launch("#13", "spec", "build"), ran("#13", "build")]
+LANDED_STALL = [
+    moved("#13", "build", "stalled", reason="PR #6667 merged outside the"
+          " batch", cause="merge-drift", pr=6667),
+    stall_ask("ask-2", "#13", options=("retry", "merged", "block"))]
+
+
+def landed_facts(unchecked=1, item="#13", pr=LANDED):
+    return {item: {"gate_blobs": {}, "unchecked": unchecked,
+                   "merged_pr": pr}}
+
+
+class TestLandedPr(unittest.TestCase):
+    """#938: the consumer's merge train merged four item PRs while the
+    items were mid-build, and the ledger never knew. A PR merged outside
+    the batch stalls the item (cause merge-drift) behind an ask that
+    offers to continue on a fresh PR, treat the item as merged, or
+    block; `merged` records the PR as the item's merge."""
+
+    def survey(self, rows, facts, probe=alive):
+        ready, writes, problems = flow.survey(START + rows, NOW, 3, probe,
+                                              facts)
+        self.assertEqual(problems, [])
+        return [entry["item"] for entry in ready], writes
+
+    def test_a_merged_pr_stalls_the_item_with_merge_drift(self):
+        items, writes = self.survey(BUILT, landed_facts())
+        self.assertNotIn("#13", items)
+        self.assertEqual(writes, [
+            {"at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#13",
+             "from": "build", "to": "stalled",
+             "reason": "PR #6667 merged outside the batch",
+             "cause": "merge-drift", "pr": 6667},
+            {"at": "2026-10-10T12:30:00Z", "kind": "ask", "item": "#13",
+             "id": "ask-2", "ask_kind": "stall",
+             "question": "#13 stalled in build: PR #6667 merged outside the"
+                         " batch. Retry, treat it as merged, or block?",
+             "options": ["retry", "merged", "block"],
+             "recommended": "retry",
+             "why": "the repo merged the item's PR without the Conductor's"
+                    " merge turn, before its build was done: retry builds"
+                    " the rest on a fresh PR that names PR #6667; merged"
+                    " records PR #6667 as the item's merge"}])
+
+    def test_a_finished_build_recommends_merged(self):
+        _, writes = self.survey(BUILT, landed_facts(unchecked=0))
+        self.assertEqual((writes[1]["recommended"], writes[1]["why"]), (
+            "merged", "the repo merged the item's PR without the Conductor's"
+            " merge turn, after its build was done: merged records PR #6667"
+            " as the item's merge; retry reruns build on a fresh PR"))
+
+    def test_a_reviewed_item_recommends_merged(self):
+        rows = [moved("#12", "review", "reviewed", verdict="pass",
+                      author_runs=["a"], reviewer_run="r")]
+        items, writes = self.survey(rows, {"#12": {"merged_pr": LANDED}})
+        self.assertNotIn("#12", items)
+        self.assertEqual((writes[0]["from"], writes[1]["recommended"]),
+                         ("reviewed", "merged"))
+        self.assertTrue(writes[1]["why"].endswith(
+            "retry reruns reviewed on a fresh PR"))
+
+    def test_the_same_pr_is_asked_about_once(self):
+        # The Owner answered retry: the rest builds on a fresh PR, and
+        # the next tick must not stall the item for the same PR again.
+        rows = BUILT + LANDED_STALL + [
+            answered("ask-2", "retry", "#13"),
+            launch("#13", "build", "build", seq=2), ran("#13", "build", 2)]
+        items, writes = self.survey(rows, landed_facts(unchecked=0))
+        self.assertEqual((items, writes), (["#12", "#13", "#14"], []))
+        # A later PR merged outside the batch is a new stall.
+        later = landed_facts(unchecked=0, pr={"pr": 6700, "sha": "def"})
+        items, writes = self.survey(rows, later)
+        self.assertNotIn("#13", items)
+        self.assertEqual((writes[0]["to"], writes[0]["pr"]),
+                         ("stalled", 6700))
+
+    def test_a_merged_answer_records_the_pr_as_the_merge(self):
+        rows = BUILT + LANDED_STALL + [answered("ask-2", "merged", "#13")]
+        items, writes = self.survey(rows, landed_facts())
+        self.assertNotIn("#13", items)
+        self.assertEqual(writes, [
+            {"at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#13",
+             "from": "stalled", "to": "merged",
+             "reason": "merged outside the batch as PR #6667",
+             "pr": 6667, "sha": "abc", "checks": {}}])
+        self.assertEqual(conductor.row_problems(writes[0]), [])
+        # Without the PR read this tick, nothing is written.
+        self.assertEqual(self.survey(rows, {}), (["#12", "#14"], []))
+
+    def test_an_item_in_flight_is_not_stalled_under_its_run(self):
+        items, writes = self.survey(BUILT[:3], landed_facts())
+        self.assertEqual((items, writes), (["#12", "#14"], []))
+
+    def test_stalled_leaves_for_merged_only_after_a_merged_answer(self):
+        rows = START + BUILT + LANDED_STALL
+        fields = {"pr": 6667, "sha": "abc", "checks": {}}
+        self.assertEqual(flow.transition_problems(
+            rows + [answered("ask-2", "merged", "#13")], "#13", "merged",
+            fields), [])
+        self.assertEqual(flow.transition_problems(
+            rows + [answered("ask-2", "retry", "#13")], "#13", "merged",
+            fields), ["cd: #13 leaves stalled for merged only after a"
+                      " merged answer to its stall ask"])
+        self.assertEqual(flow.transition_problems(
+            rows + [answered("ask-2", "retry", "#13")], "#13", "build",
+            {"run_id": run_id("#13", "build", 2), "pid": 1}), [])
+
+    def test_blocked_leaves_only_for_merged(self):
+        # close reconciles a blocked item whose PR merged after the block.
+        rows = START + [moved("#12", "spec", "blocked", cause="owner-block")]
+        self.assertEqual(flow.transition_problems(
+            rows, "#12", "merged", {"pr": 1, "sha": "a", "checks": {}}), [])
+        self.assertEqual(flow.transition_problems(rows, "#12", "stalled", {}),
+                         ["cd: #12 is blocked, and blocked is terminal"])
+
+    def test_landed_due_names_the_items_whose_pr_is_read(self):
+        rows = START + BUILT[:3] + [
+            moved("#12", "review", "reviewed", verdict="pass",
+                  author_runs=["a"], reviewer_run="r")]
+        self.assertEqual(landed.due(rows), ["#12"])
+        rows = START + BUILT + LANDED_STALL
+        self.assertEqual(landed.due(rows), [])
+        self.assertEqual(landed.due(
+            rows + [answered("ask-2", "retry", "#13")]), [])
+        self.assertEqual(landed.due(
+            rows + [answered("ask-2", "merged", "#13")]), ["#13"])
+        shipped = START + [moved("#14", "review", "ship", run_id="x"),
+                           moved("#12", "x", "merged", pr=1, sha="a",
+                                 checks={})]
+        self.assertEqual(landed.due(shipped), [])

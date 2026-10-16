@@ -12,14 +12,18 @@ An item moves only along
 A fix may skip awaiting-gate when its branch changes no gate file; an
 order starts at build; review returns to build once, for the reviewer's
 first request for changes. `stalled` is reachable from any non-terminal
-state and left only for the step it stalled in, after a retry answer.
-`blocked` is written only by conductor.answer. The Owner's 2026-10-10
-answers (breakdown.md Notes, rows 0157 and 0158) settle the launch
-record, readiness, gate asks and verdicts used here.
+state and left only for the step it stalled in, after a retry answer —
+or for merged, after a `merged` answer to the stall a PR merged outside
+the batch raises (#938). `blocked` is written only by conductor.answer,
+and left only for merged, when close finds the item's PR merged after
+the block. The Owner's 2026-10-10 answers (breakdown.md Notes, rows
+0157 and 0158) settle the launch record, readiness, gate asks and
+verdicts used here.
 """
 import re
 
 import conductor_consent as consent
+import conductor_landed as landed
 import factory_config
 from cli import CLI_FAILURES, detail
 from conductor import (BLOCK, COMPLETED, TERMINAL, answers, append,
@@ -105,7 +109,13 @@ def _successors(item_type, state, rows, item):
 
 
 def _stalled_problems(rows, found, to, fields):
-    stalled = found["last"]
+    stalled, resumed = found["last"], found["resumed"]
+    if to == landed.MERGED:
+        # A PR merged outside the batch (#938): the answer records it.
+        if resumed is not None and resumed["choice"] == landed.MERGED:
+            return []
+        return [f"cd: {found['item']} leaves stalled for merged only after"
+                " a merged answer to its stall ask"]
     if to != stalled["from"] or not found["retry"]:
         return [f"cd: {found['item']} leaves stalled only for"
                 f" {stalled['from']}, after a retry answer"]
@@ -126,6 +136,9 @@ def transition_problems(rows, item, to, fields):
     entry, state = found["entry"], found["state"]
     if found["unknown"]:
         return [found["unknown"]]
+    if state == "blocked" and to == landed.MERGED:
+        # Its PR merged after the block (#938): close reconciles it.
+        return []
     if state in TERMINAL:
         return [f"cd: {item} is {state}, and {state} is terminal"]
     if to == "blocked":
@@ -194,22 +207,27 @@ def _choices(options):
     return said[0].upper() + said[1:] + "?"
 
 
-def stall_rows(rows, now, entry, reason, cause, recommended, why):
+def stall_rows(rows, now, entry, reason, cause, recommended, why,
+               options=None, **fields):
     """[state row, stall ask] for an item that stalls in its current
     state, for `reason` of class `cause` (conductor.CAUSES, #819).
     retry-up is offered only when the run leaving this state (if any — a
     dead runner leaves none) was not already at the top band: the
-    planned band alone misses a prior retry-up bump (#732)."""
+    planned band alone misses a prior retry-up bump (#732). `options`
+    given replace the band's; `fields` go on the state row."""
     item = entry["item"]
     found = item_view(rows, item)
     state, finishing = found["state"], found["finishing"]
-    options = stall_options(finishing["band"] if finishing is not None
-                            else found["steps"].get(state, {}).get("band"))
+    if options is None:
+        options = stall_options(finishing["band"] if finishing is not None
+                                else found["steps"].get(state, {})
+                                .get("band"))
     if cause == "delivery-failed":
         # The Worker finished; a retry redoes its bookkeeping (#939),
         # and no band is involved.
         options = [option for option in options if option != "retry-up"]
-    moved = state_row(now, item, state, "stalled", reason, cause=cause)
+    moved = state_row(now, item, state, "stalled", reason, cause=cause,
+                      **fields)
     asked, problems = ask_row(
         rows + [moved], now, item, "stall",
         f"{item} stalled in {state}: {reason}. {_choices(options)}",
@@ -329,7 +347,7 @@ def queue_stall(root, batch, now, item, reason, cause, recommended, why):
 
 
 OPTION_WORDS = {"retry": "retry", "retry-up": "retry one band up",
-                "block": "block"}
+                "block": "block", landed.MERGED: "treat it as merged"}
 WORKER_WHY = ("a first failure is evidence about the item as often as about"
               " the agent, so nothing retries without your answer")
 DELIVERY_WHY = ("the Worker finished; only its spend commit, push or PR"
@@ -442,6 +460,17 @@ def needs_facts(rows):
              for entry in (read["plan"] or {}).get("items", [])]
     return [one["item"] for one in found
             if one["state"] in ("spec", "build") and one["completed"]]
+
+
+def landed_rows(rows, now, entry, found, unchecked):
+    """[state row, stall ask] for an item whose PR the repo merged
+    outside the batch (#938, conductor_landed): the stall row carries
+    the PR, so the same PR is never asked about twice."""
+    pr, state = found["pr"], item_view(rows, entry["item"])["state"]
+    recommended, why = landed.advice(state, unchecked, pr)
+    return stall_rows(rows, now, entry, landed.REASON.format(pr=pr),
+                      landed.CAUSE, recommended, why,
+                      options=landed.OPTIONS, pr=pr)
 
 
 def _build_usd(ceiling, rows):
@@ -563,7 +592,29 @@ def _merge_gone(rows, now, entry, merging, alive):
 
 
 def _candidate(rows, now, entry, alive, facts, policy):
-    """(ready step or None, in flight?, rows to write) for one item."""
+    """(ready step or None, in flight?, rows to write) for one item. A
+    PR the repo merged outside the batch (#938, facts["merged_pr"])
+    stalls the item instead of launching its next step, once per PR;
+    a `merged` answer to that stall records the PR as the merge."""
+    item = entry["item"]
+    found = facts.get(item, {}).get("merged_pr")
+    if found is not None and landed.answered_merged(item_view(rows, item)):
+        reason, fields = landed.merge(found)
+        return None, False, [state_row(now, item, "stalled", landed.MERGED,
+                                       reason, **fields)]
+    ready, in_flight, written = _step(rows, now, entry, alive, facts,
+                                      policy)
+    if ready in (None, "merge") or found is None or written \
+            or landed.asked(rows, item, found["pr"]):
+        return ready, in_flight, written
+    stalled, _ = landed_rows(rows, now, entry, found,
+                             facts[item].get("unchecked"))
+    return None, False, stalled
+
+
+def _step(rows, now, entry, alive, facts, policy):
+    """(ready step or None, in flight?, rows to write) by the item's
+    state alone; _candidate applies the merged-PR rule over it."""
     found = item_view(rows, entry["item"])
     state, launched = found["state"], found["last"]
     if state in TERMINAL:
