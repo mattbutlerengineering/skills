@@ -2,6 +2,8 @@
 stage: operate
 run: product | feature:<slug>
 date: YYYY-MM-DD
+users-observed: <N — 0 is a valid count>
+signal-source: <where the count comes from: analytics, support inbox, your own usage, none>
 ---
 
 # Retro: <title>
@@ -10,8 +12,16 @@ date: YYYY-MM-DD
 
 ### <Success criterion / intended outcome>
 
-- What happened: <observed outcome>
-- Signal strength: <anecdote | pattern | measured>
+- What happened: <observed outcome — with no one observed, the state it is in, never that it landed>
+- Signal strength: <anecdote | pattern | measured | unobserved>
+
+## Open debt
+
+Issues this run itself filed — Review deferrals, Verify carry-forwards —
+are the run's debt, never feedback (the protocol's "The Operate
+population" section says which issues are the run's own).
+
+- <#N — what it defers, and from which stage>
 
 ## Run retrospective
 
