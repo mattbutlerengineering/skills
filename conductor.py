@@ -56,7 +56,7 @@ closing a batch), conductor_calibrate (calibrate) and conductor_consent
         Join every closed batch's ledger with docs/factory/costs.jsonl
         into one actuals row per run, and print as JSON the suggested
         step weights and size budgets with their sample sizes; below
-        the floor it suggests nothing. Writes nothing (#799).
+        the floor it suggests nothing but warns (#940). Writes nothing.
   python3 conductor.py scorecards [N]
         Print each metric of the last N (default 5) scorecards in
         docs/factory/scorecards.jsonl, oldest first, with its change

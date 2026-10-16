@@ -524,13 +524,28 @@ class TestMainCheckout(unittest.TestCase):
                     (main / ".claude/worktrees/conductor-b1-12", []))
 
 
+def closed_batch(spend):
+    """A root writer: consumer batch b20261013 closed, with `spend` as
+    its cost ledger (test_conductor_calibrate's fixture, #940)."""
+    from test_conductor_calibrate import BATCH, CLOSED, ROWS, lines
+
+    def write(tmp):
+        ledger = Path(tmp) / conductor.LEDGER.format(batch=BATCH)
+        ledger.parent.mkdir(parents=True)
+        ledger.write_text(lines(ROWS + [CLOSED]))
+        Path(tmp, "docs/factory/costs.jsonl").write_text(lines(spend))
+    return write
+
+
 class TestPlanCli(unittest.TestCase):
-    def run_cli(self, argv, issues, fail=None):
+    def run_cli(self, argv, issues, fail=None, setup=None):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, ".github").mkdir()
             Path(tmp, ".github/factory.json").write_text(json.dumps(CONFIG))
             Path(tmp, "factory").mkdir()
             Path(tmp, "factory/agents").symlink_to(AGENTS)
+            if setup is not None:
+                setup(tmp)
             return cli_contract.capture(
                 conductor.main, argv, env={}, clock=clock, root=tmp,
                 run=issues_gh(issues, fail=fail), git=fake_git(checkout=tmp))
@@ -539,6 +554,33 @@ class TestPlanCli(unittest.TestCase):
         code, out = self.run_cli(["plan", "#12"], {12: issue(12)})
         self.assertEqual(code, 0, out)
         self.assertEqual(out.splitlines()[0], "cd: 1 item(s) planned")
+        self.assertEqual(out.splitlines()[-1], "cd: 0 problem(s)")
+
+    def test_plan_repeats_the_ceiling_warnings_it_prices_against(self):
+        # #940: the closed batches say review spent its ceiling 2 of 2
+        # times; the next plan prices review from the same weight, so it
+        # says so, after the plan and before the payload line.
+        from test_conductor_calibrate import SPEND
+        code, out = self.run_cli(["plan", "#12"], {12: issue(12)},
+                                 setup=closed_batch(SPEND))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-4:-2], [
+            "cd: build: 1 of 2 attempts spent the ceiling; the weight is"
+            " too low",
+            "cd: review: 2 of 2 attempts spent the ceiling; the weight is"
+            " too low"])
+        self.assertTrue(out.splitlines()[-2].startswith("cd: payload "))
+
+    def test_a_closed_batch_that_does_not_join_never_refuses_a_plan(self):
+        # The warning is advisory: a run with no spend row fails
+        # `calibrate`, which names it, and costs the plan one line.
+        from test_conductor_calibrate import SPEND
+        code, out = self.run_cli(["plan", "#12"], {12: issue(12)},
+                                 setup=closed_batch(SPEND[1:]))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-3], (
+            "cd: ceiling warnings unread: a closed batch does not join its"
+            " spend rows (conductor.py calibrate names the problem)"))
         self.assertEqual(out.splitlines()[-1], "cd: 0 problem(s)")
 
     def test_plan_ends_by_naming_the_payload_it_runs_on(self):
