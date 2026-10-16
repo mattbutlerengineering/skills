@@ -203,6 +203,23 @@ class TestDetail(unittest.TestCase):
                          "error: Your local changes would be overwritten:"
                          " | tools/factory/x.pyc | Aborting")
 
+    def test_a_tail_keeps_the_last_lines_above_the_summary(self):
+        # #939: a hook prints its own complaint, then husky's one-liner;
+        # a stall reason that carries only the last line hides the cause.
+        err = subprocess.CalledProcessError(
+            1, ["git", "commit"],
+            stderr="check-adr: ADR-088 frontmatter-missing\n\n"
+                   "  at docs/adr/0088.md\n"
+                   "husky - pre-commit script failed (code 1)\n")
+        self.assertEqual(cli.detail(err, tail=cli.STDERR_TAIL),
+                         "check-adr: ADR-088 frontmatter-missing"
+                         " | at docs/adr/0088.md"
+                         " | husky - pre-commit script failed (code 1)")
+        self.assertEqual(cli.detail(err, tail=2),
+                         "at docs/adr/0088.md"
+                         " | husky - pre-commit script failed (code 1)")
+        self.assertEqual(cli.STDERR_TAIL, 3)
+
     def test_every_line_falls_back_to_the_error(self):
         err = FileNotFoundError(2, "No such file or directory: 'git'")
         self.assertEqual(cli.detail(err, every_line=True), str(err))

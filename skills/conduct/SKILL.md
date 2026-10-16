@@ -165,8 +165,11 @@ gate ask after an item's spec step (`approve` / `block`, over the gate
 files it lists and the build's price: one run per breakdown row, so
 this answer is the build's spend consent, with the ceiling of the review
 that reads those rows' work stated beside it), stall asks (`retry`,
-`retry-up`, `block`; and `resume` / `stop` for a batch-wide pause), and
-a monthly-cap pause (`resume` / `stop`) when a launch would pass
+`retry-up`, `block`; and `resume` / `stop` for a batch-wide pause), a
+clarify ask (`block` / `proceed`) when an item's issue is closed on
+GitHub, or its state cannot be read, before a launch — block the item,
+or reopen the issue and proceed; nothing launches until it reads open —
+and a monthly-cap pause (`resume` / `stop`) when a launch would pass
 `monthly_cap_usd`. Two kinds are yours to word,
 with `conductor.py ask`:
 
@@ -193,7 +196,11 @@ mechanism, never in the foreground, and never more than `ready` lists:
 spend ask is unanswered or an item has an unanswered ask. When a runner
 exits, read its one-line result and the Worker's output it names, then
 run `next`. A failed run already queued its own stall ask; do not
-retry it. A launch the monthly cap refuses prints a `cd:` problem and
+retry it. A stall whose cause is `delivery-failed` — the Worker
+finished; its spend commit, push or PR did not — is never relaunched:
+on a `retry` answer, `next` redoes that bookkeeping itself and resumes
+the item, or stalls it again with the failed command's own words.
+A launch the monthly cap refuses prints a `cd:` problem and
 pauses dispatch behind an ask; run `next` and present it. A background
 runner does not outlive this session (step 1): tell the Owner before
 they close it with runs in flight.

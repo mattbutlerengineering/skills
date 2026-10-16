@@ -33,6 +33,7 @@ from conductor import RUNS, WORKER_ENV, answers, append, ask_row, \
     current_state, item_view, load, stamp, view
 from conductor import run_id as make_run_id
 from conductor_plan import span
+from conductor_next import deliver
 from conductor_spend import CEILING_OUTCOME, record_spend, ref_rows, \
     run_commits, spend_run, worktree_path
 from knowledge_plane import WO_TOKEN, work_orders
@@ -344,87 +345,6 @@ def _meter(root, batch, run_id, event, ended, ceiling, model):
     return 0, float(ceiling), CEILING_OUTCOME[ended], [], reason
 
 
-def feature_slugs(paths):
-    """docs/features/<slug> directories a change touches, in order."""
-    slugs = []
-    for path in paths:
-        parts = path.split("/")
-        if (len(parts) >= 3 and parts[0] == "docs" and parts[1] == "features"
-                and parts[2] and parts[2] not in slugs):
-            slugs.append(parts[2])
-    return slugs
-
-
-def _pr_create_refusal(git, gh, branch, item):
-    """A reason not to open a new PR, else None. An already-open PR is
-    updated and never reaches here. A `#N` item whose issue is closed, or
-    whose state cannot be read, is refused: re-opening a finished issue
-    is how duplicate feature directories landed on main. A branch that
-    touches docs/features/<slug> when that directory already exists on
-    origin/main is refused the same way. Anything that is not `#N` skips
-    the issue check and still gets the directory check."""
-    if cost_ledger.ISSUE_KEY.fullmatch(item):
-        viewed = gh_read(["issue", "view", item[1:], "--json", "state"],
-                         f"gh issue view {item}", "cd", run=gh, expect=dict)
-        if viewed.problems:
-            return (f"refusing to open a PR for {item}: "
-                    + viewed.problems[0])
-        state = (viewed.value.get("state")
-                 if isinstance(viewed.value, dict) else None)
-        if not isinstance(state, str) or not state.strip():
-            return (f"refusing to open a PR for {item}: its issue state"
-                    " could not be read")
-        if state.lower() == "closed":
-            return (f"refusing to open a PR for {item}: the issue is"
-                    " already closed")
-    changed, problems = flow.changed_files(git, branch)
-    if problems:
-        return problems[0]
-    for slug in feature_slugs(changed):
-        path = f"docs/features/{slug}"
-        listed, problems = _git(
-            git, ["ls-tree", "--name-only", "origin/main", "--", path],
-            f"listing {path} on origin/main")
-        if problems:
-            return problems[0]
-        if listed.strip():
-            return (f"refusing to open a PR for {item}: {path} already"
-                    " exists on origin/main")
-    return None
-
-
-def _deliver(git, gh, worktree, branch, item, batch):
-    """Push the item branch (never forced) and open or update its PR from
-    pr-body.md. A stall reason on failure, else None. A new PR is refused
-    when the issue is already closed or its feature directory is already
-    on main; an open PR is still updated."""
-    _, problems = _git(git, ["-C", str(worktree), "push", "-u", "origin",
-                             branch], f"pushing {branch}")
-    if problems:
-        return problems[0]
-    body = worktree / PR_BODY_FILE
-    if not body.is_file():
-        return None
-    listed = gh_read(["pr", "list", "--head", branch, "--state", "open",
-                      "--json", "number"], "gh pr list", run=gh)
-    try:
-        if listed.problems:
-            raise OSError(listed.problems[0])
-        if listed.value:
-            gh(["api", "-X", "PATCH", "repos/{owner}/{repo}/pulls/"
-                f"{listed.value[0]['number']}", "-F", f"body=@{body}"])
-        else:
-            refusal = _pr_create_refusal(git, gh, branch, item)
-            if refusal:
-                return refusal
-            gh(["pr", "create", "--head", branch, "--base", "main",
-                "--title", f"{item}: conductor batch {batch}",
-                "--body-file", str(body)])
-    except CLI_FAILURES as err:
-        return f"opening or updating the PR failed: {detail(err)}"
-    return None
-
-
 def _prior_work(git, rows, item, step, branch):
     """(the brief's prior-work note, "" when there is none, problems): on
     a retry, the commits the stalled run of this step made, read from
@@ -647,8 +567,10 @@ def _prepare(root, batch, item, step, git, gh, netrc, now):
         if problems:
             return None, problems
         head = out.strip()
+    # A launch carries its runner's pid; `next`'s bookkeeping resume
+    # carries only the completed run's id and is no launch (#939).
     seq = 1 + sum(1 for r in found["states"]
-                  if r["to"] == step and "run_id" in r)
+                  if r["to"] == step and "pid" in r)
     return {"rows": rows, "entry": entry, "wo": wo,
             "context": context, "body": body, "worktree": worktree,
             "block": found["reserved"], "briefed": briefed, "head": head,
@@ -722,8 +644,11 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
                           tokens, cost, outcome, done)
     if stall is None and not (worktree / PR_BODY_FILE).is_file():
         stall = "the run completed but left no pr-body.md"
-    failed = failed or _deliver(git, gh, worktree, branch, item, batch)
-    (worktree / PR_BODY_FILE).unlink(missing_ok=True)
+    failed = failed or deliver(git, gh, worktree, branch, item, batch)
+    if failed is None:
+        # Kept on a delivery failure: `next` redoes the push and PR from
+        # it (#939). The pre-launch unlink above keeps it one step's.
+        (worktree / PR_BODY_FILE).unlink(missing_ok=True)
     stall = stall or failed
     if stall is None and ctx["briefed"] is not None:
         stall = _left_unchecked(git, branch, ctx["briefed"], ctx["wo"])
@@ -743,11 +668,11 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
             _, problems = flow.record_verdict(root, batch, done, item,
                                               verdict, run_id, ctx["head"])
     if stall is not None:
+        cause = _stall_cause(stall, ended, failed)
         recommended, why = flow.worker_advice(ctx["rows"], entry, step,
-                                              band, stall, event)
-        _, problems = flow.queue_stall(
-            root, batch, done, item, stall,
-            _stall_cause(stall, ended, failed), recommended, why)
+                                              band, stall, event, cause)
+        _, problems = flow.queue_stall(root, batch, done, item, stall,
+                                       cause, recommended, why)
     return {"run_id": run_id, "outcome": outcome, "stall": stall}, problems
 
 

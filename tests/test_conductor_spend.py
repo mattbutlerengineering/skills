@@ -4,6 +4,7 @@ outcomes, and the row `next` writes for a runner found dead. git goes
 through FakeGit; tests assert the EXACT rows, calls and problem strings.
 """
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -74,14 +75,27 @@ class TestRecordSpend(unittest.TestCase):
                 skip_existing=True))
             self.assertEqual((Path(tmp) / REL).read_text().count("\n"), 1)
 
-    def test_a_failing_commit_is_the_stall_reason(self):
+    def test_a_failing_commit_is_the_stall_reason_with_its_stderr_tail(self):
+        # #939: a hook's complaint sits above its last line.
+        error = subprocess.CalledProcessError(
+            1, "git", stderr="check-adr: ADR-088 frontmatter-missing\n"
+                             "husky - pre-commit script failed (code 1)\n")
         with tempfile.TemporaryDirectory() as tmp:
-            git = FakeGit({}, failing=["-C", tmp, "commit"])
+            git = FakeGit({}, failing=["-C", tmp, "commit"], error=error)
             self.assertEqual(
                 spend.record_spend(git, Path(tmp), "#14", RID, "m", 12, 1.5,
                                    "completed", NOW),
-                f"committing the spend row of {RID} failed: fatal:"
-                " rejected")
+                f"committing the spend row of {RID} failed: check-adr:"
+                " ADR-088 frontmatter-missing | husky - pre-commit script"
+                " failed (code 1)")
+
+    def test_commit_spend_is_the_add_and_commit_half(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            git = FakeGit({})
+            self.assertIsNone(spend.commit_spend(git, Path(tmp), RID))
+            self.assertEqual(git.calls, [
+                ["-C", tmp, "add", REL],
+                ["-C", tmp, "commit", "-m", f"chore(cost): {RID}"]])
 
 
 class TestRecordLost(unittest.TestCase):
@@ -124,6 +138,27 @@ class TestRecordLost(unittest.TestCase):
             [lost_row()], log=f"docs: later\nchore(cost): {RID}\n")
         self.assertEqual((problems, text), ([], None))
         self.assertEqual([c[0] for c in calls], ["rev-parse", "log"])
+
+    def test_a_file_the_runner_wrote_is_committed_as_it_is(self):
+        # A runner that died between writing the row and committing it
+        # left a row with the build's work order; charging the ceiling
+        # under the item key would be a second row_key and a double
+        # count (#939 review of #967).
+        with tempfile.TemporaryDirectory() as tmp:
+            wt = Path(tmp) / ".claude/worktrees/conductor-b1-14"
+            (wt / REL).parent.mkdir(parents=True)
+            row = json.dumps(cost_ledger.entry(
+                "WO-0171", RID, "m", 12, 1.5, "completed",
+                "2026-10-09")) + "\n"
+            (wt / REL).write_text(row)
+            git = FakeGit({("rev-parse",): f"{tmp}/.git\n"})
+            self.assertEqual(spend.record_lost(
+                git, "b1", START + [launch("#14", "planned", "build",
+                                           pid=9)],
+                [lost_row()], NOW), [])
+            self.assertEqual((wt / REL).read_text(), row)
+            self.assertEqual([c[2] for c in git.calls if c[:1] == ["-C"]],
+                             ["add", "commit"])
 
     def test_a_missing_worktree_is_an_exact_problem(self):
         problems, calls, text, wt = self.lost([lost_row()], worktree=False)

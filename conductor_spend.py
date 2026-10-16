@@ -19,7 +19,7 @@ own `claude` process runs in its own session (cli.harness_run) and may
 spend up to that ceiling after the runner is gone.
 """
 import cost_ledger
-from cli import CLI_FAILURES, detail
+from cli import CLI_FAILURES, STDERR_TAIL, detail
 from conductor import RUN_ID, item_branch, item_view, item_worktree
 from conductor_plan import main_checkout
 
@@ -36,11 +36,16 @@ LOST = CEILING_OUTCOME["lost"]
 SPEND_SUBJECT = "chore(cost): "
 
 
-def _git(git, args, what):
+def git_call(git, args, what):
+    """(stdout, problems) of one call at the Conductor's git port, a
+    failure worded `<what> failed: <stderr tail>`: the last STDERR_TAIL
+    lines, so a commit hook's own complaint or a push's rejection reason
+    reaches the stall ask, not only the summary line under it (#939).
+    The one wrapper the spend and delivery writes share."""
     try:
         return git(args).stdout, []
     except CLI_FAILURES as err:
-        return None, [f"{what} failed: {detail(err)}"]
+        return None, [f"{what} failed: {detail(err, tail=STDERR_TAIL)}"]
 
 
 def spend_run(subject):
@@ -67,7 +72,7 @@ def run_commits(git, branch, head=None):
     first, problems): the one item-branch log read. `head` pins the
     commit read (a sha inspected for a leased delete); it defaults to
     the branch."""
-    out, problems = _git(git, ["log", "--format=%s",
+    out, problems = git_call(git, ["log", "--format=%s",
                                f"origin/main..{head or branch}"],
                          f"reading {branch}'s commits")
     return (None, problems) if problems else (out.splitlines(), [])
@@ -80,7 +85,7 @@ def _ref_entries(git, ref, path, recursive=False):
     is never read as empty, and it fails before any later file."""
     args = ["ls-tree", *(["-r"] if recursive else []), "--name-only", ref,
             "--", path]
-    listed, problems = _git(git, args, f"cd: git ls-tree {ref}")
+    listed, problems = git_call(git, args, f"cd: git ls-tree {ref}")
     if problems:
         return None, problems, []
     names = [line.strip() for line in listed.splitlines() if line.strip()]
@@ -89,7 +94,7 @@ def _ref_entries(git, ref, path, recursive=False):
     entries = []
     for name in names:
         shown = f"{ref}:{name}"
-        text, problems = _git(git, ["show", shown], f"cd: git show {shown}")
+        text, problems = git_call(git, ["show", shown], f"cd: git show {shown}")
         if problems:
             return None, problems, []
         for lineno, entry, suffixes in cost_ledger.parse(text):
@@ -132,11 +137,19 @@ def record_spend(git, worktree, wo, run_id, model, tokens, cost, outcome,
     if refused:
         return (f"refusing to record the spend row of {run_id}: "
                 + "; ".join(refused))
+    return commit_spend(git, worktree, run_id)
+
+
+def commit_spend(git, worktree, run_id):
+    """Add and commit the run's spend file on the item branch under
+    SPEND_SUBJECT + run id: the write's second half, and the half a
+    bookkeeping turn redoes for a row an earlier commit left in the
+    worktree (#939). A stall reason on failure, else None."""
     rel = cost_ledger.run_ledger_path(run_id)
     for args in (["add", rel],
                  ["commit", "-m", f"{SPEND_SUBJECT}{run_id}"]):
-        _, problems = _git(git, ["-C", str(worktree), *args],
-                           f"committing the spend row of {run_id}")
+        _, problems = git_call(git, ["-C", str(worktree), *args],
+                               f"committing the spend row of {run_id}")
         if problems:
             return problems[0]
     return None
@@ -170,9 +183,17 @@ def record_lost(git, batch, rows, writes, now):
             return [f"cd: {item}: {problems[0]}"]
         if run_id in map(spend_run, subjects):
             continue
-        ceiling = item_view(rows, item)["steps"][row["step"]]["ceiling_usd"]
-        failed = record_spend(git, worktree, item, run_id, row["model"], 0,
-                              float(ceiling), LOST, now, skip_existing=True)
+        if (worktree / cost_ledger.run_ledger_path(run_id)).is_file():
+            # The runner metered and wrote its row, under the build's
+            # work order, and died before the commit: that row is the
+            # run's; a ceiling row under the item key would be a second
+            # row_key and a double count (#939).
+            failed = commit_spend(git, worktree, run_id)
+        else:
+            ceiling = item_view(rows, item)["steps"][row["step"]][
+                "ceiling_usd"]
+            failed = record_spend(git, worktree, item, run_id, row["model"],
+                                  0, float(ceiling), LOST, now)
         if failed:
             return [f"cd: {item}: {failed}"]
     return []

@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import conductor
+import conductor_flow as flow
 import conductor_run
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -723,6 +724,37 @@ class TestFailedRun(RunCase):
             "pushing conductor/b1-12 failed: fatal: rejected"))
         self.assertEqual(self.rows[-2]["cause"], "delivery-failed")
         self.assertFalse([c for c in self.gh.calls if c[0] == "pr"])
+
+    def test_a_failed_delivery_keeps_the_body_for_the_bookkeeping_turn(self):
+        # #939: next redoes the push and PR from pr-body.md; the runner
+        # used to delete it whatever happened. The advice names the
+        # bookkeeping, not the Worker.
+        self.run_step("#12", "spec", Harness(act=pr_body),
+                      git=Git(self.tmp.name, failing=[
+                          "-C", str(self.worktree("#12")), "push"]))
+        self.assertTrue((self.worktree("#12") / "pr-body.md").exists())
+        self.assertEqual((self.rows[-1]["options"],
+                          self.rows[-1]["recommended"],
+                          self.rows[-1]["why"]),
+                         (["retry", "block"], "retry", flow.DELIVERY_WHY))
+
+    def test_a_launch_after_a_bookkeeping_resume_keeps_its_sequence(self):
+        # #939: the resume row carries the completed run's id and is not
+        # a launch, so the step's next run is build-2, not build-3.
+        rows = BASE + [
+            launch("#14", "planned", "build"), ran("#14", "build"),
+            moved("#14", "build", "stalled",
+                  reason="pushing conductor/b1-14 failed: fatal: rejected",
+                  cause="delivery-failed"),
+            stall_ask("ask-2", "#14", options=("retry", "block")),
+            answered("ask-2", "retry", "#14"),
+            flow.state_row(NOW, "#14", "stalled", "build",
+                           "bookkeeping retried for conductor-b1-14-build-1",
+                           run_id="conductor-b1-14-build-1")]
+        summary, problems = self.run_step("#14", "build",
+                                          Harness(act=pr_body), rows=rows)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["run_id"], "conductor-b1-14-build-2")
 
     def test_a_failed_pr_open_stalls(self):
         self.run_step("#12", "spec", Harness(act=pr_body),

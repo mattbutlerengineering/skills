@@ -18,6 +18,7 @@ import conductor_close as close
 import conductor_consent as consent
 import conductor_flow as flow
 import conductor_merge as merge
+import conductor_next
 import factory_config
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -125,8 +126,11 @@ def branch_git(changed=""):
 
 
 def issue_gh(labels):
+    """The gh `next` reads: the issue's labels, and its state, which a
+    launch reads first (#939) — open here."""
     return FakeGh(answers={("issue", "view"): json.dumps(
-        {"labels": [{"name": name} for name in labels]})})
+        {"labels": [{"name": name} for name in labels],
+         "state": "OPEN"})})
 
 
 class TestNextRecordsStandingConsent(unittest.TestCase):
@@ -136,7 +140,7 @@ class TestNextRecordsStandingConsent(unittest.TestCase):
             path.parent.mkdir(parents=True)
             path.write_text("".join(json.dumps(r) + "\n" for r in rows))
             self.gh = gh or issue_gh([])
-            result, problems = flow.advance(
+            result, problems = conductor_next.advance(
                 tmp, "b1", NOW, 3, alive, branch_git(changed), gh=self.gh,
                 policy=policy)
             self.rows, _ = conductor.load(tmp, "b1")
@@ -152,7 +156,11 @@ class TestNextRecordsStandingConsent(unittest.TestCase):
                       " changed"})
         self.assertIn({"item": "#12", "step": "merge"}, result["ready"])
         self.assertEqual(result["merge_due"], [])
-        self.assertEqual(self.gh.calls, [])
+        # No labels read under an empty tier list; the two reads are the
+        # launches' issue states (#939), and the merge turn is not read.
+        self.assertEqual(self.gh.calls, [
+            ["issue", "view", "13", "--json", "state"],
+            ["issue", "view", "14", "--json", "state"]])
 
     def test_the_policy_off_leaves_the_merge_to_the_owner(self):
         result, _ = self.advance(START + SHIPPED, OFF)
@@ -171,8 +179,9 @@ class TestNextRecordsStandingConsent(unittest.TestCase):
         self.assertEqual(self.rows[-1]["reason"],
                          "standing consent (ADR-0086): no gate-path file"
                          " changed; tier label tier:low")
-        self.assertEqual(self.gh.called("issue", "view"), [[
-            "issue", "view", "12", "--json", "labels"]])
+        self.assertEqual([c for c in self.gh.called("issue", "view")
+                          if c[-1] == "labels"],
+                         [["issue", "view", "12", "--json", "labels"]])
         result, _ = self.advance(START + SHIPPED, TIERED,
                                  gh=issue_gh(["type:feature"]))
         self.assertEqual(result["merge_due"], ["#12"])
