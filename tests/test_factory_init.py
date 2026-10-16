@@ -423,10 +423,11 @@ class TestTheRespellingHasOneOwner(unittest.TestCase):
     ROOT_MAKEFILE = REPO_ROOT / "Makefile"
     PAYLOAD_MAKEFILE = REPO_ROOT / "factory" / "templates" / "Makefile"
 
-    # The one root command deliberately absent from the payload: the
-    # plugin's structural lint has no product-repo counterpart, so
-    # product_makefile drops the line rather than respelling it.
-    DROPPED = ("lint.py",)
+    # The root commands deliberately absent from the payload: the
+    # plugin's structural lint and the instruction-file drift check have
+    # no product-repo counterpart, so product_makefile drops their lines
+    # rather than respelling them.
+    DROPPED = ("lint.py", "kb.py")
 
     @staticmethod
     def payload_tools():
@@ -499,10 +500,13 @@ class TestProductMakefile(unittest.TestCase):
                  "\n"
                  "check:\n"
                  "\tpython3 lint.py\n"
+                 "\tpython3 kb.py drift\n"
                  "\tpython3 gates.py\n"
                  "\tpython3 -m unittest discover tests\n")
 
     def test_swaps_the_header_drops_lint_and_respells_commands(self):
+        # Both root-only lines go: lint.py and kb.py drift have no
+        # product-repo counterpart (kb.py is not in MIRRORS).
         self.assertEqual(
             factory_init.product_makefile(self.ROOT_TEXT),
             factory_init.PRODUCT_MAKEFILE_HEADER + "\n"

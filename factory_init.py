@@ -114,15 +114,23 @@ PRODUCT_MAKEFILE_HEADER = (
     "# structural lint has no product-repo counterpart.\n")
 
 
+# The root-only recipe lines: the plugin's structural lint and the
+# instruction-file drift check (kb.py, ADR-0078) have no product-repo
+# counterpart — neither tool is in MIRRORS — so product_makefile drops
+# them rather than respelling them.
+ROOT_ONLY_LINES = ("\tpython3 lint.py\n", "\tpython3 kb.py drift\n")
+
+
 def product_makefile(text):
     """The Makefile's MIRRORS transform: the root Makefile as its
     product-repo twin. Swap the root header comment for the product one,
-    drop the plugin-only lint line (lint.py has no product-repo
-    counterpart), and respell every command via product_form. Leans on
-    the root Makefile's shape — an opening comment block ending at the
-    first blank line — which the real-tree mirror test pins."""
+    drop the root-only lines (ROOT_ONLY_LINES), and respell every command
+    via product_form. Leans on the root Makefile's shape — an opening
+    comment block ending at the first blank line — which the real-tree
+    mirror test pins."""
     body = text.partition("\n\n")[2]
-    body = body.replace("\tpython3 lint.py\n", "")
+    for line in ROOT_ONLY_LINES:
+        body = body.replace(line, "")
     return PRODUCT_MAKEFILE_HEADER + "\n" + product_form(body)
 
 

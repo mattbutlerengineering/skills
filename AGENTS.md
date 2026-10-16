@@ -5,7 +5,7 @@ state: each stage skill reads/writes run artifacts (product runs at the
 target repo's `docs/` root, feature runs under `docs/features/<slug>/`),
 and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
-## Verify (CI runs all three on every push/PR)
+## Verify (CI runs all four on every push/PR)
 
 - `python3 run_tests.py` — the full suite, one `python3 -m unittest
   tests.<module>` child per module across `os.cpu_count()` workers
@@ -14,6 +14,10 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
   module passes. `python3 -m unittest discover tests` is the same suite
   serially, and what a stamped repo runs.
 - `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
+- `python3 kb.py drift` — instruction-file drift in `CLAUDE.md`,
+  `AGENTS.md` and `.claude/rules` (dangling paths, roster tables, slash
+  commands; ADR-0078), output matching `drift: 0 problem(s)`; root-only,
+  a stamped repo's Makefile drops the line
 - `python3 gates.py && python3 gates.py --selftest` — factory drift
   detectors (roster in `gates.py`'s module docstring; B skips locally
   without a PR event payload, but the selftest exercises it), output
