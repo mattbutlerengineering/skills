@@ -37,16 +37,28 @@ problem strings; the CLI prints them and exits nonzero.
                     target's own and reported, not refused. Any
                     collision in the executable payload is still
                     refused, and nothing is overwritten.
+  stamp --tools-only <target>
+                    the Conductor alone (#941): tools/factory/* and
+                    .github/factory.json, plus a factory/manifest.json
+                    naming only those keys and marked tools-only
+                    (gates.INSTALL_KEY) — no mirror, no Makefile, no
+                    workflows, no seeds. The same refusals as stamp.
+  update --tools-only <target>
+                    refresh a tools-only target, or adopt a tools tree
+                    copied by hand (tools/factory/ present, no manifest)
+                    by writing it the tools-only manifest; refused on a
+                    full stamp. Plain update honours a tools-only
+                    manifest by itself: it refreshes what the manifest
+                    lists and nothing more, with no make-target report.
 """
 import json
 import re
-import shutil
 import sys
 from pathlib import Path
 
 import factory_config
 import gates
-from cli import report
+from cli import read_file, report
 
 
 def identity(text):
@@ -337,30 +349,71 @@ def update_manifest(root):
     return []
 
 
-def payload_copies(source, target):
-    """([(src, dest relative to target)], problems) for the whole payload.
+# The tools-only payload (#941), in destination terms like FACTORY_OWNED:
+# the tools and the config they read. What a consumer with its own CI,
+# labels and docs takes when it wants the Conductor and nothing else — no
+# Makefile, no workflows, no seeds, and no pristine mirror either, since
+# detector E's mirror half stands down for the marker the manifest gets
+# (gates.TOOLS_ONLY) and its stamped half checks the tools in use.
+TOOLS_ONLY_DESTINATIONS = ("tools/factory/",
+                           factory_config.ARTIFACT_HOMES["factory.json"][0])
+
+
+def is_tools_only(dest):
+    """Whether a resolved install destination is in the tools-only set."""
+    return dest.startswith(TOOLS_ONLY_DESTINATIONS)
+
+
+def tools_only_manifest(manifest, files):
+    """The manifest a tools-only target gets, as bytes: the plugin and
+    version the source manifest records (what `conductor.py --version`
+    reads back), the marker detector E and update both honour, and only
+    the keys the stamp lands."""
+    return (json.dumps({"plugin": manifest.get("plugin"),
+                        "version": manifest.get("version"),
+                        gates.INSTALL_KEY: gates.TOOLS_ONLY, "files": files},
+                       indent=2) + "\n").encode("utf-8")
+
+
+def payload_bytes(src):
+    """A copy's content: the bytes it carries, or the file it names."""
+    return src if isinstance(src, bytes) else src.read_bytes()
+
+
+def payload_copies(source, target, tools_only=False):
+    """([(src, dest relative to target)], problems) for the payload; src
+    is a file to copy or the bytes to write (payload_bytes reads either).
 
     The half stamp and update share: verify the source payload, resolve
-    every manifest key to its mirror path and its install destination, and
-    prove each stays inside the target. The two commands differ only in
-    what they do when a destination already exists.
+    every manifest key to its install destination — and, for a full
+    stamp, its mirror path — and prove each stays inside the target. The
+    two commands differ only in what they do when a destination already
+    exists. A full stamp lands the plugin's manifest byte for byte; a
+    tools-only one keeps the keys is_tools_only lands and gets the
+    manifest naming only those (tools_only_manifest).
     """
     problems = gates.check_scaffold_sync(source)
     if problems:
         return [], problems
     manifest_src = source / "factory" / "manifest.json"
-    files = json.loads(manifest_src.read_text(encoding="utf-8"))["files"]
-    copies = [(manifest_src, Path("factory/manifest.json"))]
-    problems = []
-    for rel in sorted(files):
-        copies.append((source / "factory" / rel, Path("factory") / rel))
+    manifest = json.loads(manifest_src.read_text(encoding="utf-8"))
+    copies, chosen, problems = [], {}, []
+    for rel in sorted(manifest["files"]):
         dest, problem = install_path(rel)
         if problem:
             problems.append(problem)
             continue
+        if tools_only and not is_tools_only(dest):
+            continue
+        chosen[rel] = manifest["files"][rel]
+        if not tools_only:
+            copies.append((source / "factory" / rel, Path("factory") / rel))
         copies.append((source / "factory" / rel, Path(dest)))
     if problems:
         return [], problems
+    written = (tools_only_manifest(manifest, chosen) if tools_only
+               else manifest_src.read_bytes())
+    copies = [(written, Path("factory/manifest.json")), *copies]
     # Every resolved destination — INSTALL_MAP's entries included — must
     # stay inside the resolved target tree, checked before any write.
     target_root = target.resolve()
@@ -370,12 +423,12 @@ def payload_copies(source, target):
     return (copies, []) if not escapes else ([], escapes)
 
 
-def _stamp(source, target, keepable):
+def _stamp(source, target, keepable, tools_only=False):
     """(kept, problems): stamp every copy whose destination is absent.
     An existing destination is kept when keepable(dest) says so and is a
     clash otherwise; any clash refuses the whole stamp before a write."""
     source, target = Path(source), Path(target)
-    copies, problems = payload_copies(source, target)
+    copies, problems = payload_copies(source, target, tools_only)
     if problems:
         return [], problems
     existing = [dest for _, dest in copies if (target / dest).exists()]
@@ -387,13 +440,14 @@ def _stamp(source, target, keepable):
         if dest in existing:
             continue
         (target / dest).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, target / dest)
+        (target / dest).write_bytes(payload_bytes(src))
     return sorted(dest.as_posix() for dest in existing), []
 
 
-def stamp(source, target):
-    """Stamp the source payload into target; refuse drift and overwrites."""
-    return _stamp(source, target, lambda dest: False)[1]
+def stamp(source, target, tools_only=False):
+    """Stamp the source payload into target; refuse drift and overwrites.
+    tools_only lands the Conductor alone (#941; TOOLS_ONLY_DESTINATIONS)."""
+    return _stamp(source, target, lambda dest: False, tools_only)[1]
 
 
 def stamp_keeping(source, target):
@@ -505,7 +559,40 @@ def missing_make_targets(target):
             for name in sorted(called - defined)]
 
 
-def update(source, target):
+def update_kind(target, tools_only):
+    """(tools_only, problems): what update refreshes in target.
+
+    A full stamp's manifest carries no marker and gets the whole payload,
+    as always. A tools-only stamp's manifest says so (gates.INSTALL_KEY),
+    and plain update honours it: refresh what the manifest lists, nothing
+    more. --tools-only is also the adoption path for a tools tree copied
+    by hand with no manifest (#941's consumer): tools/factory/ is there to
+    refresh, so it is not a first stamp. It never downgrades a full stamp
+    — the mirror and workflows it would stop listing would stay behind,
+    unchecked — and a manifest it cannot read is a stamp it cannot
+    classify, refused with the read's own words rather than treated as
+    full and buried under the whole payload.
+    """
+    manifest, problem = read_file(target / "factory" / "manifest.json",
+                                  "factory/manifest.json", dict)
+    if problem:
+        return False, [f"factory-init: {problem}"]
+    if manifest is None:
+        if tools_only and (target / "tools" / "factory").is_dir():
+            return True, []
+        flag = " --tools-only" if tools_only else ""
+        return False, ["factory-init: target has no factory/manifest.json"
+                       f" — it was never stamped; run stamp{flag}, not"
+                       " update"]
+    marked = manifest.get(gates.INSTALL_KEY) == gates.TOOLS_ONLY
+    if tools_only and not marked:
+        return False, ["factory-init: target is a full stamp (its"
+                       " factory/manifest.json carries no install marker)"
+                       " — run update without --tools-only"]
+    return marked, []
+
+
+def update(source, target, tools_only=False):
     """Refresh an already-stamped repo: (written, kept, problems).
 
     stamp refuses every existing destination. That is right for a first
@@ -521,41 +608,56 @@ def update(source, target):
     payload is reported so the user can reconcile it deliberately.
 
     Refuses a tree that was never stamped rather than silently becoming a
-    first stamp, which would land a payload nobody asked for.
+    first stamp, which would land a payload nobody asked for. What it
+    refreshes is update_kind's reading of the target: a tools-only target
+    gets the tools-only payload and no make-target report, since it has
+    no workflows to call one.
     """
     source, target = Path(source), Path(target)
-    copies, problems = payload_copies(source, target)
+    tools_only, problems = update_kind(target, tools_only)
     if problems:
         return [], [], problems
-    if not (target / "factory" / "manifest.json").is_file():
-        return [], [], ["factory-init: target has no factory/manifest.json"
-                        " — it was never stamped; run stamp, not update"]
+    copies, problems = payload_copies(source, target, tools_only)
+    if problems:
+        return [], [], problems
     written, kept = [], []
     for src, dest in copies:
         path = target / dest
         if path.exists() and not is_factory_owned(dest):
-            if path.read_bytes() != src.read_bytes():
+            if path.read_bytes() != payload_bytes(src):
                 kept.append(dest.as_posix())
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(src, path)
+        path.write_bytes(payload_bytes(src))
         written.append(dest.as_posix())
-    return written, sorted(kept), missing_make_targets(target)
+    return (written, sorted(kept),
+            [] if tools_only else missing_make_targets(target))
+
+
+def _target(argv, command):
+    """(target, tools_only) for `<command> [--tools-only] <target>`, or
+    None when argv is not that shape."""
+    if argv[:1] != [command]:
+        return None
+    tools_only = argv[1:2] == ["--tools-only"]
+    rest = argv[2:] if tools_only else argv[1:]
+    return (Path(rest[0]), tools_only) if len(rest) == 1 else None
 
 
 def main(argv):
     root = Path(__file__).resolve().parent
+    stamping, updating = _target(argv, "stamp"), _target(argv, "update")
     if argv == ["update-manifest"]:
         problems = update_manifest(root)
-    elif len(argv) == 2 and argv[0] == "stamp":
-        problems = stamp(root, Path(argv[1]))
+    elif stamping:
+        problems = stamp(root, *stamping)
     elif argv[:2] == ["stamp", "--keep-existing"] and len(argv) == 3:
         kept, problems = stamp_keeping(root, Path(argv[2]))
         for rel in kept:
             print(f"factory-init: kept {rel} (yours — the stamp did not"
                   " write it)")
-    elif len(argv) == 2 and argv[0] == "update":
-        written, kept, problems = update(root, Path(argv[1]))
+    elif updating:
+        written, kept, problems = update(root, *updating)
         for rel in kept:
             print(f"factory-init: kept {rel} (yours — differs from the"
                   " payload, reconcile by hand if you want the change)")

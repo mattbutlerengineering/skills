@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 import assembler
 import factory_config
 import work_queue
-from cli import CLI_FAILURES, detail, gh_read, label_names
+from cli import CLI_FAILURES, detail, gh_read, label_names, read_file
 from conductor import LEDGER, WORKTREES, ask, batch_branch, batch_dir, \
     batch_name_problems, batch_worktree, is_text, load, stamp
 from cost_ledger import ISSUE_KEY
@@ -497,6 +497,36 @@ def _repeated(numbers):
                                   if numbers.count(n) > 1})]
 
 
+def payload_version(root):
+    """The payload these tools were stamped from (#941): the plugin name
+    and version factory/manifest.json records, which every stamp lands,
+    or why there is none. A tools tree copied by hand has no manifest —
+    the stale-tools tell the Owner had no way to see — and is reported
+    as unversioned, never guessed at."""
+    manifest, problem = read_file(Path(root) / "factory" / "manifest.json",
+                                  "factory/manifest.json", dict)
+    if problem:
+        return f"unversioned ({problem})"
+    if manifest is None:
+        return ("unversioned (no factory/manifest.json: these tools were"
+                " copied by hand, not stamped — factory-init update"
+                " --tools-only records one)")
+    plugin, version = manifest.get("plugin"), manifest.get("version")
+    if not isinstance(version, str):
+        return "unversioned (factory/manifest.json records no version)"
+    return f"{plugin} {version}" if isinstance(plugin, str) else version
+
+
+def version_line(root):
+    """The line `--version` prints and every plan ends with."""
+    return f"cd: payload {payload_version(root)}"
+
+
+def version_cli(root):
+    print(version_line(root))
+    return []
+
+
 def plan_cli(root, args, now, run, git):
     agents, args = _agents(args)
     numbers = _issue_numbers(args)
@@ -507,7 +537,7 @@ def plan_cli(root, args, now, run, git):
         return repeated
     plan, problems = _plan(root, numbers, now, run, git, agents)
     if plan is not None:
-        print("\n".join(compose_plan(plan)))
+        print("\n".join([*compose_plan(plan), version_line(root)]))
     return problems
 
 
@@ -528,7 +558,7 @@ def open_cli(root, args, now, run, git, netrc=None):
     plan, problems = _plan(root, numbers, now, run, git, agents)
     if plan is None:
         return problems
-    print("\n".join(compose_plan(plan)))
+    print("\n".join([*compose_plan(plan), version_line(root)]))
     problems = conductor_run.preflight(
         root, git, Path.home() / ".netrc" if netrc is None else netrc)
     if problems:

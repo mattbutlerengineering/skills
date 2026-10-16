@@ -53,6 +53,19 @@ still gets a real verdict; silence would read as a pass.
 Skip this whole tier if `tools/factory/` is absent, and say so: the repo is
 plugin-only, which is a legitimate install.
 
+Read `factory/manifest.json` before the checks below. A manifest carrying
+`"install": "tools-only"` is a tools-only stamp (`factory-init stamp
+--tools-only`): the repo took `tools/factory/` and `.github/factory.json`
+on purpose and nothing else, so steps 5 through 8 do not apply — no
+Makefile, no workflows and no code-owner file were ever installed, and
+reporting them missing would be a false drift. Say "tools-only stamp,
+steps 5–8 not applicable" and run step 4 alone; detector E reads the same
+marker and asks for no `factory/templates/` mirror there. A
+`tools/factory/` with no manifest at all is a hand copy: report it as
+unversioned (`python3 tools/factory/conductor.py --version` says so) and
+name the fix, `factory-init update --tools-only`, which writes the
+manifest.
+
 4. **Run the installed detectors** and read their problem strings — never
    re-derive a finding they already report:
 

@@ -353,6 +353,40 @@ class TestComposePlan(unittest.TestCase):
         self.assertEqual(lines[-1], "  #13 deferred: no type: label")
 
 
+class TestPayloadVersion(unittest.TestCase):
+    """What `--version` and the plan's trailer print (#941): the plugin
+    and version the stamp recorded in factory/manifest.json, or why
+    there is none — reported, never guessed."""
+
+    def version(self, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            if text is not None:
+                Path(tmp, "factory").mkdir()
+                Path(tmp, "factory/manifest.json").write_text(text)
+            return conductor_plan.payload_version(tmp)
+
+    def test_reads_the_plugin_and_version_the_stamp_recorded(self):
+        self.assertEqual(
+            self.version(json.dumps({"plugin": "idea-to-prod",
+                                     "version": "0.19.0", "files": {}})),
+            "idea-to-prod 0.19.0")
+
+    def test_no_manifest_is_a_hand_copy(self):
+        self.assertEqual(self.version(None), (
+            "unversioned (no factory/manifest.json: these tools were copied"
+            " by hand, not stamped — factory-init update --tools-only"
+            " records one)"))
+
+    def test_a_manifest_recording_no_version_says_so(self):
+        self.assertEqual(
+            self.version(json.dumps({"plugin": "x", "files": {}})),
+            "unversioned (factory/manifest.json records no version)")
+
+    def test_an_unreadable_manifest_carries_the_read_s_own_reason(self):
+        self.assertTrue(self.version("{nope").startswith(
+            "unversioned (factory/manifest.json is not valid JSON:"))
+
+
 class TestOpen(unittest.TestCase):
     def test_opens_the_branch_worktree_ledger_and_spend_ask(self):
         result, _ = plan([issue(12), issue(13, ("type:defect", "size:S"))])
@@ -506,6 +540,15 @@ class TestPlanCli(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertEqual(out.splitlines()[0], "cd: 1 item(s) planned")
         self.assertEqual(out.splitlines()[-1], "cd: 0 problem(s)")
+
+    def test_plan_ends_by_naming_the_payload_it_runs_on(self):
+        # #941: the stale-tools tell, in the output the Owner reads at
+        # the start of every batch; this scratch root has no manifest
+        code, out = self.run_cli(["plan", "#12"], {12: issue(12)})
+        self.assertEqual((code, out.splitlines()[-2]), (0, (
+            "cd: payload unversioned (no factory/manifest.json: these tools"
+            " were copied by hand, not stamped — factory-init update"
+            " --tools-only records one)")))
 
     def test_an_unreadable_issue_refuses_the_whole_plan(self):
         code, out = self.run_cli(["plan", "#12", "#13"], {12: issue(12)},

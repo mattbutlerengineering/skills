@@ -19,7 +19,10 @@ stamped by factory-init (the payload ships it). Every command below
 writes `python3 conductor.py`; in a stamped repo run
 `python3 tools/factory/conductor.py` instead. If the repo has neither,
 stop and say so: it needs `factory-init` (stamp, or update an older
-stamp). Do not improvise the tool's rules.
+stamp). `conductor.py --version` names the payload the tools came from,
+and every `plan` ends with the same line; `unversioned` means a hand
+copy, which `factory-init update --tools-only` records. Do not
+improvise the tool's rules.
 
 The repo's `factory.json` (`.github/factory.json` when stamped) names
 its gate in `conductor.gate_command`; absent, it is `make check`.

@@ -728,6 +728,24 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         self.assertEqual(code, 2)
         self.assertIn(self.usage_fragment, out)
 
+    def test_version_prints_the_payload_the_tools_were_stamped_from(self):
+        # #941: a consumer on stale tools had no tell. The stamp records
+        # the plugin version in factory/manifest.json; this reads it back.
+        Path(self.tmp.name, "factory").mkdir()
+        Path(self.tmp.name, "factory/manifest.json").write_text(json.dumps(
+            {"plugin": "idea-to-prod", "version": "0.19.0", "files": {}}))
+        code, out = self.run_cli(["--version"])
+        self.assertEqual((code, out.splitlines()),
+                         (0, ["cd: payload idea-to-prod 0.19.0",
+                              "cd: 0 problem(s)"]))
+
+    def test_version_is_unversioned_when_the_tools_were_copied_by_hand(self):
+        code, out = self.run_cli(["--version"])
+        self.assertEqual((code, out.splitlines()[0]), (0, (
+            "cd: payload unversioned (no factory/manifest.json: these tools"
+            " were copied by hand, not stamped — factory-init update"
+            " --tools-only records one)")))
+
 
 # --- autorun's stop-after line (WO-0159) -------------------------------
 

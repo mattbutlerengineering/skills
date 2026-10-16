@@ -112,6 +112,11 @@ EXPECTED_INSTALLS = {
     "templates/tools/factory/gate_digest.py": "tools/factory/gate_digest.py",
 }
 
+# What a tools-only stamp lands (#941): the tools and the config they read.
+TOOLS_ONLY_RELS = {rel for rel in EXPECTED_RELS
+                   if rel.startswith("templates/tools/factory/")
+                   or rel == "templates/factory.json"}
+
 TAMPER_PROBLEM = (
     "E: factory/templates/Makefile does not match its manifest checksum"
     " (re-run manifest update, never hand-edit)")
@@ -869,6 +874,26 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         with tempfile.TemporaryDirectory() as tmp:
             return self.run_cli(["stamp", str(Path(tmp) / "product")])
 
+    def test_tools_only_stamp_then_update_through_the_cli(self):
+        # #941: the flag on both commands, against the real payload.
+        files = json.loads((REPO_ROOT / "factory" / "manifest.json")
+                           .read_text(encoding="utf-8"))["files"]
+        tools = [rel for rel in files
+                 if rel.startswith("templates/tools/factory/")]
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "product"
+            code, out = self.run_cli(["stamp", "--tools-only", str(target)])
+            self.assertEqual((code, out.splitlines()[-1]),
+                             (0, self.summary_line), out)
+            self.assertTrue((target / "tools/factory/conductor.py").is_file())
+            self.assertFalse((target / "Makefile").exists())
+            code, out = self.run_cli(["update", "--tools-only", str(target)])
+            self.assertEqual(code, 0, out)
+            # every tool plus the manifest is refreshed; factory.json is
+            # the repo's and, unchanged, is neither written nor kept
+            self.assertIn(f"factory-init: refreshed {len(tools) + 1}"
+                          " file(s), kept 0", out.splitlines())
+
 
 class TestUpdate(unittest.TestCase):
     """update refreshes an already-stamped repo (issue #212).
@@ -1020,6 +1045,192 @@ class TestUpdate(unittest.TestCase):
                 dest = Path(factory_init.install_path(rel)[0])
                 self.assertFalse(factory_init.is_factory_owned(dest), dest)
                 self.assertFalse(rel.startswith(gates.PRISTINE_PREFIXES), rel)
+
+
+class TestToolsOnly(unittest.TestCase):
+    """A tools-only stamp and its update path (issue #941).
+
+    A consumer with its own CI, labels and docs took only the Conductor:
+    tools/factory/*.py and .github/factory.json, copied by hand. stamp
+    brought everything it had left out, and update needed a manifest only
+    stamp writes, so the install had no upgrade path — it stayed in sync
+    only because the Owner knew to diff 29 files against the manifest by
+    hand. --tools-only lands exactly that subset, writes a manifest naming
+    only those keys with gates.INSTALL_KEY set to gates.TOOLS_ONLY, and
+    plain update honours the marker: it refreshes what the manifest
+    lists, nothing more. A full stamp's manifest carries no marker, so
+    update behaves there exactly as before.
+    """
+
+    HAND_EDITED = (
+        "E: tools/factory/gates.py does not match"
+        " factory/templates/tools/factory/gates.py (hand-edited stamped"
+        " file — restore it from the mirror or re-stamp, never keep the"
+        " edit)")
+
+    def manifested_source(self, tmp):
+        source = Path(tmp) / "source"
+        tree = make_factory_repo(source)
+        assert factory_init.update_manifest(tree.root) == []
+        return tree.root
+
+    def stamped_tools_only(self, tmp):
+        source = self.manifested_source(tmp)
+        target = Path(tmp) / "target"
+        target.mkdir()
+        assert factory_init.stamp(source, target, tools_only=True) == []
+        return source, target
+
+    def read_manifest(self, root):
+        return json.loads((root / "factory/manifest.json").read_text(
+            encoding="utf-8"))
+
+    def test_stamp_lands_the_tools_the_config_and_a_marked_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped_tools_only(tmp)
+            installs = {rel: factory_init.install_path(rel)[0]
+                        for rel in TOOLS_ONLY_RELS}
+            self.assertEqual(all_files(target),
+                             sorted([*installs.values(),
+                                     "factory/manifest.json"]))
+            for rel, dest in installs.items():
+                self.assertEqual((target / dest).read_bytes(),
+                                 (source / "factory" / rel).read_bytes(),
+                                 f"installed copy {dest} is not verbatim")
+            source_files = self.read_manifest(source)["files"]
+            self.assertEqual(self.read_manifest(target), {
+                "plugin": "software-factory", "version": "1.2.3",
+                gates.INSTALL_KEY: gates.TOOLS_ONLY,
+                "files": {rel: source_files[rel] for rel in TOOLS_ONLY_RELS}})
+
+    def test_the_stamped_tree_gets_an_honest_detector_e_verdict(self):
+        # no mirror by design, the marker says so, and E's stamped half
+        # still checks every tool the manifest lists
+        with tempfile.TemporaryDirectory() as tmp:
+            _, target = self.stamped_tools_only(tmp)
+            self.assertFalse((target / "factory/templates").exists())
+            self.assertEqual(gates.check_scaffold_sync(target), [])
+            (target / "tools/factory/gates.py").write_text(
+                "# hand-edited\n", encoding="utf-8")
+            self.assertEqual(gates.check_scaffold_sync(target),
+                             [self.HAND_EDITED])
+
+    def test_stamp_refuses_an_existing_tool_without_partial_stamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            target = Path(tmp) / "target"
+            FixtureTree(target).write("tools/factory/conductor.py", "mine\n")
+            self.assertEqual(
+                factory_init.stamp(source, target, tools_only=True),
+                ["factory-init: target already has"
+                 " tools/factory/conductor.py"])
+            self.assertEqual(all_files(target), ["tools/factory/conductor.py"])
+
+    def test_update_manifest_writes_no_marker(self):
+        # the additive guarantee: the plugin's own manifest, which a full
+        # stamp copies byte for byte, never carries the marker
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            self.assertEqual(sorted(self.read_manifest(source)),
+                             ["files", "plugin", "version"])
+
+    def test_plain_update_honours_the_marker(self):
+        # refresh what the manifest lists — a hand-edited tool, and a tool
+        # the payload gained since the stamp — and nothing more
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped_tools_only(tmp)
+            (target / "tools/factory/gates.py").write_text(
+                "# hand-edited\n", encoding="utf-8")
+            (source / "factory/templates/tools/factory/extra.py").write_text(
+                "EXTRA = 1\n", encoding="utf-8")
+            self.assertEqual(factory_init.update_manifest(source), [])
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual((kept, problems), ([], []))
+            self.assertIn("tools/factory/gates.py", written)
+            self.assertIn("tools/factory/extra.py", written)
+            self.assertIn("factory/manifest.json", written)
+            self.assertNotIn("Makefile", written)
+            for absent in ("Makefile", ".github/workflows",
+                           "factory/templates"):
+                self.assertFalse((target / absent).exists(), absent)
+            manifest = self.read_manifest(target)
+            self.assertEqual(manifest[gates.INSTALL_KEY], gates.TOOLS_ONLY)
+            self.assertIn("templates/tools/factory/extra.py",
+                          manifest["files"])
+            self.assertNotIn("templates/Makefile", manifest["files"])
+            self.assertEqual(gates.check_scaffold_sync(target), [])
+
+    def test_update_tools_only_adopts_a_hand_copied_tools_tree(self):
+        # #941's consumer exactly: the tools and its own factory.json
+        # copied by hand, no manifest. The tools are there to refresh, so
+        # it is not a first stamp; from here on plain update is the path.
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            target = Path(tmp) / "target"
+            tree = FixtureTree(target)
+            tree.write("tools/factory/gates.py", "# stale copy\n")
+            mine = json.dumps({"wip_cap": 7})
+            tree.write(".github/factory.json", mine)
+            written, kept, problems = factory_init.update(
+                source, target, tools_only=True)
+            self.assertEqual(problems, [])
+            self.assertEqual(kept, [".github/factory.json"])
+            self.assertIn("tools/factory/gates.py", written)
+            self.assertIn("factory/manifest.json", written)
+            self.assertEqual(
+                (target / ".github/factory.json").read_text(encoding="utf-8"),
+                mine)
+            self.assertEqual(gates.check_scaffold_sync(target), [])
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual((kept, problems), ([".github/factory.json"], []))
+            self.assertEqual(self.read_manifest(target)[gates.INSTALL_KEY],
+                             gates.TOOLS_ONLY)
+
+    def test_update_tools_only_never_downgrades_a_full_stamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            target = Path(tmp) / "target"
+            target.mkdir()
+            assert factory_init.stamp(source, target) == []
+            before = {rel: (target / rel).read_bytes()
+                      for rel in all_files(target)}
+            written, kept, problems = factory_init.update(
+                source, target, tools_only=True)
+            self.assertEqual(problems, [
+                "factory-init: target is a full stamp (its"
+                " factory/manifest.json carries no install marker) — run"
+                " update without --tools-only"])
+            self.assertEqual((written, kept), ([], []))
+            self.assertEqual({rel: (target / rel).read_bytes()
+                              for rel in all_files(target)}, before)
+
+    def test_update_tools_only_refuses_a_tree_with_no_tools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            fresh = Path(tmp) / "fresh"
+            fresh.mkdir()
+            written, kept, problems = factory_init.update(
+                source, fresh, tools_only=True)
+            self.assertEqual(problems, [
+                "factory-init: target has no factory/manifest.json — it was"
+                " never stamped; run stamp --tools-only, not update"])
+            self.assertEqual((written, kept), ([], []))
+            self.assertEqual(all_files(fresh), [])
+
+    def test_an_unreadable_target_manifest_is_refused(self):
+        # update reads the marker now, so a manifest it cannot read is a
+        # stamp it cannot classify — refused with the read's own words,
+        # never treated as full and overwritten with the whole payload
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            target = Path(tmp) / "target"
+            FixtureTree(target).write("factory/manifest.json", "{nope")
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual((written, kept), ([], []))
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "factory-init: factory/manifest.json is not valid JSON:"),
+                problems)
 
 
 class TestSeededADRs(unittest.TestCase):
@@ -1286,6 +1497,36 @@ class TestAcceptanceStampRealRepo(unittest.TestCase):
                              f"gates failed in stamped repo:\n"
                              f"{result.stdout}\n{result.stderr}")
             self.assertIn("gates: 0 problem(s)", result.stdout)
+
+    def test_tools_only_stamped_repo_passes_its_gates_and_knows_its_version(
+            self):
+        # #941: the honest doctor verdict on the real payload — no mirror,
+        # no Makefile, no workflows, and gates.py reports nothing missing;
+        # and the tools know which payload they came from.
+        manifest = json.loads((REPO_ROOT / "factory" / "manifest.json")
+                              .read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "product"
+            (target / ".git").mkdir(parents=True)
+            self.assertEqual(
+                factory_init.stamp(REPO_ROOT, target, tools_only=True), [])
+            for absent in ("Makefile", ".github/workflows",
+                           "factory/templates", "docs"):
+                self.assertFalse((target / absent).exists(), absent)
+            result = subprocess.run(
+                [sys.executable, "tools/factory/gates.py"],
+                cwd=target, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0,
+                             f"gates failed in tools-only repo:\n"
+                             f"{result.stdout}\n{result.stderr}")
+            self.assertIn("gates: 0 problem(s)", result.stdout)
+            result = subprocess.run(
+                [sys.executable, "tools/factory/conductor.py", "--version"],
+                cwd=target, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                result.stdout.splitlines()[0],
+                f"cd: payload {manifest['plugin']} {manifest['version']}")
 
     def test_running_the_stamped_tools_leaves_no_bytecode_to_commit(self):
         # #705: a consumer ran conductor.py plan, and the commit that

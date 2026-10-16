@@ -60,6 +60,25 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
      a collaborator on the target, GitHub ignores the entry and the
      code-owner gate goes inert.
 
+## Stamp the Conductor alone
+
+A repo that already has its own CI, labels and docs and wants only the
+Conductor (the `conduct` skill's tool) takes a tools-only stamp:
+
+    python3 factory_init.py stamp --tools-only <path-to-product-repo>
+
+It lands `tools/factory/` and `.github/factory.json` and nothing else — no
+`Makefile`, no workflows, no `docs/` seeds, no `factory/templates/` mirror
+— plus a `factory/manifest.json` that names only those keys and carries
+`"install": "tools-only"`. That marker is what makes the install honest
+and upgradeable: detector E reads it and asks for no mirror there (its
+stamped half still checks every tool in use), `update` reads it and
+refreshes only what the manifest lists, and `conductor.py --version` reads
+the plugin version the manifest records. The same refusals apply as to
+`stamp`: any existing destination refuses the whole stamp, so a tools tree
+copied by hand is adopted by `update --tools-only` (below), never
+re-stamped.
+
 ## Refresh an already-stamped repo
 
 A stamp is a snapshot. When the factory gains a fix — a new detector, a new
@@ -81,7 +100,22 @@ It splits the payload where detector E does:
   deliberately.
 
 It refuses a tree that was never stamped rather than quietly becoming a first
-stamp.
+stamp, and it refuses a `factory/manifest.json` it cannot read rather than
+treating the target as a full stamp.
+
+A tools-only target needs no flag: its manifest says what was installed, and
+`update` refreshes exactly that — every tool, including one the payload
+gained since the stamp, and the manifest itself — landing no Makefile,
+workflow or seed and printing no make-target report, since there are no
+workflows to call one. The flag is for adoption only:
+
+    python3 factory_init.py update --tools-only <path-to-product-repo>
+
+takes a tools tree copied by hand (`tools/factory/` present, no
+`factory/manifest.json`), refreshes it and writes it the tools-only
+manifest, so plain `update` is the path from then on. It refuses a full
+stamp rather than downgrading one: the mirror and workflows it would stop
+listing would stay behind, unchecked.
 
 **Read the make-target report.** The workflows are overwritten and they call
 only `make` targets, so a factory change that adds a target leaves a repo
