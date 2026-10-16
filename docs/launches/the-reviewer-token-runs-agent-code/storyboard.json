@@ -1,0 +1,10 @@
+{"title": "The reviewer's key stays out of reach",
+ "tagline": "Untrusted code runs without it; the reviewer starts from main",
+ "intro": "This release splits the work in two, so the key and the untrusted code are never in the same room.",
+ "steps": [
+  {"say": "The pull request's code now runs in a job that holds no secret, and it hands over only its findings, as plain text with a size limit.",
+   "do": ["grep -n -E '^  (check|review|needs-review-label):$|secrets.FACTORY_REVIEW_TOKEN|ref: ' .github/workflows/validator.yml"]},
+  {"say": "The reviewer then starts from the trusted main branch, reads those findings as data, and takes its pass or fail verdict from the check's result, never from the text.",
+   "do": ["python3 -m unittest tests.test_validator_workflow 2>&1 | tail -3"]}
+ ],
+ "outro": "A pull request written by an agent can no longer borrow the reviewer's identity to approve itself or act on the repository."}
