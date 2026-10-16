@@ -234,7 +234,7 @@ scorecard agree with GitHub.
 
 ### The standing tracker
 
-#822 stays open by the Owner's decision. The next step is the Owner's:
+#822 closed on 2026-10-16 on the Owner's instruction, and this section is the standing record in its place. The next step is the Owner's:
 upgrade the consumer's tools to the release carrying the fixes above
 (`factory-init update --tools-only`), run `next` on b20261014,
 b20261014c and sdlc-ci so the bookkeeping retries commit and push the
