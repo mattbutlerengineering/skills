@@ -4,8 +4,9 @@ docs/pipeline-protocol.md is the spec; this module is its one
 implementation. It owns the stage/skill taxonomy, the artifact tables
 (product/feature and maintenance, ADR-0025), artifact-frontmatter
 reading, the skill-file contract (path shape and frontmatter rules,
-ADR-0052), the UX conditional, the re-entry conditional, the checkbox
-rule, the Operate population (ADR-0102), the retro short-circuit, and
+ADR-0052), the UX conditional, the re-entry conditional, the Ship
+outcome (ADR-0101), the checkbox rule, the Operate population
+(ADR-0102), the retro short-circuit, and
 next-stage derivation (ADR-0021).
 Tools — the structural lint, the trigger-eval runner — are thin
 callers.
@@ -198,6 +199,32 @@ def _ux_skipped(run_dir):
     return (read_frontmatter(prd) or {}).get("ux") == "not-applicable"
 
 
+# What Ship actually reached, recorded in release.md frontmatter
+# (ADR-0101). `released` and `rolled-back` are reached outcomes — the
+# ship skill's failed ship whose rollback plan ran is a complete
+# release.md. `prepared` is a prepare-and-stop release waiting on the
+# pull request its `pending-merge:` names, written back to `released`
+# once that merges.
+SHIP_OUTCOMES = ("released", "rolled-back", "prepared")
+_SHIP_REACHED = SHIP_OUTCOMES[:2]
+
+
+def _ship_reached(run_dir):
+    """Ship is complete when release.md records an outcome the stage
+    actually reached (ADR-0101): `outcome: released` or `rolled-back`.
+    `prepared` — and any value outside SHIP_OUTCOMES, which fails
+    closed — leaves the stage pending, so a run never reaches Operate
+    over a release artifact that disagrees with production. A
+    release.md with no `outcome:` field predates the field and still
+    counts: every release written before ADR-0101 would otherwise fall
+    back to Ship."""
+    release = run_dir / "release.md"
+    if not release.is_file():
+        return False
+    outcome = (read_frontmatter(release) or {}).get("outcome")
+    return outcome is None or outcome in _SHIP_REACHED
+
+
 def checkbox_progress(path):
     """(checked, total) counts of the file's checkboxes under this
     seam's own grammar; a missing file counts (0, 0)."""
@@ -300,6 +327,8 @@ def _stage_complete(stage, artifact, run_dir):
         return _all_boxes_checked(run_dir / "breakdown.md")
     if stage == "ux-design":
         return (run_dir / artifact).is_file() or _ux_skipped(run_dir)
+    if stage == "ship":
+        return _ship_reached(run_dir)
     if stage == "operate":
         return _retro_populated(run_dir)
     return (run_dir / artifact).is_file()
@@ -311,6 +340,8 @@ def _maintenance_stage_complete(stage, artifact, run_dir):
     if stage in ("architect", "decompose"):
         return ((run_dir / artifact).is_file()
                 or not _re_entry_architect(run_dir))
+    if stage == "ship":
+        return _ship_reached(run_dir)
     if stage == "operate":
         return _retro_populated(run_dir)
     return (run_dir / artifact).is_file()

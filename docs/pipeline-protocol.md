@@ -111,7 +111,7 @@ which artifacts exist in the run directory:
 | Implement | code | every checkbox in `breakdown.md` is checked (a breakdown with no checkboxes is not yet implemented) |
 | Verify | `verification.md` | file exists |
 | Review | `review.md` | file exists |
-| Ship | `release.md` | file exists |
+| Ship | `release.md` | file exists and its `outcome:` is one the stage reached — `prepared` leaves Ship pending (see The Ship outcome below) |
 | Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; see The Operate population below) |
 
 **Next stage = the first stage in order that is not complete.**
@@ -147,6 +147,38 @@ and the Architect skill echoes that recorded reason in `architecture.md`
 frontmatter (e.g. `ux: skipped — no UI surface`) so absence is never
 ambiguous downstream.
 
+### The Ship outcome
+
+Ship records the outcome it actually reached in `release.md`
+frontmatter, as `outcome: released | rolled-back | prepared`
+(ADR-0101). `released` means the change reached users; `rolled-back`
+means the release failed or came back and the rollback plan ran — the
+`ship` skill's failed ship, still a complete artifact; `prepared` means
+the release was prepared and stopped, as every unattended run does
+without release authorization, and is waiting on a pull request the
+artifact names as `pending-merge: <PR url>`. Only a reached outcome
+completes the stage: `prepared` leaves Ship pending, as does any value
+outside that vocabulary, while a `release.md` with no `outcome:` field
+predates the field and still counts as complete.
+
+Nothing in orientation reads the forge — the tables read files
+(ADR-0100). So a prepared release is written back by whoever next
+touches the run: `next` announces "confirm the pull request merged,
+then record it" and routes to `ship`, whose Release step becomes the
+write-back; `operate` resolves it at its soft gate before anything
+else, or stops, and never writes a retro over it. The write-back reads
+the pull request through the forge CLI —
+`gh pr view <n> --json state,mergedAt`, or in a cloud session (Claude
+Code Remote), where GraphQL-backed `gh pr view` returns HTTP 403 while
+`gh api` REST calls succeed,
+`gh api repos/{owner}/{repo}/pulls/<n> --jq '{merged,merged_at}'` —
+and, when it merged, rewrites `outcome: released` and adds
+`released-at:` (the merge date), keeps `pending-merge:` as the record
+of what was waited on, and commits the artifact as the stage-boundary
+rule says. A pull request closed unmerged is not a release: the
+outcome stays `prepared` and the run stays at Ship, for a person to
+re-ship or abandon.
+
 ### Maintenance-run orientation
 
 A maintenance run does not start at Idea. It enters at a **capture step**
@@ -168,7 +200,7 @@ for a maintenance run is:
 | Implement | code | every checkbox in the run's breakdown is checked |
 | Verify | `verification.md` | file exists — **never skippable**; the regression test is the point |
 | Review | `review.md` | file exists |
-| Ship | `release.md` | file exists |
+| Ship | `release.md` | file exists and its `outcome:` is one the stage reached — `prepared` leaves Ship pending (The Ship outcome, above) |
 | Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; see The Operate population below) |
 
 **Where the breakdown lives:** with `re-entry: implement`, the breakdown is
@@ -327,6 +359,8 @@ date: 2026-07-01
 # ux-reason: <one line>   when ux is not-applicable
 # intake: #123            tracker issue that seeded defect.md (ADR-0030);
 #                         duplicates of the same defect join intake-duplicates: [...]
+# outcome: released | rolled-back | prepared   (release.md, at ship time — ADR-0101)
+# pending-merge: <PR url> while prepared; released-at: YYYY-MM-DD once written back
 # users-observed: <N>     retro.md's population line (ADR-0102) — 0 is a valid count;
 # signal-source: <where>  the two fields complete Operate together
 # assumptions: [...]      any decision made without live user input

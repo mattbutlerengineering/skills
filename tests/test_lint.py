@@ -115,13 +115,14 @@ def make_clean_tree(root):
     # The router needs its hand-off list, not just the slugs: check_router
     # pins that list's membership and pipeline order, so a bare mention
     # dump is no longer a clean router.
-    # check_router_conditionals holds the same file to naming its three
+    # check_router_conditionals holds the same file to naming its four
     # frontmatter conditionals and the Implement checkbox rule.
     (root / "skills" / "next" / "SKILL.md").write_text(
         "---\nname: next\ndescription: d\n---\n\n"
         "Honor the `ux:` field in `prd.md` frontmatter, the `re-entry:`"
-        " field in `defect.md` frontmatter, the `users-observed:` field"
-        " in `retro.md` frontmatter, and the Implement checkbox rule.\n\n"
+        " field in `defect.md` frontmatter, the `outcome:` field in"
+        " `release.md` frontmatter, the `users-observed:` field in"
+        " `retro.md` frontmatter, and the Implement checkbox rule.\n\n"
         + "\n".join(f"   - {stage} → the `{stage}` skill"
                     for stage in lint.routed_order()) + "\n",
         encoding="utf-8")
@@ -1383,6 +1384,7 @@ class TestRouterConditionals(CheckerTreeTest):
     def clean_body(self):
         return ("Honor the `ux:` field in `prd.md` frontmatter, the"
                 " `re-entry:` field in `defect.md` frontmatter, the"
+                " `outcome:` field in `release.md` frontmatter, the"
                 " `users-observed:` field in `retro.md` frontmatter, and the"
                 " Implement checkbox rule.\n\n"
                 + "\n".join(f"   - {s} → the `{s}` skill"
@@ -1400,14 +1402,27 @@ class TestRouterConditionals(CheckerTreeTest):
         body = self.clean_body().replace(
             "Honor the `ux:` field in `prd.md` frontmatter, the"
             " `re-entry:` field in `defect.md` frontmatter, the"
+            " `outcome:` field in `release.md` frontmatter, the"
             " `users-observed:` field in `retro.md` frontmatter, and the"
             " Implement checkbox rule.",
-            "Honor the `re-entry:` field in `defect.md` frontmatter and"
-            " the `users-observed:` field in `retro.md` frontmatter.")
+            "Honor the `re-entry:` field in `defect.md` frontmatter, the"
+            " `outcome:` field in `release.md` frontmatter and the"
+            " `users-observed:` field in `retro.md` frontmatter.")
         self.write(body)
         self.assertEqual(lint.check_router_conditionals(self.root), [
             "router names no 'ux' conditional (`ux:` field in `<file>`)",
             "router names no Implement checkbox rule"])
+
+    def test_a_dropped_ship_outcome_conditional_is_flagged(self):
+        """Issue #942: the router's fourth conditional. A release.md whose
+        `outcome:` is `prepared` is Ship not yet complete, and the router
+        restates that in English exactly as it restates `ux:`."""
+        body = self.clean_body().replace(
+            " the `outcome:` field in `release.md` frontmatter,", "")
+        self.write(body)
+        self.assertEqual(lint.check_router_conditionals(self.root), [
+            "router names no 'outcome' conditional"
+            " (`outcome:` field in `<file>`)"])
 
     def test_a_dropped_population_conditional_is_flagged(self):
         """Issue #944: a retro.md without its population line is Operate

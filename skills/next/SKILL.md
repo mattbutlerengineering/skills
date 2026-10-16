@@ -26,7 +26,9 @@ the correct stage skill. This skill never produces an artifact itself.
 3. **Orient.** Walk the orientation table: the next stage is the first stage
    in order that is not complete. Honor the UX conditional (`ux:` field in
    `prd.md` frontmatter), the re-entry conditional (`re-entry:` field in
-   `defect.md` frontmatter, maintenance runs), the Operate population
+   `defect.md` frontmatter, maintenance runs), the Ship outcome (`outcome:`
+   field in `release.md` frontmatter — `prepared` is Ship not yet complete,
+   the protocol's "The Ship outcome" section), the Operate population
    (`users-observed:` field in `retro.md` frontmatter — a retro without
    its population line is Operate not yet complete, the protocol's "The
    Operate population" section), and the Implement checkbox rule.
@@ -34,6 +36,9 @@ the correct stage skill. This skill never produces an artifact itself.
 4. **Announce.** Tell the user, in one or two sentences: which run this is,
    what exists, what's next, and why. Example: "Feature run `dark-mode`: PRD
    exists and declares a UI surface, no `ux.md` — next stage is UX Design."
+   A prepared release announces the write-back: "Feature run `dark-mode`:
+   `release.md` is `prepared`, waiting on <PR url> — confirm the pull
+   request merged, then record it; next stage is Ship."
 
 5. **Hand off — open pull requests first.** When the repo has open pull
    requests, run the protocol's "Open pull requests first" pre-flight

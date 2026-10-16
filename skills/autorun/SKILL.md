@@ -100,7 +100,11 @@ becomes a logged assumption, never a silent guess.
    authorizes the release, ship **prepares and stops**: run the
    pre-flight checks and write `release.md` recording readiness and the
    exact release steps, but execute no externally visible release action
-   — no deploy, publish, tag, or merge. And regardless of what the brief
+   — no deploy, publish, tag, or merge. The artifact records
+   `outcome: prepared` and the pull request it waits on as
+   `pending-merge:` (the protocol's "The Ship outcome" section), so the
+   run stays at Ship until the merge is written back. And regardless of
+   what the brief
    authorizes, never release unattended past unfixed critical review
    findings — stop and surface instead. Run operate only as the brief's
    `operate:` section says: after its `wait`, once its `minimum-signal`
@@ -115,7 +119,8 @@ becomes a logged assumption, never a silent guess.
 
 6. **Report.** Stage by stage: the artifact produced, its `assumptions:`
    entries, verification evidence, anything flagged for human review —
-   including a release that was prepared but not executed, and each ADR
+   including a release that was prepared but not executed (and the pull
+   request it waits on), and each ADR
    written unattended (status `provisional`, per the protocol). Aggregate
    every assumption from the artifacts' frontmatter into one list; note
    that the run was autorun-driven and, when the brief said `skip` or

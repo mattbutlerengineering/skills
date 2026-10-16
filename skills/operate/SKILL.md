@@ -14,8 +14,14 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
 1. Read `../../docs/pipeline-protocol.md` for run discovery, gating, and
    frontmatter conventions.
 
-2. **Soft gate.** Predecessor artifact: `release.md`. If missing, apply soft
-   gating.
+2. **Soft gate.** Predecessor artifact: `release.md` with a reached
+   outcome. If it records `outcome: prepared`, resolve that before
+   anything else, per the protocol's "The Ship outcome" section: read the
+   pull request `pending-merge:` names through the forge CLI; merged →
+   rewrite `outcome: released` with `released-at:` and commit the
+   artifact; not merged → stop and name the pull request. A retro is
+   never written over a release that is still waiting. If `release.md` is
+   missing, apply soft gating.
 
 3. **Let it breathe.** If the release just happened, say so and offer to
    return once there's real usage to reflect on — a retro written an hour

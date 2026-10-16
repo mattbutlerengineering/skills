@@ -6,9 +6,8 @@
 Amends ADR-0021's run-complete rule. "A run is complete when retro.md
 exists" becomes "when retro.md exists and carries its population
 line"; orientation still reads only the working tree (ADR-0100), and
-the shape is the Ship outcome's (`outcome:` in `release.md`, decided
-in pull request #968) — a frontmatter field the predicate reads, with
-the field's absence read as legacy.
+the shape is ADR-0101's — a frontmatter field the predicate reads,
+with the field's absence read as legacy.
 
 ## Context
 
@@ -44,8 +43,8 @@ like feedback (issue #944).
 3. **A retro with neither field is complete.** Every retro written
    before this line — twelve in this repo — would otherwise reopen as
    an active run, and run discovery would list them all. The same call
-   the Ship outcome made for `outcome:` (#968); strictness later means
-   backfilling, not changing the rule.
+   ADR-0101 made for `outcome:`; strictness later means backfilling,
+   not changing the rule.
 4. **The run's own debt is never feedback.** An issue is the run's own
    when it was created before the run's merge (the pull request
    `release.md` names, or the release log's date), its body says it

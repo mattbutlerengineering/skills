@@ -147,6 +147,7 @@ conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
 - [`docs/adr/`](docs/adr/) — architecture decision records and their status
 - [`LEDGER.md`](LEDGER.md) — per-skill maturity (draft / used-once / battle-tested)
 - `python3 lint.py` — structural lint of the install, router, and eval surface (the `CHECKERS` tuple in [`lint.py`](lint.py) is the authoritative list); runs in CI on every push/PR
+- `python3 kb.py drift` — instruction-file drift: dangling paths, skill and agent tables, and slash commands in `CLAUDE.md`, `AGENTS.md` and `.claude/rules` ([`kb_drift.py`](kb_drift.py)); runs in CI on every push/PR
 - `python3 run_tests.py` — the full offline suite, one process per test module in parallel: pipeline protocol, eval seams, and the factory tools, mostly against fixture trees plus pins on the real repo; runs in CI on every push/PR (`python3 -m unittest discover tests` is the same suite serially)
 - `python3 trigger_eval.py --record` — routing eval: which skill fires for each query in [`evals/routing.json`](evals/routing.json) (needs the `claude` CLI; costs real runs)
 - [`docs/output-evals.md`](docs/output-evals.md) — on-demand output evals grading skill artifacts against expectations
