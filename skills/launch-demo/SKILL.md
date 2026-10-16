@@ -78,8 +78,11 @@ For a run directory, read `prd.md`, `verification.md` and `release.md`
 — what was promised, what was proven, what went out. For `--pr <n>`,
 read the pull request's title and body through the forge CLI
 (`gh pr view <n> --json title,body`), and the changelog entry naming it
-when the repo keeps one. Record what was read; it becomes the
-`sources:` line.
+when the repo keeps one. In a cloud session (Claude Code Remote), where
+the GraphQL-backed `gh pr view` returns HTTP 403 while `gh api` REST
+calls succeed, read them with
+`gh api repos/{owner}/{repo}/pulls/<n> --jq '{title,body}'`. Record
+what was read; it becomes the `sources:` line.
 
 ### 4. Write the copy
 
