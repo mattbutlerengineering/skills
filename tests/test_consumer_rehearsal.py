@@ -221,8 +221,10 @@ class TestConsumerRehearsal(unittest.TestCase):
         self.assertTrue((item_wt / "setup-ran").is_file())
         self.assertFalse((batch_wt / "setup-ran").exists())
         item_branch = conductor.item_branch(BATCH, "#12")
-        self.assertIn(run_id, self.git("show", f"{item_branch}:"
-                                       "docs/factory/costs.jsonl"))
+        self.assertIn(run_id, self.git(
+            "show", f"{item_branch}:docs/factory/costs/runs/{run_id}.jsonl"))
+        self.assertNotIn("docs/factory/costs.jsonl", self.git(
+            "ls-tree", "-r", "--name-only", item_branch))
         self.assertTrue((batch_wt / conductor.RUNS.format(batch=BATCH)
                          / f"{run_id}.json").is_file())
         self.assertTrue(self.gh.called("pr", "create", "--head",

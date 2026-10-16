@@ -397,14 +397,25 @@ class TestClose(unittest.TestCase):
         return [json.loads(line) for line in
                 (self.root / LEDGER).read_text().splitlines()]
 
+    def run_file_ids(self):
+        runs = self.root / "docs/factory/costs/runs"
+        found = []
+        if runs.is_dir():
+            for path in sorted(runs.glob("*.jsonl")):
+                found.extend(json.loads(line)["run_id"]
+                             for line in path.read_text().splitlines()
+                             if line.strip())
+        return found
+
     def test_close_carries_blocked_spend_scores_commits_and_asks(self):
         summary, problems = self.close(ROWS)
         self.assertEqual(problems, [])
         self.assertEqual(summary, {"batch": "b1", "merged": ["#12", "#14"],
                                    "blocked": ["#13"], "ask": "ask-5"})
-        costs = (self.root / COSTS).read_text().splitlines()
-        self.assertEqual([json.loads(line)["run_id"] for line in costs[-2:]],
-                         ["conductor-b1-13-spec-1", "conductor-b1-13-build-1"])
+        self.assertEqual((self.root / COSTS).read_text(),
+                         lines(SPEND[:4] + SPEND[5:]))
+        self.assertEqual(self.run_file_ids(), [
+            "conductor-b1-13-build-1", "conductor-b1-13-spec-1"])
         cards = (self.root / close.SCORECARDS).read_text().splitlines()
         self.assertEqual(cards[0] + "\n", CARD)
         self.assertEqual(json.loads(cards[1]), EXPECTED)
@@ -424,9 +435,13 @@ class TestClose(unittest.TestCase):
             here + ["merge", "--no-edit", "origin/main"],
             here + ["ls-tree", "--name-only", "conductor/b1-13", "--", COSTS],
             here + ["show", f"conductor/b1-13:{COSTS}"],
+            here + ["ls-tree", "-r", "--name-only", "conductor/b1-13", "--",
+                    "docs/factory/costs/runs"],
             here + ["rev-parse", "conductor/b1-13"],
             here + ["log", "--format=%s", f"origin/main..{BRANCH_SHA}"],
             here + ["add", "--", "docs/factory/batches/b1", COSTS,
+                    "docs/factory/costs/runs/conductor-b1-13-build-1.jsonl",
+                    "docs/factory/costs/runs/conductor-b1-13-spec-1.jsonl",
                     close.SCORECARDS],
             here + ["commit", "-m", "chore(conductor): close batch b1"],
             here + ["push", "-u", "origin", "conductor/b1"],
@@ -513,9 +528,10 @@ class TestClose(unittest.TestCase):
         summary, problems = self.close(
             ROWS, branch_costs=BLOCKED_SPEND + [other])
         self.assertEqual(problems, [])
-        costs = (self.root / COSTS).read_text().splitlines()
-        self.assertEqual([json.loads(line)["run_id"] for line in costs[-2:]],
-                         ["conductor-b1-13-spec-1", "conductor-b1-13-build-1"])
+        self.assertEqual((self.root / COSTS).read_text(),
+                         lines(SPEND[:4] + SPEND[5:]))
+        self.assertEqual(self.run_file_ids(), [
+            "conductor-b1-13-build-1", "conductor-b1-13-spec-1"])
 
     def test_a_workers_own_cost_commit_keeps_the_branch(self):
         # #771: a Worker's `chore(cost): ...` commit is real work, not
@@ -589,8 +605,13 @@ class TestClose(unittest.TestCase):
         costs = SPEND[:4] + SPEND[5:] + [other]
         summary, problems = self.close(ROWS, costs=costs)
         self.assertEqual(problems, [])
-        self.assertEqual((self.root / COSTS).read_text(),
-                         lines(costs + BLOCKED_SPEND))
+        self.assertEqual((self.root / COSTS).read_text(), lines(costs))
+        runs = self.root / "docs/factory/costs/runs"
+        spec = json.loads((runs / "conductor-b1-13-spec-1.jsonl")
+                          .read_text().strip())
+        self.assertEqual(spec["wo"], "#13")
+        self.assertEqual(self.run_file_ids(), [
+            "conductor-b1-13-build-1", "conductor-b1-13-spec-1"])
 
     def test_a_retry_after_a_failed_close_record_scores_once(self):
         # Review minor 6: the scorecard was appended before the close
