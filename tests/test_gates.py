@@ -2859,13 +2859,15 @@ class TestLockstep(unittest.TestCase):
                      " $(MODEL) $(FILE) $(OUTCOME)"]
 
     # The one canonical check set. `lint.py` is the plugin's structural lint
-    # and has no product-repo counterpart, so only the root Makefile runs it.
-    # The parallel runner is root-only too, but product_form respells its
-    # line to the serial discover command rather than dropping it (#904).
+    # and `kb.py drift` checks this repo's own instruction files
+    # (ADR-0078); neither has a product-repo counterpart, so only the root
+    # Makefile runs them. The parallel runner is root-only too, but
+    # product_form respells its line to the serial discover command rather
+    # than dropping it (#904).
     CANONICAL_CHECK = ["python3 gates.py",
                        "python3 gates.py --selftest",
                        "python3 run_tests.py"]
-    ROOT_ONLY_CHECK = ["python3 lint.py"]
+    ROOT_ONLY_CHECK = ["python3 lint.py", "python3 kb.py drift"]
     VALIDATOR_TARGETS = {
         "review": ["python3 validator.py review --findings $(FINDINGS)"
                    " --status $(STATUS)"],
