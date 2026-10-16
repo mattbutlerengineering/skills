@@ -16,7 +16,7 @@ from pathlib import Path
 import conductor
 import conductor_close as close
 import conductor_flow as flow
-import conductor_run
+import conductor_spend
 import rejection_mining
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -227,6 +227,18 @@ class TestScorecard(unittest.TestCase):
         self.assertEqual((card["ran_estimate_usd"],
                           card["ran_estimate_error_pct"]), (14.0, -57.1429))
 
+    def test_a_lost_run_is_metered_at_its_charged_ceiling(self):
+        # #937: `next` writes a dead runner's run row and a spend row at
+        # its full ceiling, so the scorecard meters the loss, not $0.
+        lost = conductor_spend.LOST
+        rows = [PLAN, run("#12", "spec", "architecture_review", "f", "high",
+                          [], outcome=lost)]
+        card, problems = self.score(lines(rows), [dict(
+            spend("conductor-b1-12-spec-1", 2.0), tokens=0, outcome=lost)])
+        self.assertEqual(problems, [])
+        self.assertEqual((card["metered_usd"], card["ran_estimate_usd"]),
+                         (2.0, 2))
+
     def test_nothing_run_has_no_estimate_error(self):
         card, problems = self.score(lines([PLAN]), [])
         self.assertEqual(problems, [])
@@ -348,7 +360,7 @@ DIRTY_MERGE = subprocess.CalledProcessError(
 
 # The blocked item's commits beyond origin/main: only its spend rows,
 # which close carries into costs.jsonl (#728 item 2), or real work too.
-COST_ONLY_LOG = "".join(f"{conductor_run.SPEND_SUBJECT}{entry['run_id']}\n"
+COST_ONLY_LOG = "".join(f"{conductor_spend.SPEND_SUBJECT}{entry['run_id']}\n"
                         for entry in BLOCKED_SPEND)
 WORK_LOG = "feat: the blueprint\n" + COST_ONLY_LOG
 
@@ -546,7 +558,7 @@ class TestClose(unittest.TestCase):
     def test_another_batchs_spend_commit_keeps_the_branch(self):
         # #771: carry does not carry that run's rows, so they are not on
         # the batch branch; the commit is not this item's spend.
-        other = f"{conductor_run.SPEND_SUBJECT}conductor-oct-1-build-1\n"
+        other = f"{conductor_spend.SPEND_SUBJECT}conductor-oct-1-build-1\n"
         summary, problems = self.close(ROWS, branch_log=other + COST_ONLY_LOG)
         self.assertEqual(problems, [])
         self.assertEqual(self.git.called("-C", str(self.root), "push",

@@ -513,14 +513,14 @@ class TestMainCheckout(unittest.TestCase):
     the main checkout, whichever checkout the command runs from."""
 
     def test_both_anchors_agree_from_a_linked_worktree(self):
-        import conductor_run
+        import conductor_spend
         with tempfile.TemporaryDirectory() as tmp:
             main, linked = linked_worktree(tmp)
             for cwd in (main, linked):
                 self.assertEqual(conductor_plan.main_checkout(git_in(cwd)),
                                  (main, []))
                 self.assertEqual(
-                    conductor_run.worktree_path(git_in(cwd), "b1", "#12"),
+                    conductor_spend.worktree_path(git_in(cwd), "b1", "#12"),
                     (main / ".claude/worktrees/conductor-b1-12", []))
 
 

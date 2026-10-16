@@ -88,9 +88,16 @@ one. That item comes back in `ready` as a `merge` step with no question.
 An item left in `merge_due` is one the policy does not cover, and it
 needs the Owner's own answer as usual. A gate-path item always does.
 
-A closed session loses time, never state: resuming a batch is running
-`next` again. If there is no batch yet, go to step 2. A `cd:` problem is
-a refusal; report it and stop.
+A closed session loses its runs, never the ledger. Runners are children
+of this session: closing it, or the host sleeping, ends every
+`conductor.py run` in flight, while the Worker's own `claude` process,
+in its own session, may run on unobserved up to its dollar ceiling. On
+the next `next`, each runner found dead gets a run row and a spend row
+at its full ceiling (`runner-lost:cost-at-ceiling`, fail-closed like a
+wall-clock kill) on its item branch, then a stall ask; `retry` continues
+from what the Worker committed. Resuming a batch is running `next`
+again. If there is no batch yet, go to step 2. A `cd:` problem is a
+refusal; report it and stop.
 
 ### 2. Open a batch from the issues the Owner names
 
@@ -187,7 +194,9 @@ spend ask is unanswered or an item has an unanswered ask. When a runner
 exits, read its one-line result and the Worker's output it names, then
 run `next`. A failed run already queued its own stall ask; do not
 retry it. A launch the monthly cap refuses prints a `cd:` problem and
-pauses dispatch behind an ask; run `next` and present it.
+pauses dispatch behind an ask; run `next` and present it. A background
+runner does not outlive this session (step 1): tell the Owner before
+they close it with runs in flight.
 
 A launch refused before any Worker runs writes no run row, so the tool
 records the refusals a retry cannot fix: a push gap (any `cd: launch
