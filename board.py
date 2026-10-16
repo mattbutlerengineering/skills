@@ -4,7 +4,8 @@ ladder — as one JSON document on stdout (feature:pipeline-board).
 
 Facts only, per ADR-0062: the pipeline-board skill renders this output
 verbatim and derives nothing. A run appears in `runs` or `attention`,
-never both and never neither; completed runs (retro.md) appear nowhere.
+never both and never neither; completed runs (orientation's word, not
+retro.md's presence — ADR-0102) appear nowhere.
 Same seam discipline as orientation_pack: functions take `root` and
 read real files under it, tested against tempfile fixture trees.
 """
@@ -16,7 +17,7 @@ from pathlib import Path
 import cli
 from knowledge_plane import run_dirs
 from protocol import (RUN_ARTIFACTS, breakdown_path, checkbox_progress,
-                      run_ref, stage_states)
+                      next_stage, run_ref, stage_states)
 
 
 def _reason(err):
@@ -70,8 +71,9 @@ def gather(root, clock=None):
             if not any((run_dir / artifact).is_file()
                        for artifact in RUN_ARTIFACTS):
                 continue
-            if (run_dir / "retro.md").is_file():
-                continue
+            if next_stage(run_dir) == "complete":
+                continue  # a populated retro; an unpopulated one is
+                # an active run at Operate (ADR-0102)
             entry = _run_entry(root, run_dir)
             if all(row["state"] == "done" for row in entry["ladder"]):
                 continue  # complete without retro.md: not active
