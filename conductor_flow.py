@@ -225,27 +225,70 @@ def prior_stalls(rows, item, step):
     return streak
 
 
-def worker_advice(rows, entry, step, band, reason):
+def worker_advice(rows, entry, step, band, reason, result=None):
     """(recommended, why) for the stall ask of a failed Worker run of
     `step` at `band`, from the item's rows before that run launched
-    (#725). A first failure recommends retry; a second consecutive
-    budget stop at the same band recommends retry-up while it is offered
-    and the run was not already one band up, else block, since the
-    ceiling is the same and so is the outcome."""
+    (#725) and the run's `result` event when the harness gave one. A
+    first failure recommends retry, unless it is a budget stop whose
+    result shows the ceiling never let the Worker start (#936); that,
+    like a second consecutive budget stop at the same band, recommends
+    retry-up while it is offered and the run was not already one band
+    up, else block, since the ceiling is the same and so is the
+    outcome."""
     earlier = prior_stalls(rows, entry["item"], step)
+    stopped = reason == BUDGET_REASON
+    figures = never_started(result) if stopped and not earlier else None
+    if figures is not None:
+        return _ceiling_advice(rows, entry, step, band, FIRST_BUDGET_WHY,
+                               figures)
     if not earlier:
         return "retry", WORKER_WHY
     run, last = earlier[-1]
-    if reason == BUDGET_REASON and last == BUDGET_REASON \
+    if stopped and last == BUDGET_REASON \
             and (run or {}).get("band") == band:
-        policy = item_view(rows, entry["item"])["steps"][step]
-        up = "retry-up" in stall_options(band) \
-            and band == policy["band"] and not policy["bumped"]
-        return ("retry-up" if up else BLOCK), REPEAT_BUDGET_WHY.format(
-            step=step, ceiling=policy["ceiling_usd"],
-            remedy=("retry it one band up, on a stronger model" if up
-                    else "block it"))
+        return _ceiling_advice(rows, entry, step, band, REPEAT_BUDGET_WHY,
+                               {})
     return "retry", ATTEMPT_WHY.format(n=len(earlier) + 1, step=step)
+
+
+def _ceiling_advice(rows, entry, step, band, why, figures):
+    """(recommended, why) when the outcome repeats at the step's ceiling:
+    retry-up while it is offered and the run was not already one band
+    up, else block. `why` is filled with the step, its ceiling, the
+    remedy, and `figures`."""
+    policy = item_view(rows, entry["item"])["steps"][step]
+    up = "retry-up" in stall_options(band) \
+        and band == policy["band"] and not policy["bumped"]
+    return ("retry-up" if up else BLOCK), why.format(
+        step=step, ceiling=policy["ceiling_usd"],
+        remedy=("retry it one band up, on a stronger model" if up
+                else "block it"), **figures)
+
+
+def _output_tokens(result):
+    """A result event's output tokens: usage's, else the per-model sum
+    from modelUsage, which is where a budget stop leaves its counts
+    (#725). Both were metered by cli.read_execution before a budget
+    stop reaches the stall rule, so the counts are integers."""
+    tokens = (result.get("usage") or {}).get("output_tokens", 0)
+    return tokens or sum(counts.get("outputTokens", 0)
+                         for counts in (result.get("modelUsage") or {})
+                         .values())
+
+
+def never_started(result):
+    """The {"turns", "tokens"} a budget-stopped run ended at when they
+    show its ceiling went before the Worker started — under
+    STARTED_TURNS turns and STARTED_OUTPUT_TOKENS output tokens (#936)
+    — else None; also None for no event, or one with no num_turns
+    count, so nothing unreadable reads as a run that never started."""
+    turns = (result or {}).get("num_turns")
+    if isinstance(turns, bool) or not isinstance(turns, int):
+        return None
+    figures = {"turns": turns, "tokens": _output_tokens(result)}
+    started = turns >= STARTED_TURNS \
+        or figures["tokens"] >= STARTED_OUTPUT_TOKENS
+    return None if started else figures
 
 
 def queue_stall(root, batch, now, item, reason, cause, recommended, why):
@@ -273,6 +316,18 @@ BUDGET_REASON = f"the Worker run ended {BUDGET_STOP}"
 REPEAT_BUDGET_WHY = ("a second consecutive budget stop on {step} at the same"
                      " ${ceiling:.2f} ceiling: the outcome repeats at that"
                      " ceiling, so a plain retry spends it again; {remedy}")
+# A budget stop under these counts never let the Worker start (#936):
+# review-1 of consumer batch b20261013 stopped after 5 turns and 1,072
+# output tokens, its ceiling spent loading the brief and the tree, so the
+# outcome repeats at that ceiling as surely as after a second stop. A
+# Worker that started writes tool calls every turn, so its output runs
+# to thousands of tokens within ten turns (#725's stop had 9,000).
+STARTED_TURNS = 10
+STARTED_OUTPUT_TOKENS = 2000
+FIRST_BUDGET_WHY = ("a first budget stop on {step} at its ${ceiling:.2f}"
+                    " ceiling after {turns} turn(s) and {tokens} output"
+                    " tokens: the ceiling never let the Worker start, so a"
+                    " plain retry spends it again; {remedy}")
 IDLE_WHY = ("a dead runner or an idle step is evidence about the run more"
             " than about the item")
 CHANGES_WHY = "a second request for changes is evidence about the item"
@@ -366,17 +421,21 @@ def _build_usd(ceiling, rows):
     return round(rows * ceiling, 2)
 
 
-def _gate_question(entry, ceiling, rows):
+def _gate_question(entry, ceiling, rows, review):
     """The gate ask, which doubles as the build-spend question
     (architecture.md, `plan`): the plan priced one build run, so the
-    item is re-priced with one per breakdown row."""
+    item is re-priced with one per breakdown row, and the review that
+    reads what those rows produce is priced beside it (#936) at its
+    `review` ceiling — one run, already in the plan estimate, so it is
+    stated rather than added to the re-price."""
     item = entry["item"]
     build = _build_usd(ceiling, rows)
     repriced = entry["estimate_usd"] - ceiling + build
-    return (f"{item}'s spec is ready for its gate: approve these gate files"
-            f" and its build of {rows} breakdown row(s) at up to"
-            f" ${ceiling:.2f} each (${build:.2f}), re-pricing {item} at"
-            f" ${repriced:.2f} against its ${entry['estimate_usd']:.2f}"
+    return (f"{item}'s spec is ready for its gate: approve these gate files,"
+            f" its build of {rows} breakdown row(s) at up to"
+            f" ${ceiling:.2f} each (${build:.2f}) and its review of what"
+            f" those rows produce at up to ${review:.2f}, re-pricing {item}"
+            f" at ${repriced:.2f} against its ${entry['estimate_usd']:.2f}"
             " plan estimate?")
 
 
@@ -394,11 +453,13 @@ def _after_step(rows, now, entry, launched, facts, policy):
                           f"spec run {launched['run_id']} completed")
         files = (f"the gate files are {', '.join(sorted(blobs))}" if blobs
                  else "the item branch changes no gate file")
-        ceiling = item_view(rows, item)["steps"]["build"]["ceiling_usd"]
+        steps = item_view(rows, item)["steps"]
+        ceiling = steps["build"]["ceiling_usd"]
         unchecked = facts[item]["unchecked"]
         asked, problems = ask_row(
             rows + [moved], now, item, "gate", _gate_question(
-                entry, ceiling, unchecked), GATE_OPTIONS, "approve",
+                entry, ceiling, unchecked, steps["review"]["ceiling_usd"]),
+            GATE_OPTIONS, "approve",
             f"the spec step completed; {files}", gate_blobs=blobs,
             build_usd=_build_usd(ceiling, unchecked))
         return None, ([moved, asked] if not problems else [])

@@ -177,14 +177,22 @@ def resolve_cap(config):
 # nothing defers for its labels alone.
 #
 # `step_weights` (#724) weights how an item's size budget splits across
-# its steps as their ceilings. The default gives spec three shares and
-# every other step one: spec drives the whole run from idea to breakdown
-# at the top band, and an even share ran out of budget on 3 runs of 3.
-# A configured weight replaces that step's default; the rest keep theirs.
+# its steps as their ceilings. The default weighs a step by the band its
+# charter declares (factory/agents): spec and review, the two steps at
+# the top band, get three shares each and every other step one. Spec
+# drives the whole run from idea to breakdown there, and an even share
+# ran out of budget on 3 runs of 3; review reads everything the build
+# rows produced at the same band's price, and verify's one share ended
+# 2 review runs of 2 before the reviewer reviewed (#936). The band is
+# read here by step name rather than resolved per step: weights are
+# config that `calibrate` scales with no agents directory in hand, so a
+# charter a consumer re-bands keeps its step's weight until the Owner
+# sets it. A configured weight replaces that step's default; the rest
+# keep theirs.
 CONDUCTOR_KEYS = ("gate_command", "standing_consent", "type_labels",
                   "size_labels", "default_size", "defer_labels",
                   "step_weights", "worktree_setup")
-DEFAULT_STEP_WEIGHTS = {"spec": 3, "build": 1, "verify": 1, "review": 1,
+DEFAULT_STEP_WEIGHTS = {"spec": 3, "build": 1, "verify": 1, "review": 3,
                         "ship": 1}
 LABEL_ITEM_TYPES = ("feature", "fix")
 SIZES = ("S", "M", "L")

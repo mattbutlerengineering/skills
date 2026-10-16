@@ -119,9 +119,10 @@ Show the Owner the plan as printed: per item its type, steps, charter,
 band, model, effort and ceiling, its estimate and reserved number block,
 the batch estimate against what remains of the monthly cap, and every
 deferral line. Deferrals are part of the answer, never noise. A step's
-ceiling is its weighted share of the item's estimate: spec takes three
-shares and every other step one, unless `conductor.step_weights` in
-`factory.json` says otherwise, so name the spec share when you show it.
+ceiling is its weighted share of the item's estimate: spec and review,
+the two steps at the top band, take three shares each and every other
+step one, unless `conductor.step_weights` in `factory.json` says
+otherwise, so name those two shares when you show it.
 `open`
 first checks what every `run` will need (a usable `factory.json`, a
 readable cost ledger on `origin/main`, no push gap; see step 4) and
@@ -151,8 +152,9 @@ only way an item becomes blocked.
 
 The asks the tool writes are the spend ask (`approve` / `decline`), the
 gate ask after an item's spec step (`approve` / `block`, over the gate
-files it lists, and the build's price: one run per breakdown row, so
-this answer is the build's spend consent), stall asks (`retry`,
+files it lists and the build's price: one run per breakdown row, so
+this answer is the build's spend consent, with the ceiling of the review
+that reads those rows' work stated beside it), stall asks (`retry`,
 `retry-up`, `block`; and `resume` / `stop` for a batch-wide pause), and
 a monthly-cap pause (`resume` / `stop`) when a launch would pass
 `monthly_cap_usd`. Two kinds are yours to word,
