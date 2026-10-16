@@ -1,7 +1,7 @@
 ---
 summary: update-manifest hashes every file under factory/templates/; delete stray .orig/.rej first or they get checksum-pinned.
 sources: gates.py, factory_init.py
-verified: a3646495c45676187012917340c964b441e057a2
+verified: 5a58fe42a5f55a5e275ff4ec32d2d6100eac0d2e
 related: gates-scan-every-doc
 ---
 
