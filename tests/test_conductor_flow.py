@@ -15,6 +15,7 @@ import conductor_flow as flow
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
+from fake_gh import FakeGh  # noqa: E402
 from fake_git import FakeGit  # noqa: E402
 
 LEDGER = "docs/factory/batches/b1/ledger.jsonl"
@@ -641,6 +642,11 @@ class TestGitFacts(unittest.TestCase):
             "cd: git diff for conductor/b1-12 failed: fatal: rejected"]))
 
 
+def open_issues():
+    """The gh every `next` here reads: every issue open (#939)."""
+    return FakeGh({("issue", "view"): json.dumps({"state": "OPEN"})})
+
+
 class TestNextCli(unittest.TestCase):
     def run_cli(self, rows, probe=alive):
         with tempfile.TemporaryDirectory() as tmp:
@@ -650,12 +656,14 @@ class TestNextCli(unittest.TestCase):
             Path(tmp, ".github").mkdir()
             Path(tmp, ".github/factory.json").write_text(
                 json.dumps({"wip_cap": 2}))
-            # #937: a dead runner's charge needs its worktree and git.
+            # #937: a dead runner's charge needs its worktree and git;
+            # #939: a launch needs the issue to read open.
             Path(tmp, ".claude/worktrees/conductor-b1-14").mkdir(
                 parents=True)
             code, out = cli_contract.capture(
                 conductor.main, ["next", "b1"], env={}, clock=clock,
-                root=tmp, git=FakeGit({("rev-parse",): f"{tmp}/.git\n"}),
+                root=tmp, run=open_issues(),
+                git=FakeGit({("rev-parse",): f"{tmp}/.git\n"}),
                 alive=probe)
             rows, _ = conductor.load(tmp, "b1")
             return code, out, rows
@@ -882,7 +890,7 @@ class TestNextLostRun(unittest.TestCase):
                           failing=failing)
             code, out = cli_contract.capture(
                 conductor.main, ["next", "b1"], env={}, clock=clock,
-                root=tmp, git=git, alive=dead)
+                root=tmp, run=open_issues(), git=git, alive=dead)
             rows, _ = conductor.load(tmp, "b1")
             text = (wt / LOST_FILE).read_text() \
                 if (wt / LOST_FILE).is_file() else None
@@ -955,6 +963,68 @@ class TestNextLostRun(unittest.TestCase):
             git = FakeGit({})
             code, _ = cli_contract.capture(
                 conductor.main, ["next", "b1"], env={}, clock=clock,
-                root=tmp, git=git, alive=alive)
+                root=tmp, run=open_issues(), git=git, alive=alive)
             self.assertEqual(code, 0)
             self.assertEqual(git.calls, [])
+
+
+PUSH_FAILED = "pushing conductor/b1-14 failed: fatal: rejected"
+DELIVERY_FAILED = START + [
+    launch("#14", "planned", "build"), ran("#14", "build"),
+    moved("#14", "build", "stalled", reason=PUSH_FAILED,
+          cause="delivery-failed"),
+    stall_ask("ask-2", "#14", options=("retry", "block")),
+    answered("ask-2", "retry", "#14")]
+
+
+class TestDeliveryFailedRetry(unittest.TestCase):
+    """#939: a stall after the Worker finished (spend commit, push, PR)
+    is `next`'s bookkeeping turn to retry, never another Worker run —
+    one consumer spec completed three times for $12.53."""
+
+    def test_the_completed_run_behind_the_stall_is_found(self):
+        found = flow.item_view(DELIVERY_FAILED, "#14")
+        self.assertEqual(flow.delivered_run(DELIVERY_FAILED, found)["run_id"],
+                         run_id("#14", "build"))
+        other = START + failed("#14", "planned", "build")
+        self.assertIsNone(flow.delivered_run(other,
+                                             flow.item_view(other, "#14")))
+
+    def test_a_worker_launch_is_refused_and_the_resume_is_allowed(self):
+        self.assertEqual(
+            flow.transition_problems(DELIVERY_FAILED, "#14", "build", {
+                "run_id": run_id("#14", "build", 2), "pid": 1}),
+            ["cd: #14's build run conductor-b1-14-build-1 completed; its"
+             " bookkeeping is retried by next, never by another Worker"
+             " run"])
+        self.assertEqual(flow.transition_problems(
+            DELIVERY_FAILED, "#14", "build",
+            {"run_id": run_id("#14", "build")}), [])
+
+    def test_survey_lists_no_step_for_it(self):
+        ready, writes, problems = flow.survey(DELIVERY_FAILED, NOW, 3,
+                                              alive, {})
+        self.assertEqual((problems, writes), ([], []))
+        self.assertNotIn("#14", [entry["item"] for entry in ready])
+
+    def test_a_delivery_failed_stall_offers_no_retry_up(self):
+        entry = flow.item_view(START, "#14")["entry"]
+        rows = START + [launch("#14", "planned", "build"),
+                        ran("#14", "build")]
+        written, problems = flow.stall_rows(
+            rows, NOW, entry, PUSH_FAILED, "delivery-failed", "retry",
+            flow.DELIVERY_WHY)
+        self.assertEqual(problems, [])
+        self.assertEqual(written[1]["options"], ["retry", "block"])
+        self.assertEqual(written[1]["question"],
+                         f"#14 stalled in build: {PUSH_FAILED}. Retry, or"
+                         " block?")
+
+    def test_the_advice_for_a_delivery_failure_names_the_bookkeeping(self):
+        entry = flow.item_view(START, "#14")["entry"]
+        self.assertEqual(
+            flow.worker_advice(START, entry, "build", "implementation",
+                               PUSH_FAILED, cause="delivery-failed"),
+            ("retry", "the Worker finished; only its spend commit, push or"
+                      " PR failed, so a retry redoes that bookkeeping in"
+                      " your session and launches no run"))

@@ -24,9 +24,13 @@ closing a batch), conductor_calibrate (calibrate) and conductor_consent
         conductor/<batch> branch and worktree from origin/main, write the
         plan and reserve rows, and queue the spend ask.
   python3 conductor.py next <batch>
-        Record any new stall and gate asks (a runner found dead gets its
-        run row, and a spend row at its full ceiling on its item
-        branch), then print as JSON the oldest
+        Record any new stall, gate and clarify asks (a runner found dead
+        gets its run row and a spend row at its full ceiling on its
+        item branch; a finished run whose spend commit, push or PR
+        failed gets that bookkeeping redone on a retry answer, never a
+        relaunch; an item whose issue is closed, or unreadable, is held
+        behind a clarify ask before anything spends), then print as
+        JSON the oldest
         unanswered ask, the steps ready to launch under wip_cap (a
         `merge` step once an answer covers a shipped item), the ids of
         the asks just recorded, and the shipped items waiting for a
@@ -712,7 +716,7 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
     import conductor_calibrate
     import conductor_close
     import conductor_consent
-    import conductor_flow
+    import conductor_next
     import conductor_merge
     import conductor_plan
     import conductor_run
@@ -736,7 +740,7 @@ def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
             problems = [f"cd: next refused: {WORKER_ENV} is set, and a"
                         " Worker never advances a batch"]
         elif command == "next":
-            problems = conductor_flow.next_cli(root, batch, args, now,
+            problems = conductor_next.next_cli(root, batch, args, now,
                                                git, alive, run)
         elif command == "ask":
             problems = conductor_consent.ask_cli(root, batch, args, now)
