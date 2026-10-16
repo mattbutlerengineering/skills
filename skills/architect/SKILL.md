@@ -56,7 +56,9 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
    protocol frontmatter. If UX Design was skipped, echo it:
    `ux: skipped — <ux-reason from prd.md>`.
 
-9. **Hand off.** Next stage is Decompose.
+9. **Hand off.** Next stage is Decompose. Commit the artifact on the run's
+   branch — the protocol's "Commit at the stage boundary" section owns the
+   rule and the commit subject.
 
 ## Rules
 

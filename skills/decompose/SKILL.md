@@ -61,7 +61,9 @@ architecture contains the answers; the user reviews the cut lines.
    protocol frontmatter. Items are markdown checkboxes — Implement checks
    them off, and the pipeline reads progress from them.
 
-7. **Hand off.** Next stage is Implement.
+7. **Hand off.** Next stage is Implement. Commit the artifact on the run's
+   branch — the protocol's "Commit at the stage boundary" section owns the
+   rule and the commit subject.
 
 ## Rules
 

@@ -64,7 +64,9 @@ the user's head at this stage, so this skill interviews — it does not draft.
    into the run directory as `idea.md`, with protocol frontmatter.
 
 6. **Hand off.** State that the next stage is PRD and how to get there
-   (the `prd` skill, or the router).
+   (the `prd` skill, or the router). Commit the artifact on the run's branch
+   — the protocol's "Commit at the stage boundary" section owns the rule
+   and the commit subject.
 
 ## Rules
 

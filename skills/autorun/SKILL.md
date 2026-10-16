@@ -43,8 +43,12 @@ becomes a logged assumption, never a silent guess.
      versioning convention, and whether this run may execute it. Absent
      an explicit yes, the default is prepare-and-stop (see step 5).
    If the user has supplied these, confirm only the gaps. Write the brief
-   into the run directory as `autorun-brief.md`. The brief is not an
-   artifact: it never counts toward orientation or active-run discovery.
+   into the run directory as `autorun-brief.md` and commit it on the
+   run's branch the way a stage commits its artifact (the protocol's
+   "Commit at the stage boundary" section), subject
+   `docs(<slug>): autorun — brief`: a resume in a fresh checkout has
+   nothing else to read. The brief is not an artifact: it never counts
+   toward orientation or active-run discovery.
 
    Before the first stage, run the protocol's "Open pull requests first"
    pre-flight once. The brief never answers a merge: a green pull request
@@ -74,10 +78,15 @@ becomes a logged assumption, never a silent guess.
      verification evidence — run the real commands.
 
 4. **Gate between stages.** When the subagent returns, confirm the stage
-   artifact exists and is complete per the protocol before advancing —
-   an absent or incomplete artifact after dispatch is a failed stage. If
-   the same stage fails twice in this invocation, stop and report —
-   don't route past a broken stage.
+   artifact exists, is complete per the protocol, and is committed on
+   the run's branch (the protocol's "Commit at the stage boundary"
+   section: `git status --porcelain -- <artifact>` prints nothing)
+   before advancing. An absent, incomplete or uncommitted artifact
+   after dispatch is a failed stage: never advance past it, and name
+   the artifact (`<run directory>/<file>`) and what it lacks when
+   re-dispatching the stage and in the report. If the same stage fails
+   twice in this invocation, stop and report — don't route past a
+   broken stage.
 
 5. **Repeat 2–4 through ship** (`release.md`), with ship held to the
    release authorization in the brief. Unless the brief explicitly
@@ -106,7 +115,8 @@ becomes a logged assumption, never a silent guess.
 ## Rules
 
 - One subagent per stage, always fresh — state lives in the artifacts,
-  not in the orchestrator's memory.
+  not in the orchestrator's memory, and an artifact is state only once
+  it is committed (step 4).
 - Every assumption is written down in the artifact where it was made
   (frontmatter `assumptions:`); a silent guess is a defect.
 - No externally visible release action without explicit authorization in
