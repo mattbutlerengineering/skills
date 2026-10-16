@@ -53,6 +53,13 @@ recommendation.
     gh pr list --state open
     gh issue list --state open --limit 50
 
+In a cloud session (Claude Code Remote), where the GraphQL-backed
+`gh pr list` and `gh issue list` return HTTP 403 while `gh api` REST
+calls succeed: `gh api 'repos/{owner}/{repo}/pulls?state=open'` and
+`gh api 'repos/{owner}/{repo}/issues?state=open&per_page=50'`, dropping
+every entry that carries a `pull_request` key — the REST issues
+endpoint lists pull requests too.
+
 An automation an unmerged PR already adds is not a recommendation — it is
 a duplicate of work in flight, and it reads as new, which is worse than
 saying nothing. The same goes for an open issue that already proposes it

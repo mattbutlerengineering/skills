@@ -55,6 +55,27 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | `reap`           | none: report worker worktrees left behind                                                             |
 | `telemetry`      | none                                                                                                  |
 
+**Cloud sessions.** Each `gh` command in this file states an intent;
+the environment may offer only the GitHub MCP tools or the REST API
+through `gh api`, and either carries it out. In Claude Code Remote the
+GraphQL-backed `gh issue|pr` subcommands (`list`, `view`, `edit`,
+`checks`, `merge`, `update-branch`) return HTTP 403 while `gh api`
+REST calls succeed, so a profile written for a cloud session names the
+REST twin of each default above (`preflight`'s `gh run list` is REST
+already):
+
+- `transition`: `gh api -X POST repos/{owner}/{repo}/issues/<N>/labels -f 'labels[]=<to>'`
+  then `gh api -X DELETE repos/{owner}/{repo}/issues/<N>/labels/<from>`,
+  one pair per swap in the Labels table.
+- `ci-status`: `gh api repos/{owner}/{repo}/commits/<head-sha>/check-runs`,
+  with `<head-sha>` from `gh api repos/{owner}/{repo}/pulls/<N> --jq .head.sha`.
+- `merge-command`: `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f merge_method=squash`
+  once `ci-status` is green, then
+  `gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/<branch>`.
+  REST has no `--auto`: the train merges a green PR itself instead of
+  enqueuing it.
+- `update-branch`: `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/update-branch`.
+
 A hook can tighten a default rule; it can never loosen a rule in this
 file's Rules section.
 
@@ -73,6 +94,11 @@ file's Rules section.
 ## Phase 1: Claim a batch
 
     gh issue list --label ready --state open --json number,title,body,labels
+
+In a cloud session (see Cloud sessions above):
+`gh api 'repos/{owner}/{repo}/issues?labels=ready&state=open&per_page=100'`,
+dropping every entry that carries a `pull_request` key — the REST
+issues endpoint lists pull requests too.
 
 Sort by the profile's `priority`, oldest first within a tier; a security
 issue always gets a slot. Drop any issue that:
