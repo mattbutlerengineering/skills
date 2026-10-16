@@ -49,7 +49,9 @@ document — the code is the artifact, and progress is the checkboxes.
    contradicts), cited from the Notes entry — never a silent divergence.
 
 6. **Hand off.** When every checkbox is checked, the stage is complete; next
-   stage is Verify.
+   stage is Verify. Commit the artifact on the run's branch — the
+   protocol's "Commit at the stage boundary" section owns the rule and the
+   commit subject.
 
 ## Rules
 

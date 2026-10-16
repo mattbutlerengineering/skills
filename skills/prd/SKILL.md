@@ -60,7 +60,9 @@ lives in the user's head, not in the codebase.
      contracts, Decisions & alternatives).
 
 6. **Hand off.** Next stage is UX Design if `ux: required`, otherwise
-   Architect. Say which and how to get there.
+   Architect. Say which and how to get there. Commit the artifact on the
+   run's branch — the protocol's "Commit at the stage boundary" section
+   owns the rule and the commit subject.
 
 ## Rules
 

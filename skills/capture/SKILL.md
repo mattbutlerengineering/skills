@@ -82,7 +82,9 @@ interviews — it does not draft.
    into the run directory as `defect.md`, with protocol frontmatter.
 
 8. **Hand off.** State the next stage per the recorded re-entry — the
-   `implement` skill or the `architect` skill (or the router).
+   `implement` skill or the `architect` skill (or the router). Commit the
+   artifact on the run's branch — the protocol's "Commit at the stage
+   boundary" section owns the rule and the commit subject.
 
 ## Rules
 

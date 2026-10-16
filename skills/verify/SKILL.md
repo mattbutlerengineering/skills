@@ -36,7 +36,9 @@ verdict.
    into the run directory as `verification.md` with protocol frontmatter.
 
 7. **Hand off.** Failures route back to Implement. Otherwise next stage is
-   Review.
+   Review. Commit the artifact on the run's branch — the protocol's
+   "Commit at the stage boundary" section owns the rule and the commit
+   subject.
 
 ## Rules
 

@@ -115,6 +115,27 @@ which artifacts exist in the run directory:
 
 **Next stage = the first stage in order that is not complete.**
 
+### Commit at the stage boundary
+
+A stage ends by committing its own artifact — the file its table row
+names; for Implement, the breakdown it checked off — on the run's
+branch, as a commit of its own with the subject
+`docs(<slug>): <stage> — <one line>` (`<slug>` is the run's slug, or
+`product`; `<stage>` is the stage's name). Nothing else commits between
+stages, so an artifact left uncommitted is state that one checkout
+alone holds: a `git clean`, a worktree reap or a second session on the
+same path erases the run. One consumer run kept eight of nine
+artifacts untracked for nine days before Ship found them by accident
+(ADR-0100).
+
+The commit is a boundary step, not the completion predicate. The
+tables here still read the working tree, so `next` sees a stage the
+user has finished and not yet committed. An unattended run has nobody
+watching that tree: `autorun` advances past a stage only once the
+stage's artifact is committed — `git status --porcelain -- <artifact>`
+prints nothing, which means tracked and unchanged since its commit —
+and otherwise stops, naming the artifact.
+
 ### The UX Design conditional
 
 Whether UX Design applies is decided at PRD time and recorded in `prd.md`

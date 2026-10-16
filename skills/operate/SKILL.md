@@ -58,7 +58,9 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
 
 8. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `retro.md` with protocol frontmatter. This
-   completes the run.
+   completes the run. Commit the artifact on the run's branch — the
+   protocol's "Commit at the stage boundary" section owns the rule and the
+   commit subject.
 
 ## Rules
 

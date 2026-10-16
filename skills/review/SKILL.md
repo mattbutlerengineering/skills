@@ -77,7 +77,9 @@ arbitrate severity.
    are fixed or explicitly deferred by the user. Minors, and findings
    against `advisory` statements, may be deferred freely.
 
-10. **Hand off.** Next stage is Ship.
+10. **Hand off.** Next stage is Ship. Commit the artifact on the run's
+    branch — the protocol's "Commit at the stage boundary" section owns
+    the rule and the commit subject.
 
 ## Rules
 

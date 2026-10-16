@@ -40,7 +40,9 @@ Interview-driven: taste and intent live with the user.
 5. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `ux.md`, with protocol frontmatter.
 
-6. **Hand off.** Next stage is Architect.
+6. **Hand off.** Next stage is Architect. Commit the artifact on the run's
+   branch — the protocol's "Commit at the stage boundary" section owns the
+   rule and the commit subject.
 
 ## Rules
 
