@@ -277,6 +277,7 @@ MIRRORS = (
      identity),
     ("conductor_calibrate.py", "tools/factory/conductor_calibrate.py",
      identity),
+    ("conductor_spend.py", "tools/factory/conductor_spend.py", identity),
     ("trace.py", "tools/factory/trace.py", identity),
     (".github/workflows/validator.yml",
      ".github/workflows/validator.yml", identity),

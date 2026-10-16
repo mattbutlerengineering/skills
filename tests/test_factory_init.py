@@ -72,6 +72,7 @@ EXPECTED_RELS = {
     "templates/tools/factory/conductor_close.py",
     "templates/tools/factory/conductor_consent.py",
     "templates/tools/factory/conductor_calibrate.py",
+    "templates/tools/factory/conductor_spend.py",
     "templates/tools/factory/trace.py",
 }
 

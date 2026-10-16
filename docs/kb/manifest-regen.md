@@ -1,7 +1,7 @@
 ---
 summary: update-manifest hashes every file under factory/templates/; delete stray .orig/.rej first or they get checksum-pinned.
 sources: gates.py, factory_init.py
-verified: dbb77ccdee79c97d48e760ab1b1af40a99ef6e35
+verified: a3646495c45676187012917340c964b441e057a2
 related: gates-scan-every-doc
 ---
 
@@ -24,4 +24,15 @@ any edit to a root file `factory_init.MIRRORS` copies there (for example
 `protocol.py`, whose `UTILITY_SKILLS` every new utility skill touches).
 The manifest also records the plugin version from
 `.claude-plugin/plugin.json` at regen time; nothing gates that field, so
-a version bump without a regen leaves it behind silently.
+a version bump without a regen leaves it behind silently — and since
+ADR-0099 a stamped repo reads it back (`conductor.py --version`, and the
+tail of `plan`/`open`), so a stale field now misreports the payload
+rather than sitting unread.
+
+The one manifest `update-manifest` never writes is a tools-only target's
+(ADR-0099): `factory_init.tools_only_manifest` derives it from the
+plugin's as the subset of keys the stamp lands, marked
+`"install": "tools-only"`, and `update` rewrites it. Detector E's mirror
+half (`gates.mirror_problems`) stands down for that marker because no
+`factory/templates/` exists there; its stamped half still checks every
+listed tool in use.
