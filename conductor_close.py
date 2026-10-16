@@ -39,7 +39,7 @@ from pathlib import Path
 
 import conductor_flow as flow
 import conductor_merge
-import conductor_run
+import conductor_spend
 import cost_ledger
 import factory_config
 import label_sync
@@ -319,7 +319,7 @@ def update_from_main(git, root, branch, refused="close refused"):
 
 
 def _at(git, root):
-    """The git port run inside root: conductor_run's readers take a port
+    """The git port run inside root: conductor_spend's readers take a port
     that needs no -C."""
     return lambda args: git(["-C", str(root), *args])
 
@@ -333,12 +333,12 @@ def carry_blocked_spend(git, root, batch, blocked):
     """Copy onto the batch branch, as per-run files, every spend row a
     blocked item's branch holds for its runs: so all spend reaches main
     without another writer of the shared aggregate. The rows are read by
-    conductor_run.ref_rows, where an absent ledger holds none (#708,
+    conductor_spend.ref_rows, where an absent ledger holds none (#708,
     #772), and land through cost_ledger.record_isolated, which skips a
     row the batch branch already holds (row_key, ADR-0049), so a re-run
     never writes a row twice."""
     for item in blocked:
-        found, unread, malformed = conductor_run.ref_rows(
+        found, unread, malformed = conductor_spend.ref_rows(
             _at(git, root), flow.item_branch(batch, item))
         if unread or malformed:
             return _refused(unread) + malformed
@@ -357,7 +357,7 @@ def sort_blocked_branches(git, root, batch, blocked):
     """({"delete": [(branch, sha)], "keep": [branches]}, problems): a
     blocked item's branch is deleted when its commits beyond origin/main
     are all spend commits of that item's own runs in this batch
-    (conductor_run.spend_run, run_item), whose rows carry_blocked_spend
+    (conductor_spend.spend_run, run_item), whose rows carry_blocked_spend
     put on the batch branch; it is kept when any commit is something
     else — a Worker's own `chore(cost): ...` commit, or another batch's
     run, included (#771). The sha is the local ref inspected, which the
@@ -370,12 +370,12 @@ def sort_blocked_branches(git, root, batch, blocked):
         sha, problems = _git(git, root, ["rev-parse", branch],
                              f"reading {branch}'s head")
         subjects, problems = (None, problems) if problems else \
-            conductor_run.run_commits(_at(git, root), branch, sha.strip())
+            conductor_spend.run_commits(_at(git, root), branch, sha.strip())
         if problems:
             return None, _refused(problems)
         if not subjects:
             continue
-        if all(run_item(batch, conductor_run.spend_run(subject) or "")
+        if all(run_item(batch, conductor_spend.spend_run(subject) or "")
                == item for subject in subjects):
             sorted_branches["delete"].append((branch, sha.strip()))
         else:

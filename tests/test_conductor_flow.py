@@ -416,9 +416,17 @@ class TestSurveyWrites(unittest.TestCase):
         self.assertEqual(writes[0]["to"], "awaiting-gate")
 
     def test_a_dead_runner_with_no_finishing_row_stalls(self):
+        # #937: the lost run gets its run row first, outcome the charged
+        # ceiling, so the scorecard and calibrate join its spend row like
+        # any failed run's.
         rows = [launch("#14", "planned", "build", pid=4242)]
         writes = self.writes(rows, probe=dead)
         self.assertEqual(writes, [
+            {"at": "2026-10-10T12:30:00Z", "kind": "run", "item": "#14",
+             "step": "build", "charter": "swe", "band": "implementation",
+             "model": "m", "models_reported": [], "effort": "medium",
+             "run_id": "conductor-b1-14-build-1", "pid": 4242,
+             "outcome": "runner-lost:cost-at-ceiling"},
             {"at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#14",
              "from": "build", "to": "stalled",
              "reason": "its runner (pid 4242) is gone with no finishing"
@@ -466,7 +474,35 @@ class TestSurveyWrites(unittest.TestCase):
     def test_a_top_band_step_offers_no_retry_up(self):
         rows = [launch("#12", "planned", "spec", pid=1)]
         writes = self.writes(rows, probe=dead)
-        self.assertEqual(writes[1]["options"], ["retry", "block"])
+        self.assertEqual(writes[2]["options"], ["retry", "block"])
+
+    def test_a_lost_run_after_a_retry_up_records_the_band_it_ran_at(self):
+        # The launch-time policy, one band up, not the plan's: a lost
+        # retry-up run at the top band is not offered retry-up again
+        # (#732), and its spend row names the model that spent.
+        plan = dict(PLAN, policy={
+            "routing": {"implementation": "s", "architecture_review": "f"},
+            "effort": {"implementation": "medium",
+                       "architecture_review": "high"}})
+        rows = ([plan] + START[1:] + failed("#14", "planned", "build")[:-1]
+                + [answered("ask-2", "retry-up", "#14"),
+                   launch("#14", "stalled", "build", seq=2, pid=4242)])
+        _, writes, problems = flow.survey(rows, NOW, 3, dead, {})
+        self.assertEqual(problems, [])
+        self.assertEqual(
+            {key: writes[0][key] for key in ("band", "model", "effort",
+                                             "run_id", "outcome")},
+            {"band": "architecture_review", "model": "f", "effort": "high",
+             "run_id": "conductor-b1-14-build-2",
+             "outcome": "runner-lost:cost-at-ceiling"})
+        self.assertEqual(writes[2]["options"], ["retry", "block"])
+
+    def test_an_idle_live_runner_gets_no_run_row(self):
+        # Its runner is alive and may yet finish and write its own.
+        rows = [launch("#14", "planned", "build")]
+        start = datetime(2026, 10, 10, 12, 0, tzinfo=timezone.utc)
+        writes = self.writes(rows, now=start + timedelta(minutes=181))
+        self.assertEqual([w["kind"] for w in writes], ["state", "ask"])
 
     def test_three_consecutive_failures_pause_dispatch(self):
         rows = [launch("#12", "planned", "spec"),
@@ -614,9 +650,13 @@ class TestNextCli(unittest.TestCase):
             Path(tmp, ".github").mkdir()
             Path(tmp, ".github/factory.json").write_text(
                 json.dumps({"wip_cap": 2}))
+            # #937: a dead runner's charge needs its worktree and git.
+            Path(tmp, ".claude/worktrees/conductor-b1-14").mkdir(
+                parents=True)
             code, out = cli_contract.capture(
                 conductor.main, ["next", "b1"], env={}, clock=clock,
-                root=tmp, git=lambda args: None, alive=probe)
+                root=tmp, git=FakeGit({("rev-parse",): f"{tmp}/.git\n"}),
+                alive=probe)
             rows, _ = conductor.load(tmp, "b1")
             return code, out, rows
 
@@ -809,3 +849,112 @@ class TestWorkerAdvice(unittest.TestCase):
             [(run["run_id"], reason)
              for run, reason in flow.prior_stalls(rows, "#14", "build")],
             [(run_id("#14", "build", 2), BUDGET)])
+
+
+LOST = "runner-lost:cost-at-ceiling"
+LOST_FILE = "docs/factory/costs/runs/conductor-b1-14-build-1.jsonl"
+
+
+class TestNextLostRun(unittest.TestCase):
+    """#937: six runners lost across two consumer batches left no spend
+    row, so the cap, the scorecard and calibrate read $0 for them. `next`
+    now charges a runner found dead its full ceiling, fail-closed like a
+    wall-clock kill, through the one spend path on the item branch,
+    before it writes the stall."""
+
+    ROWS = START + [launch("#14", "planned", "build", pid=9)]
+
+    def next(self, rows, worktree=True, log="", failing=None, spent=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / LEDGER
+            path.parent.mkdir(parents=True)
+            path.write_text("".join(json.dumps(r) + "\n" for r in rows))
+            Path(tmp, ".github").mkdir()
+            Path(tmp, ".github/factory.json").write_text(
+                json.dumps({"wip_cap": 2}))
+            wt = Path(tmp) / ".claude/worktrees/conductor-b1-14"
+            if worktree:
+                wt.mkdir(parents=True)
+            if spent is not None:
+                (wt / LOST_FILE).parent.mkdir(parents=True)
+                (wt / LOST_FILE).write_text(spent)
+            git = FakeGit({("rev-parse",): f"{tmp}/.git\n", ("log",): log},
+                          failing=failing)
+            code, out = cli_contract.capture(
+                conductor.main, ["next", "b1"], env={}, clock=clock,
+                root=tmp, git=git, alive=dead)
+            rows, _ = conductor.load(tmp, "b1")
+            text = (wt / LOST_FILE).read_text() \
+                if (wt / LOST_FILE).is_file() else None
+            return {"code": code, "out": out, "rows": rows,
+                    "calls": [c for c in git.calls if c[:1] == ["-C"]],
+                    "spent": text, "worktree": str(wt)}
+
+    def test_a_dead_runner_is_charged_its_ceiling_on_its_branch(self):
+        got = self.next(self.ROWS)
+        self.assertEqual(got["code"], 0, got["out"])
+        self.assertEqual(got["spent"], json.dumps({
+            "wo": "#14", "run_id": "conductor-b1-14-build-1", "model": "m",
+            "tokens": 0, "cost": 3.0, "outcome": LOST,
+            "at": "2026-10-10"}) + "\n")
+        self.assertEqual(got["calls"], [
+            ["-C", got["worktree"], "add", LOST_FILE],
+            ["-C", got["worktree"], "commit", "-m",
+             "chore(cost): conductor-b1-14-build-1"]])
+        self.assertEqual([(r["kind"], r.get("outcome", r.get("to")))
+                          for r in got["rows"][-3:]],
+                         [("run", LOST), ("state", "stalled"),
+                          ("ask", None)])
+
+    def test_a_missing_worktree_is_a_problem_and_nothing_is_written(self):
+        got = self.next(self.ROWS, worktree=False)
+        self.assertNotEqual(got["code"], 0)
+        self.assertIn(f"cd: #14's worktree {got['worktree']} is gone, so"
+                      " its lost run conductor-b1-14-build-1 cannot be"
+                      " charged its ceiling", got["out"])
+        self.assertEqual(len(got["rows"]), len(self.ROWS))
+        self.assertIsNone(got["spent"])
+
+    def test_a_spend_row_already_committed_is_not_charged_twice(self):
+        # A tick whose ledger append failed after the spend commit: the
+        # branch's log names the run, so the rows are written and no
+        # second row is.
+        got = self.next(self.ROWS,
+                        log="chore(cost): conductor-b1-14-build-1\n")
+        self.assertEqual(got["code"], 0, got["out"])
+        self.assertEqual(got["calls"], [])
+        self.assertIsNone(got["spent"])
+        self.assertEqual(got["rows"][-3]["outcome"], LOST)
+
+    def test_a_spend_file_left_uncommitted_is_committed_not_rewritten(self):
+        row = json.dumps({"wo": "#14", "run_id": "conductor-b1-14-build-1",
+                          "model": "m", "tokens": 0, "cost": 3.0,
+                          "outcome": LOST, "at": "2026-10-09"}) + "\n"
+        got = self.next(self.ROWS, spent=row)
+        self.assertEqual(got["code"], 0, got["out"])
+        self.assertEqual(got["spent"], row)
+        self.assertEqual([c[2] for c in got["calls"]], ["add", "commit"])
+
+    def test_a_failing_spend_commit_is_a_problem_and_nothing_is_written(self):
+        got = self.next(self.ROWS, failing=["-C"])
+        self.assertNotEqual(got["code"], 0)
+        self.assertIn("cd: #14: committing the spend row of"
+                      " conductor-b1-14-build-1 failed: fatal: rejected",
+                      got["out"])
+        self.assertEqual(len(got["rows"]), len(self.ROWS))
+
+    def test_a_live_runner_charges_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / LEDGER
+            path.parent.mkdir(parents=True)
+            path.write_text("".join(json.dumps(r) + "\n"
+                                    for r in self.ROWS))
+            Path(tmp, ".github").mkdir()
+            Path(tmp, ".github/factory.json").write_text(
+                json.dumps({"wip_cap": 2}))
+            git = FakeGit({})
+            code, _ = cli_contract.capture(
+                conductor.main, ["next", "b1"], env={}, clock=clock,
+                root=tmp, git=git, alive=alive)
+            self.assertEqual(code, 0)
+            self.assertEqual(git.calls, [])
