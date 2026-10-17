@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:a-quoted-date-dodges-the-cutoff
 date: 2026-10-17
-outcome: prepared
+outcome: released
+released-at: 2026-10-17
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1002
 assumptions:
   - "Launch brief: `launch_demo.py config` printed the verdict SHIP, which by the skill means run the launch-demo skill. The orchestrator's instruction for this unattended pass was not to produce it, so it is flagged for the Owner instead of produced. A gates fix with no user-facing surface (brief: User-facing surface: none) has little to demo."
@@ -157,8 +158,13 @@ write-back runs these once it merges:
 
 ## Outcome
 
-Prepared and stopped, waiting on the pull request `pending-merge:`
-names. Flagged for the Owner:
+Released. The Owner answered "Merge now" in the autorun session on
+2026-10-17, and #1002 was squash-merged as `96af7c9` at
+2026-10-17T17:13:06Z (`gh pr view 1002 --json state,mergeCommit,mergedAt`
+→ `MERGED`). #1001 closed with it. The `chore(release)` PR and the
+launch brief are still open, and operate is skipped by Owner decision.
+The flags below were raised when the release was prepared, and they
+still stand:
 
 - **Deferred Minor 1**: `check_capture_completeness` docstring line at
   `gates.py:1706` (and the payload copy) not reflowed, 105 characters.
