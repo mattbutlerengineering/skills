@@ -108,6 +108,22 @@ an output eval runs. Upstream artifacts pre-answer what the skill would
 otherwise interview for.
 _Avoid_: test data
 
+### Claims (ADR-0107)
+
+**Claim kind**:
+What a line in a verification or review artifact rests on. Four kinds:
+**observed** (quoted output), **derived** (computed from observed),
+**inferred** (judgement) and **unknown** (not examined; what NOT RUN,
+skipped, deferred and n/a disclose).
+_Avoid_: confidence level
+
+**Fail-closed roll-up**:
+Unknown, unsupported, truncated and skipped never aggregate to pass. A
+Summary or Verdict counts or names every such item, and never reads as an
+unqualified pass over them. Detector H enforces it on a `verification.md`
+Summary dated on or after `ROLLUP_ADOPTED`.
+_Avoid_: rounding up, all green
+
 ### Factory (ADR-0032, ADR-0033, ADR-0034)
 
 **Work order**:

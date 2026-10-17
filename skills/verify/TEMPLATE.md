@@ -8,7 +8,9 @@ date: YYYY-MM-DD
 
 ## Summary
 
-<Pass/fail counts and the one-sentence verdict.>
+<Pass/fail counts and the one-sentence verdict. Count or name every NOT RUN
+/ unknown criterion, and never read as an unqualified pass over them (the
+fail-closed roll-up; claim kinds in the plugin's CONTEXT.md).>
 
 ## Criteria & evidence
 

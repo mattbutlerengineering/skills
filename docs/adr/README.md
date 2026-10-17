@@ -127,3 +127,4 @@ the canonical vocabulary.
 | [0104](0104-a-finished-runs-retry-redoes-its-bookkeeping.md) | A finished run's retry redoes its bookkeeping, and a launch re-reads its issue | provisional |
 | [0105](0105-a-pull-request-merged-outside-the-batch-is-the-items-merge.md) | A pull request merged outside the batch is the item's merge | provisional |
 | [0106](0106-pr-body-preflight-joins-the-root-only-importers.md) | pr_body_preflight joins the root-only importers of gates.py and cli.py | provisional |
+| [0107](0107-a-summary-never-rolls-unknown-up-to-pass.md) | A verification Summary never rolls a disclosed NOT RUN up into a pass | provisional |
