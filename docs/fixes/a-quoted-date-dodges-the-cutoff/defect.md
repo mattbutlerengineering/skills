@@ -153,7 +153,7 @@ unchanged.
 
 Re-entry is Implement, so these checkboxes are the run's breakdown.
 
-- [ ] **O dodge tests first (RED)**: in `TestPrdCoverage`, one test
+- [x] **O dodge tests first (RED)**: in `TestPrdCoverage`, one test
   per dodge shape (double-quoted, single-quoted, empty, non-ISO
   post-cutoff), each through `check()` with `prd_date` set to the
   `parse_frontmatter`-shaped value, e.g. `'"2026-10-20"'`. Add a quoted
@@ -163,7 +163,7 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
     `O: docs/features/demo/prd.md:17 PRD-0001 §Out of scope is cited by
     no breakdown row and carries no coverage waiver`, and fails before
     the fix.
-- [ ] **M dodge tests first (RED)**: in `TestCaptureCompleteness`, the
+- [x] **M dodge tests first (RED)**: in `TestCaptureCompleteness`, the
   same shapes. The empty date must be written with `tree.write`
   directly, because `defect()` does `date = date or self.TODAY` and
   would turn `""` into a valid date. Add quoted and datetime pre-cutoff
@@ -222,3 +222,14 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   possible follow-up seed. It is not part of this run.
 - Next stage: Implement (`re-entry: implement`). The design is decided
   by Owner decision 2, and H's helper is the proven pattern.
+- 2026-10-17 (Implement): O RED before the helper, 4 of 4 dodge
+  subtests failing, e.g. `FAIL: test_non_iso_or_quoted_post_cutoff_date_is_judged
+  (tests.test_gates.TestPrdCoverage...) (date='"2026-10-20"')` with
+  `AssertionError: Lists differ: [] != ['O: docs/features/demo/prd.md:17 PRD-0001[71 chars]ver']`.
+  The quoted and datetime pre-cutoff tests pass before and after (guards).
+- 2026-10-17 (Implement): M RED before the helper, 4 of 4 dodge
+  subtests failing, e.g. `FAIL: test_non_iso_or_quoted_post_cutoff_date_is_judged
+  (tests.test_gates.TestCaptureCompleteness...) (date='')` with
+  `AssertionError: Lists differ: [] != ["M: docs/fixes/demo/defect.md missing req[258 chars]ut'"]`.
+  The empty date is written with `tree.write` through a `dated()` helper,
+  as the work item asks.
