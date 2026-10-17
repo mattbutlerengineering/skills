@@ -53,7 +53,7 @@ NOT RUN / unknown item.
 
 ## Milestone 3: the finished change passes every check
 
-- [ ] **Whole-repo verify** — the four CI checks and the one-owner pre-pass over the finished change — size:S
+- [x] **Whole-repo verify** — the four CI checks and the one-owner pre-pass over the finished change — size:S
   - Accept: `python3 run_tests.py` exits 0; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 kb.py drift` prints `drift: 0 problem(s)`; `python3 gates.py` and `python3 gates.py --selftest` each print `gates: 0 problem(s)`. `git diff --stat main -- 'docs/**/verification.md' 'docs/**/review.md'` prints nothing, and `git diff --name-only main -- .claude-plugin/plugin.json` prints nothing. `python3 one_owner.py` reports no `one-owner:` problem naming `ROLLUP_ADOPTED` or `SUMMARY_UNKNOWN_TERM`.
   - Blocked by: Payload mirror and manifest regen; Protocol: state the roll-up rule once; Templates and verify SKILL.md carry the rule
 
@@ -111,3 +111,17 @@ Deviations discovered during Implement get logged here, dated.
   explicitly, rather than reworded into it. The two templates point to
   "the plugin's CONTEXT.md" in prose, not by a link, because their text
   is copied into a target repo where a relative link would dangle.
+
+- 2026-10-17 (Whole-repo verify): `python3 run_tests.py` printed
+  `tests: 3303 tests across 106 modules in 18.9s on 8 workers, 0
+  problem(s)`; `python3 lint.py` printed `lint: 0 problem(s) across 34
+  skills`; `python3 kb.py drift` printed `drift: 0 problem(s)`;
+  `python3 gates.py && python3 gates.py --selftest` printed `gates: 0
+  problem(s)` and `selftest: ok`. `python3 one_owner.py` (advisory)
+  printed `one-owner: 9 problem(s)`, none naming `ROLLUP_ADOPTED` or
+  `SUMMARY_UNKNOWN_TERM`, and none in code this run added. `git diff
+  --stat origin/main -- 'docs/**/verification.md' 'docs/**/review.md'`
+  and `git diff --name-only origin/main -- .claude-plugin/plugin.json`
+  printed nothing (against the stale local `main`, see the deviation
+  above, the first lists only the two pr-body-preflight files from
+  #991).
