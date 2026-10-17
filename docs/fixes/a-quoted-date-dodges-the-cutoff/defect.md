@@ -203,12 +203,12 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   `.orig`/`.rej` files, then run `python3 factory_init.py
   update-manifest` and commit the manifest.
   - Accept: the two files are byte-identical, and detector E is clean.
-- [ ] **Backlog claim**: the claim on the O/M date seed in
+- [x] **Backlog claim**: the claim on the O/M date seed in
   `docs/backlog.md` landed with this capture commit. Confirm it is
   still there and well-formed, then check this box.
   - Accept: the seed line ends in
     `(claimed: maintenance:a-quoted-date-dodges-the-cutoff)`.
-- [ ] **Whole-repo checks**: `python3 run_tests.py`, `python3 lint.py`,
+- [x] **Whole-repo checks**: `python3 run_tests.py`, `python3 lint.py`,
   `python3 kb.py drift`, and `python3 gates.py && python3 gates.py
   --selftest`.
   - Accept: all pass, and `gates.py` reports `gates: 0 problem(s)` on
@@ -249,3 +249,10 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   paragraph at the end; ADR-0107's earlier "Detectors O and M keep their
   compare" sentence stays as written and is superseded by its new
   amendment, since ADRs are amended, not rewritten. No new ADR.
+- 2026-10-17 (Implement): the backlog seed at `docs/backlog.md:123`
+  still ends in `(claimed: maintenance:a-quoted-date-dodges-the-cutoff)`.
+  Whole-repo checks: `tests: 3312 tests across 106 modules in 17.2s on
+  8 workers, 0 problem(s)`; `lint: 0 problem(s) across 34 skills`;
+  `drift: 0 problem(s)`; `gates: 0 problem(s)` and `selftest: ok`.
+  `git diff --stat origin/main` over every prd.md, defect.md and
+  verification.md lists only this run's own defect.md.
