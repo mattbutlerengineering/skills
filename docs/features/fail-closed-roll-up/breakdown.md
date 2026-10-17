@@ -70,10 +70,10 @@ phrasings that unambiguously mean not-examined satisfy the Summary rule.
 - [x] **Grandfather only an ISO date** — `_rollup_applies` strips surrounding quotes and whitespace, takes a datetime's date part, and grandfathers only a `YYYY-MM-DD` value before `ROLLUP_ADOPTED`; detectors O and M unchanged; one backlog seed for O and M's raw-string compare — size:S
   - Accept: the date-dodge tests pass; every other `tests/test_gates.py` case passes unedited; `docs/backlog.md` gains one seed line ending `(from: session:2026-10-17)`.
   - Blocked by: Date-dodge tests
-- [ ] **Honest-wording tests** — new cases in `TestEvidenceRollUp` — size:S
+- [x] **Honest-wording tests** — new cases in `TestEvidenceRollUp` — size:S
   - Accept: each added shape (see Notes) gives `[]` over a NOT RUN criterion dated past the cutoff, and each rejected shape still gives the roll-up problem. Run before the next item, every added shape fails.
   - Blocked by: —
-- [ ] **Widen `SUMMARY_UNKNOWN_TERM`** — Summary-only extras, the trailing boundary no longer rejects `-` or `/`; the heads shared with `DISCLOSURE_VERDICT` stay identical — size:S
+- [x] **Widen `SUMMARY_UNKNOWN_TERM`** — Summary-only extras, the trailing boundary no longer rejects `-` or `/`; the heads shared with `DISCLOSURE_VERDICT` stay identical — size:S
   - Accept: the honest-wording tests pass; every other `tests/test_gates.py` case passes unedited; `python3 gates.py` on the real tree prints `gates: 0 problem(s)`.
   - Blocked by: Honest-wording tests
 - [ ] **Docs, payload and manifest** — dated amendment in ADR-0107 and `architecture.md`; the verify SKILL.md overstatement corrected; payload copies and manifest regenerated — size:S
@@ -165,3 +165,38 @@ Deviations discovered during Implement get logged here, dated.
   grandfathers only a value that is. No tracked `prd.md`, `defect.md` or
   `verification.md` has a non-ISO `date:`, so O and M (unchanged, seeded
   in `docs/backlog.md`) and H's real-tree output are unaffected.
+- 2026-10-17 (Review fix loop, Honest-wording tests, RED): `python3 -m
+  unittest tests.test_gates.TestEvidenceRollUp` printed `FAILED
+  (failures=12)`, one per added shape, the first `FAIL:
+  test_honest_gap_wordings_from_review_pass (...) (summary='7 PASS; the
+  live dispatch check could not be run.')`. The three rejected shapes
+  already fail the gate before the change; their test pins that they
+  still do.
+- 2026-10-17 (Review fix loop, wording decisions). Added, each a
+  Summary-only alternative, so the heads `SUMMARY_UNKNOWN_TERM` shares
+  with `DISCLOSURE_VERDICT` stay spelled identically (the deferred
+  shared-heads minor is not made worse):
+  - `not applicable`: the spelled-out `n/a`, the same claim kind.
+  - `n't (been )?run` (straight or curly apostrophe): "wasn't run",
+    "hasn't been run", "couldn't run" can only mean not run.
+  - `not be(en)? run`: "could not be run", "has not been run".
+  - trailing boundary `(?!\w)` instead of `(?![\w/-])`: a hyphen or
+    slash after a head ("skipped-by-design", "deferred/blocked") no
+    longer hides it. The leading boundary is unchanged.
+  - `unexercised` ("remains unexercised"): only means not examined.
+  - `not_?run` ("NOT_RUN", "NOTRUN"): an identifier spelling of the
+    NOT RUN head; unambiguous.
+  - `unverifiable`: says the check could not be examined; the honest
+    "NOT YET VERIFIABLE" already passes through `not yet`.
+  Rejected, pinned as still failing:
+  - `outstanding` ("is outstanding"): as often praise ("outstanding
+    coverage") as a gap, so it would satisfy the rule on incidental prose.
+  - `blocked` ("1 BLOCKED"): this repo's artifacts routinely describe a
+    gate that "blocked" a bad change as passing behaviour; "deferred/
+    blocked" already passes through `deferred`.
+  - `skips` ("1 skips"): mostly a verb describing behaviour ("the
+    detector skips fenced lines"), and widening the shared `skip(?:ped)?`
+    head in one regex only would drift the two copies.
+- 2026-10-17 (Review fix loop, Widen `SUMMARY_UNKNOWN_TERM`, GREEN):
+  `python3 -m unittest tests.test_gates` printed `OK`; `python3
+  gates.py` printed `gates: 0 problem(s)`; no pre-existing case edited.

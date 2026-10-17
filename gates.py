@@ -231,11 +231,21 @@ VERDICT_LEAD = re.compile(r"^[\s*_`\"'“‘([]+")
 # Summary on main fails. Any word satisfies any disclosed head, because
 # every head is the same claim kind. A count carries its word ("1 NOT
 # RUN"), so naming covers counting; there is no pass-word scan.
+# The 2026-10-17 review widened it on evidence (ADR-0107's amendment):
+# Summary-only words that can only mean not examined (`not applicable`,
+# `not_run`/`notrun`, `unverifiable`, `unexercised`, `not be(en) run`,
+# and a contracted `n't (been) run`, which carries its own leading word
+# so it sits outside the leading boundary), and a trailing boundary that
+# lets a hyphen or slash follow ("skipped-by-design", "deferred/blocked").
+# The heads shared with DISCLOSURE_VERDICT stay spelled identically.
 SUMMARY_TITLE = "summary"
 SUMMARY_UNKNOWN_TERM = re.compile(
-    r"(?<![\w/-])(?:n/?a|skip(?:ped)?|defer(?:red)?|untested|unverified"
+    r"(?:(?<![\w/-])(?:n/?a|skip(?:ped)?|defer(?:red)?|untested|unverified"
     r"|pending|todo|tbd|not[\s-]+(?:yet|run|ran|verified|executed|checked"
-    r"|tested|attempted)|unknown|unmet|unproven)(?![\w/-])",
+    r"|tested|attempted)|unknown|unmet|unproven"
+    r"|not\s+applicable|not_?run|unverifiable|unexercised"
+    r"|not\s+be(?:en)?\s+run)"
+    r"|n['’]t\s+(?:been\s+)?run)(?!\w)",
     re.IGNORECASE)
 # The roll-up's grandfather cutoff: ADR-0107's own date, compared with the
 # artifact's frontmatter `date:` the way O compares COVERAGE_ADOPTED. A
