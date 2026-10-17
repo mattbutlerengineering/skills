@@ -248,16 +248,17 @@ SUMMARY_UNKNOWN_TERM = re.compile(
     r"|n['’]t\s+(?:been\s+)?run)(?!\w)",
     re.IGNORECASE)
 # The roll-up's grandfather cutoff: ADR-0107's own date, compared with the
-# artifact's frontmatter `date:` the way O compares COVERAGE_ADOPTED. A
-# verification.md shipped before the rule existed does not owe it. A
-# missing date is NOT grandfathered (fail closed), so omitting the date
-# cannot dodge the rule. Only an ISO `YYYY-MM-DD` value (after surrounding
-# quotes and whitespace are stripped, and a datetime cut to its date) is
-# compared at all: a raw-string compare let a quoted, empty or non-ISO
-# value sort before the cutoff and switch the rule off (ADR-0107's
-# 2026-10-17 amendment).
+# artifact's frontmatter `date:` through _grandfathered, as O and M compare
+# theirs. A verification.md shipped before the rule existed does not owe
+# it. A missing date is NOT grandfathered (fail closed), so omitting the
+# date cannot dodge the rule.
 ROLLUP_ADOPTED = "2026-10-17"
-ROLLUP_ISO_DATE = re.compile(
+# The one `date:` spelling a grandfather cutoff compares at all (H, O and
+# M, all through _grandfathered): an ISO `YYYY-MM-DD`, or a datetime read
+# by its date part, once surrounding quotes and whitespace are stripped. A
+# raw-string compare let a quoted, empty or non-ISO value sort before the
+# cutoff and switch the rule off (ADR-0107's 2026-10-17 amendments).
+FRONTMATTER_ISO_DATE = re.compile(
     r"^(\d{4}-\d{2}-\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?"
     r"(?:Z|[+-]\d{2}:?\d{2})?)?$")
 # Unfilled TEMPLATE filler is not output — matched by its filler TEXT, not by
@@ -1209,20 +1210,27 @@ def verification_sections(text):
     return sections, unclosed
 
 
-def _rollup_applies(text):
-    """Does the roll-up rule judge this artifact? False only when its
-    frontmatter `date:`, stripped of surrounding quotes and whitespace,
-    is an ISO date (or a datetime, read by its date part) before
-    ROLLUP_ADOPTED. A missing, empty or non-ISO date is judged (fail
-    closed)."""
-    date = (parse_frontmatter(text) or {}).get("date")
+def _grandfathered(date, cutoff):
+    """Does a frontmatter `date:` value predate CUTOFF? True only when
+    DATE, stripped of surrounding quotes and whitespace, is an ISO date
+    (or a datetime, read by its date part) before CUTOFF. A missing,
+    empty or non-ISO date is judged (fail closed). H, O and M all ask
+    this, so the answer has one owner."""
     if not isinstance(date, str):
-        return True
+        return False
     value = date.strip()
     if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
         value = value[1:-1].strip()
-    iso = ROLLUP_ISO_DATE.match(value)
-    return not (iso and iso.group(1) < ROLLUP_ADOPTED)
+    iso = FRONTMATTER_ISO_DATE.match(value)
+    return bool(iso) and iso.group(1) < cutoff
+
+
+def _rollup_applies(text):
+    """Does the roll-up rule judge this artifact? False only when its
+    frontmatter `date:` is grandfathered against ROLLUP_ADOPTED (see
+    _grandfathered)."""
+    date = (parse_frontmatter(text) or {}).get("date")
+    return not _grandfathered(date, ROLLUP_ADOPTED)
 
 
 def _rollup_problems(sections):
@@ -1359,8 +1367,9 @@ SECTION_CITATION = re.compile(r"§\s*([^,;)§]+)")
 # PRD's own frontmatter `date:`, a fixed constant against a static field,
 # so the same tree always answers the same way. This repo's PRD-0001..
 # PRD-0005 predate it; PRD-0006, dated on it, carries its own waivers, as
-# ADR-0072's Consequences ask. A missing date is NOT grandfathered — fail
-# closed, so omitting the date cannot dodge O.
+# ADR-0072's Consequences ask. A missing, empty or non-ISO date is NOT
+# grandfathered — fail closed through _grandfathered (FRONTMATTER_ISO_DATE),
+# so neither omitting the date nor quoting or misspelling it can dodge O.
 COVERAGE_ADOPTED = "2026-09-21"
 
 
@@ -1423,8 +1432,9 @@ def check_prd_coverage(root, parsed=None):
 
     Coverage is a Decompose-time property, so a run with no breakdown.md
     yet (a PRD still at its approval gate) is out of scope, as is a PRD
-    whose `date:` predates COVERAGE_ADOPTED. `parsed` defaults to a fresh
-    parse of `root`, same convention as A, C, D, G, H and I."""
+    whose `date:` predates COVERAGE_ADOPTED (read by _grandfathered).
+    `parsed` defaults to a fresh parse of `root`, same convention as A,
+    C, D, G, H and I."""
     if parsed is None:
         parsed = parse_run(root)
     problems = []
@@ -1432,8 +1442,7 @@ def check_prd_coverage(root, parsed=None):
         prd_id = entry["prd_id"]
         if not prd_id or entry["prd"] is None or entry["breakdown"] is None:
             continue
-        date = entry["prd_date"]
-        if isinstance(date, str) and date < COVERAGE_ADOPTED:
+        if _grandfathered(entry["prd_date"], COVERAGE_ADOPTED):
             continue
         citations = [cited.strip().casefold()
                      for row in breakdown_rows(entry["breakdown"])
@@ -1613,7 +1622,10 @@ CAPTURE_PLACEHOLDER = re.compile(r"^\s*[-*+]?\s*<[^>]*>\s*$")
 # capture from here on carries today's date and is checked in full.
 # A missing or unparseable `date:` is NOT grandfathered — fail closed,
 # the same direction cost_ledger.line_problems takes on a bad `at`
-# field, so an author cannot dodge M by omitting the date.
+# field, so an author cannot dodge M by omitting the date. "Unparseable"
+# is _grandfathered's reading: anything but an ISO date (quoted or a
+# datetime is fine) is judged, so a quoted, empty or non-ISO value cannot
+# sort before the cutoff and switch M off.
 CAPTURE_ADOPTED = "2026-09-21"
 
 
@@ -1690,8 +1702,8 @@ def check_capture_completeness(root):
     elsewhere is not this detector's problem" discipline C already
     applies file-by-file. A defect.md whose own frontmatter `date:`
     predates CAPTURE_ADOPTED is grandfathered (see that constant's own
-    comment) — a missing or unparseable date is NOT grandfathered, fail
-    closed. Bare `root`, no `parsed`: defect.md is not one of
+    comment and _grandfathered) — a missing, empty, non-ISO or otherwise
+    unparseable date is NOT grandfathered, fail closed. Bare `root`, no `parsed`: defect.md is not one of
     parse_run's run-level artifacts (its own docstring says so), so
     threading `parsed` here would either grow that walk for one detector
     or leave M re-deriving the same thing under a different name — this
@@ -1702,8 +1714,7 @@ def check_capture_completeness(root):
         if not defect.is_file():
             continue
         frontmatter = read_frontmatter(defect) or {}
-        date = frontmatter.get("date")
-        if isinstance(date, str) and date < CAPTURE_ADOPTED:
+        if _grandfathered(frontmatter.get("date"), CAPTURE_ADOPTED):
             continue
         rel = defect.relative_to(root)
         text = defect.read_text(encoding="utf-8")

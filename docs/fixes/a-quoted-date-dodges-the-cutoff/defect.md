@@ -171,7 +171,7 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   - Accept: each dodge test asserts the four exact
     `M: docs/fixes/demo/defect.md missing required section ...`
     strings and fails before the fix.
-- [ ] **One helper**: one private function in `gates.py` that takes the
+- [x] **One helper**: one private function in `gates.py` that takes the
   frontmatter `date` value and a cutoff and answers "grandfathered?". It
   holds H's normalization: a non-string is judged; strip surrounding
   quotes and whitespace; read a datetime by its date part; grandfather
@@ -180,7 +180,7 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   only user. No new module, and no cutoff value changes.
   - Accept: a grep count shows the pattern and the quote-strip appear
     once in `gates.py`. `one_owner.py` cannot see function bodies.
-- [ ] **Three callers**: H's `_rollup_applies`, O's
+- [x] **Three callers**: H's `_rollup_applies`, O's
   `check_prd_coverage` and M's `check_capture_completeness` call the
   helper. No raw `date < ..._ADOPTED` compare is left.
   - Accept: the O and M tests above go GREEN. H's existing tests,
@@ -198,7 +198,7 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   finds an unrecorded decision.
   - Accept: no text left in `gates.py` or `docs/adr/` describes O or M
     as a raw-string compare.
-- [ ] **Payload mirror and manifest**: copy `gates.py` to
+- [x] **Payload mirror and manifest**: copy `gates.py` to
   `factory/templates/tools/factory/gates.py`. Delete any stray
   `.orig`/`.rej` files, then run `python3 factory_init.py
   update-manifest` and commit the manifest.
@@ -233,3 +233,12 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   `AssertionError: Lists differ: [] != ["M: docs/fixes/demo/defect.md missing req[258 chars]ut'"]`.
   The empty date is written with `tree.write` through a `dated()` helper,
   as the work item asks.
+- 2026-10-17 (Implement): the helper is `_grandfathered(date, cutoff)`
+  in `gates.py`, and the pattern is renamed `FRONTMATTER_ISO_DATE` (the
+  brief's "neutrally named successor"). Grep counts on `gates.py`: the
+  `\d{4}-\d{2}-\d{2}` pattern 1, the quote-strip test 1,
+  `ROLLUP_ISO_DATE` 0, `date < ..._ADOPTED` 0. GREEN: `python3 -m
+  unittest tests.test_gates` OK with H's tests unedited. Shipped
+  artifacts that name the old constant (the fail-closed-roll-up run's
+  architecture, breakdown and review, and the backlog seed) are history
+  and stay as written.
