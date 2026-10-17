@@ -187,7 +187,7 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
     including `test_non_iso_or_quoted_post_cutoff_date_is_judged` and
     `test_quoted_or_datetime_pre_cutoff_date_is_grandfathered`, pass
     without edits. `grep -n "date < " gates.py` finds no cutoff compare.
-- [ ] **Comment and ADR text**: update the `COVERAGE_ADOPTED`,
+- [x] **Comment and ADR text**: update the `COVERAGE_ADOPTED`,
   `CAPTURE_ADOPTED` and `ROLLUP_ADOPTED` comment blocks (the last one
   says "the way O compares COVERAGE_ADOPTED") and the
   `check_capture_completeness` docstring. Append a dated amendment line
@@ -242,3 +242,10 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   artifacts that name the old constant (the fail-closed-roll-up run's
   architecture, breakdown and review, and the backlog seed) are history
   and stay as written.
+- 2026-10-17 (Implement): comment blocks for `ROLLUP_ADOPTED`, the
+  pattern, `COVERAGE_ADOPTED` and `CAPTURE_ADOPTED`, and the O and M
+  docstrings, now name `_grandfathered` (landed in the fix commit with
+  the code). ADR-0107 and ADR-0073 each gained one dated amendment
+  paragraph at the end; ADR-0107's earlier "Detectors O and M keep their
+  compare" sentence stays as written and is superseded by its new
+  amendment, since ADRs are amended, not rewritten. No new ADR.
