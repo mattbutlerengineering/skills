@@ -2,7 +2,8 @@
 stage: ship
 run: feature:fail-closed-roll-up
 date: 2026-10-17
-outcome: prepared
+outcome: released
+released-at: 2026-10-17
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/998
 assumptions:
   - "Release authorization is prepare-and-stop (Owner decision 4 in autorun-brief.md): the branch is pushed, one type:feature issue (#997) and one PR (#998) are open; no merge, tag, plugin.json bump, branch deletion or release PR."
@@ -161,8 +162,12 @@ gh pr create --base main --title "revert: fail-closed roll-up" --body-file <body
 
 ## Outcome
 
-Prepared and stopped — waiting on the pull request `pending-merge:`
-names (#998, CI green). Flagged for the Owner:
+Released. The Owner answered "Merge now" in the autorun session on
+2026-10-17, and #998 was squash-merged as `461803a` at
+2026-10-17T15:59:17Z (`gh pr view 998 --json state,mergeCommit,mergedAt`
+→ `MERGED`). #997 closed with it. The operate minimum-signal, the
+`chore(release)` PR and the launch brief are still open. The flags
+below were raised when the release was prepared, and they still stand:
 
 - **ADR-0107 is provisional** (written unattended); accept or amend it.
 - **7 deferred minors** (review.md, re-review verdict): invisible and
