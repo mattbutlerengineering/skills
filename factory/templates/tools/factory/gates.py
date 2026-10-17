@@ -347,7 +347,14 @@ def check_pr_traceability(root, env=None):
         return [f"B: {error}"]
     if pr is None:
         return []
-    body = pr.get("body") or ""
+    return pr_body_problems(pr.get("body") or "")
+
+
+def pr_body_problems(body):
+    """B's body rule on a bare string: the one owner of it and of its two
+    problem strings, judged by check_pr_traceability on CI and by the
+    root-only pr_body_preflight hook before `gh pr create` runs.
+    `""` stands for a missing body."""
     problems = []
     if not WO_TOKEN.search(body) and not NO_WO_DECLARATION.search(body):
         problems.append("B: PR body cites no work-order id")
