@@ -47,7 +47,7 @@ NOT RUN / unknown item.
 - [x] **Protocol: state the roll-up rule once** — one short section in `docs/pipeline-protocol.md` — size:S
   - Accept: the new section states the rule once, links `CONTEXT.md` for the claim kinds without redefining observed, derived, inferred or unknown, and cites ADR-0107 for the gate half (detector H on `verification.md`, grandfathered by `date:` before `ROLLUP_ADOPTED`). `grep -n "derived (computed" docs/pipeline-protocol.md` prints nothing.
   - Blocked by: CONTEXT.md: claim kinds and fail-closed roll-up
-- [ ] **Templates and verify SKILL.md carry the rule** — `skills/verify/TEMPLATE.md`'s `## Summary` placeholder, `skills/review/TEMPLATE.md`'s `## Verdict` placeholder and `skills/verify/SKILL.md`'s "summary of it" line — size:S
+- [x] **Templates and verify SKILL.md carry the rule** — `skills/verify/TEMPLATE.md`'s `## Summary` placeholder, `skills/review/TEMPLATE.md`'s `## Verdict` placeholder and `skills/verify/SKILL.md`'s "summary of it" line — size:S
   - Accept: each of the three places says the line counts or names every NOT RUN / unknown item and never reads as an unqualified pass over them, pointing to `CONTEXT.md` rather than redefining the claim kinds. `skills/review/SKILL.md` is unchanged (it never describes the Verdict line). The verify template's Summary heading is still spelled exactly `## Summary`. `.claude-plugin/plugin.json` is unchanged (ADR-0095).
   - Blocked by: CONTEXT.md: claim kinds and fail-closed roll-up
 
@@ -103,3 +103,11 @@ Deviations discovered during Implement get logged here, dated.
   'docs/**/review.md'` lists those two files although this run edits
   neither. The same command against `origin/main` prints nothing, and
   that is the check this run reports.
+
+- 2026-10-17 (Templates and verify SKILL.md, placement): the "summary of
+  it" line in `skills/verify/SKILL.md` step 4 is about evidence not being
+  a summary, not about the `## Summary` line. The roll-up sentence is
+  appended to that step's text right after it, naming `## Summary`
+  explicitly, rather than reworded into it. The two templates point to
+  "the plugin's CONTEXT.md" in prose, not by a link, because their text
+  is copied into a target repo where a relative link would dangle.
