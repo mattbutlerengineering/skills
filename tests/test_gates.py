@@ -2126,6 +2126,41 @@ class TestPrTraceability(unittest.TestCase):
                     Path(tmp), env={"GITHUB_EVENT_PATH": str(path)}),
                 [f"B: GITHUB_EVENT_PATH {path} is not a JSON object"])
 
+
+class TestPrBodyProblems(unittest.TestCase):
+    """B's body rule on a bare string: the one owner the CI event path and
+    the pr_body_preflight hook both judge through."""
+
+    NO_WO = "B: PR body cites no work-order id"
+    NO_CLOSES = "B: PR body has no Closes #N link"
+
+    def test_work_order_token_and_closes_line_pass(self):
+        self.assertEqual(
+            gates.pr_body_problems("WO-0003 per breakdown\n\nCloses #108"),
+            [])
+
+    def test_no_work_order_waiver_and_closes_line_pass(self):
+        self.assertEqual(
+            gates.pr_body_problems(
+                "No work order: governance fix\n\nCloses #108"), [])
+
+    def test_missing_work_order_line(self):
+        self.assertEqual(gates.pr_body_problems("Closes #108"),
+                         [self.NO_WO])
+
+    def test_missing_closes_line(self):
+        self.assertEqual(gates.pr_body_problems("WO-0003 per breakdown"),
+                         [self.NO_CLOSES])
+
+    def test_both_missing_in_order(self):
+        self.assertEqual(gates.pr_body_problems("no tokens here"),
+                         [self.NO_WO, self.NO_CLOSES])
+
+    def test_empty_body_fires_both_in_order(self):
+        self.assertEqual(gates.pr_body_problems(""),
+                         [self.NO_WO, self.NO_CLOSES])
+
+
 class TestEvidenceHonesty(unittest.TestCase):
     """H (origin: WO-0011): a criterion that asserts a LABELLED verdict must
     show literal output or disclose that the check was NOT RUN.
