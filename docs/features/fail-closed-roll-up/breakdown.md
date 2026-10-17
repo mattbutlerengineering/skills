@@ -27,7 +27,7 @@ labelled disclosure, and main's real tree still reports 0 problems.
 - [x] **Roll-up rule tests** — new cases in `tests/test_gates.py` beside `TestEvidenceHonesty`, plus one defect artifact in `gates_selftest.evidence_honesty_defect_fixture` — size:M
   - Accept: the cases assert exact output through `gates.evidence_problems(text)` and `gates.check_evidence_honesty(root)`: a fixture dated `2026-10-17` with one criterion verdict `NOT RUN` and a Summary reading as a full pass gives exactly one problem at the first Summary heading's line whose text is `summary "Summary" neither counts nor names the 1 criterion section(s) disclosed as not run (first: "<criterion title>", line <verdict line>); unknown never rolls up to pass`, and through `check_evidence_honesty` that string carries the `H: {rel}:{lineno} ` prefix; the same shape with no `date:` fails identically (fail closed); the same shape dated `2026-10-16` gives `[]`; a Summary counting it (`1 PASS, 1 NOT RUN`) gives `[]`; a Summary naming a different kind (`1 deferred`) gives `[]`; a fixture with no disclosed criterion gives `[]`; a criterion that only mentions "not run" in prose with no labelled disclosure verdict gives `[]`; a fixture with no section titled `Summary` gives `[]`; a Summary that says `not run` only inside a fenced block fails with the problem above; two disclosed criteria give one problem carrying `the 2 criterion section(s)` and the first one's title and line; the three honest Summary shapes from main (`0 of 7 met, 0 failed, 7 unmet`, `7 PASS, 0 FAIL, 2 NOT YET VERIFIABLE`, `16 PASS, 3 FAIL, 1 DEFERRED`), each over a labelled disclosure and dated past the cutoff, give `[]`; `gates.ROLLUP_ADOPTED == "2026-10-17"`; each section dict from `gates.verification_sections` carries `names_unknown`, true for a section with an unfenced `unknown` and false for one whose only such word is fenced. The selftest defect fixture gains one artifact dated `2026-10-17` with a full-pass Summary over one `NOT RUN` criterion, and the H `expect` gains the substring `neither counts nor names`. Run before the next item, the new `tests/test_gates.py` cases fail (no `ROLLUP_ADOPTED`, no `names_unknown`, no roll-up problem) and `python3 gates.py --selftest` fails on the missing H substring.
   - Blocked by: —
-- [ ] **Roll-up rule in detector H** — in `gates.py`: `ROLLUP_ADOPTED`, `SUMMARY_TITLE` and `SUMMARY_UNKNOWN_TERM` as the architecture's data model gives them; the `names_unknown` flag in `verification_sections`; new private `_rollup_problems(sections)` and `_rollup_applies(text)`; one step in `evidence_problems` after the per-section loop and before the artifact-wide backstop; the import widened to `from protocol import read_frontmatter, parse_frontmatter`; the module docstring's H roster entry gains the Summary half — size:M
+- [x] **Roll-up rule in detector H** — in `gates.py`: `ROLLUP_ADOPTED`, `SUMMARY_TITLE` and `SUMMARY_UNKNOWN_TERM` as the architecture's data model gives them; the `names_unknown` flag in `verification_sections`; new private `_rollup_problems(sections)` and `_rollup_applies(text)`; one step in `evidence_problems` after the per-section loop and before the artifact-wide backstop; the import widened to `from protocol import read_frontmatter, parse_frontmatter`; the module docstring's H roster entry gains the Summary half — size:M
   - Accept: the roll-up rule tests pass, and `python3 gates.py --selftest` prints `gates: 0 problem(s)`. Every pre-existing `tests/test_gates.py` case and the selftest clean fixture pass with no assertion or fixture edited (any outcome change is logged in Notes and routed back as a design gap). `check_evidence_honesty` is unchanged in code. `verification_sections` stays the only section parse of the artifact: `_rollup_problems` reads its dicts and calls `_is_disclosure`, and no new regex walks headings. No module import edge is added beyond the widened `protocol` import, so `tests/test_dual_membership.py` passes with its pin unchanged. `python3 gates.py` on the real tree prints `gates: 0 problem(s)`, and `git diff --stat main -- 'docs/**/verification.md' 'docs/**/review.md'` prints nothing.
   - Blocked by: Roll-up rule tests
 - [ ] **Payload mirror and manifest regen** — refresh the payload copies of `gates.py` and `gates_selftest.py` and the checksum manifest — size:S
@@ -88,3 +88,18 @@ Deviations discovered during Implement get logged here, dated.
   rule's silence once it lands. Until the payload item, the mirrored
   `gates_selftest.py` differs from its payload copy, so
   `tests.test_factory_init` is red between these commits by design.
+
+- 2026-10-17 (Roll-up rule in detector H, GREEN): `python3 -m unittest
+  tests.test_gates` printed `OK`; `python3 gates.py --selftest` printed
+  `selftest: ok` and `gates: 0 problem(s)`; `python3 gates.py` printed
+  `gates: 0 problem(s)`. No pre-existing H test or selftest fixture
+  changed outcome, so there is no design gap. `python3 run_tests.py`'s
+  only failing module was `tests.test_factory_init` (the two mirror
+  copies, fixed by the next item).
+- 2026-10-17 (deviation, environment): the local `main` ref is stale at
+  `7376d94`; the branch's base is `origin/main` at `1290a4e` (#991),
+  which added `docs/features/pr-body-preflight/verification.md` and
+  `review.md`. So `git diff --stat main -- 'docs/**/verification.md'
+  'docs/**/review.md'` lists those two files although this run edits
+  neither. The same command against `origin/main` prints nothing, and
+  that is the check this run reports.

@@ -41,8 +41,11 @@ ai-tooling suite where the rule is the same idea):
                      fenced output or discloses NOT RUN, in its OWN section
                      scope (an appendix fence vouches for nothing; a scoped
                      hedge is not a disclaimer; there is no roll-up excuse);
-                     and an artifact with neither output nor a written
-                     NOT-RUN disclaimer anywhere fails outright
+                     an artifact with neither output nor a written
+                     NOT-RUN disclaimer anywhere fails outright; and a
+                     `## Summary` dated on/after ROLLUP_ADOPTED (or
+                     undated) names the unknown kind whenever a section
+                     discloses NOT RUN under a labelled verdict (ADR-0107)
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
   K STANDARDS-DRIFT — docs/standards.json's ADR-derived entries match a
@@ -96,7 +99,7 @@ from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
                              local_link_targets, parse_run, repo_root,
                              resolve_link, run_dirs, status_head, unfenced,
                              work_orders)
-from protocol import read_frontmatter
+from protocol import parse_frontmatter, read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
 # `WO-####`. Such a PR declares that EXPLICITLY — the same "declared, never
@@ -220,6 +223,26 @@ DISCLOSURE_VERDICT = re.compile(
 # Emphasis and brackets are formatting, not claim: `**NOT RUN**` and `(N/A)`
 # are the disclosures they look like, so the head is read past them.
 VERDICT_LEAD = re.compile(r"^[\s*_`\"'“‘([]+")
+# H's Summary half (ADR-0107): unknown never rolls up to pass. When a
+# criterion discloses NOT RUN under a labelled verdict, a `## Summary`
+# must name the unknown kind somewhere outside a fence. The words are the
+# disclosure heads read anywhere in the line, plus `not yet`, `unknown`,
+# `unmet` and `unproven`: without them the honest "2 NOT YET VERIFIABLE"
+# Summary on main fails. Any word satisfies any disclosed head, because
+# every head is the same claim kind. A count carries its word ("1 NOT
+# RUN"), so naming covers counting; there is no pass-word scan.
+SUMMARY_TITLE = "summary"
+SUMMARY_UNKNOWN_TERM = re.compile(
+    r"(?<![\w/-])(?:n/a|skip(?:ped)?|defer(?:red)?|untested|unverified"
+    r"|pending|todo|tbd|not[\s-]+(?:yet|run|ran|verified|executed|checked"
+    r"|tested|attempted)|unknown|unmet|unproven)(?![\w/-])",
+    re.IGNORECASE)
+# The roll-up's grandfather cutoff: ADR-0107's own date, compared with the
+# artifact's frontmatter `date:` the way O compares COVERAGE_ADOPTED. A
+# verification.md shipped before the rule existed does not owe it. A
+# missing date is NOT grandfathered (fail closed), so omitting the date
+# cannot dodge the rule.
+ROLLUP_ADOPTED = "2026-10-17"
 # Unfilled TEMPLATE filler is not output — matched by its filler TEXT, not by
 # the shape `<...>`. That shape is also real evidence (a DOM dump's `<html>`,
 # a Python repr like `<class 'app.models.User'>`), and discarding it
@@ -1126,8 +1149,10 @@ def verification_sections(text):
     Public with evidence_problems: pure text in, structure out, so the H
     grammar is exercisable without a fixture tree. Returns (sections,
     unclosed), where each section is {"title", "lineno", "evidence",
-    "not_run", "results"} and `unclosed` is the line number of a fence that
-    is never closed, or None.
+    "not_run", "names_unknown", "results"} and `unclosed` is the line
+    number of a fence that is never closed, or None. `names_unknown` (an
+    unfenced SUMMARY_UNKNOWN_TERM word) is recorded for every section and
+    read only for a Summary, by _rollup_problems.
 
     Built on the shared _skip_frontmatter/_walk_sections engine (also used
     by capture_sections, detector M's own reader): this function owns only
@@ -1137,7 +1162,7 @@ def verification_sections(text):
 
     def blank(title, lineno):
         return {"title": title, "lineno": lineno, "evidence": False,
-                "not_run": False, "results": []}
+                "not_run": False, "names_unknown": False, "results": []}
 
     lines = text.splitlines()
     body = _skip_frontmatter(lines)
@@ -1158,11 +1183,51 @@ def verification_sections(text):
                 continue
             if NOT_RUN_TOKEN.search(line):
                 current["not_run"] = True
+            if SUMMARY_UNKNOWN_TERM.search(line):
+                current["names_unknown"] = True
             result = RESULT_LINE.match(line)
             if result:
                 current["results"].append((lineno, result.group(1)))
     sections.append(current)
     return sections, unclosed
+
+
+def _rollup_applies(text):
+    """Does the roll-up rule judge this artifact? False only when its
+    frontmatter `date:` is a string before ROLLUP_ADOPTED; a missing or
+    unreadable date is judged (fail closed)."""
+    date = (parse_frontmatter(text) or {}).get("date")
+    return not (isinstance(date, str) and date < ROLLUP_ADOPTED)
+
+
+def _rollup_problems(sections):
+    """The roll-up rule over verification_sections' already-parsed
+    SECTIONS (ADR-0107): when a non-Summary section holds a labelled
+    verdict that _is_disclosure accepts, some Summary section must name
+    the unknown kind. Returns [] or one (lineno, suffix) at the first
+    Summary's heading. No Summary means no roll-up line to judge."""
+    def is_summary(section):
+        return section["title"].strip().casefold() == SUMMARY_TITLE
+
+    summaries = [s for s in sections if is_summary(s)]
+    if not summaries or any(s["names_unknown"] for s in summaries):
+        return []
+    disclosed = []
+    for section in sections:
+        if is_summary(section):
+            continue
+        lines = [lineno for lineno, verdict in section["results"]
+                 if _is_disclosure(verdict)]
+        if lines:
+            disclosed.append((section["title"], lines[0]))
+    if not disclosed:
+        return []
+    criterion, line = disclosed[0]
+    return [(summaries[0]["lineno"],
+             f'summary "{summaries[0]["title"]}" neither counts nor names'
+             f" the {len(disclosed)} criterion section(s) disclosed as not"
+             f' run (first: "{criterion}", line {line}); unknown never'
+             " rolls up to pass")]
 
 
 def evidence_problems(text):
@@ -1202,6 +1267,10 @@ def evidence_problems(text):
              f'criterion "{section["title"]}" asserts {verdict} with'
              " neither literal evidence nor a NOT-RUN disclaimer (evidence"
              " must be a fenced code block in this section)"))
+    # The Summary half (ADR-0107). It needs a labelled disclosure and the
+    # backstop below needs no labelled verdict at all, so never both.
+    if _rollup_applies(text):
+        problems.extend(_rollup_problems(sections))
     # An artifact that asserts no verdict at all escapes the per-criterion
     # rule; it still owes the reader output or a disclosure.
     if not any(s["results"] for s in sections) and not any(
