@@ -13,12 +13,15 @@ owner gates.pr_body_problems, before the PR exists.
   exit 0   everything else: silent, or one `pr-body-preflight: not checked
            — <reason>` note per `gh pr create` whose body it cannot read
 
-It fails open: an unreadable body, an unparsable command or any exception
-is exit 0, and CI's B still judges that PR. Root-only (not mirrored).
+It fails open: an unreadable body, an unparsable command, a PR aimed at
+another repository or any exception is exit 0, and CI's B still judges
+that PR. Heredoc bodies and comments are never read as commands.
+Root-only (not mirrored).
 
   python3 pr_body_preflight.py < payload.json
 """
 import json
+import os
 import re
 import shlex
 import sys
@@ -43,6 +46,9 @@ VALUE_FLAGS = frozenset({
 DEFERRING_FLAGS = frozenset({
     "--fill", "--fill-first", "--fill-verbose", "-f", "--web", "-w",
     "--editor", "-e", "--template", "-T", "--recover"})
+# Commands that move the shell before a later gh pr create runs.
+DIRECTORY_CHANGERS = frozenset({"cd", "pushd", "popd"})
+REMOTE_URL = re.compile(r"(?:push)?url\s*=\s*(?P<url>\S+)$")
 # The opening of a heredoc command substitution, `$(cat <<'D'` and kin.
 HEREDOC_OPEN = re.compile(
     r"\$\(\s*cat\s+<<(?P<dash>-?)[ \t]*(?P<quote>['\"]?)"
@@ -101,6 +107,160 @@ def _mask_heredocs(command):
         start = end
     pieces.append(command[start:])
     return "".join(pieces), bodies
+
+
+# Characters after which an unquoted `#` starts a comment: whitespace and
+# the control and redirection operators, as in the shell's own grammar.
+WORD_BREAK = " \t\n;&|()<>"
+
+
+class _Unrun:
+    """Cut the text the shell never runs out of a command: every heredoc
+    body (with its delimiter line) and every comment, so neither is
+    tokenized as a command. Quote-aware: `<<` and `#` inside quotes, a
+    `#` mid-word and a `<<<` here-string are kept. Raises ValueError on a
+    shape it cannot classify (an unclosed quote, substitution or
+    backtick, or a heredoc delimiter it cannot read), which the caller
+    turns into a note: the shell would reject the first kinds, and the
+    last fails open."""
+
+    def __init__(self, text):
+        self.text, self.pos, self.out = text, 0, []
+        self.pending, self.boundary = [], True
+
+    def run(self):
+        self._normal(nested=False)
+        return "".join(self.out)
+
+    def _take(self, end, boundary=False):
+        self.out.append(self.text[self.pos:end])
+        self.pos, self.boundary = end, boundary
+
+    def _normal(self, nested):
+        """Unquoted text, to the end or (nested) to the `)` closing a
+        `$(`. The quoting and substitution openers hand off."""
+        depth, text = 0, self.text
+        while self.pos < len(text):
+            ch = text[self.pos]
+            if ch == ")" and nested and depth == 0:
+                return self._take(self.pos + 1)
+            if ch in "()" and nested:
+                depth += 1 if ch == "(" else -1
+            if not self._special(ch):
+                self._take(self.pos + 1, boundary=ch in WORD_BREAK)
+                if ch == "\n" and self.pending:
+                    self._bodies()
+        if nested:
+            raise ValueError("an unclosed command substitution")
+
+    def _special(self, ch):
+        """Consume one construct starting at pos; False when ch is plain."""
+        text, pos = self.text, self.pos
+        if ch == "\\":
+            self._take(pos + 2)
+        elif ch == "'" or text.startswith("$'", pos):
+            self._quoted(pos + (2 if ch == "$" else 1), "'", ch == "$")
+        elif ch == '"':
+            self._double()
+        elif ch == "`":
+            self._quoted(pos + 1, "`", True)
+        elif text.startswith("$((", pos):
+            self._arithmetic()
+        elif text.startswith("$(", pos):
+            self._take(pos + 2, boundary=True)
+            self._normal(nested=True)
+        elif ch == "#" and self.boundary:
+            end = text.find("\n", pos)
+            self.pos = len(text) if end < 0 else end
+        elif text.startswith("<<<", pos):
+            self._take(pos + 3, boundary=True)
+        elif text.startswith("<<", pos):
+            self._heredoc_operator()
+        else:
+            return False
+        return True
+
+    def _quoted(self, start, close, escapes):
+        """A span to the next close (single quotes take no escapes)."""
+        index = start
+        while index < len(self.text) and self.text[index] != close:
+            index += 2 if escapes and self.text[index] == "\\" else 1
+        if index >= len(self.text):
+            raise ValueError("No closing quotation")
+        self._take(index + 1)
+
+    def _double(self):
+        """A double-quoted span; a `$(` inside it is unquoted again."""
+        self._take(self.pos + 1)
+        text = self.text
+        while self.pos < len(text):
+            ch = text[self.pos]
+            if ch == '"':
+                return self._take(self.pos + 1)
+            if ch == "\\":
+                self._take(self.pos + 2)
+            elif ch == "`":
+                self._quoted(self.pos + 1, "`", True)
+            elif text.startswith("$((", self.pos):
+                self._arithmetic()
+            elif text.startswith("$(", self.pos):
+                self._take(self.pos + 2, boundary=True)
+                self._normal(nested=True)
+            else:
+                self._take(self.pos + 1)
+        raise ValueError("No closing quotation")
+
+    def _arithmetic(self):
+        """`$(( … ))`, kept whole: its `<<` is a shift, not a heredoc."""
+        depth, index = 0, self.pos + 1
+        while index < len(self.text):
+            depth += {"(": 1, ")": -1}.get(self.text[index], 0)
+            index += 1
+            if depth == 0:
+                return self._take(index)
+        raise ValueError("an unclosed command substitution")
+
+    def _heredoc_operator(self):
+        """`<<D`, `<<-D`, `<< 'D'`, `<<\\D`, `<<E'O'F`: keep the operator
+        and its word, and queue the body for the end of the line."""
+        text, index = self.text, self.pos + 2
+        dash = text.startswith("-", index)
+        index += dash
+        while index < len(text) and text[index] in " \t":
+            index += 1
+        delim = []
+        while index < len(text) and text[index] not in WORD_BREAK:
+            ch = text[index]
+            if ch in "$`":
+                raise ValueError("a heredoc delimiter the hook cannot read")
+            if ch in "'\"":
+                close = text.find(ch, index + 1)
+                if close < 0:
+                    raise ValueError("No closing quotation")
+                delim.append(text[index + 1:close])
+                index = close + 1
+            else:
+                step = 2 if ch == "\\" else 1
+                delim.append(text[index + step - 1:index + step])
+                index += step
+        if not "".join(delim):
+            raise ValueError("a heredoc with no delimiter")
+        self.pending.append(("".join(delim), dash))
+        self._take(index)
+
+    def _bodies(self):
+        """Drop each queued heredoc's body and delimiter line. A body
+        whose delimiter line never comes runs to the end, as in bash."""
+        text = self.text
+        for delim, dash in self.pending:
+            while self.pos < len(text):
+                end = text.find("\n", self.pos)
+                end = len(text) if end < 0 else end
+                line = text[self.pos:end]
+                self.pos = min(end + 1, len(text))
+                if (line.lstrip("\t") if dash else line) == delim:
+                    break
+        self.pending = []
 
 
 def _tokens(command):
@@ -188,9 +348,10 @@ def _hidden_in_cluster(arg):
 
 
 def _body_sources(args):
-    """[(kind, value)] for every body source among args, kind "body" or
-    "file". Raises _Unreadable for a flag or cluster that hides it."""
-    sources, index = [], 0
+    """([(kind, value)] for every body source among args, kind "body" or
+    "file"; [every -R/--repo value]). Raises _Unreadable for a flag or
+    cluster that hides the body."""
+    sources, repos, index = [], [], 0
     while index < len(args):
         arg = args[index]
         if arg == "--":
@@ -201,14 +362,19 @@ def _body_sources(args):
             raise _Unreadable(f"{arg} hides a body flag in a cluster")
         body = _flag_value(args, index, "--body", "-b")
         path = None if body else _flag_value(args, index, "--body-file", "-F")
+        repo = (None if body or path
+                else _flag_value(args, index, "--repo", "-R"))
         if body or path:
             sources.append(("body", body[0]) if body else ("file", path[0]))
             index = (body or path)[1]
+        elif repo:
+            repos.append(repo[0])
+            index = repo[1]
         elif arg in VALUE_FLAGS:
             index += 2
         else:
             index += 1
-    return sources
+    return sources, repos
 
 
 def _read_body_file(path, context):
@@ -254,23 +420,132 @@ def _resolve(value, context):
 
 
 def _body(args, context):
-    """The body text for one gh pr create. Raises _Unreadable."""
-    sources = _body_sources(args)
+    """(body text, [-R/--repo values]) for one gh pr create. Raises
+    _Unreadable."""
+    sources, repos = _body_sources(args)
     if not sources:
         raise _Unreadable("no --body or --body-file")
     if len(sources) > 1:
         raise _Unreadable("more than one body source")
     kind, value = sources[0]
     if kind == "file":
-        return _read_body_file(value, context)
-    return _resolve(value, context)
+        return _read_body_file(value, context), repos
+    return _resolve(value, context), repos
 
 
-def _verdicts(command, cwd):
+def _git_config(start):
+    """The resolved path of the git config that owns directory start, or
+    None outside a checkout. A worktree's `.git` file is followed to its
+    common directory, so every worktree of one clone shares one config."""
+    import cli
+    start = start.resolve()
+    for directory in (start, *start.parents):
+        dot = directory / ".git"
+        if dot.is_dir():
+            return (dot / "config").resolve()
+        if not dot.is_file():
+            continue
+        text, _ = cli.read_file(dot, ".git", str)
+        if not text or not text.startswith("gitdir:"):
+            return None
+        gitdir = directory / text[len("gitdir:"):].strip()
+        common, _ = cli.read_file(gitdir / "commondir", "commondir", str)
+        base = gitdir / common.strip() if common else gitdir
+        return (base / "config").resolve()
+    return None
+
+
+def _slug(value):
+    """`host/owner/name`, lowercased, for a gh `[HOST/]OWNER/REPO` value
+    or a git remote URL (scp-like, https or ssh), else None."""
+    text = re.sub(r"^[a-z][a-z0-9+.-]*://", "", value.strip().lower())
+    text = re.sub(r"^[^@/]*@", "", text).replace(":", "/", 1)
+    parts = text.removesuffix("/").removesuffix(".git").split("/")
+    if len(parts) == 2:
+        parts = ["github.com", *parts]
+    return "/".join(parts) if len(parts) == 3 and all(parts) else None
+
+
+def _remote_slugs(cwd):
+    """The slugs of every remote URL in the cwd checkout's git config,
+    read from the file (no git, no network), or None when unknown."""
+    import cli
+    if not isinstance(cwd, str):
+        return None
+    config = _git_config(Path(cwd))
+    text = cli.read_file(config, "git config", str)[0] if config else None
+    slugs, in_remote = set(), False
+    for line in (text or "").splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            in_remote = line.startswith("[remote ")
+        elif in_remote and REMOTE_URL.match(line):
+            slugs.add(_slug(REMOTE_URL.match(line)["url"]))
+    slugs.discard(None)
+    return frozenset(slugs) or None
+
+
+def _gh_repo(earlier, prefix, environ):
+    """GH_REPO as gh will see it: the environment, then each earlier
+    `GH_REPO=` word in the compound, then the command's own prefix; the
+    last one wins and an empty value means unset."""
+    value = environ.get("GH_REPO", "")
+    for word in [word for words in earlier for word in words] + prefix:
+        if word.startswith("GH_REPO="):
+            value = word[len("GH_REPO="):]
+    return [value] if value else []
+
+
+def _working_directory(earlier, cwd):
+    """The directory gh pr create runs in after the compound's earlier
+    cd/pushd/popd, or None when one of them cannot be placed."""
+    here = Path(cwd) if isinstance(cwd, str) else None
+    for words in earlier:
+        if words[0] not in DIRECTORY_CHANGERS:
+            continue
+        args = words[1:]
+        if words[0] == "popd" or len(args) != 1 or here is None:
+            return None
+        if args[0].startswith(("-", "~")) or any(
+                ch in args[0] for ch in "$`"):
+            return None
+        here = here / args[0]
+        if not here.is_dir():
+            return None
+    return here
+
+
+def _check_target(repos, context):
+    """Raise _Unreadable unless this gh pr create opens a PR on this
+    repository: B is this repository's rule (review finding 3). Named
+    repositories (-R/--repo, GH_REPO) are compared with the cwd
+    checkout's remotes; a cd must stay inside the cwd's checkout."""
+    earlier = context["commands"][:context["position"]]
+    named = repos + _gh_repo(earlier, context["prefix"], context["environ"])
+    if named:
+        slugs = _remote_slugs(context["cwd"])
+        for value in named:
+            if slugs is None:
+                raise _Unreadable(f"the PR targets {value} and this "
+                                  "repository's remote cannot be read")
+            if _slug(value) not in slugs:
+                raise _Unreadable(
+                    f"the PR targets {value}, not this repository")
+    if not any(words[0] in DIRECTORY_CHANGERS for words in earlier):
+        return
+    here = _working_directory(earlier, context["cwd"])
+    home = _git_config(Path(context["cwd"])) if here else None
+    if home is None:
+        raise _Unreadable("a cd before gh pr create the hook cannot place")
+    if _git_config(here) != home:
+        raise _Unreadable("a cd before gh pr create leaves this repository")
+
+
+def _verdicts(command, cwd, environ):
     """(failed, notes-and-problems lines) over every gh pr create."""
     masked, heredocs = _mask_heredocs(command)
     try:
-        tokens = _tokens(masked)
+        tokens = _tokens(_Unrun(masked).run())
     except ValueError as exc:
         return False, [NOTE.format(f"cannot parse the command: {exc}")]
     commands = _simple_commands(tokens)
@@ -281,9 +556,14 @@ def _verdicts(command, cwd):
     import gates  # lazy: ~60 ms, paid only by a candidate command
     failed, lines = False, []
     for position, args in candidates:
-        context = {"first": position == 0, "cwd": cwd, "heredocs": heredocs}
+        words = commands[position]
+        context = {"first": position == 0, "cwd": cwd, "heredocs": heredocs,
+                   "commands": commands, "position": position,
+                   "prefix": words[:len(words) - len(args) - 3],
+                   "environ": environ}
         try:
-            body = _body(args, context)
+            body, repos = _body(args, context)
+            _check_target(repos, context)
         except _Unreadable as exc:
             lines.append(NOTE.format(exc))
             continue
@@ -293,10 +573,12 @@ def _verdicts(command, cwd):
     return failed, lines
 
 
-def preflight(payload_text):
+def preflight(payload_text, environ=None):
     """(exit_code, stderr_lines) for one PreToolUse payload. Pure: writes
-    nothing, reads only body files. Exit 2 only on a judged failing body;
-    any exception is exit 0 with a note."""
+    nothing, reads only body files and the cwd checkout's git config.
+    environ is the environment gh would inherit (only GH_REPO is read;
+    None is empty). Exit 2 only on a judged failing body; any exception
+    is exit 0 with a note."""
     try:
         data = json.loads(payload_text)
     except ValueError:
@@ -309,7 +591,7 @@ def preflight(payload_text):
     if not all(part in command for part in ("gh", "pr", "create")):
         return 0, []
     try:
-        failed, lines = _verdicts(command, data.get("cwd"))
+        failed, lines = _verdicts(command, data.get("cwd"), environ or {})
     except Exception as exc:  # fail open: a crash must never block Bash
         return 0, [NOTE.format(f"{type(exc).__name__}: {exc}")]
     return (2, lines + [POINTER]) if failed else (0, lines)
@@ -326,7 +608,7 @@ def main(argv, stdin=None):
     except Exception as exc:  # fail open on an unreadable stdin
         print(NOTE.format(f"{type(exc).__name__}: {exc}"), file=sys.stderr)
         return 0
-    code, lines = preflight(text)
+    code, lines = preflight(text, os.environ)
     for line in lines:
         print(line, file=sys.stderr)
     return code

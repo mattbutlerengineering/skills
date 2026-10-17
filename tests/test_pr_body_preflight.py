@@ -94,8 +94,15 @@ class TestLiteralBody(unittest.TestCase):
                 self.assertEqual(run(command), (0, []))
 
     def test_compound_command_is_judged(self):
-        self.assertEqual(run('cd x && gh pr create --body "x"'),
-                         refused("x"))
+        """A cd the hook can place inside this repository keeps the
+        command judged (amended at the review fix loop: a cd it cannot
+        place now fails open, so the fixture gives it a real checkout)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            (top / "x").mkdir()
+            self.assertEqual(run('cd x && gh pr create --body "x"', top),
+                             refused("x"))
 
     def test_newline_separates_two_commands(self):
         self.assertEqual(run('git push -u origin b\ngh pr create --body "x"'),
@@ -107,7 +114,7 @@ class TestLiteralBody(unittest.TestCase):
                          (0, []))
 
     def test_leading_assignments_and_a_gh_path_are_recognised(self):
-        for command in ('GH_REPO=o/r gh pr create --body "x"',
+        for command in ('FOO=o/r gh pr create --body "x"',
                         '/usr/local/bin/gh pr create --body "x"'):
             with self.subTest(command=command):
                 self.assertEqual(run(command), refused("x"))
@@ -311,6 +318,203 @@ class TestUnreadableShapes(unittest.TestCase):
         self.assertEqual(
             run('gh pr create -db "x"'),
             (0, [note("-db hides a body flag in a cluster")]))
+
+
+class TestTextTheShellNeverRuns(unittest.TestCase):
+    """Review finding 1: a heredoc body and a comment tail are never run,
+    so a `gh pr create` inside one is not a command and is never judged."""
+
+    def test_review_reproductions_are_not_commands(self):
+        for command in (
+                "cat > notes.md <<'EOF'\nExample:\n"
+                "  gh pr create --title x --body \"WIP\"\nEOF",
+                "git commit -F - <<'EOF'\ndocs: x\n\n"
+                "gh pr create --body \"fix stuff\" is refused now\nEOF",
+                "cat <<'EOF' > x\nX=1 gh pr create --body 'nope'\nEOF",
+                "true # later ; gh pr create --body 'bad'"):
+            with self.subTest(command=command):
+                self.assertEqual(run(command), (0, [NOT_SEEN]))
+
+    def test_every_heredoc_operator_spelling_hides_its_body(self):
+        body = "gh pr create --body bad\n"
+        for opener, close in (("<<EOF", "EOF"), ("<< EOF", "EOF"),
+                              ('<<"EOF"', "EOF"), ("<<\\EOF", "EOF"),
+                              ("<<E'O'F", "EOF"), ("<<-EOF", "\tEOF"),
+                              ("<<-'EOF'", "\t\tEOF"),
+                              ("<<EOF <<TWO", "EOF\n" + body + "TWO")):
+            with self.subTest(opener=opener):
+                command = f"cat > f {opener}\n\t{body}{close}\nls"
+                self.assertEqual(run(command), (0, [NOT_SEEN]))
+
+    def test_a_heredoc_inside_a_substitution_hides_its_body(self):
+        command = ("x=$(python3 - <<'EOF'\nprint('gh pr create --body bad')"
+                   "\ngh pr create --body bad\nEOF\n)")
+        self.assertEqual(run(command), (0, [NOT_SEEN]))
+
+    def test_a_heredoc_with_no_delimiter_line_hides_the_rest(self):
+        self.assertEqual(run("cat <<EOF\ngh pr create --body bad"),
+                         (0, [NOT_SEEN]))
+
+    def test_a_real_command_after_a_heredoc_is_still_judged(self):
+        """An apostrophe in the body no longer breaks the parse."""
+        command = ("cat > b.md <<'EOF'\nit's done\nEOF\n"
+                   'gh pr create --body "x"')
+        self.assertEqual(run(command), refused("x"))
+
+    def test_lookalikes_of_a_heredoc_are_not_heredocs(self):
+        for command in ('cat <<< "a"; gh pr create --body "x"',
+                        'echo "a <<EOF"\ngh pr create --body "x"',
+                        "echo 'a <<EOF'\ngh pr create --body \"x\"",
+                        'echo $((1<<2)); gh pr create --body "x"'):
+            with self.subTest(command=command):
+                self.assertEqual(run(command), refused("x"))
+
+    def test_a_comment_line_is_not_a_command(self):
+        self.assertEqual(run("# a note; gh pr create --body bad\nls"),
+                         (0, [NOT_SEEN]))
+
+    def test_a_comment_after_a_real_command_does_not_hide_it(self):
+        self.assertEqual(run('gh pr create --body "x" # note'),
+                         refused("x"))
+
+    def test_a_hash_that_starts_no_word_is_body_text(self):
+        for value, body in (('"x # y"', "x # y"), ("x#1", "x#1"),
+                            ("'a #b'", "a #b"), ("x\\ #1", "x #1")):
+            with self.subTest(value=value):
+                self.assertEqual(run(f"gh pr create --body {value}"),
+                                 refused(body))
+
+    def test_a_shape_the_hook_cannot_classify_fails_open(self):
+        for command, reason in (
+                ("cat <<$X\ngh pr create --body bad\n$X",
+                 "a heredoc delimiter the hook cannot read"),
+                ("cat <<\ngh pr create --body bad",
+                 "a heredoc with no delimiter"),
+                ('gh pr create --body "x" $(ls',
+                 "an unclosed command substitution")):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    run(command),
+                    (0, [note(f"cannot parse the command: {reason}")]))
+
+
+def _git_repo(root, url):
+    """A directory that git would call a checkout with one remote."""
+    (root / ".git").mkdir(parents=True)
+    (root / ".git" / "config").write_text(
+        f'[core]\n\tbare = false\n[remote "origin"]\n\turl = {url}\n'
+        "\tfetch = +refs/heads/*:refs/remotes/origin/*\n", encoding="utf-8")
+
+
+class TestOtherRepository(unittest.TestCase):
+    """Review finding 3: B is this repository's rule, so a PR aimed at
+    another repository is never judged by it."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.top = Path(tmp.name).resolve()
+        self.cwd = self.top / "this"
+        _git_repo(self.cwd, "git@github.com:me/this.git")
+        (self.cwd / "sub").mkdir()
+        _git_repo(self.top / "that", "https://github.com/me/that.git")
+        (self.top / "plain").mkdir()
+
+    def run_here(self, command, environ=None):
+        return pr_body_preflight.preflight(payload(command, self.cwd),
+                                           environ)
+
+    def test_a_repo_flag_naming_another_repository_fails_open(self):
+        for flag in ("-R other/repo", "--repo other/repo",
+                     "--repo=other/repo", "-Rother/repo", "-R=other/repo",
+                     "-R github.com/other/repo"):
+            value = flag.split("=", 1)[-1].split()[-1].removeprefix("-R")
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    self.run_here(f'gh pr create {flag} --body "x"'),
+                    (0, [note(f"the PR targets {value}, "
+                              "not this repository")]))
+
+    def test_gh_repo_naming_another_repository_fails_open(self):
+        reason = note("the PR targets other/repo, not this repository")
+        for command in ('GH_REPO=other/repo gh pr create --body "x"',
+                        'export GH_REPO=other/repo && '
+                        'gh pr create --body "x"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_here(command), (0, [reason]))
+        self.assertEqual(
+            self.run_here('gh pr create --body "x"',
+                          {"GH_REPO": "other/repo"}),
+            (0, [reason]))
+
+    def test_main_reads_gh_repo_from_its_environment(self):
+        err = io.StringIO()
+        with mock.patch.dict(os.environ, {"GH_REPO": "other/repo"}), \
+                redirect_stderr(err):
+            code = pr_body_preflight.main([], stdin=io.StringIO(
+                payload('gh pr create --body "x"', self.cwd)))
+        self.assertEqual(
+            (code, err.getvalue().splitlines()),
+            (0, [note("the PR targets other/repo, not this repository")]))
+
+    def test_naming_this_repository_is_still_judged(self):
+        for command in ('gh pr create -R me/this --body "x"',
+                        'gh pr create --repo=Me/This --body "x"',
+                        'gh pr create -R github.com/me/this --body "x"',
+                        'GH_REPO=me/this gh pr create --body "x"',
+                        'GH_REPO= gh pr create --body "x"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_here(command), refused("x"))
+
+    def test_a_named_repository_with_no_remote_to_compare_fails_open(self):
+        reason = note("the PR targets me/this and this repository's "
+                      "remote cannot be read")
+        self.assertEqual(run('gh pr create -R me/this --body "x"'),
+                         (0, [reason]))
+        self.assertEqual(
+            run('gh pr create -R me/this --body "x"', cwd=self.top / "plain"),
+            (0, [reason]))
+
+    def test_a_cd_inside_this_repository_is_still_judged(self):
+        for command in ('cd sub && gh pr create --body "x"',
+                        f'cd {self.cwd}/sub; gh pr create --body "x"',
+                        'cd sub/.. && pushd sub && gh pr create --body "x"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_here(command), refused("x"))
+
+    def test_a_cd_out_of_this_repository_fails_open(self):
+        reason = note("a cd before gh pr create leaves this repository")
+        for command in ('cd ../that && gh pr create --body "x"',
+                        'cd ../plain && gh pr create --body "x"',
+                        f'cd {self.top}/that\ngh pr create --body "x"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_here(command), (0, [reason]))
+
+    def test_a_worktree_shares_its_clones_remotes_and_checkout(self):
+        """A worktree's .git is a file naming its gitdir, whose commondir
+        leads back to the clone's one config."""
+        gitdir = self.cwd / ".git" / "worktrees" / "w"
+        gitdir.mkdir(parents=True)
+        (gitdir / "commondir").write_text("../..\n", encoding="utf-8")
+        tree = self.top / "w"
+        tree.mkdir()
+        (tree / ".git").write_text(f"gitdir: {gitdir}\n", encoding="utf-8")
+        here = payload('gh pr create -R me/this --body "x"', tree)
+        self.assertEqual(pr_body_preflight.preflight(here), refused("x"))
+        back = payload(f'cd {self.cwd} && gh pr create --body "x"', tree)
+        self.assertEqual(pr_body_preflight.preflight(back), refused("x"))
+
+    def test_a_cd_the_hook_cannot_place_fails_open(self):
+        reason = note("a cd before gh pr create the hook cannot place")
+        for command in ('cd "$HOME" && gh pr create --body "x"',
+                        'cd && gh pr create --body "x"',
+                        'cd - && gh pr create --body "x"',
+                        'cd ~/x && gh pr create --body "x"',
+                        'cd gone && gh pr create --body "x"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_here(command), (0, [reason]))
+        self.assertEqual(run('cd sub && gh pr create --body "x"'),
+                         (0, [reason]))
 
 
 class _BrokenStdin:
