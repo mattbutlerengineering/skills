@@ -149,17 +149,22 @@ The steps run in this order:
    body with an unquoted delimiter is literal only if it has no `$`, no
    backtick and no backslash; otherwise it is unreadable (the shell would
    expand it, or join a backslash-newline; amended at Review).
+   *(Amended 2026-10-16, review fix loop: step 2b below now runs between
+   this step and step 3.)*
 3. **Tokenize.** Use `shlex.shlex(posix=True,
    punctuation_chars=";&|()<>\n")`, with `whitespace_split=True`,
    `whitespace=" \t"` and `commenters=""`. Probed: with the defaults, a
    newline is whitespace (it merges two commands), and `#` ends a word
    mid-token (`-b a#1` loses `#1`). A `ValueError` (an unclosed quote)
-   makes every candidate unreadable.
+   makes every candidate unreadable. *(Amended 2026-10-16: `commenters`
+   stays empty, and comments are cut in step 2b instead, where quoting
+   and word starts are known.)*
 4. **Split** on the operator tokens (`&&`, `||`, `;`, `|`, `&`, newline,
    parentheses). A simple command is a `gh pr create` when its words,
    after leading `NAME=value` assignments, start with `gh` (or a path
    ending in `/gh`), `pr`, `create`. Prefixes such as `bash -c`, `env`,
-   `xargs` or `command` are not looked through. If the pre-filter
+   `xargs` or `command` are not looked through. *(Amended 2026-10-16: the
+   skipped assignments are still read for `GH_REPO` in step 8.)* If the pre-filter
    matched but no simple command qualifies, there is one note
    (`saw "gh pr create" but found no such command`) and exit 0.
 5. **Find the body source** among the args:
@@ -184,6 +189,72 @@ The steps run in this order:
    with no `cwd` it is unreadable. The file is read with
    `cli.read_file(path, shown, str)`. Absent, unreadable or non-UTF-8
    is unreadable, with the problem text as the reason.
+
+#### Amended 2026-10-16 (review fix loop: review findings 1 and 3)
+
+Review found that text the shell never runs reached the tokenizer, and
+that a PR aimed at another repository was judged by this repository's
+rule. Both break the guarantee: exit 2 only on a body read and judged
+failing, in a `gh pr create` that will run against this repository. Two
+steps are added; steps 1 to 7 above are otherwise unchanged.
+
+2b. **Cut the text the shell never runs** (`_Unrun`, after step 2,
+    before step 3). One quote-aware pass over the masked string tracks
+    single quotes, `$'…'`, double quotes, backticks, `$( … )` (unquoted
+    again inside double quotes) and `$(( … ))`. In unquoted text:
+    - a `#` at a word start (string start, after unescaped whitespace or
+      an operator character) drops to the end of the line; a `#`
+      mid-word (`a#1`, `=#1`, after an escaped space) is kept;
+    - `<<` (not `<<<`, not inside `$(( ))`) is a heredoc operator:
+      optional `-`, blanks, then a delimiter word whose quotes and
+      backslashes are removed (`<<'EOF'`, `<<"EOF"`, `<<\EOF`,
+      `<<E'O'F`). The operator and its word stay, so step 4 drops them as
+      a redirection. At the end of that line, each queued body and its
+      delimiter line (tab-stripped for `<<-`) is cut. A body whose
+      delimiter never comes runs to the end, as in bash.
+    - It raises, and every candidate becomes unreadable, on an unclosed
+      quote (`No closing quotation`, the same note shlex gave), an
+      unclosed substitution or backtick (the shell rejects both, so no
+      `gh` runs), a delimiter holding `$` or a backtick, or `<<` with no
+      word.
+    Accepted limits, each failing open or unchanged from before: a
+    `case` pattern's `)` inside `$( )` closes it early, and shlex still
+    knows nothing of `$'…'` or of quotes nested in `"$( )"`.
+
+8. **Check the target repository** (after the body is recovered, so
+   every step-5-to-7 note is unchanged; before judging).
+   - Named targets: every `-R`/`--repo` value in any spelling
+     (`-R v`, `-Rv`, `-R=v`, `--repo v`, `--repo=v`), plus `GH_REPO` as gh
+     would see it: the hook's environment (`main` passes `os.environ`;
+     `preflight(payload_text, environ=None)` treats None as empty), then
+     each earlier `GH_REPO=` word in the compound (`export GH_REPO=…`),
+     then the command's own prefix. The last one wins and an empty value
+     means unset.
+   - "This repository" is decided without git or network: the cwd's
+     checkout is found by walking up to `.git`. A worktree's `.git` file
+     is followed through its `gitdir` and `commondir` to the clone's one
+     config. That config's `[remote …]` `url`/`pushurl` values are
+     parsed as `host/owner/name`, scp-like, https or ssh. A named target
+     normalises the same way (a bare `owner/name` is on `github.com`) and
+     is compared case-insensitively. A target not among them gives
+     `the PR targets <v>, not this repository`. No cwd, no checkout or no
+     parsable remote gives `the PR targets <v> and this repository's
+     remote cannot be read`.
+   - Directory changes: if any earlier simple command is `cd`, `pushd` or
+     `popd`, each is applied in order from the payload cwd. Each takes
+     exactly one plain argument: no option, no `~`, no `$` or backtick,
+     and an existing directory. `popd` is never placed. When it cannot
+     be placed, or the cwd has no checkout, the note is `a cd before gh
+     pr create the hook cannot place`. A final directory whose checkout
+     config differs from the cwd's gives `… leaves this repository`. A
+     `cd` into a subdirectory or another worktree of the same clone
+     stays judged. This supersedes Review's suggestion to leave `cd`
+     judged as an accepted limit, because the Owner asked for it to fail
+     open, and resolving it is a few `is_dir` and config lookups.
+   - Accepted limit: the payload cwd itself is taken as this repository.
+     A session whose shell already sits in another checkout, after a `cd`
+     in an earlier Bash call, is still judged when its command names no
+     other repository and changes no directory.
 
 ## Stack & dependencies
 

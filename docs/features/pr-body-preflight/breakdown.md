@@ -62,6 +62,19 @@ and nothing else is ever blocked.
   - Accept: `python3 run_tests.py` exits 0; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 gates.py` and `python3 gates.py --selftest` print `gates: 0 problem(s)`; `python3 kb.py drift` prints `drift: 0 problem(s)`. `python3 one_owner.py` reports no `one-owner:` problem naming `pr_body_preflight.py` and either B regex or either B string. No file under `skills/` and not `.claude-plugin/plugin.json` changed (ADR-0095).
   - Blocked by: Register the hook in .claude/settings.json
 
+## Milestone 3: review fix loop: only a command that runs, against this repository, is judged
+
+Added 2026-10-16 when Review routed findings 1 (critical) and 3 (major)
+back to Implement. The Owner authorized fixing exactly these two in
+session. Findings 4 to 8 stay deferred, as review.md records them.
+
+- [x] **Unrun-text and other-repository replay tests** — further cases in `tests/test_pr_body_preflight.py`, replayed through `preflight` — size:M
+  - Accept: Review's four reproductions (a `cat > f <<'EOF'` body, a `git commit -F - <<'EOF'` body, `cat <<'EOF' > x` with an assignment-prefixed line, and `true # later ; gh pr create --body 'bad'`) give exit 0 with the `saw "gh pr create" but found no such command` note. Every heredoc operator spelling (`<<EOF`, `<< EOF`, `<<"EOF"`, `<<\EOF`, `<<E'O'F`, `<<-EOF` and `<<-'EOF'` with tab-indented delimiters, two heredocs on one line), a heredoc inside `$( )`, and a heredoc with no delimiter line hide their bodies. A real `gh pr create` after a heredoc whose body holds an apostrophe is judged. `<<<`, a quoted `<<` and `$((1<<2))` are not heredocs. A comment line and a comment tail are not commands, and a `#` that starts no word is body text. A delimiter holding `$`, a `<<` with no word and an unclosed `$(` fail open with a `cannot parse the command` note. In a temp checkout with one remote: `-R`, `--repo`, `--repo=`, `-Rv`, `-R=v` and `-R host/owner/name` naming another repository fail open, as do `GH_REPO=` as a prefix, an earlier `export`, `preflight`'s `environ` and `main`'s `os.environ`. The same repository named in any spelling, any case, or with an empty `GH_REPO=` is still judged. A named repository with no cwd or no checkout fails open. A `cd`/`pushd` inside the checkout is still judged. A `cd` to another checkout or to a plain directory fails open. A `cd` it cannot place (`$`, none, `-`, `~`, missing, no cwd) fails open. A worktree shares its clone's remotes and checkout. Run before the next item, the new cases fail.
+  - Blocked by: Whole-repo verify
+- [x] **Cut unrun text; check the target repository** — architecture.md steps 2b and 8 (amended 2026-10-16, review fix loop) — size:M
+  - Accept: the new replay tests pass, and every earlier test passes with its assertion unchanged (two fixtures adjusted, see Notes). The hook still imports only the standard library, `gates` and `cli`. The historical replay over this project's transcripts has no exit 2 that B would not give, and none on a command whose `gh pr create` never runs. `python3 run_tests.py`, `python3 lint.py`, `python3 kb.py drift`, `python3 gates.py` and `python3 gates.py --selftest` are clean.
+  - Blocked by: Unrun-text and other-repository replay tests
+
 ## Design gaps found
 
 Both gaps come from pinned repo tests the architecture does not account
@@ -158,3 +171,52 @@ revised to match.
   `pr_body_preflight.py`, either B regex or either B string.
   `git diff --stat main...HEAD -- skills/ .claude-plugin/plugin.json`
   is empty.
+- 2026-10-16 (Implement, review fix loop): findings 1 and 3 fixed
+  test-first in `8189351`. RED: 46 of the 61 tests failed or errored
+  (`FAILED (failures=21, errors=25)`). The reproductions gave exit 2
+  with B's strings where `(0, [NOT_SEEN])` was expected. The repository
+  cases raised `TypeError: preflight() takes 1 positional argument but 2
+  were given`. GREEN: `Ran 62 tests … OK`. The worktree test was written
+  after the code, so it was proved by mutation: dropping the `commondir`
+  branch fails it. The comment fixture was tightened to
+  `# a note; gh pr create --body bad`, because the first version passed
+  with comment stripping disabled.
+- 2026-10-16 (Implement, review fix loop), two existing fixtures adjusted
+  and no assertion weakened. The Owner's authorized behaviour change
+  contradicts both fixtures' setup. `test_compound_command_is_judged`
+  ran `cd x && …` with no cwd. A cd the hook cannot place now fails
+  open, so the fixture gets a temp checkout with a real `x` and still
+  asserts the refusal. `test_leading_assignments_and_a_gh_path_are_recognised`
+  used `GH_REPO=o/r` as its sample assignment, and that now names
+  another repository. It uses `FOO=o/r`, which tests the same
+  assignment skip.
+- 2026-10-16 (Implement, review fix loop), design choices, recorded in
+  architecture.md's amendment. "This repo" is decided from the cwd
+  checkout's `.git/config` remote URLs, a stdlib file read with no git
+  and no network. Worktrees are followed through `commondir`, and this
+  repository's sessions run in them. Any unknown fails open. `cd`
+  fails open when it leaves the checkout or cannot be placed. This
+  supersedes Review's suggestion to leave it judged, as the Owner asked.
+  The target check runs after body recovery, so every earlier note
+  keeps its wording. `preflight` gains an `environ=None` port, which is
+  empty by default so the seam stays pure, and `main` passes
+  `os.environ`.
+- 2026-10-16 (Implement, review fix loop), replay. All 9,094 historical
+  Bash commands from 42 transcripts were replayed read-only, each with
+  its own cwd, through HEAD-before-fix and the fix. The full replay gave
+  exit 2 twice before and twice after. Both are the same real
+  `gh pr create` runs with quoted-heredoc literal bodies that lack
+  `Closes #N`, so B rejects them too. Of the 210 commands holding
+  `pr create`, 9 were judged before (7 pass, 2 exit 2) and 8 after
+  (6 pass, 2 exit 2). The pass that moved was a `cd` in a record with no
+  cwd, which now fails open. The 61 `No closing quotation` parses are
+  gone: 46 became `a body file is read only from the first command`,
+  6 became `no --body or --body-file`, and 9 became `saw "gh pr create"
+  but found no such command`. Each of those 9 is a heredoc file write
+  whose body only mentions `pr create`. Coverage stays at about 4%, so
+  Review's major finding 4 (bind a heredoc to the `--body-file` it
+  writes) is still the lever, and it stays deferred. Live observation:
+  before the fix, the registered hook refused this loop's own
+  `python3 - <<'PYEOF'` test edit, whose body held
+  `gh pr create --body "x"` text. After it, the same kind of heredoc
+  passed.
