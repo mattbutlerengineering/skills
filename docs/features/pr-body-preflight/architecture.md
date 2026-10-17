@@ -220,6 +220,17 @@ steps are added; steps 1 to 7 above are otherwise unchanged.
     Accepted limits, each failing open or unchanged from before: a
     `case` pattern's `)` inside `$( )` closes it early, and shlex still
     knows nothing of `$'…'` or of quotes nested in `"$( )"`.
+    *(Amended 2026-10-16, re-review, commits `0715189`, `b745415` and
+    `b276426`:)* a backslash-newline outside single quotes is removed,
+    as the shell removes it, so a continued `gh pr create` stays one
+    command, a double-quoted body is joined, and a `#` right after the
+    join is a comment exactly when it would be without it. A
+    `(( … ))` command at a word start is kept whole, like `$(( … ))`.
+    Two shapes raise, and so fail open: a backtick span holding `<<` (a
+    heredoc inside backticks), and a `#` comment or `<<` inside an
+    unquoted `${ … }`, tracked by a depth counter so the pass stays
+    linear. Accepted limit: a `(( ))` inside `$( )` miscounts the
+    substitution's depth and fails open as unclosed.
 
 8. **Check the target repository** (after the body is recovered, so
    every step-5-to-7 note is unchanged; before judging).

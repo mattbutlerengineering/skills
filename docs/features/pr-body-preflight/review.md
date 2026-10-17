@@ -8,6 +8,11 @@ assumptions:
   - "False-block frequency was measured by replaying every Bash command in this project's local Claude Code transcripts (~/.claude/projects/-Users-mbutler-github-skills*/*.jsonl, 42 files) through preflight(), read-only, with each record's own cwd. The transcripts stay where they are; nothing from them is copied here beyond counts and two command fragments."
   - "Probes ran from a scratchpad harness outside the repo. Latency was timed through the registered command from .claude/settings.json under /bin/sh with CLAUDE_PROJECT_DIR set, 20 runs each, on the Owner's machine (python3 is /opt/homebrew/bin/python3)."
   - "Domain passes: none selected (no changed path matches payments, migrations or dependencies). Standards filtered to domain `factory`: stdlib-only and adr0032-one-way-mirror, both advisory."
+  - "Re-review 2026-10-16: Severity follows the brief's definition literally. Every exit 2 on a body B accepts, on a command whose `gh pr create` never runs, or on a PR for another repository is critical, whatever its frequency. Three of the five new criticals need shapes that no observed command contains, and their frequency is stated beside the grade so the Owner can downgrade."
+  - "Re-review 2026-10-16: Each new critical was fixed here, not routed, because each fix is one condition (the line-continuation fix is the same condition in the two contexts the shell applies it in) with its own test, written first and seen failing. The continuation fix changes what gets judged (8 to 40 of 210 historical `pr create` commands), so every exit 2 it produces was checked against B on the body as bash renders it before the commit."
+  - "Re-review 2026-10-16: Whether `gh` runs was decided by executing each probe under bash and zsh, with a stub `gh` first on PATH, in a scratchpad directory. Transcript commands were never executed. They were only replayed through `preflight()`, and their quoted-heredoc bodies were rendered by bash's `cat`."
+  - "Re-review 2026-10-16: architecture.md step 2b gets a dated amendment line for the three fix commits. It is committed with review.md, because an undocumented deviation would itself be a design finding."
+  - "Re-review 2026-10-16: Findings 4 to 8 keep the deferral the Owner authorized for the review fix loop (breakdown.md Milestone 3). Their status is restated here with re-measured numbers, not re-decided."
 ---
 
 # Review: PR-body preflight hook
@@ -285,3 +290,223 @@ fixed in `eacc548`. Two majors need an Owner decision before Ship, to fix
 or defer: the other-repository false block, recommended for the same
 re-entry, and the about-4% real coverage, recommended for a re-measure
 after the fix. The four minors are deferred with reasons.
+
+## Re-review 2026-10-16
+
+### Scope
+
+This pass covers the review fix loop: `git diff 4fd75d4..HEAD --
+pr_body_preflight.py tests/` (commit `8189351`), a full read of the
+current `pr_body_preflight.py`, and the amendments to architecture.md
+(steps 2b and 8, with their accepted limits). It also covers this pass's
+own fix commits `0715189`, `b745415` and `b276426`. Probes ran against
+the module in-process. Each "does `gh` run" claim was checked by
+executing the probe under bash and zsh with a stub `gh` first on PATH.
+The repository logic was probed in hand-built checkouts: two remotes
+(ssh and https, mixed case), a worktree `.git` file with `commondir`, a
+`.git` directory with no config, a random-bytes config, a garbage `.git`
+file, a symlinked cwd, and an `ssh://` remote.
+
+### Prior findings, re-judged
+
+- **Finding 1 (critical, heredoc/comment false block): closed.** All four
+  reproductions now give `(0, ['… saw "gh pr create" but found no such
+  command'])`. So do nested heredocs, a delimiter-like line inside the
+  body (`  EOF`, `EOFX`), two heredocs on one line, `<<-` with tabs, a
+  heredoc in `"$( )"`, in `<( )`, in a function body and in a `for`
+  loop, and `cat <<E | grep x` and `cat <<E && ls`. Each matches bash,
+  where `gh` never runs. `<<EOF` inside single or double quotes, `#` in
+  a URL, `${#x}`, `$#`, `a#b`, `\#`, `$((1<<2))` and `<<<x` all leave a
+  real `gh pr create` judged, as bash runs it. The pass found residual
+  shapes of the same class, listed below under New findings, and fixed
+  them.
+- **Finding 3 (major, other-repository judging): closed.** `-R`/`--repo`
+  in every spelling, `GH_REPO` (prefix, `export`, environment) and a
+  `cd` out of the checkout all fail open, with `the PR targets <v>, not
+  this repository` or `a cd before gh pr create leaves this repository`.
+  This repository named in any case, as `owner/name`, as a URL or as
+  `host/owner/name` is still judged. That holds from a worktree (whose
+  `.git` file is followed through `commondir`) and from a symlinked
+  cwd. A `.git` with no config, a corrupt config, a garbage `.git`
+  file, or an unreadable remote fails open with `… remote cannot be
+  read` or `… cannot place`. One residual shape, a continued line
+  carrying `-R`, was fixed (the line-continuation critical below). One
+  residual is a minor (every remote counts as this repository).
+- **Findings 4 to 8: still deferred, as the Owner authorized for the fix
+  loop** (breakdown.md Milestone 3). Re-measured:
+  - 4 (major, coverage): of the 210 historical `pr create` commands,
+    40 are now judged (32 pass, 8 exit 2), up from 8. That is about
+    19%. The rise comes from the line-continuation fix. The dominant gap is
+    unchanged: 138 are `a body file is read only from the first
+    command`, so binding a heredoc to the `--body-file` it writes is
+    still the lever.
+  - 5 (minor, single-quoted `$`): unchanged. The merged-PR replay is
+    still 58 of 60 in the single-quoted form.
+  - 6 (minor, `--dry-run` refused): unchanged.
+  - 7 (minor, pathological sizes): unchanged in kind. A 1 MB command
+    takes 1.2 to 2.3 s in-process, against 1.1 s before the unrun pass.
+    This pass's own `${ }` fix briefly made 20,000 `${a ` openings take
+    11.8 s. `b745415` brought that back to 68 ms; see the quadratic
+    `${ }` minor below.
+  - 8 (minor, start-up per Bash call): unchanged, since the
+    non-candidate path is untouched.
+
+### New findings
+
+#### Critical (fixed): a backslash-newline split one `gh pr create` in two, and kept itself inside a double-quoted body
+
+- Scenario: shlex saw a line continuation as a newline token, so the
+  hook judged the first line as the whole command. This predates the
+  fix loop, and the first review missed it.
+
+  ```
+  gh pr create --body bad \<newline>  --web
+      → (2, [B's two strings]); the design says --web fails open
+  gh pr create --body fix \<newline>  -R other/repo
+      → (2, …); the PR is for another repository (finding 3's class)
+  gh pr create --body "WO-0003 per breakdown. Closes \<newline>#108"
+      → (2, ['B: PR body has no Closes #N link', …])
+      bash passes the body as "… Closes #108", and B accepts it
+  ```
+
+  The common multi-line form `gh pr create \<newline> --title … \<newline>
+  --body …` was also never judged (`no --body or --body-file`).
+- Fix: `b276426`, test-first. `_Unrun` drops a backslash-newline in
+  unquoted and double-quoted text, as the shell does. Single quotes keep
+  it. RED: `test_a_line_continuation_joins_the_lines` failed with
+  `(2, ['B: PR body cites no work-order id', …]) != (0, ['… --web leaves
+  the body to gh'])`. GREEN: `Ran 67 tests … OK`. After the fix:
+  `--web` → the `--web` note, `-R other/repo` → `the PR targets
+  other/repo, not this repository`, and the `Closes \<newline>#108`
+  body → `(0, [])`. The transcript replay's exit 2 count went from 2 to
+  8. All 8 agree with `gates.pr_body_problems` on the bash-rendered
+  body. Each is a `gh pr create` in this repository, either from its
+  own cwd, after `cd /Users/mbutler/github/skills`, or with `-R
+  mattbutlerengineering/skills`. The merged-PR replay still has 0
+  refusals in 180 invocations.
+- Decision: fixed.
+
+#### Critical (fixed): a heredoc inside backticks reached the tokenizer as commands
+
+- Scenario: `_Unrun` kept a backtick span whole, and shlex does not know
+  backticks. `` x=`cat <<'EOF'⏎gh pr create --body bad⏎EOF⏎` `` → exit 2.
+  bash and zsh: `gh` never runs. This is the residual of finding 1. It
+  is rare, since backticks are legacy syntax, but it is a plain,
+  non-adversarial shape.
+- Fix: `0715189`. A backtick span holding `<<` raises, so the command
+  fails open with `cannot parse the command: a heredoc inside
+  backticks`. RED: `test_a_heredoc_inside_backticks_fails_open` failed
+  for `<<EOF` and `<<'EOF'` (exit 2). GREEN with the suite.
+- Decision: fixed.
+
+#### Critical (fixed, frequency ≈ 0): `#` right after a line continuation was kept as text
+
+- Scenario: `echo a \⏎# ; gh pr create --body bad` → exit 2. The shell
+  joins the lines into `echo a # ; …`, a comment, so `gh` never runs.
+  No observed command has this shape.
+- Fix: `0715189` kept the word boundary across the join, and
+  `b276426`'s removal of the pair subsumes that. RED:
+  `test_a_comment_after_a_line_continuation_is_a_comment` failed (exit
+  2). GREEN. `--body x\⏎#1` is still judged as `x#1`.
+- Decision: fixed.
+
+#### Critical (fixed, frequency ≈ 0): a `<<` shift in a `(( ))` command was read as a heredoc
+
+- Scenario: `((y = 1<<2))⏎echo '⏎2⏎gh pr create --body bad⏎' "' #"` →
+  exit 2. The fake heredoc's "body" swallowed the quote that hides the
+  `gh` line from the shell. This needs a hand-built quote resync. The
+  plain shape `(( n <<= 1 ))⏎gh pr create …` failed open, which lost
+  coverage.
+- Fix: `0715189`. `((` at a word start is kept whole, like `$(( ))`.
+  RED: `test_an_arithmetic_command_shift_is_not_a_heredoc` failed (exit
+  2). GREEN. The plain shape is now judged. Accepted limit: `(( ))`
+  inside `$( )` miscounts the depth and fails open as unclosed.
+- Decision: fixed.
+
+#### Critical (fixed, frequency ≈ 0): a blank-then-`#` inside `${ }` was cut as a comment
+
+- Scenario: `echo ${x:- #'⏎gh pr create --body bad⏎' "' #"}` → exit 2.
+  In bash, `#` inside `${ }` is not a comment, and the `gh` line sits
+  in single quotes. This also needs a hand-built quote resync.
+- Fix: `0715189`, then `b745415`. A `#` comment or `<<` inside an
+  unquoted `${ }` raises, so the command fails open with `a ${ } holding
+  # or << the hook cannot read`. A depth counter tracks this. RED:
+  `test_a_parameter_expansion_holding_a_comment_or_heredoc_fails_open`
+  failed (exit 2). GREEN. `${#x}` is still plain text.
+- Decision: fixed.
+
+#### Minor (fixed in this pass): this pass's first `${ }` check was quadratic
+
+- Scenario: `0715189` searched from each `${` to the next `}`. 20,000
+  `${a ` openings (80 KB) took 11,766 ms in-process, past the 10 s hook
+  timeout. Before that commit the same input took 73 ms. The input fails
+  open either way.
+- Fix: `b745415` replaced the search with a depth counter. Timing is
+  68 ms, with the same verdicts on every test and on the 9,098-command
+  replay. There is no timing test, because one would be flaky. The
+  measurement is recorded here.
+- Decision: fixed.
+
+#### Minor: every remote counts as "this repository"
+
+- Scenario: step 8 accepts a named target that matches any `[remote …]`
+  URL. In a checkout with an `upstream` remote for a repository that
+  does not run B, `gh pr create -R up/stream --body x` is judged by B.
+  Probed in a temp checkout: exit 2. This clone has exactly one remote
+  (`origin`), so there is no trigger today. A fork of this repository
+  would have `upstream` pointing at this repository, which does run B.
+- Decision: deferred. No trigger exists today. Narrowing to `origin`
+  would break a fork's `-R upstream`, which is correctly judged.
+
+### Passes
+
+- **Security**: no findings. The new reads are the `.git` file, a
+  `commondir`, and a git config. All go through `cli.read_file`, whose
+  `is_file` guard refuses directories, FIFOs and devices. Contents are
+  parsed only for `url`/`pushurl` lines and are never echoed. A note
+  echoes only the command's own `-R`/`GH_REPO` value. A `gitdir:` or
+  `commondir` can point anywhere, but the read is read-only, and the
+  `.git` entry is the user's own: git refuses to check out a tracked
+  `.git` path. `cd` targets get only `is_dir`. There is no size cap on
+  these reads, which matches the body-file read. There is still no
+  subprocess or shell execution.
+- **Complexity**: 633 lines, under the 800-line ceiling. Each helper has
+  one caller, so no cut-list line applies. The step-8 code (about 110
+  lines) is what the Owner asked for. One concern is about shape, not
+  size, so it goes to `deepen` and is not refactored here: the command
+  is lexed three times with overlapping quote knowledge (the
+  `HEREDOC_OPEN` regex mask, `_Unrun`, then shlex). Every accepted
+  limit in step 2b, and the six residuals above, sit in the gaps
+  between those three lexers. A single quote-aware pass that emits
+  words would retire `_mask_heredocs`, `_heredoc_at` and the shlex
+  configuration.
+- **Design**: the code matches architecture.md steps 2b and 8. This
+  pass's three fix commits are recorded as a dated amendment line in
+  step 2b.
+- **ADR compliance**: the delta touches only `pr_body_preflight.py`, its
+  tests and run documents. ADR-0075 holds, since every new file read
+  goes through `cli.read_file`. The module is still root-only
+  (ADR-0060), and `.claude-plugin/plugin.json` is untouched (ADR-0095).
+  No new decision passes the ADR test: the target-repository rule is
+  reversible and recorded in the architecture.
+- **Standards**: stdlib-only holds (`os` added).
+
+### Verification after this pass
+
+`python3 run_tests.py`: `tests: 3289 tests across 106 modules in 15.3s
+on 8 workers, 0 problem(s)`. `python3 lint.py`: `lint: 0 problem(s)
+across 34 skills`. The transcript replay (9,098 Bash commands, 42
+files) gives exit 2 exactly 8 times, and all 8 agree with B. The
+merged-PR replay gives 0 refusals in 180 invocations.
+
+### Re-review verdict
+
+**No critical or high finding is unfixed.** Findings 1 and 3 are
+closed. Seven new findings came from this pass. Five are criticals, and the
+line-continuation one predates the fix loop. One is a minor of this
+pass's own making. All six are fixed test-first in `0715189`,
+`b745415` and `b276426`. The seventh is a minor. Finding 4
+(major, coverage, now about 19%) and the minors 5 to 8 stay deferred, as
+the Owner authorized. That seventh finding, every remote counting as
+this repository, is deferred with its reason. Ready for Ship. The one-line
+`deepen` hand-off on the three-lexer shape is advisory.
