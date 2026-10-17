@@ -10,11 +10,13 @@ import io
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stderr
 from pathlib import Path
 from unittest import mock
 
+import cli
 import gates
 import pr_body_preflight
 
@@ -166,6 +168,136 @@ class TestOneOwner(unittest.TestCase):
                         side_effect=RuntimeError("boom")):
             self.assertEqual(run('gh pr create --body "x"'),
                              (0, [note("RuntimeError: boom")]))
+
+
+class _TempCwd(unittest.TestCase):
+    """Body files live in a temp directory used as the payload cwd."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.cwd = Path(tmp.name)
+        (self.cwd / "pass.md").write_text(PASSING + "\n", encoding="utf-8")
+        (self.cwd / "fail.md").write_text("x\n", encoding="utf-8")
+
+    def run_here(self, command):
+        return run(command, cwd=self.cwd)
+
+
+class TestBodyFile(_TempCwd):
+    def test_body_file_flags_with_a_real_file_are_judged(self):
+        for flag in ("--body-file ", "--body-file=", "-F ", "-F"):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    self.run_here(f"gh pr create {flag}pass.md"), (0, []))
+                self.assertEqual(
+                    self.run_here(f"gh pr create {flag}fail.md"),
+                    refused("x\n"))
+
+    def test_an_absolute_body_file_needs_no_cwd(self):
+        self.assertEqual(
+            run(f"gh pr create -F {self.cwd / 'fail.md'}"), refused("x\n"))
+
+    def test_a_missing_body_file_fails_open(self):
+        self.assertEqual(self.run_here("gh pr create --body-file gone.md"),
+                         (0, [note("no body file at gone.md")]))
+
+    def test_a_non_utf8_body_file_fails_open_with_the_read_problem(self):
+        (self.cwd / "bad.md").write_bytes(b"\xff\xfe")
+        _, problem = cli.read_file(self.cwd / "bad.md", "bad.md", str)
+        self.assertEqual(self.run_here("gh pr create -F bad.md"),
+                         (0, [note(problem)]))
+
+    def test_a_relative_body_file_with_no_cwd_fails_open(self):
+        self.assertEqual(
+            run("gh pr create --body-file fail.md"),
+            (0, [note("a relative body file with no cwd in the payload")]))
+
+    def test_cat_substitutions_are_read_as_that_file(self):
+        for value in ('"$(cat fail.md)"', '"$(< fail.md)"'):
+            with self.subTest(value=value):
+                self.assertEqual(
+                    self.run_here(f"gh pr create --body {value}"),
+                    refused("x\n"))
+                self.assertEqual(
+                    self.run_here(
+                        f"gh pr create --body {value.replace('fail', 'pass')}"),
+                    (0, []))
+
+    def test_a_body_file_after_another_command_fails_open(self):
+        reason = note("a body file is read only from the first command")
+        for command in ("cd x && gh pr create --body-file fail.md",
+                        'cd x && gh pr create --body "$(cat fail.md)"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_here(command), (0, [reason]))
+
+    def test_body_file_stdin_fails_open(self):
+        self.assertEqual(
+            self.run_here("gh pr create --body-file -"),
+            (0, [note("--body-file - reads the body from stdin")]))
+
+
+class TestHeredoc(unittest.TestCase):
+    def test_quoted_delimiter_body_is_judged_verbatim(self):
+        """Inner quotes survive: a body ending `#12"` still meets B's
+        word boundary, so it passes rather than being falsely blocked."""
+        for delim in ("'EOF'", '"EOF"'):
+            with self.subTest(delim=delim):
+                command = ('gh pr create --title t --body "$(cat <<' + delim
+                           + "\nWO-0003 it's \"q\"\n\nCloses #12\"\nEOF\n)\"")
+                self.assertEqual(run(command), (0, []))
+
+    def test_quoted_delimiter_failing_body_is_refused_verbatim(self):
+        body = "it's \"q\" and `ticks` and $NOT_EXPANDED"
+        command = ("gh pr create --body \"$(cat <<'EOF'\n" + body
+                   + "\nEOF\n)\"")
+        self.assertEqual(run(command), refused(body))
+
+    def test_dash_heredoc_strips_leading_tabs(self):
+        command = ("gh pr create --body \"$(cat <<-'EOF'\n\tWO-0003\n"
+                   "\tCloses #12\n\tEOF\n)\"")
+        self.assertEqual(run(command), (0, []))
+
+    def test_unquoted_delimiter_with_a_dollar_fails_open(self):
+        command = 'gh pr create --body "$(cat <<EOF\nWO-0003 $X\nEOF\n)"'
+        self.assertEqual(
+            run(command),
+            (0, [note("an unquoted heredoc body holds $ or a backtick")]))
+
+    def test_unquoted_delimiter_without_expansions_is_judged(self):
+        command = 'gh pr create --body "$(cat <<EOF\nplain text\nEOF\n)"'
+        self.assertEqual(run(command), refused("plain text"))
+
+
+class TestUnreadableShapes(unittest.TestCase):
+    def test_a_body_with_a_dollar_or_backtick_fails_open(self):
+        reason = note("the body holds $ or a backtick the hook cannot expand")
+        for value in ('"$VAR"', '"see `x`"', '"$(git log -1)"'):
+            with self.subTest(value=value):
+                self.assertEqual(run(f"gh pr create --body {value}"),
+                                 (0, [reason]))
+
+    def test_flags_that_leave_the_body_to_gh_fail_open(self):
+        for flag in ("--fill", "--fill-first", "--fill-verbose", "--web",
+                     "-w", "--editor", "-e", "-f", "--template t",
+                     "-T t", "--recover r"):
+            with self.subTest(flag=flag):
+                self.assertEqual(
+                    run(f"gh pr create {flag}"),
+                    (0, [note(f"{flag.split()[0]} leaves the body to gh")]))
+
+    def test_no_body_source_fails_open(self):
+        self.assertEqual(run("gh pr create --title t"),
+                         (0, [note("no --body or --body-file")]))
+
+    def test_two_body_sources_fail_open(self):
+        self.assertEqual(run('gh pr create -b "x" -F f.md'),
+                         (0, [note("more than one body source")]))
+
+    def test_a_cluster_hiding_a_body_flag_fails_open(self):
+        self.assertEqual(
+            run('gh pr create -db "x"'),
+            (0, [note("-db hides a body flag in a cluster")]))
 
 
 class _BrokenStdin:
