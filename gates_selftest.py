@@ -260,10 +260,11 @@ EVIDENCE_SUITE_GREEN_OPEN = ("### Suite is green\n\n- Evidence:\n  ```\n"
 
 
 def evidence_honesty_defect_fixture(root):
-    """Four artifacts H must catch: a bare unevidenced claim, a
+    """Five artifacts H must catch: a bare unevidenced claim, a
     template-shaped roll-up with zero real output, a gamed artifact
-    exercising each bypass H closes, and an unclosed code fence that must
-    not silently swallow the rest of the file."""
+    exercising each bypass H closes, an unclosed code fence that must
+    not silently swallow the rest of the file, and a Summary that rolls
+    a disclosed NOT RUN up into a pass (ADR-0107)."""
     demo = root / "docs" / "features" / "demo"
     demo.mkdir(parents=True)
     (demo / "verification.md").write_text(
@@ -307,6 +308,14 @@ def evidence_honesty_defect_fixture(root):
         "---\nstage: verify\n---\n# Verification\n\n"
         "### Report renders\n\n- Evidence:\n  ```\n  3 orders merged\n"
         "- Result: PASS\n", encoding="utf-8")
+    # A Summary dated on the roll-up cutoff that reads as a full pass
+    # over a criterion that disclosed NOT RUN: unknown never rolls up.
+    rolledup = root / "docs" / "features" / "rolledup"
+    rolledup.mkdir(parents=True)
+    (rolledup / "verification.md").write_text(
+        "---\nstage: verify\ndate: 2026-10-17\n---\n# Verification\n\n"
+        "## Summary\n\nAll criteria pass.\n\n" + EVIDENCE_HONEST_LEAF
+        + "### Live dispatch\n\n- Result: NOT RUN\n", encoding="utf-8")
 
 
 def evidence_honesty_clean_fixture(root):
@@ -607,7 +616,8 @@ def selftest():
                'criterion "Budget guard holds" asserts PASS with neither',
                'criterion "Router picks the model" asserts PASS with neither',
                'criterion "Retry path" asserts PASS with neither',
-               "unclosed code fence")
+               "unclosed code fence",
+               "neither counts nor names")
 
     # H: the honest side — three shapes that must stay silent.
     with tempfile.TemporaryDirectory() as tmp:

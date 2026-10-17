@@ -2764,6 +2764,127 @@ class TestEvidenceHonesty(unittest.TestCase):
         self.assertEqual(problems, [])
 
 
+class TestEvidenceRollUp(unittest.TestCase):
+    """H's Summary half (ADR-0107): on a verification.md dated on or after
+    gates.ROLLUP_ADOPTED (or undated: fail closed), a `## Summary` must
+    count or name the unknown kind when another section holds a labelled
+    NOT-RUN disclosure. Unknown never rolls up to pass.
+
+    Asserted on TEXT through gates.evidence_problems, as TestEvidenceHonesty
+    does; line numbers are the frontmatter's length plus the body's own
+    line, so each case reads its expected line off its literal."""
+
+    DATED = "---\nstage: verify\ndate: 2026-10-17\n---\n\n# Verification\n\n"
+    UNDATED = "---\nstage: verify\n---\n\n# Verification\n\n"
+    BEFORE = "---\nstage: verify\ndate: 2026-10-16\n---\n\n# Verification\n\n"
+    PASSED = ("### Suite is green\n\n- Evidence:\n  ```\n  OK\n  ```\n"
+              "- Result: PASS\n\n")
+    DISCLOSED = ("### Live dispatch\n\n"
+                 "- Result: NOT RUN — needs a second account.\n")
+
+    def body(self, summary, criteria=None, title="Summary"):
+        """`## {title}` over SUMMARY, then CRITERIA (default: one evidenced
+        PASS and one labelled NOT RUN, the verdict on body line 15)."""
+        return (f"## {title}\n\n{summary}\n\n"
+                + (self.PASSED + self.DISCLOSED if criteria is None
+                   else criteria))
+
+    def rollup(self, n, criterion, line):
+        """The suffix evidence_problems emits for a full-pass Summary."""
+        return (f'summary "Summary" neither counts nor names the {n}'
+                f' criterion section(s) disclosed as not run (first:'
+                f' "{criterion}", line {line}); unknown never rolls up to'
+                " pass")
+
+    def test_cutoff_is_pinned(self):
+        self.assertEqual(gates.ROLLUP_ADOPTED, "2026-10-17")
+
+    def test_full_pass_summary_over_a_disclosed_criterion_fails(self):
+        head = self.DATED.count("\n")
+        self.assertEqual(
+            gates.evidence_problems(
+                self.DATED + self.body("All criteria pass.")),
+            [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
+
+    def test_undated_artifact_is_judged_fail_closed(self):
+        head = self.UNDATED.count("\n")
+        self.assertEqual(
+            gates.evidence_problems(
+                self.UNDATED + self.body("All criteria pass.")),
+            [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
+
+    def test_artifact_dated_before_the_cutoff_is_grandfathered(self):
+        self.assertEqual(gates.evidence_problems(
+            self.BEFORE + self.body("All criteria pass.")), [])
+
+    def test_summary_counting_the_not_run_item_passes(self):
+        self.assertEqual(gates.evidence_problems(
+            self.DATED + self.body("1 PASS, 1 NOT RUN.")), [])
+
+    def test_summary_naming_a_different_unknown_kind_passes(self):
+        self.assertEqual(gates.evidence_problems(
+            self.DATED + self.body("1 PASS, 1 deferred.")), [])
+
+    def test_no_disclosed_criterion_is_silent(self):
+        self.assertEqual(gates.evidence_problems(
+            self.DATED + self.body("All criteria pass.", self.PASSED)), [])
+
+    def test_prose_only_not_run_without_a_labelled_disclosure_is_silent(self):
+        self.assertEqual(gates.evidence_problems(
+            self.DATED + self.body(
+                "All criteria pass.",
+                self.PASSED + "### Live dispatch\n\n"
+                "The live leg was not run; it needs a second account.\n")),
+            [])
+
+    def test_no_summary_section_is_silent(self):
+        self.assertEqual(gates.evidence_problems(
+            self.DATED + self.body("All criteria pass.", title="Overview")),
+            [])
+
+    def test_unknown_word_only_inside_a_fence_does_not_count(self):
+        head = self.DATED.count("\n")
+        self.assertEqual(
+            gates.evidence_problems(self.DATED + self.body(
+                "All criteria pass.\n\n```\nnot run\n```")),
+            [(head + 1, self.rollup(1, "Live dispatch", head + 19))])
+
+    def test_two_disclosed_criteria_give_one_problem_counting_both(self):
+        head = self.DATED.count("\n")
+        self.assertEqual(
+            gates.evidence_problems(self.DATED + self.body(
+                "All criteria pass.",
+                self.PASSED + self.DISCLOSED
+                + "\n### Soak test\n\n- Result: SKIPPED\n")),
+            [(head + 1, self.rollup(2, "Live dispatch", head + 15))])
+
+    def test_honest_summary_shapes_from_main_pass(self):
+        for summary in ("0 of 7 met, 0 failed, 7 unmet.",
+                        "7 PASS, 0 FAIL, 2 NOT YET VERIFIABLE.",
+                        "16 PASS, 3 FAIL, 1 DEFERRED."):
+            with self.subTest(summary=summary):
+                self.assertEqual(gates.evidence_problems(
+                    self.DATED + self.body(summary)), [])
+
+    def test_wrapper_prefixes_the_rollup_problem(self):
+        root = Path("/repo")
+        parsed = parsed_run(runs=[run_entry(
+            root / "docs/features/demo",
+            verification=self.DATED + self.body("All criteria pass."))])
+        head = self.DATED.count("\n")
+        self.assertEqual(gates.check_evidence_honesty(root, parsed), [
+            f"H: {TestEvidenceHonesty.REL}:{head + 1} "
+            + self.rollup(1, "Live dispatch", head + 15)])
+
+    def test_sections_record_an_unfenced_unknown_word(self):
+        sections, _ = gates.verification_sections(
+            "## Open\n\nOne check is unknown.\n\n"
+            "## Quoted\n\n```\nunknown\n```\n")
+        self.assertEqual([(s["title"], s["names_unknown"]) for s in sections],
+                         [("(untitled)", False), ("Open", True),
+                          ("Quoted", False)])
+
+
 class TestRunAll(unittest.TestCase):
     def test_run_all_threads_env_to_the_pr_detector(self):
         with tempfile.TemporaryDirectory() as tmp:
