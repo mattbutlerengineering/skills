@@ -2825,6 +2825,14 @@ class TestEvidenceRollUp(unittest.TestCase):
         self.assertEqual(gates.evidence_problems(
             self.DATED + self.body("1 PASS, 1 deferred.")), [])
 
+    def test_summary_naming_the_slashless_na_head_passes(self):
+        # `NA` is a disclosure head (DISCLOSURE_VERDICT's `n/?a`), so a
+        # Summary that counts it in the criterion's own word names the kind.
+        self.assertEqual(gates.evidence_problems(
+            self.DATED + self.body(
+                "1 PASS, 1 NA.",
+                self.PASSED + "### Live dispatch\n\n- Result: NA\n")), [])
+
     def test_no_disclosed_criterion_is_silent(self):
         self.assertEqual(gates.evidence_problems(
             self.DATED + self.body("All criteria pass.", self.PASSED)), [])

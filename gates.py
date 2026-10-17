@@ -233,7 +233,7 @@ VERDICT_LEAD = re.compile(r"^[\s*_`\"'“‘([]+")
 # RUN"), so naming covers counting; there is no pass-word scan.
 SUMMARY_TITLE = "summary"
 SUMMARY_UNKNOWN_TERM = re.compile(
-    r"(?<![\w/-])(?:n/a|skip(?:ped)?|defer(?:red)?|untested|unverified"
+    r"(?<![\w/-])(?:n/?a|skip(?:ped)?|defer(?:red)?|untested|unverified"
     r"|pending|todo|tbd|not[\s-]+(?:yet|run|ran|verified|executed|checked"
     r"|tested|attempted)|unknown|unmet|unproven)(?![\w/-])",
     re.IGNORECASE)
