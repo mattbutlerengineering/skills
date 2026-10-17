@@ -8,6 +8,7 @@ judged failing; every other outcome is exit 0, silent or with one note.
 """
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -330,6 +331,52 @@ class TestMain(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(err.getvalue().splitlines(),
                          [note("OSError: gone")])
+
+
+class TestRegistration(unittest.TestCase):
+    """The exact command registered in .claude/settings.json, run the way
+    Claude Code runs it: through /bin/sh with CLAUDE_PROJECT_DIR set."""
+
+    def registered_command(self):
+        settings = json.loads(
+            (REPO_ROOT / ".claude" / "settings.json").read_text(
+                encoding="utf-8"))
+        entries = [entry for entry in
+                   settings.get("hooks", {}).get("PreToolUse", [])
+                   if entry.get("matcher") == "Bash"]
+        self.assertEqual(len(entries), 1, "one PreToolUse Bash entry")
+        hooks = entries[0]["hooks"]
+        self.assertEqual(len(hooks), 1)
+        self.assertEqual(hooks[0]["type"], "command")
+        self.assertEqual(hooks[0]["timeout"], 10)
+        return hooks[0]["command"]
+
+    def shell(self, command, project_dir, text):
+        env = {"PATH": os.environ.get("PATH", ""),
+               "CLAUDE_PROJECT_DIR": str(project_dir)}
+        return subprocess.run(["/bin/sh", "-c", command], input=text,
+                              env=env, capture_output=True, text=True,
+                              timeout=30)
+
+    def test_a_failing_body_is_refused_through_the_registration(self):
+        done = self.shell(self.registered_command(), REPO_ROOT,
+                          payload('gh pr create --body "x"', REPO_ROOT))
+        self.assertEqual(done.returncode, 2)
+        self.assertEqual(done.stderr.splitlines(),
+                         [NO_WO, NO_CLOSES, POINTER])
+
+    def test_a_non_gh_command_passes_through_the_registration(self):
+        done = self.shell(self.registered_command(), REPO_ROOT,
+                          payload("ls -la", REPO_ROOT))
+        self.assertEqual((done.returncode, done.stderr), (0, ""))
+
+    def test_a_checkout_without_the_script_passes(self):
+        """The guard: python3 exits 2 on a missing script, which would
+        block every Bash call; the registration turns that into 0."""
+        with tempfile.TemporaryDirectory() as tmp:
+            done = self.shell(self.registered_command(), tmp,
+                              payload('gh pr create --body "x"', tmp))
+        self.assertEqual(done.returncode, 0)
 
 
 if __name__ == "__main__":
