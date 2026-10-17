@@ -3,7 +3,7 @@ stage: ship
 run: maintenance:a-quoted-date-dodges-the-cutoff
 date: 2026-10-17
 outcome: prepared
-pending-merge: (set once the pull request is opened)
+pending-merge: https://github.com/mattbutlerengineering/skills/pull/1002
 assumptions:
   - "Launch brief: `launch_demo.py config` printed the verdict SHIP, which by the skill means run the launch-demo skill. The orchestrator's instruction for this unattended pass was not to produce it, so it is flagged for the Owner instead of produced. A gates fix with no user-facing surface (brief: User-facing surface: none) has little to demo."
   - "Rollback default: the protocol's two-way door, undone by `git revert` of the squash commit plus a manifest regen; no data, no migration, no published version from this branch."
@@ -18,6 +18,7 @@ issue, and opened one pull request. It did not merge, tag, bump
 `.claude-plugin/plugin.json`, delete a branch, or cut a release PR.
 
 - Issue: https://github.com/mattbutlerengineering/skills/issues/1001
+- Pull request: https://github.com/mattbutlerengineering/skills/pull/1002 (opened by `gh pr create`)
 - Branch: `fix/a-quoted-date-dodges-the-cutoff`, base `main` (`461803a`)
 
 ## Pre-flight
@@ -133,7 +134,7 @@ git commit -am "revert: restore O/M date compare" && git push   # via a PR
 Nothing has reached users: the pull request is open and unmerged. The
 write-back runs these once it merges:
 
-- `gh pr view <n> --json state,mergedAt` -> merged, with its date.
+- `gh pr view 1002 --json state,mergedAt` -> merged, with its date.
 - On main at the squash commit: `python3 run_tests.py`, `python3
   gates.py && python3 gates.py --selftest`, and `cmp gates.py
   factory/templates/tools/factory/gates.py`.
@@ -150,7 +151,7 @@ write-back runs these once it merges:
    `.claude-plugin/plugin.json`, because the payload `gates.py` changed
    (one per wave; this branch never touches the version).
 3. Write back (protocol, "The Ship outcome"): run `next`, or `ship`
-   on this run; it reads the PR with `gh pr view <n> --json
+   on this run; it reads the PR with `gh pr view 1002 --json
    state,mergedAt`, rewrites `outcome: released`, adds `released-at:`
    with the merge date, and drops `pending-merge:`.
 
