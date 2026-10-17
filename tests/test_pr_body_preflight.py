@@ -401,6 +401,19 @@ class TestTextTheShellNeverRuns(unittest.TestCase):
             run("echo a \\\n# ; gh pr create --body bad"), (0, [NOT_SEEN]))
         self.assertEqual(run('gh pr create --body x\\\n#1'), refused("x#1"))
 
+    def test_a_line_continuation_joins_the_lines(self):
+        """Re-review: the shell removes a backslash-newline outside
+        single quotes, so a flag on the next line belongs to the same
+        gh pr create and a quoted body is joined."""
+        self.assertEqual(run("gh pr create --body bad \\\n  --web"),
+                         (0, [note("--web leaves the body to gh")]))
+        self.assertEqual(
+            run('gh pr create --body "WO-0003 per breakdown. '
+                'Closes \\\n#108"'), (0, []))
+        self.assertEqual(run("gh pr create \\\n  --body bad"), refused("bad"))
+        self.assertEqual(run("gh pr create --body 'a\\\nb'"),
+                         refused("a\\\nb"))
+
     def test_an_arithmetic_command_shift_is_not_a_heredoc(self):
         """Re-review: `(( … << … ))` read as a heredoc cut real lines."""
         self.assertEqual(

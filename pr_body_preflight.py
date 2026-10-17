@@ -156,9 +156,10 @@ class _Unrun:
     def _special(self, ch):
         """Consume one construct starting at pos; False when ch is plain."""
         text, pos = self.text, self.pos
-        if ch == "\\":  # a removed backslash-newline keeps the boundary
-            joined = text[pos + 1:pos + 2] == "\n"
-            self._take(pos + 2, self.boundary and joined)
+        if text.startswith("\\\n", pos):  # the shell removes it
+            self.pos += 2
+        elif ch == "\\":
+            self._take(pos + 2)
         elif ch == "'" or text.startswith("$'", pos):
             self._quoted(pos + (2 if ch == "$" else 1), "'", ch == "$")
         elif ch == '"':
@@ -208,7 +209,9 @@ class _Unrun:
             ch = text[self.pos]
             if ch == '"':
                 return self._take(self.pos + 1)
-            if ch == "\\":
+            if text.startswith("\\\n", self.pos):  # removed, as unquoted
+                self.pos += 2
+            elif ch == "\\":
                 self._take(self.pos + 2)
             elif ch == "`":
                 self._quoted(self.pos + 1, "`", True)
