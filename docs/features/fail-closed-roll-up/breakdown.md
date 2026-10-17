@@ -189,14 +189,17 @@ Deviations discovered during Implement get logged here, dated.
   - `unverifiable`: says the check could not be examined; the honest
     "NOT YET VERIFIABLE" already passes through `not yet`.
   Rejected, pinned as still failing:
-  - `outstanding` ("is outstanding"): as often praise ("outstanding
-    coverage") as a gap, so it would satisfy the rule on incidental prose.
-  - `blocked` ("1 BLOCKED"): this repo's artifacts routinely describe a
-    gate that "blocked" a bad change as passing behaviour; "deferred/
-    blocked" already passes through `deferred`.
-  - `skips` ("1 skips"): mostly a verb describing behaviour ("the
-    detector skips fenced lines"), and widening the shared `skip(?:ped)?`
-    head in one regex only would drift the two copies.
+  - `outstanding` ("is outstanding"): ambiguous between a gap and praise
+    ("outstanding coverage"), and on main it names open Owner decisions
+    ("still have an owner decision outstanding"), not unexamined checks.
+  - `blocked` ("1 BLOCKED"): on main it is overwhelmingly dependency
+    prose ("blocked by: —" in 4 tracked verification.md files) and the
+    `wo:blocked` label, so it would satisfy the rule on incidental text;
+    "deferred/blocked" already passes through `deferred`.
+  - `skips` ("1 skips"): on main it is a verb describing behaviour
+    ("detector B skips silently", "the gate skips review"), and widening
+    the shared `skip(?:ped)?` head in one regex only would drift the two
+    copies.
 - 2026-10-17 (Review fix loop, Widen `SUMMARY_UNKNOWN_TERM`, GREEN):
   `python3 -m unittest tests.test_gates` printed `OK`; `python3
   gates.py` printed `gates: 0 problem(s)`; no pre-existing case edited.
