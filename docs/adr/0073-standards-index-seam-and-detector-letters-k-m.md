@@ -169,3 +169,11 @@ than encoded in prose.
   a `defect.md` already on disk when a repo takes this factory update
   predates `M` by construction and is exempt the same way; a fresh
   capture from then on carries today's date and is checked in full.
+
+Amended 2026-10-17 (maintenance run a-quoted-date-dodges-the-cutoff): "a
+missing or unparseable date is NOT exempted" was false until now. `M`
+compared the raw string, so a quoted, empty or non-ISO `date:` sorted
+before `CAPTURE_ADOPTED` and was exempted. `M` now reads the date through
+`gates._grandfathered`, shared with H and O: only a `YYYY-MM-DD` value
+(quoted or a datetime is fine) before the cutoff is exempt, and anything
+else is judged.
