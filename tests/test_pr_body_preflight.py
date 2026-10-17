@@ -384,6 +384,41 @@ class TestTextTheShellNeverRuns(unittest.TestCase):
                 self.assertEqual(run(f"gh pr create --body {value}"),
                                  refused(body))
 
+    def test_a_heredoc_inside_backticks_fails_open(self):
+        """Re-review: a backtick span was kept whole, so its heredoc
+        body reached the tokenizer as commands."""
+        for opener in ("<<EOF", "<<'EOF'"):
+            with self.subTest(opener=opener):
+                self.assertEqual(
+                    run(f"x=`cat {opener}\ngh pr create --body bad\nEOF\n`"),
+                    (0, [note("cannot parse the command: "
+                              "a heredoc inside backticks")]))
+
+    def test_a_comment_after_a_line_continuation_is_a_comment(self):
+        """Re-review: the shell removes a backslash-newline, so a `#`
+        right after one starts a word when the text before it did."""
+        self.assertEqual(
+            run("echo a \\\n# ; gh pr create --body bad"), (0, [NOT_SEEN]))
+        self.assertEqual(run('gh pr create --body x\\\n#1'), refused("x#1"))
+
+    def test_an_arithmetic_command_shift_is_not_a_heredoc(self):
+        """Re-review: `(( … << … ))` read as a heredoc cut real lines."""
+        self.assertEqual(
+            run("((y = 1<<2))\necho '\n2\ngh pr create --body bad\n' \"' #\""),
+            (0, [NOT_SEEN]))
+        self.assertEqual(run('(( n <<= 1 ))\ngh pr create --body "x"'),
+                         refused("x"))
+
+    def test_a_parameter_expansion_holding_a_comment_or_heredoc_fails_open(
+            self):
+        """Re-review: a `#` after a blank inside `${ }` is not a comment."""
+        self.assertEqual(
+            run("echo ${x:- #'\ngh pr create --body bad\n' \"' #\"}"),
+            (0, [note("cannot parse the command: "
+                      "a ${ } holding # or << the hook cannot read")]))
+        self.assertEqual(run('echo ${#x}; gh pr create --body "x"'),
+                         refused("x"))
+
     def test_a_shape_the_hook_cannot_classify_fails_open(self):
         for command, reason in (
                 ("cat <<$X\ngh pr create --body bad\n$X",

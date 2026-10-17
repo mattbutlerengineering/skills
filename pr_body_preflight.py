@@ -156,8 +156,9 @@ class _Unrun:
     def _special(self, ch):
         """Consume one construct starting at pos; False when ch is plain."""
         text, pos = self.text, self.pos
-        if ch == "\\":
-            self._take(pos + 2)
+        if ch == "\\":  # a removed backslash-newline keeps the boundary
+            joined = text[pos + 1:pos + 2] == "\n"
+            self._take(pos + 2, self.boundary and joined)
         elif ch == "'" or text.startswith("$'", pos):
             self._quoted(pos + (2 if ch == "$" else 1), "'", ch == "$")
         elif ch == '"':
@@ -165,7 +166,12 @@ class _Unrun:
         elif ch == "`":
             self._quoted(pos + 1, "`", True)
         elif text.startswith("$((", pos):
-            self._arithmetic()
+            self._arithmetic(pos + 1)
+        elif text.startswith("((", pos) and self.boundary:
+            self._arithmetic(pos)
+        elif text.startswith("${", pos) and re.search(
+                r"\s#|<<", text[pos:text.find("}", pos)]):
+            raise ValueError("a ${ } holding # or << the hook cannot read")
         elif text.startswith("$(", pos):
             self._take(pos + 2, boundary=True)
             self._normal(nested=True)
@@ -187,6 +193,8 @@ class _Unrun:
             index += 2 if escapes and self.text[index] == "\\" else 1
         if index >= len(self.text):
             raise ValueError("No closing quotation")
+        if close == "`" and "<<" in self.text[start:index]:
+            raise ValueError("a heredoc inside backticks")
         self._take(index + 1)
 
     def _double(self):
@@ -202,7 +210,7 @@ class _Unrun:
             elif ch == "`":
                 self._quoted(self.pos + 1, "`", True)
             elif text.startswith("$((", self.pos):
-                self._arithmetic()
+                self._arithmetic(self.pos + 1)
             elif text.startswith("$(", self.pos):
                 self._take(self.pos + 2, boundary=True)
                 self._normal(nested=True)
@@ -210,9 +218,10 @@ class _Unrun:
                 self._take(self.pos + 1)
         raise ValueError("No closing quotation")
 
-    def _arithmetic(self):
-        """`$(( … ))`, kept whole: its `<<` is a shift, not a heredoc."""
-        depth, index = 0, self.pos + 1
+    def _arithmetic(self, start):
+        """`$(( … ))` or a `(( … ))` command (start at its first paren),
+        kept whole: its `<<` is a shift, not a heredoc."""
+        depth, index = 0, start
         while index < len(self.text):
             depth += {"(": 1, ")": -1}.get(self.text[index], 0)
             index += 1
