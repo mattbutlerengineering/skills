@@ -6,6 +6,9 @@ assumptions:
   - "Unattended review (autorun): no live Owner to arbitrate severity. Severities are the reviewer's, against the caller's bar: critical = the gate fails an honest artifact on main or in a likely shape, or breaks CI or stamped repos. None met it."
   - "Recommended default taken (fix loop): a finding was fixed in this stage only when the fix was one condition plus one test, written first and seen failing. The slashless NA head met that bar and is fixed (d8d6895). Every other finding is recorded, not fixed; the two open majors need the Owner's fix-or-defer under the skill's step 9 and are surfaced in the Verdict, not deferred on the Owner's behalf."
   - "Recommended default taken (base): the diff reviewed is `git diff origin/main...HEAD`, the branch's own base (verification.md's assumption on the stale local main ref)."
+  - "Re-review 2026-10-17: scope is only the fix loop, `git diff 1768f97..HEAD` (432666f..b466693), which the Owner authorized live (fix both now). The original review sections above are left as written; the re-review section supersedes their Verdict."
+  - "Re-review 2026-10-17: severities are the reviewer's against the same bar as the first pass (critical = an honest artifact fails, or CI or a stamped repo breaks). Incidental words satisfying the rule stay minor, as the first pass ranked that class; no critical was found, so nothing was fixed in this stage."
+  - "Re-review 2026-10-17: a stamped repo's verification.md with a trailing YAML comment on `date:` would now be judged; only this repo's 91 tracked verification.md files could be checked (all plain ISO)."
 ---
 
 # Review: Fail-closed roll-up for verification Summaries
@@ -320,3 +323,230 @@ pass ran; no pass is unknown. The gate is green on main and in CI, it
 breaks no stamped repo (its existing artifacts predate the cutoff), and
 8 of 9 mutations are killed by exact-string tests. Once the Owner fixes
 or defers the two open majors, this is ready for Ship.
+
+## Re-review 2026-10-17
+
+Scope: only the fix loop, `git diff 1768f97..HEAD`, six commits from
+`432666f` to `b466693`: `_rollup_applies` and `ROLLUP_ISO_DATE`, the
+widened `SUMMARY_UNKNOWN_TERM` (root and payload `gates.py`, manifest),
+four new `TestEvidenceRollUp` tests, the ADR-0107 and `architecture.md`
+amendments, the protocol and verify SKILL.md wording, a backlog seed,
+and breakdown Milestone 4 with its Notes. The Owner authorized the loop
+live on 2026-10-17 ("fix both now").
+
+Method: a fresh probe through the public `gates.evidence_problems`
+(`probe2.py` in the session scratchpad, outside the repo; each artifact
+is frontmatter, a `## Summary`, one evidenced PASS and one
+`- Result: NOT RUN` criterion; `FIRES` means H reports the roll-up), and
+five mutations of the new code against the whole suite.
+
+### Probe output at HEAD
+
+```
+== date shapes (full-pass summary) ==
+plain post                   -> FIRES
+"post"                       -> FIRES
+'post'                       -> FIRES
+empty                        -> FIRES
+spaces only                  -> FIRES
+""                           -> FIRES
+''                           -> FIRES
+dd/mm/yyyy                   -> FIRES
+datetime post                -> FIRES
+datetime pre                 -> silent
+datetime space pre           -> silent
+pre + comment                -> FIRES
+post + comment               -> FIRES
+pre                          -> silent
+"pre"                        -> silent
+mismatched quotes pre        -> FIRES
+quote one side pre           -> FIRES
+pre 9999-?? nonsense month   -> FIRES
+0000-00-00                   -> silent
+1999-01-01                   -> silent
+Date: capital pre            -> FIRES
+no date line                 -> FIRES
+no frontmatter               -> FIRES
+duplicate date key (pre last) -> silent
+== incidental summaries (dishonest: should FIRE) ==
+All 8 criteria pass; the gate doesn't run on drafts.           -> silent
+All criteria pass. CI won't run twice.                         -> silent
+All criteria pass; detector B skips locally but that's fine.   -> FIRES
+All criteria pass; the `not_run` flag is set per section.      -> silent
+All criteria pass; the not_running state is covered.           -> FIRES
+All criteria pass; skip-free run.                              -> silent
+All pass; the unknown-term rule is satisfied.                  -> silent
+All pass; pending-state handling verified.                     -> silent
+All criteria pass; the todo-list renders.                      -> silent
+All criteria pass, including the N/A-handling path.            -> silent
+All criteria pass; don't run it twice.                         -> silent
+All criteria pass; it can't run out of memory.                 -> silent
+All criteria pass; we don't run anything manual.               -> silent
+All criteria pass; the cron isn't running.                     -> FIRES
+All criteria pass; the outstanding issue is closed.            -> FIRES
+All criteria pass; unblocked.                                  -> FIRES
+All criteria pass; non-applicable rows were removed.           -> FIRES
+== honest ==
+7 PASS, 1 NOT RUN.                                             -> silent
+7 PASS; live dispatch wasn't run.                              -> silent
+7 PASS; couldn't be run.                                       -> FIRES
+7 PASS; live dispatch didn’t run.                              -> silent
+7 PASS; 1 not-run.                                             -> silent
+7 PASS; 1 skipped.                                             -> silent
+7 PASS; 1 not-applicable.                                      -> FIRES
+7 PASS; live dispatch was not run.                             -> silent
+7 PASS; won't be run until launch.                             -> FIRES
+7 PASS; 1 NOT RUN (blocked).                                   -> silent
+7 PASS; 1 n/a.                                                 -> silent
+```
+
+Against the real tree: `python3 gates.py` printed `gates: 0 problem(s)`.
+Of the 91 tracked `verification.md` files, none has a `date:` that is
+not plain `YYYY-MM-DD` and none lacks one (`git ls-files
+'*verification.md' | xargs grep -h '^date:' | grep -vE '^date:
+[0-9]{4}-[0-9]{2}-[0-9]{2}$'` and `... | xargs grep -L '^date:'` both
+printed nothing). The payload `gates.py` is byte-identical to the root
+(`cmp` silent), and its manifest entry (`fa0d8acf...`) matches
+`shasum -a 256` of the payload copy.
+
+### Mutation results (whole suite, `python3 run_tests.py`)
+
+Each mutation touched only the root `gates.py`, so each also fails the
+payload pin (`test_every_mirrored_root_file_matches_its_payload_copy`),
+left out below; that is the second of the two problems in each tail.
+
+```
+== M1 undo ISO check: landed=True suite_rc=1
+     test_non_iso_or_quoted_post_cutoff_date_is_judged
+    tail: tests: 3308 tests across 106 modules in 14.2s on 8 workers, 2 problem(s)
+== M2 revert trailing boundary: landed=True suite_rc=1
+     test_honest_gap_wordings_from_review_pass
+    tail: tests: 3308 tests across 106 modules in 14.3s on 8 workers, 2 problem(s)
+== M3 drop quote stripping: landed=True suite_rc=1
+     test_quoted_or_datetime_pre_cutoff_date_is_grandfathered
+    tail: tests: 3308 tests across 106 modules in 14.5s on 8 workers, 2 problem(s)
+== M4 drop n't branch: landed=True suite_rc=1
+     test_honest_gap_wordings_from_review_pass
+    tail: tests: 3308 tests across 106 modules in 14.2s on 8 workers, 2 problem(s)
+== M5 datetime suffix not allowed: landed=True suite_rc=1
+     test_quoted_or_datetime_pre_cutoff_date_is_grandfathered
+    tail: tests: 3308 tests across 106 modules in 14.2s on 8 workers, 2 problem(s)
+restored: True
+```
+
+Five of five killed, each by a rule test asserting the exact roll-up
+problem (or `[]`) through `gates.evidence_problems`. `git status
+--short` printed nothing after the restore.
+
+### Majors from the first pass
+
+- **Quoted, empty or non-ISO `date:` dodge: closed.** Every dodge shape
+  now fires (probe: `"post"`, `'post'`, `empty`, `""`, `''`,
+  `dd/mm/yyyy`, mismatched quotes); a pre-cutoff ISO date, quoted or as
+  a datetime, is still grandfathered; missing frontmatter and a missing
+  `date:` are judged. Tests pin both directions and M1, M3, M5 are
+  killed. The remaining silent shapes are not dodges of this rule: a
+  duplicate `date:` key (last wins) and `0000-00-00` are a false date,
+  which any author can already write as a plain pre-cutoff value.
+  `2026-13-45` is judged (it sorts after the cutoff), which is the
+  fail-closed direction. A trailing YAML comment on a pre-cutoff date
+  is now judged; no tracked artifact has one (assumption logged for
+  stamped repos). O and M keep the raw compare, seeded in
+  `docs/backlog.md` as the ADR amendment says.
+- **Honest gap wordings false-positiving: closed.** All twelve shapes
+  the first pass listed except the three deliberately rejected now pass
+  (probe and `test_honest_gap_wordings_from_review_pass`; M2, M4
+  killed). The rejections are sound: `outstanding` (probe: "the
+  outstanding issue is closed" would otherwise satisfy), `blocked` and
+  `skips` are common incidental words, and "1 NOT RUN (blocked)" still
+  passes through its head word. The heads shared with
+  `DISCLOSURE_VERDICT` are spelled identically (n/?a, skip(?:ped)?,
+  defer(?:red)?, untested, unverified, pending, todo, tbd, and the same
+  `not[\s-]+` list), and the leading boundary is unchanged.
+
+### New findings
+
+#### Minor: the fix loop widened what incidental prose satisfies the rule
+
+- Scenario: the contracted branch `n['’]t\s+(?:been\s+)?run` sits
+  outside the leading boundary, so any "don't / doesn't / won't / can't
+  run" in a behaviour description satisfies a full-pass Summary over a
+  NOT RUN criterion (probe: "the gate doesn't run on drafts", "CI won't
+  run twice", "it can't run out of memory" -> silent). The new trailing
+  boundary `(?!\w)` also turns compounds into satisfiers that the first
+  pass's probe showed firing: "skip-free run" and "the unknown-term
+  rule" were FIRES and are now silent, as are "pending-state",
+  "todo-list" and "N/A-handling". `not_run` as an identifier in
+  backticks satisfies it too; `not_running` does not.
+- Why minor: it is the same class the first pass ranked minor and
+  deferred (the rule is a floor against the silent full-pass Summary,
+  not a parser of intent), it makes no honest artifact fail, and ADR-0107
+  accepts incidental satisfaction. It does weaken the floor in a shape
+  plausible in a real Summary ("doesn't run on forks").
+- Standard: none.
+- Decision: recorded, not fixed (not critical). Recommended follow-up:
+  require the contracted branch to follow a subject auxiliary that
+  reads as a report of the check (wasn't / hasn't been / couldn't /
+  didn't) rather than any `n't`; and either restore a trailing boundary
+  that rejects a hyphen followed by a word (keeping "skipped-by-design"
+  only by listing it) or record the compound shapes as accepted in
+  ADR-0107's successor.
+
+#### Minor: two honest spellings still false-positive
+
+- Scenario: "couldn't be run" and "won't be run until launch" fire,
+  because the contracted branch takes `(been\s+)?` but not `be`, while
+  the spelled-out branch takes `be(en)?`. "1 not-applicable" fires
+  because `not\s+applicable` takes no hyphen, unlike `not[\s-]+` for
+  the heads. The tests cover "could not be run" but not its
+  contraction.
+- Standard: none.
+- Decision: recorded, not fixed (not critical; the problem string tells
+  the author what to write). One-token widenings: `be(?:en)?` in the
+  contracted branch and `not[\s-]+applicable`, each with a test.
+
+#### Minor: the trailing-comment behaviour change is unpinned
+
+- Scenario: breakdown Notes record that `date: 2026-10-01 # x` is now
+  judged, not grandfathered; no test pins it and ADR-0107's amendment
+  does not mention it, so a later change could grandfather it again
+  silently, or a stamped repo using comments meets it unannounced.
+- Standard: none.
+- Decision: recorded. One subTest in
+  `test_non_iso_or_quoted_post_cutoff_date_is_judged` would pin it.
+
+### Docs
+
+ADR-0107's amendment, the `architecture.md` amendment line, the code
+comment, `docs/pipeline-protocol.md` ("missing, empty or not an ISO
+date") and the narrowed `skills/verify/SKILL.md` line all match the code
+at HEAD; the first pass's "docs overstate" minor is closed for both
+lines it named. `CONTEXT.md` still says H enforces the rule on a Summary
+"dated on or after `ROLLUP_ADOPTED`" without the undated and non-ISO
+cases; that wording predates the fix loop and is imprecise, not wrong in
+direction. ADR-0107 was amended with a dated section rather than a
+rewrite of its Decision; the change tightens enforcement of the same
+decision, so no superseding ADR is owed.
+
+### Final checks at HEAD (`b466693`)
+
+```
+$ python3 run_tests.py 2>&1 | tail -1
+tests: 3308 tests across 106 modules in 14.3s on 8 workers, 0 problem(s)
+$ python3 lint.py | tail -1
+lint: 0 problem(s) across 34 skills
+$ python3 kb.py drift | tail -1
+drift: 0 problem(s)
+$ python3 gates.py && python3 gates.py --selftest
+gates: 0 problem(s)
+selftest: ok
+```
+
+## Verdict (re-review 2026-10-17)
+
+Ready for Ship. Both open majors are closed with evidence (probe, tests,
+and mutations M1 to M5, all killed). Open/unfixed: 0 critical, 0 major,
+7 minor (4 first-pass minors still deferred with their reasons, the
+"docs overstate" minor now closed, and the 3 new minors above). None of
+them blocks Ship. All four CI checks are clean at HEAD, and no honest
+artifact on main is now judged and failed.
