@@ -263,7 +263,19 @@ class TestHeredoc(unittest.TestCase):
         command = 'gh pr create --body "$(cat <<EOF\nWO-0003 $X\nEOF\n)"'
         self.assertEqual(
             run(command),
-            (0, [note("an unquoted heredoc body holds $ or a backtick")]))
+            (0, [note("an unquoted heredoc body holds $, a backtick "
+                      "or a backslash")]))
+
+    def test_unquoted_delimiter_with_a_backslash_fails_open(self):
+        """The shell joins a backslash-newline in an unquoted heredoc, so
+        `Closes \\<newline>#12` reaches gh as `Closes #12`, which B
+        accepts; judging the raw text would be a false block."""
+        command = ('gh pr create --body "$(cat <<EOF\nWO-0003 Closes \\\n'
+                   '#12\nEOF\n)"')
+        self.assertEqual(
+            run(command),
+            (0, [note("an unquoted heredoc body holds $, a backtick "
+                      "or a backslash")]))
 
     def test_unquoted_delimiter_without_expansions_is_judged(self):
         command = 'gh pr create --body "$(cat <<EOF\nplain text\nEOF\n)"'

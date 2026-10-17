@@ -59,8 +59,8 @@ def _heredoc_at(command, match):
     """(body, end) for the heredoc substitution whose opening is match,
     or None when its delimiter line or closing paren is missing. body is
     (text, literal): $() drops trailing newlines, <<- drops leading tabs,
-    and an unquoted delimiter's body is literal only with no $ or
-    backtick, since the shell would expand it."""
+    and an unquoted delimiter's body is literal only with no $,
+    backtick or backslash, since the shell would expand or join it."""
     delim, dash = match["delim"], bool(match["dash"])
     lines, offset = [], match.end()
     while True:
@@ -78,7 +78,7 @@ def _heredoc_at(command, match):
     if close is None:
         return None
     text = "\n".join(lines).rstrip("\n")
-    literal = bool(match["quote"]) or not any(ch in text for ch in "$`")
+    literal = bool(match["quote"]) or not any(ch in text for ch in "$`\\")
     return (text, literal), close.end()
 
 
@@ -241,7 +241,8 @@ def _resolve(value, context):
     if placeholder:
         text, literal = context["heredocs"][int(placeholder[1])]
         if not literal:
-            raise _Unreadable("an unquoted heredoc body holds $ or a backtick")
+            raise _Unreadable(
+                "an unquoted heredoc body holds $, a backtick or a backslash")
         return text
     cat = CAT_FILE.fullmatch(value)
     if cat:

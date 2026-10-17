@@ -146,8 +146,9 @@ The steps run in this order:
    happens before tokenizing because `shlex` does not know a `$( )`
    opens a new quoting context: the probe turned `it's "q"` inside a
    heredoc into `it's q`. A body with a quoted delimiter is literal. A
-   body with an unquoted delimiter is literal only if it has no `$` and
-   no backtick; otherwise it is unreadable (the shell would expand it).
+   body with an unquoted delimiter is literal only if it has no `$`, no
+   backtick and no backslash; otherwise it is unreadable (the shell would
+   expand it, or join a backslash-newline; amended at Review).
 3. **Tokenize.** Use `shlex.shlex(posix=True,
    punctuation_chars=";&|()<>\n")`, with `whitespace_split=True`,
    `whitespace=" \t"` and `commenters=""`. Probed: with the defaults, a
