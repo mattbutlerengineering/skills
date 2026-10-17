@@ -121,3 +121,8 @@ fix both before Ship.
   prose (the run's `breakdown.md` Notes give each reason). The heads
   shared with H's verdict regex are unchanged.
 
+Amended 2026-10-17 (maintenance run a-quoted-date-dodges-the-cutoff): the
+seed above is done. Detectors O and M no longer keep their compare; H, O
+and M all grandfather through one private `gates._grandfathered(date,
+cutoff)`, and `ROLLUP_ISO_DATE` is renamed `FRONTMATTER_ISO_DATE`, with
+that helper as its only user.

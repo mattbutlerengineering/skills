@@ -1050,6 +1050,45 @@ class TestCaptureCompleteness(unittest.TestCase):
             self.assertNotEqual(gates.check_capture_completeness(tree.root),
                                 [])
 
+    def dated(self, tree, value):
+        """A defect.md missing four sections, its `date:` spelled VALUE
+        verbatim. Written directly: defect() turns an empty date into
+        TODAY."""
+        tree.write("docs/fixes/demo/defect.md",
+                   "---\nstage: capture\nrun: maintenance:x\ndate:"
+                   + (f" {value}" if value else "")
+                   + "\nre-entry: implement\n---\n\n# Defect: x\n\n"
+                   "## Defect (or Condition)\n\nReal prose.\n")
+
+    def test_non_iso_or_quoted_post_cutoff_date_is_judged(self):
+        # Date dodge: a raw-string compare grandfathered every value that
+        # sorts before the cutoff, so a quote, an empty value or a non-ISO
+        # spelling switched M off.
+        for value in ('"2026-10-20"', "'2026-10-20'", "", "20/10/2026"):
+            with self.subTest(date=value), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                self.dated(tree, value)
+                self.assertEqual(
+                    gates.check_capture_completeness(tree.root), [
+                        "M: docs/fixes/demo/defect.md missing required"
+                        " section 'Reproduction / Evidence'",
+                        "M: docs/fixes/demo/defect.md missing required"
+                        " section 'Root-cause hypothesis'",
+                        "M: docs/fixes/demo/defect.md missing required"
+                        " section 'Blast radius'",
+                        "M: docs/fixes/demo/defect.md missing required"
+                        " section 'Ruled out'"])
+
+    def test_quoted_or_datetime_pre_cutoff_date_is_grandfathered(self):
+        for value in ('"2026-01-01"', "'2026-01-01'", "2026-01-01T09:00:00"):
+            with self.subTest(date=value), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                self.dated(tree, value)
+                self.assertEqual(
+                    gates.check_capture_completeness(tree.root), [])
+
     def test_multiple_defects_across_runs_are_each_reported(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
@@ -1853,6 +1892,22 @@ class TestPrdCoverage(unittest.TestCase):
 
     def test_a_missing_date_is_not_grandfathered(self):
         self.assertEqual(len(self.check(prd_date=None)), 1)
+
+    def test_non_iso_or_quoted_post_cutoff_date_is_judged(self):
+        # Date dodge: a raw-string compare grandfathered every value that
+        # sorts before the cutoff, so a quote, an empty value or a non-ISO
+        # spelling switched O off. Values are parse_frontmatter-shaped.
+        for value in ('"2026-10-20"', "'2026-10-20'", "", "20/10/2026"):
+            with self.subTest(date=value):
+                self.assertEqual(self.check(prd_date=value), [
+                    "O: docs/features/demo/prd.md:17 PRD-0001 §Out of scope"
+                    " is cited by no breakdown row and carries no coverage"
+                    " waiver"])
+
+    def test_quoted_or_datetime_pre_cutoff_date_is_grandfathered(self):
+        for value in ('"2026-09-20"', "'2026-09-20'", "2026-09-20T09:00:00"):
+            with self.subTest(date=value):
+                self.assertEqual(self.check(prd_date=value), [])
 
     def test_a_run_not_yet_decomposed_is_out_of_scope(self):
         parsed = parsed_run(runs=[run_entry(
