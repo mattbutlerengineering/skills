@@ -36,7 +36,7 @@ ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
         ("dashboard", "factory_config"), ("factory_init", "factory_config"),
         ("dashboard", "cost_ledger"), ("dashboard", "cost_report"),
         ("dashboard", "human_gates"), ("factory_init", "gates"),
-        ("sweeps", "label_sync"),
+        ("sweeps", "label_sync"), ("pr_body_preflight", "gates"),
     })
 
 # The other direction: conductor_merge reads MIRRORS from the stamper in
