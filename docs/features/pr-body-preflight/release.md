@@ -2,7 +2,8 @@
 stage: ship
 run: feature:pr-body-preflight
 date: 2026-10-16
-outcome: prepared
+outcome: released
+released-at: 2026-10-17
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/991
 assumptions:
   - "Release authorization is Owner decision 4 in autorun-brief.md, prepare and stop. Ship pushed the branch, filed one type:feature issue (#990), opened one PR (#991) and stopped. It did not merge, tag, bump the version or delete a branch."
@@ -156,8 +157,12 @@ the body by any unread shape (for example `--web`) or fix the body.
 
 ## Outcome
 
-Prepared and stopped. The run is waiting on the pull request that
-`pending-merge:` names (#991, which closes #990). Flagged for the Owner:
+Released. The Owner answered "Merge now" in an autorun resume session
+on 2026-10-17, and #991 was squash-merged as `1290a4e` at
+2026-10-17T14:16:22Z (`gh pr view 991 --json state,mergeCommit,mergedAt`
+→ `MERGED`). #990 closed with it. Release step 5, the fresh-session
+refusal check, has not been run yet. The flags below were raised when
+the release was prepared, and they still stand:
 
 - ADR-0106 is provisional.
 - Deferred review findings: 4 (major, real coverage is about 19%, 40 of
