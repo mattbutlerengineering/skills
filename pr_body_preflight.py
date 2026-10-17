@@ -126,7 +126,7 @@ class _Unrun:
 
     def __init__(self, text):
         self.text, self.pos, self.out = text, 0, []
-        self.pending, self.boundary = [], True
+        self.pending, self.boundary, self.braces = [], True, 0
 
     def run(self):
         self._normal(nested=False)
@@ -169,12 +169,15 @@ class _Unrun:
             self._arithmetic(pos + 1)
         elif text.startswith("((", pos) and self.boundary:
             self._arithmetic(pos)
-        elif text.startswith("${", pos) and re.search(
-                r"\s#|<<", text[pos:text.find("}", pos)]):
-            raise ValueError("a ${ } holding # or << the hook cannot read")
+        elif text.startswith("${", pos) or (ch == "}" and self.braces):
+            self.braces += 1 if ch == "$" else -1
+            self._take(pos + (2 if ch == "$" else 1))
         elif text.startswith("$(", pos):
             self._take(pos + 2, boundary=True)
             self._normal(nested=True)
+        elif self.braces and (text.startswith("<<", pos)
+                              or (ch == "#" and self.boundary)):
+            raise ValueError("a ${ } holding # or << the hook cannot read")
         elif ch == "#" and self.boundary:
             end = text.find("\n", pos)
             self.pos = len(text) if end < 0 else end
