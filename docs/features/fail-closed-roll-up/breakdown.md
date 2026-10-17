@@ -41,7 +41,7 @@ rule, the protocol states the rule once and points there, and the verify
 Summary and review Verdict guidance tell an author to count or name every
 NOT RUN / unknown item.
 
-- [ ] **CONTEXT.md: claim kinds and fail-closed roll-up** — two vocabulary entries, the only owner of the words — size:S
+- [x] **CONTEXT.md: claim kinds and fail-closed roll-up** — two vocabulary entries, the only owner of the words — size:S
   - Accept: `CONTEXT.md` has a **Claim kind** entry defining observed (quoted output), derived (computed from observed), inferred (judgement) and unknown (not examined; what NOT RUN, skipped, deferred and n/a disclose), and a **Fail-closed roll-up** entry stating that unknown, unsupported, truncated and skipped never aggregate to pass, so a Summary or Verdict counts or names them. `grep -c "never aggregate to pass" CONTEXT.md` prints 1. No literal four-digit work-order or PRD id appears in the added text (`docs/kb/gates-scan-every-doc.md`).
   - Blocked by: —
 - [ ] **Protocol: state the roll-up rule once** — one short section in `docs/pipeline-protocol.md` — size:S
