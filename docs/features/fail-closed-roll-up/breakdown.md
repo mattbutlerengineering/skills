@@ -57,6 +57,29 @@ NOT RUN / unknown item.
   - Accept: `python3 run_tests.py` exits 0; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 kb.py drift` prints `drift: 0 problem(s)`; `python3 gates.py` and `python3 gates.py --selftest` each print `gates: 0 problem(s)`. `git diff --stat main -- 'docs/**/verification.md' 'docs/**/review.md'` prints nothing, and `git diff --name-only main -- .claude-plugin/plugin.json` prints nothing. `python3 one_owner.py` reports no `one-owner:` problem naming `ROLLUP_ADOPTED` or `SUMMARY_UNKNOWN_TERM`.
   - Blocked by: Payload mirror and manifest regen; Protocol: state the roll-up rule once; Templates and verify SKILL.md carry the rule
 
+## Milestone 4: Review fix loop (Owner-authorized 2026-10-17)
+
+The Owner decided live on 2026-10-17 to fix both open review majors before
+Ship. When this milestone is done, a quoted, empty or non-ISO `date:` no
+longer grandfathers a post-cutoff Summary, and the reviewer's honest gap
+phrasings that unambiguously mean not-examined satisfy the Summary rule.
+
+- [ ] **Date-dodge tests** — new cases in `TestEvidenceRollUp` — size:S
+  - Accept: through `gates.evidence_problems`, a full-pass Summary over a NOT RUN criterion gives the roll-up problem when `date:` is `"2026-10-20"`, `'2026-10-20'`, empty, `20/10/2026` or `16 Oct 2026`; gives `[]` when `date:` is `"2026-10-16"` (quoted ISO, pre-cutoff) or `2026-10-16T09:00:00` (datetime, pre-cutoff). Run before the next item, the five dodge cases fail.
+  - Blocked by: —
+- [ ] **Grandfather only an ISO date** — `_rollup_applies` strips surrounding quotes and whitespace, takes a datetime's date part, and grandfathers only a `YYYY-MM-DD` value before `ROLLUP_ADOPTED`; detectors O and M unchanged; one backlog seed for O and M's raw-string compare — size:S
+  - Accept: the date-dodge tests pass; every other `tests/test_gates.py` case passes unedited; `docs/backlog.md` gains one seed line ending `(from: session:2026-10-17)`.
+  - Blocked by: Date-dodge tests
+- [ ] **Honest-wording tests** — new cases in `TestEvidenceRollUp` — size:S
+  - Accept: each added shape (see Notes) gives `[]` over a NOT RUN criterion dated past the cutoff, and each rejected shape still gives the roll-up problem. Run before the next item, every added shape fails.
+  - Blocked by: —
+- [ ] **Widen `SUMMARY_UNKNOWN_TERM`** — Summary-only extras, the trailing boundary no longer rejects `-` or `/`; the heads shared with `DISCLOSURE_VERDICT` stay identical — size:S
+  - Accept: the honest-wording tests pass; every other `tests/test_gates.py` case passes unedited; `python3 gates.py` on the real tree prints `gates: 0 problem(s)`.
+  - Blocked by: Honest-wording tests
+- [ ] **Docs, payload and manifest** — dated amendment in ADR-0107 and `architecture.md`; the verify SKILL.md overstatement corrected; payload copies and manifest regenerated — size:S
+  - Accept: stray `.orig`/`.rej` deleted first, `python3 factory_init.py update-manifest` prints `factory-init: 0 problem(s)`; the four CI checks are clean; `git diff --stat origin/main -- 'docs/**/verification.md' 'docs/**/review.md'` lists only this run's own files; `.claude-plugin/plugin.json` unchanged.
+  - Blocked by: Grandfather only an ISO date; Widen `SUMMARY_UNKNOWN_TERM`
+
 ## Design gaps found
 
 None. Every component in architecture.md (the `verification_sections`

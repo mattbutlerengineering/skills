@@ -2817,6 +2817,33 @@ class TestEvidenceRollUp(unittest.TestCase):
         self.assertEqual(gates.evidence_problems(
             self.BEFORE + self.body("All criteria pass.")), [])
 
+    def dated(self, value):
+        """The DATED header with `date:` spelled VALUE (no space when
+        VALUE is empty, so the line reads `date:`)."""
+        return ("---\nstage: verify\ndate:" + (f" {value}" if value else "")
+                + "\n---\n\n# Verification\n\n")
+
+    def test_non_iso_or_quoted_post_cutoff_date_is_judged(self):
+        # Review major (date dodge): a raw-string compare grandfathered
+        # every value that sorts before the cutoff, so a quote, an empty
+        # value or a non-ISO spelling switched the rule off.
+        for value in ('"2026-10-20"', "'2026-10-20'", "", "20/10/2026",
+                      "16 Oct 2026"):
+            with self.subTest(date=value):
+                header = self.dated(value)
+                head = header.count("\n")
+                self.assertEqual(
+                    gates.evidence_problems(
+                        header + self.body("All criteria pass.")),
+                    [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
+
+    def test_quoted_or_datetime_pre_cutoff_date_is_grandfathered(self):
+        for value in ('"2026-10-16"', "'2026-10-16'", "2026-10-16T09:00:00",
+                      " 2026-10-16 "):
+            with self.subTest(date=value):
+                self.assertEqual(gates.evidence_problems(
+                    self.dated(value) + self.body("All criteria pass.")), [])
+
     def test_summary_counting_the_not_run_item_passes(self):
         self.assertEqual(gates.evidence_problems(
             self.DATED + self.body("1 PASS, 1 NOT RUN.")), [])
