@@ -64,10 +64,10 @@ Ship. When this milestone is done, a quoted, empty or non-ISO `date:` no
 longer grandfathers a post-cutoff Summary, and the reviewer's honest gap
 phrasings that unambiguously mean not-examined satisfy the Summary rule.
 
-- [ ] **Date-dodge tests** — new cases in `TestEvidenceRollUp` — size:S
+- [x] **Date-dodge tests** — new cases in `TestEvidenceRollUp` — size:S
   - Accept: through `gates.evidence_problems`, a full-pass Summary over a NOT RUN criterion gives the roll-up problem when `date:` is `"2026-10-20"`, `'2026-10-20'`, empty, `20/10/2026` or `16 Oct 2026`; gives `[]` when `date:` is `"2026-10-16"` (quoted ISO, pre-cutoff) or `2026-10-16T09:00:00` (datetime, pre-cutoff). Run before the next item, the five dodge cases fail.
   - Blocked by: —
-- [ ] **Grandfather only an ISO date** — `_rollup_applies` strips surrounding quotes and whitespace, takes a datetime's date part, and grandfathers only a `YYYY-MM-DD` value before `ROLLUP_ADOPTED`; detectors O and M unchanged; one backlog seed for O and M's raw-string compare — size:S
+- [x] **Grandfather only an ISO date** — `_rollup_applies` strips surrounding quotes and whitespace, takes a datetime's date part, and grandfathers only a `YYYY-MM-DD` value before `ROLLUP_ADOPTED`; detectors O and M unchanged; one backlog seed for O and M's raw-string compare — size:S
   - Accept: the date-dodge tests pass; every other `tests/test_gates.py` case passes unedited; `docs/backlog.md` gains one seed line ending `(from: session:2026-10-17)`.
   - Blocked by: Date-dodge tests
 - [ ] **Honest-wording tests** — new cases in `TestEvidenceRollUp` — size:S
@@ -148,3 +148,20 @@ Deviations discovered during Implement get logged here, dated.
   printed nothing (against the stale local `main`, see the deviation
   above, the first lists only the two pr-body-preflight files from
   #991).
+
+- 2026-10-17 (Review fix loop, Date-dodge tests, RED): `python3 -m
+  unittest tests.test_gates.TestEvidenceRollUp` printed `FAILED
+  (failures=5)`, one per dodge shape (`date='"2026-10-20"'`,
+  `date="'2026-10-20'"`, `date=''`, `date='20/10/2026'`,
+  `date='16 Oct 2026'`), each `AssertionError: Lists differ: [] !=
+  [(8, 'summary "Summary" neither counts nor[118 chars]ss')]`. The
+  pre-cutoff quoted and datetime cases pass before the fix as well; they
+  pin that the normalization still grandfathers them.
+- 2026-10-17 (Review fix loop, Grandfather only an ISO date, GREEN):
+  `python3 -m unittest tests.test_gates` printed `OK`; `python3
+  gates.py` printed `gates: 0 problem(s)`. A date carrying a trailing
+  YAML comment (`date: 2026-10-01 # x`) is now judged, not
+  grandfathered: it is not ISO after normalization, and the Owner's rule
+  grandfathers only a value that is. No tracked `prd.md`, `defect.md` or
+  `verification.md` has a non-ISO `date:`, so O and M (unchanged, seeded
+  in `docs/backlog.md`) and H's real-tree output are unaffected.
