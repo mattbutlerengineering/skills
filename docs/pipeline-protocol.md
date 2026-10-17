@@ -378,8 +378,8 @@ rule rests on are defined in [CONTEXT.md](../CONTEXT.md) (Claims).
 Detector H enforces the verification half (ADR-0107): a `## Summary` must
 name the unknown kind when another section discloses NOT RUN under a
 labelled verdict. It judges artifacts whose frontmatter `date:` is on or
-after `ROLLUP_ADOPTED` in `gates.py`, and undated ones; earlier artifacts
-are grandfathered. Nothing gates `review.md`; its template carries the
+after `ROLLUP_ADOPTED` in `gates.py`, and ones whose `date:` is missing,
+empty or not an ISO date; earlier artifacts are grandfathered. Nothing gates `review.md`; its template carries the
 rule.
 
 ## When to write an ADR

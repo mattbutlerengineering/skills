@@ -231,18 +231,35 @@ VERDICT_LEAD = re.compile(r"^[\s*_`\"'“‘([]+")
 # Summary on main fails. Any word satisfies any disclosed head, because
 # every head is the same claim kind. A count carries its word ("1 NOT
 # RUN"), so naming covers counting; there is no pass-word scan.
+# The 2026-10-17 review widened it on evidence (ADR-0107's amendment):
+# Summary-only words that can only mean not examined (`not applicable`,
+# `not_run`/`notrun`, `unverifiable`, `unexercised`, `not be(en) run`,
+# and a contracted `n't (been) run`, which carries its own leading word
+# so it sits outside the leading boundary), and a trailing boundary that
+# lets a hyphen or slash follow ("skipped-by-design", "deferred/blocked").
+# The heads shared with DISCLOSURE_VERDICT stay spelled identically.
 SUMMARY_TITLE = "summary"
 SUMMARY_UNKNOWN_TERM = re.compile(
-    r"(?<![\w/-])(?:n/?a|skip(?:ped)?|defer(?:red)?|untested|unverified"
+    r"(?:(?<![\w/-])(?:n/?a|skip(?:ped)?|defer(?:red)?|untested|unverified"
     r"|pending|todo|tbd|not[\s-]+(?:yet|run|ran|verified|executed|checked"
-    r"|tested|attempted)|unknown|unmet|unproven)(?![\w/-])",
+    r"|tested|attempted)|unknown|unmet|unproven"
+    r"|not\s+applicable|not_?run|unverifiable|unexercised"
+    r"|not\s+be(?:en)?\s+run)"
+    r"|n['’]t\s+(?:been\s+)?run)(?!\w)",
     re.IGNORECASE)
 # The roll-up's grandfather cutoff: ADR-0107's own date, compared with the
 # artifact's frontmatter `date:` the way O compares COVERAGE_ADOPTED. A
 # verification.md shipped before the rule existed does not owe it. A
 # missing date is NOT grandfathered (fail closed), so omitting the date
-# cannot dodge the rule.
+# cannot dodge the rule. Only an ISO `YYYY-MM-DD` value (after surrounding
+# quotes and whitespace are stripped, and a datetime cut to its date) is
+# compared at all: a raw-string compare let a quoted, empty or non-ISO
+# value sort before the cutoff and switch the rule off (ADR-0107's
+# 2026-10-17 amendment).
 ROLLUP_ADOPTED = "2026-10-17"
+ROLLUP_ISO_DATE = re.compile(
+    r"^(\d{4}-\d{2}-\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?"
+    r"(?:Z|[+-]\d{2}:?\d{2})?)?$")
 # Unfilled TEMPLATE filler is not output — matched by its filler TEXT, not by
 # the shape `<...>`. That shape is also real evidence (a DOM dump's `<html>`,
 # a Python repr like `<class 'app.models.User'>`), and discarding it
@@ -1194,10 +1211,18 @@ def verification_sections(text):
 
 def _rollup_applies(text):
     """Does the roll-up rule judge this artifact? False only when its
-    frontmatter `date:` is a string before ROLLUP_ADOPTED; a missing or
-    unreadable date is judged (fail closed)."""
+    frontmatter `date:`, stripped of surrounding quotes and whitespace,
+    is an ISO date (or a datetime, read by its date part) before
+    ROLLUP_ADOPTED. A missing, empty or non-ISO date is judged (fail
+    closed)."""
     date = (parse_frontmatter(text) or {}).get("date")
-    return not (isinstance(date, str) and date < ROLLUP_ADOPTED)
+    if not isinstance(date, str):
+        return True
+    value = date.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1].strip()
+    iso = ROLLUP_ISO_DATE.match(value)
+    return not (iso and iso.group(1) < ROLLUP_ADOPTED)
 
 
 def _rollup_problems(sections):

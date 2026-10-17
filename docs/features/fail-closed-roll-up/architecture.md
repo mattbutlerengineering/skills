@@ -269,6 +269,12 @@ changes outcome. Implement confirms this with the full suite.
   `COVERAGE_ADOPTED` (ADR-0107).
 - **A missing date is judged** over grandfathered. Same direction as
   O and M; omitting the date cannot dodge it (ADR-0107).
+  Amended 2026-10-17 (review fix loop, Owner decision): `_rollup_applies`
+  grandfathers only a `YYYY-MM-DD` value (quotes and whitespace stripped,
+  a datetime read by its date part) before the cutoff, so a quoted,
+  empty or non-ISO `date:` is judged; `SUMMARY_UNKNOWN_TERM` gained
+  Summary-only not-examined words and lets `-` or `/` follow a word
+  (ADR-0107's amendment).
 - **A flag on every section** over passing the Summary's raw lines out
   of the parse. One boolean keeps the section dict small, and a
   Summary is just a section to the parser.

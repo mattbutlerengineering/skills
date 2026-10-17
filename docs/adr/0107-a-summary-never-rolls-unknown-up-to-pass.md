@@ -97,3 +97,27 @@ guidance carry it. Detector H enforces the verification half:
 - `gates.py` ships into stamped repos (`factory_init.MIRRORS`), so the
   rule reaches them on their next update. Their existing artifacts are
   dated before the cutoff and stay silent; a dateless one is judged.
+
+## Amendment (2026-10-17)
+
+The run's review found two gaps; the Owner decided live on 2026-10-17 to
+fix both before Ship.
+
+- **Grandfathered only by an ISO date.** The raw-string compare let a
+  quoted (`date: "2026-10-20"`), empty (`date:`) or non-ISO
+  (`date: 20/10/2026`) value sort before the cutoff and switch the rule
+  off, so "omitting the date cannot dodge the rule" was false for an
+  empty `date:`. The value is now stripped of surrounding quotes and
+  whitespace and a datetime is read by its date part; only a
+  `YYYY-MM-DD` value before `ROLLUP_ADOPTED` is grandfathered, and
+  anything else is judged (fail closed). Detectors O and M keep their
+  compare; the same shape there is a `docs/backlog.md` seed.
+- **The vocabulary widened on evidence.** Summary-only words that can
+  only mean not examined: `not applicable`, `not_run` / `notrun`,
+  `unverifiable`, `unexercised`, `not be(en) run`, and a contracted
+  `n't (been) run`. A hyphen or slash may now follow a word
+  ("skipped-by-design", "deferred/blocked"). `outstanding`, `blocked`
+  and `skips` were considered and rejected as common in incidental
+  prose (the run's `breakdown.md` Notes give each reason). The heads
+  shared with H's verdict regex are unchanged.
+

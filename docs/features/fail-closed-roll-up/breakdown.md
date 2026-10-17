@@ -76,7 +76,7 @@ phrasings that unambiguously mean not-examined satisfy the Summary rule.
 - [x] **Widen `SUMMARY_UNKNOWN_TERM`** — Summary-only extras, the trailing boundary no longer rejects `-` or `/`; the heads shared with `DISCLOSURE_VERDICT` stay identical — size:S
   - Accept: the honest-wording tests pass; every other `tests/test_gates.py` case passes unedited; `python3 gates.py` on the real tree prints `gates: 0 problem(s)`.
   - Blocked by: Honest-wording tests
-- [ ] **Docs, payload and manifest** — dated amendment in ADR-0107 and `architecture.md`; the verify SKILL.md overstatement corrected; payload copies and manifest regenerated — size:S
+- [x] **Docs, payload and manifest** — dated amendment in ADR-0107 and `architecture.md`; the verify SKILL.md overstatement corrected; payload copies and manifest regenerated — size:S
   - Accept: stray `.orig`/`.rej` deleted first, `python3 factory_init.py update-manifest` prints `factory-init: 0 problem(s)`; the four CI checks are clean; `git diff --stat origin/main -- 'docs/**/verification.md' 'docs/**/review.md'` lists only this run's own files; `.claude-plugin/plugin.json` unchanged.
   - Blocked by: Grandfather only an ISO date; Widen `SUMMARY_UNKNOWN_TERM`
 
@@ -203,3 +203,22 @@ Deviations discovered during Implement get logged here, dated.
 - 2026-10-17 (Review fix loop, Widen `SUMMARY_UNKNOWN_TERM`, GREEN):
   `python3 -m unittest tests.test_gates` printed `OK`; `python3
   gates.py` printed `gates: 0 problem(s)`; no pre-existing case edited.
+- 2026-10-17 (Review fix loop, Docs, payload and manifest): ADR-0107
+  gains a dated amendment section (not rewritten); `architecture.md`
+  gains a dated amendment line under its missing-date decision;
+  `docs/pipeline-protocol.md`'s "undated ones" now says missing, empty
+  or non-ISO, which the date fix makes true; `skills/verify/SKILL.md`'s
+  "Detector H refuses one that does not" is narrowed to what H refuses.
+  `CONTEXT.md` overstated nothing and is unchanged. No stray
+  `.orig`/`.rej` existed; `python3 factory_init.py update-manifest`
+  printed `factory-init: 0 problem(s)` and the payload `gates.py` is
+  byte-identical to the root (`gates_selftest.py` unchanged). Checks:
+  `python3 run_tests.py` printed `tests: 3308 tests across 106 modules
+  in 15.0s on 8 workers, 0 problem(s)`; `python3 lint.py` printed
+  `lint: 0 problem(s) across 34 skills`; `python3 kb.py drift` printed
+  `drift: 0 problem(s)`; `python3 gates.py && python3 gates.py
+  --selftest` printed `gates: 0 problem(s)` and `selftest: ok`. `git
+  diff --stat origin/main -- 'docs/**/verification.md'
+  'docs/**/review.md'` lists only this run's own two files, and `git
+  diff --name-only origin/main -- .claude-plugin/plugin.json` prints
+  nothing.
