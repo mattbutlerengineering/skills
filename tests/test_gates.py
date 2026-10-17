@@ -2901,6 +2901,39 @@ class TestEvidenceRollUp(unittest.TestCase):
                 self.assertEqual(gates.evidence_problems(
                     self.DATED + self.body(summary)), [])
 
+    def test_honest_gap_wordings_from_review_pass(self):
+        # Review major (honest-wording false positives), Owner decision
+        # 2026-10-17: each shape names the gap in words that can only
+        # mean not examined.
+        for summary in (
+                "7 PASS; the live dispatch check could not be run.",
+                "7 PASS; live dispatch has not been run.",
+                "7 PASS; live dispatch wasn't run.",
+                "7 PASS; live dispatch hasn't been run.",
+                "7 PASS; live dispatch couldn’t run.",
+                "7 PASS, 1 not applicable.",
+                "7 PASS, 1 skipped-by-design.",
+                "7 PASS and 1 deferred/blocked.",
+                "7 PASS; live dispatch remains unexercised.",
+                "7 PASS, 1 NOT_RUN.",
+                "7 PASS, 1 NOTRUN.",
+                "7 PASS, 1 unverifiable."):
+            with self.subTest(summary=summary):
+                self.assertEqual(gates.evidence_problems(
+                    self.DATED + self.body(summary)), [])
+
+    def test_wordings_rejected_from_the_vocabulary_still_fail(self):
+        # Rejected 2026-10-17 (breakdown Notes): each word is common in
+        # incidental prose that is not a disclosure.
+        head = self.DATED.count("\n")
+        for summary in ("7 of 8 criteria pass; live dispatch is outstanding.",
+                        "7 PASS, 1 BLOCKED.",
+                        "7 PASS, 1 skips."):
+            with self.subTest(summary=summary):
+                self.assertEqual(
+                    gates.evidence_problems(self.DATED + self.body(summary)),
+                    [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
+
     def test_wrapper_prefixes_the_rollup_problem(self):
         root = Path("/repo")
         parsed = parsed_run(runs=[run_entry(
