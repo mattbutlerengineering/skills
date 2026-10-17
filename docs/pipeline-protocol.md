@@ -367,6 +367,21 @@ date: 2026-07-01
 ---
 ```
 
+## Fail-closed roll-up
+
+Unknown, unsupported, truncated and skipped never aggregate to pass. A
+`verification.md` Summary and a `review.md` Verdict count or name every
+criterion that was not run, skipped, deferred or otherwise not examined,
+and never read as an unqualified pass over them. The claim kinds this
+rule rests on are defined in [CONTEXT.md](../CONTEXT.md) (Claims).
+
+Detector H enforces the verification half (ADR-0107): a `## Summary` must
+name the unknown kind when another section discloses NOT RUN under a
+labelled verdict. It judges artifacts whose frontmatter `date:` is on or
+after `ROLLUP_ADOPTED` in `gates.py`, and undated ones; earlier artifacts
+are grandfathered. Nothing gates `review.md`; its template carries the
+rule.
+
 ## When to write an ADR
 
 The pipeline writes ADRs as it goes (ADR-0082) — not on request. One test

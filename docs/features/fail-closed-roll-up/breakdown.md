@@ -44,7 +44,7 @@ NOT RUN / unknown item.
 - [x] **CONTEXT.md: claim kinds and fail-closed roll-up** — two vocabulary entries, the only owner of the words — size:S
   - Accept: `CONTEXT.md` has a **Claim kind** entry defining observed (quoted output), derived (computed from observed), inferred (judgement) and unknown (not examined; what NOT RUN, skipped, deferred and n/a disclose), and a **Fail-closed roll-up** entry stating that unknown, unsupported, truncated and skipped never aggregate to pass, so a Summary or Verdict counts or names them. `grep -c "never aggregate to pass" CONTEXT.md` prints 1. No literal four-digit work-order or PRD id appears in the added text (`docs/kb/gates-scan-every-doc.md`).
   - Blocked by: —
-- [ ] **Protocol: state the roll-up rule once** — one short section in `docs/pipeline-protocol.md` — size:S
+- [x] **Protocol: state the roll-up rule once** — one short section in `docs/pipeline-protocol.md` — size:S
   - Accept: the new section states the rule once, links `CONTEXT.md` for the claim kinds without redefining observed, derived, inferred or unknown, and cites ADR-0107 for the gate half (detector H on `verification.md`, grandfathered by `date:` before `ROLLUP_ADOPTED`). `grep -n "derived (computed" docs/pipeline-protocol.md` prints nothing.
   - Blocked by: CONTEXT.md: claim kinds and fail-closed roll-up
 - [ ] **Templates and verify SKILL.md carry the rule** — `skills/verify/TEMPLATE.md`'s `## Summary` placeholder, `skills/review/TEMPLATE.md`'s `## Verdict` placeholder and `skills/verify/SKILL.md`'s "summary of it" line — size:S
