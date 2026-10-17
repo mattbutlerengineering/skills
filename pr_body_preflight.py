@@ -22,6 +22,7 @@ import json
 import re
 import shlex
 import sys
+from pathlib import Path
 
 NOTE = "pr-body-preflight: not checked — {}"
 POINTER = ("pr-body-preflight: the body contract is "
@@ -36,6 +37,70 @@ VALUE_FLAGS = frozenset({
     "-t", "--title", "-B", "--base", "-H", "--head", "-a", "--assignee",
     "-l", "--label", "-m", "--milestone", "-p", "--project",
     "-r", "--reviewer", "-R", "--repo"})
+# Flags that leave the body to gh (commits, a browser, an editor, a
+# template or a saved draft), so the hook cannot know it. -f is --fill's
+# shorthand.
+DEFERRING_FLAGS = frozenset({
+    "--fill", "--fill-first", "--fill-verbose", "-f", "--web", "-w",
+    "--editor", "-e", "--template", "-T", "--recover"})
+# The opening of a heredoc command substitution, `$(cat <<'D'` and kin.
+HEREDOC_OPEN = re.compile(
+    r"\$\(\s*cat\s+<<(?P<dash>-?)[ \t]*(?P<quote>['\"]?)"
+    r"(?P<delim>[A-Za-z_][A-Za-z0-9_]*)(?P=quote)[ \t]*\n")
+HEREDOC_CLOSE = re.compile(r"\s*\)")
+PLACEHOLDER = "__pr_body_preflight_heredoc_{}__"
+PLACEHOLDER_WORD = re.compile(r"__pr_body_preflight_heredoc_(\d+)__")
+# `$(cat PATH)` or `$(< PATH)` with a plain path: read as a body file.
+CAT_FILE = re.compile(
+    r"\$\(\s*(?:cat\s+|<\s*)(?P<path>[^\s$`'\"()<>|;&\\]+)\s*\)")
+
+
+def _heredoc_at(command, match):
+    """(body, end) for the heredoc substitution whose opening is match,
+    or None when its delimiter line or closing paren is missing. body is
+    (text, literal): $() drops trailing newlines, <<- drops leading tabs,
+    and an unquoted delimiter's body is literal only with no $ or
+    backtick, since the shell would expand it."""
+    delim, dash = match["delim"], bool(match["dash"])
+    lines, offset = [], match.end()
+    while True:
+        newline = command.find("\n", offset)
+        if newline < 0:
+            return None
+        line = command[offset:newline]
+        if dash:
+            line = line.lstrip("\t")
+        offset = newline + 1
+        if line == delim:
+            break
+        lines.append(line)
+    close = HEREDOC_CLOSE.match(command, offset)
+    if close is None:
+        return None
+    text = "\n".join(lines).rstrip("\n")
+    literal = bool(match["quote"]) or not any(ch in text for ch in "$`")
+    return (text, literal), close.end()
+
+
+def _mask_heredocs(command):
+    """(masked command, [heredoc bodies]): each heredoc substitution is
+    cut from the raw string and replaced by a placeholder word before
+    shlex sees it, because shlex does not know $( ) opens a new quoting
+    context and would strip the body's inner quotes."""
+    pieces, bodies, start = [], [], 0
+    for match in HEREDOC_OPEN.finditer(command):
+        if match.start() < start:
+            continue
+        found = _heredoc_at(command, match)
+        if found is None:
+            continue
+        body, end = found
+        pieces += [command[start:match.start()],
+                   PLACEHOLDER.format(len(bodies))]
+        bodies.append(body)
+        start = end
+    pieces.append(command[start:])
+    return "".join(pieces), bodies
 
 
 def _tokens(command):
@@ -107,17 +172,38 @@ class _Unreadable(Exception):
     the note's reason."""
 
 
+def _deferring(arg):
+    """The flag name when arg leaves the body to gh, else None."""
+    name = arg.split("=", 1)[0] if arg.startswith("--") else arg
+    return name if name in DEFERRING_FLAGS else None
+
+
+def _hidden_in_cluster(arg):
+    """True for a single-dash cluster holding b or F past second place
+    (`-db`): a body flag the hook will not unpick. A value flag's joined
+    value (`-Bfix/b`) is not a cluster."""
+    return (len(arg) > 2 and arg[0] == "-" and arg[1] not in "-bF"
+            and arg[:2] not in VALUE_FLAGS
+            and ("b" in arg[2:] or "F" in arg[2:]))
+
+
 def _body_sources(args):
-    """[(kind, value)] for every body source among args, kind "body"."""
+    """[(kind, value)] for every body source among args, kind "body" or
+    "file". Raises _Unreadable for a flag or cluster that hides it."""
     sources, index = [], 0
     while index < len(args):
         arg = args[index]
         if arg == "--":
             break
-        found = _flag_value(args, index, "--body", "-b")
-        if found is not None:
-            sources.append(("body", found[0]))
-            index = found[1]
+        if _deferring(arg):
+            raise _Unreadable(f"{_deferring(arg)} leaves the body to gh")
+        if _hidden_in_cluster(arg):
+            raise _Unreadable(f"{arg} hides a body flag in a cluster")
+        body = _flag_value(args, index, "--body", "-b")
+        path = None if body else _flag_value(args, index, "--body-file", "-F")
+        if body or path:
+            sources.append(("body", body[0]) if body else ("file", path[0]))
+            index = (body or path)[1]
         elif arg in VALUE_FLAGS:
             index += 2
         else:
@@ -125,32 +211,78 @@ def _body_sources(args):
     return sources
 
 
-def _body(args):
+def _read_body_file(path, context):
+    """The text of one body file. Read only from the compound's first
+    simple command: an earlier segment could write the file or change
+    directory, so the file on disk is not known to be the body."""
+    import cli  # lazy, like gates: only a candidate pays for it
+    if path == "-":
+        raise _Unreadable("--body-file - reads the body from stdin")
+    if not context["first"]:
+        raise _Unreadable("a body file is read only from the first command")
+    target = Path(path)
+    if not target.is_absolute():
+        if not isinstance(context["cwd"], str):
+            raise _Unreadable("a relative body file with no cwd in the payload")
+        target = Path(context["cwd"]) / target
+    text, problem = cli.read_file(target, path, str)
+    if problem:
+        raise _Unreadable(problem)
+    if text is None:
+        raise _Unreadable(f"no body file at {path}")
+    return text
+
+
+def _resolve(value, context):
+    """The body a --body value stands for. A placeholder alone is its
+    heredoc; `$(cat PATH)` / `$(< PATH)` is that file; any other $ or
+    backtick is a shell expansion the hook cannot do."""
+    placeholder = PLACEHOLDER_WORD.fullmatch(value)
+    if placeholder:
+        text, literal = context["heredocs"][int(placeholder[1])]
+        if not literal:
+            raise _Unreadable("an unquoted heredoc body holds $ or a backtick")
+        return text
+    cat = CAT_FILE.fullmatch(value)
+    if cat:
+        return _read_body_file(cat["path"], context)
+    if PLACEHOLDER_WORD.search(value) or any(ch in value for ch in "$`"):
+        raise _Unreadable(
+            "the body holds $ or a backtick the hook cannot expand")
+    return value
+
+
+def _body(args, context):
     """The body text for one gh pr create. Raises _Unreadable."""
     sources = _body_sources(args)
     if not sources:
         raise _Unreadable("no --body or --body-file")
     if len(sources) > 1:
         raise _Unreadable("more than one body source")
-    return sources[0][1]
+    kind, value = sources[0]
+    if kind == "file":
+        return _read_body_file(value, context)
+    return _resolve(value, context)
 
 
-def _verdicts(command):
-    """(problems, notes-and-problems lines) over every gh pr create."""
+def _verdicts(command, cwd):
+    """(failed, notes-and-problems lines) over every gh pr create."""
+    masked, heredocs = _mask_heredocs(command)
     try:
-        tokens = _tokens(command)
+        tokens = _tokens(masked)
     except ValueError as exc:
         return False, [NOTE.format(f"cannot parse the command: {exc}")]
-    candidates = [args for args in map(_create_args,
-                                       _simple_commands(tokens))
-                  if args is not None]
+    commands = _simple_commands(tokens)
+    candidates = [(position, args) for position, args in
+                  enumerate(map(_create_args, commands)) if args is not None]
     if not candidates:
         return False, [NOTE.format(NOT_SEEN)]
     import gates  # lazy: ~60 ms, paid only by a candidate command
     failed, lines = False, []
-    for args in candidates:
+    for position, args in candidates:
+        context = {"first": position == 0, "cwd": cwd, "heredocs": heredocs}
         try:
-            body = _body(args)
+            body = _body(args, context)
         except _Unreadable as exc:
             lines.append(NOTE.format(exc))
             continue
@@ -176,7 +308,7 @@ def preflight(payload_text):
     if not all(part in command for part in ("gh", "pr", "create")):
         return 0, []
     try:
-        failed, lines = _verdicts(command)
+        failed, lines = _verdicts(command, data.get("cwd"))
     except Exception as exc:  # fail open: a crash must never block Bash
         return 0, [NOTE.format(f"{type(exc).__name__}: {exc}")]
     return (2, lines + [POINTER]) if failed else (0, lines)
