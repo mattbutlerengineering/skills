@@ -25,4 +25,6 @@ came back clean, and which domain passes ran clean or were not selected.>
 
 ## Verdict
 
-<Ready to ship, or what blocks it.>
+<Ready to ship, or what blocks it. Count or name every pass that was not
+run or is unknown, and never read as an unqualified pass over them (the
+fail-closed roll-up; claim kinds in the plugin's CONTEXT.md).>

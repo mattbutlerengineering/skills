@@ -26,7 +26,11 @@ verdict.
    quote the relevant results) over manual walkthroughs, but do the manual
    check when that's what the criterion needs. Record for each: the
    criterion, the check performed, the evidence (actual output, not a
-   summary of it), and pass/fail.
+   summary of it), and pass/fail. The artifact's `## Summary` counts or
+   names every NOT RUN / unknown criterion and never reads as an
+   unqualified pass over them (the fail-closed roll-up; claim kinds in
+   `../../CONTEXT.md`). Detector H refuses a Summary that names no
+   unknown word over a criterion with a labelled NOT RUN verdict (ADR-0107).
 
 5. **Report honestly.** Failures and gaps go in the artifact as failures and
    gaps — never soften them. A criterion that can't be verified is a finding
