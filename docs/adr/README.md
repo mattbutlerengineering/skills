@@ -111,7 +111,7 @@ the canonical vocabulary.
 | [0088](0088-a-fast-path-classification-is-the-review-for-auto-merge.md) | A fast-path classification is the review for auto-merge | accepted |
 | [0089](0089-an-enforced-standard-may-cite-a-standing-adr.md) | An enforced standard may cite a standing ADR | accepted |
 | [0090](0090-the-gate-timeline-read-and-open-queues-join-human-gates.md) | The gate timeline read and the open queues join human_gates | accepted |
-| [0091](0091-the-restructure-blockers-re-measured-and-pinned.md) | The tools/factory restructure blockers, re-measured and pinned | superseded in part by ADR-0097 (the cli.py row) |
+| [0091](0091-the-restructure-blockers-re-measured-and-pinned.md) | The tools/factory restructure blockers, re-measured and pinned | superseded in part by ADR-0106 (the cli.py and gates.py rows; the cli.py row earlier by ADR-0097) |
 | [0092](0092-a-derived-trace-view-joins-the-knowledge-owners-over-time.md) | A derived trace view joins the knowledge owners over time | accepted (Owner, 2026-10-14) |
 | [0093](0093-every-plugin-eval-case-carries-its-skill-tag.md) | Every plugin-eval case carries its skill directory as a tag | accepted (Owner, 2026-10-14) |
 | [0094](0094-parse-run-reads-every-artifact-through-the-guarded-read.md) | parse_run reads every run artifact and the ADR index through the guarded read | accepted (Owner, 2026-10-14) |
@@ -126,3 +126,4 @@ the canonical vocabulary.
 | [0103](0103-calibrate-warns-below-its-floor-and-the-floor-is-a-setting.md) | Calibrate warns below its floor, and the floor is a setting | provisional |
 | [0104](0104-a-finished-runs-retry-redoes-its-bookkeeping.md) | A finished run's retry redoes its bookkeeping, and a launch re-reads its issue | provisional |
 | [0105](0105-a-pull-request-merged-outside-the-batch-is-the-items-merge.md) | A pull request merged outside the batch is the item's merge | provisional |
+| [0106](0106-pr-body-preflight-joins-the-root-only-importers.md) | pr_body_preflight joins the root-only importers of gates.py and cli.py | provisional |

@@ -8,6 +8,10 @@ assumptions:
   - "Hook contract read from the official security-guidance plugin's hooks.json and script in the local plugin cache (matcher on the tool name, type command, JSON on stdin with tool_name and tool_input, exit 2 blocks and feeds stderr back, exit 0 proceeds), plus the user's own settings.json timeout field. No field is used that neither shows."
   - "Recommended default taken: the hook is a root-level script (pr_body_preflight.py), not under .claude/hooks/. That matches every other root-only tool here (kb.py, one_owner.py, run_tests.py), lets it import gates with no sys.path change, and keeps it inside one_owner.py's scan."
   - "Recommended default taken: a body file (--body-file, or $(cat file)) is read only when gh pr create is the first simple command of its compound command. Any earlier segment could write that file or change the directory, so the file on disk is not known to be the body gh will send."
+  - "Re-entry 2026-10-16: the hook is a factory verb because tests/test_factory_cli.py derives the verb set from every root __main__ guard (ADR-0054); disguising the guard to dodge the scan was not considered a real option. The registered hook command still runs the script by filename, since ADR-0054 decides that files invoke tools by filename and the front door's callers are humans."
+  - "Re-entry 2026-10-16: an argv given to main (only a human can give one; the registered command passes none) prints usage on stderr and exits 0, not 2, so the rule that only a judged failing body exits 2 has no exception."
+  - "Re-entry 2026-10-16: the dual-membership growth is recorded in ADR-0106 (provisional), shaped on ADR-0097, and ADR-0091's status line and index row are updated to name it, as the ADR index's own rule asks. ADR-0097 is left unedited: its decision stands and only its count moves."
+  - "Re-entry 2026-10-16: the structural identity test (pr_body_preflight.pr_body_problems is gates.pr_body_problems) contradicts the lazy import of gates that the cost line asks for, since a function-level import leaves no module attribute. The lazy import is kept and the identity test is replaced by a delegation test, below."
 ---
 
 # Architecture: PR-body preflight hook
@@ -192,7 +196,8 @@ The steps run in this order:
 
 The tests go in `tests/test_pr_body_preflight.py`. The script exposes a
 pure `main(stdin_text) -> (exit_code, stderr_lines)` plus a thin
-`__main__`. Fixtures are complete hook payloads (JSON with
+`__main__`. *(Amended 2026-10-16: the pure seam is `preflight`, and
+`main` takes `argv`; see "Amended 2026-10-16" under Decisions.)* Fixtures are complete hook payloads (JSON with
 `tool_name: "Bash"`, `tool_input.command` and `cwd`), replayed through
 `main`. Body files sit in a temp directory used as `cwd`. The cases are:
 
@@ -220,7 +225,8 @@ script through the exact command string in `.claude/settings.json`
 exit-2 path and the guard. The guard is also run with a non-existent
 `CLAUDE_PROJECT_DIR` and gives exit 0. The second test asserts that
 `pr_body_preflight.pr_body_problems is gates.pr_body_problems`, so the
-check has one owner, and `python3 one_owner.py` is the review pre-pass
+check has one owner *(amended 2026-10-16: replaced by a delegation
+test; see below)*, and `python3 one_owner.py` is the review pre-pass
 on top. `tests/test_gates.py` gains direct `pr_body_problems` cases
 beside `TestPrTraceability`.
 
@@ -254,8 +260,111 @@ beside `TestPrTraceability`.
   codes are the contract this machine's hooks already use, and a note
   needs no model-visible channel.
 
+### Amended 2026-10-16 (Architect re-entry from Decompose)
+
+Decompose found two pinned repo rules the design above did not account
+for (`breakdown.md`, "Design gaps found"). A sweep of the other pinned
+walks over root modules found a third conflict, inside this document.
+The decisions above stand except where named here.
+
+1. **Entry point: the hook is a `factory` verb, with an `argv` main
+   and a separate pure seam.** `tests/test_factory_cli.py` (ADR-0054)
+   requires one `factory.VERBS` row per root module that carries a
+   `__main__` guard, named after the module, and a `main` whose first
+   positional parameter is `argv` (or that has none at all).
+   - `factory.VERBS` gains `"pr-body-preflight": ("pr_body_preflight",
+     "argv")`. The module's docstring first line is the index line
+     `factory.py help` prints, in the usual `pr-body-preflight: …`
+     form.
+   - The pure test seam is `preflight(payload_text: str) -> (int,
+     list[str])`: the hook payload text in, the exit code and stderr
+     lines out. Body-recovery steps 1 to 7 and the catch-all run inside
+     it, so a `gates` failure is still exit 0 with a note when driven
+     through the seam. It writes nothing and reads only body files.
+   - `main(argv, stdin=None)` is the thin adapter. With a non-empty
+     `argv` it prints the docstring usage to stderr and returns 0. A
+     human is the only one who can pass an argument, and exit 2 would
+     mean "block" to a hook. Otherwise it reads `stdin`, or
+     `sys.stdin` when `stdin` is None (looked up at call time, not
+     bound as a default), passes the text to `preflight`, writes the
+     lines to stderr and returns the code. A failure reading stdin is
+     exit 0 with a note. `__main__` is `sys.exit(main(sys.argv[1:]))`.
+     The `stdin` keyword has a default, so the `argv` row stays
+     correct. `fast_path.main(argv, git=…)` and
+     `sweeps.main(argv, run=…)` are the precedent for keyword ports
+     after `argv`.
+   - The `.claude/settings.json` command is unchanged: it runs
+     `pr_body_preflight.py` by filename, not
+     `factory.py pr-body-preflight`. ADR-0054 decides that files invoke
+     tools by filename and that the front door's callers are humans.
+     Routing through the front door would also add `factory.py` and its
+     import to every Bash call, and the `[ ! -f … ] ||` guard would have
+     to cover two files.
+   - Replay tests call `pr_body_preflight.preflight(json.dumps(payload))`
+     and assert `(code, lines)`. One test drives
+     `main([], stdin=io.StringIO(…))` and captures stderr. One drives
+     `main(["x"])` and gets exit 0 with the usage text. The existing
+     `TestVerbTableIsDerived` and `TestDispatch` cover the row with no
+     new test.
+
+2. **The dual-membership set grows by two pairs, recorded in
+   ADR-0106.** `pr_body_preflight` imports the mirrored `gates`
+   (`pr_body_problems`) and `cli` (`read_file`). That makes 43 pairs
+   over the same nine modules: `cli.py` gets 19 importers and
+   `gates.py` gets 2. Leaving the set unchanged would mean copying B's
+   rule, hand-writing the guarded read, a subprocess over a synthetic
+   event, or moving a repo-only adapter into mirrored `gates.py`. Each
+   of those is worse than one recorded edge, and ADR-0106 gives the
+   reasons. `tests/test_dual_membership.py` sees function-level imports
+   too, so the lazy import does not hide either edge. Updating that pin
+   (two pairs, and its comment's count) is Implement's work on the Hook
+   core item. The ADR is written here.
+
+3. **The identity test is replaced; the lazy import of `gates` stays.**
+   The cost line imports `gates` only after the pre-filter matches, so
+   `pr_body_preflight` has no module attribute `pr_body_problems` for
+   the structural test to compare with `is`. Importing at the top
+   instead would put about 60 ms on every Bash call. The replacement
+   proves the same thing, that the hook judges through B's one owner
+   and not through a copy:
+   - with `gates.pr_body_problems` patched to return a sentinel list
+     for a body that would pass, `preflight` exits 2 and its stderr
+     carries that sentinel;
+   - the existing patched-to-raise case gives exit 0 and a note.
+
+   `python3 one_owner.py` stays the review pre-pass.
+
+**Other pinned root-module rules checked, none tripped by this design:**
+
+- `tests/test_gates.py`'s ready-label walk: the hook names no
+  `wo:ready-for-agent` literal.
+- `gates.label_declarers` (detector J): the hook assigns no
+  module-level `LABELS`.
+- `tests/test_fake_gh.py`: it walks `tests/`. The hook's tests need no
+  gh fake, so they must not define a function taking only `args` that
+  answers a gh command.
+- `tests/test_shadowed_definitions.py`: no name defined twice at one
+  scope.
+- `tests/test_factory_init.py`: MIRRORS↔payload pins, and gates' lazy
+  imports must ship. The hook is not mirrored, and `gates` gains no
+  `import_module`.
+- `tests/test_run_tests.py` and `tests/timings.json`: a module missing
+  from the timings file is scheduled at 0 s. `--record` is optional.
+- `kb_drift`: it reads `.claude/settings.json` only for
+  `enabledPlugins`, so a `hooks` key is ignored, and its directory
+  surfaces do not include the repo root.
+- `one_owner.py`: B's strings and regexes stay in `gates` and
+  `knowledge_plane` only, as already designed.
+- `factory.py`'s count-claim pin: the docstring is unchanged.
+
 ## ADRs
 
 None — no decision met the ADR bar. Every decision above is cheap to
 reverse: deleting one settings entry and one script removes the hook,
 and the extracted function is a move.
+
+Amended 2026-10-16: ADR-0106 (provisional), "pr_body_preflight joins
+the root-only importers of gates.py and cli.py". It does not pass the
+protocol's three-leg test either; it exists because
+`tests/test_dual_membership.py` makes any change to ADR-0091's pinned
+set an ADR by rule, and ADR-0097 is the precedent for one new edge.
