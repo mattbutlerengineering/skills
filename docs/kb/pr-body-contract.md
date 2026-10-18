@@ -1,16 +1,24 @@
 ---
-summary: A PR body needs a WO id or a "No work order:" line plus Closes #N, or detector B fails on CI only — it skips locally.
-sources: gates.py, knowledge_plane.py, validator.py, .github/workflows/validator.yml
-verified: 6a89ee3a19901009b85ac0f58c1466d1e9fa2a8c
+summary: A PR body needs a WO id or a "No work order:" line plus Closes #N; B skips locally, only the gh pr create hook catches it early.
+sources: gates.py, knowledge_plane.py, validator.py, pr_body_preflight.py, .github/workflows/validator.yml
+verified: f557ae1e07f54e27336742f7fab1bcbb139dc775
 related: gates-scan-every-doc
 ---
 
-# The PR body is gated, but only on CI
+# The PR body is gated on CI, and pre-checked by a hook
 
 `gates.check_pr_traceability` (detector B) reads the pull request body
 from the CI event payload. Locally there is no payload, so B **skips
 silently** — `python3 gates.py` passes on your machine and the
 `pull_request` run fails. It reads like a flaky check; it is not.
+
+One local catch exists: `pr_body_preflight.py`, a PreToolUse hook in
+`.claude/settings.json`, refuses a `gh pr create` whose body fails B
+(exit 2, B's strings from `gates.pr_body_problems`, the rule's one
+owner). It fails open: a body it cannot read (`--fill`, `--web`, a
+shell expansion, another repository) gets a "not checked" note and
+passes. A PR opened any other way, or edited later, is judged by CI's B
+alone.
 
 The body must carry both:
 
