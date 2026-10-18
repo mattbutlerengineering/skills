@@ -1491,6 +1491,40 @@ class TestDoctorChecklistMatchesThePayload(unittest.TestCase):
             f" while the payload ships {shipped}")
 
 
+class TestDoctorReportContract(unittest.TestCase):
+    """The README quotes doctor's clean plugin-only summary as the expected
+    output of a working install (#966), and doctor's step 10 carries the
+    same line as its contract. Two copies of one line drift apart unless
+    something holds them together, and the version-skew check names a file
+    path that only the plugin's own layout makes true."""
+
+    DOCTOR = REPO_ROOT / "skills" / "doctor" / "SKILL.md"
+
+    def readme_summary(self):
+        lines = (REPO_ROOT / "README.md").read_text(
+            encoding="utf-8").splitlines()
+        found = [line for line in lines
+                 if line.startswith("doctor: 0 problem(s)")]
+        self.assertEqual(len(found), 1,
+                         "README.md should quote exactly one clean doctor"
+                         " summary line")
+        return found[0]
+
+    def test_doctor_carries_the_readme_summary_word_for_word(self):
+        self.assertIn(
+            self.readme_summary(), self.DOCTOR.read_text(encoding="utf-8"),
+            "skills/doctor/SKILL.md no longer carries the clean plugin-only"
+            " summary the README promises, word for word")
+
+    def test_the_plugin_version_doctor_reads_is_two_levels_up(self):
+        plugin = (self.DOCTOR.parent.parent.parent
+                  / ".claude-plugin" / "plugin.json")
+        prose = " ".join(self.DOCTOR.read_text(encoding="utf-8").split())
+        self.assertIn("two levels above this skill's base directory", prose)
+        self.assertTrue(json.loads(plugin.read_text(
+            encoding="utf-8")).get("version"))
+
+
 class TestAcceptanceStampRealRepo(unittest.TestCase):
     def test_stamped_repo_passes_its_own_gates(self):
         with tempfile.TemporaryDirectory() as tmp:
