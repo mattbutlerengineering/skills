@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:a-zero-count-names-nothing
 date: 2026-10-18
-outcome: prepared
+outcome: released
+released-at: 2026-10-18
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1018
 assumptions:
   - "Ship's independent re-check stands in for re-running Verify. verification.md (`7e017c6`) predates the fix-loop commits `c2ef6e0` and `779f968`, and until now only their author had checked them. Ship re-ran the four checks on `779f968`, wrote its own probe and mutation scripts (ship_recheck.py, ship_mutate.py in the session scratchpad), and compared the two gates.py copies with `cmp`, all quoted below. verification.md is not rewritten."
@@ -247,9 +248,10 @@ unmerged. The write-back runs these checks once it merges:
 
 ## Outcome
 
-Prepared and stopped. The run is waiting on the pull request that
-`pending-merge:` names (#1018, CI green). Ship stays pending until the
-merge is written back. Flags for the Owner:
+Released. The Owner answered "Merge now" in session, and #1018 was
+squash-merged as `41d407a` at 2026-10-18T15:53:16Z, closing #1017. #1012
+merged origin/main afterwards, keeping both sets of backlog lines, with
+all four checks at 0. The flags recorded at prepare time still stand:
 
 - **Merge-order conflict with #1012** on `docs/backlog.md`. Keep both
   sides (step 1 above).
