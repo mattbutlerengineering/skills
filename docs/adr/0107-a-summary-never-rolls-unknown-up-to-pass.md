@@ -1,6 +1,6 @@
 # A verification Summary never rolls a disclosed NOT RUN up into a pass
 
-- Status: provisional
+- Status: superseded in part by ADR-0108 (the naming clause; provisional)
 - Date: 2026-10-17
 
 Recorded by the `fail-closed-roll-up` feature run
