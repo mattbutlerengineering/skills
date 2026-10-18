@@ -141,17 +141,18 @@ def standards_drift_clean_fixture(root):
     ]), encoding="utf-8")
 
 
-def capture_completeness_defect_fixture(root):
+def capture_completeness_defect_fixture(root, date=None):
     """A fresh (dated on CAPTURE_ADOPTED, so not grandfathered) defect.md:
     two required sections missing outright, two present as unfilled
     TEMPLATE.md placeholders, and one filled in for real — every shape M
-    must tell apart, in one fixture."""
+    must tell apart, in one fixture. DATE overrides the frontmatter
+    `date:` value verbatim (a quoted post-cutoff date must not dodge M)."""
     path = root / "docs" / "fixes" / "demo" / "defect.md"
     path.parent.mkdir(parents=True)
     path.write_text(
         "---\nstage: capture\nrun: maintenance:demo\n"
-        f"date: {gates.CAPTURE_ADOPTED}\nre-entry: implement\n---\n\n"
-        "# Defect: demo\n\n"
+        f"date: {gates.CAPTURE_ADOPTED if date is None else date}\n"
+        "re-entry: implement\n---\n\n# Defect: demo\n\n"
         "## Defect (or Condition)\n\n<What is broken — observed vs"
         " expected behavior.>\n\n"
         "## Reproduction / Evidence\n\nRun `make check`; it fails with"
@@ -310,12 +311,23 @@ def evidence_honesty_defect_fixture(root):
         "- Result: PASS\n", encoding="utf-8")
     # A Summary dated on the roll-up cutoff that reads as a full pass
     # over a criterion that disclosed NOT RUN: unknown never rolls up.
-    rolledup = root / "docs" / "features" / "rolledup"
-    rolledup.mkdir(parents=True)
-    (rolledup / "verification.md").write_text(
-        "---\nstage: verify\ndate: 2026-10-17\n---\n# Verification\n\n"
-        "## Summary\n\nAll criteria pass.\n\n" + EVIDENCE_HONEST_LEAF
+    evidence_rollup_defect_fixture(root, "rolledup", "2026-10-17",
+                                   "All criteria pass.")
+
+
+def evidence_rollup_defect_fixture(root, slug, date, summary):
+    """One verification.md at docs/features/SLUG/ whose frontmatter `date:`
+    is DATE verbatim and whose Summary reads SUMMARY over one evidenced
+    PASS and one criterion disclosed NOT RUN — the roll-up rule
+    (ADR-0107) must refuse it. Returns the artifact's repo-relative
+    path, so a caller can assert on that artifact alone."""
+    run = root / "docs" / "features" / slug
+    run.mkdir(parents=True)
+    (run / "verification.md").write_text(
+        f"---\nstage: verify\ndate: {date}\n---\n# Verification\n\n"
+        f"## Summary\n\n{summary}\n\n" + EVIDENCE_HONEST_LEAF
         + "### Live dispatch\n\n- Result: NOT RUN\n", encoding="utf-8")
+    return f"docs/features/{slug}/verification.md"
 
 
 def evidence_honesty_clean_fixture(root):
@@ -362,15 +374,18 @@ def needs_clarification_defect_fixture(root):
         encoding="utf-8")
 
 
-def prd_coverage_fixture(root, waive_actors):
+def prd_coverage_fixture(root, waive_actors, date=None):
     """A PRD dated on COVERAGE_ADOPTED whose §Solution a work-order row
-    cites and whose §Actors none does — waived or not, per the caller."""
+    cites and whose §Actors none does — waived or not, per the caller.
+    DATE overrides the frontmatter `date:` value verbatim (a quoted
+    post-cutoff date must not dodge O)."""
     run = root / "docs" / "features" / "demo"
     run.mkdir(parents=True, exist_ok=True)
     waiver = ("<!-- coverage-waiver: actors are context, not work -->\n\n"
               if waive_actors else "")
     (run / "prd.md").write_text(
-        f"---\nstage: prd\nid: PRD-0001\ndate: {gates.COVERAGE_ADOPTED}\n---\n"
+        "---\nstage: prd\nid: PRD-0001\n"
+        f"date: {gates.COVERAGE_ADOPTED if date is None else date}\n---\n"
         "# PRD\n\n## Solution\n\nBuild it.\n\n## Actors\n\n" + waiver
         + "- **Dev**\n", encoding="utf-8")
     (run / "breakdown.md").write_text(
@@ -407,6 +422,12 @@ def clean_repo_fixture(root):
                      "architecture_review": "a"},
          "wip_cap": 3, "monthly_cap_usd": 300})
     scaffold_sync_fixture(root, rel="factory.json", payload=config)
+
+
+# A quoted frontmatter date after every detector's cutoff. A raw string
+# compare reads it as before the cutoff ('"' sorts below '2'), so it is
+# the shape that dodged O, M and H until #1018.
+QUOTED_POST_CUTOFF = '"2026-10-20"'
 
 
 def selftest():
@@ -502,6 +523,23 @@ def selftest():
                for p in gates.check_capture_completeness(root)):
             failures.append("M: Reproduction / Evidence should be clean,"
                             f" got {gates.check_capture_completeness(root)}")
+
+    # M: a quoted post-cutoff date is judged, not grandfathered — the
+    # dodge the raw string compare let through (#1018).
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        capture_completeness_defect_fixture(root, date=QUOTED_POST_CUTOFF)
+        expect("M quoted date", gates.check_capture_completeness(root),
+               "docs/fixes/demo/defect.md missing required section"
+               " 'Root-cause hypothesis'")
+    # M: an empty date is judged too — it sorts before any cutoff as a
+    # bare string (#1018).
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        capture_completeness_defect_fixture(root, date="")
+        expect("M empty date", gates.check_capture_completeness(root),
+               "docs/fixes/demo/defect.md missing required section"
+               " 'Root-cause hypothesis'")
 
     # M: a defect.md dated before CAPTURE_ADOPTED is grandfathered —
     # missing every section, but M must stay silent (ADR-0073).
@@ -619,6 +657,25 @@ def selftest():
                "unclosed code fence",
                "neither counts nor names")
 
+    # H: the roll-up rule judges a quoted or empty post-cutoff date
+    # (#1018) and does not read a zero count, digit or word, as naming
+    # the unknown kind (ADR-0108). Each in its own tree, asserted on its
+    # own path: the "H" row's fragment would match any artifact's roll-up
+    # line.
+    for label, date, summary in (
+            ("H quoted date", QUOTED_POST_CUTOFF, "All criteria pass."),
+            ("H empty date", "", "All criteria pass."),
+            ("H zero count", gates.ROLLUP_ADOPTED,
+             "1 PASS, 0 FAIL, 0 NOT RUN."),
+            ("H none skipped", gates.ROLLUP_ADOPTED,
+             "1 PASS; none skipped.")):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = evidence_rollup_defect_fixture(
+                root, "rollup", date, summary)
+            expect(label, gates.check_evidence_honesty(root),
+                   f'{path}:7 summary "Summary" neither counts nor names')
+
     # H: the honest side — three shapes that must stay silent.
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -647,6 +704,20 @@ def selftest():
         root = Path(tmp)
         prd_coverage_fixture(root, waive_actors=True)
         expect_clean("O waived", gates.check_prd_coverage(root))
+    # O: a quoted post-cutoff date is judged, not grandfathered (#1018).
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        prd_coverage_fixture(root, waive_actors=False, date=QUOTED_POST_CUTOFF)
+        expect("O quoted date", gates.check_prd_coverage(root),
+               "docs/features/demo/prd.md:12 PRD-0001 §Actors is cited by"
+               " no breakdown row")
+    # O: an empty date is judged too (#1018).
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        prd_coverage_fixture(root, waive_actors=False, date="")
+        expect("O empty date", gates.check_prd_coverage(root),
+               "docs/features/demo/prd.md:12 PRD-0001 §Actors is cited by"
+               " no breakdown row")
 
     # Every detector's happy path at once — the integration smoke test
     # run_all must stay silent across, beyond any one detector's own
