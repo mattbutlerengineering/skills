@@ -4,6 +4,8 @@ run: maintenance:the-selftest-cannot-see-a-dodge
 date: 2026-10-18
 assumptions:
   - "All three findings are minors, and each is deferred under the skill's default (minors may be deferred freely). None opens a bypass that origin/main lacked: every regression shape below also leaves origin/main's selftest ok, and this repo's unit tests catch each one. Whether to fix any before Ship is the Owner's call; the Verdict says which are cheap."
+  - "Fix loop (2026-10-18): the Owner answered Fix now for Minors 1, 2 and 3. Minors 1 and 2 are fixed test-first in dfae528 (selftest rows, payload mirror, manifest, TestSelftest pins); Minor 3 is ADR-0108's dated amendment in 8a7d334, which stays provisional. gates.py and plugin.json are untouched."
+  - "Fix loop scope: Review found R2 slips past O and M as well as H, and each new O and M empty-date row costs one fixture call with the existing date parameter, so empty-date rows went in for all three detectors, matching the per-detector quoted-date rows, rather than relying on _grandfathered being the one owner today."
   - "Severity of Minors 1 and 2 is judged against the brief's scope, which asked for one quoted post-cutoff row per detector and one '0 NOT RUN' row. The run delivered exactly that, so a further dodge shape is a widening, not a miss."
   - "Minor 3 cites a provisional ADR (ADR-0108). It is a stale statement of fact in Consequences, not a violation of its Decision, so the one-severity-lower rule for provisional ADRs has nothing to lower."
   - "The review's probe scripts live in the session scratchpad, not the repo: review_dodge_builders.py and review_dodge_mutate.py under /private/tmp/claude-501/-Users-mbutler-github-skills/61791cec-ce5d-4fbf-a8e5-60dc748e0ec7/scratchpad/. They ran in detached scratch worktrees of HEAD 0cbbdf9 and origin/main f8c16d9, and a stamped temp repo, all removed afterwards. The working tree was never edited by a probe."
@@ -218,9 +220,9 @@ No critical and no major findings.
   this run exists for. One extra tuple, `("H empty date", "", "All
   criteria pass.")`, turns R2 red (probe above).
 - Standard: none
-- Decision: deferred (skill default for minors). The brief scoped one
-  quoted row per detector, and that is delivered. It is cheap to take
-  before Ship; see the Verdict.
+- Decision: fixed in `dfae528` (Owner: Fix all three now; first
+  deferred under the skill default). Empty-date rows for O, M and H. See
+  "Fix loop" below.
 
 ### Minor: the zero-count row sees only the digit; narrowing the zero vocabulary leaves the selftest ok
 
@@ -234,9 +236,9 @@ No critical and no major findings.
   "1 PASS; none skipped.")`, turns R3 and R4 red, and it also fails on
   the full zero-blind reversion, since "none" is a zero.
 - Standard: none
-- Decision: deferred (skill default for minors). The brief named "0
-  NOT RUN" as the row, and that is delivered. It is cheap to take
-  before Ship; see the Verdict.
+- Decision: fixed in `dfae528` (Owner: Fix all three now; first
+  deferred under the skill default). The `H none skipped` row. See "Fix
+  loop" below.
 
 ### Minor: ADR-0108's Consequences still say the selftest has no zero-count row
 
@@ -250,10 +252,9 @@ No critical and no major findings.
   claim; the remaining hits are dated run artifacts and the claimed
   backlog line.
 - Standard: none
-- Decision: deferred (skill default for minors). The fix is a dated
-  amendment line under that consequence, not an edit to the Decision,
-  as ADR-0107 and ADR-0108 already do. It is doc-only, and Ship can
-  take it.
+- Decision: fixed in `8a7d334` (Owner: Fix all three now; first
+  deferred under the skill default). A dated amendment under that
+  consequence; the Decision is unedited and ADR-0108 stays provisional.
 
 ## Passes with no findings
 
@@ -317,22 +318,133 @@ $ python3 gates.py --selftest
 selftest: ok
 ```
 
+## Fix loop (2026-10-18)
+
+The Owner answered "Fix all three now" for Minors 1, 2 and 3. Fixed in
+two commits on top of `7d5fb28`; `gates.py` and
+`.claude-plugin/plugin.json` are untouched.
+
+- `dfae528` (`test(selftest): empty-date rows for O, M and H, and an H
+  none-skipped row`): four new selftest rows, `O empty date`,
+  `M empty date`, `H empty date` and `H none skipped`, each asserting
+  its own path and line like the existing rows. The H rows are two more
+  tuples in the H loop; O and M reuse their builders' `date` parameter
+  with `date=""`. The payload copy is mirrored (`cmp` identical, 0 stray
+  `.orig`/`.rej` under `factory/templates/` before
+  `factory_init.py update-manifest`, which printed
+  `factory-init: 0 problem(s)`), and `TestSelftest` gains two pins.
+- `8a7d334` (`docs(adr): ADR-0108 amendment — the selftest now has
+  zero-count rows`): a dated 2026-10-18 amendment under the
+  Consequences line that said the fixture has no zero-count row. It
+  names `H zero count` and `H none skipped`. ADR-0108 stays
+  provisional.
+
+**O and M empty-date rows (the choice).** R2 grandfathers an empty
+date for O and M too, not just H, and each extra row is one fixture
+call with an existing parameter. They went in, matching the
+per-detector quoted-date rows, so the selftest does not depend on
+`_grandfathered` staying the one owner of the date reading.
+
+**TestSelftest pins (the choice).** One cheap mock covers each shape,
+so both went in, test-first:
+
+- `test_selftest_fails_when_the_date_checks_drop_the_iso_match`
+  replaces `_grandfathered` with a strip-quotes, bare-compare function
+  (R2) and asserts exactly `{"O empty date", "M empty date",
+  "H empty date"}`: the quoted-date rows stay green.
+- `test_selftest_fails_when_the_zero_vocabulary_narrows` patches
+  `gates.SUMMARY_ZERO_COUNT` with the live pattern's
+  `(?:0|zero|no|none|nothing)` swapped for `(?:0)` (R3) and
+  `(?:0|zero)` (R4), one subTest each, and asserts exactly
+  `{"H none skipped"}`: `H zero count`'s digit zero stays green.
+- The two existing pins' exact label sets grew by the rows the same
+  mock now also reddens: the raw-string compare adds the three
+  empty-date rows, and the zero-blind `_names_unknown` adds
+  `H none skipped`.
+
+The pins before the rows existed (red for the right reason):
+
+```
+FAIL: test_selftest_fails_when_a_zero_count_names_the_unknown
+AssertionError: Items in the second set but not the first:
+FAIL: test_selftest_fails_when_the_date_checks_compare_the_raw_string
+AssertionError: Items in the second set but not the first:
+FAIL: test_selftest_fails_when_the_date_checks_drop_the_iso_match
+AssertionError: 0 != 1
+FAIL: test_selftest_fails_when_the_zero_vocabulary_narrows (narrowed='(?:0)')
+AssertionError: 0 != 1
+FAIL: test_selftest_fails_when_the_zero_vocabulary_narrows (narrowed='(?:0|zero)')
+AssertionError: 0 != 1
+Ran 7 tests in 3.570s
+FAILED (failures=5)
+```
+
+After the rows: `Ran 7 tests ... OK`, and `selftest: ok`.
+
+**Mutations.** `review_dodge_mutate.py` (session scratchpad), in a
+detached scratch worktree of `7d5fb28`, removed afterwards. Before,
+on HEAD `7d5fb28`'s selftest (unittest lines elided; they match the
+Probes section above):
+
+```
+baseline selftest: selftest: ok exit 0
+=== R1_double_quotes_only (landed: True)
+  selftest: selftest: ok exit 0
+=== R2_strip_quotes_no_iso (landed: True)
+  selftest: selftest: ok exit 0
+=== R3_zero_digit_only (landed: True)
+  selftest: selftest: ok exit 0
+=== R4_no_negation_words (landed: True)
+  selftest: selftest: ok exit 0
+restored: True
+```
+
+After, with `dfae528`'s four files copied into the same worktree:
+
+```
+baseline selftest: selftest: ok exit 0
+=== R1_double_quotes_only (landed: True)
+  selftest: selftest: ok exit 0
+=== R2_strip_quotes_no_iso (landed: True)
+  selftest: M empty date: expected a problem containing "docs/fixes/demo/defect.md missing required section 'Root-cause hypothesis'", got [] | H empty date: expected a problem containing 'docs/features/rollup/verification.md:7 summary "Summary" neither counts nor names', got [] | O empty date: expected a problem containing 'docs/features/demo/prd.md:12 PRD-0001 §Actors is cited by no breakdown row', got [] | selftest: FAIL exit 1
+  unittest: ['Ran 294 tests in 6.488s', 'FAILED (failures=12)']
+=== R3_zero_digit_only (landed: True)
+  selftest: H none skipped: expected a problem containing 'docs/features/rollup/verification.md:7 summary "Summary" neither counts nor names', got [] | selftest: FAIL exit 1
+  unittest: ['Ran 294 tests in 6.068s', 'FAILED (failures=10)']
+=== R4_no_negation_words (landed: True)
+  selftest: H none skipped: expected a problem containing 'docs/features/rollup/verification.md:7 summary "Summary" neither counts nor names', got [] | selftest: FAIL exit 1
+  unittest: ['Ran 294 tests in 5.979s', 'FAILED (failures=8)']
+restored: True
+```
+
+Each shape fails only its own rows. R1 stays `ok`, as above: it is not
+a dodge. The unittest failures under R2 to R4 now include the new
+`TestSelftest` pins (and `test_selftest_passes`), which turn red with
+the selftest.
+
+Final checks (HEAD `8a7d334` plus this record):
+
+```
+$ python3 run_tests.py
+tests: 3327 tests across 106 modules in 14.3s on 8 workers, 0 problem(s)
+$ python3 lint.py
+lint: 0 problem(s) across 34 skills
+$ python3 kb.py drift
+drift: 0 problem(s)
+$ python3 gates.py
+gates: 0 problem(s)
+$ python3 gates.py --selftest
+selftest: ok
+```
+
 ## Verdict
 
 Ready for Ship. All five passes ran, plus the test, payload and
 builder-identity checks. None was skipped or left unknown, and no domain
 pass was selected. There is no critical and no major finding, and no
-finding cites an `enforced` standard. Three minors are deferred under
+finding cites an `enforced` standard. Three minors were first deferred under
 the skill's default, each with its reason above.
 
-Recommended before Ship, because each is cheap and inside the run's
-own purpose:
-
-- Minors 1 and 2: two tuple lines in the H loop, mirrored and
-  re-manifested. The probe above shows they pass today and catch R2,
-  R3 and R4.
-- Minor 3: a one-line dated amendment to ADR-0108's Consequences.
-
-Deferring all three is also sound. No shape above is a regression
-against origin/main, and this repo's unit tests catch every one before
-a payload ships.
+Fix loop: the Owner took all three minors before Ship, and each is
+fixed (see "Fix loop" above): Minors 1 and 2 in `dfae528`, Minor 3 in
+`8a7d334`. No finding stays deferred.
