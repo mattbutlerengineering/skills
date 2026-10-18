@@ -4,7 +4,7 @@ run: maintenance:a-zero-count-names-nothing
 date: 2026-10-17
 re-entry: implement
 origin: docs/backlog.md seed (from feature:fail-closed-roll-up), detector H's zero-count roll-up gap, raised by that run's retro
-assumptions: ["re-entry: implement, taken from the brief's reading (the orchestrator's, not an Owner answer) under the skill's rule that a scoped fix with no design decisions re-enters at Implement. Owner decision 2 fixes the shape, and the change stays inside the existing section parse, so Capture found no design question to send to Architect"]
+assumptions: ["re-entry: implement, taken from the brief's reading (the orchestrator's, not an Owner answer) under the skill's rule that a scoped fix with no design decisions re-enters at Implement. Owner decision 2 fixes the shape, and the change stays inside the existing section parse, so Capture found no design question to send to Architect", "Implement: the zero grammar is 0/zero/no/none/nothing as a whole word, at most one word, an optional was/were, then spaces, hyphens or emphasis; the brief left the exact grammar to Implement, and this covers its four required shapes plus the negation", "Implement: the negated zero (no criteria were skipped) is treated as a zero, taking the brief's recommended yes since it costs one alternation under the same bound and is pinned RED then GREEN; a two-word negation (no live check was skipped) still names, recorded as an accepted limit with a lean: marker and in ADR-0108", "Implement: the verify template line 11 is changed, because it asks for pass/fail counts and so invites the 0 NOT RUN shape both judged artifacts used; skills/verify/TEMPLATE.md is not mirrored into factory/templates (factory_init.MIRRORS has no skills/ entry), so no payload lockstep applies", "Implement: a new provisional ADR-0108 superseding ADR-0107 in part, not an amendment line, because the seed asks for one and ADR-0107's Consequences say a dodge seen in a real artifact is a reason for a new ADR, not a rewrite; ADR-0107's status becomes superseded in part by ADR-0108 (the naming clause; provisional), the README grammar for a partial supersession; 0108 was the next free number on the branch and on origin/main, and no open PR adds one"]
 ---
 
 # Defect: a zero count names nothing
@@ -153,7 +153,7 @@ for every count except zero.
 
 Re-entry is Implement, so these checkboxes are the run's breakdown.
 
-- [ ] **Zero-shape tests first (RED)**: in `TestEvidenceRollUp`
+- [x] **Zero-shape tests first (RED)**: in `TestEvidenceRollUp`
   (`tests/test_gates.py:2822`), add the retro's probe as a fixture: a
   judged artifact whose Summary reads "N PASS, 0 FAIL, 0 NOT RUN" over a
   criterion with `- Result: NOT RUN`. Add one subtest per zero shape
@@ -164,7 +164,7 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
     run (first: "...", line N); unknown never rolls up to pass` through
     `evidence_problems` (or `check_evidence_honesty` with its `H:
     {rel}:{lineno}` prefix), and each fails before the fix.
-- [ ] **Guards that stay green**: each zero shape with no disclosed
+- [x] **Guards that stay green**: each zero shape with no disclosed
   criterion passes. Non-zero and named mentions over a disclosure pass:
   "1 NOT RUN", "2 skipped", "criterion 4 was not run". So does a line
   holding both a zero and a non-zero mention ("0 NOT RUN, 1 skipped"),
@@ -172,12 +172,12 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   stays refused.
   - Accept: these pass before and after the fix, and H's existing tests
     pass unedited.
-- [ ] **Negated zero ("no criteria were skipped")**: decide it as the
+- [x] **Negated zero ("no criteria were skipped")**: decide it as the
   brief recommends. Treat it as a zero if that is cheap and tested;
   otherwise record it as an accepted limit in Notes and in the ADR.
   - Accept: either a RED-then-GREEN test pins it, or the limit is
     written down with its reason.
-- [ ] **The fix**: in `verification_sections` (or a helper it calls),
+- [x] **The fix**: in `verification_sections` (or a helper it calls),
   a `SUMMARY_UNKNOWN_TERM` match whose preceding text ends in a zero
   count (`0` or `zero` as a whole word, optionally followed by
   whitespace or a hyphen) does not set `names_unknown`. Every other
@@ -186,30 +186,30 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   at zero, and the `verification_sections` docstring. Stdlib only.
   - Accept: the RED tests go GREEN, and `python3 -m unittest
     tests.test_gates` passes.
-- [ ] **Verify template wording**: read `skills/verify/TEMPLATE.md`
+- [x] **Verify template wording**: read `skills/verify/TEMPLATE.md`
   line 11. If its count guidance teaches the dodge, add that a zero
   count does not name a disclosed criterion.
   - Accept: either the line is changed, or Notes says why it already
     does not teach the dodge.
-- [ ] **ADR**: a new provisional ADR succeeding ADR-0107's naming
+- [x] **ADR**: a new provisional ADR succeeding ADR-0107's naming
   clause ("Satisfied by naming the kind"), as the seed asks, with its
   row in `docs/adr/README.md`. Record the rejected "count must match"
   option. If the protocol prefers an amendment line on a provisional
   ADR, use that and log the choice in Notes.
   - Accept: `docs/adr/` states the zero-count rule, and `python3
     gates.py` and `python3 kb.py drift` are clean.
-- [ ] **Payload mirror and manifest**: copy `gates.py` to
+- [x] **Payload mirror and manifest**: copy `gates.py` to
   `factory/templates/tools/factory/gates.py`. Delete any stray
   `.orig`/`.rej` files, then run `python3 factory_init.py
   update-manifest` and commit the manifest.
   - Accept: `cmp` shows the two files are identical, and detector E is
     clean.
-- [ ] **Backlog claim**: the claim on `docs/backlog.md` line 125
+- [x] **Backlog claim**: the claim on `docs/backlog.md` line 125
   landed with this capture commit. Confirm it is still there and
   well-formed, then check this box.
   - Accept: the seed line ends in
     `(claimed: maintenance:a-zero-count-names-nothing)`.
-- [ ] **Whole-repo checks**: `python3 run_tests.py`, `python3 lint.py`,
+- [x] **Whole-repo checks**: `python3 run_tests.py`, `python3 lint.py`,
   `python3 kb.py drift`, and `python3 gates.py && python3 gates.py
   --selftest`.
   - Accept: all pass, and `gates.py` reports `gates: 0 problem(s)` on
@@ -225,4 +225,33 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   to 128 (the shared heads alternation, the `n't run` tightening, the
   stamped-repo measurement), H's per-section rule, and shipped
   artifacts.
-- Next stage: Implement (`re-entry: implement`).
+- 2026-10-17 (Implement): RED at `9fc15c7`: 12 failures, each `[]`
+  where H's roll-up string was expected (11 zero-shape and probe
+  subtests plus the `names_unknown` section test); the guards passed.
+  GREEN at `4cc2ede`. Reverting only the `_names_unknown(line)` call to
+  the old `SUMMARY_UNKNOWN_TERM.search(line)` brings back the same 12
+  failures; dropping `SUMMARY_ZERO_COUNT`'s leading boundary fails the
+  `10 NOT RUN` guard. Capture's `repro_zero.py` and
+  `repro_zero_tree.py` probes now return the roll-up string for probe A
+  and every probe C shape.
+- 2026-10-17 (Implement): work item 3, the negated zero, is a zero
+  (`no`, `none`, `nothing` in `SUMMARY_ZERO_COUNT`), pinned by the
+  "no criteria were skipped", "none skipped" and "nothing was skipped"
+  subtests. Limit: a negation with two words before the verb ("no live
+  check was skipped") still names. It carries a `lean:` marker and is in
+  ADR-0108's Consequences. A side effect, also in ADR-0108: "nothing
+  was skipped except live dispatch" as a Summary's only mention is now
+  refused.
+- 2026-10-17 (Implement): work item 5, `skills/verify/TEMPLATE.md`
+  line 11 asks for pass/fail counts and so invites "0 NOT RUN", so it
+  now adds that a zero count names nothing. Not mirrored into
+  `factory/templates`.
+- 2026-10-17 (Implement): work item 6, new provisional
+  `docs/adr/0108-a-zero-count-names-nothing.md` superseding ADR-0107 in
+  part, with ADR-0107's status line and both index rows updated.
+- 2026-10-17 (Implement), adjacent and not fixed: `skills/verify/SKILL.md`
+  lines 31 to 33 say H "refuses a Summary that names no unknown word"
+  and cite ADR-0107 only. Under ADR-0108 a zero-preceded word does not
+  count, so the sentence is slightly loose. Out of this run's scope
+  (the brief names only the template).
+- Next stage: Verify.
