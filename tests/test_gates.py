@@ -3052,6 +3052,32 @@ class TestEvidenceRollUp(unittest.TestCase):
                 self.DATED + self.body("1 PASS, 0-skipped.")),
             [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
 
+    def test_named_summary_after_a_zero_count_label_passes(self):
+        # Review fix loop, Minor 1 (ADR-0108): a count label is not the
+        # zero's noun, so "0 FAIL" is a count of failures, never a zero
+        # count of the unknown word after it.
+        for summary in ("3 PASS, 0 FAIL NOT RUN: criterion 9.",
+                        "3 PASS, 0 FAIL - NOT RUN: criterion 9.",
+                        "3 PASS, 0 FAIL -- skipped: live dispatch.",
+                        "3 PASS, 0 FAILED NOT RUN: criterion 9.",
+                        "0 passed NOT RUN: criterion 9."):
+            with self.subTest(summary=summary):
+                self.assertEqual(gates.evidence_problems(
+                    self.DATED + self.body(summary)), [])
+
+    def test_spaced_hyphen_after_a_zero_count_is_a_separator(self):
+        # A spaced ASCII dash separates clauses as an em dash does
+        # (ADR-0108): the zero before it counts something else.
+        self.assertEqual(gates.evidence_problems(
+            self.DATED + self.body(
+                "3 PASS; no regressions - NOT RUN: criterion 9.")), [])
+
+    def test_a_decimal_is_not_a_zero_count(self):
+        # The `.` in the zero's leading guard (ADR-0108): "1.0" is one
+        # number, so its trailing 0 is no zero count.
+        self.assertEqual(gates.evidence_problems(
+            self.DATED + self.body("1 PASS, 1.0 NOT RUN.")), [])
+
     def test_sections_do_not_record_a_zero_count_as_naming(self):
         sections, _ = gates.verification_sections(
             "## Zero\n\n11 PASS, 0 FAIL, 0 NOT RUN.\n\n"

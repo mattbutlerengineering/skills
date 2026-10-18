@@ -30,10 +30,25 @@ An unknown-vocabulary match does not name the kind when a zero count
 directly precedes it (`gates.SUMMARY_ZERO_COUNT`, read by
 `gates._names_unknown`). A zero count is `0`, `zero`, `no`, `none` or
 `nothing` as a whole word, then at most one word, then an optional
-`was` / `were`, then only spaces, hyphens or emphasis markers. So "0 NOT
+`was` / `were`, then only spaces or emphasis markers. So "0 NOT
 RUN", "0 not run", "zero skipped", "0 N/A", "**0** NOT RUN", "0
 criteria skipped", "no criteria were skipped" and "nothing was skipped"
 name nothing.
+
+Amended 2026-10-18 by this run's review fix loop (review.md Minors 1
+and 3), before the ADR left provisional:
+
+- The whole-word zero is also not read straight after a `.`, so "1.0
+  NOT RUN" is one number and still names. The guard was in the code
+  from the start; this states it.
+- The one word may not be a pass/fail count label (any word starting
+  `pass` or `fail`, case-insensitive). "0 FAIL NOT RUN: criterion 9"
+  counts failures, then names the criterion; it names.
+- A hyphen is not part of the tail. A spaced ASCII dash separates
+  clauses as an em or en dash does, so "0 FAIL - NOT RUN: criterion 9"
+  and "no regressions - NOT RUN: criterion 9" name. "0-skipped" is
+  unaffected: the vocabulary's leading boundary never matches after a
+  hyphen, so it names nothing either way.
 
 Every other match still names: "1 NOT RUN", "10 NOT RUN", "2 skipped",
 "criterion 4 was not run". Matches are judged one at a time, so "0 NOT
@@ -70,3 +85,13 @@ artifact on main changes outcome.
 - `gates.py` ships into stamped repos, so the change reaches them on
   their next payload update. The `gates_selftest.py` fixture has no
   zero-count row.
+- Zero shapes outside "directly precedes" still name the kind, and are
+  accepted limits (review.md Minor 2; no tracked artifact uses one over
+  a disclosure): a count hard-wrapped onto the next line ("11 PASS, 0
+  FAIL, 0" then "NOT RUN."), a count written after its word ("NOT RUN:
+  0", "Not run: 0."), table cells (`| NOT RUN | 0 |`, or a header row
+  over a counts row), an en dash ("0 – NOT RUN"), "0 (zero) NOT RUN",
+  "0: NOT RUN" and "0x NOT RUN". Since the 2026-10-18 amendment a
+  spaced hyphen joins them ("0 - NOT RUN"), and so does a zero whose
+  one word starts `pass` or `fail` ("nothing passing was skipped").
+  Widen on a real artifact, as for the longer negation.

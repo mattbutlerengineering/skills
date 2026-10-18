@@ -250,16 +250,21 @@ SUMMARY_UNKNOWN_TERM = re.compile(
     r"|n['’]t\s+(?:been\s+)?run)(?!\w)",
     re.IGNORECASE)
 # A zero count, read on the text right before a SUMMARY_UNKNOWN_TERM match
-# (ADR-0108): `0`, `zero`, `no`, `none` or `nothing` as a whole word, then
-# at most one word ("criteria") and an optional `was`/`were`, then only
-# spaces, hyphens or emphasis. "0 NOT RUN", "zero skipped", "0 criteria
+# (ADR-0108): `0`, `zero`, `no`, `none` or `nothing` as a whole word (not
+# after a `.`, so "1.0" is one number), then at most one word ("criteria")
+# that is not a pass/fail count label, and an optional `was`/`were`, then
+# only spaces or emphasis. "0 NOT RUN", "zero skipped", "0 criteria
 # skipped" and "no criteria were skipped" name nothing; "10 NOT RUN",
-# "1 skipped" and "criterion 4 was not run" still name.
+# "1.0 NOT RUN", "1 skipped" and "criterion 4 was not run" still name.
+# The 2026-10-18 review fix loop: "0 FAIL NOT RUN: criterion 9" counts
+# failures, so a word starting `pass`/`fail` is never the zero's noun; and
+# a spaced hyphen separates clauses as an em or en dash does, so "0 FAIL -
+# NOT RUN: ..." names ("0-skipped" never matched the term at all).
 # lean: a longer negation ("no live check was skipped") still names; widen
 # this on a real artifact that uses one, not before.
 SUMMARY_ZERO_COUNT = re.compile(
-    r"(?<![\w.])(?:0|zero|no|none|nothing)(?:\s+[^\W\d_]+)?"
-    r"(?:\s+(?:were|was))?[\s*_`-]*$",
+    r"(?<![\w.])(?:0|zero|no|none|nothing)(?:\s+(?!pass|fail)[^\W\d_]+)?"
+    r"(?:\s+(?:were|was))?[\s*_`]*$",
     re.IGNORECASE)
 # The roll-up's grandfather cutoff: ADR-0107's own date, compared with the
 # artifact's frontmatter `date:` through _grandfathered, as O and M compare
