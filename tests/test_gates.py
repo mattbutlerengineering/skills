@@ -2989,6 +2989,77 @@ class TestEvidenceRollUp(unittest.TestCase):
                     gates.evidence_problems(self.DATED + self.body(summary)),
                     [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
 
+    # A zero count names nothing (ADR-0108): each shape below says no item
+    # is unknown, so over a disclosed criterion it is the stale Summary the
+    # roll-up exists for. The first is the fail-closed-roll-up retro's
+    # probe, the verify template's own count shape.
+    ZERO_SHAPES = ("1 PASS, 0 FAIL, 0 NOT RUN.",
+                   "1 PASS, 0 not run.",
+                   "1 PASS, zero skipped.",
+                   "1 PASS, 0 N/A.",
+                   "1 PASS, ZERO deferred.",
+                   "1 PASS, **0** NOT RUN.",
+                   "1 PASS, 0 criteria skipped.",
+                   "1 PASS; no criteria were skipped.",
+                   "1 PASS; none skipped.",
+                   "1 PASS; nothing was skipped.")
+
+    def test_zero_count_summary_over_a_disclosed_criterion_fails(self):
+        head = self.DATED.count("\n")
+        for summary in self.ZERO_SHAPES:
+            with self.subTest(summary=summary):
+                self.assertEqual(
+                    gates.evidence_problems(self.DATED + self.body(summary)),
+                    [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
+
+    def test_wrapper_refuses_the_retro_probe(self):
+        root = Path("/repo")
+        parsed = parsed_run(runs=[run_entry(
+            root / "docs/features/demo",
+            verification=self.DATED + self.body(
+                "1 PASS, 0 FAIL, 0 NOT RUN."))])
+        head = self.DATED.count("\n")
+        self.assertEqual(gates.check_evidence_honesty(root, parsed), [
+            f"H: {TestEvidenceHonesty.REL}:{head + 1} "
+            + self.rollup(1, "Live dispatch", head + 15)])
+
+    def test_zero_count_summary_with_no_disclosure_passes(self):
+        for summary in self.ZERO_SHAPES:
+            with self.subTest(summary=summary):
+                self.assertEqual(gates.evidence_problems(
+                    self.DATED + self.body(summary, self.PASSED)), [])
+
+    def test_non_zero_or_named_mention_over_a_disclosure_passes(self):
+        # Judged per match, not per line: one naming mention suffices.
+        for summary in ("1 PASS, 1 NOT RUN.",
+                        "1 PASS, 2 skipped.",
+                        "1 PASS; criterion 4 was not run.",
+                        "1 PASS, 0 NOT RUN, 1 skipped.",
+                        "1 PASS, 0 FAIL, 1 NOT RUN.",
+                        "1 PASS, 10 NOT RUN.",
+                        "1 PASS; no FAIL; 1 skipped.",
+                        "1 PASS; the live check was not run."):
+            with self.subTest(summary=summary):
+                self.assertEqual(gates.evidence_problems(
+                    self.DATED + self.body(summary)), [])
+
+    def test_hyphenated_zero_over_a_disclosure_stays_refused(self):
+        # The term's leading boundary never matches after a hyphen, so
+        # "0-skipped" names nothing before and after ADR-0108.
+        head = self.DATED.count("\n")
+        self.assertEqual(
+            gates.evidence_problems(
+                self.DATED + self.body("1 PASS, 0-skipped.")),
+            [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
+
+    def test_sections_do_not_record_a_zero_count_as_naming(self):
+        sections, _ = gates.verification_sections(
+            "## Zero\n\n11 PASS, 0 FAIL, 0 NOT RUN.\n\n"
+            "## Mixed\n\n0 NOT RUN, 1 skipped.\n")
+        self.assertEqual([(s["title"], s["names_unknown"]) for s in sections],
+                         [("(untitled)", False), ("Zero", False),
+                          ("Mixed", True)])
+
     def test_wrapper_prefixes_the_rollup_problem(self):
         root = Path("/repo")
         parsed = parsed_run(runs=[run_entry(
