@@ -85,6 +85,11 @@ artifact on main changes outcome.
 - `gates.py` ships into stamped repos, so the change reaches them on
   their next payload update. The `gates_selftest.py` fixture has no
   zero-count row.
+  Amended 2026-10-18 (maintenance run the-selftest-cannot-see-a-dodge):
+  the selftest now has two zero-count rows, `H zero count` ("1 PASS, 0
+  FAIL, 0 NOT RUN.") and `H none skipped` ("1 PASS; none skipped."),
+  each over a criterion disclosed NOT RUN, so a stamped repo's
+  `gates.py --selftest` goes red if the zero reading regresses.
 - Zero shapes outside "directly precedes" still name the kind, and are
   accepted limits (review.md Minor 2; no tracked artifact uses one over
   a disclosure): a count hard-wrapped onto the next line ("11 PASS, 0
