@@ -532,6 +532,14 @@ def selftest():
         expect("M quoted date", gates.check_capture_completeness(root),
                "docs/fixes/demo/defect.md missing required section"
                " 'Root-cause hypothesis'")
+    # M: an empty date is judged too — it sorts before any cutoff as a
+    # bare string (#1018).
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        capture_completeness_defect_fixture(root, date="")
+        expect("M empty date", gates.check_capture_completeness(root),
+               "docs/fixes/demo/defect.md missing required section"
+               " 'Root-cause hypothesis'")
 
     # M: a defect.md dated before CAPTURE_ADOPTED is grandfathered —
     # missing every section, but M must stay silent (ADR-0073).
@@ -649,14 +657,18 @@ def selftest():
                "unclosed code fence",
                "neither counts nor names")
 
-    # H: the roll-up rule judges a quoted post-cutoff date (#1018) and
-    # does not read a zero count as naming the unknown kind (ADR-0108).
-    # Each in its own tree, asserted on its own path: the "H" row's
-    # fragment would match any artifact's roll-up line.
+    # H: the roll-up rule judges a quoted or empty post-cutoff date
+    # (#1018) and does not read a zero count, digit or word, as naming
+    # the unknown kind (ADR-0108). Each in its own tree, asserted on its
+    # own path: the "H" row's fragment would match any artifact's roll-up
+    # line.
     for label, date, summary in (
             ("H quoted date", QUOTED_POST_CUTOFF, "All criteria pass."),
+            ("H empty date", "", "All criteria pass."),
             ("H zero count", gates.ROLLUP_ADOPTED,
-             "1 PASS, 0 FAIL, 0 NOT RUN.")):
+             "1 PASS, 0 FAIL, 0 NOT RUN."),
+            ("H none skipped", gates.ROLLUP_ADOPTED,
+             "1 PASS; none skipped.")):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             path = evidence_rollup_defect_fixture(
@@ -697,6 +709,13 @@ def selftest():
         root = Path(tmp)
         prd_coverage_fixture(root, waive_actors=False, date=QUOTED_POST_CUTOFF)
         expect("O quoted date", gates.check_prd_coverage(root),
+               "docs/features/demo/prd.md:12 PRD-0001 §Actors is cited by"
+               " no breakdown row")
+    # O: an empty date is judged too (#1018).
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        prd_coverage_fixture(root, waive_actors=False, date="")
+        expect("O empty date", gates.check_prd_coverage(root),
                "docs/features/demo/prd.md:12 PRD-0001 §Actors is cited by"
                " no breakdown row")
 

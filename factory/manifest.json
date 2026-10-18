@@ -42,7 +42,7 @@
     "templates/tools/factory/factory_config.py": "7f49c2dba84c849b2628f48a85037ad74a8d996962cef578d7ba6d2d945e1a1f",
     "templates/tools/factory/gate_digest.py": "648aadea80f1c7129a071d6aff1d3f5ec78b291eae84866fea08eac6a9eeb7f5",
     "templates/tools/factory/gates.py": "219389d410c7e14aa7cc15dce987ff3cd079f53d2835b974e657cf355806e99b",
-    "templates/tools/factory/gates_selftest.py": "a99ad94afaa70636d10af357b55f7bf53bc4d4709edbe31578ce845451c488e0",
+    "templates/tools/factory/gates_selftest.py": "a1750cc27fe906a27b8e3e60348c72e40c1ce8ba6f4d8786f412e46a29a3e2e4",
     "templates/tools/factory/handoff.py": "3549ea43f3585bbb888b7a1a310a10b410b24d4a112210d56f1be8cea16b1f61",
     "templates/tools/factory/human_gates.py": "419718c2d38c6d28f973edab8a57a8e9ff4fdac2a7ef5fb53d906ea156f0ac81",
     "templates/tools/factory/knowledge_plane.py": "5323b6c109ac686ee7a77eb60b7cf3d1c83b57db6b14586b614b64ac085ca207",

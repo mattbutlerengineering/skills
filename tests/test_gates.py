@@ -10,6 +10,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -3793,7 +3794,23 @@ class TestSelftest(unittest.TestCase):
         code, labels = self._selftest_failures("_grandfathered", raw)
         self.assertEqual(code, 1)
         self.assertEqual(labels,
-                         {"O quoted date", "M quoted date", "H quoted date"})
+                         {"O quoted date", "M quoted date", "H quoted date",
+                          "O empty date", "M empty date", "H empty date"})
+
+    def test_selftest_fails_when_the_date_checks_drop_the_iso_match(self):
+        """The empty-date dodge rows: a _grandfathered that strips the
+        quotes but compares the bare string (no ISO match) grandfathers an
+        empty date, and each of O, M and H's empty-date row must go red
+        while the quoted rows stay green."""
+        def no_iso(date, cutoff):
+            if not isinstance(date, str):
+                return False
+            value = date.strip().strip("\"'").strip()
+            return value < cutoff
+        code, labels = self._selftest_failures("_grandfathered", no_iso)
+        self.assertEqual(code, 1)
+        self.assertEqual(labels,
+                         {"O empty date", "M empty date", "H empty date"})
 
     def test_selftest_fails_when_a_zero_count_names_the_unknown(self):
         """The zero-count row: a _names_unknown that ignored the zero
@@ -3803,7 +3820,23 @@ class TestSelftest(unittest.TestCase):
             return bool(gates.SUMMARY_UNKNOWN_TERM.search(line))
         code, labels = self._selftest_failures("_names_unknown", ignores_zero)
         self.assertEqual(code, 1)
-        self.assertEqual(labels, {"H zero count"})
+        self.assertEqual(labels, {"H zero count", "H none skipped"})
+
+    def test_selftest_fails_when_the_zero_vocabulary_narrows(self):
+        """The none-skipped row: a SUMMARY_ZERO_COUNT narrowed to the digit,
+        or to the digit and "zero", reads "none skipped" as naming the
+        unknown kind, and only the H none-skipped row must go red."""
+        source = gates.SUMMARY_ZERO_COUNT.pattern
+        full = "(?:0|zero|no|none|nothing)"
+        self.assertEqual(source.count(full), 1)
+        for narrowed in ("(?:0)", "(?:0|zero)"):
+            with self.subTest(narrowed=narrowed):
+                regex = re.compile(source.replace(full, narrowed),
+                                   gates.SUMMARY_ZERO_COUNT.flags)
+                code, labels = self._selftest_failures(
+                    "SUMMARY_ZERO_COUNT", regex)
+                self.assertEqual(code, 1)
+                self.assertEqual(labels, {"H none skipped"})
 
 
 if __name__ == "__main__":
