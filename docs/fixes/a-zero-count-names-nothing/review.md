@@ -3,7 +3,8 @@ stage: review
 run: maintenance:a-zero-count-names-nothing
 date: 2026-10-17
 assumptions:
-  - "All five findings are minors and are deferred under the skill's default (minors may be deferred freely). None of them opens a bypass that main lacked, and fixing any of them means a gates.py change, a payload copy and a manifest regen, which is Implement's work, not Review's."
+  - "All five findings are minors and were first deferred under the skill's default (minors may be deferred freely). None of them opens a bypass that main lacked."
+  - "Fix loop (2026-10-18): the Owner answered Fix now for Minors 1 and 3; both are fixed test-first in c2ef6e0. Minors 2, 4 and 5 stay deferred as backlog seeds, and Minor 2 is also an ADR-0108 Consequences line."
   - "Severity of the over-refusal (Minor 1) is judged against ADR-0108's own precedent: that ADR already accepts one honest-but-refused shape ('nothing was skipped except live dispatch') as fail-closed. The refused shapes here are rarer in this repo (6 ASCII ' - ' dash lines across all tracked verification.md files, against 828 em-dash lines), each refusal carries H's actionable string, and no tracked artifact changes outcome."
   - "ZERO_SHAPES is a literal tuple, not a derived collection, so the empty-the-collection vacuity hunt does not apply to it; the vacuity check was done by mutation instead (the Mutations table)."
   - "The review's probe scripts live in the session scratchpad, not the repo: review_zero_probe.py, review_sweep.py and mutate_review_zero.py under /private/tmp/claude-501/-Users-mbutler-github-skills/61791cec-ce5d-4fbf-a8e5-60dc748e0ec7/scratchpad/. The origin/main side ran on a detached worktree of 6a89ee3 in the same scratchpad, removed afterwards."
@@ -172,11 +173,9 @@ No critical and no major findings.
   match straight after a hyphen, so the tail's hyphen only ever acts on
   a spaced dash.
 - Standard: none
-- Decision: deferred (the skill's default for a minor). It fails
-  closed with an actionable string, matching the honest-but-refused
-  shape ADR-0108 already accepts. A cheap later fix: drop `-` from the
-  tail (no test depends on it) and exclude `pass|fail` from the
-  one-word slot, each pinned by a guard subtest.
+- Decision: fixed in `c2ef6e0` (Owner: Fix now). The one-word slot no
+  longer takes a word starting `pass` or `fail`, and the tail no longer
+  takes a hyphen. See "Fix loop" below.
 
 ### Minor: zero shapes that still name are not recorded as limits
 
@@ -196,9 +195,10 @@ No critical and no major findings.
   "pass/fail counts" could reach for.
 - Standard: none
 - Decision: deferred. Prevention for a gap nobody has used (0 tracked
-  artifacts have any of these shapes over a disclosure). Follow-up: a
-  Consequences line in the next ADR touching H, or a backlog seed, per
-  ADR-0108's own "widen on a real artifact" rule.
+  artifacts have any of these shapes over a disclosure). Recorded as an
+  accepted limit in ADR-0108's Consequences (`c2ef6e0`) and seeded in
+  `docs/backlog.md` with a proposed fix, per ADR-0108's own "widen on a
+  real artifact" rule.
 
 ### Minor: two `SUMMARY_ZERO_COUNT` branches are unpinned and one is undocumented
 
@@ -209,8 +209,9 @@ No critical and no major findings.
   says "as a whole word" and never mentions the decimal guard, so the
   code holds a rule the ADR does not state.
 - Standard: none
-- Decision: deferred. Pin both with one guard subtest each when Minor 1
-  is fixed (that fix may delete the hyphen branch instead).
+- Decision: fixed in `c2ef6e0` (Owner: Fix now). The hyphen branch is
+  deleted and the deletion pinned; the dot guard is pinned and stated
+  in ADR-0108. See "Fix loop" below.
 
 ### Minor: `_names_unknown` is quadratic in line length
 
@@ -231,9 +232,9 @@ No critical and no major findings.
   point where this shows.
 - Standard: none
 - Decision: deferred. No real input reaches it, and it is a CI-time
-  cost, not a wrong verdict. A fix is to anchor the zero search to a
-  bounded window before `match.start()`, with the window's width
-  stated beside the grammar.
+  cost, not a wrong verdict. Seeded in `docs/backlog.md`: anchor the
+  zero search to a bounded window before `match.start()`, with the
+  window's width stated beside the grammar.
 
 ### Minor: `skills/verify/SKILL.md` still states the pre-ADR-0108 rule
 
@@ -246,8 +247,8 @@ No critical and no major findings.
   logged this in defect.md's Notes as out of scope.
 - Standard: none
 - Decision: deferred. The template the author fills carries the rule,
-  and the brief scoped only the template. A one-line follow-up: cite
-  ADR-0108 there and say a zero count names nothing.
+  and the brief scoped only the template. Seeded in `docs/backlog.md`:
+  cite ADR-0108 there and say a zero count names nothing.
 
 ## Passes with no findings
 
@@ -307,12 +308,122 @@ $ python3 gates.py --selftest
 selftest: ok
 ```
 
+## Fix loop (2026-10-18)
+
+The Owner answered "Fix now" for Minors 1 and 3 and left 2, 4 and 5
+deferred. Fixed test-first in `c2ef6e0`
+(`fix(gates): a count label or a spaced dash after a zero leaves the
+Summary naming`): `gates.py`, its payload copy (`cmp` identical), the
+manifest regen (no stray `.orig`/`.rej`/`__pycache__` under
+`factory/templates/`), three new tests in `tests/test_gates.py`, and
+ADR-0108's amendment and Consequences line. No existing test's
+expectation changed.
+
+The regex, before and after:
+
+```
+before: (?<![\w.])(?:0|zero|no|none|nothing)(?:\s+[^\W\d_]+)?(?:\s+(?:were|was))?[\s*_`-]*$
+after:  (?<![\w.])(?:0|zero|no|none|nothing)(?:\s+(?!pass|fail)[^\W\d_]+)?(?:\s+(?:were|was))?[\s*_`]*$
+```
+
+Excluding count labels from the one-word slot alone makes all three of
+Minor 1's shapes name. The hyphen was dropped as well, by decision, not
+necessity: a spaced ASCII dash is a clause separator, as the em and en
+dash already were, and keeping it would only ever refuse an honest
+"no regressions - NOT RUN: criterion 9" (ADR-0108's 2026-10-18
+amendment). The cost is that "0 - NOT RUN" now names; ADR-0108 lists it
+with the other accepted limits.
+
+New tests, before the fix (gates.py at `b0a00e7`):
+
+```
+FAIL: test_named_summary_after_a_zero_count_label_passes (...) (summary='3 PASS, 0 FAIL NOT RUN: criterion 9.')
+FAIL: test_named_summary_after_a_zero_count_label_passes (...) (summary='3 PASS, 0 FAIL - NOT RUN: criterion 9.')
+FAIL: test_named_summary_after_a_zero_count_label_passes (...) (summary='3 PASS, 0 FAIL -- skipped: live dispatch.')
+FAIL: test_named_summary_after_a_zero_count_label_passes (...) (summary='3 PASS, 0 FAILED NOT RUN: criterion 9.')
+FAIL: test_named_summary_after_a_zero_count_label_passes (...) (summary='0 passed NOT RUN: criterion 9.')
+FAIL: test_spaced_hyphen_after_a_zero_count_is_a_separator (...)
+AssertionError: Lists differ: [(8, 'summary "Summary" neither counts nor[118 chars]ss')] != []
+Ran 3 tests in 0.002s
+FAILED (failures=6)
+```
+
+`test_a_decimal_is_not_a_zero_count` passed before the fix: it pins a
+guard the code already had, so its red is shown by mutation m4 below.
+After the fix, with the existing refusal tests alongside:
+
+```
+test_named_summary_after_a_zero_count_label_passes ... ok
+test_spaced_hyphen_after_a_zero_count_is_a_separator ... ok
+test_a_decimal_is_not_a_zero_count ... ok
+test_zero_count_summary_over_a_disclosed_criterion_fails ... ok
+test_hyphenated_zero_over_a_disclosure_stays_refused ... ok
+Ran 5 tests in 0.001s
+OK
+```
+
+Mutations re-derived for the new regex (`mutate_fixloop_zero.py` in
+the session scratchpad; same harness as above, each landed, each
+restored). Every one is now caught, m1 and m4 included:
+
+```
+== m1_hyphen_tail_restored landed=True rc=1 ['Ran 290 tests in 4.514s', 'FAILED (failures=1)']
+   FAIL: test_spaced_hyphen_after_a_zero_count_is_a_separator
+== m2_no_emphasis_tail landed=True rc=1 ['Ran 290 tests in 4.704s', 'FAILED (failures=1)']
+   summary='1 PASS, **0** NOT RUN.'
+== m3_no_was_were landed=True rc=1 ['Ran 290 tests in 4.195s', 'FAILED (failures=1)']
+   summary='1 PASS; no criteria were skipped.'
+== m4_no_dot_lookbehind landed=True rc=1 ['Ran 290 tests in 4.213s', 'FAILED (failures=1)']
+   FAIL: test_a_decimal_is_not_a_zero_count
+== m5_no_word_slot landed=True rc=1 ['Ran 290 tests in 4.224s', 'FAILED (failures=2)']
+   summary='1 PASS, 0 criteria skipped.'
+   summary='1 PASS; no criteria were skipped.'
+== m6_no_negations landed=True rc=1 ['Ran 290 tests in 4.338s', 'FAILED (failures=3)']
+   summary='1 PASS; no criteria were skipped.'
+   summary='1 PASS; none skipped.'
+   summary='1 PASS; nothing was skipped.'
+== m7_no_label_exclusion landed=True rc=1 ['Ran 290 tests in 4.799s', 'FAILED (failures=3)']
+   summary='3 PASS, 0 FAIL NOT RUN: criterion 9.'
+   summary='3 PASS, 0 FAILED NOT RUN: criterion 9.'
+   summary='0 passed NOT RUN: criterion 9.'
+== m8_fail_only_exclusion landed=True rc=1 ['Ran 290 tests in 4.341s', 'FAILED (failures=1)']
+   summary='0 passed NOT RUN: criterion 9.'
+restored: True
+```
+
+The review's probe on the fixed tree: Minor 1's three shapes now
+`pass`; "**0** NOT RUN", "ZERO deferred", "0 criteria skipped", "no
+criteria were skipped", "none skipped", "nothing was skipped", "11
+PASS, 0 FAIL, 0 NOT RUN.", "none NOT RUN" and "1/0 NOT RUN" stay
+`REFUSED`; "1.0 NOT RUN" passes. The tracked-artifact sweep, `b0a00e7`
+against the fixed tree: `files=93 refused_main=0 refused_head=0
+outcome_changes=0 summary_flips=0`.
+
+Deferred, each with a `docs/backlog.md` seed tagged
+`(from: maintenance:a-zero-count-names-nothing)`: Minor 2 (also an
+ADR-0108 Consequences line), Minor 4 and Minor 5.
+
+Checks after the fix (`c2ef6e0` plus the seeds):
+
+```
+$ python3 run_tests.py
+tests: 3321 tests across 106 modules in 16.8s on 8 workers, 0 problem(s)
+$ python3 lint.py
+lint: 0 problem(s) across 34 skills
+$ python3 kb.py drift
+drift: 0 problem(s)
+$ python3 gates.py
+gates: 0 problem(s)
+$ python3 gates.py --selftest
+selftest: ok
+```
+
 ## Verdict
 
 Ready for Ship. All five passes and the test review ran; none was
 skipped or left unknown, and the domain passes were not selected. No
-critical or major finding, so the fix loop was not entered. Five minors
-are deferred with reasons: the over-refusal of a spaced-dash or
-comma-less named Summary, the unrecorded zero shapes that still name,
-two unpinned regex branches, the quadratic rescan, and the stale
-sentence in `skills/verify/SKILL.md`.
+critical or major finding. The Owner chose Fix now for Minors 1 and 3,
+both fixed in `c2ef6e0` with the four checks green after. Three minors
+stay deferred with reasons and a backlog seed each: the zero shapes
+that still name (also an ADR-0108 accepted limit), the quadratic
+rescan, and the stale sentence in `skills/verify/SKILL.md`.
