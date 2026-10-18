@@ -32,7 +32,12 @@ still gets a real verdict; silence would read as a pass.
 
 2. **The protocol is readable.** Read the pipeline protocol from the
    installed plugin. It is the runtime interface here — this repo has no
-   `protocol.py` to fall back on.
+   `protocol.py` to fall back on. Read the installed plugin's version too,
+   from `.claude-plugin/plugin.json` two levels above this skill's base
+   directory, and name it in the report above the summary
+   (`plugin: idea-to-prod <version>`). `claude plugin update` refreshes
+   the cache only when that version moves, so a stale cache looks
+   exactly like a current one until something names the number.
 
 3. **Any run artifacts parse.** Walk the candidate run directories (`docs/`
    plus every `docs/features/*/` and `docs/fixes/*/`). For each artifact
@@ -65,6 +70,24 @@ marker and asks for no `factory/templates/` mirror there. A
 unversioned (`python3 tools/factory/conductor.py --version` says so) and
 name the fix, `factory-init update --tools-only`, which writes the
 manifest.
+
+Then compare the stamp's version with the plugin's. Read the stamp's from
+`python3 tools/factory/conductor.py --version`, which prints what the
+manifest records, and the plugin's from step 2. Compare them as dotted
+integers, not strings, because `0.9.0` is older than `0.10.0`. No
+repo-side gate can make this check, because none of them can see the
+installed plugin. Equal versions are not a problem. A difference is one
+`DOCTOR [tier 1]` line, and its fix depends on which side is older:
+
+- **The stamp is older.** The repo's tools predate gate and payload
+  fixes the plugin already carries. Fix: `factory-init update` (or
+  `factory-init update --tools-only` on a tools-only stamp).
+- **The plugin is older.** The installed cache is stale: the repo was
+  stamped from a newer plugin than this session runs, so these skills
+  may not match the tools they drive. Fix:
+  `claude plugin marketplace update skills`, then
+  `claude plugin update idea-to-prod@skills`, then start a new session,
+  because skills load at session start.
 
 4. **Run the installed detectors** and read their problem strings — never
    re-derive a finding they already report:
@@ -156,6 +179,12 @@ manifest.
           tests/ with at least one test module
         doctor: 1 problem(s) — tier 0 ok, tier 1 1 problem(s),
           tier 2 not run (networked, ask to include it)
+
+    A clean plugin-only install ends with exactly this line, word for word.
+    The README quotes it as the expected output of a working install, so
+    it is a contract, not a sample:
+
+        doctor: 0 problem(s) — tier 0 ok, tier 1 skipped (no tools/factory/ — plugin-only install), tier 2 not run (networked, ask to include it)
 
     A tier that could not run is reported as not run, never as clean.
 
