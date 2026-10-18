@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:the-selftest-cannot-see-a-dodge
 date: 2026-10-18
-outcome: prepared
+outcome: released
+released-at: 2026-10-18
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1029
 assumptions:
   - "Ship's independent re-check stands in for re-running Verify. verification.md (`0cbbdf9`) predates the fix-loop commits `dfae528`, `8a7d334` and `1ce5ba2`, and until now only their author had checked them. Ship re-ran the four checks on `1ce5ba2`, wrote its own mutation script (ship_dodge_mutate.py in the session scratchpad) for R2 and R3, ran it in a detached scratch worktree and in a freshly stamped temp repo, and compared the root and payload gates_selftest.py with `cmp`, all quoted below. verification.md is not rewritten."
@@ -238,9 +239,9 @@ unmerged. The write-back runs these checks once it merges:
 
 ## Outcome
 
-Prepared and stopped. The run waits on the pull request
-`pending-merge:` names (#1029), and stays at Ship until the merge is
-written back. For the Owner:
+Released. The Owner answered "Merge now" in session, and #1029 was
+squash-merged as `dfe42e0` at 2026-10-18T22:39:34Z, closing #1028. The
+items recorded at prepare time still stand:
 
 - **Merge** #1029 (step 1 above). No other PR is open, so there is no
   merge-order conflict today.
