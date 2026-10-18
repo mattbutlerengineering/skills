@@ -10,7 +10,8 @@ date: YYYY-MM-DD
 
 <Pass/fail counts and the one-sentence verdict. Count or name every NOT RUN
 / unknown criterion, and never read as an unqualified pass over them (the
-fail-closed roll-up; claim kinds in the plugin's CONTEXT.md).>
+fail-closed roll-up; claim kinds in the plugin's CONTEXT.md). A zero count
+("0 NOT RUN") names nothing: re-count after any criterion changes.>
 
 ## Criteria & evidence
 

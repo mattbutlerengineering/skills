@@ -230,7 +230,9 @@ VERDICT_LEAD = re.compile(r"^[\s*_`\"'“‘([]+")
 # `unmet` and `unproven`: without them the honest "2 NOT YET VERIFIABLE"
 # Summary on main fails. Any word satisfies any disclosed head, because
 # every head is the same claim kind. A count carries its word ("1 NOT
-# RUN"), so naming covers counting; there is no pass-word scan.
+# RUN"), so naming covers counting, except at zero: "0 NOT RUN" says no
+# item is unknown, so a match SUMMARY_ZERO_COUNT ends right before names
+# nothing (ADR-0108). There is no pass-word scan.
 # The 2026-10-17 review widened it on evidence (ADR-0107's amendment):
 # Summary-only words that can only mean not examined (`not applicable`,
 # `not_run`/`notrun`, `unverifiable`, `unexercised`, `not be(en) run`,
@@ -246,6 +248,23 @@ SUMMARY_UNKNOWN_TERM = re.compile(
     r"|not\s+applicable|not_?run|unverifiable|unexercised"
     r"|not\s+be(?:en)?\s+run)"
     r"|n['’]t\s+(?:been\s+)?run)(?!\w)",
+    re.IGNORECASE)
+# A zero count, read on the text right before a SUMMARY_UNKNOWN_TERM match
+# (ADR-0108): `0`, `zero`, `no`, `none` or `nothing` as a whole word (not
+# after a `.`, so "1.0" is one number), then at most one word ("criteria")
+# that is not a pass/fail count label, and an optional `was`/`were`, then
+# only spaces or emphasis. "0 NOT RUN", "zero skipped", "0 criteria
+# skipped" and "no criteria were skipped" name nothing; "10 NOT RUN",
+# "1.0 NOT RUN", "1 skipped" and "criterion 4 was not run" still name.
+# The 2026-10-18 review fix loop: "0 FAIL NOT RUN: criterion 9" counts
+# failures, so a word starting `pass`/`fail` is never the zero's noun; and
+# a spaced hyphen separates clauses as an em or en dash does, so "0 FAIL -
+# NOT RUN: ..." names ("0-skipped" never matched the term at all).
+# lean: a longer negation ("no live check was skipped") still names; widen
+# this on a real artifact that uses one, not before.
+SUMMARY_ZERO_COUNT = re.compile(
+    r"(?<![\w.])(?:0|zero|no|none|nothing)(?:\s+(?!pass|fail)[^\W\d_]+)?"
+    r"(?:\s+(?:were|was))?[\s*_`]*$",
     re.IGNORECASE)
 # The roll-up's grandfather cutoff: ADR-0107's own date, compared with the
 # artifact's frontmatter `date:` through _grandfathered, as O and M compare
@@ -1149,6 +1168,15 @@ def _walk_sections(lines, body_start):
         yield "line", lineno, (line, False)
 
 
+def _names_unknown(line):
+    """Does LINE name the unknown kind (ADR-0107, ADR-0108)? True when some
+    SUMMARY_UNKNOWN_TERM match in it is not directly preceded by a zero
+    count (SUMMARY_ZERO_COUNT). Judged per match, so "0 NOT RUN, 1
+    skipped" names on its second mention."""
+    return any(not SUMMARY_ZERO_COUNT.search(line, 0, match.start())
+               for match in SUMMARY_UNKNOWN_TERM.finditer(line))
+
+
 def verification_sections(text):
     """Split a verification artifact's TEXT into heading-delimited sections,
     each recording — IN ITS OWN SCOPE — whether it shows literal output,
@@ -1169,8 +1197,9 @@ def verification_sections(text):
     unclosed), where each section is {"title", "lineno", "evidence",
     "not_run", "names_unknown", "results"} and `unclosed` is the line
     number of a fence that is never closed, or None. `names_unknown` (an
-    unfenced SUMMARY_UNKNOWN_TERM word) is recorded for every section and
-    read only for a Summary, by _rollup_problems.
+    unfenced SUMMARY_UNKNOWN_TERM word that no SUMMARY_ZERO_COUNT directly
+    precedes, judged per match: see _names_unknown) is recorded for every
+    section and read only for a Summary, by _rollup_problems.
 
     Built on the shared _skip_frontmatter/_walk_sections engine (also used
     by capture_sections, detector M's own reader): this function owns only
@@ -1201,7 +1230,7 @@ def verification_sections(text):
                 continue
             if NOT_RUN_TOKEN.search(line):
                 current["not_run"] = True
-            if SUMMARY_UNKNOWN_TERM.search(line):
+            if _names_unknown(line):
                 current["names_unknown"] = True
             result = RESULT_LINE.match(line)
             if result:
