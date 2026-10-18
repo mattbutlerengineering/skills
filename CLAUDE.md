@@ -164,6 +164,6 @@ Non-inferable project knowledge, one page per line. Read a page before changing 
 - docs/kb/gates-scan-every-doc.md: Detectors C and I scan every repo markdown, fences included; an example PRD/ADR/WO id or a sample link fails gates.
 - docs/kb/main-unprotected.md: main has no branch protection or rulesets — ADR-0036's required checks are convention, and the ADR-0070 merge queue is off.
 - docs/kb/manifest-regen.md: update-manifest hashes every file under factory/templates/; delete stray .orig/.rej first or they get checksum-pinned.
-- docs/kb/pr-body-contract.md: A PR body needs a WO id or a "No work order:" line plus Closes #N, or detector B fails on CI only — it skips locally.
+- docs/kb/pr-body-contract.md: A PR body needs a WO id or a "No work order:" line plus Closes #N; B skips locally, only the gh pr create hook catches it early.
 - docs/kb/stamp-outside-payload.md: factory-init stamps CODEOWNERS, the Makefile, factory.json, labels.json, seeded ADRs and design docs outside FACTORY_OWNED; update never refreshes them, and only doctor checks most.
 <!-- END KB INDEX -->
