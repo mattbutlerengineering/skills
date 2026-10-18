@@ -223,54 +223,54 @@ as a minor (the seed's origin), so it never reached a work item.
 
 Re-entry is Implement, so these checkboxes are the run's breakdown.
 
-- [ ] **O dodge row**: a selftest scenario with a PRD dated quoted and
+- [x] **O dodge row**: a selftest scenario with a PRD dated quoted and
   after `COVERAGE_ADOPTED` (for example `date: "2026-10-20"`), in its
   own tree, beside an uncited, unwaived section. Assert O's coverage
   string under its own label (for example `"O quoted date"`).
   - Accept: passes on today's code, and the expected string names the
     fixture's `prd.md` path.
-- [ ] **M dodge row**: a selftest scenario with a defect.md dated quoted
+- [x] **M dodge row**: a selftest scenario with a defect.md dated quoted
   and after `CAPTURE_ADOPTED`, missing a required section, in its own
   tree. Assert M's string under its own label.
   - Accept: passes on today's code, and the expected string names the
     fixture's `defect.md` path.
-- [ ] **H date dodge row**: a verification.md dated quoted and after
+- [x] **H date dodge row**: a verification.md dated quoted and after
   `ROLLUP_ADOPTED`, its Summary reading as a full pass over a criterion
   disclosed NOT RUN. Assert H's roll-up string on that artifact's own
   path, under its own label.
   - Accept: passes on today's code. The assert is path-specific, so the
     existing `rolledup` row's "neither counts nor names" cannot satisfy
     it.
-- [ ] **H zero-count row**: a verification.md dated on or after
+- [x] **H zero-count row**: a verification.md dated on or after
   `ROLLUP_ADOPTED` (unquoted), its Summary reading "N PASS, 0 FAIL, 0
   NOT RUN" over a criterion disclosed NOT RUN. Assert the roll-up string
   on that artifact's own path, under its own label.
   - Accept: passes on today's code, and is path-specific as above.
-- [ ] **Shared builders stay green**: whether a new row gets its own
+- [x] **Shared builders stay green**: whether a new row gets its own
   builder or a parameter on an existing one, the `TestRoster.defects()`
   and `tests/test_knowledge_plane.py` callers keep passing unedited, or
   are edited only to follow a changed signature.
   - Accept: `python3 -m unittest tests.test_gates
     tests.test_knowledge_plane` passes.
-- [ ] **Mutation proof (scratchpad only)**: in a scratch worktree or
+- [x] **Mutation proof (scratchpad only)**: in a scratch worktree or
   copy, never the working tree, apply each reversion from Reproduction
   in turn (O's call, M's call, `_rollup_applies`, `_names_unknown`), and
   run `python3 gates.py --selftest` against the new rows.
   - Accept: each of the four runs prints `selftest: FAIL` with a failure
     line naming that reversion's row, and the expected output is quoted
     in Notes from a real run. The scratch copy is removed afterwards.
-- [ ] **Payload mirror and manifest**: copy `gates_selftest.py` to
+- [x] **Payload mirror and manifest**: copy `gates_selftest.py` to
   `factory/templates/tools/factory/gates_selftest.py`. Delete any stray
   `.orig`/`.rej` files first, then run `python3 factory_init.py
   update-manifest` and commit the manifest.
   - Accept: `cmp` shows the two files are identical, and detector E is
     clean.
-- [ ] **Backlog claim**: the claim on `docs/backlog.md` line 124 landed
+- [x] **Backlog claim**: the claim on `docs/backlog.md` line 124 landed
   with this capture commit. Confirm it is still there and well-formed,
   then check this box.
   - Accept: the seed line ends in
     `(claimed: maintenance:the-selftest-cannot-see-a-dodge)`.
-- [ ] **Whole-repo checks**: `python3 run_tests.py`, `python3 lint.py`,
+- [x] **Whole-repo checks**: `python3 run_tests.py`, `python3 lint.py`,
   `python3 kb.py drift`, and `python3 gates.py && python3 gates.py
   --selftest`.
   - Accept: all pass. `gates.py --selftest` prints `selftest: ok` on the
@@ -295,4 +295,77 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   change, the other open H seeds (backlog lines 126 to 132), and
   `.claude-plugin/plugin.json` (ADR-0095). The payload changes, so a
   later `chore(release)` PR is owed.
-- Next stage: Implement.
+- 2026-10-18 (Implement): the four rows landed as `O quoted date`,
+  `M quoted date`, `H quoted date` and `H zero count`, each in its own
+  temporary tree, each asserting one fragment that carries its own
+  artifact path and line. `prd_coverage_fixture` and
+  `capture_completeness_defect_fixture` gained an optional `date`
+  (default unchanged), and a new `evidence_rollup_defect_fixture(root,
+  slug, date, summary)` writes one roll-up artifact and returns its path.
+  The existing `rolledup` artifact is now written through it, with the
+  same text, so the roll-up body has one copy. No caller was edited.
+- 2026-10-18 (Implement): mutation proof, run in a detached scratch
+  worktree at `997f738` with the new `gates_selftest.py` copied in
+  (removed afterwards; the working tree's `gates.py` was never edited).
+  Baseline: `selftest: ok`, exit 0. Each reversion was applied alone,
+  then reset with `git checkout -- gates.py`. Verbatim:
+
+  ```
+  === reversion O
+   gates.py | 2 +-
+  O quoted date: expected a problem containing 'docs/features/demo/prd.md:12 PRD-0001 §Actors is cited by no breakdown row', got []
+  selftest: FAIL
+  exit=1
+  === reversion M
+   gates.py | 2 +-
+  M quoted date: expected a problem containing "docs/fixes/demo/defect.md missing required section 'Root-cause hypothesis'", got []
+  selftest: FAIL
+  exit=1
+  === reversion Hdate
+   gates.py | 2 +-
+  H quoted date: expected a problem containing 'docs/features/rollup/verification.md:7 summary "Summary" neither counts nor names', got []
+  selftest: FAIL
+  exit=1
+  === reversion Hzero
+   gates.py | 3 +--
+  H zero count: expected a problem containing 'docs/features/rollup/verification.md:7 summary "Summary" neither counts nor names', got []
+  selftest: FAIL
+  exit=1
+  ```
+
+  Each reversion fails its own row and no other row. The seed's
+  combined shape (a raw compare inside `_grandfathered`) fails the three
+  date rows together, and only those:
+
+  ```
+  M quoted date: expected a problem containing "docs/fixes/demo/defect.md missing required section 'Root-cause hypothesis'", got []
+  H quoted date: expected a problem containing 'docs/features/rollup/verification.md:7 summary "Summary" neither counts nor names', got []
+  O quoted date: expected a problem containing 'docs/features/demo/prd.md:12 PRD-0001 §Actors is cited by no breakdown row', got []
+  selftest: FAIL
+  exit=1
+  ```
+
+- 2026-10-18 (Implement, assumption): the permanent mutation pin was
+  added, on the orchestrator's recommendation (cheap, and it stops the
+  rows going vacuous later). Two `TestSelftest` tests patch
+  `gates._grandfathered` with the raw compare and `gates._names_unknown`
+  with a zero-blind search, then assert `selftest()` returns 1 and that
+  the failing labels are exactly `{"O quoted date", "M quoted date",
+  "H quoted date"}` and exactly `{"H zero count"}`. Both were run first
+  against the tree without the rows, and failed `0 != 1`. Patching
+  `_grandfathered` stands in for the per-caller reversions, which a
+  `mock.patch.object` cannot reach one at a time. The per-caller proof is
+  the scratch run above.
+- 2026-10-18 (Implement, assumption): the H rows assert the roll-up line
+  at line 7 of their own `docs/features/rollup/verification.md`, a fixed
+  line the builder writes. A builder edit that moves the Summary must
+  update the fragment; the selftest goes red, not silent, if it does not.
+- 2026-10-18 (Implement): checks on the committed tree:
+  `tests: 3325 tests across 106 modules in 33.6s on 8 workers, 0
+  problem(s)`, `lint: 0 problem(s) across 34 skills`, `drift: 0
+  problem(s)`, `gates: 0 problem(s)`, `selftest: ok`; `python3 -m
+  unittest tests.test_gates tests.test_knowledge_plane` ran 364 tests,
+  `OK`. `cmp` finds the root and payload `gates_selftest.py` identical,
+  no stray `.orig`/`.rej` existed, and `update-manifest` reported
+  `factory-init: 0 problem(s)`.
+- Next stage: Verify.
