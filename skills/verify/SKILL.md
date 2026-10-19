@@ -30,7 +30,8 @@ verdict.
    names every NOT RUN / unknown criterion and never reads as an
    unqualified pass over them (the fail-closed roll-up; claim kinds in
    `../../CONTEXT.md`). Detector H refuses a Summary that names no
-   unknown word over a criterion with a labelled NOT RUN verdict (ADR-0107).
+   unknown word over a criterion with a labelled NOT RUN verdict (ADR-0107);
+   a zero count ("0 NOT RUN") names nothing and is refused too (ADR-0108).
 
 5. **Report honestly.** Failures and gaps go in the artifact as failures and
    gaps — never soften them. A criterion that can't be verified is a finding
