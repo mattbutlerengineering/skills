@@ -19,6 +19,7 @@ from pathlib import Path
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling helper imports
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cli_contract  # noqa: E402
 import git_repo  # noqa: E402
 
 import cli  # noqa: E402
@@ -564,6 +565,251 @@ class TestReviewFindings(unittest.TestCase):
     def test_s1_does_not_match_inside_s10(self):
         self.assertEqual(findings("## F1 — S10 and WS1 and S1x\n"),
                          {"label": "observed", "findings": 1, "named": 0})
+
+
+P = "decompose-signals: "
+NO_REVIEW = "review-traced unmeasurable — no review.md"
+
+
+class ReportCase(unittest.TestCase):
+    """main([]) against a real temp repo; every line asserted exactly."""
+
+    def setUp(self):
+        self.repo = Repo(self)
+        self.repo.commit("feat: base", **{at("README.md"): "hi\n"})
+
+    def main(self, argv=(), run=None):
+        return cli_contract.capture(decompose_signals.main, list(argv),
+                                    root=self.repo.root,
+                                    run=run or git_run())
+
+    def header(self):
+        listing = self.repo.git("for-each-ref",
+                                "--format=%(refname) %(objectname)")
+        lines = sorted(line for line in listing.splitlines()
+                       if not line.startswith("refs/stash "))
+        digest = hashlib.sha256(
+            "".join(f"{line}\n" for line in lines).encode()).hexdigest()
+        return [f"{P}refs read — refs/heads ({len(lines)}); refs/stash"
+                f" skipped; digest {digest[:12]}",
+                f"{P}boundary rule — {decompose_signals.RULE}"]
+
+    def run_lines(self, out):
+        return [line for line in out.splitlines()
+                if line.startswith(P + "feature:")
+                or line.startswith(P + "maintenance:")
+                or line.startswith(P + "product ")]
+
+    def only_run_line(self):
+        code, out = self.main()
+        self.assertEqual(code, 0, out)
+        lines = self.run_lines(out)
+        self.assertEqual(len(lines), 1, out)
+        return lines[0]
+
+
+def sha7(sha):
+    return sha[:7]
+
+
+class TestTheFiveFixtureRuns(ReportCase):
+    def test_a_run_with_no_re_plans(self):
+        d = self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        i = self.repo.commit("docs(demo): implement — done", **{BD: TICKED})
+        self.assertEqual(self.only_run_line(), (
+            f"{P}feature:demo — decompose observed {sha7(d)}, implement"
+            f" observed {sha7(i)}; re-plan 0 of 2 (added 0, dropped 0,"
+            " split 0, merged 0; renamed 0) observed; design gaps 0"
+            f" observed; {NO_REVIEW}"))
+
+    def test_a_run_with_a_split_item(self):
+        d = self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        i = self.repo.commit("feat: S1, split", **{BD: breakdown(
+            row("S1", "first — superseded by S3 and S4", done=True),
+            row("S2", "second"), row("S3", "a"), row("S4", "b"))})
+        self.assertEqual(self.only_run_line(), (
+            f"{P}feature:demo — decompose observed {sha7(d)}, implement"
+            f" inferred {sha7(i)}; re-plan 3 of 2 (added 2, dropped 0,"
+            " split 1, merged 0; renamed 0) inferred; design gaps 0"
+            f" inferred; {NO_REVIEW}"))
+
+    def test_a_run_routed_back_to_architect(self):
+        d = self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        self.repo.commit("docs(demo): architect — the gap",
+                         **{ARCH: "# Architecture\n"})
+        i = self.repo.commit("docs(demo): implement — done", **{BD: TICKED})
+        self.assertEqual(self.only_run_line(), (
+            f"{P}feature:demo — decompose observed {sha7(d)}, implement"
+            f" observed {sha7(i)}; re-plan 0 of 2 (added 0, dropped 0,"
+            " split 0, merged 0; renamed 0) observed; design gaps 1"
+            f" observed; {NO_REVIEW}"))
+
+    def test_a_run_with_only_inferred_boundaries(self):
+        d = self.repo.commit("feat: plan", **{BD: PLAN})
+        i = self.repo.commit("feat: S1", **{BD: TICKED})
+        self.assertEqual(self.only_run_line(), (
+            f"{P}feature:demo — decompose inferred {sha7(d)}, implement"
+            f" inferred {sha7(i)}; re-plan 0 of 2 (added 0, dropped 0,"
+            " split 0, merged 0; renamed 0) inferred; design gaps 0"
+            f" inferred; {NO_REVIEW}"))
+
+    def test_an_unmeasurable_run(self):
+        self.repo.write(f"{RUN}/breakdown.md", PLAN)
+        reason = f"no commit on the refs read changes {RUN}/breakdown.md"
+        self.assertEqual(self.only_run_line(), (
+            f"{P}feature:demo — decompose none, implement none; re-plan"
+            f" unmeasurable — {reason}; design gaps unmeasurable —"
+            f" {reason}; {NO_REVIEW}"))
+
+
+class TestReviewShapes(ReportCase):
+    def setUp(self):
+        super().setUp()
+        self.repo.commit("feat: plan", **{BD: PLAN})
+        self.repo.commit("feat: S1", **{BD: TICKED})
+
+    def review_part(self):
+        return self.only_run_line().rsplit("; ", 1)[1]
+
+    def test_no_review_md(self):
+        self.assertEqual(self.review_part(), NO_REVIEW)
+
+    def test_a_review_with_no_finding_heading(self):
+        self.repo.write(f"{RUN}/review.md", "# Review\n\n## Verdict\n\nOK\n")
+        self.assertEqual(
+            self.review_part(),
+            "review-traced 0 findings — review.md has no finding heading")
+        self.assertNotEqual(self.review_part(), NO_REVIEW)
+
+    def test_findings_that_name_an_item(self):
+        self.repo.write(f"{RUN}/review.md",
+                        "# Review\n\n### Major: S1 is off\n\n"
+                        "### Minor: nothing named\n")
+        self.assertEqual(self.review_part(),
+                         "review-traced 1 of 2 findings name an item")
+
+
+class TestTheWholeReport(ReportCase, cli_contract.ReportContract,
+                         cli_contract.CliContract):
+    summary_line = f"{P}3 run(s), 0 problem(s)"
+    usage_fragment = "python3 decompose_signals.py [--record]"
+    bad_argv = ("--nope",)
+
+    def setUp(self):
+        super().setUp()
+        a, b = "docs/features/a", "docs/features/b"
+        self.a_d = self.repo.commit(
+            "docs(a): decompose — plan", **{at(f"{a}/breakdown.md"): PLAN})
+        self.b_d = self.repo.commit(
+            "feat: plan b", **{at(f"{b}/breakdown.md"): breakdown(
+                row("S1", "only"))})
+        self.a_i = self.repo.commit(
+            "docs(a): implement — done",
+            **{at(f"{a}/breakdown.md"): TICKED})
+        self.b_i = self.repo.commit(
+            "feat: b grows", **{at(f"{b}/breakdown.md"): breakdown(
+                row("S1", "only", done=True), row("S2", "new"))})
+        self.repo.write(f"{a}/review.md", "## F1 — S1\n\n## F2 — none\n")
+        self.repo.write(f"{b}/review.md", "# Review\n")
+        self.repo.write("docs/fixes/c/breakdown.md", PLAN)
+
+    def clean_cli(self):
+        return self.main()
+
+    def run_cli(self, argv):
+        return self.main(argv)
+
+    def test_the_exact_report(self):
+        code, out = self.main()
+        reason = ("no commit on the refs read changes"
+                  " docs/fixes/c/breakdown.md")
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), self.header() + [
+            f"{P}feature:a — decompose observed {sha7(self.a_d)}, implement"
+            f" observed {sha7(self.a_i)}; re-plan 0 of 2 (added 0, dropped"
+            " 0, split 0, merged 0; renamed 0) observed; design gaps 0"
+            " observed; review-traced 1 of 2 findings name an item",
+            f"{P}feature:b — decompose inferred {sha7(self.b_d)}, implement"
+            f" inferred {sha7(self.b_i)}; re-plan 1 of 1 (added 1, dropped"
+            " 0, split 0, merged 0; renamed 0) inferred; design gaps 0"
+            " inferred; review-traced 0 findings — review.md has no"
+            " finding heading",
+            f"{P}maintenance:c — decompose none, implement none; re-plan"
+            f" unmeasurable — {reason}; design gaps unmeasurable —"
+            f" {reason}; {NO_REVIEW}",
+            f"{P}aggregate re-plan — observed 0/2 over 1 run(s); inferred"
+            " 1/1 over 1 run(s); combined 1/3 over 2 run(s); unmeasurable"
+            " 1 run(s)",
+            f"{P}aggregate design gaps — observed 0/1 over 1 run(s);"
+            " inferred 0/1 over 1 run(s); combined 0/2 over 2 run(s);"
+            " unmeasurable 1 run(s)",
+            f"{P}aggregate review-traced — observed 1/2 over 2 run(s);"
+            " inferred 0/0 over 0 run(s); combined 1/2 over 2 run(s);"
+            " unmeasurable 1 run(s)",
+            self.summary_line])
+
+    def test_the_rule_names_its_adr(self):
+        self.assertIn("ADR-0109", decompose_signals.RULE)
+
+
+class TestReportFailures(ReportCase):
+    def test_a_failed_for_each_ref_prints_no_run_lines(self):
+        self.repo.commit("feat: plan", **{BD: PLAN})
+        code, out = self.main(run=failing(BOOM))
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            f"{P}git for-each-ref failed: fatal: boom",
+            f"{P}0 run(s), 1 problem(s)"])
+
+    def test_a_failed_log_prints_no_run_lines(self):
+        self.repo.commit("feat: plan", **{BD: PLAN})
+        real = git_run()
+
+        def run(args, input=None, cwd=None):
+            if args[0] == "log":
+                raise BOOM
+            return real(args, input=input, cwd=cwd)
+        code, out = self.main(run=run)
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            f"{P}git log failed: fatal: boom", f"{P}0 run(s), 1 problem(s)"])
+
+    def test_a_failed_show_is_read_failed_plus_one_problem(self):
+        self.repo.commit("feat: plan", **{BD: PLAN})
+        real = git_run()
+
+        def run(args, input=None, cwd=None):
+            if args[0] == "show":
+                raise BOOM
+            return real(args, input=input, cwd=cwd)
+        code, out = self.main(run=run)
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines()[2:], [
+            f"{P}feature:demo — decompose none, implement none; re-plan"
+            " unmeasurable — read failed; design gaps unmeasurable — read"
+            f" failed; {NO_REVIEW}",
+            f"{P}aggregate re-plan — observed 0/0 over 0 run(s); inferred"
+            " 0/0 over 0 run(s); combined 0/0 over 0 run(s); unmeasurable"
+            " 1 run(s)",
+            f"{P}aggregate design gaps — observed 0/0 over 0 run(s);"
+            " inferred 0/0 over 0 run(s); combined 0/0 over 0 run(s);"
+            " unmeasurable 1 run(s)",
+            f"{P}aggregate review-traced — observed 0/0 over 0 run(s);"
+            " inferred 0/0 over 0 run(s); combined 0/0 over 0 run(s);"
+            " unmeasurable 1 run(s)",
+            f"{P}git show failed: fatal: boom",
+            f"{P}1 run(s), 1 problem(s)"])
+
+    def test_only_local_read_only_verbs_are_run_end_to_end(self):
+        self.repo.commit("feat: plan", **{BD: PLAN})
+        self.repo.commit("feat: S1", **{BD: TICKED})
+        real, verbs = git_run(), []
+
+        def run(args, input=None, cwd=None):
+            verbs.append(args[0])
+            return real(args, input=input, cwd=cwd)
+        self.main(run=run)
+        self.assertLessEqual(set(verbs), ALLOWED_VERBS)
 
 if __name__ == "__main__":
     unittest.main()
