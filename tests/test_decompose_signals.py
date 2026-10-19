@@ -256,6 +256,38 @@ class TestImplement(HistoryCase):
         self.repo.commit("feat: S1", **{BD: TICKED})
         self.assertEqual(self.bounds()["implement"], {"unmeasurable": NO_I})
 
+    def test_a_version_with_no_rows_is_never_fully_checked(self):
+        """ADR-0111: at least one row. Zero of zero is not every row."""
+        self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        self.repo.commit("feat: rows moved out", **{BD: breakdown()})
+        done = self.repo.commit("feat: S1 and S2", **{BD: DONE})
+        self.assertEqual(self.bounds()["implement"],
+                         {"sha": done, "label": "inferred"})
+
+    def test_an_all_checked_decompose_commit_is_not_its_own_implement(self):
+        """ADR-0111: the earliest commit *after* D. An observed D whose
+        version already checks every row does not end its own window."""
+        self.repo.commit("docs(demo): decompose — plan", **{BD: DONE})
+        self.assertEqual(self.bounds()["implement"], {"unmeasurable": NO_I})
+        later = self.repo.commit("feat: note", **{BD: DONE + "\nnote\n"})
+        self.assertEqual(self.bounds()["implement"],
+                         {"sha": later, "label": "inferred"})
+
+    def test_a_failed_read_before_the_last_tick_is_read_failed(self):
+        """The inferred pass reads every version up to the all-checked
+        one; a failed read on the way is never skipped."""
+        self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        tick = self.repo.commit("feat: S1", **{BD: TICKED})
+        self.repo.commit("feat: S2", **{BD: DONE})
+
+        def read(sha, path):
+            if sha == tick:
+                return None
+            return read_version(self.repo.root, self.run, sha, path)[0]
+        self.assertEqual(
+            boundaries(self.history()["commits"], RUN, read)["implement"],
+            {"unmeasurable": "read failed"})
+
 
 class TestRefs(HistoryCase):
     def test_a_commit_only_on_refs_stash_is_never_a_boundary(self):
