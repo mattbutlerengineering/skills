@@ -27,7 +27,7 @@ three mirrored modules:
 
 - `cli`, for `runner`, `CLI_FAILURES`, `detail`, `report` and `read_file`;
 - `knowledge_plane`, for `breakdown_files`, `breakdown_rows`,
-  `parse_row`, `row_title`, `unfenced`, `WO_TOKEN`, `BLOCKED_BY` and
+  `ROW`, `row_title`, `unfenced`, `WO_TOKEN`, `BLOCKED_BY` and
   `repo_root`;
 - `protocol`, for `STAGE_ARTIFACTS` and `run_ref`.
 
