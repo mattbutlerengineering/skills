@@ -317,5 +317,108 @@ class TestNoNetwork(HistoryCase):
                 self.assertNotIn(f'"{verb}"', source)
 
 
+
+def lines(*rows):
+    """A breakdown version's lines: a heading, prose, then the rows."""
+    return ["# Breakdown", "", "Prose naming S9 is not a row.", "",
+            *rows]
+
+
+class TestItemKeys(unittest.TestCase):
+    def test_each_key_shape(self):
+        self.assertEqual(decompose_signals.item_keys(lines(
+            "- [ ] **WO-0012** wire it — size:S, blocked by: WO-0011",
+            "- [ ] WO-0013 a bare token row — size:S",
+            "- [ ] **S1 Boundary tests** — cases — size:M",
+            "- [x] **I2 — the thing holds.** *(blocked by I1)*",
+            "- [ ] **A1** pin it — size:S, blocked by: —",
+            "- [x] **Roll-up rule tests** — new cases — size:S",
+            "- [ ] a plain row with no bold — size:S",
+            "  - Accept: S1 passes.",
+        )), ["WO-0012", "WO-0013", "S1", "I2", "A1", "Roll-up rule tests",
+             "a plain row with no bold"])
+
+    def test_a_long_word_with_digits_is_not_a_label(self):
+        self.assertEqual(decompose_signals.item_keys(lines(
+            "- [ ] **ADR0109 notes** — size:S",
+            "- [ ] **S1-S3 bundle** — size:S")),
+            ["ADR0109 notes", "S1-S3 bundle"])
+
+
+D_SHA, I_SHA = "d" * 40, "e" * 40
+S1 = row("S1", "first")
+S2 = row("S2", "second")
+S3 = row("S3", "third")
+
+
+def replan(d_rows, i_rows):
+    return decompose_signals.replan(lines(*d_rows), lines(*i_rows), D_SHA,
+                                    I_SHA)
+
+
+def counts(items_at_d, added=0, dropped=0, split=0, merged=0, renamed=0):
+    return {"items_at_d": items_at_d, "added": added, "dropped": dropped,
+            "split": split, "merged": merged, "renamed": renamed,
+            "count": added + dropped + split + merged}
+
+
+class TestReplan(unittest.TestCase):
+    def test_no_change(self):
+        ticked = row("S1", "first", done=True)
+        self.assertEqual(replan([S1, S2, S3], [ticked, S2, S3]), counts(3))
+
+    def test_one_added_row(self):
+        self.assertEqual(replan([S1, S2], [S1, S2, S3]),
+                         counts(2, added=1))
+
+    def test_one_dropped_row(self):
+        self.assertEqual(replan([S1, S2, S3], [S1, S3]),
+                         counts(3, dropped=1))
+
+    def test_a_renumbered_row_with_the_same_title_is_a_rename(self):
+        self.assertEqual(
+            replan([row("WO-0051", "author the docs"), S2],
+                   [row("WO-0061", "Author the `docs`."), S2]),
+            counts(2, renamed=1))
+
+    def test_a_kept_row_citing_two_added_keys_is_a_split(self):
+        superseded = row("S1", "first — superseded, moved to S4 and S5")
+        self.assertEqual(
+            replan([S1, S2],
+                   [superseded, S2, row("S4", "a"), row("S5", "b")]),
+            counts(2, added=2, split=1))
+
+    def test_a_dropped_row_cited_by_two_added_rows_is_a_split(self):
+        self.assertEqual(
+            replan([S1, S2],
+                   [S1, row("S4", "half of S2"), row("S5", "rest of S2")]),
+            counts(2, added=2, dropped=1, split=1))
+
+    def test_an_added_row_citing_two_dropped_keys_is_a_merge(self):
+        self.assertEqual(
+            replan([S1, S2, S3], [S1, row("S4", "folds S2 and S3")]),
+            counts(3, added=1, dropped=2, merged=1))
+
+    def test_a_mention_inside_blocked_by_is_never_a_citation(self):
+        self.assertEqual(
+            replan([S1, S2, S3],
+                   [S1, row("S4", "new", rest=" — blocked by: S2, S3")]),
+            counts(3, added=1, dropped=2))
+        self.assertEqual(
+            replan([S1, S2],
+                   [row("S1", "first", rest=" — blocked by: S4, S5"), S2,
+                    row("S4", "a"), row("S5", "b")]),
+            counts(2, added=2))
+
+    def test_a_duplicate_key_makes_the_signal_unmeasurable(self):
+        self.assertEqual(
+            replan([S1, row("S1", "again")], [S1]),
+            {"unmeasurable":
+             f"duplicate work-item key S1 at {D_SHA[:7]}"})
+        self.assertEqual(
+            replan([S1], [S1, row("S1", "again")]),
+            {"unmeasurable":
+             f"duplicate work-item key S1 at {I_SHA[:7]}"})
+
 if __name__ == "__main__":
     unittest.main()
