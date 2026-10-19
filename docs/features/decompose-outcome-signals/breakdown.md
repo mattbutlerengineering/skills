@@ -41,10 +41,10 @@ When this milestone is done, `replan`, `design_gaps` and
 `review_findings` each return a count or a fixed unmeasurable reason
 from plain inputs, with no git.
 
-- [ ] **S3 Work-item diff tests** — cases for `item_keys` and `replan` over pairs of breakdown line lists — size:M
+- [x] **S3 Work-item diff tests** — cases for `item_keys` and `replan` over pairs of breakdown line lists — size:M
   - Accept: the module holds these cases, each asserting exact keys or counts. `item_keys` takes a WO token when the row carries one, else a short leading label in the bold span (`S1`, `A1`, `I2`), else the bold text, else the row text up to the first ` — `. `replan` gives: no change, count 0 and items_at_d equal to the row count; one added row, added 1; one dropped row, dropped 1; a dropped and an added row with equal normalized titles, renamed 1 and count 0; an old row whose I-version cites two added keys, split 1; a dropped row cited by two added rows, split 1; one added row citing two dropped keys, merged 1; a row whose only mention of another key is inside its `blocked by:` clause, split 0. Count is added + dropped + splits + merges. Two rows with the same key in one version give the reason `duplicate work-item key <key> at <sha7>`. Run before S4, the new cases fail.
   - Blocked by: S2 History adapter and boundary policy
-- [ ] **S4 Work-item diff** — `item_keys` and `replan` as architecture.md's Work-item diff describes — size:M
+- [x] **S4 Work-item diff** — `item_keys` and `replan` as architecture.md's Work-item diff describes — size:M
   - Accept: the S3 tests pass, and the S1 tests still pass. Rows are parsed with `knowledge_plane.parse_row` / `breakdown_rows`, titles come from `knowledge_plane.row_title` for WO rows, and citations are read with the clause `knowledge_plane.BLOCKED_BY` matches removed. `knowledge_plane.WO_TOKEN` is used, and no WO or blocked-by regex is retyped.
   - Blocked by: S3 Work-item diff tests
 - [ ] **S5 Design-gap and review-tracer tests** — cases for `design_gaps` and `review_findings` — size:M

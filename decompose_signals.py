@@ -21,7 +21,8 @@ import hashlib
 import re
 
 from cli import CLI_FAILURES, detail
-from knowledge_plane import breakdown_rows
+from knowledge_plane import (BLOCKED_BY, ROW, WO_TOKEN, breakdown_rows,
+                             row_title)
 from protocol import STAGE_ARTIFACTS
 
 LABEL = "decompose-signals"
@@ -172,3 +173,94 @@ def _implement(later, run_rel, path, read):
             return {"sha": commit["sha"], "label": "inferred"}
     return {"unmeasurable":
             "no implement boundary: no later commit checks a row"}
+
+
+# A short label leading the bold span (S1, A1, I2): the form the fix-run
+# breakdowns and this run's own use. A word with more letters (ADR0109)
+# or a range (S1-S3) is not one.
+_LABEL = re.compile(r"([A-Z]{1,2}\d+[a-z]?)(?![\w-])")
+_BOLD = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _item(line):
+    """(key, normalized title) of one breakdown row line."""
+    rest = line[ROW.match(line).end():]
+    wo = WO_TOKEN.search(rest)
+    if wo:
+        title = row_title(line) or rest[wo.end():].split(" — ")[0]
+        return wo.group(0), _normal(title)
+    bold = _BOLD.match(rest.strip())
+    if bold:
+        label = _LABEL.match(bold.group(1).strip())
+        if label:
+            after = rest.replace("**", "").strip()[label.end():]
+            title = after.strip(" —-:").split(" — ")[0]
+            return label.group(1), _normal(title)
+        key = bold.group(1).strip()
+        return key, _normal(key)
+    key = rest.split(" — ")[0].strip()
+    return key, _normal(key)
+
+
+def _normal(title):
+    """A title compared for a rename: case, code marks, spacing and a
+    trailing full stop are not part of it."""
+    return " ".join(title.replace("`", "").lower().split()).rstrip(".:")
+
+
+def item_keys(lines):
+    """The work-item key of every row in one breakdown version, in order:
+    its WO token, else a short label leading its bold span, else the
+    bold text, else the row text up to the first ` — `."""
+    return [_item(r["text"])[0] for r in breakdown_rows(lines)]
+
+
+def _cites(line, keys):
+    """The keys in `keys` that `line` names as whole tokens outside its
+    `blocked by:` clause — a dependency is never a split or a merge."""
+    clause = BLOCKED_BY.search(line)
+    text = line[:clause.start()] + line[clause.end():] if clause else line
+    return {key for key in keys
+            if re.search(rf"(?<!\w){re.escape(key)}(?!\w)", text)}
+
+
+def _version(lines, sha):
+    """({key: (title, line)}, unmeasurable reason or None)."""
+    items = {}
+    for r in breakdown_rows(lines):
+        key, title = _item(r["text"])
+        if key in items:
+            return None, f"duplicate work-item key {key} at {sha[:7]}"
+        items[key] = (title, r["text"])
+    return items, None
+
+
+def replan(d_lines, i_lines, d_sha, i_sha):
+    """The work-item diff between the decompose (D) and implement (I)
+    versions: {items_at_d, added, dropped, split, merged, renamed, count},
+    or {unmeasurable: reason} when a version repeats a key. A rename (a
+    dropped and an added item with the same title) is not a re-plan; a
+    split or a merge is read only from citations."""
+    old, reason = _version(d_lines, d_sha)
+    new, reason = (None, reason) if reason else _version(i_lines, i_sha)
+    if reason:
+        return {"unmeasurable": reason}
+    added = [k for k in new if k not in old]
+    dropped = [k for k in old if k not in new]
+    renamed = 0
+    for key in list(dropped):
+        twin = next((a for a in added if new[a][0] == old[key][0]), None)
+        if twin is not None:
+            added.remove(twin)
+            dropped.remove(key)
+            renamed += 1
+    cited = {k: _cites(new[k][1], set(added) | set(dropped)) - {k}
+             for k in new}
+    split = sum(1 for k in new if k in old and len(cited[k] & set(added)) > 1)
+    split += sum(1 for d in dropped
+                 if sum(1 for a in added if d in cited[a]) > 1)
+    merged = sum(1 for a in added if len(cited[a] & set(dropped)) > 1)
+    return {"items_at_d": len(old), "added": len(added),
+            "dropped": len(dropped), "split": split, "merged": merged,
+            "renamed": renamed,
+            "count": len(added) + len(dropped) + split + merged}
