@@ -83,7 +83,7 @@ committed as the tool wrote them.
 - [x] **S11 Docs** — the CLAUDE.md "on demand, free" bullet beside `one_owner.py`, an `evals/README.md` results-layout line for `decompose-signals-<date>[-N].json`, and a CONTEXT.md entry for **Outcome signal** — size:S
   - Accept: CLAUDE.md names `python3 decompose_signals.py` as free and outside every gate, says it never fetches, and gives the manual fetch step. `evals/README.md` lists the new kind beside `charter-<date>[-N].json` and says it is factory evidence, not LEDGER evidence. CONTEXT.md defines **Outcome signal** as one of re-plan, design gaps routed to Architect, and review-traced findings, each labelled observed or inferred. No Makefile or workflow line is added. `python3 kb.py drift` prints `drift: 0 problem(s)` and `python3 lint.py` prints `lint: 0 problem(s)`.
   - Blocked by: S10 eval_schema snapshot kind and --record
-- [ ] **S12 Whole-repo verify** — the four CI checks and the one-owner pre-pass over the finished change — size:S
+- [x] **S12 Whole-repo verify** — the four CI checks and the one-owner pre-pass over the finished change — size:S
   - Accept: `python3 run_tests.py` exits 0; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 kb.py drift` prints `drift: 0 problem(s)`; `python3 gates.py` and `python3 gates.py --selftest` print `gates: 0 problem(s)`. `python3 one_owner.py` reports no `one-owner:` problem naming `decompose_signals.py`. No file under `skills/` or `factory/templates/`, and not `.claude-plugin/plugin.json`, `factory_init.MIRRORS` or `LEDGER.md`, changed.
   - Blocked by: S11 Docs
 - [ ] **S13 Record the first real numbers** — run `python3 decompose_signals.py --record` on this clone and commit the file it writes, unedited — size:S
