@@ -517,7 +517,7 @@ class TestDesignGapsFromTheSection(unittest.TestCase):
                          {"unmeasurable": "read failed"})
 
 
-CURRENT = breakdown(S1, S2, row("S10", "tenth")).splitlines()
+CURRENT = breakdown(S1, S2).splitlines()
 
 
 def findings(text):

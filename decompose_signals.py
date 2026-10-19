@@ -22,7 +22,7 @@ import re
 
 from cli import CLI_FAILURES, detail
 from knowledge_plane import (BLOCKED_BY, ROW, WO_TOKEN, breakdown_rows,
-                             row_title)
+                             row_title, unfenced)
 from protocol import STAGE_ARTIFACTS
 
 LABEL = "decompose-signals"
@@ -264,3 +264,102 @@ def replan(d_lines, i_lines, d_sha, i_sha):
             "dropped": len(dropped), "split": split, "merged": merged,
             "renamed": renamed,
             "count": len(added) + len(dropped) + split + merged}
+
+
+def _within(commits, d, i):
+    """The commits in the window (D, I], in walk order."""
+    shas = [c["sha"] for c in commits]
+    return commits[shas.index(d["sha"]) + 1:shas.index(i["sha"]) + 1]
+
+
+# Decompose's TEMPLATE.md section: gaps routed back to Architect, or none.
+_GAPS_HEADING = re.compile(r"^##\s+Design gaps found\s*$", re.IGNORECASE)
+_HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+NO_GAPS_SECTION = 'no "Design gaps found" section at the decompose boundary'
+
+
+def _gaps_words(text):
+    """The words of the unfenced `## Design gaps found` section, emphasis
+    stripped, or None when there is no such section or it says nothing."""
+    words, inside = None, False
+    for _, line in unfenced(text.splitlines()):
+        heading = _HEADING.match(line)
+        if inside and heading and len(heading.group(1)) <= 2:
+            break
+        if _GAPS_HEADING.match(line):
+            inside, words = True, []
+        elif inside:
+            words += re.sub(r"[*_`]", "", line).split()
+    return words or None
+
+
+def design_gaps(commits, run_rel, bounds, d_text):
+    """Routes back to Architect: {label, routes, source} or {unmeasurable:
+    reason}. With D observed, the architect boundary commits for this run
+    in (D, I], labelled as I is. With D inferred, the D version's `Design
+    gaps found` section (`d_text`, None when its read failed): `none`
+    gives 0 and anything else 1, labelled inferred."""
+    d, i = bounds["decompose"], bounds["implement"]
+    if "unmeasurable" in d:
+        return {"unmeasurable": d["unmeasurable"]}
+    if d["label"] == "observed":
+        if "unmeasurable" in i:
+            return {"unmeasurable": i["unmeasurable"]}
+        routes = sum(1 for c in _within(commits, d, i)
+                     if _observed(c, run_rel, "architect"))
+        return {"label": i["label"], "routes": routes, "source": "subjects"}
+    if d_text is None:
+        return {"unmeasurable": READ_FAILED}
+    words = _gaps_words(d_text)
+    if words is None:
+        return {"unmeasurable": NO_GAPS_SECTION}
+    return {"label": "inferred",
+            "routes": 0 if words[0].strip(".,:;!").lower() == "none" else 1,
+            "source": "section"}
+
+
+# A finding heading (levels 2 to 4, emphasis stripped) leads with a
+# severity word or an ordinal label (F1, Finding 1, 1.).
+_FINDING = re.compile(
+    r"^(?:(?:critical|major|minor|low|medium|high)\b(?!-)"
+    r"|F\d+\b|Finding\s+\d+\b|\d+\.)", re.IGNORECASE)
+
+
+def _finding_level(line):
+    """The heading level when `line` is a finding heading, else None."""
+    heading = _HEADING.match(line)
+    if not heading or not 2 <= len(heading.group(1)) <= 4:
+        return None
+    text = re.sub(r"[*_]", "", heading.group(2)).strip()
+    return len(heading.group(1)) if _FINDING.match(text) else None
+
+
+def _names(text, keys):
+    return any(re.search(rf"(?<!\w){re.escape(key)}(?!\w)", text)
+               for key in keys)
+
+
+def review_findings(review_text, breakdown_lines):
+    """The review tracer's three shapes: {unmeasurable: "no review.md"}
+    when review_text is None; {findings: 0, reason: "no finding heading"};
+    or {label: observed, findings: N, named: M}, M being the findings
+    whose block holds a current work-item key as a whole token. A block
+    runs from its heading to the next unfenced heading at its own level
+    or above, or the next finding heading."""
+    if review_text is None:
+        return {"unmeasurable": "no review.md"}
+    lines = review_text.splitlines()
+    headings = [(n - 1, _HEADING.match(line), _finding_level(line))
+                for n, line in unfenced(lines) if _HEADING.match(line)]
+    keys = set(item_keys(breakdown_lines))
+    found = named = 0
+    for at, (start, _, level) in enumerate(headings):
+        if level is None:
+            continue
+        end = next((n for n, heading, other in headings[at + 1:]
+                    if other or len(heading.group(1)) <= level), len(lines))
+        found += 1
+        named += _names("\n".join(lines[start:end]), keys)
+    if not found:
+        return {"findings": 0, "reason": "no finding heading"}
+    return {"label": "observed", "findings": found, "named": named}
