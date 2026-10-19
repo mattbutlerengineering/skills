@@ -80,7 +80,7 @@ committed as the tool wrote them.
 - [x] **S10 eval_schema snapshot kind and --record** — `decompose-signals` joins `results_path` and `SNAPSHOT_KINDS`, its docstring line beside `charter`'s, and `main` gains `--record` — size:S
   - Accept: the S9 tests pass, and every earlier test, including the existing `tests/test_eval_schema.py` cases, still passes. `_RESULTS_LINK` is unchanged. The `-N` grammar has one owner, `eval_schema.results_path`; `decompose_signals.py` builds no results filename itself.
   - Blocked by: S9 Record tests
-- [ ] **S11 Docs** — the CLAUDE.md "on demand, free" bullet beside `one_owner.py`, an `evals/README.md` results-layout line for `decompose-signals-<date>[-N].json`, and a CONTEXT.md entry for **Outcome signal** — size:S
+- [x] **S11 Docs** — the CLAUDE.md "on demand, free" bullet beside `one_owner.py`, an `evals/README.md` results-layout line for `decompose-signals-<date>[-N].json`, and a CONTEXT.md entry for **Outcome signal** — size:S
   - Accept: CLAUDE.md names `python3 decompose_signals.py` as free and outside every gate, says it never fetches, and gives the manual fetch step. `evals/README.md` lists the new kind beside `charter-<date>[-N].json` and says it is factory evidence, not LEDGER evidence. CONTEXT.md defines **Outcome signal** as one of re-plan, design gaps routed to Architect, and review-traced findings, each labelled observed or inferred. No Makefile or workflow line is added. `python3 kb.py drift` prints `drift: 0 problem(s)` and `python3 lint.py` prints `lint: 0 problem(s)`.
   - Blocked by: S10 eval_schema snapshot kind and --record
 - [ ] **S12 Whole-repo verify** — the four CI checks and the one-owner pre-pass over the finished change — size:S

@@ -20,11 +20,13 @@ Both cost real model runs and run on demand — CI never invokes them.
   `trigger-<date>[-N].json` (claude harness, the default) or
   `trigger-omp-<date>[-N].json` (`--harness omp`, ADR-0031), output gradings
   under `output/<slug>-<date>[-N]/`, and charter-regression replays
-  (`charter_replay.py`) as `charter-<date>[-N].json`; `-2`, `-3`… suffixes
+  (`charter_replay.py`) as `charter-<date>[-N].json`, and Decompose
+  outcome-signal records (`decompose_signals.py --record`) as
+  `decompose-signals-<date>[-N].json`; `-2`, `-3`… suffixes
   distinguish same-day runs. LEDGER.md links the trigger and output records
   as evidence (maturity stays keyed to claude runs; omp snapshots are
-  supplementary harness evidence); charter replays are factory evidence,
-  never LEDGER evidence.
+  supplementary harness evidence); charter replays and decompose-signals
+  records are factory evidence, never LEDGER evidence.
 
 ## Plugin evals (not in this directory)
 
