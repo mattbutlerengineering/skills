@@ -109,7 +109,7 @@ committed as the tool wrote them.
 - [x] **S15 Last-tick implement boundary** — `_implement`'s inferred pass picks the earliest later version with at least one row and every row done, the fixed reason becomes `no implement boundary: no later commit checks every row`, and `RULE` gains the inferred rule as architecture.md words it — size:S
   - Accept: the S14 tests pass, and every earlier test still passes. `_done` and `knowledge_plane.breakdown_rows` are reused, and no row regex is retyped. The observed pass and `boundaries`' decompose logic are unchanged. The RunRecord shape is unchanged. The module docstring cites ADR-0111 beside ADR-0109. `python3 decompose_signals.py` on this clone matches architecture.md's accepted behaviour changes: only inferred implement shas move, first-live-dispatch reads `re-plan 4 of 8 (added 3, dropped 0, split 1, merged 0; renamed 0) inferred`, faster-sdlc reads `re-plan unmeasurable — no implement boundary: no later commit checks every row`, every other run's figures and every observed figure are unchanged, and the boundary-rule header line prints the new sentence. If today's refs give anything else, stop and route it back. S12's checks pass again: `python3 run_tests.py` exits 0, `python3 lint.py`, `python3 kb.py drift` and `python3 gates.py` / `--selftest` print 0 problem(s), and `python3 one_owner.py` names no problem in `decompose_signals.py`.
   - Blocked by: S14 Last-tick implement boundary tests
-- [ ] **S16 Record the second real numbers** — run `python3 decompose_signals.py --record` again on this clone and commit the new file it writes, unedited; the first record stays as it is — size:S
+- [x] **S16 Record the second real numbers** — run `python3 decompose_signals.py --record` again on this clone and commit the new file it writes, unedited; the first record stays as it is — size:S
   - Accept: every earlier item's breakdown tick is committed first, so `git status --porcelain -- docs/` prints nothing. The command exits 0 and prints `decompose-signals: recorded evals/results/decompose-signals-<date>[-N].json`, a new path (`decompose-signals-2026-10-18-2.json` on 2026-10-18). That file is committed byte-for-byte as written, and `git diff` shows `evals/results/decompose-signals-2026-10-18.json` unchanged. The new file's `rule` is S15's sentence. A rerun without `--record` on the same refs prints the same run and aggregate lines as the recorded `runs` and `aggregate`. The refs namespaces, digest and the three aggregate lines are copied from the tool's output into Notes, dated, beside the first record's. LEDGER.md is unchanged.
   - Blocked by: S15 Last-tick implement boundary
 
@@ -142,7 +142,7 @@ this run's own row (`re-plan 0 of 13` inferred at the first tick against
 Owner settled it live as decision 7, the commit that checks the last row
 (autorun-brief.md). Architect wrote ADR-0111 and amended architecture.md's
 Boundary policy, and the new work is S14, S15 and S16. Status: answered
-by Architect; S14 to S16 are open.
+by Architect. S14, S15 and S16 are done.
 
 ## Notes
 
@@ -260,3 +260,26 @@ boundary: no later commit checks every row`. No observed figure moved.
 The inferred re-plan aggregate went from 7/219 over 26 runs to 10/208
 over 25, and design gaps and review-traced are unchanged, as
 architecture.md accepts. S12's checks passed again.
+
+2026-10-18, Implement, S16. `python3 decompose_signals.py --record` ran
+at 76b59fe with `git status --porcelain -- docs/` empty and exited 0.
+It printed `decompose-signals: recorded
+evals/results/decompose-signals-2026-10-18-2.json` and
+`decompose-signals: 36 run(s), 0 problem(s)`. The file is committed
+unedited in 1d7279e, and `cmp` of the committed blob against the written
+copy is empty. Its `rule` equals S15's `RULE`. A rerun without
+`--record` on the same refs printed the same lines, and `render` over
+the recorded snapshot gives the rerun's header, run and aggregate lines.
+`git diff` from d1a870a shows
+`evals/results/decompose-signals-2026-10-18.json` unchanged, and
+LEDGER.md is unchanged. Copied from the tool's output, beside the first
+record's above:
+
+    decompose-signals: refs read — refs/heads (401), refs/pr (13), refs/remotes/origin (184), refs/remotes/pr (488); refs/stash skipped; digest 69e5099cd97f
+    decompose-signals: aggregate re-plan — observed 2/42 over 4 run(s); inferred 10/208 over 25 run(s); combined 12/250 over 29 run(s); unmeasurable 7 run(s)
+    decompose-signals: aggregate design gaps — observed 2/4 over 4 run(s); inferred 0/18 over 18 run(s); combined 2/22 over 22 run(s); unmeasurable 14 run(s)
+    decompose-signals: aggregate review-traced — observed 33/193 over 35 run(s); inferred 0/0 over 0 run(s); combined 33/193 over 35 run(s); unmeasurable 1 run(s)
+
+The two records are taken under different inferred-implement rules (the
+first record's `rule` names ADR-0109 only) and on different refs, so
+they are compared run by run, never as one series (ADR-0111).
