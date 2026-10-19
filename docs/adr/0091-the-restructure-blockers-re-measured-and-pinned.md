@@ -1,6 +1,6 @@
 # The tools/factory restructure blockers, re-measured and pinned
 
-- Status: superseded in part by ADR-0106 (the cli.py and gates.py rows; the cli.py row earlier by ADR-0097; accepted by the Owner, 2026-10-13)
+- Status: superseded in part by ADR-0110 (the knowledge_plane.py and protocol.py rows) and ADR-0106 (the cli.py and gates.py rows; the cli.py row earlier by ADR-0097, later by ADR-0110; accepted by the Owner, 2026-10-13)
 - Date: 2026-10-13
 
 The Owner chose this on 2026-10-13, in session. It resolves issue #783.
