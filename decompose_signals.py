@@ -105,10 +105,13 @@ def read_history(root, run):
         # lean: --name-only cannot tell a deletion from an edit, so a
         # deleted artifact's version read would fail as `read failed`;
         # no tracked commit deletes one today. --name-status is the
-        # upgrade if a record ever reports it.
+        # upgrade if a record ever reports it. --full-history: default
+        # simplification follows only a merge's TREESAME parent, so a run
+        # branch that merged its trunk could hide its own boundaries.
         out, problems = _git(
-            run, root, ["log", "--stdin", "--author-date-order", "--reverse",
-                        "--name-only", _FORMAT, "--", *PATHSPECS],
+            run, root, ["log", "--stdin", "--full-history",
+                        "--author-date-order", "--reverse", "--name-only",
+                        _FORMAT, "--", *PATHSPECS],
             input="".join(f"{name}\n" for name in names))
         if out is None:
             return None, problems

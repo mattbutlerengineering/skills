@@ -253,6 +253,27 @@ class TestRefs(HistoryCase):
         self.assertEqual(self.bounds()["decompose"],
                          {"sha": sha, "label": "observed"})
 
+    def test_a_merge_resolved_to_the_other_parent_hides_no_boundary(self):
+        """git log's default history simplification follows only the
+        TREESAME parent of a merge. A run branch that merged its trunk
+        and took the trunk's breakdown would lose its own boundary
+        commits and read as unmeasurable; the walk reads full history."""
+        self.repo.commit("feat: base", **{at("README.md"): "hi\n"})
+        trunk = self.repo.git("branch", "--show-current")
+        self.repo.git("checkout", "-q", "-b", "feat/demo")
+        d = self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        i = self.repo.commit("docs(demo): implement — done",
+                             **{BD: TICKED})
+        self.repo.git("checkout", "-q", trunk)
+        self.repo.commit("feat: demo (#1)", **{BD: TICKED})
+        self.repo.commit("docs: a later edit", **{BD: TICKED + "\nnote\n"})
+        self.repo.git("checkout", "-q", "feat/demo")
+        self.repo.git("merge", "-q", "-X", "theirs", trunk, "-m", "merge")
+        self.repo.git("branch", "-q", "-D", trunk)
+        self.assertEqual(self.bounds(),
+                         {"decompose": {"sha": d, "label": "observed"},
+                          "implement": {"sha": i, "label": "observed"}})
+
 
 def failing(err, after=()):
     """A fake git port that answers the verbs in `after` with an empty
