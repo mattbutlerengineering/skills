@@ -19,11 +19,13 @@ signal's aggregate, never counted as zero.
 """
 import hashlib
 import re
+import sys
+from pathlib import Path
 
-from cli import CLI_FAILURES, detail
-from knowledge_plane import (BLOCKED_BY, ROW, WO_TOKEN, breakdown_rows,
-                             row_title, unfenced)
-from protocol import STAGE_ARTIFACTS
+from cli import CLI_FAILURES, detail, read_file, report, runner
+from knowledge_plane import (BLOCKED_BY, ROW, WO_TOKEN, breakdown_files,
+                             breakdown_rows, repo_root, row_title, unfenced)
+from protocol import STAGE_ARTIFACTS, run_ref
 
 LABEL = "decompose-signals"
 # Every call is local and read-only, so a retry after a timeout is safe.
@@ -40,6 +42,12 @@ SUBJECT = {stage: re.compile(rf"^docs\([^)]*\): {re.escape(stage)}\b")
 PATHSPECS = tuple(
     spec for artifact in (ARTIFACT["decompose"], ARTIFACT["architect"])
     for spec in (f":(glob)docs/*/*/{artifact}", f"docs/{artifact}"))
+# ADR-0109's rule, printed in every report and written into every record.
+RULE = ("a boundary is observed when its commit subject reads"
+        " docs(<any scope>): <stage>, the stage a whole word, and the commit"
+        " changes that stage's artifact in the run's own directory; any"
+        " other boundary is inferred (ADR-0109)")
+USAGE = "python3 decompose_signals.py [--record]"
 # A NUL opens each commit record; unit separators split its header.
 _FORMAT = "--format=%x00%H%x1f%at%x1f%s"
 
@@ -363,3 +371,165 @@ def review_findings(review_text, breakdown_lines):
     if not found:
         return {"findings": 0, "reason": "no finding heading"}
     return {"label": "observed", "findings": found, "named": named}
+
+
+def _reader(root, run, problems):
+    """A cached read(sha, path): each version is shown once, and a failed
+    show is one problem however many signals ask for it."""
+    cache = {}
+
+    def read(sha, path):
+        if (sha, path) not in cache:
+            text, failed = read_version(root, run, sha, path)
+            problems.extend(failed)
+            cache[sha, path] = text
+        return cache[sha, path]
+    return read
+
+
+def _replan(bounds, path, read):
+    d, i = bounds["decompose"], bounds["implement"]
+    for boundary in (d, i):
+        if "unmeasurable" in boundary:
+            return {"unmeasurable": boundary["unmeasurable"]}
+    d_text, i_text = read(d["sha"], path), read(i["sha"], path)
+    if d_text is None or i_text is None:
+        return {"unmeasurable": READ_FAILED}
+    diff = replan(d_text.splitlines(), i_text.splitlines(), d["sha"],
+                  i["sha"])
+    if "unmeasurable" in diff:
+        return diff
+    both = d["label"] == i["label"] == "observed"
+    return {"label": "observed" if both else "inferred", **diff}
+
+
+def _run_record(root, run_dir, lines, commits, read, problems):
+    rel = run_dir.relative_to(root).as_posix()
+    path = f"{rel}/{ARTIFACT['decompose']}"
+    bounds = boundaries(commits, rel, read)
+    d = bounds["decompose"]
+    d_text = read(d["sha"], path) if "sha" in d else None
+    review_text, problem = read_file(run_dir / ARTIFACT["review"],
+                                     f"{rel}/{ARTIFACT['review']}", str)
+    if problem:
+        problems.append(f"{LABEL}: {problem}")
+        review = {"unmeasurable": READ_FAILED}
+    else:
+        review = review_findings(review_text, lines)
+    return {"run": run_ref(root, run_dir), "path": rel, **bounds,
+            "replan": _replan(bounds, path, read),
+            "design_gaps": design_gaps(commits, rel, bounds, d_text),
+            "review": review}
+
+
+# (signal, RunRecord field, numerator field, denominator field or None
+# for one per measured run), in report order.
+SIGNALS = (("re-plan", "replan", "count", "items_at_d"),
+           ("design gaps", "design_gaps", "routes", None),
+           ("review-traced", "review", "named", "findings"))
+POPULATIONS = ("observed", "inferred")
+
+
+def _aggregate(runs):
+    """Per signal, each population's {runs, numerator, denominator} plus
+    the combined figure and the unmeasurable run count. Unmeasurable never
+    reaches a count; a review with no finding heading is observed 0/0."""
+    aggregate = {}
+    for signal, field, num, den in SIGNALS:
+        measured = [r[field] for r in runs if "unmeasurable" not in r[field]]
+        figures = {}
+        for population in (*POPULATIONS, "combined"):
+            chosen = [m for m in measured if population == "combined"
+                      or m.get("label", "observed") == population]
+            figures[population] = {
+                "runs": len(chosen),
+                "numerator": sum(m.get(num, 0) for m in chosen),
+                "denominator": sum(m.get(den, 0) if den else 1
+                                   for m in chosen)}
+        figures["unmeasurable"] = len(runs) - len(measured)
+        aggregate[signal] = figures
+    return aggregate
+
+
+def measure(root, run):
+    """(result, problems): the refs read, their digest, the rule, one
+    RunRecord per run with a breakdown in run-path order, and the
+    aggregate; result is None when the history could not be read."""
+    root = Path(root)
+    history, problems = read_history(root, run)
+    if history is None:
+        return None, problems
+    read = _reader(root, run, problems)
+    runs = [_run_record(root, path.parent, lines, history["commits"], read,
+                        problems)
+            for path, lines in sorted(breakdown_files(root))]
+    return {"refs": history["refs"], "refs_digest": history["digest"],
+            "rule": RULE, "runs": runs, "aggregate": _aggregate(runs)}, \
+        problems
+
+
+def _boundary(stage, boundary):
+    if "unmeasurable" in boundary:
+        return f"{stage} none"
+    return f"{stage} {boundary['label']} {boundary['sha'][:7]}"
+
+
+def _signal(record, signal, field):
+    value = record[field]
+    if "unmeasurable" in value:
+        return f"{signal} unmeasurable — {value['unmeasurable']}"
+    if field == "replan":
+        return (f"re-plan {value['count']} of {value['items_at_d']} (added"
+                f" {value['added']}, dropped {value['dropped']}, split"
+                f" {value['split']}, merged {value['merged']}; renamed"
+                f" {value['renamed']}) {value['label']}")
+    if field == "design_gaps":
+        return f"design gaps {value['routes']} {value['label']}"
+    if not value["findings"]:
+        return "review-traced 0 findings — review.md has no finding heading"
+    return (f"review-traced {value['named']} of {value['findings']}"
+            " findings name an item")
+
+
+def render(result):
+    """The report's lines, header first and aggregate last."""
+    refs = ", ".join(f"{ns} ({n})" for ns, n in result["refs"].items())
+    lines = [f"{LABEL}: refs read — {refs or 'none'}; {STASH} skipped;"
+             f" digest {result['refs_digest'][:12]}",
+             f"{LABEL}: boundary rule — {result['rule']}"]
+    for record in result["runs"]:
+        parts = [f"{_boundary('decompose', record['decompose'])},"
+                 f" {_boundary('implement', record['implement'])}"]
+        parts += [_signal(record, signal, field)
+                  for signal, field, _, _ in SIGNALS]
+        lines.append(f"{LABEL}: {record['run']} — {'; '.join(parts)}")
+    for signal, figures in result["aggregate"].items():
+        shown = "; ".join(
+            f"{population} {f['numerator']}/{f['denominator']} over"
+            f" {f['runs']} run(s)"
+            for population, f in ((p, figures[p])
+                                  for p in (*POPULATIONS, "combined")))
+        lines.append(f"{LABEL}: aggregate {signal} — {shown}; unmeasurable"
+                     f" {figures['unmeasurable']} run(s)")
+    return lines
+
+
+def main(argv, root=None, run=None):
+    """`python3 decompose_signals.py` — print every run's signals and the
+    aggregate. Exit 0 when nothing failed (unmeasurable runs included), 1
+    with problems, 2 on an unknown argument."""
+    if argv:
+        print(f"{LABEL}: {' '.join(argv)!r} — unknown argument\n\n"
+              f"  {USAGE}")
+        return 2
+    root = Path(root) if root is not None else repo_root()
+    result, problems = measure(root, run or runner("git",
+                                                   timeout=GIT_TIMEOUT))
+    for line in render(result) if result else []:
+        print(line)
+    return report(LABEL, problems,
+                  prefix=f"{len(result['runs']) if result else 0} run(s), ")
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

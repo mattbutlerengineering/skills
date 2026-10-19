@@ -44,6 +44,7 @@ VERBS = {
     "conductor": ("conductor", "argv"),
     "cost-report": ("cost_report", "argv"),
     "dashboard": ("dashboard", "argv"),
+    "decompose-signals": ("decompose_signals", "argv"),
     "factory-init": ("factory_init", "argv"),
     "fast-path": ("fast_path", "argv"),
     "gate-digest": ("gate_digest", "argv"),
