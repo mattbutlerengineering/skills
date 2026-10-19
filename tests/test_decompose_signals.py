@@ -420,5 +420,150 @@ class TestReplan(unittest.TestCase):
             {"unmeasurable":
              f"duplicate work-item key S1 at {I_SHA[:7]}"})
 
+
+def commit(n, subject, *files):
+    return {"sha": f"{n:x}" * 40, "author_time": EPOCH + n,
+            "subject": subject, "files": list(files)}
+
+
+D_PATH, A_PATH = f"{RUN}/breakdown.md", f"{RUN}/architecture.md"
+WALK = [commit(1, "docs(demo): architect — design", A_PATH),
+        commit(2, "docs(demo): decompose — plan", D_PATH),
+        commit(3, "docs(demo): architect — gap one", A_PATH),
+        commit(4, "docs(x): architect — the other run",
+               f"{OTHER}/architecture.md"),
+        commit(5, "feat: touch the design", A_PATH),
+        commit(6, "docs(demo): architecture rework", A_PATH),
+        commit(7, "docs(demo): implement — done", D_PATH),
+        commit(8, "docs(demo): architect — after the window", A_PATH)]
+
+
+def bound(n, label):
+    return {"sha": WALK[n - 1]["sha"], "label": label}
+
+
+def gaps(bounds, d_text=None):
+    return decompose_signals.design_gaps(WALK, RUN, bounds, d_text)
+
+
+class TestDesignGapsFromSubjects(unittest.TestCase):
+    def test_observed_window_counts_architect_commits_for_this_run(self):
+        self.assertEqual(
+            gaps({"decompose": bound(2, "observed"),
+                  "implement": bound(7, "observed")}),
+            {"label": "observed", "routes": 1, "source": "subjects"})
+
+    def test_an_inferred_implement_boundary_makes_it_inferred(self):
+        self.assertEqual(
+            gaps({"decompose": bound(2, "observed"),
+                  "implement": bound(8, "inferred")}),
+            {"label": "inferred", "routes": 2, "source": "subjects"})
+
+    def test_no_implement_boundary_is_that_boundarys_reason(self):
+        reason = "no implement boundary: no later commit checks a row"
+        self.assertEqual(
+            gaps({"decompose": bound(2, "observed"),
+                  "implement": {"unmeasurable": reason}}),
+            {"unmeasurable": reason})
+
+    def test_no_decompose_boundary_is_that_boundarys_reason(self):
+        reason = f"no commit on the refs read changes {D_PATH}"
+        self.assertEqual(
+            gaps({"decompose": {"unmeasurable": reason},
+                  "implement": {"unmeasurable": reason}}),
+            {"unmeasurable": reason})
+
+
+MISSING = 'no "Design gaps found" section at the decompose boundary'
+
+
+class TestDesignGapsFromTheSection(unittest.TestCase):
+    INFERRED = {"decompose": bound(2, "inferred"),
+                "implement": bound(7, "inferred")}
+
+    def section(self, text):
+        return gaps(self.INFERRED, text)
+
+    def test_none_is_zero(self):
+        self.assertEqual(self.section(breakdown(S1, gaps="**None.** All "
+                                                "of it is designed.")),
+                         {"label": "inferred", "routes": 0,
+                          "source": "section"})
+
+    def test_other_content_is_one(self):
+        self.assertEqual(self.section(breakdown(
+            S1, gaps="The cache key was undesigned; routed to Architect.")),
+            {"label": "inferred", "routes": 1, "source": "section"})
+
+    def test_a_missing_section(self):
+        self.assertEqual(self.section(breakdown(S1, gaps=None)),
+                         {"unmeasurable": MISSING})
+
+    def test_a_section_heading_inside_a_fence_is_missing(self):
+        fenced = breakdown(S1, gaps=None) + (
+            "\n```markdown\n## Design gaps found\n\nnone.\n```\n")
+        self.assertEqual(self.section(fenced), {"unmeasurable": MISSING})
+
+    def test_an_inferred_decompose_with_no_implement_still_reads(self):
+        self.assertEqual(
+            gaps({"decompose": bound(2, "inferred"),
+                  "implement": {"unmeasurable": "no implement boundary:"
+                                " no later commit checks a row"}},
+                 breakdown(S1)),
+            {"label": "inferred", "routes": 0, "source": "section"})
+
+    def test_a_failed_read_of_the_decompose_version(self):
+        self.assertEqual(self.section(None),
+                         {"unmeasurable": "read failed"})
+
+
+CURRENT = breakdown(S1, S2, row("S10", "tenth")).splitlines()
+
+
+def findings(text):
+    return decompose_signals.review_findings(text, CURRENT)
+
+
+class TestReviewFindings(unittest.TestCase):
+    def test_no_review_md(self):
+        self.assertEqual(findings(None), {"unmeasurable": "no review.md"})
+
+    def test_a_review_with_no_finding_heading(self):
+        self.assertEqual(
+            findings("# Review: demo\n\n## Scope\n\nS1.\n\n## Findings\n\n"
+                     "None.\n\n## Verdict\n\nShip.\n"),
+            {"findings": 0, "reason": "no finding heading"})
+
+    def test_every_finding_shape_and_which_name_an_item(self):
+        text = "\n".join([
+            "# Critical: a level-1 heading is the title, S1",
+            "## Findings",
+            "### Critical: the walk drops a ref (S1)",
+            "## Major — ordering",
+            "Names nothing.",
+            "### **Minor**: emphasis is stripped",
+            "In S2's row.",
+            "## F1 — ordinal label",
+            "Touches S10 only.",
+            "### Finding 2 — spelled out",
+            "#### Evidence",
+            "S2 again, under a sub-heading of the finding.",
+            "### 3. numbered",
+            "#### high: lower case counts",
+            "##### Minor: level 5 is not a finding",
+            "```",
+            "### Major: inside a fence",
+            "```",
+            "## Highlights",
+            "S1 here is outside every finding.",
+            "## Verdict",
+        ])
+        self.assertEqual(findings(text),
+                         {"label": "observed", "findings": 7, "named": 3})
+
+    def test_s1_does_not_match_inside_s10(self):
+        self.assertEqual(findings("## F1 — S10 and WS1 and S1x\n"),
+                         {"label": "observed", "findings": 1, "named": 0})
+
 if __name__ == "__main__":
     unittest.main()
