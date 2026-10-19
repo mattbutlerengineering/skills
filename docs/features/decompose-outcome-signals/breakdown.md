@@ -11,6 +11,11 @@ assumptions:
   - "Derived from the data model: a review.md with no heading the grammar reads is a measured run with 0 findings (its record has no `unmeasurable` key), so it counts in the review-traced run total and adds 0/0. Only `no review.md` is unmeasurable."
   - "The dual-membership pin moves in the item that first adds the imports (S2), because tests/test_dual_membership.py derives the crossing pairs from the tree and fails as soon as an unpinned import lands. S8 checks the finished pin against ADR-0110's three pairs and 46-pair count."
   - "Both ADRs stay provisional. Confirming or replacing ADR-0109 is the Owner's call, before the first record is cited (ADR-0109 says so), so no item here changes either ADR's status."
+  - "Implement default taken (ref namespace): a namespace is refs/remotes/<remote> for a remote-tracking ref, else the ref's first two components (refs/heads, refs/tags, refs/pr). The header always prints `refs/stash skipped`, and `none` when no ref is read."
+  - "Implement default taken (unmeasurable boundary in a run line): it prints as `decompose none` / `implement none`; the reason is printed once per signal that reads it, as architecture.md's fixed reasons."
+  - "Implement default taken (design-gap section): a `## Design gaps found` section with no words is treated as missing (unmeasurable), the fail-closed reading, since it records neither `none` nor a gap."
+  - "Implement default taken (finding block): a finding's block runs from its heading to the next unfenced heading at its own level or above, or the next finding heading, so a `#### Evidence` sub-heading stays inside the finding and a grouping heading like `### Major` does not absorb its child findings. Fenced lines inside a block count toward naming an item; only fenced headings are ignored."
+  - "Implement default taken (severity words): matched case-insensitively and not before a hyphen, so `High-level` is not a finding; a short label is one or two capitals plus digits (`ADR0109` is not a label)."
   - "The first record (S13) is taken from the refs this clone holds at that time. The PRD measured 488 PR head refs already fetched under refs/remotes/pr. Fetching is the documented manual step, and no item runs it, because the tool never fetches and the brief rules out network in the tool."
 ---
 
@@ -116,3 +121,27 @@ finding heading (S5, S7); first numbers recorded append-only and
 reproducible (S9, S13); the five repo checks (S12).
 
 <!-- Deviations discovered during Implement get logged here, dated. -->
+
+2026-10-18, Implement. S6's "breakdown texts are read through
+`cli.read_file`" holds for `review.md` only: the working-tree breakdown
+comes from `knowledge_plane.breakdown_files` (S8 requires it), which reads
+it unguarded, and reading it a second time through `cli.read_file` would
+be a second read of one file. A breakdown version at a commit is read
+through `git show`. The `cli.read_file` wiring landed in S8's `measure`,
+where the reads happen, not in S6.
+
+2026-10-18, Implement, S13 stopped: a design gap routed back to
+Architect. The first `--record` (exit 0, `36 run(s), 0 problem(s)`) is
+not committed. Its codex-style-standards-enforcement line reads `re-plan
+12 of 14 (added 6, dropped 6, split 0, merged 0; renamed 0) inferred`,
+because that run renumbered its work orders by six between ebe8b2a and
+5f30760 with every title unchanged. Keys 0051 to 0058 sit in both
+versions under different titles, so the dropped and added items never
+share a title. architecture.md's work-item identity assumption and its
+citation-based split/merge decision name this run as the measured rename
+case that title-match renames handle. Under the rule as written they do
+not: 12 of the aggregate's 19 inferred re-plans come from this one
+renumbering. Identity (key first or title first) is an Architect
+decision, so S13 stays unticked until Architect answers. The written
+snapshot and the tool's output are held outside the tree for the
+reviewer.
