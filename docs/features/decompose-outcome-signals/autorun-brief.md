@@ -1,7 +1,7 @@
 # Autorun brief: decompose-outcome-signals
 
 Not an artifact. Written 2026-10-18 by the orchestrator. The Owner invoked
-`/idea-to-prod:autorun` with no description and answered five questions one
+`/idea-to-prod:autorun` with no description and answered six questions one
 at a time in session, taking the recommended option each time:
 
 1. What to drive: "#986 Decompose loop 1/4 (Recommended)".
@@ -10,6 +10,12 @@ at a time in session, taking the recommended option each time:
 3. Data source: "Subjects + file-history fallback (Recommended)".
 4. Release: "Prepare-and-stop, open PR (Recommended)".
 5. Operate: "minimum-signal: #987 uses it (Recommended)".
+6. Work-item identity, asked mid-run when Implement routed a design gap
+   back at S13: "Title first, key fallback (Recommended)". Match breakdown
+   items across versions on normalized title first and fall back to the key
+   (WO number or short label), so a renumbering that keeps titles is a
+   rename, not a re-plan (codex-style-standards-enforcement, ebe8b2a to
+   5f30760, WO-0045..0058 became WO-0051..0064).
 
 The rest of this brief is the orchestrator's reading of issue #986 and of
 the repo, and is marked that way. When a stage needs an answer this brief
