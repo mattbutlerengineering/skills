@@ -8,7 +8,9 @@ a failing fake runner covers only the CLI-failure strings, and a
 recording wrapper around the real runner pins the git verbs the tool is
 allowed to run.
 """
+import datetime
 import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -810,6 +812,68 @@ class TestReportFailures(ReportCase):
             return real(args, input=input, cwd=cwd)
         self.main(run=run)
         self.assertLessEqual(set(verbs), ALLOWED_VERBS)
+
+
+class TestRecord(ReportCase):
+    def setUp(self):
+        super().setUp()
+        self.repo.commit("feat: plan", **{BD: PLAN})
+        self.repo.commit("feat: S1", **{BD: TICKED})
+        self.results = self.repo.root / "evals" / "results"
+        self.name = (f"decompose-signals-{datetime.date.today().isoformat()}"
+                     ".json")
+
+    def snapshots(self):
+        return sorted(self.results.glob("*.json")) if \
+            self.results.is_dir() else []
+
+    def test_a_clean_record_writes_one_snapshot(self):
+        code, out = self.main(["--record"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.snapshots(), [self.results / self.name])
+        self.assertIn(f"{P}recorded evals/results/{self.name}",
+                      out.splitlines())
+        snapshot = json.loads(self.snapshots()[0].read_text(
+            encoding="utf-8"))
+        self.assertEqual(sorted(snapshot), sorted(
+            ("date", "head", "refs", "refs_digest", "rule", "runs",
+             "aggregate")))
+        self.assertEqual(snapshot["head"], self.repo.git("rev-parse",
+                                                         "HEAD"))
+        self.assertEqual(snapshot["rule"], decompose_signals.RULE)
+        self.assertEqual([r["run"] for r in snapshot["runs"]],
+                         ["feature:demo"])
+
+    def test_a_dirty_docs_tree_refuses(self):
+        self.repo.write(f"{RUN}/notes.md", "uncommitted\n")
+        code, out = self.main(["--record"])
+        self.assertEqual(code, 1)
+        self.assertEqual(self.snapshots(), [])
+        self.assertIn(f"{P}--record refused: git status --porcelain --"
+                      " docs/ is not empty", out.splitlines())
+
+    def test_a_measurement_with_problems_refuses(self):
+        real = git_run()
+
+        def run(args, input=None, cwd=None):
+            if args[0] == "show":
+                raise BOOM
+            return real(args, input=input, cwd=cwd)
+        code, out = self.main(["--record"], run=run)
+        self.assertEqual(code, 1)
+        self.assertEqual(self.snapshots(), [])
+        self.assertIn(f"{P}--record refused: the measurement has problems",
+                      out.splitlines())
+
+    def test_two_records_on_the_same_refs_agree(self):
+        self.main(["--record"])
+        self.main(["--record"])
+        first, second = (json.loads(path.read_text(encoding="utf-8"))
+                         for path in self.snapshots())
+        for key in ("refs_digest", "runs", "aggregate"):
+            with self.subTest(key=key):
+                self.assertEqual(first[key], second[key])
+        self.assertEqual(len(self.snapshots()), 2)
 
 if __name__ == "__main__":
     unittest.main()
