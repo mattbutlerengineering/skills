@@ -1,7 +1,7 @@
 # Autorun brief: decompose-outcome-signals
 
 Not an artifact. Written 2026-10-18 by the orchestrator. The Owner invoked
-`/idea-to-prod:autorun` with no description and answered six questions one
+`/idea-to-prod:autorun` with no description and answered seven questions one
 at a time in session, taking the recommended option each time:
 
 1. What to drive: "#986 Decompose loop 1/4 (Recommended)".
@@ -16,6 +16,13 @@ at a time in session, taking the recommended option each time:
    (WO number or short label), so a renumbering that keeps titles is a
    rename, not a re-plan (codex-style-standards-enforcement, ebe8b2a to
    5f30760, WO-0045..0058 became WO-0051..0064).
+7. Inferred implement boundary, asked after Review deferred a major to the
+   Owner: "Last tick, re-record (Recommended)". The inferred implement
+   boundary moves from the first commit that ticks a breakdown checkbox to
+   the commit that ticks the last one, so it marks the end of Implement as
+   the observed implement commit does. Amends Owner decision 3 through an
+   ADR amending ADR-0109. A second dated record is taken after the fix; the
+   first record stays, unedited.
 
 The rest of this brief is the orchestrator's reading of issue #986 and of
 the repo, and is marked that way. When a stage needs an answer this brief
