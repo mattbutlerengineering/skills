@@ -418,6 +418,12 @@ class TestReplan(unittest.TestCase):
                    [S1, row("S4", "half of S2"), row("S5", "rest of S2")]),
             counts(2, added=2, dropped=1, split=1))
 
+    def test_a_kept_row_citing_one_added_key_is_no_split(self):
+        self.assertEqual(
+            replan([S1, S2],
+                   [row("S1", "first — see S4"), S2, row("S4", "a")]),
+            counts(2, added=1))
+
     def test_an_added_row_citing_two_dropped_keys_is_a_merge(self):
         self.assertEqual(
             replan([S1, S2, S3], [S1, row("S4", "folds S2 and S3")]),
@@ -675,6 +681,12 @@ class TestReviewFindings(unittest.TestCase):
         ])
         self.assertEqual(findings(text),
                          {"label": "observed", "findings": 7, "named": 3})
+
+    def test_a_hyphenated_severity_word_is_not_a_finding(self):
+        self.assertEqual(
+            findings("## High-level summary\n\nS1.\n\n"
+                     "## Low-risk areas\n\nS2.\n"),
+            {"findings": 0, "reason": "no finding heading"})
 
     def test_s1_does_not_match_inside_s10(self):
         self.assertEqual(findings("## F1 — S10 and WS1 and S1x\n"),
