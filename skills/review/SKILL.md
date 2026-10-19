@@ -92,4 +92,7 @@ arbitrate severity.
 - **Maintenance runs**: scale per the protocol's Run scale section — a
   patch bump gets a lighter pass than a refactor. The regression test
   from Verify is the floor; don't re-verify what Verify already
-  covered.
+  covered. A green regression test is not the fix: it proves the
+  reproduction is gone, not the brittleness. Inspect the producing
+  boundary and its consumers, and say what related cleanup remains
+  and why.
