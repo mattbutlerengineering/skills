@@ -19,6 +19,7 @@ signal's aggregate, never counted as zero.
 """
 import datetime
 import hashlib
+from collections import Counter
 import re
 import sys
 from pathlib import Path
@@ -245,36 +246,53 @@ def _version(lines, sha):
     return items, None
 
 
+def _unique_titles(items):
+    """{normalized title: key} for the titles that are non-empty and occur
+    once in their version — a repeated title is ambiguous, so it matches
+    nothing by title."""
+    seen = Counter(title for title, _ in items.values())
+    return {title: key for key, (title, _) in items.items()
+            if title and seen[title] == 1}
+
+
+def _match(old, new):
+    """{D key: I key}, one-to-one, under Owner decision 6: a title pass
+    over unique titles, then a key pass over what is left."""
+    old_titles, new_titles = _unique_titles(old), _unique_titles(new)
+    pairs = {old_titles[t]: new_titles[t]
+             for t in old_titles if t in new_titles}
+    taken = set(pairs.values())
+    pairs.update({k: k for k in old
+                  if k not in pairs and k in new and k not in taken})
+    return pairs
+
+
 def replan(d_lines, i_lines, d_sha, i_sha):
     """The work-item diff between the decompose (D) and implement (I)
     versions: {items_at_d, added, dropped, split, merged, renamed, count},
-    or {unmeasurable: reason} when a version repeats a key. A rename (a
-    dropped and an added item with the same title) is not a re-plan; a
-    split or a merge is read only from citations."""
+    or {unmeasurable: reason} when a version repeats a key. Items match
+    by title first, then by key; a title match whose keys differ is a
+    rename, never a re-plan. A split or a merge is read only from
+    citations, and a dropped key some I-version item still uses names
+    that item, so it is never cited."""
     old, reason = _version(d_lines, d_sha)
     new, reason = (None, reason) if reason else _version(i_lines, i_sha)
     if reason:
         return {"unmeasurable": reason}
-    added = [k for k in new if k not in old]
-    dropped = [k for k in old if k not in new]
-    renamed = 0
-    for key in list(dropped):
-        twin = next((a for a in added if new[a][0] == old[key][0]), None)
-        if twin is not None:
-            added.remove(twin)
-            dropped.remove(key)
-            renamed += 1
-    cited = {k: _cites(new[k][1], set(added) | set(dropped)) - {k}
-             for k in new}
-    split = sum(1 for k in new if k in old and len(cited[k] & set(added)) > 1)
+    pairs = _match(old, new)
+    matched = set(pairs.values())
+    added = [k for k in new if k not in matched]
+    dropped = [k for k in old if k not in pairs]
+    citable = set(added) | {k for k in dropped if k not in new}
+    cited = {k: _cites(new[k][1], citable) - {k} for k in new}
+    split = sum(1 for k in matched if len(cited[k] & set(added)) > 1)
     split += sum(1 for d in dropped
                  if sum(1 for a in added if d in cited[a]) > 1)
     merged = sum(1 for a in added if len(cited[a] & set(dropped)) > 1)
     return {"items_at_d": len(old), "added": len(added),
             "dropped": len(dropped), "split": split, "merged": merged,
-            "renamed": renamed,
+            "renamed": sum(1 for d, i in pairs.items() if d != i),
             "count": len(added) + len(dropped) + split + merged}
-
 
 def _within(commits, d, i):
     """The commits in the window (D, I], in walk order."""
