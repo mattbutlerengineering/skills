@@ -18,7 +18,11 @@ assumptions:
   - "Recommended default taken (review-traced labelling): review-traced reads the committed review.md and breakdown.md and no boundary, so every measured run is observed for it. Its inferred population always prints as 0 run(s), so the line keeps the same shape as the other two signals."
   - "Recommended default taken (record location): `evals/results/decompose-signals-<date>[-N].json`, written by `--record` through eval_schema.write_snapshot as a third snapshot kind. eval_schema already owns that append-only naming grammar, and charter replays set the precedent for factory evidence that is never LEDGER evidence. A new directory would need a second owner of the -N grammar."
   - "Codebase default taken (unmeasurable is per signal): a run can be unmeasurable on re-plan and still measured on review-traced. Each per-run line gives the reason for each unmeasurable signal, and that signal's aggregate leaves the run out (the fail-closed roll-up: unknown never counts as zero)."
-  - "Owner decision 3 kept as written: the inferred implement boundary is the first commit that ticks a row, which is the start of Implement. The observed one is the protocol's `implement` commit, which is the end of it. Measured on the 3 runs with an observed implement boundary: the work-item keys at the first tick equal the keys at the implement commit in all 3, so today the two windows agree. The aggregate splits the populations anyway, and the gap is recorded under Consequences in ADR-0109."
+  - "Amended 2026-10-18. This assumption first kept Owner decision 3 as written (the inferred implement boundary is the first commit that ticks a row) and said the two implement windows agree, because the work-item keys at the first tick equalled those at the implement commit on 3 runs. Review falsified that on this run's own row: inferred at the first tick it read `re-plan 0 of 13`, and observed at the implement commit `re-plan 2 of 13 … ; design gaps 1 observed`. Keys agreeing at the first tick never showed the windows agree. The inferred implement boundary is now Owner decision 7 (the commit that checks the last row; autorun-brief.md), taken live, so it is not an assumption. ADR-0111 records it and supersedes that part of ADR-0109. The defaults below fill in its details."
+  - "Recommended default taken (what the last tick is, under Owner decision 7): the earliest commit after D, in walk order, whose breakdown version has at least one row and checks every row. Measured 2026-10-18 on the 4 runs with an observed implement boundary: in all 4, the observed implement commit is exactly this commit. The alternative, the commit after which every row stays checked, was rejected. Across every ref, later waves add unchecked rows on 6 runs (fail-closed-roll-up goes from 7 of 7 to 7 of 12), so on 5 inferred runs it would move I onto a later wave."
+  - "Recommended default taken (a breakdown never fully checked): no implement boundary, reason `no implement boundary: no later commit checks every row`, which replaces `… checks a row`. The fail-closed reading, since the protocol counts Implement done only when every checkbox is checked. The alternative, the latest commit that checks a row, guesses an end for an Implement that has not finished. Measured: 1 run (faster-sdlc, 9 of 11 checked) becomes unmeasurable. It would read `re-plan 0 of 11` under the latest tick."
+  - "Recommended default taken (rows unchecked or added later): they do not move I. The boundary is the first time every row is checked, as the observed boundary is the earliest implement commit after D. A version with no rows is never fully checked."
+  - "Recommended default taken (records): the rule sentence (`RULE`) gains the inferred rule, so a record shows which rule it was taken under. The first record stays unedited, and Implement takes a second dated record under the new rule (Owner decision 7). eval_schema names it `decompose-signals-<date>[-N].json`, which on 2026-10-18 is `-2`."
 ---
 
 # Architecture: Decompose outcome signals from git history
@@ -86,8 +90,16 @@ Where each PRD success criterion is met:
     `breakdown.md`. Inferred D: the earliest commit that changes it.
   - Observed I: the earliest commit after D whose subject matches
     `docs(<scope>): implement` and which changes the run's
-    `breakdown.md`. Inferred I: the earliest commit after D whose version
-    has a done row (`knowledge_plane.breakdown_rows`, field `done`).
+    `breakdown.md`. Inferred I (Owner decision 7, ADR-0111): the
+    earliest commit after D whose version has at least one row and every
+    row done (`knowledge_plane.breakdown_rows`, field `done`). That is the
+    first time Implement was complete, so it marks the end of Implement,
+    as the observed I does. Rows that are later unchecked, or added
+    unchecked later, do not move it. A run whose breakdown is never fully
+    checked on the refs read has no I.
+  - Amended 2026-10-18, on a major that Review routed to the Owner. The
+    shipped inferred I was the first commit after D with any done row,
+    the start of Implement, and its window ended almost at once.
   - The artifact for each stage comes from `protocol.STAGE_ARTIFACTS`.
 - Collaborators: the history adapter, for the versions it must inspect.
   It is pure over (commits, version reader).
@@ -219,14 +231,22 @@ Ordering is by run path, which keeps output deterministic.
 - Output, stdout, in this order. Implement pins the exact strings in
   tests:
   - `decompose-signals: refs read — <ns> (<n>), …; refs/stash skipped; digest <12 hex>`
-  - `decompose-signals: boundary rule — <ADR-0109 rule, one sentence>`
+  - `decompose-signals: boundary rule — <ADR-0109 rule, one sentence>`.
+    After ADR-0111 the sentence reads: `a boundary is observed when its
+    commit subject reads docs(<any scope>): <stage>, the stage a whole
+    word, and the commit changes that stage's artifact in the run's own
+    directory; any other boundary is inferred: decompose at the commit
+    that first adds breakdown.md, implement at the first later commit that
+    checks every row (ADR-0109, ADR-0111)`
   - one line per run, for example
     `decompose-signals: feature:<slug> — decompose observed <sha7>, implement inferred <sha7>; re-plan 1 of 9 (added 1, dropped 0, split 0, merged 0; renamed 0) inferred; design gaps 0 inferred; review-traced 3 of 12 findings name an item`
   - an unmeasurable signal prints `<signal> unmeasurable — <reason>`.
     The reasons are fixed strings:
     - `no commit on the refs read changes <path>`
     - `the first version (<sha7>) already checks <n> of <m> rows`
-    - `no implement boundary: no later commit checks a row`
+    - `no implement boundary: no later commit checks every row`
+      (ADR-0111; it replaces `no implement boundary: no later commit
+      checks a row`)
     - `duplicate work-item key <key> at <sha7>`
     - `no "Design gaps found" section at the decompose boundary`
     - `no review.md`
@@ -311,6 +331,18 @@ Ordering is by run path, which keeps output deterministic.
   renamed 14)`, and the inferred re-plan aggregate goes from 19/232 to
   7/232 over 27 runs. Every other run's re-plan record is identical, and
   all 63 existing tests pass under the new rule.
+- **The last tick for the inferred implement boundary** (Owner decision
+  7, taken live, ADR-0111) over the first tick. The first tick marks the
+  start of Implement, so its window missed this run's own re-plans and
+  route back to Architect. Accepted behaviour changes, from running both
+  rules over all 36 runs in this clone on 2026-10-18: 24 runs move their
+  inferred I. 22 of them keep the same figures. first-live-dispatch goes
+  from `re-plan 1 of 8 (added 1, …)` to `re-plan 4 of 8 (added 3,
+  dropped 0, split 1, merged 0; renamed 0)`, and faster-sdlc becomes
+  re-plan unmeasurable. On today's refs the inferred re-plan aggregate
+  goes from 7/219 over 26 runs to 10/208 over 25 (the first record, on
+  earlier refs, reads 7/232 over 27). Design gaps, review-traced and every
+  observed figure are unchanged.
 - **Design gaps from the template's section when D is inferred** over
   architecture.md touches: all 6 touches inside an inferred window were
   noise, judged by subject.
@@ -332,7 +364,10 @@ Ordering is by run path, which keeps output deterministic.
 
 - [ADR-0109](../../adr/0109-an-observed-boundary-names-its-stage-and-writes-its-artifact.md)
   — an observed boundary names its stage and writes its artifact
-  (provisional)
+  (provisional; superseded in part by ADR-0111)
+- [ADR-0111](../../adr/0111-the-inferred-implement-boundary-is-the-commit-that-checks-the-last-row.md)
+  — the inferred implement boundary is the commit that checks the last
+  row; supersedes ADR-0109 in part (provisional, on Owner decision 7)
 - [ADR-0110](../../adr/0110-decompose-signals-joins-the-root-only-importers.md)
   — decompose_signals joins the root-only importers of cli.py,
   knowledge_plane.py and protocol.py (provisional)

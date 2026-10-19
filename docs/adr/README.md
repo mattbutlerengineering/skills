@@ -129,5 +129,6 @@ the canonical vocabulary.
 | [0106](0106-pr-body-preflight-joins-the-root-only-importers.md) | pr_body_preflight joins the root-only importers of gates.py and cli.py | superseded in part by ADR-0110 (the cli.py row; provisional) |
 | [0107](0107-a-summary-never-rolls-unknown-up-to-pass.md) | A verification Summary never rolls a disclosed NOT RUN up into a pass | superseded in part by ADR-0108 (the naming clause; provisional) |
 | [0108](0108-a-zero-count-names-nothing.md) | A zero count in a verification Summary names nothing | provisional |
-| [0109](0109-an-observed-boundary-names-its-stage-and-writes-its-artifact.md) | An observed stage boundary names its stage and writes its artifact | provisional |
+| [0109](0109-an-observed-boundary-names-its-stage-and-writes-its-artifact.md) | An observed stage boundary names its stage and writes its artifact | superseded in part by ADR-0111 (the inferred implement boundary and the windows-agree consequence; provisional) |
 | [0110](0110-decompose-signals-joins-the-root-only-importers.md) | decompose_signals joins the root-only importers of cli.py, knowledge_plane.py and protocol.py | provisional |
+| [0111](0111-the-inferred-implement-boundary-is-the-commit-that-checks-the-last-row.md) | The inferred implement boundary is the commit that checks the last row | provisional |

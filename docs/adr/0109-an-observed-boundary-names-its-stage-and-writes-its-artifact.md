@@ -1,6 +1,6 @@
 # An observed stage boundary names its stage and writes its artifact
 
-- Status: provisional
+- Status: superseded in part by ADR-0111 (the inferred implement boundary and the windows-agree consequence; provisional)
 - Date: 2026-10-18
 
 Recorded by the `decompose-outcome-signals` feature run

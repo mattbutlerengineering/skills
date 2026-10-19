@@ -18,6 +18,8 @@ assumptions:
   - "Implement default taken (severity words): matched case-insensitively and not before a hyphen, so `High-level` is not a finding; a short label is one or two capitals plus digits (`ADR0109` is not a label)."
   - "The first record (S13) is taken from the refs this clone holds at that time. The PRD measured 488 PR head refs already fetched under refs/remotes/pr. Fetching is the documented manual step, and no item runs it, because the tool never fetches and the brief rules out network in the tool."
   - "Architect re-entry, 2026-10-18 (Owner decision 6, title-first work-item identity): the new work is two items, S12a (tests) and S12b (implementation), placed before S13. They take a letter suffix so that S13 and the Notes' references to it keep their label. The suffix is a short label `_LABEL` reads (`S12a`). The items stay in Milestone 4, because they must land after S12 and before the first record. S12b repeats S12's whole-repo checks, because S12 ran before the change."
+  - "Architect re-entry, 2026-10-18 (Owner decision 7, last-tick inferred implement boundary; ADR-0111): the new work is S14 (tests), S15 (implementation) and S16 (the second record), placed after S13. Every earlier item is done and S13's record is committed, so plain next labels are used; a letter suffix was only needed to insert before S13. They form one more slice of Milestone 4, because the second record is its point. S15 repeats S12's whole-repo checks, because they last ran before the change."
+  - "S16 writes a new file and never edits the first record (Owner decision 7). eval_schema picks the name: `decompose-signals-2026-10-18-2.json` if it runs on 2026-10-18, else that day's undashed name. The item accepts either."
 ---
 
 # Breakdown: Decompose outcome signals from git history
@@ -101,6 +103,15 @@ committed as the tool wrote them.
 - [x] **S13 Record the first real numbers** — run `python3 decompose_signals.py --record` on this clone and commit the file it writes, unedited — size:S
   - Accept: every earlier item's breakdown tick is committed first, so `git status --porcelain -- docs/` prints nothing. The command exits 0 and prints `decompose-signals: recorded evals/results/decompose-signals-<date>[-N].json`. That file is committed byte-for-byte as written, with no hand edit (`git diff` between the written file and the committed blob is empty). A rerun without `--record` on the same refs prints the same run and aggregate lines as the recorded `runs` and `aggregate`. The refs namespaces, digest and the observed, inferred and unmeasurable run counts are copied from the tool's output into Notes, dated. LEDGER.md is unchanged.
   - Blocked by: S12b Title-first identity
+- [ ] **S14 Last-tick implement boundary tests** — cases for `boundaries` and `main([])` under architecture.md's amended inferred implement boundary (Owner decision 7, ADR-0111) — size:M
+  - Accept: the module holds these cases, each asserting exact values or strings. A breakdown committed with 2 rows, then 1 checked, then both checked: inferred implement is the commit that checks both, not the first tick. A later commit that adds an unchecked row, or unchecks one, does not move it. A run whose versions after D never check every row, including one that checks some, gives `no implement boundary: no later commit checks every row`, for re-plan and, with D observed, for design gaps. The old string `no implement boundary: no later commit checks a row` appears in no test. An observed implement commit still wins over an earlier all-checked commit. `decompose_signals.RULE` contains `implement at the first later commit that checks every row` and `ADR-0111`. One `main([])` case on a temp repo whose D-to-first-tick window holds no re-plan and whose first-tick-to-all-checked window adds a row prints `re-plan 1 of <n> (added 1, …) inferred` and the all-checked commit's sha7 as `implement inferred`. The existing cases built on a single tick are updated to the new rule, not deleted, and every other earlier case still holds. Run before S15, the all-checked, never-fully-checked, RULE and `main([])` cases fail.
+  - Blocked by: S13 Record the first real numbers
+- [ ] **S15 Last-tick implement boundary** — `_implement`'s inferred pass picks the earliest later version with at least one row and every row done, the fixed reason becomes `no implement boundary: no later commit checks every row`, and `RULE` gains the inferred rule as architecture.md words it — size:S
+  - Accept: the S14 tests pass, and every earlier test still passes. `_done` and `knowledge_plane.breakdown_rows` are reused, and no row regex is retyped. The observed pass and `boundaries`' decompose logic are unchanged. The RunRecord shape is unchanged. The module docstring cites ADR-0111 beside ADR-0109. `python3 decompose_signals.py` on this clone matches architecture.md's accepted behaviour changes: only inferred implement shas move, first-live-dispatch reads `re-plan 4 of 8 (added 3, dropped 0, split 1, merged 0; renamed 0) inferred`, faster-sdlc reads `re-plan unmeasurable — no implement boundary: no later commit checks every row`, every other run's figures and every observed figure are unchanged, and the boundary-rule header line prints the new sentence. If today's refs give anything else, stop and route it back. S12's checks pass again: `python3 run_tests.py` exits 0, `python3 lint.py`, `python3 kb.py drift` and `python3 gates.py` / `--selftest` print 0 problem(s), and `python3 one_owner.py` names no problem in `decompose_signals.py`.
+  - Blocked by: S14 Last-tick implement boundary tests
+- [ ] **S16 Record the second real numbers** — run `python3 decompose_signals.py --record` again on this clone and commit the new file it writes, unedited; the first record stays as it is — size:S
+  - Accept: every earlier item's breakdown tick is committed first, so `git status --porcelain -- docs/` prints nothing. The command exits 0 and prints `decompose-signals: recorded evals/results/decompose-signals-<date>[-N].json`, a new path (`decompose-signals-2026-10-18-2.json` on 2026-10-18). That file is committed byte-for-byte as written, and `git diff` shows `evals/results/decompose-signals-2026-10-18.json` unchanged. The new file's `rule` is S15's sentence. A rerun without `--record` on the same refs prints the same run and aggregate lines as the recorded `runs` and `aggregate`. The refs namespaces, digest and the three aggregate lines are copied from the tool's output into Notes, dated, beside the first record's. LEDGER.md is unchanged.
+  - Blocked by: S15 Last-tick implement boundary
 
 ## Design gaps found
 
@@ -121,6 +132,17 @@ Owner settled it live as decision 6, title first with key fallback
 (autorun-brief.md). Architect amended architecture.md's Work-item diff the
 same day, and the new work is S12a and S12b, placed before S13. Status:
 answered by Architect. S12a, S12b and S13 are done.
+
+2026-10-18, routed from Review to the Owner, then to Architect: the
+inferred implement boundary. ADR-0109 and architecture.md took it as the
+first commit that ticks a row, the start of Implement, and claimed the
+inferred and observed windows agree. Review's major falsified that on
+this run's own row (`re-plan 0 of 13` inferred at the first tick against
+`re-plan 2 of 13 …; design gaps 1 observed` at the implement commit). The
+Owner settled it live as decision 7, the commit that checks the last row
+(autorun-brief.md). Architect wrote ADR-0111 and amended architecture.md's
+Boundary policy, and the new work is S14, S15 and S16. Status: answered
+by Architect; S14 to S16 are open.
 
 ## Notes
 
@@ -207,3 +229,17 @@ output:
     decompose-signals: aggregate re-plan — observed 0/29 over 3 run(s); inferred 7/232 over 27 run(s); combined 7/261 over 30 run(s); unmeasurable 6 run(s)
     decompose-signals: aggregate design gaps — observed 1/3 over 3 run(s); inferred 0/19 over 19 run(s); combined 1/22 over 22 run(s); unmeasurable 14 run(s)
     decompose-signals: aggregate review-traced — observed 32/184 over 34 run(s); inferred 0/0 over 0 run(s); combined 32/184 over 34 run(s); unmeasurable 2 run(s)
+
+2026-10-18, Architect re-entry for the inferred implement boundary
+(Owner decision 7, ADR-0111). architecture.md's Boundary policy now takes
+inferred I as the earliest commit after D whose version has at least one
+row and checks every row, and a breakdown never fully checked has no I.
+A scratchpad prototype ran the old and new rules over this clone's 36
+runs (head 34a3962). On the 4 runs with an observed I, the observed
+implement commit is the first all-checked commit in every one. 24 runs
+move their inferred I. 22 keep their figures, first-live-dispatch goes
+from re-plan 1 of 8 to 4 of 8 (added 3, split 1), and faster-sdlc becomes
+unmeasurable. The inferred re-plan aggregate goes from 7/219 over 26 runs
+to 10/208 over 25. Design gaps and review-traced are unchanged. Added S14
+(tests), S15 (implementation) and S16 (the second record) after S13. The
+first record stays unedited.
