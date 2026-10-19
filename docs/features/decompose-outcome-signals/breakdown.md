@@ -74,10 +74,10 @@ When this milestone is done, `--record` writes the result through
 `eval_schema`, the docs name the tool, and this repo's first numbers are
 committed as the tool wrote them.
 
-- [ ] **S9 Record tests** — cases in `tests/test_eval_schema.py` for the new snapshot kind, and in `tests/test_decompose_signals.py` for `--record` — size:M
+- [x] **S9 Record tests** — cases in `tests/test_eval_schema.py` for the new snapshot kind, and in `tests/test_decompose_signals.py` for `--record` — size:M
   - Accept: `eval_schema.results_path(results, "decompose-signals", "2026-10-18")` returns `decompose-signals-2026-10-18.json`, and `-2` once that file exists; `write_snapshot(output, results, "decompose-signals")` writes indented JSON with a trailing newline; `eval_schema.valid_results_link` is false for a `decompose-signals-…` path, so the kind can never be LEDGER evidence. `main(["--record"])` on a clean temp repo writes one snapshot holding `date`, `head`, `refs`, `refs_digest`, `rule`, `runs` and `aggregate`, and prints `decompose-signals: recorded <path>`. It writes nothing and prints a problem when `git status --porcelain -- docs/` is non-empty, and when the run has any problem. Two invocations on the same refs give equal `refs_digest`, `runs` and `aggregate`. Run before S10, the new cases fail.
   - Blocked by: S8 Report and front door
-- [ ] **S10 eval_schema snapshot kind and --record** — `decompose-signals` joins `results_path` and `SNAPSHOT_KINDS`, its docstring line beside `charter`'s, and `main` gains `--record` — size:S
+- [x] **S10 eval_schema snapshot kind and --record** — `decompose-signals` joins `results_path` and `SNAPSHOT_KINDS`, its docstring line beside `charter`'s, and `main` gains `--record` — size:S
   - Accept: the S9 tests pass, and every earlier test, including the existing `tests/test_eval_schema.py` cases, still passes. `_RESULTS_LINK` is unchanged. The `-N` grammar has one owner, `eval_schema.results_path`; `decompose_signals.py` builds no results filename itself.
   - Blocked by: S9 Record tests
 - [ ] **S11 Docs** — the CLAUDE.md "on demand, free" bullet beside `one_owner.py`, an `evals/README.md` results-layout line for `decompose-signals-<date>[-N].json`, and a CONTEXT.md entry for **Outcome signal** — size:S

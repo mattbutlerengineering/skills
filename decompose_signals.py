@@ -17,12 +17,14 @@ NOT A GATE. Unmeasurable is data, not a problem: a run whose history
 cannot answer a signal is named with the reason and left out of that
 signal's aggregate, never counted as zero.
 """
+import datetime
 import hashlib
 import re
 import sys
 from pathlib import Path
 
 from cli import CLI_FAILURES, detail, read_file, report, runner
+from eval_schema import write_snapshot
 from knowledge_plane import (BLOCKED_BY, ROW, WO_TOKEN, breakdown_files,
                              breakdown_rows, repo_root, row_title, unfenced)
 from protocol import STAGE_ARTIFACTS, run_ref
@@ -514,19 +516,50 @@ def render(result):
     return lines
 
 
+def record(root, run, result, problems):
+    """Write the snapshot through eval_schema and return its path, or
+    None with a refusal appended to `problems`: a record must be
+    reproducible from the refs, so docs/ must be clean and the
+    measurement problem-free."""
+    if problems:
+        problems.append(f"{LABEL}: --record refused: the measurement has"
+                        " problems")
+        return None
+    dirty, failed = _git(run, root, ["status", "--porcelain", "--",
+                                     "docs/"])
+    head, failed_head = _git(run, root, ["rev-parse", "HEAD"])
+    if failed or failed_head:
+        problems.extend(failed + failed_head)
+        return None
+    if dirty.strip():
+        problems.append(f"{LABEL}: --record refused: git status"
+                        " --porcelain -- docs/ is not empty")
+        return None
+    snapshot = {"date": datetime.date.today().isoformat(),
+                "head": head.strip(), **result}
+    path = write_snapshot(snapshot, root / "evals" / "results",
+                          "decompose-signals")
+    return path.relative_to(root).as_posix()
+
+
 def main(argv, root=None, run=None):
-    """`python3 decompose_signals.py` — print every run's signals and the
-    aggregate. Exit 0 when nothing failed (unmeasurable runs included), 1
-    with problems, 2 on an unknown argument."""
-    if argv:
+    """`python3 decompose_signals.py [--record]` — print every run's
+    signals and the aggregate; with --record, also write them as an
+    append-only snapshot. Exit 0 when nothing failed (unmeasurable runs
+    included), 1 with problems, 2 on an unknown argument."""
+    if argv not in ([], ["--record"]):
         print(f"{LABEL}: {' '.join(argv)!r} — unknown argument\n\n"
               f"  {USAGE}")
         return 2
     root = Path(root) if root is not None else repo_root()
-    result, problems = measure(root, run or runner("git",
-                                                   timeout=GIT_TIMEOUT))
+    run = run or runner("git", timeout=GIT_TIMEOUT)
+    result, problems = measure(root, run)
     for line in render(result) if result else []:
         print(line)
+    if result and argv:
+        path = record(root, run, result, problems)
+        if path:
+            print(f"{LABEL}: recorded {path}")
     return report(LABEL, problems,
                   prefix=f"{len(result['runs']) if result else 0} run(s), ")
 
