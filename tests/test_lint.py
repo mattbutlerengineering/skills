@@ -218,6 +218,11 @@ class TestCleanTree(CheckerTreeTest):
             with self.subTest(checker=checker.__name__):
                 self.assertEqual(checker(self.root), [])
 
+    def test_verify_skill_cites_zero_count_rule(self):
+        body = (ROOT / "skills" / "verify" / "SKILL.md").read_text(
+            encoding="utf-8")
+        self.assertIn("ADR-0108", body)
+
 
 class TestManifest(CheckerTreeTest):
     def test_missing_field(self):
