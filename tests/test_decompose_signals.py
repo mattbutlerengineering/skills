@@ -1,12 +1,12 @@
 """decompose_signals.py — Decompose outcome signals from git history.
 
 The run is docs/features/decompose-outcome-signals/ (ADR-0109's boundary
-rule, ADR-0110's import edges). Every case here runs against a REAL temp
-git repo built by the Repo fixture below, because author-date order and
-pathspec semantics are what is under test (architecture.md, Decisions);
-a failing fake runner covers only the CLI-failure strings, and a
-recording wrapper around the real runner pins the git verbs the tool is
-allowed to run.
+rule, amended by ADR-0111; ADR-0110's import edges). Every case here runs
+against a REAL temp git repo built by the Repo fixture below, because
+author-date order and pathspec semantics are what is under test
+(architecture.md, Decisions); a failing fake runner covers only the
+CLI-failure strings, and a recording wrapper around the real runner pins
+the git verbs the tool is allowed to run.
 """
 import datetime
 import hashlib
@@ -103,6 +103,10 @@ OTHER_BD = at(f"{OTHER}/breakdown.md")
 
 PLAN = breakdown(row("S1", "first"), row("S2", "second"))
 TICKED = breakdown(row("S1", "first", done=True), row("S2", "second"))
+# Every row checked: an inferred implement boundary (ADR-0111).
+DONE = breakdown(row("S1", "first", done=True),
+                 row("S2", "second", done=True))
+NO_I = "no implement boundary: no later commit checks every row"
 
 
 class HistoryCase(unittest.TestCase):
@@ -198,44 +202,71 @@ class TestImplement(HistoryCase):
         self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
         self.repo.commit("docs(x): implement the design change",
                          **{ARCH: "# Architecture\n"})
-        tick = self.repo.commit("feat: S1", **{BD: TICKED})
+        done = self.repo.commit("feat: S1 and S2", **{BD: DONE})
         self.assertEqual(self.bounds()["implement"],
-                         {"sha": tick, "label": "inferred"})
+                         {"sha": done, "label": "inferred"})
 
-    def test_inferred_is_the_earliest_later_version_with_a_done_row(self):
+    def test_an_observed_implement_wins_over_an_earlier_all_checked(self):
+        self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        self.repo.commit("feat: S1 and S2", **{BD: DONE})
+        sha = self.repo.commit("docs(demo): implement — done",
+                               **{BD: DONE + "\nnotes\n"})
+        self.assertEqual(self.bounds()["implement"],
+                         {"sha": sha, "label": "observed"})
+
+    def test_inferred_is_the_first_later_version_checking_every_row(self):
+        """ADR-0111: the commit that checks the last row, not the first
+        tick."""
         self.repo.commit("feat: plan", **{BD: PLAN})
         self.repo.commit("feat: reword", **{BD: PLAN.replace("first",
                                                                "1st")})
         tick = self.repo.commit("feat: S1", **{BD: TICKED})
-        self.repo.commit("feat: S2", **{BD: TICKED.replace(
-            "- [ ] **S2", "- [x] **S2")})
-        self.assertEqual(self.bounds(),
+        done = self.repo.commit("feat: S2", **{BD: DONE})
+        bounds = self.bounds()
+        self.assertEqual(bounds,
                          {"decompose": {"sha": self.repo.git(
                              "rev-parse", "HEAD~3"), "label": "inferred"},
-                          "implement": {"sha": tick, "label": "inferred"}})
+                          "implement": {"sha": done, "label": "inferred"}})
+        self.assertNotEqual(bounds["implement"]["sha"], tick)
 
-    def test_no_later_commit_checks_a_row(self):
+    def test_a_later_unchecked_row_does_not_move_it(self):
+        self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        self.repo.commit("feat: S1", **{BD: TICKED})
+        done = self.repo.commit("feat: S2", **{BD: DONE})
+        self.repo.commit("feat: next wave", **{BD: breakdown(
+            row("S1", "first", done=True), row("S2", "second", done=True),
+            row("S3", "third"))})
+        self.repo.commit("feat: wave done", **{BD: breakdown(
+            row("S1", "first", done=True), row("S2", "second", done=True),
+            row("S3", "third", done=True))})
+        self.assertEqual(self.bounds()["implement"],
+                         {"sha": done, "label": "inferred"})
+
+    def test_a_later_unchecked_row_after_unticking_does_not_move_it(self):
+        self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        done = self.repo.commit("feat: S1 and S2", **{BD: DONE})
+        self.repo.commit("fix: S2 was not done", **{BD: TICKED})
+        self.repo.commit("feat: S2 again", **{BD: DONE + "\nnote\n"})
+        self.assertEqual(self.bounds()["implement"],
+                         {"sha": done, "label": "inferred"})
+
+    def test_no_later_commit_checks_every_row(self):
         self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
         self.repo.commit("feat: reword", **{BD: PLAN + "\nmore\n"})
-        self.assertEqual(
-            self.bounds()["implement"],
-            {"unmeasurable":
-             "no implement boundary: no later commit checks a row"})
+        self.repo.commit("feat: S1", **{BD: TICKED})
+        self.assertEqual(self.bounds()["implement"], {"unmeasurable": NO_I})
 
 
 class TestRefs(HistoryCase):
     def test_a_commit_only_on_refs_stash_is_never_a_boundary(self):
         self.repo.commit("feat: plan", **{BD: PLAN})
-        self.repo.write(f"{RUN}/breakdown.md", TICKED)
+        self.repo.write(f"{RUN}/breakdown.md", DONE)
         self.repo.git("stash", "-q")
         self.assertTrue(self.repo.git("rev-parse", "--verify",
                                       "refs/stash"))
         history = self.history()
         self.assertNotIn("refs/stash", history["refs"])
-        self.assertEqual(
-            self.bounds()["implement"],
-            {"unmeasurable":
-             "no implement boundary: no later commit checks a row"})
+        self.assertEqual(self.bounds()["implement"], {"unmeasurable": NO_I})
 
     def test_namespace_counts_and_the_digest_of_the_ref_tips(self):
         self.repo.commit("feat: plan", **{BD: PLAN})
@@ -336,7 +367,7 @@ class TestNoNetwork(HistoryCase):
             return real(args, input=input, cwd=cwd)
         self.run = recording
         self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
-        self.repo.commit("feat: S1", **{BD: TICKED})
+        self.repo.commit("feat: S1 and S2", **{BD: DONE})
         self.bounds()
         self.assertTrue(verbs)
         self.assertLessEqual(set(verbs), ALLOWED_VERBS)
@@ -590,11 +621,10 @@ class TestDesignGapsFromSubjects(unittest.TestCase):
             {"label": "inferred", "routes": 2, "source": "subjects"})
 
     def test_no_implement_boundary_is_that_boundarys_reason(self):
-        reason = "no implement boundary: no later commit checks a row"
         self.assertEqual(
             gaps({"decompose": bound(2, "observed"),
-                  "implement": {"unmeasurable": reason}}),
-            {"unmeasurable": reason})
+                  "implement": {"unmeasurable": NO_I}}),
+            {"unmeasurable": NO_I})
 
     def test_no_decompose_boundary_is_that_boundarys_reason(self):
         reason = f"no commit on the refs read changes {D_PATH}"
@@ -637,8 +667,7 @@ class TestDesignGapsFromTheSection(unittest.TestCase):
     def test_an_inferred_decompose_with_no_implement_still_reads(self):
         self.assertEqual(
             gaps({"decompose": bound(2, "inferred"),
-                  "implement": {"unmeasurable": "no implement boundary:"
-                                " no later commit checks a row"}},
+                  "implement": {"unmeasurable": NO_I}},
                  breakdown(S1)),
             {"label": "inferred", "routes": 0, "source": "section"})
 
@@ -759,9 +788,10 @@ class TestTheFiveFixtureRuns(ReportCase):
 
     def test_a_run_with_a_split_item(self):
         d = self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
-        i = self.repo.commit("feat: S1, split", **{BD: breakdown(
+        i = self.repo.commit("feat: S1, split, all done", **{BD: breakdown(
             row("S1", "first — superseded by S3 and S4", done=True),
-            row("S2", "second"), row("S3", "a"), row("S4", "b"))})
+            row("S2", "second", done=True), row("S3", "a", done=True),
+            row("S4", "b", done=True))})
         self.assertEqual(self.only_run_line(), (
             f"{P}feature:demo — decompose observed {sha7(d)}, implement"
             f" inferred {sha7(i)}; re-plan 3 of 2 (added 2, dropped 0,"
@@ -781,7 +811,7 @@ class TestTheFiveFixtureRuns(ReportCase):
 
     def test_a_run_with_only_inferred_boundaries(self):
         d = self.repo.commit("feat: plan", **{BD: PLAN})
-        i = self.repo.commit("feat: S1", **{BD: TICKED})
+        i = self.repo.commit("feat: S1 and S2", **{BD: DONE})
         self.assertEqual(self.only_run_line(), (
             f"{P}feature:demo — decompose inferred {sha7(d)}, implement"
             f" inferred {sha7(i)}; re-plan 0 of 2 (added 0, dropped 0,"
@@ -802,7 +832,7 @@ class TestARenumberedRun(ReportCase):
         d = self.repo.commit("feat: plan",
                              **{BD: breakdown(*renumbered(45))})
         i = self.repo.commit("feat: renumber and tick",
-                             **{BD: breakdown(*renumbered(51, ticked=5))})
+                             **{BD: breakdown(*renumbered(51, ticked=14))})
         self.assertEqual(self.only_run_line(), (
             f"{P}feature:demo — decompose inferred {sha7(d)}, implement"
             f" inferred {sha7(i)}; re-plan 0 of 14 (added 0, dropped 0,"
@@ -810,11 +840,36 @@ class TestARenumberedRun(ReportCase):
             f" inferred; {NO_REVIEW}"))
 
 
+class TestTheLastTick(ReportCase):
+    """ADR-0111: the inferred window runs to the commit that checks the
+    last row, so a re-plan after the first tick is inside it."""
+
+    def test_a_row_added_after_the_first_tick_is_a_re_plan(self):
+        d = self.repo.commit("feat: plan", **{BD: PLAN})
+        self.repo.commit("feat: S1", **{BD: TICKED})
+        i = self.repo.commit("feat: S3 added, all done", **{BD: breakdown(
+            row("S1", "first", done=True), row("S2", "second", done=True),
+            row("S3", "third", done=True))})
+        self.assertEqual(self.only_run_line(), (
+            f"{P}feature:demo — decompose inferred {sha7(d)}, implement"
+            f" inferred {sha7(i)}; re-plan 1 of 2 (added 1, dropped 0,"
+            " split 0, merged 0; renamed 0) inferred; design gaps 0"
+            f" inferred; {NO_REVIEW}"))
+
+    def test_a_breakdown_never_fully_checked_is_unmeasurable(self):
+        d = self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        self.repo.commit("feat: S1", **{BD: TICKED})
+        self.assertEqual(self.only_run_line(), (
+            f"{P}feature:demo — decompose observed {sha7(d)}, implement"
+            f" none; re-plan unmeasurable — {NO_I}; design gaps"
+            f" unmeasurable — {NO_I}; {NO_REVIEW}"))
+
+
 class TestReviewShapes(ReportCase):
     def setUp(self):
         super().setUp()
         self.repo.commit("feat: plan", **{BD: PLAN})
-        self.repo.commit("feat: S1", **{BD: TICKED})
+        self.repo.commit("feat: S1 and S2", **{BD: DONE})
 
     def review_part(self):
         return self.only_run_line().rsplit("; ", 1)[1]
@@ -856,7 +911,7 @@ class TestTheWholeReport(ReportCase, cli_contract.ReportContract,
             **{at(f"{a}/breakdown.md"): TICKED})
         self.b_i = self.repo.commit(
             "feat: b grows", **{at(f"{b}/breakdown.md"): breakdown(
-                row("S1", "only", done=True), row("S2", "new"))})
+                row("S1", "only", done=True), row("S2", "new", done=True))})
         self.repo.write(f"{a}/review.md", "## F1 — S1\n\n## F2 — none\n")
         self.repo.write(f"{b}/review.md", "# Review\n")
         self.repo.write("docs/fixes/c/breakdown.md", PLAN)
@@ -898,6 +953,11 @@ class TestTheWholeReport(ReportCase, cli_contract.ReportContract,
 
     def test_the_rule_names_its_adr(self):
         self.assertIn("ADR-0109", decompose_signals.RULE)
+
+    def test_the_rule_names_the_last_tick(self):
+        self.assertIn("implement at the first later commit that checks"
+                      " every row", decompose_signals.RULE)
+        self.assertIn("ADR-0111", decompose_signals.RULE)
 
 
 class TestReportFailures(ReportCase):
@@ -950,7 +1010,7 @@ class TestReportFailures(ReportCase):
 
     def test_only_local_read_only_verbs_are_run_end_to_end(self):
         self.repo.commit("feat: plan", **{BD: PLAN})
-        self.repo.commit("feat: S1", **{BD: TICKED})
+        self.repo.commit("feat: S1 and S2", **{BD: DONE})
         real, verbs = git_run(), []
 
         def run(args, input=None, cwd=None):
@@ -964,7 +1024,7 @@ class TestRecord(ReportCase):
     def setUp(self):
         super().setUp()
         self.repo.commit("feat: plan", **{BD: PLAN})
-        self.repo.commit("feat: S1", **{BD: TICKED})
+        self.repo.commit("feat: S1 and S2", **{BD: DONE})
         self.results = self.repo.root / "evals" / "results"
         self.name = (f"decompose-signals-{datetime.date.today().isoformat()}"
                      ".json")
