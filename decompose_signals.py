@@ -37,8 +37,9 @@ STASH = "refs/stash"
 # stage -> the artifact its boundary commit writes (decompose and
 # implement both write breakdown.md, architect architecture.md).
 ARTIFACT = dict(STAGE_ARTIFACTS)
-# ADR-0109, part 1: `docs(<any scope>): <stage>`, the stage a whole word.
-SUBJECT = {stage: re.compile(rf"^docs\([^)]*\): {re.escape(stage)}\b")
+# ADR-0109, part 1: `docs(<any scope>): <stage>`, the stage a whole word
+# (a hyphenated compound such as `implement-queue` is not the stage).
+SUBJECT = {stage: re.compile(rf"^docs\([^)]*\): {re.escape(stage)}\b(?!-)")
            for stage in ARTIFACT}
 # The run artifacts the walk is restricted to: every feature and fixes
 # run's, and the product run's at the docs/ root.

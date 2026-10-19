@@ -147,6 +147,15 @@ class TestObservedDecompose(HistoryCase):
         self.assertEqual(self.bounds()["decompose"],
                          {"sha": first, "label": "inferred"})
 
+    def test_a_hyphenated_compound_is_not_the_stage(self):
+        """`\\b` sits between a word and a hyphen, so `decompose-signals`
+        would read as the stage without the (?!-) guard the finding
+        grammar already carries."""
+        first = self.repo.commit("docs(x): decompose-signals fixture",
+                                 **{BD: PLAN})
+        self.assertEqual(self.bounds()["decompose"],
+                         {"sha": first, "label": "inferred"})
+
 
 class TestInferredDecompose(HistoryCase):
     def test_the_earliest_commit_changing_the_breakdown(self):
