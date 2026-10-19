@@ -7,7 +7,12 @@ assumptions:
   - "No live interview: every PRD open question was settled from autorun-brief.md, idea.md, prd.md, the code and a throwaway prototype run against this clone's refs (scratchpad only, nothing committed), taking the recommended default each time. Nothing here is expensive to reverse before the first record lands. Both ADRs are provisional."
   - "Recommended default taken (ref set): the tool reads every ref the clone holds except refs/stash, and it is not configurable. The output names each namespace read with its count, plus a digest of the ref tips. A stash commit snapshots uncommitted work, so it could pass for an inferred boundary. A --refs option has no caller (YAGNI). Measured 2026-10-18: 1086 refs besides refs/stash, 488 of them under refs/remotes/pr."
   - "Recommended default taken (subject-match strictness, ADR-0109): a boundary is observed when the subject reads `docs(<any scope>): <stage>` with the stage as a whole word, and the commit changes that stage's artifact in this run's directory. The scope is not compared with the slug, and the em dash is not required. There is no third label. Measured: slug-equal plus em dash finds observed decompose boundaries for 2 runs. The path-anchored rule finds 4, adding software-factory (scope `factory`) and the-reviewer-token-runs-agent-code (scope `reviewer-token`)."
-  - "Recommended default taken (work-item identity): a work item's key is its row's leading label (a WO token, or a short label like A1 or I2 at the start of the bold span), else the bold text, else the row text up to the first ` — `. When a dropped item and an added item have the same title, the item was renamed, which is not a re-plan; codex-style-standards-enforcement's WO renumbering is the measured case. A split or merge is detected only by citation: a row outside its `blocked by:` clause names the work items it became, or the ones it absorbed. first-live-dispatch's superseded row is the measured case. Duplicate keys in one version make that run's re-plan signal unmeasurable."
+  - "Recommended default taken (work-item key): a work item's key is its row's leading label (a WO token, or a short label like A1 or I2 at the start of the bold span), else the bold text, else the row text up to the first ` — `. A split or merge is detected only by citation: a row outside its `blocked by:` clause names the work items it became, or the ones it absorbed. first-live-dispatch's superseded row is the measured case. Duplicate keys in one version make that run's re-plan signal unmeasurable. Amended 2026-10-18: this default first made identity key-first, and claimed that title-match renames handled codex-style-standards-enforcement's renumbering. They did not (breakdown.md Notes, S13), because keys 0051 to 0058 sit in both versions under different titles. Identity is now Owner decision 6 (title first, key fallback; autorun-brief.md), taken live, so it is not an assumption. The defaults below fill in its details."
+  - "Recommended default taken (title matching, under Owner decision 6): only a title that is non-empty and appears once in its version can be matched. Two rows with the same normalized title in one version are ambiguous, so neither is matched by title, and both fall back to the key. Pairing them in row order was rejected as a guess. Measured 2026-10-18: no breakdown version at any run's D or I repeats a title, so today this rule never applies."
+  - "Recommended default taken (what `renamed` counts): a pair matched by title whose keys differ. A pair matched by key fallback whose titles differ is the same item retitled. It counts as kept, and in no field, which is what the shipped rule already does for a key match. No RunRecord field is added."
+  - "Recommended default taken (citations once keys can be reused): a token in an I-version row names an I-version item first. A dropped key that some I-version item still uses is not citable, so it can never count toward a split or a merge. Under key-first a dropped key was absent from I by definition, so this case could not arise before. Reading the token as the dropped item would count a renumbered dependency as a split."
+  - "Recommended default taken (duplicate keys): `duplicate work-item key <key> at <sha7>` stays unmeasurable and is checked before matching. Keys are still the fallback identity and the citation targets, and decision 6 does not touch this rule. Measured 2026-10-18: no run is unmeasurable for this reason today. All 6 unmeasurable re-plan runs give the already-checks reason."
+  - "No ADR for the identity rule. It fails the hard-to-reverse leg: no record has been committed (S13 is open), and the rule lives in one function behind a pinned test. ADR-0109's decision covers boundaries, not identity, and ADR-0110's covers imports, so neither one is amended. ADR-0109's statement that the work-item keys at the first tick equal those at the implement commit is about keys, and it still holds."
   - "Recommended default taken (inferred design gaps): when a run has no observed decompose boundary, the design-gap signal is read from the `## Design gaps found` section that Decompose's TEMPLATE.md requires, in the breakdown version at the decompose boundary. A section whose first word is `none` gives 0. Any other content gives 1 route. A missing section makes the signal unmeasurable. The alternative was a later commit touching architecture.md, and the prototype found 6 such commits inside an inferred window. By subject, every one was a batch landing, a closure or a feature commit, not a route back to Architect."
   - "Recommended default taken (what a finding is): a heading of level 2 to 4, outside fences, whose text (emphasis stripped) starts with a severity word (critical, major, minor, low, medium, high) or an ordinal label (F1, Finding 1, 1.). A finding names a work item when its block holds one of the current breakdown's item keys as a whole token. The prototype found 184 findings in 34 review.md files, 32 of them naming an item: design evidence only, not the baseline."
   - "Recommended default taken (review-traced labelling): review-traced reads the committed review.md and breakdown.md and no boundary, so every measured run is observed for it. Its inferred population always prints as 0 run(s), so the line keeps the same shape as the other two signals."
@@ -89,19 +94,52 @@ Where each PRD success criterion is met:
 
 ### Work-item diff (`item_keys`, `replan`)
 
-- Responsibility: the key of each work item in one breakdown version, and
-  the D→I diff as added, dropped, split, merged and renamed counts.
-  - Rename: an unmatched dropped/added pair with equal normalized
-    titles. Titles come from `knowledge_plane.row_title` for WO rows and
-    from the text after the label for label rows.
-  - Split: one old work item whose I-version row cites at least 2 added
+- Responsibility: the key and normalized title of each work item in one
+  breakdown version, and the D→I diff as added, dropped, split, merged
+  and renamed counts.
+  - Key: see the work-item key assumption. If a key repeats within a
+    version, that run's re-plan signal is unmeasurable
+    (`duplicate work-item key <key> at <sha7>`). This is checked first,
+    before any matching.
+  - Title: `knowledge_plane.row_title` for WO rows (else the text after
+    the token up to the first ` — `), the text after the label for label
+    rows (`**` removed, cut at the first ` — `, and leading or trailing
+    ` —-:` stripped), and otherwise the key itself.
+  - Normalized title: the title with backticks removed, lowercased,
+    whitespace runs collapsed to one space, ends trimmed, and any
+    trailing `.` and `:` characters stripped (the shipped `_normal`). Case, code marks, spacing and a closing
+    stop are not part of identity.
+  - Identity, Owner decision 6 (title first, key fallback), in two
+    passes, each one-to-one:
+    1. Title pass. A D item and an I item are the same item when their
+       normalized titles are equal, non-empty, and each appears only
+       once in its version. A repeated title matches nothing in this
+       pass.
+    2. Key pass. A D item and an I item still unmatched that share a
+       key are the same item, retitled.
+    Every D item still unmatched is dropped, and every I item still
+    unmatched is added. After the key pass no key is both added and
+    dropped, so the two sets are disjoint.
+  - Rename: a title-pass pair whose keys differ. `renamed` counts these
+    pairs. A key-pass pair is kept and counted nowhere.
+  - Split: a matched item whose I-version row cites at least 2 added
     keys, or a dropped item cited by at least 2 added rows.
   - Merge: one added row that cites at least 2 dropped items.
   - Citations are read from the row line with its `blocked by:` clause
     removed (`knowledge_plane.BLOCKED_BY`), so a dependency is never read
-    as a split.
+    as a split. The citable keys are the added keys, plus the dropped
+    keys that no I-version item uses. A token in an I-version row names
+    the I-version item first.
   - Re-plan count = added + dropped + splits + merges. Renames count 0.
     The rate's denominator is the number of work items at D.
+  - Pinned case: a renumbering that keeps every title gives
+    `re-plan 0 of <n> (added 0, dropped 0, split 0, merged 0; renamed <r>)`,
+    where `<r>` is the number of items whose key changed. On
+    codex-style-standards-enforcement (ebe8b2a → 5f30760, WO-0045..0058
+    renumbered to WO-0051..0064) that is `re-plan 0 of 14 (…; renamed 14)`.
+  - Amended 2026-10-18, on a design gap that Implement routed back at
+    S13. The shipped rule was key first, with a title match only between
+    leftover dropped and added items.
 - Collaborators: `knowledge_plane.parse_row` / `breakdown_rows`,
   `WO_TOKEN`, `BLOCKED_BY`. It is pure over two lists of lines.
 
@@ -260,7 +298,19 @@ Ordering is by run path, which keeps output deterministic.
 - **Citation-based split/merge** over a per-commit heuristic ("one dropped
   and two added in one commit is a split"): the heuristic reads
   codex-style-standards-enforcement's six-for-six WO renumbering as six
-  splits. Title-match renames handle that case.
+  splits. Title-first identity, the next decision, handles that case.
+- **Title first, key fallback** for work-item identity (Owner decision 6,
+  taken live) over key first. Key first matched codex-style-standards-
+  enforcement's reused keys WO-0051 to WO-0058 to different items, so a
+  renumbering with every title kept read as `added 6, dropped 6`. Title
+  first loses only when one row takes another row's old title, which no
+  measured run does. Accepted behaviour changes, from running both rules
+  over all 36 runs in this clone on 2026-10-18: one run differs.
+  codex-style-standards-enforcement goes from `re-plan 12 of 14 (added 6,
+  dropped 6, …; renamed 0)` to `re-plan 0 of 14 (added 0, dropped 0, …;
+  renamed 14)`, and the inferred re-plan aggregate goes from 19/232 to
+  7/232 over 27 runs. Every other run's re-plan record is identical, and
+  all 63 existing tests pass under the new rule.
 - **Design gaps from the template's section when D is inferred** over
   architecture.md touches: all 6 touches inside an inferred window were
   noise, judged by subject.

@@ -17,6 +17,7 @@ assumptions:
   - "Implement default taken (finding block): a finding's block runs from its heading to the next unfenced heading at its own level or above, or the next finding heading, so a `#### Evidence` sub-heading stays inside the finding and a grouping heading like `### Major` does not absorb its child findings. Fenced lines inside a block count toward naming an item; only fenced headings are ignored."
   - "Implement default taken (severity words): matched case-insensitively and not before a hyphen, so `High-level` is not a finding; a short label is one or two capitals plus digits (`ADR0109` is not a label)."
   - "The first record (S13) is taken from the refs this clone holds at that time. The PRD measured 488 PR head refs already fetched under refs/remotes/pr. Fetching is the documented manual step, and no item runs it, because the tool never fetches and the brief rules out network in the tool."
+  - "Architect re-entry, 2026-10-18 (Owner decision 6, title-first work-item identity): the new work is two items, S12a (tests) and S12b (implementation), placed before S13. They take a letter suffix so that S13 and the Notes' references to it keep their label. The suffix is a short label `_LABEL` reads (`S12a`). The items stay in Milestone 4, because they must land after S12 and before the first record. S12b repeats S12's whole-repo checks, because S12 ran before the change."
 ---
 
 # Breakdown: Decompose outcome signals from git history
@@ -91,19 +92,35 @@ committed as the tool wrote them.
 - [x] **S12 Whole-repo verify** — the four CI checks and the one-owner pre-pass over the finished change — size:S
   - Accept: `python3 run_tests.py` exits 0; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 kb.py drift` prints `drift: 0 problem(s)`; `python3 gates.py` and `python3 gates.py --selftest` print `gates: 0 problem(s)`. `python3 one_owner.py` reports no `one-owner:` problem naming `decompose_signals.py`. No file under `skills/` or `factory/templates/`, and not `.claude-plugin/plugin.json`, `factory_init.MIRRORS` or `LEDGER.md`, changed.
   - Blocked by: S11 Docs
+- [ ] **S12a Title-first identity tests** — cases for `replan` under architecture.md's two-pass identity (Owner decision 6), plus one end-to-end renumbering run — size:M
+  - Accept: the module holds these cases, each asserting exact counts. A renumbering fixture modelled on codex-style-standards-enforcement: a D version of 14 rows `WO-0045`..`WO-0058` and an I version of the same 14 titles as `WO-0051`..`WO-0064`, with the `blocked by:` clauses renumbered and some rows ticked. The keys overlap, so key-first gives added 6 and dropped 6. It gives `items_at_d` 14, added 0, dropped 0, split 0, merged 0, renamed 14 and count 0. A title that differs only in case, backticks, spacing or a trailing `.`/`:` still matches. Title beats key: D `S3 X`, `S4 Y` and I `S3 Y`, `S4 Z` give renamed 1, dropped 1 (`S3`) and added 1 (`S4`). Key fallback: a row keeping its key under a new title is kept, with renamed 0 and count 0. A title repeated within one version matches nothing by title, and those rows fall back to their keys. A dropped key that an I-version item still uses is not counted as cited, so no split or merge comes from it, while a split by citation of two added keys still counts on a renamed item. A duplicate key still gives `duplicate work-item key <key> at <sha7>`. One `main([])` case on a temp repo whose breakdown is renumbered between D and I prints `re-plan 0 of 14 (added 0, dropped 0, split 0, merged 0; renamed 14)`. Every earlier case still holds. Run before S12b, the renumbering and title-beats-key cases fail. The reused-dropped-key case pins the citation rule against a naive title-first pass, which would count it as a split.
+  - Blocked by: S12 Whole-repo verify
+- [ ] **S12b Title-first identity** — `replan`'s matching as architecture.md's Work-item diff describes: a title pass over unique non-empty normalized titles, then a key pass, with citable keys restricted to added keys and dropped keys no I-version item uses — size:S
+  - Accept: the S12a tests pass, and every earlier test still passes. `_normal`, `_item`, `_cites`, `_version` and the duplicate-key check are reused, and no row, WO or blocked-by regex is retyped. `item_keys` and the review tracer are unchanged. The RunRecord `replan` shape is unchanged (no new field). `python3 decompose_signals.py` on this clone prints codex-style-standards-enforcement's line with `re-plan 0 of 14 (added 0, dropped 0, split 0, merged 0; renamed 14)`, and every other run's re-plan figures match the pre-change output (architecture.md's accepted behaviour changes). S12's checks pass again: `python3 run_tests.py` exits 0, `python3 lint.py`, `python3 kb.py drift` and `python3 gates.py` / `--selftest` print 0 problem(s), and `python3 one_owner.py` names no problem in `decompose_signals.py`.
+  - Blocked by: S12a Title-first identity tests
 - [ ] **S13 Record the first real numbers** — run `python3 decompose_signals.py --record` on this clone and commit the file it writes, unedited — size:S
   - Accept: every earlier item's breakdown tick is committed first, so `git status --porcelain -- docs/` prints nothing. The command exits 0 and prints `decompose-signals: recorded evals/results/decompose-signals-<date>[-N].json`. That file is committed byte-for-byte as written, with no hand edit (`git diff` between the written file and the committed blob is empty). A rerun without `--record` on the same refs prints the same run and aggregate lines as the recorded `runs` and `aggregate`. The refs namespaces, digest and the observed, inferred and unmeasurable run counts are copied from the tool's output into Notes, dated. LEDGER.md is unchanged.
-  - Blocked by: S12 Whole-repo verify
+  - Blocked by: S12b Title-first identity
 
 ## Design gaps found
 
-None. Every component, interface string and failure mode the items need is
+At Decompose: none. Every component, interface string and failure mode the items need is
 in architecture.md or ADR-0109 / ADR-0110. Three points the architecture
 leaves implicit are derived from its stated rules and data model, not
 designed here; each is logged in the frontmatter `assumptions:` (a signal
 reading an unmeasurable boundary is unmeasurable; the design-gap
 aggregate's denominator is measured runs; a `review.md` with no finding
 heading is a measured run with 0 findings).
+
+2026-10-18, routed back from Implement at S13 (recorded under Notes):
+work-item identity. architecture.md made identity key-first. That counted
+codex-style-standards-enforcement's renumbering with every title kept
+(ebe8b2a → 5f30760, WO-0045..0058 → WO-0051..0064) as added 6 and
+dropped 6, and the architecture claimed title matching handled it. The
+Owner settled it live as decision 6, title first with key fallback
+(autorun-brief.md). Architect amended architecture.md's Work-item diff the
+same day, and the new work is S12a and S12b, placed before S13. Status:
+answered by Architect. S12a, S12b and S13 are open.
 
 ## Notes
 
@@ -145,3 +162,14 @@ renumbering. Identity (key first or title first) is an Architect
 decision, so S13 stays unticked until Architect answers. The written
 snapshot and the tool's output are held outside the tree for the
 reviewer.
+
+2026-10-18, Architect re-entry for the S13 design gap. architecture.md's
+Work-item diff now states two-pass identity: a title pass over unique,
+non-empty normalized titles, then a key pass. It also states which keys
+are citable once keys can be reused, and the pinned renumbering result.
+Both rules were run over this clone's 36 runs. Only
+codex-style-standards-enforcement changes (`re-plan 12 of 14` → `re-plan 0
+of 14 … renamed 14`), and the inferred re-plan aggregate goes from 19/232
+to 7/232. Added S12a (tests) and S12b (implementation) ahead of S13, and
+S13 is now blocked by S12b. The snapshot held outside the tree is stale
+and is not committed. S13 reruns `--record` after S12b.
