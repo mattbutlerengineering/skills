@@ -5,7 +5,9 @@ Step 1 of the Decompose learning loop (issue #986; the run is
 docs/features/decompose-outcome-signals/). For every run directory with
 a breakdown.md it finds the run's decompose and implement boundaries in
 one git walk over every ref the clone holds (refs/stash excepted), and
-labels each one observed or inferred under ADR-0109's rule.
+labels each one observed or inferred under ADR-0109's rule, as ADR-0111
+amends it: an inferred implement boundary is the first later commit that
+checks every row.
 
 READ-ONLY AND LOCAL. git is the only external CLI, reached through
 cli.runner and injected as `run`; the tool never fetches. PR head refs
@@ -46,11 +48,14 @@ SUBJECT = {stage: re.compile(rf"^docs\([^)]*\): {re.escape(stage)}\b(?!-)")
 PATHSPECS = tuple(
     spec for artifact in (ARTIFACT["decompose"], ARTIFACT["architect"])
     for spec in (f":(glob)docs/*/*/{artifact}", f"docs/{artifact}"))
-# ADR-0109's rule, printed in every report and written into every record.
+# ADR-0109's rule as ADR-0111 amends it, printed in every report and
+# written into every record.
 RULE = ("a boundary is observed when its commit subject reads"
         " docs(<any scope>): <stage>, the stage a whole word, and the commit"
         " changes that stage's artifact in the run's own directory; any"
-        " other boundary is inferred (ADR-0109)")
+        " other boundary is inferred: decompose at the commit that first"
+        " adds breakdown.md, implement at the first later commit that checks"
+        " every row (ADR-0109, ADR-0111)")
 USAGE = "python3 decompose_signals.py [--record]"
 # A NUL opens each commit record; unit separators split its header.
 _FORMAT = "--format=%x00%H%x1f%at%x1f%s"
@@ -176,7 +181,9 @@ def _both(reason):
 
 
 def _implement(later, run_rel, path, read):
-    """The implement Boundary among the breakdown commits after D."""
+    """The implement Boundary among the breakdown commits after D. Inferred
+    (ADR-0111): the first version with rows, every one done, the first time
+    Implement was complete; later unchecked rows do not move it."""
     for commit in later:
         if _observed(commit, run_rel, "implement"):
             return {"sha": commit["sha"], "label": "observed"}
@@ -184,10 +191,11 @@ def _implement(later, run_rel, path, read):
         text = read(commit["sha"], path)
         if text is None:
             return {"unmeasurable": READ_FAILED}
-        if _done(text)[0]:
+        done, total = _done(text)
+        if total and done == total:
             return {"sha": commit["sha"], "label": "inferred"}
     return {"unmeasurable":
-            "no implement boundary: no later commit checks a row"}
+            "no implement boundary: no later commit checks every row"}
 
 
 # A short label leading the bold span (S1, A1, I2): the form the fix-run

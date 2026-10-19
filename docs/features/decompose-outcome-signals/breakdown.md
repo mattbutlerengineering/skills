@@ -103,10 +103,10 @@ committed as the tool wrote them.
 - [x] **S13 Record the first real numbers** — run `python3 decompose_signals.py --record` on this clone and commit the file it writes, unedited — size:S
   - Accept: every earlier item's breakdown tick is committed first, so `git status --porcelain -- docs/` prints nothing. The command exits 0 and prints `decompose-signals: recorded evals/results/decompose-signals-<date>[-N].json`. That file is committed byte-for-byte as written, with no hand edit (`git diff` between the written file and the committed blob is empty). A rerun without `--record` on the same refs prints the same run and aggregate lines as the recorded `runs` and `aggregate`. The refs namespaces, digest and the observed, inferred and unmeasurable run counts are copied from the tool's output into Notes, dated. LEDGER.md is unchanged.
   - Blocked by: S12b Title-first identity
-- [ ] **S14 Last-tick implement boundary tests** — cases for `boundaries` and `main([])` under architecture.md's amended inferred implement boundary (Owner decision 7, ADR-0111) — size:M
+- [x] **S14 Last-tick implement boundary tests** — cases for `boundaries` and `main([])` under architecture.md's amended inferred implement boundary (Owner decision 7, ADR-0111) — size:M
   - Accept: the module holds these cases, each asserting exact values or strings. A breakdown committed with 2 rows, then 1 checked, then both checked: inferred implement is the commit that checks both, not the first tick. A later commit that adds an unchecked row, or unchecks one, does not move it. A run whose versions after D never check every row, including one that checks some, gives `no implement boundary: no later commit checks every row`, for re-plan and, with D observed, for design gaps. The old string `no implement boundary: no later commit checks a row` appears in no test. An observed implement commit still wins over an earlier all-checked commit. `decompose_signals.RULE` contains `implement at the first later commit that checks every row` and `ADR-0111`. One `main([])` case on a temp repo whose D-to-first-tick window holds no re-plan and whose first-tick-to-all-checked window adds a row prints `re-plan 1 of <n> (added 1, …) inferred` and the all-checked commit's sha7 as `implement inferred`. The existing cases built on a single tick are updated to the new rule, not deleted, and every other earlier case still holds. Run before S15, the all-checked, never-fully-checked, RULE and `main([])` cases fail.
   - Blocked by: S13 Record the first real numbers
-- [ ] **S15 Last-tick implement boundary** — `_implement`'s inferred pass picks the earliest later version with at least one row and every row done, the fixed reason becomes `no implement boundary: no later commit checks every row`, and `RULE` gains the inferred rule as architecture.md words it — size:S
+- [x] **S15 Last-tick implement boundary** — `_implement`'s inferred pass picks the earliest later version with at least one row and every row done, the fixed reason becomes `no implement boundary: no later commit checks every row`, and `RULE` gains the inferred rule as architecture.md words it — size:S
   - Accept: the S14 tests pass, and every earlier test still passes. `_done` and `knowledge_plane.breakdown_rows` are reused, and no row regex is retyped. The observed pass and `boundaries`' decompose logic are unchanged. The RunRecord shape is unchanged. The module docstring cites ADR-0111 beside ADR-0109. `python3 decompose_signals.py` on this clone matches architecture.md's accepted behaviour changes: only inferred implement shas move, first-live-dispatch reads `re-plan 4 of 8 (added 3, dropped 0, split 1, merged 0; renamed 0) inferred`, faster-sdlc reads `re-plan unmeasurable — no implement boundary: no later commit checks every row`, every other run's figures and every observed figure are unchanged, and the boundary-rule header line prints the new sentence. If today's refs give anything else, stop and route it back. S12's checks pass again: `python3 run_tests.py` exits 0, `python3 lint.py`, `python3 kb.py drift` and `python3 gates.py` / `--selftest` print 0 problem(s), and `python3 one_owner.py` names no problem in `decompose_signals.py`.
   - Blocked by: S14 Last-tick implement boundary tests
 - [ ] **S16 Record the second real numbers** — run `python3 decompose_signals.py --record` again on this clone and commit the new file it writes, unedited; the first record stays as it is — size:S
@@ -243,3 +243,20 @@ unmeasurable. The inferred re-plan aggregate goes from 7/219 over 26 runs
 to 10/208 over 25. Design gaps and review-traced are unchanged. Added S14
 (tests), S15 (implementation) and S16 (the second record) after S13. The
 first record stays unedited.
+
+2026-10-18, Implement, S14 and S15. S14 moved every case built on a
+single tick onto an all-checked version and added the last-tick cases.
+Run on the first-tick tree before S15, 7 of 83 cases failed, each for
+the rule: the all-checked pick, a later unchecked row, the
+never-fully-checked reason (also in the refs/stash case), RULE, and both
+new `main([])` runs. The unticking case already held, because its first
+tick is also its first all-checked commit. After S15 all 83 pass.
+`python3 decompose_signals.py` was diffed against its output from before
+S15 on the same refs (only this branch's tip moved). 24 runs changed: 22
+moved only their inferred implement sha, first-live-dispatch reads
+`re-plan 4 of 8 (added 3, dropped 0, split 1, merged 0; renamed 0)
+inferred`, and faster-sdlc reads `re-plan unmeasurable — no implement
+boundary: no later commit checks every row`. No observed figure moved.
+The inferred re-plan aggregate went from 7/219 over 26 runs to 10/208
+over 25, and design gaps and review-traced are unchanged, as
+architecture.md accepts. S12's checks passed again.
