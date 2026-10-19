@@ -336,8 +336,11 @@ def design_gaps(commits, run_rel, bounds, d_text):
     if d["label"] == "observed":
         if "unmeasurable" in i:
             return {"unmeasurable": i["unmeasurable"]}
-        routes = sum(1 for c in _within(commits, d, i)
-                     if _observed(c, run_rel, "architect"))
+        # A cherry-picked or rebased copy on another ref keeps the
+        # subject and author date: one route, however many refs hold it.
+        routes = len({(c["author_time"], c["subject"])
+                      for c in _within(commits, d, i)
+                      if _observed(c, run_rel, "architect")})
         return {"label": i["label"], "routes": routes, "source": "subjects"}
     if d_text is None:
         return {"unmeasurable": READ_FAILED}

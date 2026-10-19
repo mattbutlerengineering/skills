@@ -557,6 +557,17 @@ class TestDesignGapsFromSubjects(unittest.TestCase):
                   "implement": bound(7, "observed")}),
             {"label": "observed", "routes": 1, "source": "subjects"})
 
+    def test_a_copy_of_one_architect_commit_is_one_route(self):
+        """A cherry-pick or rebase onto another ref keeps the subject and
+        the author date: the walk sees the same route twice."""
+        copy = {**WALK[2], "sha": "c" * 40}
+        walk = [*WALK[:3], copy, *WALK[3:]]
+        self.assertEqual(
+            decompose_signals.design_gaps(
+                walk, RUN, {"decompose": bound(2, "observed"),
+                            "implement": bound(7, "observed")}, None),
+            {"label": "observed", "routes": 1, "source": "subjects"})
+
     def test_an_inferred_implement_boundary_makes_it_inferred(self):
         self.assertEqual(
             gaps({"decompose": bound(2, "observed"),
