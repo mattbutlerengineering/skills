@@ -98,7 +98,7 @@ committed as the tool wrote them.
 - [x] **S12b Title-first identity** — `replan`'s matching as architecture.md's Work-item diff describes: a title pass over unique non-empty normalized titles, then a key pass, with citable keys restricted to added keys and dropped keys no I-version item uses — size:S
   - Accept: the S12a tests pass, and every earlier test still passes. `_normal`, `_item`, `_cites`, `_version` and the duplicate-key check are reused, and no row, WO or blocked-by regex is retyped. `item_keys` and the review tracer are unchanged. The RunRecord `replan` shape is unchanged (no new field). `python3 decompose_signals.py` on this clone prints codex-style-standards-enforcement's line with `re-plan 0 of 14 (added 0, dropped 0, split 0, merged 0; renamed 14)`, and every other run's re-plan figures match the pre-change output (architecture.md's accepted behaviour changes). S12's checks pass again: `python3 run_tests.py` exits 0, `python3 lint.py`, `python3 kb.py drift` and `python3 gates.py` / `--selftest` print 0 problem(s), and `python3 one_owner.py` names no problem in `decompose_signals.py`.
   - Blocked by: S12a Title-first identity tests
-- [ ] **S13 Record the first real numbers** — run `python3 decompose_signals.py --record` on this clone and commit the file it writes, unedited — size:S
+- [x] **S13 Record the first real numbers** — run `python3 decompose_signals.py --record` on this clone and commit the file it writes, unedited — size:S
   - Accept: every earlier item's breakdown tick is committed first, so `git status --porcelain -- docs/` prints nothing. The command exits 0 and prints `decompose-signals: recorded evals/results/decompose-signals-<date>[-N].json`. That file is committed byte-for-byte as written, with no hand edit (`git diff` between the written file and the committed blob is empty). A rerun without `--record` on the same refs prints the same run and aggregate lines as the recorded `runs` and `aggregate`. The refs namespaces, digest and the observed, inferred and unmeasurable run counts are copied from the tool's output into Notes, dated. LEDGER.md is unchanged.
   - Blocked by: S12b Title-first identity
 
@@ -120,7 +120,7 @@ dropped 6, and the architecture claimed title matching handled it. The
 Owner settled it live as decision 6, title first with key fallback
 (autorun-brief.md). Architect amended architecture.md's Work-item diff the
 same day, and the new work is S12a and S12b, placed before S13. Status:
-answered by Architect. S12a, S12b and S13 are open.
+answered by Architect. S12a, S12b and S13 are done.
 
 ## Notes
 
@@ -173,3 +173,37 @@ of 14 … renamed 14`), and the inferred re-plan aggregate goes from 19/232
 to 7/232. Added S12a (tests) and S12b (implementation) ahead of S13, and
 S13 is now blocked by S12b. The snapshot held outside the tree is stale
 and is not committed. S13 reruns `--record` after S12b.
+
+2026-10-18, Implement, S12a and S12b. S12a's nine title-first cases
+were run on the key-first tree before S12b: seven failed, including
+the renumbering, normalized-title, title-beats-key, repeated-title and
+renamed-item-split cases, plus the one `main([])` renumbered run. The
+kept-key and duplicate-key cases already held. The reused-dropped-key
+case failed too, but only on `renamed` (0 against 1). Its `split 0`,
+the part that pins the citation rule, already held, because under key
+first a dropped key can never be reused. After S12b all 72 cases pass.
+`python3 decompose_signals.py` was diffed against its output from
+before the change. Only codex-style-standards-enforcement's line and
+the re-plan aggregate changed, as architecture.md accepts. The refs
+digest changed too, because the S12a commit moved this branch's head. S12's
+checks passed again after S12b. The first `python3 run_tests.py` run
+reported 2 problem(s) in a module of 8 tests that took 60 s, and the
+output did not name the module. The two reruns, and the run after S13,
+printed 0 problem(s), so it is logged as an unexplained flake, not
+fixed.
+
+2026-10-18, Implement, S13. `python3 decompose_signals.py --record` ran
+at 4f727c1 with `git status --porcelain -- docs/` empty and exited 0.
+It printed `decompose-signals: recorded
+evals/results/decompose-signals-2026-10-18.json` and `decompose-signals:
+36 run(s), 0 problem(s)`. The file is committed unedited in 27bd1b0, and
+`cmp` against the written copy is empty. A rerun without `--record` on
+the same refs printed the same lines, and `render` over the recorded
+snapshot gives the rerun's header, run and aggregate lines. The stale
+snapshot held outside the tree was not used. Copied from the tool's
+output:
+
+    decompose-signals: refs read — refs/heads (401), refs/pr (13), refs/remotes/origin (184), refs/remotes/pr (488); refs/stash skipped; digest 802d11762774
+    decompose-signals: aggregate re-plan — observed 0/29 over 3 run(s); inferred 7/232 over 27 run(s); combined 7/261 over 30 run(s); unmeasurable 6 run(s)
+    decompose-signals: aggregate design gaps — observed 1/3 over 3 run(s); inferred 0/19 over 19 run(s); combined 1/22 over 22 run(s); unmeasurable 14 run(s)
+    decompose-signals: aggregate review-traced — observed 32/184 over 34 run(s); inferred 0/0 over 0 run(s); combined 32/184 over 34 run(s); unmeasurable 2 run(s)
