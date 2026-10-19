@@ -3,7 +3,7 @@ stage: ship
 run: feature:decompose-outcome-signals
 date: 2026-10-18
 outcome: prepared
-pending-merge: <filled once the PR exists>
+pending-merge: https://github.com/mattbutlerengineering/skills/pull/1040
 assumptions:
   - "Release authorization is Owner decision 4 in autorun-brief.md, prepare and stop. Ship pushes the branch, opens one PR and stops. It does not merge, tag, bump the version or delete a branch."
   - "No plugin.json bump on this branch (ADR-0095 rule 1). `git diff --stat origin/main...HEAD -- skills/ .claude-plugin/ factory/` prints nothing: no skill, no payload and no manifest change. The tool is root-only (ADR-0110), so ADR-0095 rule 2's payload-only release PR does not apply either; no chore(release) PR is needed for this change."
@@ -71,11 +71,11 @@ tool turns `make check` red here and nowhere else.
 
 ```
 # Before merge: close the PR; nothing reached main
-gh pr close <N>
+gh pr close 1040
 
 # After merge: revert the squash-merge commit
 git checkout -b revert/decompose-outcome-signals origin/main
-git revert <merge sha of the PR>
+git revert <merge sha of #1040>
 python3 run_tests.py && python3 lint.py && python3 kb.py drift && python3 gates.py && python3 gates.py --selftest
 git push -u origin revert/decompose-outcome-signals
 gh pr create --body-file <body>   # needs a No work order: line and a Closes #N line
@@ -110,6 +110,12 @@ ADR-0106 and ADR-0109 revert with the same commit.
    run's own review.md gained a finding naming an item after that record
    was taken: its row read `1 of 9` in the record and reads `2 of 10`
    now. The records are not edited.
+6. `git push -u origin feat/decompose-outcome-signals` → new branch on
+   origin, at `0c05aeb`.
+7. Body judged first (`gates.pr_body_problems` on the body file → `[]`),
+   then `gh pr create --base main --head feat/decompose-outcome-signals
+   --body-file …` in a call of its own →
+   https://github.com/mattbutlerengineering/skills/pull/1040
 
 ## Post-release checks
 
@@ -133,10 +139,10 @@ ADR-0106 and ADR-0109 revert with the same commit.
 4. Do not delete `feat/decompose-outcome-signals` until the PR shows
    `MERGED`. Main is squash-merged, so the branch's boundary commits are
    what this tool measures for this run; keep the branch (or its
-   `refs/pull/<N>/head`) reachable.
+   `refs/pull/1040/head`) reachable.
 5. Write-back, per the protocol's "The Ship outcome":
-   `gh pr view <N> --json state,mergedAt` (in a cloud session:
-   `gh api repos/mattbutlerengineering/skills/pulls/<N> --jq '{merged,merged_at}'`).
+   `gh pr view 1040 --json state,mergedAt` (in a cloud session:
+   `gh api repos/mattbutlerengineering/skills/pulls/1040 --jq '{merged,merged_at}'`).
    When it merged, set `outcome: released` and add
    `released-at: <merge date>` here, keep `pending-merge:`, and commit as
    `docs(decompose-outcome-signals): ship — <one line>`. If it closed
