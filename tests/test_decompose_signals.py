@@ -424,6 +424,86 @@ class TestReplan(unittest.TestCase):
              f"duplicate work-item key S1 at {I_SHA[:7]}"})
 
 
+# codex-style-standards-enforcement's renumbering (ebe8b2a -> 5f30760):
+# 14 work orders keep every title while WO-0045..0058 become
+# WO-0051..0064, their blocked-by clauses renumbered and the first five
+# ticked. Keys 0051..0058 sit in both versions on different items.
+RENUMBERED_TITLES = (
+    "author the real `docs/adr/**` file(s)", "`standards_index.py` parser",
+    "wire it into `factory.py`", "detector `K` and selftest fixtures",
+    "detector `M` and selftest fixtures", "back-fill normative statements",
+    "hand-curate the first entries", "regenerate `docs/standards.json`",
+    "the review skill step", "the reviewer charter step",
+    "the architect skill step", "the architect charter step",
+    "full battery green", "resolve the deferred acceptance bar")
+
+
+def wo(n):
+    return f"WO-{n:04d}"
+
+
+def renumbered(first, ticked=0):
+    """The 14 rows keyed from wo(first), each blocked by the one before."""
+    return [row(wo(first + n), title, done=n < ticked,
+                rest=" — size:S, blocked by: "
+                + (wo(first + n - 1) if n else "—"))
+            for n, title in enumerate(RENUMBERED_TITLES)]
+
+
+class TestTitleFirstIdentity(unittest.TestCase):
+    """Owner decision 6: title first, key fallback (architecture.md,
+    Work-item diff)."""
+
+    def test_a_renumbering_that_keeps_every_title_is_fourteen_renames(self):
+        self.assertEqual(replan(renumbered(45), renumbered(51, ticked=5)),
+                         counts(14, renamed=14))
+
+    def test_a_title_differing_in_case_code_marks_spacing_or_stop(self):
+        self.assertEqual(
+            replan([row("S1", "wire the `factory.py` verb"),
+                    row("S2", "Pin it"), S3],
+                   [row("S2", "Wire  the factory.py   VERB."),
+                    row("S3", "pin it:"), row("S9", "third")]),
+            counts(3, renamed=3))
+
+    def test_title_beats_key(self):
+        self.assertEqual(
+            replan([row("S3", "X"), row("S4", "Y")],
+                   [row("S3", "Y"), row("S4", "Z")]),
+            counts(2, added=1, dropped=1, renamed=1))
+
+    def test_a_kept_key_under_a_new_title_is_kept(self):
+        self.assertEqual(replan([S1, S2], [row("S1", "first, retitled"), S2]),
+                         counts(2))
+
+    def test_a_repeated_title_falls_back_to_the_key(self):
+        same = [row("S1", "same"), row("S2", "same")]
+        self.assertEqual(replan(same, same), counts(2))
+        self.assertEqual(
+            replan(same, [row("S3", "same"), row("S4", "same")]),
+            counts(2, added=2, dropped=2))
+
+    def test_a_dropped_key_an_i_version_item_uses_is_not_cited(self):
+        self.assertEqual(
+            replan([row("S1", "alpha"), row("S2", "beta")],
+                   [row("S2", "alpha"), row("S4", "half of S2"),
+                    row("S5", "rest of S2")]),
+            counts(2, added=2, dropped=1, renamed=1))
+
+    def test_a_renamed_item_citing_two_added_keys_is_a_split(self):
+        self.assertEqual(
+            replan([row("S1", "alpha"), S2],
+                   [row("S3", "alpha — moved to S4 and S5"), S2,
+                    row("S4", "a"), row("S5", "b")]),
+            counts(2, added=2, split=1, renamed=1))
+
+    def test_a_duplicate_key_is_checked_before_matching(self):
+        self.assertEqual(
+            replan([S1, S2], [row("S7", "first"), row("S7", "second")]),
+            {"unmeasurable":
+             f"duplicate work-item key S7 at {I_SHA[:7]}"})
+
+
 def commit(n, subject, *files):
     return {"sha": f"{n:x}" * 40, "author_time": EPOCH + n,
             "subject": subject, "files": list(files)}
@@ -662,6 +742,19 @@ class TestTheFiveFixtureRuns(ReportCase):
             f"{P}feature:demo — decompose none, implement none; re-plan"
             f" unmeasurable — {reason}; design gaps unmeasurable —"
             f" {reason}; {NO_REVIEW}"))
+
+
+class TestARenumberedRun(ReportCase):
+    def test_a_renumbering_between_d_and_i_is_no_re_plan(self):
+        d = self.repo.commit("feat: plan",
+                             **{BD: breakdown(*renumbered(45))})
+        i = self.repo.commit("feat: renumber and tick",
+                             **{BD: breakdown(*renumbered(51, ticked=5))})
+        self.assertEqual(self.only_run_line(), (
+            f"{P}feature:demo — decompose inferred {sha7(d)}, implement"
+            f" inferred {sha7(i)}; re-plan 0 of 14 (added 0, dropped 0,"
+            " split 0, merged 0; renamed 14) inferred; design gaps 0"
+            f" inferred; {NO_REVIEW}"))
 
 
 class TestReviewShapes(ReportCase):
