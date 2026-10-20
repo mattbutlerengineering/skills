@@ -43,6 +43,7 @@ ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
         ("dashboard", "factory_config"), ("factory_init", "factory_config"),
         ("dashboard", "cost_ledger"), ("dashboard", "cost_report"),
         ("size_band_calibration", "cost_ledger"),
+        ("size_band_calibration", "factory_config"),
         ("dashboard", "human_gates"), ("factory_init", "gates"),
         ("sweeps", "label_sync"), ("pr_body_preflight", "gates"),
     })

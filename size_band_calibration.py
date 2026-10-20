@@ -16,9 +16,11 @@ computed from the ledger and the breakdowns.
 NOT A GATE. A refusal below the floor and a band with no joined row are
 data, not problems.
 """
+import math
 from collections import Counter
 
 import cost_ledger
+from factory_config import resolve_budget, resolve_calibrate_floor
 from knowledge_plane import parse_row
 
 LABEL = "size-band-calibration"
@@ -84,3 +86,45 @@ def work_orders(used, mapping):
     return [{"wo": token, "band": mapping[token]["size"],
              "run": mapping[token]["run"], "cost": totals[token]}
             for token in sorted(totals)]
+
+
+def bre(actual, estimate):
+    """Balanced Relative Error, signed: (actual - estimate) divided by the
+    smaller of the two, so a cost of twice the estimate reads +1 and half
+    the estimate reads -1. Both are positive: zero-cost rows are excluded
+    before a work order exists, and resolve_budget refuses a non-positive
+    budget."""
+    return (actual - estimate) / min(actual, estimate)
+
+
+def interval(values, floor):
+    """None below `floor` values, else the nearest-rank P10, P50 and P90:
+    rank ceil(p * n / 100) of the sorted values, 1-based, no
+    interpolation, so every figure returned was measured."""
+    ordered = sorted(values)
+    if len(ordered) < floor:
+        return None
+    return {f"p{p}": ordered[math.ceil(p * len(ordered) / 100) - 1]
+            for p in (10, 50, 90)}
+
+
+def over_budget(values):
+    """How many BRE values are an overrun: above the band's budget."""
+    return sum(1 for value in values if value > 0)
+
+
+def band_stats(band, orders, config):
+    """(stats, problems) for one band's work orders. The budget and the
+    floor are factory_config's (the band's budgets_usd entry and
+    conductor.calibrate_floor); stats is None with the config problems
+    when either cannot be resolved. `bre` is sorted."""
+    budget, problems = resolve_budget(band, config)
+    floor, floor_problems = resolve_calibrate_floor(config)
+    if problems or floor_problems:
+        return None, problems + floor_problems
+    costs = [o["cost"] for o in orders if o["band"] == band]
+    errors = sorted(bre(cost, budget) for cost in costs)
+    return {"band": band, "n": len(costs), "budget": budget, "floor": floor,
+            "bre": errors, "interval": interval(errors, floor),
+            "over": over_budget(errors), "cost_total": sum(costs),
+            "cost_mean": sum(costs) / len(costs) if costs else 0.0}, []

@@ -39,10 +39,10 @@ When this milestone is done, `bre` and `interval` turn one band's work
 orders into nearest-rank P10, P50 and P90 of Balanced Relative Error, or
 `None` below the floor, and never invent a value.
 
-- [ ] **S3 Error and interval tests** — hand-worked cases for `bre` and `interval`, plus the budget and floor sources — size:M
+- [x] **S3 Error and interval tests** — hand-worked cases for `bre` and `interval`, plus the budget and floor sources — size:M
   - Accept: the module holds these cases, each asserting exact numbers worked by hand in the test. `bre` is (actual - estimate) / min(actual, estimate) with the estimate the band's budget: a cost of twice the budget gives +1 and half the budget gives -1. The budget is read through `factory_config.resolve_budget` from a fixture config, not a retyped table. `interval` on four values returns `None`; on five returns P10 as the minimum and P90 as the maximum; on a longer list the ranks are ceil(p * n / 100) of the sorted values, 1-based, with no interpolation, so every returned value is a member of the input. A custom floor from `factory_config.resolve_calibrate_floor` moves the refusal point. An unsorted input and a sorted one give the same interval. A band's over-budget count is the number of work orders with BRE above 0. Before the functions exist the cases fail.
   - Blocked by: S2 Band join, row selection and work orders
-- [ ] **S4 Balanced Relative Error and nearest-rank interval** — `bre`, `interval` and the over-budget count as architecture.md's Work orders and BRE and Interval describe — size:S
+- [x] **S4 Balanced Relative Error and nearest-rank interval** — `bre`, `interval` and the over-budget count as architecture.md's Work orders and BRE and Interval describe — size:S
   - Accept: the S3 tests pass, and every earlier test still passes. Sorting and `math.ceil` only; no `statistics` call. The floor and budget come from `factory_config`, and the module defines no constant 5 and no budget table. `tests/test_dual_membership.py`'s pin gains `(size_band_calibration, factory_config)` and the test passes.
   - Blocked by: S3 Error and interval tests
 
