@@ -132,3 +132,4 @@ the canonical vocabulary.
 | [0109](0109-an-observed-boundary-names-its-stage-and-writes-its-artifact.md) | An observed stage boundary names its stage and writes its artifact | superseded in part by ADR-0111 (the inferred implement boundary and the windows-agree consequence; provisional) |
 | [0110](0110-decompose-signals-joins-the-root-only-importers.md) | decompose_signals joins the root-only importers of cli.py, knowledge_plane.py and protocol.py | provisional |
 | [0111](0111-the-inferred-implement-boundary-is-the-commit-that-checks-the-last-row.md) | The inferred implement boundary is the commit that checks the last row | provisional |
+| [0112](0112-size-band-calibration-joins-the-root-only-importers.md) | size_band_calibration joins the root-only importers of cli.py, knowledge_plane.py, cost_ledger.py and factory_config.py | provisional |

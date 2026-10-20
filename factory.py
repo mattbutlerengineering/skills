@@ -59,6 +59,7 @@ VERBS = {
     "pr-body-preflight": ("pr_body_preflight", "argv"),
     "rejection-mining": ("rejection_mining", "argv"),
     "run-tests": ("run_tests", "argv"),
+    "size-band-calibration": ("size_band_calibration", "argv"),
     "standards-index": ("standards_index", "argv"),
     "sweeps": ("sweeps", "argv"),
     "trace": ("trace", "argv"),

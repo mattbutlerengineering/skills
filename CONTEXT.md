@@ -98,6 +98,13 @@ boundaries it read (ADR-0109); a run history cannot answer is
 unmeasurable, never zero.
 _Avoid_: plan quality score
 
+**Size-band error interval**:
+A size band's nearest-rank P10, P50 and P90 of Balanced Relative Error
+against the band's budget, one sample per work order, printed by
+`size_band_calibration.py` only at or above the calibrate floor and
+otherwise refused with the band's n.
+_Avoid_: estimate range, confidence interval
+
 ### Evals
 
 **Trigger eval**:
