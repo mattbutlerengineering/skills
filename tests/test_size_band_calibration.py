@@ -6,11 +6,20 @@ and fixture breakdown text; the cost side is cost_ledger's, the band side
 is the breakdown row's `size:` (Owner decision 4: a read-time join, the
 ledger gains no field).
 """
+import ast
 import copy
+import io
+import json
+import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
+from types import SimpleNamespace
 
+import cli
 import cost_ledger
+import decompose_signals
+import factory_config
 import size_band_calibration as sbc
 
 ROOT = Path("/repo")
@@ -334,6 +343,254 @@ class TestReplanByBand(unittest.TestCase):
         measure = fixed(self.RUNS)
         sbc.replan_by_band([order(1, "S", 1.0, RUN_A)], measure, ROOT, "git")
         self.assertEqual(measure.calls, [(ROOT, "git")])
+
+
+PREFIX = "size-band-calibration:"
+USAGE = "python3 size_band_calibration.py"
+REPLAN = "re-plan 1/10 over 1 run(s) (0 unmeasurable)"
+
+
+def write(root, relative, text):
+    path = Path(root) / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+class Repo:
+    """A temp repo: factory.json, a ledger and one breakdown per run."""
+
+    def __init__(self, case, config=CONFIG):
+        tmp = tempfile.TemporaryDirectory()
+        case.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        if config is not None:
+            write(self.root, ".github/factory.json", json.dumps(config))
+
+    def breakdown(self, run, *rows):
+        write(self.root, f"{run}/breakdown.md", "\n".join(rows) + "\n")
+
+    def ledger(self, *entries):
+        write(self.root, cost_ledger.COST_LEDGER,
+              "".join(json.dumps(e) + "\n" for e in entries))
+
+
+def run_main(argv, repo, measure=None, run=None):
+    out = io.StringIO()
+    with redirect_stdout(out):
+        code = sbc.main(argv, root=repo.root, run=run,
+                        measure=measure or fixed([record(RUN_A, 1, 10)]))
+    return code, out.getvalue().splitlines()
+
+
+def band_line(band, text):
+    return f"{PREFIX} band {band} — {text}"
+
+
+def no_rows(band):
+    return band_line(band, "no metered work order joins this band;"
+                     " re-plan unmeasurable")
+
+
+def sized(*costs, start=1, band="S"):
+    """Breakdown rows and ledger entries for one work order per cost."""
+    numbers = range(start, start + len(costs))
+    return ([row(n, band) for n in numbers],
+            [ledger(wo(n), cost, f"run{n}")
+             for n, cost in zip(numbers, costs)])
+
+
+class TestReport(unittest.TestCase):
+    def test_a_band_at_four_is_refused_with_cost_and_replan_only(self):
+        repo = Repo(self)
+        rows, entries = sized(2.5, 5.0, 7.5, 10.0)
+        repo.breakdown(RUN_A, *rows)
+        repo.ledger(*entries)
+        code, lines = run_main([], repo)
+        total = 2.5 + 5.0 + 7.5 + 10.0
+        self.assertEqual(lines, [
+            band_line("S", "refused: n 4 work order(s) is below the minimum"
+                      f" of 5, no interval printed; cost ${total:.3f} total;"
+                      f" {REPLAN}"),
+            no_rows("M"), no_rows("L"),
+            f"{PREFIX} 4 work order(s), 0 problem(s)"])
+        self.assertEqual(code, 0)
+
+    def test_the_same_band_at_five_prints_the_interval(self):
+        repo = Repo(self)
+        costs = (2.5, 5.0, 7.5, 10.0, 20.0)
+        rows, entries = sized(*costs)
+        repo.breakdown(RUN_A, *rows)
+        repo.ledger(*entries)
+        code, lines = run_main([], repo)
+        errors = sorted((c - 5) / min(c, 5) for c in costs)
+        p10, p50, p90 = errors[0], errors[2], errors[4]
+        over = sum(1 for e in errors if e > 0)
+        total = sum(costs)
+        self.assertEqual(lines[0], band_line(
+            "S", f"BRE P10 {p10:+.3f}, P50 {p50:+.3f}, P90 {p90:+.3f} over 5"
+            " work order(s) against a $5 budget (nearest rank; at n = 5 P10"
+            " and P90 are the observed range); over budget"
+            f" {over} of 5; cost ${total / 5:.3f} mean, ${total:.3f} total;"
+            f" {REPLAN}"))
+        self.assertEqual(lines[0].count("P10 -1.000, P50 +0.500, P90 +3.000"),
+                         1)
+        self.assertEqual(lines[1:], [no_rows("M"), no_rows("L"),
+                                     f"{PREFIX} 5 work order(s), 0 problem(s)"])
+        self.assertEqual(code, 0)
+
+    def test_an_all_unmetered_ledger_excludes_every_row(self):
+        repo = Repo(self)
+        repo.breakdown(RUN_A, row(1, "S"))
+        repo.ledger(*[ledger(wo(1), 0.0, f"o{n}", "owner-session:unmetered")
+                      for n in range(3)])
+        code, lines = run_main([], repo)
+        self.assertEqual(lines, [
+            f"{PREFIX} excluded 3 owner-session:unmetered row(s) — cost never"
+            " recorded, none estimated",
+            no_rows("S"), no_rows("M"), no_rows("L"),
+            f"{PREFIX} 0 work order(s), 0 problem(s)"])
+        self.assertEqual(code, 0)
+
+    def test_a_mixed_ledger_prints_each_nonzero_exclusion_in_order(self):
+        repo = Repo(self)
+        repo.breakdown(RUN_A, row(1, "M"), row(2, "L"), row(3, "S"),
+                       row(3, "M"), row(4))
+        repo.ledger(
+            ledger(wo(1), 3.0, "a"), ledger(wo(1), 4.0, "b"),
+            cost_ledger.gate_entry(wo(1), "human", 30, "2026-10-01T00:00:00Z"),
+            ledger(wo(1), 0.0, "o", "owner-session:unmetered"),
+            ledger(wo(2), 0.0, "z"), ledger("#9", 5.0, "i"),
+            ledger(wo(4), 6.0, "n"), ledger(wo(3), 7.0, "c"))
+        code, lines = run_main([], repo)
+        self.assertEqual(lines[:5], [
+            f"{PREFIX} excluded 1 owner-session:unmetered row(s) — cost never"
+            " recorded, none estimated",
+            f"{PREFIX} excluded 1 gate-latency row(s) — waits, not spend",
+            f"{PREFIX} excluded 1 row(s) with cost 0 — no cost recorded",
+            f"{PREFIX} excluded 2 row(s) whose wo names no sized breakdown"
+            " row",
+            f"{PREFIX} excluded 1 row(s) whose wo has conflicting sizes"])
+        self.assertEqual(lines[5:], [
+            no_rows("S"),
+            band_line("M", "refused: n 1 work order(s) is below the minimum"
+                      f" of 5, no interval printed; cost ${3.0 + 4.0:.3f} total;"
+                      f" {REPLAN}"),
+            no_rows("L"),
+            f"{PREFIX} 1 work order(s), 0 problem(s)"])
+        self.assertEqual(code, 0)
+
+    def test_the_replan_figure_never_reads_zero_over_zero(self):
+        repo = Repo(self)
+        rows, entries = sized(1.0)
+        repo.breakdown(RUN_A, *rows)
+        repo.ledger(*entries)
+        _, lines = run_main([], repo, measure=fixed(
+            [record(RUN_A, reason="no decompose commit")]))
+        self.assertTrue(lines[0].endswith(
+            "re-plan unmeasurable — no decompose commit"))
+
+    def test_a_failed_measurement_is_a_problem_and_the_report_stands(self):
+        repo = Repo(self)
+        rows, entries = sized(1.0)
+        repo.breakdown(RUN_A, *rows)
+        repo.ledger(*entries)
+        failed = [f"{PREFIX} git for-each-ref failed: boom"]
+        code, lines = run_main([], repo, measure=fixed(None, failed))
+        self.assertEqual(lines[0], failed[0])
+        self.assertTrue(lines[1].endswith(
+            "re-plan unmeasurable — git history could not be read"))
+        self.assertEqual(lines[-1], f"{PREFIX} 1 work order(s), 1 problem(s)")
+        self.assertEqual(code, 1)
+
+
+class TestReportFailures(unittest.TestCase):
+    def test_a_rejected_ledger_line_stops_the_band_lines(self):
+        repo = Repo(self)
+        repo.breakdown(RUN_A, row(1, "S"))
+        write(repo.root, cost_ledger.COST_LEDGER, "not json\n")
+        _, expected = cost_ledger.read(repo.root)
+        code, lines = run_main([], repo)
+        self.assertTrue(expected)
+        self.assertEqual(lines, expected
+                         + [f"{PREFIX} 0 work order(s), {len(expected)}"
+                            " problem(s)"])
+        self.assertEqual(code, 1)
+
+    def test_a_bad_factory_json_stops_the_band_lines(self):
+        repo = Repo(self, config=None)
+        repo.breakdown(RUN_A, row(1, "S"))
+        repo.ledger(ledger(wo(1), 1.0))
+        _, expected = factory_config.load(repo.root)
+        code, lines = run_main([], repo)
+        self.assertEqual(len(expected), 1)
+        self.assertTrue(expected[0].startswith("config: "))
+        self.assertEqual(lines, expected
+                         + [f"{PREFIX} 0 work order(s), 1 problem(s)"])
+        self.assertEqual(code, 1)
+
+    def test_a_config_without_a_budget_table_stops_the_band_lines(self):
+        repo = Repo(self, config={})
+        repo.breakdown(RUN_A, row(1, "S"))
+        repo.ledger(ledger(wo(1), 1.0))
+        code, lines = run_main([], repo)
+        self.assertEqual(lines, [
+            "config: factory.json has no budgets_usd table",
+            f"{PREFIX} 0 work order(s), 1 problem(s)"])
+        self.assertEqual(code, 1)
+
+    def test_an_unreadable_breakdown_is_a_problem_and_unjoined(self):
+        repo = Repo(self)
+        path = write(repo.root, f"{RUN_A}/breakdown.md", "")
+        path.write_bytes(b"\xff\xfe")
+        _, problem = cli.read_file(path, f"{RUN_A}/breakdown.md", str)
+        repo.ledger(ledger(wo(1), 1.0))
+        code, lines = run_main([], repo)
+        self.assertEqual(lines[:2], [
+            f"{PREFIX} {problem}",
+            f"{PREFIX} excluded 1 row(s) whose wo names no sized breakdown"
+            " row"])
+        self.assertEqual(lines[-1], f"{PREFIX} 0 work order(s), 1 problem(s)")
+        self.assertEqual(code, 1)
+
+    def test_any_argument_is_a_usage_error(self):
+        repo = Repo(self)
+        code, lines = run_main(["--record"], repo)
+        self.assertEqual(lines, [f"{PREFIX} '--record' — unknown argument",
+                                 "", f"  {USAGE}"])
+        self.assertEqual(code, 2)
+
+
+class TestLocalAndReadOnly(unittest.TestCase):
+    NETWORK = {"socket", "ssl", "http", "urllib", "ftplib", "smtplib",
+               "requests", "asyncio"}
+
+    def test_the_module_imports_no_network_module(self):
+        source = (Path(__file__).resolve().parent.parent
+                  / "size_band_calibration.py").read_text(encoding="utf-8")
+        imported = set()
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.Import):
+                imported.update(a.name.split(".")[0] for a in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module.split(".")[0])
+        self.assertEqual(imported & self.NETWORK, set())
+
+    def test_the_live_measure_runs_only_read_only_git_verbs(self):
+        repo = Repo(self)
+        rows, entries = sized(1.0)
+        repo.breakdown(RUN_A, *rows)
+        repo.ledger(*entries)
+        verbs = []
+
+        def recorder(args, input=None, cwd=None):
+            verbs.append(args[0])
+            return SimpleNamespace(stdout="")
+        code, _ = run_main([], repo, measure=decompose_signals.measure,
+                           run=recorder)
+        self.assertEqual(code, 0)
+        self.assertTrue(verbs)
+        self.assertLessEqual(set(verbs), {"for-each-ref", "log", "show"})
 
 
 if __name__ == "__main__":
