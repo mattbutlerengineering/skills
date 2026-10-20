@@ -16,23 +16,26 @@ import factory_init
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # ADR-0091's table as (root-only importer, mirrored module) pairs:
-# 43 pairs over nine mirrored modules (ADR-0097 added fast_path to the
+# 46 pairs over nine mirrored modules (ADR-0097 added fast_path to the
 # cli.py row; ADR-0106 added pr_body_preflight to the cli.py and gates.py
-# rows).
+# rows; ADR-0110 added decompose_signals to the cli.py, knowledge_plane.py
+# and protocol.py rows).
 ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
     {(tool, "cli") for tool in (
         "adr_status", "board", "charter_recorded", "charter_replay",
-        "dashboard", "eval_schema", "factory_init", "fast_path", "kb",
-        "kb_drift", "kb_harvest", "launch_demo", "lint", "md_claims",
-        "one_owner", "plane_drift", "pr_body_preflight", "sweeps",
-        "trigger_eval",
+        "dashboard", "decompose_signals", "eval_schema", "factory_init",
+        "fast_path", "kb", "kb_drift", "kb_harvest", "launch_demo", "lint",
+        "md_claims", "one_owner", "plane_drift", "pr_body_preflight",
+        "sweeps", "trigger_eval",
     )}
     | {(tool, "knowledge_plane") for tool in (
-        "adr_status", "board", "dashboard", "kb", "kb_drift", "lint",
-        "md_claims", "one_owner", "plane_drift", "sweeps",
+        "adr_status", "board", "dashboard", "decompose_signals", "kb",
+        "kb_drift", "lint", "md_claims", "one_owner", "plane_drift",
+        "sweeps",
     )}
     | {(tool, "protocol") for tool in (
-        "board", "dashboard", "kb", "kb_drift", "lint", "trigger_eval",
+        "board", "dashboard", "decompose_signals", "kb", "kb_drift", "lint",
+        "trigger_eval",
     )}
     | {
         ("dashboard", "factory_config"), ("factory_init", "factory_config"),

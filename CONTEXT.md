@@ -88,6 +88,16 @@ The stage breaking a finished technical design into milestones, work items,
 and a dependency-ordered sequence. Pure work breakdown — no design decisions.
 _Avoid_: plan, planning
 
+**Outcome signal**:
+One of three measures of how a Decompose plan held up, read from git
+history by `decompose_signals.py`: re-plan (work items added, dropped,
+split or merged between the decompose and implement boundaries), design
+gaps routed to Architect, and review-traced findings (review findings
+that name a work item). Each is labelled observed or inferred by the
+boundaries it read (ADR-0109); a run history cannot answer is
+unmeasurable, never zero.
+_Avoid_: plan quality score
+
 ### Evals
 
 **Trigger eval**:

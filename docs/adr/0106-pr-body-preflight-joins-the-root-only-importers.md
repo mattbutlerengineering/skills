@@ -1,6 +1,6 @@
 # pr_body_preflight joins the root-only importers of gates.py and cli.py
 
-- Status: provisional
+- Status: superseded in part by ADR-0110 (the cli.py row; provisional)
 - Date: 2026-10-16
 
 Supersedes in part ADR-0091: its measurement table's `cli.py` row (as

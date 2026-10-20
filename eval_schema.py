@@ -58,6 +58,9 @@ def results_path(results_dir, kind, date, slug=None, harness=None):
     charter -> <results_dir>/charter-<date>[-N].json (a charter-regression
                replay, charter_replay.py; factory evidence, not skill
                maturity, so it is not LEDGER-linkable evidence below)
+    decompose-signals -> <results_dir>/decompose-signals-<date>[-N].json
+               (decompose_signals.py --record; factory evidence like
+               charter, never LEDGER-linkable)
 
     -N starts at 2 and counts past existing same-day results. The path is
     returned, never created — recording stays with the caller.
@@ -68,8 +71,8 @@ def results_path(results_dir, kind, date, slug=None, harness=None):
         head = ("trigger" if harness in (None, "claude")
                 else f"trigger-{harness}")
         base, stem, ext = results_dir, f"{head}-{date}", ".json"
-    elif kind == "charter":
-        base, stem, ext = results_dir, f"charter-{date}", ".json"
+    elif kind in ("charter", "decompose-signals"):
+        base, stem, ext = results_dir, f"{kind}-{date}", ".json"
     elif kind == "output":
         if not slug:
             raise ValueError("output results need a slug")
@@ -103,7 +106,7 @@ def object_problems(data, label):
 
 # The results kinds that are a single file. "output" names a grading
 # DIRECTORY instead, so it has no snapshot to write.
-SNAPSHOT_KINDS = ("trigger", "charter")
+SNAPSHOT_KINDS = ("trigger", "charter", "decompose-signals")
 
 
 def write_snapshot(output, results_dir, kind, harness=None):

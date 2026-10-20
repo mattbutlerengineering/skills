@@ -56,6 +56,15 @@ pre-pass, deliberately **not** a gate:
   recorded with a `# one-owner:` marker at the definition it excuses
   (ADR-0061), and the pass re-derives that carve-out in both directions
   on every run.
+- `python3 decompose_signals.py` — Decompose outcome signals (re-plan,
+  design gaps routed to Architect, review-traced findings) per run and in
+  aggregate, read from the git refs the clone already holds, each
+  boundary labelled observed or inferred (ADR-0109). Free and outside
+  every gate, like `one_owner.py`. It never fetches: PR head refs count
+  only after the manual `git fetch origin
+  '+refs/pull/*/head:refs/remotes/pr/*'`. `--record` writes the result
+  append-only to `evals/results/decompose-signals-<date>[-N].json`, on a
+  clean `docs/` only; factory evidence, never LEDGER evidence.
 
 ## Hard conventions
 

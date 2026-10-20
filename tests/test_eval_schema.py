@@ -397,6 +397,20 @@ class TestResultsPath(unittest.TestCase):
             eval_schema.results_path(self.results, "charter", "2026-07-12"),
             self.results / "charter-2026-07-12-2.json")
 
+    def test_decompose_signals_snapshot_is_dated_and_suffixed(self):
+        """decompose_signals.py --record writes through the same grammar
+        (ADR-0109's run): one owner of the -N suffix."""
+        self.assertEqual(
+            eval_schema.results_path(self.results, "decompose-signals",
+                                     "2026-10-18"),
+            self.results / "decompose-signals-2026-10-18.json")
+        (self.results / "decompose-signals-2026-10-18.json").write_text(
+            "{}", encoding="utf-8")
+        self.assertEqual(
+            eval_schema.results_path(self.results, "decompose-signals",
+                                     "2026-10-18"),
+            self.results / "decompose-signals-2026-10-18-2.json")
+
     def test_output_without_slug_fails_loud(self):
         with self.assertRaises(ValueError):
             eval_schema.results_path(self.results, "output", "2026-07-02")
@@ -457,6 +471,14 @@ class TestWriteSnapshot(unittest.TestCase):
     def test_the_bytes_on_disk_are_indented_json_with_a_final_newline(self):
         path = eval_schema.write_snapshot(self.output, self.results,
                                           "charter")
+        self.assertEqual(path.read_text(encoding="utf-8"),
+                         json.dumps(self.output, indent=2) + "\n")
+
+    def test_a_decompose_signals_snapshot_is_indented_json(self):
+        path = eval_schema.write_snapshot(self.output, self.results,
+                                          "decompose-signals")
+        self.assertEqual(path, self.results
+                         / "decompose-signals-2026-07-02.json")
         self.assertEqual(path.read_text(encoding="utf-8"),
                          json.dumps(self.output, indent=2) + "\n")
 
@@ -546,6 +568,8 @@ class TestValidResultsLink(unittest.TestCase):
                 # are off-grammar too
                 "evals/results/trigger-claude-2026-07-01.json",
                 "evals/results/trigger-opencode-2026-07-01.json",
+                # factory evidence, never skill maturity
+                "evals/results/decompose-signals-2026-07-01.json",
                 "evals/results/output/decompose-2026-07-01-007/grading.json"):
             with self.subTest(target=target):
                 self.assertFalse(eval_schema.valid_results_link(target))
