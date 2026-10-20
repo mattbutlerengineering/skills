@@ -70,7 +70,7 @@ exclusion, one line per band S, M and L, and the `cli.report` summary.
 When this milestone is done, CLAUDE.md and CONTEXT.md name the tool and its
 vocabulary, and every CI check is green over the finished change.
 
-- [ ] **S9 Docs** — the CLAUDE.md "on demand, free" bullet beside `decompose_signals.py` and a CONTEXT.md entry for **Size-band error interval** — size:S
+- [x] **S9 Docs** — the CLAUDE.md "on demand, free" bullet beside `decompose_signals.py` and a CONTEXT.md entry for **Size-band error interval** — size:S
   - Accept: CLAUDE.md names `python3 size_band_calibration.py` as free, outside every gate and making no network call, and says it refuses a band below the floor. CONTEXT.md defines **Size-band error interval** as a band's nearest-rank P10, P50 and P90 of Balanced Relative Error against the band's budget, printed only at or above the floor. Neither doc contains a work-order token or sample id that detectors C and I would scan.
   - Blocked by: S8 Report and front door
 - [ ] **S10 Whole-repo verify** — the four CI checks and the one-owner pre-pass over the finished change — size:S

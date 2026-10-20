@@ -65,6 +65,12 @@ pre-pass, deliberately **not** a gate:
   '+refs/pull/*/head:refs/remotes/pr/*'`. `--record` writes the result
   append-only to `evals/results/decompose-signals-<date>[-N].json`, on a
   clean `docs/` only; factory evidence, never LEDGER evidence.
+- `python3 size_band_calibration.py` — each S/M/L band's past cost
+  error against its budget, from the cost ledger joined at read time to
+  the breakdown row's `size:`, beside its cost and re-plan rate. Free,
+  outside every gate and making no network call, like
+  `decompose_signals.py`. It refuses a band below the calibrate floor and
+  says so, and excludes unmetered rows with a count, never an estimate.
 
 ## Hard conventions
 
