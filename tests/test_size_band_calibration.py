@@ -556,6 +556,18 @@ class TestReportFailures(unittest.TestCase):
                     f"{PREFIX} 0 work order(s), 1 problem(s)"])
                 self.assertEqual(code, 1)
 
+    def test_a_bad_calibrate_floor_stops_the_band_lines(self):
+        config = {**CONFIG, "conductor": {"calibrate_floor": 0}}
+        repo = Repo(self, config=config)
+        repo.breakdown(RUN_A, row(1, "S"))
+        repo.ledger(ledger(wo(1), 1.0))
+        _, expected = factory_config.resolve_calibrate_floor(config)
+        code, lines = run_main([], repo)
+        self.assertEqual(len(expected), 1)
+        self.assertEqual(lines, expected
+                         + [f"{PREFIX} 0 work order(s), 1 problem(s)"])
+        self.assertEqual(code, 1)
+
     def test_an_unreadable_breakdown_is_a_problem_and_unjoined(self):
         repo = Repo(self)
         path = write(repo.root, f"{RUN_A}/breakdown.md", "")
