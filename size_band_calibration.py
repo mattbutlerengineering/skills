@@ -25,11 +25,11 @@ import cost_ledger
 import decompose_signals
 import factory_config
 from cli import read_file, report, runner
-from factory_config import resolve_budget, resolve_calibrate_floor
+from factory_config import (SIZES as BANDS, resolve_budget,
+                            resolve_calibrate_floor)
 from knowledge_plane import parse_row, repo_root, run_dirs
 
 LABEL = "size-band-calibration"
-BANDS = ("S", "M", "L")
 USAGE = "python3 size_band_calibration.py"
 
 
@@ -55,13 +55,13 @@ def bands(files, root):
     return mapping, ambiguous
 
 
-def _unusable(entry, mapping, ambiguous):
+def _unusable(token, cost, mapping, ambiguous):
     """The exclusion a dispatched row falls into, or None when it is used."""
-    if entry["cost"] == 0:
+    if cost == 0:
         return "zero_cost"
-    if entry["wo"] in ambiguous:
+    if token in ambiguous:
         return "ambiguous"
-    if entry["wo"] not in mapping:
+    if token not in mapping:
         return "unjoined"
     return None
 
@@ -75,7 +75,8 @@ def select(entries, mapping, ambiguous):
     spend = cost_ledger.dispatched(entries)
     gate = sum(1 for e in entries if cost_ledger.gate_wait(e) is not None)
     owner = sum(1 for e in entries if cost_ledger.owner_session(e))
-    reasons = [(e, _unusable(e, mapping, ambiguous)) for e in spend]
+    reasons = [(e, _unusable(e["wo"], e["cost"], mapping, ambiguous))
+               for e in spend]
     counts = Counter(reason for _, reason in reasons if reason)
     return [e for e, reason in reasons if reason is None], {
         "gate": gate, "owner_session": owner,
