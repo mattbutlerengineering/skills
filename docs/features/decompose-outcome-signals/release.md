@@ -2,7 +2,8 @@
 stage: ship
 run: feature:decompose-outcome-signals
 date: 2026-10-18
-outcome: prepared
+outcome: released
+released-at: 2026-10-20
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1040
 assumptions:
   - "Release authorization is Owner decision 4 in autorun-brief.md, prepare and stop. Ship pushes the branch, opens one PR and stops. It does not merge, tag, bump the version or delete a branch."
