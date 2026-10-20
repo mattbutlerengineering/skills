@@ -73,7 +73,7 @@ vocabulary, and every CI check is green over the finished change.
 - [x] **S9 Docs** — the CLAUDE.md "on demand, free" bullet beside `decompose_signals.py` and a CONTEXT.md entry for **Size-band error interval** — size:S
   - Accept: CLAUDE.md names `python3 size_band_calibration.py` as free, outside every gate and making no network call, and says it refuses a band below the floor. CONTEXT.md defines **Size-band error interval** as a band's nearest-rank P10, P50 and P90 of Balanced Relative Error against the band's budget, printed only at or above the floor. Neither doc contains a work-order token or sample id that detectors C and I would scan.
   - Blocked by: S8 Report and front door
-- [ ] **S10 Whole-repo verify** — the four CI checks and the one-owner pre-pass over the finished change — size:S
+- [x] **S10 Whole-repo verify** — the four CI checks and the one-owner pre-pass over the finished change — size:S
   - Accept: `python3 run_tests.py` exits 0; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 kb.py drift` prints `drift: 0 problem(s)`; `python3 gates.py` and `python3 gates.py --selftest` print `gates: 0 problem(s)`. `python3 one_owner.py` reports no `one-owner:` problem naming `size_band_calibration.py`. `tests/test_dual_membership.py` passes with 50 pairs over nine mirrored modules. No file under `skills/` or `factory/templates/`, and not `.claude-plugin/plugin.json`, `factory_init.MIRRORS`, `docs/factory/costs.jsonl` or `cost_ledger.py`, is changed. `python3 size_band_calibration.py` on this clone exits 0 and prints either an interval or a refusal for each of S, M and L.
   - Blocked by: S9 Docs
 
@@ -83,3 +83,17 @@ none.
 
 ## Notes
 
+
+- 2026-10-20 (S8): `main` reads breakdowns through `knowledge_plane.run_dirs`
+  and `cli.read_file` with `parse_row` per line, not `breakdown_files`,
+  because `breakdown_files` raises on an unreadable file and S8 requires
+  that to be a labelled problem with the work orders falling to the
+  unjoined exclusion. No design gap.
+- 2026-10-20 (S1): the S1 commit is red by design (the test module fails
+  on import until S2); S2 turns it green.
+- 2026-10-20 (S10): `python3 one_owner.py` first reported two findings
+  naming `size_band_calibration.py` (a second `("S", "M", "L")` against
+  `factory_config.SIZES`, and `_unusable` reading the ledger keys `cost`
+  and `wo` as `dashboard._spend` does). Both fixed in code, no
+  `# one-owner:` marker; the rerun names the module in no finding. The
+  eleven other findings are pre-existing.
