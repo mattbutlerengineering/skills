@@ -17,14 +17,20 @@ NOT A GATE. A refusal below the floor and a band with no joined row are
 data, not problems.
 """
 import math
+import sys
 from collections import Counter
+from pathlib import Path
 
 import cost_ledger
+import decompose_signals
+import factory_config
+from cli import read_file, report, runner
 from factory_config import resolve_budget, resolve_calibrate_floor
-from knowledge_plane import parse_row
+from knowledge_plane import parse_row, repo_root, run_dirs
 
 LABEL = "size-band-calibration"
 BANDS = ("S", "M", "L")
+USAGE = "python3 size_band_calibration.py"
 
 
 def bands(files, root):
@@ -169,3 +175,107 @@ def replan_by_band(orders, measure, root, run):
     return {band: _band_replan({o["run"] for o in orders
                                 if o["band"] == band}, records)
             for band in BANDS}, problems
+
+
+EXCLUSIONS = (
+    ("owner_session", "owner-session:unmetered row(s) — cost never recorded,"
+     " none estimated"),
+    ("gate", "gate-latency row(s) — waits, not spend"),
+    ("zero_cost", "row(s) with cost 0 — no cost recorded"),
+    ("unjoined", "row(s) whose wo names no sized breakdown row"),
+    ("ambiguous", "row(s) whose wo has conflicting sizes"))
+
+
+def _replan_text(figure):
+    if "count" not in figure:
+        return f"re-plan unmeasurable — {figure['unmeasurable']}"
+    return (f"re-plan {figure['count']}/{figure['items']} over"
+            f" {figure['runs']} run(s) ({figure['unmeasurable']}"
+            " unmeasurable)")
+
+
+def _band_line(stats, figure):
+    band, n = stats["band"], stats["n"]
+    if n == 0:
+        return (f"{LABEL}: band {band} — no metered work order joins this"
+                " band; re-plan unmeasurable")
+    replan = _replan_text(figure)
+    total = f"${stats['cost_total']:.3f} total"
+    if stats["interval"] is None:
+        return (f"{LABEL}: band {band} — refused: n {n} work order(s) is"
+                f" below the minimum of {stats['floor']}, no interval"
+                f" printed; cost {total}; {replan}")
+    p = stats["interval"]
+    return (f"{LABEL}: band {band} — BRE P10 {p['p10']:+.3f}, P50"
+            f" {p['p50']:+.3f}, P90 {p['p90']:+.3f} over {n} work order(s)"
+            f" against a ${stats['budget']:g} budget (nearest rank; at"
+            " n = 5 P10 and P90 are the observed range); over budget"
+            f" {stats['over']} of {n}; cost ${stats['cost_mean']:.3f} mean,"
+            f" {total}; {replan}")
+
+
+def render(exclusions, stats, figures):
+    """The report's lines, before the summary: one per nonzero exclusion
+    in EXCLUSIONS' order, then one per band S, M and L. `stats` is
+    {band: band_stats} and `figures` replan_by_band's."""
+    lines = [f"{LABEL}: excluded {exclusions[key]} {text}"
+             for key, text in EXCLUSIONS if exclusions[key]]
+    return lines + [_band_line(stats[band], figures[band])
+                    for band in BANDS]
+
+
+def _config_problems(config):
+    """band_stats' config problems for every band, each stated once."""
+    found = [p for band in BANDS for p in band_stats(band, [], config)[1]]
+    return list(dict.fromkeys(found))
+
+
+def _read_breakdowns(root):
+    """((path, lines) per readable breakdown, problems): read through
+    cli.read_file, so an unreadable one is a labelled problem and its
+    work orders fall into the unjoined exclusion."""
+    files, problems = [], []
+    for run_dir in run_dirs(root):
+        path = run_dir / "breakdown.md"
+        text, problem = read_file(
+            path, path.relative_to(root).as_posix(), str)
+        if problem:
+            problems.append(f"{LABEL}: {problem}")
+        elif text is not None:
+            files.append((path, text.splitlines()))
+    return files, problems
+
+
+def main(argv, root=None, run=None, measure=decompose_signals.measure):
+    """`python3 size_band_calibration.py` — print every exclusion and each
+    band's interval or refusal beside its cost and re-plan rate. Exit 0
+    when nothing failed (refusals and empty bands are data), 1 with
+    problems, 2 on any argument."""
+    if argv:
+        print(f"{LABEL}: {' '.join(argv)!r} — unknown argument\n\n"
+              f"  {USAGE}")
+        return 2
+    root = Path(root) if root is not None else repo_root()
+    config, problems = factory_config.load(root)
+    problems = problems or _config_problems(config)
+    entries, ledger_problems = [], []
+    if not problems:
+        entries, ledger_problems = cost_ledger.read(root)
+    if problems or ledger_problems:
+        return report(LABEL, problems + ledger_problems,
+                      prefix="0 work order(s), ")
+    files, problems = _read_breakdowns(root)
+    mapping, ambiguous = bands(files, root)
+    used, exclusions = select(entries, mapping, ambiguous)
+    orders = work_orders(used, mapping)
+    run = run or runner("git", timeout=decompose_signals.GIT_TIMEOUT)
+    figures, measure_problems = replan_by_band(orders, measure, root, run)
+    stats = {band: band_stats(band, orders, config)[0] for band in BANDS}
+    for line in render(exclusions, stats, figures):
+        print(line)
+    return report(LABEL, problems + measure_problems,
+                  prefix=f"{len(orders)} work order(s), ")
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

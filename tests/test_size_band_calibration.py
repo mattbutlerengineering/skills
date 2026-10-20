@@ -497,9 +497,9 @@ class TestReport(unittest.TestCase):
         repo.ledger(*entries)
         failed = [f"{PREFIX} git for-each-ref failed: boom"]
         code, lines = run_main([], repo, measure=fixed(None, failed))
-        self.assertEqual(lines[0], failed[0])
-        self.assertTrue(lines[1].endswith(
+        self.assertTrue(lines[0].endswith(
             "re-plan unmeasurable — git history could not be read"))
+        self.assertEqual(lines[-2], failed[0])
         self.assertEqual(lines[-1], f"{PREFIX} 1 work order(s), 1 problem(s)")
         self.assertEqual(code, 1)
 
@@ -546,10 +546,10 @@ class TestReportFailures(unittest.TestCase):
         _, problem = cli.read_file(path, f"{RUN_A}/breakdown.md", str)
         repo.ledger(ledger(wo(1), 1.0))
         code, lines = run_main([], repo)
-        self.assertEqual(lines[:2], [
-            f"{PREFIX} {problem}",
-            f"{PREFIX} excluded 1 row(s) whose wo names no sized breakdown"
-            " row"])
+        self.assertEqual(lines[0],
+                         f"{PREFIX} excluded 1 row(s) whose wo names no"
+                         " sized breakdown row")
+        self.assertEqual(lines[-2], f"{PREFIX} {problem}")
         self.assertEqual(lines[-1], f"{PREFIX} 0 work order(s), 1 problem(s)")
         self.assertEqual(code, 1)
 

@@ -28,7 +28,7 @@ ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
         "dashboard", "decompose_signals", "eval_schema", "factory_init",
         "fast_path", "kb", "kb_drift", "kb_harvest", "launch_demo", "lint",
         "md_claims", "one_owner", "plane_drift", "pr_body_preflight",
-        "sweeps", "trigger_eval",
+        "size_band_calibration", "sweeps", "trigger_eval",
     )}
     | {(tool, "knowledge_plane") for tool in (
         "adr_status", "board", "dashboard", "decompose_signals", "kb",
