@@ -397,6 +397,12 @@ def check_skill_recitals(root):
 # "references/playbook.md" resolved against the wrong directory.
 SKILL_ASSET = re.compile(
     r"(?<![A-Za-z0-9._/-])(?:references|assets)/[A-Za-z0-9._-]+")
+# A SKILL.md naming a sibling skill's bundled file, the way plugin skills
+# install side by side: "apply `../lean/references/ladder.md`". Group 1 is
+# the sibling slug. Same lookbehind as SKILL_ASSET.
+SIBLING_ASSET = re.compile(
+    r"(?<![A-Za-z0-9._/-])\.\./([a-z0-9-]+)/"
+    r"((?:references|assets)/[A-Za-z0-9._-]+)")
 
 
 def named_files(root, path, skill_dir):
@@ -435,11 +441,31 @@ def check_skill_assets(root):
         except OSError:
             return False
 
+    known = set(ALL_SKILLS + extra_skills(root))
+
+    def sibling_problems(slug, skill_dir):
+        text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+        linked = set(local_link_targets(text))  # reported as outside
+        problems = []
+        for match in sorted(set(SIBLING_ASSET.finditer(text)),
+                            key=lambda m: m.group(0)):
+            ref, sibling, rest = match.group(0), match.group(1), match.group(2)
+            if ref in linked:
+                continue
+            target = root / "skills" / sibling / rest
+            if sibling not in known:
+                problems.append(f"skills/{slug}/SKILL.md names {ref!r}, "
+                                "which is not a known skill")
+            elif not ships(target.parent, target.name):
+                problems.append(f"skills/{slug}/SKILL.md names {ref!r}, "
+                                "which does not exist")
+        return problems
+
     def problems_for(slug):
         skill_dir = root / "skills" / slug
         if not (skill_dir / "SKILL.md").is_file():
             return []
-        problems = []
+        problems = sibling_problems(slug, skill_dir)
         for path in sorted(skill_dir.rglob("*.md")):
             source = path.relative_to(skill_dir).as_posix()
             for ref, named in named_files(root, path, skill_dir):
