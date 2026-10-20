@@ -140,5 +140,121 @@ class TestWorkOrders(unittest.TestCase):
         self.assertEqual([o["cost"] for o in orders], [2.0])
 
 
+CONFIG = {"budgets_usd": {"S": 5, "M": 15, "L": 40}}
+
+
+def order(n, band, cost, run=RUN_A):
+    return {"wo": wo(n), "band": band, "run": run, "cost": cost}
+
+
+class TestBre(unittest.TestCase):
+    def test_twice_the_budget_is_plus_one_and_half_is_minus_one(self):
+        self.assertEqual(sbc.bre(10.0, 5), 1.0)
+        self.assertEqual(sbc.bre(2.5, 5), -1.0)
+
+    def test_the_budget_itself_is_zero(self):
+        self.assertEqual(sbc.bre(5.0, 5), 0.0)
+
+    def test_worked_by_hand_against_the_smaller_of_the_two(self):
+        # overrun: (20 - 5) / min(20, 5) = 3; underrun: (3 - 12) / 3 = -3
+        self.assertEqual(sbc.bre(20.0, 5), 3.0)
+        self.assertEqual(sbc.bre(3.0, 12), -3.0)
+
+
+class TestInterval(unittest.TestCase):
+    def test_four_values_are_refused(self):
+        self.assertIsNone(sbc.interval([1.0, 2.0, 3.0, 4.0], 5))
+
+    def test_five_values_are_the_observed_range_and_the_middle_rank(self):
+        # ranks ceil(0.5)=1, ceil(2.5)=3, ceil(4.5)=5
+        self.assertEqual(sbc.interval([-1.0, 0.0, 0.5, 1.0, 3.0], 5),
+                         {"p10": -1.0, "p50": 0.5, "p90": 3.0})
+
+    def test_ten_values_use_ceil_of_p_n_over_100_with_no_interpolation(self):
+        values = [float(v) for v in range(1, 11)]
+        # ranks ceil(1)=1, ceil(5)=5, ceil(9)=9
+        self.assertEqual(sbc.interval(values, 5),
+                         {"p10": 1.0, "p50": 5.0, "p90": 9.0})
+
+    def test_twelve_values_round_the_rank_up(self):
+        values = [float(v) for v in range(1, 13)]
+        # ranks ceil(1.2)=2, ceil(6)=6, ceil(10.8)=11
+        self.assertEqual(sbc.interval(values, 5),
+                         {"p10": 2.0, "p50": 6.0, "p90": 11.0})
+
+    def test_every_returned_value_is_a_member_of_the_input(self):
+        values = [0.3, 7.7, -2.2, 1.1, 9.9, 4.4, 5.5]
+        result = sbc.interval(values, 5)
+        self.assertTrue(set(result.values()) <= set(values))
+
+    def test_input_order_does_not_matter(self):
+        values = [3.0, -1.0, 1.0, 0.5, 0.0, 2.0]
+        self.assertEqual(sbc.interval(values, 5),
+                         sbc.interval(sorted(values), 5))
+
+    def test_a_custom_floor_moves_the_refusal_point(self):
+        self.assertIsNone(sbc.interval([1.0, 2.0], 3))
+        self.assertEqual(sbc.interval([1.0, 2.0, 3.0], 3),
+                         {"p10": 1.0, "p50": 2.0, "p90": 3.0})
+
+    def test_the_input_is_not_mutated(self):
+        values = [3.0, 1.0, 2.0, 5.0, 4.0]
+        sbc.interval(values, 5)
+        self.assertEqual(values, [3.0, 1.0, 2.0, 5.0, 4.0])
+
+
+class TestOverBudget(unittest.TestCase):
+    def test_counts_the_work_orders_with_bre_above_zero(self):
+        self.assertEqual(sbc.over_budget([-1.0, 0.0, 0.5, 1.0, 3.0]), 3)
+        self.assertEqual(sbc.over_budget([]), 0)
+
+
+class TestBandStats(unittest.TestCase):
+    ORDERS = [order(1, "S", 2.5), order(2, "S", 5.0), order(3, "S", 7.5),
+              order(4, "S", 10.0), order(5, "S", 20.0),
+              order(6, "M", 15.0)]
+
+    def test_the_budget_comes_from_the_fixture_config(self):
+        stats, problems = sbc.band_stats("S", self.ORDERS, CONFIG)
+        self.assertEqual(problems, [])
+        self.assertEqual(stats["budget"], 5)
+        self.assertEqual(stats["bre"], [-1.0, 0.0, 0.5, 1.0, 3.0])
+        config = {"budgets_usd": {"S": 10, "M": 15, "L": 40}}
+        other, _ = sbc.band_stats("S", self.ORDERS, config)
+        self.assertEqual(other["budget"], 10)
+
+    def test_a_band_at_the_floor_has_an_interval_and_totals(self):
+        stats, _ = sbc.band_stats("S", self.ORDERS, CONFIG)
+        self.assertEqual(stats["n"], 5)
+        self.assertEqual(stats["floor"], 5)
+        self.assertEqual(stats["interval"],
+                         {"p10": -1.0, "p50": 0.5, "p90": 3.0})
+        self.assertEqual(stats["over"], 3)
+        self.assertEqual(stats["cost_total"], 45.0)
+        self.assertEqual(stats["cost_mean"], 9.0)
+
+    def test_a_band_below_the_floor_has_no_interval(self):
+        stats, _ = sbc.band_stats("M", self.ORDERS, CONFIG)
+        self.assertEqual((stats["n"], stats["interval"]), (1, None))
+
+    def test_the_floor_comes_from_factory_config(self):
+        config = {**CONFIG, "conductor": {"calibrate_floor": 1}}
+        stats, _ = sbc.band_stats("M", self.ORDERS, config)
+        self.assertEqual(stats["floor"], 1)
+        self.assertEqual(stats["interval"],
+                         {"p10": 0.0, "p50": 0.0, "p90": 0.0})
+
+    def test_an_empty_band_has_no_rows_and_no_interval(self):
+        stats, _ = sbc.band_stats("L", self.ORDERS, CONFIG)
+        self.assertEqual((stats["n"], stats["bre"], stats["interval"]),
+                         (0, [], None))
+
+    def test_a_config_without_budgets_is_a_problem(self):
+        stats, problems = sbc.band_stats("S", self.ORDERS, {})
+        self.assertIsNone(stats)
+        self.assertEqual(
+            problems, ["config: factory.json has no budgets_usd table"])
+
+
 if __name__ == "__main__":
     unittest.main()
