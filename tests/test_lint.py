@@ -772,6 +772,42 @@ class TestSkillAssets(CheckerTreeTest):
             ["skills/rogue/SKILL.md names 'references/gone.md', "
              "which does not exist"])
 
+    def test_sibling_skill_reference_that_does_not_exist(self):
+        self.write_skill("idea", "Apply `../prd/references/laddr.md`.\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names '../prd/references/laddr.md', "
+             "which does not exist"])
+
+    def test_sibling_skill_reference_that_ships_is_clean(self):
+        self.write_skill("idea", "Apply `../prd/references/ladder.md`.\n")
+        self.write_ref(self.root / "skills" / "prd", "ladder.md", "l\n")
+        self.assertEqual(lint.check_skill_assets(self.root), [])
+
+    def test_sibling_skill_reference_with_differing_case(self):
+        self.write_skill("idea", "Apply `../prd/references/ladder.md`.\n")
+        self.write_ref(self.root / "skills" / "prd", "Ladder.md", "l\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names '../prd/references/ladder.md', "
+             "which does not exist"])
+
+    def test_sibling_reference_naming_an_unknown_skill(self):
+        self.write_skill("idea", "Apply `../nosuch/assets/x.svg`.\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names '../nosuch/assets/x.svg', "
+             "which is not a known skill"])
+
+    def test_bare_reference_still_resolves_against_the_skill_itself(self):
+        # The sibling file must not satisfy a bare name.
+        self.write_skill("idea", "Apply `references/ladder.md`.\n")
+        self.write_ref(self.root / "skills" / "prd", "ladder.md", "l\n")
+        self.assertEqual(
+            lint.check_skill_assets(self.root),
+            ["skills/idea/SKILL.md names 'references/ladder.md', "
+             "which does not exist"])
+
     def test_missing_skill_md_belongs_to_check_skills(self):
         (self.root / "skills" / "idea" / "SKILL.md").unlink()
         self.assertEqual(lint.check_skill_assets(self.root), [])
