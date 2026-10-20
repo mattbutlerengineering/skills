@@ -13,6 +13,12 @@ session, taking the recommended option each time:
 3. Release: "Prepare-and-stop, open PR (Recommended)". Ship pushes the
    branch, opens one PR and stops. It does not merge.
 
+4. Size-band join, asked after Architect surfaced it: "Read-time join
+   (Recommended)". The band is joined at read time from a ledger row's
+   work-order token to the breakdown's `size:`, and the ledger gains no
+   field. This rewords #987's "ledger rows carry a size band" acceptance
+   line and the PRD's first success criterion to match.
+
 The rest of this brief is the orchestrator's reading of issue #987 and of
 the repo, and is marked that way. When a stage needs an answer this brief
 doesn't hold, it follows the autorun rule: take the skill-supplied default

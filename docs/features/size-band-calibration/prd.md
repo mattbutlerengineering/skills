@@ -79,8 +79,9 @@ Two parts, in order.
 
 ## Success criteria
 
-- [ ] A ledger row written by the metering seam carries a size band, and a
-      test asserts the join from that row to a breakdown row's `size:` band.
+- [ ] A ledger row the calibration reads joins, by its work-order token, to
+      a breakdown row's `size:` band at read time, and a test asserts that
+      join. The ledger gains no field (Owner decision 4, autorun-brief.md).
 - [ ] A band whose metered n is below 5 prints a refusal naming the band,
       its n, the minimum and the reason, and prints no interval. A test
       asserts the exact string at n = 4 and the interval at n = 5.
