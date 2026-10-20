@@ -16,10 +16,12 @@ import factory_init
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # ADR-0091's table as (root-only importer, mirrored module) pairs:
-# 46 pairs over nine mirrored modules (ADR-0097 added fast_path to the
+# 50 pairs over nine mirrored modules (ADR-0097 added fast_path to the
 # cli.py row; ADR-0106 added pr_body_preflight to the cli.py and gates.py
 # rows; ADR-0110 added decompose_signals to the cli.py, knowledge_plane.py
-# and protocol.py rows).
+# and protocol.py rows; ADR-0112 added size_band_calibration to the cli.py,
+# knowledge_plane.py, cost_ledger.py and factory_config.py rows). The pairs
+# land one per item as the module grows its imports.
 ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
     {(tool, "cli") for tool in (
         "adr_status", "board", "charter_recorded", "charter_replay",
@@ -31,7 +33,7 @@ ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
     | {(tool, "knowledge_plane") for tool in (
         "adr_status", "board", "dashboard", "decompose_signals", "kb",
         "kb_drift", "lint", "md_claims", "one_owner", "plane_drift",
-        "sweeps",
+        "size_band_calibration", "sweeps",
     )}
     | {(tool, "protocol") for tool in (
         "board", "dashboard", "decompose_signals", "kb", "kb_drift", "lint",
@@ -40,6 +42,7 @@ ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
     | {
         ("dashboard", "factory_config"), ("factory_init", "factory_config"),
         ("dashboard", "cost_ledger"), ("dashboard", "cost_report"),
+        ("size_band_calibration", "cost_ledger"),
         ("dashboard", "human_gates"), ("factory_init", "gates"),
         ("sweeps", "label_sync"), ("pr_body_preflight", "gates"),
     })

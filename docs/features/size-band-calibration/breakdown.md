@@ -26,10 +26,10 @@ When this milestone is done, `size_band_calibration.bands`, `select` and
 `work_orders` turn a ledger and breakdown text into one cost per sized work
 order plus counted exclusions, with no cost estimated for any excluded row.
 
-- [ ] **S1 Join and selection tests** — cases for `bands`, `select` and `work_orders` over fixture breakdown text and fixture ledger entries — size:M
+- [x] **S1 Join and selection tests** — cases for `bands`, `select` and `work_orders` over fixture breakdown text and fixture ledger entries — size:M
   - Accept: the module holds these cases, each asserting exact values. Join: a ledger row's work-order token joins to the `size:` of the breakdown row that names it, and the ledger entry gains no field. A token under two different sizes is left out of the map and counted as `ambiguous`; a row with no `size:` is not defaulted. Selection order, each row counted once: gate-latency rows, then owner-session rows, then dispatched rows with cost 0, then dispatched rows whose token names no sized breakdown row (an issue key, an unknown token, a row with no `size:`); the rest are used. A ledger of only unmetered owner-session rows gives no used rows and an owner-session count equal to its length. Sample unit: six used rows for one token and one for another give two work orders, with the first costing the sum of its six; n counts work orders, never rows. Each excluded row yields no cost. Before the module exists the test module fails on import.
   - Blocked by: —
-- [ ] **S2 Band join, row selection and work orders** — root-level `size_band_calibration.py` with `bands`, `select` and `work_orders` as architecture.md's Band join and Row selection describe — size:M
+- [x] **S2 Band join, row selection and work orders** — root-level `size_band_calibration.py` with `bands`, `select` and `work_orders` as architecture.md's Band join and Row selection describe — size:M
   - Accept: the S1 tests pass. The ledger is read through `cost_ledger.read`, with `cost_ledger.dispatched`, `gate_wait` and `owner_session` as the predicates and none re-implemented. Breakdowns come from `knowledge_plane.breakdown_files` and `parse_row`, with no retyped row regex. The module imports only the standard library, `cost_ledger` and `knowledge_plane`, and is not in `factory_init.MIRRORS`. `tests/test_dual_membership.py`'s pin gains `(size_band_calibration, knowledge_plane)` and `(size_band_calibration, cost_ledger)`, its pair-count comment is updated, and the test passes.
   - Blocked by: S1 Join and selection tests
 
