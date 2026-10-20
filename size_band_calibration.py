@@ -55,6 +55,17 @@ def bands(files, root):
     return mapping, ambiguous
 
 
+def non_finite(entries):
+    """Problem strings for dispatched rows whose cost is NaN or infinite.
+    json.loads accepts both and the ledger shape rule (a non-negative
+    number) lets them through; either would print as "$nan" or "+inf"
+    in a figure that exits 0, so the report stops instead."""
+    return [f"{LABEL}: ledger row for {entry['wo']} ({entry['run_id']}) has"
+            f" a non-finite cost {entry['cost']!r}"
+            for entry in cost_ledger.dispatched(entries)
+            if not math.isfinite(entry["cost"])]
+
+
 def _unusable(token, cost, mapping, ambiguous):
     """The exclusion a dispatched row falls into, or None when it is used."""
     if cost == 0:
@@ -262,6 +273,7 @@ def main(argv, root=None, run=None, measure=decompose_signals.measure):
     entries, ledger_problems = [], []
     if not problems:
         entries, ledger_problems = cost_ledger.read(root)
+        ledger_problems = ledger_problems + non_finite(entries)
     if problems or ledger_problems:
         return report(LABEL, problems + ledger_problems,
                       prefix="0 work order(s), ")

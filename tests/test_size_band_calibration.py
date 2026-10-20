@@ -539,6 +539,23 @@ class TestReportFailures(unittest.TestCase):
             f"{PREFIX} 0 work order(s), 1 problem(s)"])
         self.assertEqual(code, 1)
 
+    def test_a_non_finite_cost_is_a_problem_not_a_band_figure(self):
+        # json.loads reads NaN and Infinity, and the ledger shape rule
+        # (a number, not negative) lets both through; printing them
+        # would put "$nan" and "+inf" into a figure that exits 0.
+        for bad in (float("nan"), float("inf")):
+            with self.subTest(cost=bad):
+                repo = Repo(self)
+                rows, entries = sized(1.0, 2.0, 3.0, 4.0, 5.0)
+                repo.breakdown(RUN_A, *rows)
+                repo.ledger(*entries[:4], ledger(wo(5), bad, "run5"))
+                code, lines = run_main([], repo)
+                self.assertEqual(lines, [
+                    f"{PREFIX} ledger row for {wo(5)} (run5) has a"
+                    f" non-finite cost {bad!r}",
+                    f"{PREFIX} 0 work order(s), 1 problem(s)"])
+                self.assertEqual(code, 1)
+
     def test_an_unreadable_breakdown_is_a_problem_and_unjoined(self):
         repo = Repo(self)
         path = write(repo.root, f"{RUN_A}/breakdown.md", "")
