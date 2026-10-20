@@ -52,10 +52,10 @@ When this milestone is done, `python3 size_band_calibration.py` and
 `python3 factory.py size-band-calibration` print one line per nonzero
 exclusion, one line per band S, M and L, and the `cli.report` summary.
 
-- [ ] **S5 Re-plan source tests** — cases for `replan_by_band` with an injected `measure` — size:S
+- [x] **S5 Re-plan source tests** — cases for `replan_by_band` with an injected `measure` — size:S
   - Accept: the module holds these cases, each asserting exact values. A band pools the measurable runs that hold at least one of its work orders: the sum of `count` over the sum of `items_at_d`, with the number of runs and the number of unmeasurable ones. A band whose contributing runs are all unmeasurable gives `re-plan unmeasurable` with the reason, never `0/0` and never zero. A band with no contributing run is unmeasurable. A failed measurement gives one problem string and every band unmeasurable with that reason. A work order joins to its run by the breakdown path that `bands` kept.
   - Blocked by: S4 Balanced Relative Error and nearest-rank interval
-- [ ] **S6 Re-plan source** — `replan_by_band` over `decompose_signals.measure` records as architecture.md's Re-plan source describes — size:S
+- [x] **S6 Re-plan source** — `replan_by_band` over `decompose_signals.measure` records as architecture.md's Re-plan source describes — size:S
   - Accept: the S5 tests pass, and every earlier test still passes. `measure` is a parameter, so tests pass a fixed result and the live call reaches git only through `cli.runner` inside `decompose_signals`. The module imports `decompose_signals` and no other new module; it is root-only, so the dual-membership pin is unchanged and still passes.
   - Blocked by: S5 Re-plan source tests
 - [ ] **S7 Report tests** — end-to-end cases that drive `main([])` against fixture ledgers, breakdowns and an injected `measure` and assert the exact stdout lines and exit code — size:M

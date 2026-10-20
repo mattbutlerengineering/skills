@@ -128,3 +128,44 @@ def band_stats(band, orders, config):
             "bre": errors, "interval": interval(errors, floor),
             "over": over_budget(errors), "cost_total": sum(costs),
             "cost_mean": sum(costs) / len(costs) if costs else 0.0}, []
+
+
+UNREADABLE_HISTORY = "git history could not be read"
+NO_RUN = "no run holds a work order of this band"
+NOT_MEASURED = "run not in the measurement"
+
+
+def _band_replan(runs, records):
+    """One band's pooled re-plan figure from the runs holding its work
+    orders: the sum of `count` over the sum of `items_at_d` across the
+    measurable ones, the number of runs and of unmeasurable ones; or
+    {unmeasurable: reason} when no contributing run is measurable. A
+    run's figure is the run's, not a work order's."""
+    if not runs:
+        return {"unmeasurable": NO_RUN}
+    replans = [records[run]["replan"] if run in records
+               else {"unmeasurable": NOT_MEASURED} for run in sorted(runs)]
+    measured = [r for r in replans if "unmeasurable" not in r]
+    if not measured:
+        return {"unmeasurable": replans[0]["unmeasurable"]}
+    return {"count": sum(r["count"] for r in measured),
+            "items": sum(r["items_at_d"] for r in measured),
+            "runs": len(measured),
+            "unmeasurable": len(replans) - len(measured)}
+
+
+def replan_by_band(orders, measure, root, run):
+    """(figures, problems): per band S, M and L, the re-plan rate pooled
+    over the measurable runs that hold at least one of its work orders,
+    joined on the run directory `bands` kept. `measure(root, run)` is
+    decompose_signals.measure's contract, injected so tests pass a fixed
+    result. A failed measurement passes its problems through and leaves
+    every band unmeasurable; the rest of the report stands."""
+    result, problems = measure(root, run)
+    if result is None:
+        return {band: {"unmeasurable": UNREADABLE_HISTORY}
+                for band in BANDS}, problems
+    records = {r["path"]: r for r in result["runs"]}
+    return {band: _band_replan({o["run"] for o in orders
+                                if o["band"] == band}, records)
+            for band in BANDS}, problems
