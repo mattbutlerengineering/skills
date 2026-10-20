@@ -36,6 +36,7 @@ section)
 ## Post-release checks
 
 - <check performed> → <evidence it works where users get it>
+- Fix runs: <producing boundary and its consumers inspected; related cleanup remaining and why>
 
 ## Outcome
 

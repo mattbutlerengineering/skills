@@ -223,6 +223,16 @@ class TestCleanTree(CheckerTreeTest):
             encoding="utf-8")
         self.assertIn("ADR-0108", body)
 
+    def test_fix_runs_say_green_test_is_not_the_fix(self):
+        for rel in (("review", "SKILL.md"), ("ship", "TEMPLATE.md")):
+            body = " ".join((ROOT / "skills" / rel[0] / rel[1]).read_text(
+                encoding="utf-8").split())
+            self.assertIn("producing boundary and its consumers", body, rel)
+            self.assertIn("related cleanup", body, rel)
+        review = " ".join((ROOT / "skills" / "review" / "SKILL.md").read_text(
+            encoding="utf-8").split())
+        self.assertIn("green regression test is not the fix", review)
+
 
 class TestManifest(CheckerTreeTest):
     def test_missing_field(self):
