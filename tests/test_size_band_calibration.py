@@ -256,5 +256,85 @@ class TestBandStats(unittest.TestCase):
             problems, ["config: factory.json has no budgets_usd table"])
 
 
+RUN_C = "docs/features/gamma"
+
+
+def record(run, count=None, items=None, reason=None):
+    replan = ({"unmeasurable": reason} if reason else
+              {"label": "observed", "count": count, "items_at_d": items,
+               "added": 0, "dropped": 0, "split": 0, "merged": 0,
+               "renamed": 0})
+    return {"path": run, "replan": replan}
+
+
+def fixed(runs, problems=()):
+    """An injected measure returning a fixed result and recording its
+    arguments."""
+    calls = []
+
+    def measure(root, run):
+        calls.append((root, run))
+        result = {"runs": runs} if runs is not None else None
+        return result, list(problems)
+    measure.calls = calls
+    return measure
+
+
+class TestReplanByBand(unittest.TestCase):
+    RUNS = [record(RUN_A, 2, 8), record(RUN_B, 1, 4),
+            record(RUN_C, reason="no decompose commit")]
+
+    def figures(self, orders, runs=None):
+        figures, problems = sbc.replan_by_band(
+            orders, fixed(self.RUNS if runs is None else runs), ROOT,
+            "git")
+        self.assertEqual(problems, [])
+        return figures
+
+    def test_a_band_pools_the_runs_that_hold_its_work_orders(self):
+        figures = self.figures([order(1, "S", 1.0, RUN_A),
+                                order(2, "S", 1.0, RUN_A),
+                                order(3, "S", 1.0, RUN_B)])
+        self.assertEqual(figures["S"], {"count": 3, "items": 12, "runs": 2,
+                                        "unmeasurable": 0})
+
+    def test_unmeasurable_runs_are_counted_not_summed(self):
+        figures = self.figures([order(1, "M", 1.0, RUN_A),
+                                order(2, "M", 1.0, RUN_C)])
+        self.assertEqual(figures["M"], {"count": 2, "items": 8, "runs": 1,
+                                        "unmeasurable": 1})
+
+    def test_all_unmeasurable_runs_name_the_reason_never_zero(self):
+        figures = self.figures([order(1, "L", 1.0, RUN_C)])
+        self.assertEqual(figures["L"], {"unmeasurable":
+                                        "no decompose commit"})
+
+    def test_a_band_with_no_contributing_run_is_unmeasurable(self):
+        figures = self.figures([order(1, "S", 1.0, RUN_A)])
+        self.assertEqual(figures["M"], {"unmeasurable":
+                                        "no run holds a work order of this"
+                                        " band"})
+
+    def test_a_run_the_measurement_never_saw_is_unmeasurable(self):
+        figures = self.figures([order(1, "S", 1.0, "docs/features/new")])
+        self.assertEqual(figures["S"], {"unmeasurable":
+                                        "run not in the measurement"})
+
+    def test_a_failed_measurement_is_one_problem_and_all_unmeasurable(self):
+        failed = ["size-band-calibration: git for-each-ref failed: boom"]
+        measure = fixed(None, failed)
+        figures, problems = sbc.replan_by_band(
+            [order(1, "S", 1.0, RUN_A)], measure, ROOT, "git")
+        self.assertEqual(problems, failed)
+        reason = "git history could not be read"
+        self.assertEqual(figures, {band: {"unmeasurable": reason}
+                                   for band in ("S", "M", "L")})
+
+    def test_the_measure_is_called_once_with_the_root_and_runner(self):
+        measure = fixed(self.RUNS)
+        sbc.replan_by_band([order(1, "S", 1.0, RUN_A)], measure, ROOT, "git")
+        self.assertEqual(measure.calls, [(ROOT, "git")])
+
+
 if __name__ == "__main__":
     unittest.main()
