@@ -673,5 +673,55 @@ class TestNoShippedLesson(unittest.TestCase):
         self.assertTrue(all(entry["sources"] for entry in lessons))
 
 
+def rp_run(name, count, items, label="observed"):
+    return record(f"feature:{name}", replan(count, items, label))
+
+
+# Pooled by hand: treated 0+2+1+0+1 = 4 re-plans over 10+8+6+9+5 = 38
+# items in 5 runs; untreated 0+1 = 1 over 10+10 = 20 items in 2 runs. The
+# inferred run and the unmeasurable one are in neither pool.
+COMPARE = [rp_run("t1", 2, 10), rp_run("t2", 0, 8), rp_run("t3", 1, 6),
+           rp_run("t4", 0, 9), rp_run("t5", 1, 5),
+           rp_run("u1", 0, 10), rp_run("u2", 1, 10),
+           rp_run("i1", 5, 8, "inferred"), record("feature:x")]
+TREATED_SET = {"feature:t1", "feature:t2", "feature:t3", "feature:t4",
+               "feature:t5", "feature:i1"}
+UNMEASURABLE_LINE = ("decompose-lessons: unmeasurable re-plan run(s):"
+                     " feature:x")
+
+
+class TestCompare(unittest.TestCase):
+    def test_at_the_floor_a_descriptive_line_with_both_pools(self):
+        self.assertEqual(dl.compare(COMPARE, TREATED_SET, 5), [
+            "decompose-lessons: re-plan treated 4/38 over 5 run(s),"
+            " untreated 1/20 over 2 run(s) (observed only; 1"
+            " unmeasurable); descriptive, treated higher",
+            UNMEASURABLE_LINE])
+
+    def test_a_treated_rate_at_or_below_untreated_is_not_higher(self):
+        flipped = [rp_run("t1", 0, 10), *COMPARE[1:5], rp_run("u1", 6, 10),
+                   *COMPARE[6:]]
+        got = dl.compare(flipped, TREATED_SET, 5)
+        self.assertTrue(got[0].endswith("descriptive, treated not higher"))
+        self.assertIn("treated 2/38 over 5 run(s), untreated 7/20 over 2",
+                      got[0])
+
+    def test_below_the_floor_no_rate_is_printed(self):
+        few = TREATED_SET - {"feature:t5"}
+        self.assertEqual(dl.compare(COMPARE, few, 5), [
+            "decompose-lessons: no verdict: 4 treated run(s) is below the"
+            " minimum of 5", UNMEASURABLE_LINE])
+
+    def test_the_floor_is_a_parameter_not_a_literal(self):
+        got = dl.compare(COMPARE, TREATED_SET, 6)
+        self.assertEqual(got[0], "decompose-lessons: no verdict: 5 treated"
+                                 " run(s) is below the minimum of 6")
+
+    def test_no_unmeasurable_run_means_no_naming_line(self):
+        got = dl.compare(COMPARE[:-1], TREATED_SET, 5)
+        self.assertEqual(len(got), 1)
+        self.assertIn("(observed only; 0 unmeasurable)", got[0])
+
+
 if __name__ == "__main__":
     unittest.main()

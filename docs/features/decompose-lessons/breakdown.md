@@ -72,7 +72,7 @@ When this milestone is done, `decompose_lessons.votes` and the update fold take 
 
 When this milestone is done, `python3 decompose_lessons.py` prints pair count, lessons and the treated-versus-untreated re-plan comparison, `update` writes the file, and `python3 factory.py decompose-lessons` reaches both.
 
-- [ ] **S11 Comparison tests** — cases for `compare` over fixture records and a fixed treated set — size:M
+- [x] **S11 Comparison tests** — cases for `compare` over fixture records and a fixed treated set — size:M
   - Accept: the module holds these cases, each recomputing the figures in the test from the fixture records. Re-plan is pooled as the sum of `count` over the sum of `items_at_d`, over observed-label measurable runs only, split into treated and untreated. At or above `factory_config.resolve_calibrate_floor` treated runs the line is `decompose-lessons: re-plan treated <c>/<i> over <r> run(s), untreated <c>/<i> over <r> run(s) (observed only; <u> unmeasurable); descriptive, treated higher|not higher`. Below the floor the line is `decompose-lessons: no verdict: <r> treated run(s) is below the minimum of <floor>` and no rate is printed. Unmeasurable runs are counted and named, never counted as zero. Before `compare` exists the cases fail.
   - Blocked by: S10 Update fold
 - [ ] **S12 Comparison** — `compare` as architecture.md's Comparison describes — size:S
