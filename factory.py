@@ -44,6 +44,7 @@ VERBS = {
     "conductor": ("conductor", "argv"),
     "cost-report": ("cost_report", "argv"),
     "dashboard": ("dashboard", "argv"),
+    "decompose-grade": ("decompose_grade", "argv"),
     "decompose-lessons": ("decompose_lessons", "argv"),
     "decompose-signals": ("decompose_signals", "argv"),
     "factory-init": ("factory_init", "argv"),
