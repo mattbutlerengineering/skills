@@ -198,5 +198,126 @@ class TestGradeImports(unittest.TestCase):
             body=core, type_ignores=[]))))
 
 
+GOOD_ACCEPT = "`POST /alpha` returns 201 with the stored record."
+BOTH = "Alpha Service and Beta Worker"
+
+
+def row(key, blocked="—", title=BOTH, accept=GOOD_ACCEPT, inline=None):
+    """One checkbox row in TEMPLATE form; `blocked=None` drops the clause."""
+    head = f"- [ ] **{key} Thing** — {title}"
+    if inline is not None:
+        head += f" — size:S, blocked by: {inline}"
+    lines = [head, f"  - Accept: {accept}"]
+    if blocked is not None:
+        lines.append(f"  - Blocked by: {blocked}")
+    return "\n".join(lines)
+
+
+def breakdown(*rows):
+    return "# Breakdown: Demo\n\n" + "\n".join(rows) + "\n"
+
+
+def lines_of(result, prefix):
+    return [f for f in result["feedback"] if f.startswith(prefix)]
+
+
+MISS_BETA = 'coverage-miss: component "Beta Worker" is named by no item'
+
+
+class TestCoverageCheck(unittest.TestCase):
+    def test_a_component_named_by_no_row_block_is_a_miss(self):
+        result = dg.grade(breakdown(row("A1", title="Alpha Service only")),
+                          ARCH)
+        self.assertEqual(result["feedback"], [MISS_BETA])
+        self.assertEqual(result["parts"]["coverage"], 0.5)
+
+    def test_matching_is_case_insensitive_and_reads_sub_bullets(self):
+        text = breakdown(row("A1", title="alpha service only",
+                             accept=GOOD_ACCEPT + " BETA WORKER runs."))
+        self.assertEqual(dg.grade(text, ARCH)["feedback"], [])
+
+    def test_a_trailing_parenthetical_is_not_part_of_the_name(self):
+        arch = ARCH.replace("### Beta Worker (async)", "### Beta Worker (async, v2)")
+        self.assertEqual(
+            dg.grade(breakdown(row("A1")), arch)["feedback"], [])
+
+    def test_a_name_shorter_than_four_characters_is_not_graded(self):
+        arch = ARCH.replace("### Beta Worker (async)", "### API")
+        result = dg.grade(breakdown(row("A1", title="Alpha Service")), arch)
+        self.assertEqual(result["feedback"], [])
+        self.assertEqual(result["parts"]["coverage"], 1.0)
+
+    def test_a_component_name_is_not_matched_inside_a_longer_word(self):
+        result = dg.grade(
+            breakdown(row("A1", title="Alpha Service and Beta Workers")),
+            ARCH)
+        self.assertEqual(result["feedback"], [MISS_BETA])
+
+
+class TestDependencyCheck(unittest.TestCase):
+    def test_a_blocker_naming_an_item_key_resolves(self):
+        text = breakdown(row("A1"), row("A2", blocked="A1"))
+        self.assertEqual(dg.grade(text, ARCH)["feedback"], [])
+
+    def test_the_clause_may_be_inline_and_any_case(self):
+        text = breakdown(row("A1"), row("A2", blocked=None, inline="A9"))
+        self.assertEqual(
+            dg.grade(text, ARCH)["feedback"],
+            ['dangling-blocked-by: A2 is blocked by "A9",'
+             ' which names no item'])
+        text = text.replace("blocked by:", "Blocked By:")
+        self.assertEqual(len(dg.grade(text, ARCH)["feedback"]), 1)
+
+    def test_the_clause_splits_on_semicolons_and_commas(self):
+        text = breakdown(row("A1"), row("A2"),
+                         row("A3", blocked="A1; A2, A7"))
+        result = dg.grade(text, ARCH)
+        self.assertEqual(result["feedback"], [
+            'dangling-blocked-by: A3 is blocked by "A7",'
+            ' which names no item'])
+        self.assertEqual(result["parts"]["dependencies"], round(2 / 3, 3))
+
+    def test_dash_none_and_absent_clauses_make_no_edge(self):
+        for blocked in ("—", "-", "none", "None", None):
+            text = breakdown(row("A1", blocked=blocked))
+            result = dg.grade(text, ARCH)
+            self.assertEqual(result["feedback"], [], blocked)
+            self.assertEqual(result["parts"]["dependencies"], 1.0, blocked)
+
+    def test_an_element_that_starts_with_a_key_resolves_with_its_title(self):
+        text = breakdown(row("A1"), row("A2", blocked="A1 Thing"))
+        self.assertEqual(dg.grade(text, ARCH)["feedback"], [])
+
+    def test_a_key_is_matched_at_a_word_boundary(self):
+        text = breakdown(row("A1"), row("A2", blocked="A10"))
+        self.assertEqual(
+            dg.grade(text, ARCH)["feedback"],
+            ['dangling-blocked-by: A2 is blocked by "A10",'
+             ' which names no item'])
+
+    def test_an_item_naming_itself_is_dangling(self):
+        text = breakdown(row("A1", blocked="A1"))
+        self.assertEqual(
+            dg.grade(text, ARCH)["feedback"],
+            ['dangling-blocked-by: A1 is blocked by "A1",'
+             ' which names no item'])
+
+    def test_two_dangling_elements_give_two_lines_in_item_order(self):
+        text = breakdown(row("A1", blocked="A8"), row("A2", blocked="A9"))
+        self.assertEqual(
+            dg.grade(text, ARCH)["feedback"],
+            ['dangling-blocked-by: A1 is blocked by "A8",'
+             ' which names no item',
+             'dangling-blocked-by: A2 is blocked by "A9",'
+             ' which names no item'])
+
+    def test_coverage_lines_come_before_dependency_lines(self):
+        text = breakdown(row("A1", title="Alpha Service", blocked="A9"))
+        self.assertEqual(
+            dg.grade(text, ARCH)["feedback"],
+            [MISS_BETA, 'dangling-blocked-by: A1 is blocked by "A9",'
+                        ' which names no item'])
+
+
 if __name__ == "__main__":
     unittest.main()
