@@ -6,7 +6,12 @@ an injected git runner; no lesson is hand-written in the repo, so every
 lesson here is a fixture built by the helpers below.
 """
 import copy
+import json
+import os
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 import decompose_lessons as dl
 
@@ -124,6 +129,100 @@ class TestLessonOperations(unittest.TestCase):
             problems,
             ["decompose-lessons: edit refused: replan/feature/added cites"
              " no source run"])
+
+
+def jsonl(seen, *lessons):
+    """The file text the module writes: header, then one line per lesson."""
+    lines = [json.dumps({"seen": seen}, ensure_ascii=False)]
+    lines += [json.dumps(entry, ensure_ascii=False) for entry in lessons]
+    return "\n".join(lines) + "\n"
+
+
+class TempFile(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.dir = Path(directory.name)
+        self.path = self.dir / "lessons.jsonl"
+
+
+class TestFile(TempFile):
+    def test_a_file_round_trips_byte_identically(self):
+        text = jsonl(["feature:a", "feature:b"],
+                     lesson("a/feature/x", text="em dash \u2014 kept"),
+                     lesson("b/feature/y", 3, (SRC_A, SRC_B), ("feature:c",)))
+        self.path.write_text(text, encoding="utf-8")
+        lessons, seen, problems = dl.load(self.path)
+        self.assertEqual(problems, [])
+        self.assertEqual(seen, ["feature:a", "feature:b"])
+        self.assertEqual([entry["id"] for entry in lessons],
+                         ["a/feature/x", "b/feature/y"])
+        self.assertEqual(dl.dump(self.path, lessons, seen), [])
+        self.assertEqual(self.path.read_text(encoding="utf-8"), text)
+
+    def test_dump_sorts_lessons_by_id_and_seen(self):
+        problems = dl.dump(self.path, [lesson("b/feature/y"),
+                                       lesson("a/feature/x")],
+                           ["feature:b", "feature:a"])
+        self.assertEqual(problems, [])
+        self.assertEqual(
+            self.path.read_text(encoding="utf-8"),
+            jsonl(["feature:a", "feature:b"], lesson("a/feature/x"),
+                  lesson("b/feature/y")))
+
+    def test_a_missing_file_loads_as_nothing(self):
+        self.assertEqual(dl.load(self.path), ([], [], []))
+
+    def test_each_malformed_shape_names_its_line_and_loads_nothing(self):
+        header = json.dumps({"seen": []})
+        good = json.dumps(lesson("a/feature/x"))
+        cases = {
+            "not json": ([header, "{oops"],
+                         "lessons.jsonl line 2: not valid JSON"),
+            "not an object": ([header, "[1]"],
+                              "lessons.jsonl line 2: not a JSON object"),
+            "no sources": ([header, json.dumps(lesson(sources=()))],
+                           "lessons.jsonl line 2: cites no source run"),
+            "duplicate id": ([header, good, good],
+                             "lessons.jsonl line 3: duplicate id"
+                             " a/feature/x"),
+            "importance": ([header, json.dumps(lesson("a/feature/x", 0))],
+                           "lessons.jsonl line 2: importance 0 is below 1"),
+            "no header": ([good],
+                          "lessons.jsonl line 1: expected the seen header"),
+            "missing field": ([header, json.dumps({"id": "a/feature/x"})],
+                              "lessons.jsonl line 2: missing or malformed"
+                              " field importance"),
+        }
+        for name, (lines, expected) in cases.items():
+            with self.subTest(name):
+                self.path.write_text("\n".join(lines) + "\n")
+                self.assertEqual(
+                    dl.load(self.path),
+                    ([], [], [f"decompose-lessons: {expected}"]))
+
+    def test_dump_refuses_an_invalid_lesson_and_writes_nothing(self):
+        problems = dl.dump(self.path, [lesson(sources=())], [])
+        self.assertEqual(
+            problems,
+            ["decompose-lessons: lessons.jsonl line 2: cites no source run"])
+        self.assertFalse(self.path.exists())
+
+    def test_a_failing_replace_leaves_the_original_byte_identical(self):
+        text = jsonl(["feature:a"], lesson())
+        self.path.write_text(text, encoding="utf-8")
+        with mock.patch.object(dl.os, "replace",
+                               side_effect=OSError("disk full")):
+            problems = dl.dump(self.path, [lesson("b/feature/y")], [])
+        self.assertEqual(
+            problems,
+            ["decompose-lessons: cannot write lessons.jsonl: disk full"])
+        self.assertEqual(self.path.read_text(encoding="utf-8"), text)
+        self.assertEqual(os.listdir(self.dir), ["lessons.jsonl"])
+
+    def test_an_empty_write_creates_no_file(self):
+        self.assertEqual(dl.dump(self.path, [], []), [])
+        self.assertEqual(os.listdir(self.dir), [])
 
 
 if __name__ == "__main__":
