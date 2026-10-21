@@ -60,7 +60,7 @@ When this milestone is done, the Idea skill tells the agent to append one seed l
 - [x] **S7 Producers sentence test** — add a case to `tests/test_idea_ambition_ladder.py` that pins the protocol's Producers sentence — size:S
   - Accept: the case reads `docs/pipeline-protocol.md` and asserts the Seed backlog section's producers sentence contains `Idea appends the rungs it did not take` alongside the existing Operate and Capture producers, and that the sentence still names both. Run before the edit, it fails.
   - Blocked by: S6 Seed instruction
-- [ ] **S8 Producers sentence** — the one-sentence edit to `docs/pipeline-protocol.md` naming Idea as a backlog producer — size:S
+- [x] **S8 Producers sentence** — the one-sentence edit to `docs/pipeline-protocol.md` naming Idea as a backlog producer — size:S
   - Accept: the S7 case passes. The diff against the pre-edit file is that one sentence and nothing else; this is the single change outside `skills/`, `plugin-evals/`, `tests/` and this run's docs, kept in its own item so Review can judge it. `python3 lint.py` prints `lint: 0 problem(s)` and `python3 kb.py drift` prints `drift: 0 problem(s)`.
   - Blocked by: S7 Producers sentence test
 
