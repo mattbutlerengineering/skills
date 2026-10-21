@@ -91,7 +91,7 @@ When this milestone is done, `plugin-evals/idea/ladder-brief/` is a well-formed 
 
 ## Milestone 6: the whole change verifies and stays in scope
 
-- [ ] **S14 Whole-repo verify** — the CI checks and the scope checks over the finished change — size:S
+- [x] **S14 Whole-repo verify** — the CI checks and the scope checks over the finished change — size:S
   - Accept: `python3 run_tests.py` exits 0; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 kb.py drift` prints `drift: 0 problem(s)`; `python3 gates.py` and `python3 gates.py --selftest` print `gates: 0 problem(s)` and `selftest: ok`. A diff from this run's first implement commit shows no change under `.claude-plugin/`, `factory/templates/`, `evals/`, `plugin-evals/records/`, `skills/launch-demo` or `skills/verify`, no change to `LEDGER.md`, changes under `skills/` only in `skills/idea` and `skills/prd`, exactly one changed line in `docs/pipeline-protocol.md`, and no edit to an existing eval definition. No `claude plugin eval` run was made. The results are recorded as a dated line in Notes.
   - Blocked by: S13 Detectors over the authored text
 
@@ -103,3 +103,6 @@ none.
 
 
 - 2026-10-20 S13: `python3 gates.py` printed `gates: 0 problem(s)` and `python3 lint.py` printed `lint: 0 problem(s) across 34 skills` with the edited skills, template, protocol sentence and suite present.
+- 2026-10-20 S14: `python3 run_tests.py` printed `tests: 3674 tests across 113 modules in 25.5s on 8 workers, 0 problem(s)`; `python3 lint.py` printed `lint: 0 problem(s) across 34 skills`; `python3 kb.py drift` printed `drift: 0 problem(s)`; `python3 gates.py` printed `gates: 0 problem(s)` and `python3 gates.py --selftest` printed `selftest: ok`. The diff from the parent of the first implement commit shows no change under `.claude-plugin/`, `factory/templates/`, `evals/`, `plugin-evals/records/`, `skills/launch-demo`, `skills/verify`, `LEDGER.md` or `docs/backlog.md`; `docs/pipeline-protocol.md` changed one line (1 insertion, 1 deletion); `skills/` changed only in `skills/idea` and `skills/prd`. No `claude plugin eval` run or model call was made.
+- 2026-10-20 Deviation (S8): the Producers sentence is wrapped over three lines, so the Idea clause was placed as a short sentence on the existing line ending `deferred defect.` rather than rewording the list, keeping the protocol diff to one changed line as S14 requires.
+- 2026-10-20 Deviation (S9, S11): the scope tests diff against the merge-base of HEAD with `origin/main` (else `main`) instead of `main` directly, because local `main` trails the branch base and a direct diff reported other runs' `skills/decompose` change. They still skip cleanly when neither ref exists. The S9 typed-id check is limited to the PRD clause's neighbourhood, since `skills/prd/SKILL.md` already cites an ADR elsewhere.
