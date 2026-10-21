@@ -410,6 +410,8 @@ def _apply_ballots(lessons, ballots):
     """(lessons, lines, dropped ids, problems); a problem abandons all."""
     lines, dropped = [], []
     for op, lid, voter_ref in ballots:
+        if lid in dropped:
+            continue  # the lesson is gone; the voter is still folded in
         step = upvote if op == "upvote" else downvote
         lessons, problems = step(lessons, lid, voter_ref)
         if problems:

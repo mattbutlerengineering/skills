@@ -541,6 +541,24 @@ class TestFold(unittest.TestCase):
         self.assertEqual((again, seen2, lines2, problems2),
                          (got, seen, [], []))
 
+    def test_a_ballot_after_the_lesson_dropped_in_the_same_fold_is_skipped(
+            self):
+        # Review finding: a second voter on a lesson the first one dropped
+        # made the fold refuse "no lesson", every update, forever.
+        existing = [lesson("replan/feature/added", 1, ("feature:old",))]
+        ballots = [("downvote", "replan/feature/added", "feature:h"),
+                   ("upvote", "replan/feature/added", "feature:v")]
+        got, seen, lines, problems = dl.fold(existing, [], [HIT, CLEAN],
+                                             ballots)
+        self.assertEqual(problems, [])
+        self.assertEqual(lines, [
+            "decompose-lessons: DOWNVOTE replan/feature/added",
+            "decompose-lessons: DROP replan/feature/added",
+            "decompose-lessons: ADD design_gaps/feature/routed"])
+        self.assertEqual([e["id"] for e in got],
+                         ["design_gaps/feature/routed"])
+        self.assertIn("feature:v", seen)
+
     def test_an_upvote_prints_one_line_and_moves_the_count(self):
         existing = [lesson("replan/feature/added")]
         got, _, lines, _ = dl.fold(
