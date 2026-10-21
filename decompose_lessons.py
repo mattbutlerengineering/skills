@@ -225,10 +225,17 @@ def _signals():
 
 
 def _hit_label(value, num):
-    """(label, count) of one measurable signal value, else None."""
+    """(label, count) of one measurable signal value, else None. A value
+    with no label or no count (the review tracer's `{findings: 0, reason}`
+    for a review with no finding heading) is not measured, so it is
+    neither hit nor clean: fail closed, never a zero."""
     if "unmeasurable" in value:
         return None
-    return value.get("label", "observed"), value.get(num, 0)
+    label, count = value.get("label"), value.get(num)
+    if label is None or isinstance(count, bool) \
+            or not isinstance(count, int):
+        return None
+    return label, count
 
 
 def _detail(field, value):

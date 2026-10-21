@@ -262,6 +262,8 @@ HISTORY = [
     record("feature:c", replan(4, 8, "inferred", added=1, dropped=3)),
     record("feature:d", replan(0, 14, "inferred")),
     record("feature:e", replan(1, 6, "observed", added=1)),
+    record("feature:r", review={"label": "observed", "findings": 2,
+                                "named": 0}),
     record("maintenance:m", replan(6, 7, "inferred", dropped=6)),
     record("maintenance:n", replan(0, 5, "inferred")),
     record("maintenance:z", replan(4, 9, "observed", dropped=2, split=2)),
@@ -290,9 +292,9 @@ HAND_PAIRS = [
     pair("design_gaps", "feature", "routed", "feature:a", "feature:b",
          "feature runs routed back to Architect: a 1 route(s) (observed),"
          " b 0 route(s) (observed)"),
-    pair("review", "feature", "named", "feature:a", "feature:b",
+    pair("review", "feature", "named", "feature:a", "feature:r",
          "feature runs whose review findings name an item: a 3 of 4"
-         " findings (observed), b 0 of 0 findings (observed)"),
+         " findings (observed), r 0 of 2 findings (observed)"),
 ]
 
 
@@ -315,6 +317,19 @@ class TestPairs(unittest.TestCase):
             dl.pairs(HISTORY)))
         self.assertNotIn("S took M", text)
         self.assertNotIn("plan better", text)
+
+    def test_a_review_without_a_finding_heading_is_not_a_measured_zero(self):
+        # Review finding: the tracer's {findings: 0, reason} carries no
+        # label, and was read as a clean "observed" run.
+        hit = record("feature:a", review={"label": "observed",
+                                          "findings": 3, "named": 2})
+        blank = record("feature:b", review=NO_HEADING)
+        self.assertEqual(dl.pairs([hit, blank]), [])
+        self.assertEqual(
+            [p["clean"] for p in dl.pairs(
+                [hit, blank, record("feature:c", review={
+                    "label": "observed", "findings": 1, "named": 0})])],
+            ["feature:c"])
 
     def test_the_detail_ties_break_in_added_dropped_split_merged_order(self):
         tie = [record("feature:x", replan(4, 9, "observed", dropped=2,
@@ -345,7 +360,7 @@ class TestPairs(unittest.TestCase):
              "text": HAND_PAIRS[3]["text"],
              "sources": ["maintenance:m", "maintenance:n"]},
             {"id": "review/feature/named", "text": HAND_PAIRS[5]["text"],
-             "sources": ["feature:a", "feature:b"]},
+             "sources": ["feature:a", "feature:r"]},
         ])
 
     def test_a_history_with_no_pair_is_empty_and_has_the_string(self):
@@ -483,6 +498,12 @@ class TestVotes(unittest.TestCase):
                                           voter("feature:other")])
         self.assertEqual(ballots, [
             ("upvote", "replan/feature/added", "feature:other")])
+
+    def test_a_review_without_a_finding_heading_casts_no_vote(self):
+        lessons = [lesson("review/feature/named")]
+        ballots, _ = self.cast(lessons, [
+            voter("feature:blank", review=NO_HEADING)])
+        self.assertEqual(ballots, [])
 
     def test_a_voter_of_another_kind_or_unmeasurable_signal_is_skipped(self):
         ballots, _ = self.cast([ADDED_LESSON], [
