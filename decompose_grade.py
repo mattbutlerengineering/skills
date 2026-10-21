@@ -24,6 +24,7 @@ LABEL = "decompose-grade"
 PARTS = ("coverage", "dependencies", "accept", "sizing")
 NO_ITEMS = "no-items: breakdown holds no checkbox work items"
 NO_COMPONENTS = "holds no components"
+NO_GRADABLE = "holds no component named 4 or more characters"
 _SECTION = re.compile(r"^##\s+(.*?)\s*$")
 _HEADING = re.compile(r"^###\s+(.*?)\s*$")
 _PAREN = re.compile(r"\s*\([^)]*\)\s*$")
@@ -257,8 +258,11 @@ def summary(record):
 def grade(breakdown_text, architecture_text, prd_text=""):
     """{score, parts, feedback} for one breakdown. Deterministic; defects
     are data, not exceptions. ValueError("holds no components") when the
-    architecture names none."""
+    architecture names none, ValueError(NO_GRADABLE) when every name is under
+    MIN_NAME: a vacuous 1.0 on coverage and sizing is never a score."""
     components = read_components(architecture_text)
+    if not _graded(components):
+        raise ValueError(NO_GRADABLE)
     items = read_items(breakdown_text)
     if not items:
         return {"score": 0.0, "parts": {name: 0.0 for name in PARTS},

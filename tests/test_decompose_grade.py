@@ -238,6 +238,13 @@ class TestCoverageCheck(unittest.TestCase):
         self.assertEqual(result["feedback"], [MISS_BETA])
         self.assertEqual(result["parts"]["coverage"], 0.5)
 
+    def test_an_architecture_whose_names_are_all_too_short_raises(self):
+        arch = "## Components\n\n### API\n\n### DB\n"
+        with self.assertRaises(ValueError) as caught:
+            dg.grade(GOOD_BREAKDOWN, arch)
+        self.assertEqual(str(caught.exception),
+                         "holds no component named 4 or more characters")
+
     def test_matching_is_case_insensitive_and_reads_sub_bullets(self):
         text = breakdown(row("A1", title="alpha service only",
                              accept=GOOD_ACCEPT + " BETA WORKER runs."))
