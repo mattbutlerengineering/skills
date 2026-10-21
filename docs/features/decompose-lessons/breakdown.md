@@ -55,7 +55,7 @@ When this milestone is done, `decompose_lessons.pairs` turns a list of run recor
 
 When this milestone is done, `decompose_lessons.votes` and the update fold take an existing file plus fixture records and a fixture git history to a new list of lessons, voted, extended and decayed, with dropped lessons staying dropped.
 
-- [ ] **S7 Voting tests** — cases for `votes` and `treated` with an injected git runner — size:M
+- [x] **S7 Voting tests** — cases for `votes` and `treated` with an injected git runner — size:M
   - Accept: the module holds these cases. A voter is a run not in `seen`, of the lesson's kind, whose decompose label is observed, whose signal is measurable and which is treated. A voter that hit the lesson's signal DOWNVOTEs and a clean voter UPVOTEs, and each voter votes once per lesson, recorded in `voted` so a second pass changes nothing. `treated` is true only when the commit that first added the lessons file is an ancestor of the run's decompose boundary commit, asserted by a recording fake runner that shows `git merge-base --is-ancestor` and a first-add lookup and no other git verb outside `decompose_signals`' read-only set. A voter that predates the file does not vote. A run with an inferred boundary does not vote. A runner failure or timeout is a problem and no vote is returned. Before `votes` and `treated` exist the cases fail.
   - Blocked by: S6 Pair derivation
 - [ ] **S8 Voting** — `votes` and `treated` as architecture.md's Voting describes — size:M

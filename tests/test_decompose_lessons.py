@@ -8,9 +8,11 @@ lesson here is a fixture built by the helpers below.
 import copy
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 import decompose_lessons as dl
@@ -235,9 +237,9 @@ def replan(count, items, label, added=0, dropped=0, split=0, merged=0):
 
 
 def record(run, rp=UNMEASURABLE, gaps=UNMEASURABLE, review=UNMEASURABLE,
-           decompose="observed", **extra):
+           decompose="observed", sha="d" * 40, **extra):
     return {"run": run, "path": f"docs/{run}",
-            "decompose": {"sha": "d" * 40, "label": decompose},
+            "decompose": {"sha": sha, "label": decompose},
             "implement": {"sha": "i" * 40, "label": decompose},
             "replan": rp, "design_gaps": gaps, "review": review, **extra}
 
@@ -350,6 +352,156 @@ class TestPairs(unittest.TestCase):
         self.assertEqual(
             dl.NO_PAIR, "decompose-lessons: no contrast pair found \u2014 no"
             " lesson derived")
+
+
+FIRST = "f" * 40
+
+
+class GitFake:
+    """A recording injected git runner: `log` answers the lessons file's
+    adding commits newest first; `merge-base --is-ancestor` exits 0 for a
+    descendant sha and 1 for any other."""
+
+    def __init__(self, added=(FIRST,), descended=(), fail=None):
+        self.added, self.descended, self.fail = added, set(descended), fail
+        self.calls = []
+
+    def __call__(self, args, input=None, cwd=None):
+        self.calls.append(list(args))
+        if self.fail and args[0] == self.fail[0]:
+            raise self.fail[1]
+        if args[0] == "log":
+            return SimpleNamespace(stdout="".join(f"{s}\n"
+                                                  for s in self.added))
+        if args[:2] == ["merge-base", "--is-ancestor"]:
+            if args[3] in self.descended:
+                return SimpleNamespace(stdout="")
+            raise subprocess.CalledProcessError(1, ["git", *args])
+        raise AssertionError(f"unexpected git verb {args}")
+
+
+def clean_replan():
+    return replan(0, 8, "observed")
+
+
+def hit_replan():
+    return replan(2, 8, "observed", added=2)
+
+
+TREATED = "t" * 40
+OLD = "o" * 40
+ADDED_LESSON = lesson("replan/feature/added")
+
+
+def voter(run, rp=None, sha=TREATED, **kw):
+    return record(run, clean_replan() if rp is None else rp, sha=sha, **kw)
+
+
+class TestTreated(unittest.TestCase):
+    def test_a_run_is_treated_only_when_the_first_add_is_its_ancestor(self):
+        git = GitFake(added=("b" * 40, FIRST), descended={TREATED})
+        got, problems = dl.treated(
+            Path("/repo"), git, [voter("feature:new"),
+                                 voter("feature:old", sha=OLD)])
+        self.assertEqual((got, problems), ({"feature:new"}, []))
+        self.assertEqual(git.calls, [
+            ["log", "--diff-filter=A", "--format=%H", "--",
+             "docs/factory/decompose-lessons.jsonl"],
+            ["merge-base", "--is-ancestor", FIRST, TREATED],
+            ["merge-base", "--is-ancestor", FIRST, OLD]])
+
+    def test_a_file_never_committed_treats_no_run(self):
+        git = GitFake(added=())
+        self.assertEqual(
+            dl.treated(Path("/repo"), git, [voter("feature:new")]),
+            (set(), []))
+        self.assertEqual([c[0] for c in git.calls], ["log"])
+
+    def test_a_run_with_no_decompose_commit_is_not_treated(self):
+        gone = {**voter("feature:x"), "decompose": UNMEASURABLE}
+        git = GitFake(descended={TREATED})
+        self.assertEqual(dl.treated(Path("/repo"), git, [gone]),
+                         (set(), []))
+
+    def test_a_runner_failure_or_timeout_is_a_problem(self):
+        for verb, err, why in (
+                ("log", subprocess.CalledProcessError(
+                    128, ["git"], stderr="fatal: bad object\n"),
+                 "fatal: bad object"),
+                ("merge-base", subprocess.TimeoutExpired(["git"], 60),
+                 str(subprocess.TimeoutExpired(["git"], 60)))):
+            with self.subTest(verb):
+                git = GitFake(fail=(verb, err))
+                got, problems = dl.treated(Path("/repo"), git,
+                                           [voter("feature:new")])
+                self.assertEqual(got, set())
+                self.assertEqual(
+                    problems, [f"decompose-lessons: git {verb} failed:"
+                               f" {why}"])
+
+
+class TestVotes(unittest.TestCase):
+    def cast(self, lessons, records, seen=(), descended=(TREATED,)):
+        git = GitFake(descended=descended)
+        ballots, problems = dl.votes(Path("/repo"), git, lessons, records,
+                                     seen)
+        self.assertEqual(problems, [])
+        return ballots, git
+
+    def test_a_clean_voter_upvotes_and_a_hit_voter_downvotes(self):
+        ballots, _ = self.cast([ADDED_LESSON], [
+            voter("feature:clean"), voter("feature:hit", hit_replan())])
+        self.assertEqual(ballots, [
+            ("upvote", "replan/feature/added", "feature:clean"),
+            ("downvote", "replan/feature/added", "feature:hit")])
+
+    def test_a_voter_predating_the_file_does_not_vote(self):
+        ballots, _ = self.cast([ADDED_LESSON], [voter("feature:o", sha=OLD)])
+        self.assertEqual(ballots, [])
+
+    def test_a_run_with_an_inferred_boundary_does_not_vote(self):
+        ballots, _ = self.cast([ADDED_LESSON],
+                               [voter("feature:i", decompose="inferred")])
+        self.assertEqual(ballots, [])
+
+    def test_a_seen_run_or_one_already_voted_does_not_vote(self):
+        already = lesson("replan/feature/added", voted=["feature:v"])
+        ballots, _ = self.cast([already], [voter("feature:v"),
+                                           voter("feature:s")],
+                               seen=["feature:s"])
+        self.assertEqual(ballots, [])
+
+    def test_a_voter_of_another_kind_or_unmeasurable_signal_is_skipped(self):
+        ballots, _ = self.cast([ADDED_LESSON], [
+            voter("maintenance:m"),
+            record("feature:u", sha=TREATED)])
+        self.assertEqual(ballots, [])
+
+    def test_a_second_pass_changes_nothing(self):
+        records = [voter("feature:clean")]
+        ballots, _ = self.cast([ADDED_LESSON], records)
+        lessons, _ = dl.upvote([ADDED_LESSON], ballots[0][1], ballots[0][2])
+        again, _ = self.cast(lessons, records)
+        self.assertEqual(again, [])
+
+    def test_only_log_and_merge_base_are_reached(self):
+        _, git = self.cast([ADDED_LESSON], [voter("feature:clean")])
+        self.assertEqual({call[0] for call in git.calls},
+                         {"log", "merge-base"})
+
+    def test_no_lessons_means_no_git_call(self):
+        _, git = self.cast([], [voter("feature:clean")])
+        self.assertEqual(git.calls, [])
+
+    def test_a_runner_failure_returns_no_vote(self):
+        git = GitFake(fail=("merge-base", subprocess.CalledProcessError(
+            128, ["git"], stderr="fatal: bad")))
+        ballots, problems = dl.votes(
+            Path("/repo"), git, [ADDED_LESSON], [voter("feature:clean")], [])
+        self.assertEqual(ballots, [])
+        self.assertEqual(problems,
+                         ["decompose-lessons: git merge-base failed:"
+                          " fatal: bad"])
 
 
 if __name__ == "__main__":
