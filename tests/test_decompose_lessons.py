@@ -225,5 +225,132 @@ class TestFile(TempFile):
         self.assertEqual(os.listdir(self.dir), [])
 
 
+UNMEASURABLE = {"unmeasurable": "fixture"}
+
+
+def replan(count, items, label, added=0, dropped=0, split=0, merged=0):
+    return {"label": label, "count": count, "items_at_d": items,
+            "added": added, "dropped": dropped, "split": split,
+            "merged": merged, "renamed": 0}
+
+
+def record(run, rp=UNMEASURABLE, gaps=UNMEASURABLE, review=UNMEASURABLE,
+           decompose="observed", **extra):
+    return {"run": run, "path": f"docs/{run}",
+            "decompose": {"sha": "d" * 40, "label": decompose},
+            "implement": {"sha": "i" * 40, "label": decompose},
+            "replan": rp, "design_gaps": gaps, "review": review, **extra}
+
+
+NO_HEADING = {"findings": 0, "reason": "no finding heading"}
+# Worked by hand: kind and label decide who may be a clean run; the first
+# clean run in list order is the exemplar.
+HISTORY = [
+    record("feature:0"),
+    record("feature:a", replan(2, 10, "observed", added=2),
+           {"label": "observed", "routes": 1, "source": "subjects"},
+           {"label": "observed", "findings": 4, "named": 3},
+           band_miss="S took M", retro="we should plan better"),
+    record("feature:b", replan(0, 8, "observed"),
+           {"label": "observed", "routes": 0, "source": "subjects"},
+           NO_HEADING),
+    record("feature:c", replan(4, 8, "inferred", added=1, dropped=3)),
+    record("feature:d", replan(0, 14, "inferred")),
+    record("feature:e", replan(1, 6, "observed", added=1)),
+    record("maintenance:m", replan(6, 7, "inferred", dropped=6)),
+    record("maintenance:n", replan(0, 5, "inferred")),
+    record("maintenance:z", replan(4, 9, "observed", dropped=2, split=2)),
+]
+
+
+def pair(signal, kind, detail, hit, clean, text):
+    return {"signal": signal, "kind": kind, "detail": detail, "hit": hit,
+            "clean": clean, "text": text}
+
+
+HAND_PAIRS = [
+    pair("replan", "feature", "added", "feature:a", "feature:b",
+         "feature runs that re-planned mostly by adding rows: a 2 of 10"
+         " items (observed), b 0 of 8 items (observed)"),
+    pair("replan", "feature", "dropped", "feature:c", "feature:d",
+         "feature runs that re-planned mostly by dropping rows: c 4 of 8"
+         " items (inferred), d 0 of 14 items (inferred)"),
+    pair("replan", "feature", "added", "feature:e", "feature:b",
+         "feature runs that re-planned mostly by adding rows: e 1 of 6"
+         " items (observed), b 0 of 8 items (observed)"),
+    pair("replan", "maintenance", "dropped", "maintenance:m",
+         "maintenance:n",
+         "maintenance runs that re-planned mostly by dropping rows: m 6 of"
+         " 7 items (inferred), n 0 of 5 items (inferred)"),
+    pair("design_gaps", "feature", "routed", "feature:a", "feature:b",
+         "feature runs routed back to Architect: a 1 route(s) (observed),"
+         " b 0 route(s) (observed)"),
+    pair("review", "feature", "named", "feature:a", "feature:b",
+         "feature runs whose review findings name an item: a 3 of 4"
+         " findings (observed), b 0 of 0 findings (observed)"),
+]
+
+
+class TestPairs(unittest.TestCase):
+    def test_pairs_match_the_hand_worked_history(self):
+        self.assertEqual(dl.pairs(HISTORY), HAND_PAIRS)
+
+    def test_a_hit_run_with_no_clean_run_of_its_kind_and_label_has_no_pair(
+            self):
+        hits = {p["hit"] for p in dl.pairs(HISTORY)}
+        self.assertNotIn("maintenance:z", hits)
+
+    def test_an_unmeasurable_run_is_never_hit_or_clean(self):
+        used = {p["hit"] for p in dl.pairs(HISTORY)} | {
+            p["clean"] for p in dl.pairs(HISTORY)}
+        self.assertNotIn("feature:0", used)
+
+    def test_band_misses_and_retro_notes_reach_no_pair_or_lesson(self):
+        text = repr(dl.pairs(HISTORY)) + repr(dl.candidates(
+            dl.pairs(HISTORY)))
+        self.assertNotIn("S took M", text)
+        self.assertNotIn("plan better", text)
+
+    def test_the_detail_ties_break_in_added_dropped_split_merged_order(self):
+        tie = [record("feature:x", replan(4, 9, "observed", dropped=2,
+                                          split=2)),
+               record("feature:y", replan(0, 9, "observed"))]
+        self.assertEqual(dl.pairs(tie)[0]["detail"], "dropped")
+        tie = [record("feature:x", replan(4, 9, "observed", split=2,
+                                          merged=2)),
+               record("feature:y", replan(0, 9, "observed"))]
+        self.assertEqual(dl.pairs(tie)[0]["detail"], "split")
+
+    def test_skipped_hit_runs_make_no_pair_but_may_still_be_clean(self):
+        got = dl.pairs(HISTORY, skip={"feature:a", "feature:c"})
+        self.assertEqual([p["hit"] for p in got],
+                         ["feature:e", "maintenance:m"])
+
+    def test_two_pairs_with_one_id_collapse_to_one_lesson_with_both_sources(
+            self):
+        self.assertEqual(dl.candidates(dl.pairs(HISTORY)), [
+            {"id": "design_gaps/feature/routed",
+             "text": HAND_PAIRS[4]["text"],
+             "sources": ["feature:a", "feature:b"]},
+            {"id": "replan/feature/added", "text": HAND_PAIRS[0]["text"],
+             "sources": ["feature:a", "feature:b", "feature:e"]},
+            {"id": "replan/feature/dropped", "text": HAND_PAIRS[1]["text"],
+             "sources": ["feature:c", "feature:d"]},
+            {"id": "replan/maintenance/dropped",
+             "text": HAND_PAIRS[3]["text"],
+             "sources": ["maintenance:m", "maintenance:n"]},
+            {"id": "review/feature/named", "text": HAND_PAIRS[5]["text"],
+             "sources": ["feature:a", "feature:b"]},
+        ])
+
+    def test_a_history_with_no_pair_is_empty_and_has_the_string(self):
+        lone = [record("feature:a", replan(2, 10, "observed", added=2))]
+        self.assertEqual(dl.pairs(lone), [])
+        self.assertEqual(dl.candidates([]), [])
+        self.assertEqual(
+            dl.NO_PAIR, "decompose-lessons: no contrast pair found \u2014 no"
+            " lesson derived")
+
+
 if __name__ == "__main__":
     unittest.main()
