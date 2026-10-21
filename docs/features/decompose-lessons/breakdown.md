@@ -27,7 +27,7 @@ When this milestone is done, `decompose_lessons.add`, `edit`, `upvote`,
 `downvote`, `load` and `dump` keep the lesson invariants over a JSONL file
 on fixture lessons alone, with no git and no run records.
 
-- [ ] **S1 Lesson operation tests** — cases for `add`, `edit`, `upvote` and `downvote` over fixture lesson lists — size:M
+- [x] **S1 Lesson operation tests** — cases for `add`, `edit`, `upvote` and `downvote` over fixture lesson lists — size:M
   - Accept: the module holds these cases, each asserting exact values and that the input list is not mutated. ADD with no source run returns the original list and the problem `decompose-lessons: add refused: <id> cites no source run`. ADD with sources returns a new list holding the lesson at importance 2 with its sources and an empty `voted`. UPVOTE takes 2 to 3 and DOWNVOTE takes 2 to 1, each leaving `sources` intact. DOWNVOTE from 1 removes the lesson from the list, and a lesson at 1 left alone remains; no lesson is stored below 1. A vote or EDIT naming an unknown id returns the original list, the problem `decompose-lessons: <op> refused: no lesson <id>`, and creates nothing. EDIT changes text and keeps importance, sources and `voted`; an EDIT that would leave no source run is refused like an ADD. Before the module exists the test module fails on import.
   - Blocked by: —
 - [ ] **S2 Lesson operations** — root-level `decompose_lessons.py` with `add`, `edit`, `upvote` and `downvote` as architecture.md's Lesson operations describes — size:M
