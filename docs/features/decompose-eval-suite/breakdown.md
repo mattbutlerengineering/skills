@@ -50,7 +50,7 @@ When this milestone is done, `decompose_grade.grade(breakdown_text, architecture
 - [x] **S6 Coverage and dependency tests** — cases for the coverage-miss and dangling-blocked-by checks over inline texts — size:M
   - Accept: the module holds these cases, each asserting exact strings. A component whose name appears in no row block emits `coverage-miss: component "<name>" is named by no item`, matching is case-insensitive, and a component name shorter than 4 characters is not graded. Components are the `###` headings under `## Components` with a trailing parenthetical removed. A `Blocked by:` clause, sub-bullet or inline and case-insensitive, is split on `;` and `,`; `—`, `-`, `none` and an absent clause make no edge; an element that starts at a word boundary with an item key resolves; an element that starts with no key emits `dangling-blocked-by: <item> is blocked by "<element>", which names no item`; an element naming its own item is dangling. The coverage part is covered over total components and the dependencies part resolved over total edges. An item fails a part once however many lines name it. Before the checks exist the cases fail.
   - Blocked by: S5 Grade core
-- [ ] **S7 Coverage and dependency checks** — the two checks inside `grade` — size:M
+- [x] **S7 Coverage and dependency checks** — the two checks inside `grade` — size:M
   - Accept: the S6 tests pass and every earlier test still passes. Feedback lines are ordered coverage, then dependency, then by item order. The checks are pure and add no import.
   - Blocked by: S6 Coverage and dependency tests
 - [ ] **S8 Accept tests** — cases for the untestable-accept check over inline texts — size:M
