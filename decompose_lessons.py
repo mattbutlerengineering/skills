@@ -21,11 +21,12 @@ NOT A GATE. An empty pair set and a refused verdict are data.
 """
 import json
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 
 import decompose_signals
-from cli import read_file
+from cli import CLI_FAILURES, detail, read_file
 
 LABEL = "decompose-lessons"
 LESSONS_PATH = "docs/factory/decompose-lessons.jsonl"
@@ -300,3 +301,98 @@ def candidates(pair_list):
         entry["sources"].update((pair["hit"], pair["clean"]))
     return [{**entry, "sources": sorted(entry["sources"])}
             for _, entry in sorted(grouped.items())]
+
+
+# Voting. A voter is a run whose draft could have read the file: its
+# decompose commit descends from the commit that first added the lessons
+# file. git is reached through the injected runner, read-only.
+
+def _git(run, root, args):
+    """(CompletedProcess or None, problems) for one git call."""
+    try:
+        return run(args, cwd=str(root)), []
+    except CLI_FAILURES as err:
+        return None, [f"{LABEL}: git {args[0]} failed: {detail(err)}"]
+
+
+def _first_add(run, root):
+    """(oldest commit adding the lessons file or None, problems)."""
+    done, problems = _git(run, root, ["log", "--diff-filter=A",
+                                      "--format=%H", "--", LESSONS_PATH])
+    if done is None:
+        return None, problems
+    shas = done.stdout.split()
+    return (shas[-1] if shas else None), []
+
+
+def _descends(run, root, first, sha):
+    """(True when `first` is an ancestor of `sha`, problems): exit 1 is
+    the answer no, any other failure a problem."""
+    try:
+        run(["merge-base", "--is-ancestor", first, sha], cwd=str(root))
+        return True, []
+    except subprocess.CalledProcessError as err:
+        if err.returncode == 1:
+            return False, []
+        return False, [f"{LABEL}: git merge-base failed: {detail(err)}"]
+    except CLI_FAILURES as err:
+        return False, [f"{LABEL}: git merge-base failed: {detail(err)}"]
+
+
+def treated(root, run, records):
+    """(refs of the runs whose decompose commit descends from the commit
+    that first added the lessons file, problems). No such commit, or a
+    run with no decompose commit, is not treated; a git failure gives no
+    runs and the problem."""
+    first, problems = _first_add(run, root)
+    if first is None:
+        return set(), problems
+    found = set()
+    for rec in records:
+        sha = rec["decompose"].get("sha")
+        if sha is None:
+            continue
+        yes, problems = _descends(run, root, first, sha)
+        if problems:
+            return set(), problems
+        if yes:
+            found.add(rec["run"])
+    return found, []
+
+
+def _lesson_parts(lid):
+    signal, run_kind, _ = lid.split("/", 2)
+    return signal, run_kind
+
+
+def _ballot(lesson_entry, rec):
+    """The vote one voter casts on one lesson, or None when it may not."""
+    signal, run_kind = _lesson_parts(lesson_entry["id"])
+    num = {field: n for field, n, _ in _signals()}.get(signal)
+    figure = _hit_label(rec[signal], num) if num else None
+    if figure is None or kind(rec["run"]) != run_kind \
+            or rec["run"] in lesson_entry["voted"]:
+        return None
+    return "downvote" if figure[1] else "upvote"
+
+
+def votes(root, run, lessons, records, seen):
+    """(ballots, problems): (op, lesson id, run ref) for each treated,
+    unseen run with an observed decompose boundary and a measurable
+    signal, once per lesson. A git failure gives no ballots."""
+    kinds = {_lesson_parts(entry["id"])[1] for entry in lessons}
+    eligible = [rec for rec in records
+                if rec["run"] not in seen and kind(rec["run"]) in kinds
+                and rec["decompose"].get("label") == "observed"]
+    if not eligible:
+        return [], []
+    voters, problems = treated(root, run, eligible)
+    if problems:
+        return [], problems
+    ballots = []
+    for entry in lessons:
+        for rec in eligible:
+            op = _ballot(entry, rec) if rec["run"] in voters else None
+            if op:
+                ballots.append((op, entry["id"], rec["run"]))
+    return ballots, []
