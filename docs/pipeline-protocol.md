@@ -311,7 +311,7 @@ mid-session with no run closing.
 
 **Producers:** Operate appends its retro's idea seeds at run close
 (creating the file if absent), and Capture may append a consciously
-deferred defect. Producers append well-formed entries only and never
+deferred defect. Idea appends the rungs it did not take. Producers append well-formed entries only and never
 rewrite existing lines.
 
 **Consumers:** `next` reads the backlog in exactly two moments — when

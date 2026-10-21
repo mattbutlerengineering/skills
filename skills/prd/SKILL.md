@@ -38,7 +38,10 @@ lives in the user's head, not in the codebase.
 4. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `prd.md`, with protocol frontmatter including
    the `ux:` field (and `ux-reason:` when `ux: not-applicable`). Scale to the run: a feature PRD is roughly a page; a
-   product PRD is comprehensive. An ambiguity you hit mid-section that
+   product PRD is comprehensive. When the run's `idea.md` has a
+   `## The demo` holding a script, copy it into a success criterion worded
+   "the demo runs as written", with the script as its checkable body; an
+   absent or none demo writes no criterion. An ambiguity you hit mid-section that
    the interview did not settle gets an inline marker at the exact clause
    — `[NEEDS CLARIFICATION: <question>]` — rather than a guess; "Open
    questions" stays for what is genuinely open at the artifact's close.
