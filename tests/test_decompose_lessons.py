@@ -193,6 +193,12 @@ class TestFile(TempFile):
                              " a/feature/x"),
             "importance": ([header, json.dumps(lesson("a/feature/x", 0))],
                            "lessons.jsonl line 2: importance 0 is below 1"),
+            "nesting past the recursion limit": (
+                [header, "[" * 200000 + "]" * 200000],
+                "lessons.jsonl line 2: not valid JSON"),
+            "seen of non-strings": (
+                [json.dumps({"seen": [1, "a"]})],
+                "lessons.jsonl line 1: expected the seen header"),
             "no header": ([good],
                           "lessons.jsonl line 1: expected the seen header"),
             "missing field": ([header, json.dumps({"id": "a/feature/x"})],

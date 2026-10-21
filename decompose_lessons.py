@@ -140,12 +140,14 @@ def _parse(text, shown):
     for n, line in enumerate(text.splitlines(), start=1):
         try:
             value = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
             return [], [], [f"{LABEL}: {shown} line {n}: not valid JSON"]
         if not isinstance(value, dict):
             return [], [], [f"{LABEL}: {shown} line {n}: not a JSON object"]
         if n == 1:
-            if not isinstance(value.get("seen"), list):
+            head = value.get("seen")
+            if not isinstance(head, list) \
+                    or not all(isinstance(ref, str) for ref in head):
                 return [], [], [f"{LABEL}: {shown} line 1: expected the"
                                 " seen header"]
             seen = value["seen"]
