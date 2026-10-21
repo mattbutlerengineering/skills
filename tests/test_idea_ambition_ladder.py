@@ -5,11 +5,16 @@ and nothing else: no model is called and `claude plugin eval` is never
 invoked.
 """
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
+import lint
+import protocol
+
 ROOT = Path(__file__).resolve().parents[1]
 SKILL = ROOT / "skills/idea/SKILL.md"
+TEMPLATE = ROOT / "skills/idea/TEMPLATE.md"
 TYPED_ID = re.compile(r"\b(PRD|ADR|WO)-\d{4}\b")
 
 
@@ -81,6 +86,80 @@ class TestLadderOrder(unittest.TestCase):
         text = skill_text()
         self.assertLess(text.index("**The ambition ladder.**"),
                         text.index("**Write the artifact.**"))
+
+
+HEADINGS = ("## Evidence", "## Ambition rung", "## The demo",
+            "## Riskiest piece + spike", "## Cheapest kill test",
+            "## Solution hunch")
+OLD_IDEA = """---
+stage: idea
+run: feature:old-shape
+date: 2026-01-01
+---
+
+# Idea: Old shape
+
+## Problem
+
+p
+
+## Who has it
+
+w
+
+## Why now
+
+n
+
+## Evidence
+
+e
+
+## Solution hunch
+
+s
+
+## Success in one sentence
+
+o
+
+## Unknowns & risks
+
+- u
+"""
+
+
+class TestTemplate(unittest.TestCase):
+    def setUp(self):
+        self.text = TEMPLATE.read_text(encoding="utf-8")
+
+    def test_the_four_sections_sit_between_evidence_and_the_hunch(self):
+        indexes = [self.text.index(h + "\n") for h in HEADINGS]
+        self.assertEqual(indexes, sorted(indexes))
+
+    def test_the_four_test_labels_have_pass_or_fail_slots(self):
+        for label in ("Demo", "Removes a step", "Only this product",
+                      "Achievable"):
+            self.assertRegex(self.text,
+                             rf"(?m)^{label}: pass \| fail")
+
+    def test_the_template_carries_no_typed_id(self):
+        self.assertIsNone(TYPED_ID.search(self.text))
+
+
+class TestOldBriefStillValidates(unittest.TestCase):
+    """Pins a measured fact: nothing parses idea.md sections."""
+
+    def test_an_old_idea_md_is_a_finished_idea_stage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "docs/features/old-shape"
+            run.mkdir(parents=True)
+            (run / "idea.md").write_text(OLD_IDEA, encoding="utf-8")
+            states = dict(protocol.stage_states(run))
+            self.assertEqual(states["idea"], "done")
+            front = protocol.parse_frontmatter(OLD_IDEA)
+            self.assertEqual(sorted(front), ["date", "run", "stage"])
+        self.assertEqual(lint.check_templates(ROOT), [])
 
 
 if __name__ == "__main__":

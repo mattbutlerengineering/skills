@@ -40,7 +40,7 @@ When this milestone is done, `skills/idea/SKILL.md` carries the ambition-ladder 
 
 When this milestone is done, `skills/idea/TEMPLATE.md` has the four new sections between Evidence and Solution hunch, and a brief written to the old seven-section form still reads as a finished idea stage.
 
-- [ ] **S3 Template and old-brief tests** — add the template cases and the old-idea.md case to `tests/test_idea_ambition_ladder.py` — size:M
+- [x] **S3 Template and old-brief tests** — add the template cases and the old-idea.md case to `tests/test_idea_ambition_ladder.py` — size:M
   - Accept: the module gains these cases. The four headings `## Ambition rung`, `## The demo`, `## Riskiest piece + spike` and `## Cheapest kill test` exist in `skills/idea/TEMPLATE.md` in that order, between `## Evidence` and `## Solution hunch`. The four test labels `Demo`, `Removes a step`, `Only this product` and `Achievable` exist, each with a pass or fail slot. The template carries no typed id. The old-idea case writes a temp run directory holding the seven original sections as a literal in the test, asserts `protocol.stage_states` reports the idea stage `done`, asserts `protocol.parse_frontmatter` returns the three frontmatter keys, and asserts `lint.check_templates(ROOT)` is `[]`. The template cases fail before the edit; the old-idea case passes immediately and is kept as a pin on a fact architecture.md measured, which the S3 note records.
   - Blocked by: S2 Ladder step
 - [ ] **S4 Template sections** — insert the four sections into `skills/idea/TEMPLATE.md` — size:S
