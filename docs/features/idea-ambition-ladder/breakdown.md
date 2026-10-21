@@ -57,7 +57,7 @@ When this milestone is done, the Idea skill tells the agent to append one seed l
 - [x] **S6 Seed instruction** — add the seed rule and its failure handling to the ladder block in `skills/idea/SKILL.md` — size:S
   - Accept: the S5 tests pass and the S1 tests still pass. The instruction is addressed to the agent running the skill, says to append in the stage-boundary commit using specific paths, gives the run-ref as `feature:` plus the slug on a feature run and `product` on a product run in prose without a literal sample slug, requires one line with no parentheses and no typed ids in the seed text, and names no tool. `python3 lint.py` prints `lint: 0 problem(s)` after the edit.
   - Blocked by: S5 Seed tests
-- [ ] **S7 Producers sentence test** — add a case to `tests/test_idea_ambition_ladder.py` that pins the protocol's Producers sentence — size:S
+- [x] **S7 Producers sentence test** — add a case to `tests/test_idea_ambition_ladder.py` that pins the protocol's Producers sentence — size:S
   - Accept: the case reads `docs/pipeline-protocol.md` and asserts the Seed backlog section's producers sentence contains `Idea appends the rungs it did not take` alongside the existing Operate and Capture producers, and that the sentence still names both. Run before the edit, it fails.
   - Blocked by: S6 Seed instruction
 - [ ] **S8 Producers sentence** — the one-sentence edit to `docs/pipeline-protocol.md` naming Idea as a backlog producer — size:S

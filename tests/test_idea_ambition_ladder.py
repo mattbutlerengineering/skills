@@ -216,5 +216,17 @@ class TestSeedGrammar(unittest.TestCase):
              " '- <seed text> (from: <run-ref>)'"])
 
 
+class TestProtocolProducers(unittest.TestCase):
+    def test_the_producers_sentence_names_idea_beside_the_others(self):
+        text = " ".join((ROOT / "docs/pipeline-protocol.md").read_text(
+            encoding="utf-8").split())
+        start = text.index("**Producers:**")
+        sentence = text[start:text.index("**Consumers:**", start)]
+        for phrase in ("Idea appends the rungs it did not take",
+                       "Operate appends its retro's idea seeds",
+                       "Capture may append a consciously deferred defect"):
+            self.assertIn(phrase, sentence)
+
+
 if __name__ == "__main__":
     unittest.main()
