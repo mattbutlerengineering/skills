@@ -39,6 +39,9 @@ the user's head at this stage, so this skill interviews — it does not draft.
    - Why now — what changed to make this worth doing?
    - What evidence exists that the problem is real (even anecdote counts —
      label it as such)?
+   - **Ambition ladder.** How big should this be? Offer three rungs,
+     Showstopper (recommended), and let the user pick — see the block
+     below.
    - What's the rough shape of a solution? (A hunch, not a design.)
    - What would make you call this a success in one sentence?
    - What are the biggest unknowns or ways this dies?
@@ -60,6 +63,49 @@ the user's head at this stage, so this skill interviews — it does not draft.
    of existence. Where the skill is not installed, the interview alone is a
    complete result.
 
+   **The ambition ladder.** After the problem and evidence answers, and
+   before the solution hunch, offer three rungs anchored on the user's own
+   words: quote their opening sentence and build each rung from it, never
+   renaming their idea.
+
+   - **Solid** — fixes the problem and ships fast. The fallback.
+   - **Showstopper** — the same problem plus one moment that makes a viewer
+     say "wait, do that again". Showstopper (recommended).
+   - **Moonshot** — not achievable at this run's scale.
+
+   The pick is the user's, and it is recorded in idea.md. The Moonshot is
+   never chosen in this run and is always saved as a seed; if the user picks
+   it, say so and ask for the Showstopper or Solid pick. If the user
+   declines the ladder, record Solid as chosen and note that they declined.
+
+   Apply four tests to the Showstopper so "wow" is not left to taste. Each
+   is answered in writing, pass or fail with one clause of evidence:
+
+   1. A 30-second demo exists: the before and the after fit in two
+      sentences, and the after is something you see, not a metric.
+   2. It removes a step instead of speeding one up: zero clicks, zero setup,
+      or it is done before you ask.
+   3. It is built on something only this product has: its data, its place
+      in the workflow, or context a competitor cannot see.
+   4. It is achievable: it fits this run's scale, and its riskiest technical
+      piece is named with a spike of about two days that could prove it.
+
+   When a test fails, say which one and re-scope it once. If it still
+   fails, or no spike could prove it, record it as the Moonshot and make
+   Solid the pick.
+
+   Prompts for the demo and the tests, one at a time:
+   - What would you show first in a demo?
+   - What does the user do today that they would never have to do again?
+   - What does the product already know that it is not using?
+
+   For a feature run, ask the ladder as one question: three one-line rungs
+   built from the user's own sentence, Showstopper recommended, pick or
+   correct. Ask the prompts only when their framing names no demo moment, at
+   most two. Run the four tests silently and surface only a failure; keep
+   the spike to one sentence. A product run asks all three prompts in full,
+   one at a time.
+
 5. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
    into the run directory as `idea.md`, with protocol frontmatter.
 
@@ -71,6 +117,8 @@ the user's head at this stage, so this skill interviews — it does not draft.
 ## Rules
 
 - Capture the user's words, sharpened — don't replace their idea with yours.
+  The ladder offers a bigger version anchored on their words; it never swaps
+  their idea for yours.
 - Outside evidence corroborates or challenges; it never re-authors. And a
   community that has not discussed the problem is not evidence the problem
   is unreal — most real problems are undiscussed, so silence goes in as
