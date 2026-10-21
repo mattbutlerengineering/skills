@@ -94,6 +94,18 @@ the user's head at this stage, so this skill interviews — it does not draft.
    fails, or no spike could prove it, record it as the Moonshot and make
    Solid the pick.
 
+   Save the larger rungs you did not take as backlog seeds: seed every
+   unchosen rung larger than the pick. Solid is never seeded and the
+   Moonshot always is. Append one line each to `docs/backlog.md` in the form
+   `- <seed text> (from: <run-ref>)`, with the run-ref being feature: plus
+   the slug on a feature run and product on a product run. The seed text is
+   one line with no parentheses and no typed ids. The file is append only:
+   add below the last line and never rewrite an existing one, and create the
+   file with its header line when it is absent. Stage the append by path in
+   the same commit as idea.md. Write well-formed lines only: a seed that
+   would fail the grammar is not written. If the file cannot be written, say
+   so and put the seeds in the Not taken line of the brief instead.
+
    Prompts for the demo and the tests, one at a time:
    - What would you show first in a demo?
    - What does the user do today that they would never have to do again?
