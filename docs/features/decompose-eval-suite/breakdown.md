@@ -65,7 +65,7 @@ When this milestone is done, `decompose_grade.grade(breakdown_text, architecture
 - [x] **S11 Size check** — the mis-sized check with `MAX_SPAN` as a named constant — size:S
   - Accept: the S10 tests pass and every earlier test still passes. The component list is the one the coverage check builds, with no second parse of the architecture.
   - Blocked by: S10 Size tests
-- [ ] **S12 Good-versus-bad table** — cases running `grade` over the five cut files against the existing csv-export architecture and PRD — size:M
+- [x] **S12 Good-versus-bad table** — cases running `grade` over the five cut files against the existing csv-export architecture and PRD — size:M
   - Accept: the module holds these cases, with the fixture architecture and PRD read in place from `evals/fixtures/decompose-feature/docs/features/csv-export/`. `good.md` emits no feedback line and scores strictly higher than each bad cut, with the scores asserted. Each bad cut emits exactly its class's line (coverage names the omitted component, dangling names both items, accept names the item, sized names the item and its count) and no other class's line, asserted by exact string. A mutation check replaces each check's body in turn with a no-op and asserts its bad cut's output changes, proving the mutation applied. These cases pass on the assembled S7, S9 and S11, so they carry no red run; the mutation check stands in for it.
   - Blocked by: S3 Gates over the cuts; S11 Size check
 

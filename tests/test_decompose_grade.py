@@ -11,6 +11,7 @@ import re
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import decompose_grade as dg
 
@@ -478,6 +479,54 @@ class TestSizeCheck(unittest.TestCase):
              ' which names no item',
              untestable("A1", "empty"), mis_sized("A1", 4),
              mis_sized("A2", 4)])
+
+
+FIXTURE_ARCH = (FIXTURE / "architecture.md").read_text(encoding="utf-8")
+FIXTURE_PRD = (FIXTURE / "prd.md").read_text(encoding="utf-8")
+EXPECTED = {
+    "bad-coverage": (0.938, [
+        'coverage-miss: component "Delivery" is named by no item']),
+    "bad-dangling": (0.964, [
+        'dangling-blocked-by: S6 is blocked by "S9", which names no item']),
+    "bad-accept": (0.958, [untestable("S3", "unanchored")]),
+    "bad-sized": (0.958, [mis_sized("S6", 4)]),
+}
+# check function -> the bad cut that check alone must flag
+MUTATIONS = {"check_coverage": "bad-coverage",
+             "check_dependencies": "bad-dangling",
+             "check_accept": "bad-accept", "check_sizing": "bad-sized"}
+
+
+def grade_cut(name):
+    return dg.grade(cut(name), FIXTURE_ARCH, FIXTURE_PRD)
+
+
+class TestGoodVersusBadCuts(unittest.TestCase):
+    def test_the_good_cut_emits_nothing_and_scores_one(self):
+        result = grade_cut("good")
+        self.assertEqual(result["feedback"], [])
+        self.assertEqual(result["score"], 1.0)
+
+    def test_each_bad_cut_emits_exactly_its_own_line_and_a_lower_score(self):
+        for name, (score, feedback) in EXPECTED.items():
+            result = grade_cut(name)
+            self.assertEqual(result["feedback"], feedback, name)
+            self.assertEqual(result["score"], score, name)
+            self.assertLess(result["score"], grade_cut("good")["score"])
+
+    def test_each_check_is_what_flags_its_bad_cut(self):
+        # Mutation check, in place of a red run: replace each check with a
+        # no-op in turn. The cut's output must change, which also proves
+        # the mutation applied (a no-op patch that changed nothing would
+        # leave the line in place and fail here).
+        for check, name in MUTATIONS.items():
+            before = grade_cut(name)
+            with mock.patch.object(dg, check,
+                                   lambda *args, **kw: (1.0, [])):
+                after = grade_cut(name)
+            self.assertNotEqual(after, before, check)
+            self.assertEqual(after["feedback"], [], check)
+            self.assertEqual(after["score"], 1.0, check)
 
 
 if __name__ == "__main__":
