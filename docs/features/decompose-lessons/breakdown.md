@@ -95,7 +95,7 @@ When this milestone is done, the Decompose skill reads the lessons file at draft
 - [x] **S16 Skill step** — one step in `skills/decompose/SKILL.md` between the soft gate and the draft, per architecture.md's Skill step — size:S
   - Accept: the S15 tests pass. `python3 lint.py` is re-run after the edit and prints `lint: 0 problem(s)`. `git diff --name-only main...HEAD -- skills/` lists only paths under `skills/decompose/`. `.claude-plugin/plugin.json` is unchanged (ADR-0095: the wave's release PR bumps it).
   - Blocked by: S15 Skill step tests
-- [ ] **S17 Docs** — the CLAUDE.md "on demand, free" bullet beside `decompose_signals.py` and a CONTEXT.md entry for **Decompose lesson** — size:S
+- [x] **S17 Docs** — the CLAUDE.md "on demand, free" bullet beside `decompose_signals.py` and a CONTEXT.md entry for **Decompose lesson** — size:S
   - Accept: CLAUDE.md names `python3 decompose_lessons.py` as free, outside every gate and making no network call, says `update` is the one writer and is run by the Owner, and names `docs/factory/decompose-lessons.jsonl`. CONTEXT.md defines **Decompose lesson** as a derived, sourced, voted line whose importance starts at 2 and which is removed at 0. Neither doc contains a work-order token or sample lesson id that detectors C and I would scan, and `python3 kb.py drift` still prints `drift: 0 problem(s)`.
   - Blocked by: S16 Skill step
 - [ ] **S18 Whole-repo verify** — the four CI checks and the scope checks over the finished change — size:S
