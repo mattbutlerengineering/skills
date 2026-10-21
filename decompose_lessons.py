@@ -26,6 +26,7 @@ import tempfile
 from pathlib import Path
 
 import decompose_signals
+import factory_config
 from cli import CLI_FAILURES, detail, read_file
 
 LABEL = "decompose-lessons"
@@ -490,3 +491,41 @@ def update(root, run, measure=decompose_signals.measure):
     if problems:
         return [], problems
     return [*lines, f"{LABEL}: wrote {LESSONS_PATH}"], []
+
+
+# Comparison: re-plan pooled (sum of count over sum of items_at_d) over
+# observed-label measurable runs, treated against untreated. Descriptive
+# only: at present volume one re-plan moves the rate about 4 points, so no
+# significance is claimed, and the floor is factory_config's.
+
+def _pool(runs):
+    """(re-plans, items, run count) summed over replan values."""
+    return (sum(v["count"] for v in runs), sum(v["items_at_d"] for v in runs),
+            len(runs))
+
+
+def compare(records, treated_set, floor):
+    """The comparison lines: the verdict or refusal, then the unmeasurable
+    runs by name when there are any. Unmeasurable and inferred runs are
+    in neither pool; an unmeasurable run is never counted as zero."""
+    observed = [(r["run"], r["replan"]) for r in records
+                if r["replan"].get("label") == "observed"]
+    unmeasurable = [r["run"] for r in records if "unmeasurable" in r["replan"]]
+    t = _pool([v for ref, v in observed if ref in treated_set])
+    u = _pool([v for ref, v in observed if ref not in treated_set])
+    if t[2] < floor:
+        lines = [f"{LABEL}: no verdict: {t[2]} treated run(s) is below the"
+                 f" minimum of {floor}"]
+    else:
+        # lean: a zero-item untreated pool has no rate, so it reads "not
+        # higher"; upgrade to a third wording if a repo ever reaches it.
+        higher = u[1] > 0 and t[0] * u[1] > u[0] * t[1]
+        lines = [f"{LABEL}: re-plan treated {t[0]}/{t[1]} over {t[2]}"
+                 f" run(s), untreated {u[0]}/{u[1]} over {u[2]} run(s)"
+                 f" (observed only; {len(unmeasurable)} unmeasurable);"
+                 " descriptive, treated"
+                 f" {'higher' if higher else 'not higher'}"]
+    if unmeasurable:
+        lines.append(f"{LABEL}: unmeasurable re-plan run(s):"
+                     f" {', '.join(unmeasurable)}")
+    return lines

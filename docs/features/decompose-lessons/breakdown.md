@@ -75,7 +75,7 @@ When this milestone is done, `python3 decompose_lessons.py` prints pair count, l
 - [x] **S11 Comparison tests** — cases for `compare` over fixture records and a fixed treated set — size:M
   - Accept: the module holds these cases, each recomputing the figures in the test from the fixture records. Re-plan is pooled as the sum of `count` over the sum of `items_at_d`, over observed-label measurable runs only, split into treated and untreated. At or above `factory_config.resolve_calibrate_floor` treated runs the line is `decompose-lessons: re-plan treated <c>/<i> over <r> run(s), untreated <c>/<i> over <r> run(s) (observed only; <u> unmeasurable); descriptive, treated higher|not higher`. Below the floor the line is `decompose-lessons: no verdict: <r> treated run(s) is below the minimum of <floor>` and no rate is printed. Unmeasurable runs are counted and named, never counted as zero. Before `compare` exists the cases fail.
   - Blocked by: S10 Update fold
-- [ ] **S12 Comparison** — `compare` as architecture.md's Comparison describes — size:S
+- [x] **S12 Comparison** — `compare` as architecture.md's Comparison describes — size:S
   - Accept: the S11 tests pass and every earlier test still passes. The floor is read through `factory_config.resolve_calibrate_floor`, not a local 5. `tests/test_dual_membership.py`'s pin gains `(decompose_lessons, factory_config)`, so the set is 52 pairs as ADR-0113 records, its pair-count comment is updated, and the test passes.
   - Blocked by: S11 Comparison tests
 - [ ] **S13 Report and front door tests** — end-to-end cases that drive `main([])` and `main(["update"])` against fixture records, a temp lessons file and an injected runner, asserting stdout and exit codes — size:M
