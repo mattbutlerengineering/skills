@@ -29,6 +29,9 @@ _PAREN = re.compile(r"\s*\([^)]*\)\s*$")
 # A component name shorter than this is not graded: a deliberate floor
 # against substring hits.
 MIN_NAME = 4
+# An item naming more distinct components than this is more than one
+# sitting (measured in architecture.md: 1 of 205 real rows exceeds 3).
+MAX_SPAN = 3
 _BLOCKED_BY = re.compile(r"blocked by:[ \t]*([^(\n]*)", re.IGNORECASE)
 _NO_EDGE = {"", "—", "-", "none"}
 _ACCEPT = re.compile(r"^\s*[-*+]\s+accept:[ \t]*(.*)$", re.IGNORECASE)
@@ -209,6 +212,19 @@ def check_accept(items, anchors):
                      len(items)), feedback
 
 
+def check_sizing(items, components):
+    """(fraction, feedback): the items naming at most MAX_SPAN of the graded
+    components (the list the coverage check grades), sub-bullets included."""
+    graded = _graded(components)
+    spans = [(i["key"], sum(1 for name in graded if _names(name, i["block"])))
+             for i in items]
+    feedback = [f"mis-sized: {key} names {count} components"
+                f" (limit {MAX_SPAN})"
+                for key, count in spans if count > MAX_SPAN]
+    return _fraction(sum(1 for _, c in spans if c <= MAX_SPAN),
+                     len(items)), feedback
+
+
 def combine(parts):
     """The score: the mean of the four part fractions, 3 places."""
     return round(sum(parts[name] for name in PARTS) / len(PARTS), 3)
@@ -236,7 +252,8 @@ def grade(breakdown_text, architecture_text, prd_text=""):
             ("coverage", check_coverage(items, components)),
             ("dependencies", check_dependencies(items)),
             ("accept", check_accept(
-                items, build_anchors(architecture_text, prd_text)))):
+                items, build_anchors(architecture_text, prd_text))),
+            ("sizing", check_sizing(items, components))):
         parts[name] = fraction
         feedback.extend(lines)
     return {"score": combine(parts),

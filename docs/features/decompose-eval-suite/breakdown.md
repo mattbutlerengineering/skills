@@ -62,7 +62,7 @@ When this milestone is done, `decompose_grade.grade(breakdown_text, architecture
 - [x] **S10 Size tests** — cases for the mis-sized check over inline texts — size:S
   - Accept: the module holds these cases, each asserting exact strings. An item whose row text plus sub-bullets name more than `MAX_SPAN` (3) distinct architecture components emits `mis-sized: <item> names <n> components (limit 3)`; an item naming exactly 3 emits nothing; an item naming 0 emits nothing. A declared `size:` band, Accept length and clause count change nothing, asserted by two otherwise equal items. Before the check exists the cases fail.
   - Blocked by: S9 Accept check
-- [ ] **S11 Size check** — the mis-sized check with `MAX_SPAN` as a named constant — size:S
+- [x] **S11 Size check** — the mis-sized check with `MAX_SPAN` as a named constant — size:S
   - Accept: the S10 tests pass and every earlier test still passes. The component list is the one the coverage check builds, with no second parse of the architecture.
   - Blocked by: S10 Size tests
 - [ ] **S12 Good-versus-bad table** — cases running `grade` over the five cut files against the existing csv-export architecture and PRD — size:M
