@@ -41,7 +41,7 @@ When this milestone is done, `plugin-evals/decompose/fixtures/csv-export/cuts/` 
 
 When this milestone is done, `decompose_grade.grade(breakdown_text, architecture_text, prd_text)` returns a score, four part fractions and exact feedback lines, and scores the good cut strictly above each bad cut with each bad cut emitting only its own class's line.
 
-- [ ] **S4 Grade core tests** — cases for rows, keys, the score formula, the summary line and the no-input failures over inline texts — size:M
+- [x] **S4 Grade core tests** — cases for rows, keys, the score formula, the summary line and the no-input failures over inline texts — size:M
   - Accept: the module holds these cases, each asserting exact values. A breakdown with no checkbox rows scores 0.0 with the one line `no-items: breakdown holds no checkbox work items`. An architecture with no `## Components` section or no `###` headings raises `ValueError` whose message reads `holds no components`. The score is the mean of the four part fractions rounded to 3 places, with the dependencies part 1.0 when there are no edges, hand-computed in the test for a two-item inline breakdown. A row with no bold span takes its row text as its key. The same inputs give an equal record twice. An AST check asserts `decompose_grade.py` imports only the standard library, `knowledge_plane` and `decompose_signals`, and none of `socket`, `urllib`, `http`, `subprocess` or a model client, and does not import `cli`. Before the module exists the cases fail on import.
   - Blocked by: —
 - [ ] **S5 Grade core** — root-level `decompose_grade.py` with `grade`, row and key reading, the score and the summary line — size:M
