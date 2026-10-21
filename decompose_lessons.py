@@ -22,14 +22,16 @@ NOT A GATE. An empty pair set and a refused verdict are data.
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 import decompose_signals
 import factory_config
-from cli import CLI_FAILURES, detail, read_file
+from cli import CLI_FAILURES, detail, read_file, report, runner
 
 LABEL = "decompose-lessons"
+USAGE = "python3 decompose_lessons.py [update]"
 LESSONS_PATH = "docs/factory/decompose-lessons.jsonl"
 NO_PAIR = f"{LABEL}: no contrast pair found \u2014 no lesson derived"
 FIELDS = ("id", "importance", "text", "sources", "voted")
@@ -529,3 +531,81 @@ def compare(records, treated_set, floor):
         lines.append(f"{LABEL}: unmeasurable re-plan run(s):"
                      f" {', '.join(unmeasurable)}")
     return lines
+
+
+# Report and front door.
+
+def _hit_runs(records):
+    """How many (signal, run) hits the records hold, with or without a
+    clean run to pair them with."""
+    return sum(1 for field, num, _ in _signals() for rec in records
+               if (_hit_label(rec[field], num) or (0, 0))[1] > 0)
+
+
+def _pair_line(pair_list, records):
+    if not pair_list:
+        return NO_PAIR
+    per = {field: sum(1 for p in pair_list if p["signal"] == field)
+           for field, _, _ in _signals()}
+    return (f"{LABEL}: {len(pair_list)} contrast pair(s) from"
+            f" {_hit_runs(records)} hit run(s): re-plan {per['replan']},"
+            f" design gaps {per['design_gaps']}, review-traced"
+            f" {per['review']}")
+
+
+def render(pair_list, lessons, comparison, records):
+    """The report's lines: the pair count (or the no-pair string), one
+    line per lesson, then the comparison."""
+    lines = [_pair_line(pair_list, records)]
+    lines += [f"{LABEL}: {entry['id']} importance {entry['importance']}"
+              f" \u2014 {entry['text']}"
+              f" (sources: {', '.join(entry['sources'])})"
+              for entry in lessons]
+    return lines + comparison
+
+
+def _status(root, run, measure):
+    """(lines, runs read, problems) for the read-only report."""
+    config, problems = factory_config.load(root)
+    floor, floor_problems = (None, []) if problems else \
+        factory_config.resolve_calibrate_floor(config)
+    lessons, _, file_problems = load(Path(root) / LESSONS_PATH,
+                                     LESSONS_PATH)
+    problems = problems + floor_problems + file_problems
+    if problems:
+        return [], 0, problems
+    result, problems = measure(root, run)
+    if result is None:
+        return [], 0, problems
+    records = result["runs"]
+    treated_set, treated_problems = treated(root, run, records)
+    comparison = compare(records, treated_set, floor)
+    lines = render(pairs(records), lessons, comparison, records)
+    return lines, len(records), problems + treated_problems
+
+
+def main(argv, root=None, run=None, measure=decompose_signals.measure):
+    """`python3 decompose_lessons.py [update]` \u2014 print the pair count, the
+    lessons and the treated-versus-untreated re-plan comparison; `update`
+    folds new runs in and writes the file, the one writer. Exit 0 when
+    nothing failed (an empty pair set and a refused verdict included), 1
+    with problems, 2 on an unknown argument."""
+    if argv not in ([], ["update"]):
+        print(f"{LABEL}: {' '.join(argv)!r} \u2014 unknown argument\n\n"
+              f"  {USAGE}")
+        return 2
+    root = Path(root) if root is not None else decompose_signals.repo_root()
+    run = run or runner("git", timeout=decompose_signals.GIT_TIMEOUT)
+    if argv:
+        lines, problems = update(root, run, measure)
+        prefix = ""
+    else:
+        lines, count, problems = _status(root, run, measure)
+        prefix = f"{count} run(s), " if count else ""
+    for line in lines:
+        print(line)
+    return report(LABEL, problems, prefix=prefix)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -81,7 +81,7 @@ When this milestone is done, `python3 decompose_lessons.py` prints pair count, l
 - [x] **S13 Report and front door tests** — end-to-end cases that drive `main([])` and `main(["update"])` against fixture records, a temp lessons file and an injected runner, asserting stdout and exit codes — size:M
   - Accept: the module holds these cases, each asserting exact strings. `main([])` prints in this order the pair-count line `decompose-lessons: <p> contrast pair(s) from <h> hit run(s): re-plan <a>, design gaps <b>, review-traced <c>`, one `decompose-lessons: <id> importance <n> — <text> (sources: <runs>)` line per lesson, the comparison line, and the `cli.report` summary; with no pair it prints the no-pair string instead of the count line. `main([])` writes nothing and the file is byte-identical afterwards. `main(["update"])` performs the S9 fold and exits 0. Exit codes: 0 with an empty pair set and with a refused verdict, 1 when `measure` or the file reports problems, 2 with usage on any unknown argument. A check that the module source imports no network module. Before `render` and `main` exist the cases fail.
   - Blocked by: S12 Comparison
-- [ ] **S14 Report and front door** — `render`, `main` and the `factory.py` verb — size:M
+- [x] **S14 Report and front door** — `render`, `main` and the `factory.py` verb — size:M
   - Accept: the S13 tests pass and every earlier test still passes. Output goes through `cli.report`, so the summary prefix is computed. `factory.VERBS` gains `"decompose-lessons": ("decompose_lessons", "argv")` and `tests/test_factory_cli.py` passes. `tests/test_dual_membership.py` passes with 52 pairs.
   - Blocked by: S13 Report and front door tests
 
