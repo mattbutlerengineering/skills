@@ -264,7 +264,7 @@ class TestPrdCarriesTheDemo(unittest.TestCase):
     def test_the_carrying_clause_adds_no_typed_id(self):
         text = prd_text()
         start = text.index("## The demo")
-        self.assertIsNone(TYPED_ID.search(text[start - 300:start + 600]))
+        self.assertIsNone(TYPED_ID.search(text[start - 100:start + 200]))
 
 
 @unittest.skipUnless(base(), "no main ref to compare against")

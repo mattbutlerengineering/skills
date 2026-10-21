@@ -71,7 +71,7 @@ When this milestone is done, the PRD skill tells the agent to copy the idea brie
 - [x] **S9 PRD line tests** — add the PRD hand-off and byte-identical cases to `tests/test_idea_ambition_ladder.py` — size:M
   - Accept: the module gains these cases. `skills/prd/SKILL.md` contains `the demo runs as written`, `## The demo` and `idea.md`, and states that an absent or `none` demo writes no criterion. `git diff --name-only main -- skills/launch-demo skills/verify` is empty, asserted through a subprocess call to git, and the case skips cleanly when `main` is absent, as the decompose suite's `main_exists` does. A further case asserts that, against main, the only files changed under `skills/` are under `skills/idea` or `skills/prd`. The PRD-text cases fail before the edit; the byte-identical cases pass immediately and stay as scope pins.
   - Blocked by: S8 Producers sentence
-- [ ] **S10 PRD carrying line** — add the one clause to step 4 of `skills/prd/SKILL.md` — size:S
+- [x] **S10 PRD carrying line** — add the one clause to step 4 of `skills/prd/SKILL.md` — size:S
   - Accept: the S9 tests pass. The clause tells the PRD agent, when `idea.md` has a `## The demo` holding a script, to copy it into a success criterion worded `the demo runs as written` with the script as its checkable body, and to write nothing for an old brief or a `none` demo. The skill names no tool and adds no typed id. `python3 lint.py` prints `lint: 0 problem(s)` after the edit.
   - Blocked by: S9 PRD line tests
 
