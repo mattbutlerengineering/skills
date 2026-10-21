@@ -19,6 +19,16 @@ fetches.
 
 NOT A GATE. An empty pair set and a refused verdict are data.
 """
+import json
+import os
+import tempfile
+from pathlib import Path
+
+from cli import read_file
+
+LABEL = "decompose-lessons"
+LESSONS_PATH = "docs/factory/decompose-lessons.jsonl"
+FIELDS = ("id", "importance", "text", "sources", "voted")
 
 
 def _lesson(lid, text, sources, importance=2, voted=()):
@@ -32,7 +42,7 @@ def _find(lessons, lid):
 
 
 def _refused(op, why):
-    return f"decompose-lessons: {op} refused: {why}"
+    return f"{LABEL}: {op} refused: {why}"
 
 
 def add(lessons, lid, text, sources):
@@ -80,3 +90,102 @@ def downvote(lessons, lid, voter):
     """(new list, problems): importance - 1, `voter` recorded in voted; the
     lesson is removed when that would leave it below 1 (dropped at 0)."""
     return _vote("downvote", -1, lessons, lid, voter)
+
+
+# The file: line 1 is {"seen": [...]}, every other line one lesson, sorted
+# by id (ADR-0113). One validator serves both directions, so a file that
+# loads is a file that dumps.
+
+def _field_problem(entry):
+    """The first reason one lesson object is malformed, or None."""
+    for field in FIELDS:
+        value = entry.get(field)
+        text_ok = isinstance(value, str) and (field != "id" or value)
+        list_ok = isinstance(value, list) and all(
+            isinstance(item, str) for item in value)
+        number_ok = isinstance(value, int) and not isinstance(value, bool)
+        ok = {"id": text_ok, "text": text_ok, "importance": number_ok,
+              "sources": list_ok, "voted": list_ok}[field]
+        if not ok:
+            return f"missing or malformed field {field}"
+    if not entry["sources"]:
+        return "cites no source run"
+    if entry["importance"] < 1:
+        return f"importance {entry['importance']} is below 1"
+    return None
+
+
+def _lesson_problems(lessons, shown):
+    """Label-prefixed problems for lessons in file order (line 2 on)."""
+    problems, ids = [], set()
+    for n, entry in enumerate(lessons, start=2):
+        why = _field_problem(entry)
+        if why is None and entry["id"] in ids:
+            why = f"duplicate id {entry['id']}"
+        if why:
+            problems.append(f"{LABEL}: {shown} line {n}: {why}")
+        ids.add(entry.get("id"))
+    return problems
+
+
+def _parse(text, shown):
+    """(lessons, seen, problems) for the file text."""
+    lessons, seen, problems = [], [], []
+    for n, line in enumerate(text.splitlines(), start=1):
+        try:
+            value = json.loads(line)
+        except ValueError:
+            return [], [], [f"{LABEL}: {shown} line {n}: not valid JSON"]
+        if not isinstance(value, dict):
+            return [], [], [f"{LABEL}: {shown} line {n}: not a JSON object"]
+        if n == 1:
+            if not isinstance(value.get("seen"), list):
+                return [], [], [f"{LABEL}: {shown} line 1: expected the"
+                                " seen header"]
+            seen = value["seen"]
+        else:
+            lessons.append(value)
+    problems = _lesson_problems(lessons, shown)
+    return ([], [], problems) if problems else (lessons, seen, [])
+
+
+def load(path, shown=None):
+    """(lessons, seen, problems) from the lessons file. A missing or empty
+    file is no lessons and no seen; any problem returns nothing else."""
+    shown = shown or Path(path).name
+    text, problem = read_file(path, shown, str)
+    if problem:
+        return [], [], [f"{LABEL}: {problem}"]
+    return _parse(text, shown) if text else ([], [], [])
+
+
+def serialize(lessons, seen):
+    """The file text: the seen header, then lessons sorted by id."""
+    rows = [{"seen": sorted(seen)}, *sorted(lessons, key=lambda e: e["id"])]
+    return "".join(json.dumps(row, ensure_ascii=False) + "\n"
+                   for row in rows)
+
+
+def dump(path, lessons, seen, shown=None):
+    """problems. Writes the whole file through a temp file and os.replace,
+    so a failure leaves the original untouched. Invalid lessons write
+    nothing; no lessons and no seen creates no file."""
+    shown = shown or Path(path).name
+    problems = _lesson_problems(sorted(lessons, key=lambda e: e["id"]),
+                                shown)
+    if problems or not (lessons or seen):
+        return problems
+    path = Path(path)
+    temp = None
+    try:
+        with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", dir=path.parent, delete=False,
+                prefix=f".{path.name}.") as handle:
+            temp = handle.name
+            handle.write(serialize(lessons, seen))
+        os.replace(temp, path)
+    except OSError as err:
+        if temp:
+            Path(temp).unlink(missing_ok=True)
+        return [f"{LABEL}: cannot write {shown}: {err}"]
+    return []

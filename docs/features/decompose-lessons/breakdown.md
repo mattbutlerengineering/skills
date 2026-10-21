@@ -36,7 +36,7 @@ on fixture lessons alone, with no git and no run records.
 - [x] **S3 File tests** — cases for `load` and `dump` over temp files — size:M
   - Accept: the module holds these cases. A file with a `{"seen": [...]}` first line and lesson lines round-trips byte-identically through `load` then `dump`, lessons sorted by id and `seen` sorted. A malformed line, a lesson with no sources, a duplicate id and an importance below 1 each give a problem naming the line number and nothing is written. A missing file loads as no lessons and no `seen`. `dump` writes the whole file through a temp file and `os.replace`, asserted by a failing replace leaving the original file byte-identical. A write whose list is empty and whose `seen` is empty creates no file. Before `load` and `dump` exist the cases fail.
   - Blocked by: S2 Lesson operations
-- [ ] **S4 File** — `load` and `dump` as architecture.md's File describes — size:S
+- [x] **S4 File** — `load` and `dump` as architecture.md's File describes — size:S
   - Accept: the S3 tests pass and every earlier test still passes. The file is read through `cli.read_file`, with no retyped guarded-read logic. `tests/test_dual_membership.py`'s pin gains `(decompose_lessons, cli)`, its pair-count comment reads 51, and the test passes.
   - Blocked by: S3 File tests
 
