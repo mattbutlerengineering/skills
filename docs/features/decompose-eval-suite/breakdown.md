@@ -93,7 +93,7 @@ When this milestone is done, `plugin-evals/decompose/csv-export-cut/` is a well-
 
 ## Milestone 5: the docs name the tool and the whole change verifies
 
-- [ ] **S17 Docs** — the CLAUDE.md "on demand, free" bullet beside `decompose_signals.py` — size:S
+- [x] **S17 Docs** — the CLAUDE.md "on demand, free" bullet beside `decompose_signals.py` — size:S
   - Accept: CLAUDE.md names `python3 decompose_grade.py` as free, offline, outside every gate, making no model or network call, taking a produced breakdown and its architecture, and says it is calibrated to fixture-spelled breakdowns and is not a retroactive audit of shipped runs. It mentions the harness suite as authored and never run, with no LEDGER change. It contains no work-order token or sample id that detectors C and I would scan, and `python3 kb.py drift` still prints `drift: 0 problem(s)`.
   - Blocked by: S16 Suite case
 - [ ] **S18 Whole-repo verify** — the four CI checks and the scope checks over the finished change — size:S

@@ -80,6 +80,16 @@ pre-pass, deliberately **not** a gate:
   `update` is the one writer and the Owner runs it. No command takes
   lesson text from a person, and the tool ships no lesson.
   <!-- drift-ignore: docs/factory/decompose-lessons.jsonl -->
+- `python3 decompose_grade.py <breakdown.md> <architecture.md> [<prd.md>]` —
+  scores a produced Decompose breakdown against the architecture it was
+  drafted from and prints one line per defect (a component no item names, a
+  dangling `Blocked by`, an uncheckable `Accept` line, an item spanning more
+  than three components), exit 0 clean, 1 with defects, 2 on bad input
+  (ADR-0114). Free and outside every gate, making no model or network call,
+  like the two above. It is calibrated to fixture-spelled breakdowns and is
+  not a retroactive audit of shipped runs. Its harness counterpart,
+  `plugin-evals/decompose/`, is authored and has never been run; there is no
+  LEDGER change.
 
 ## Hard conventions
 
