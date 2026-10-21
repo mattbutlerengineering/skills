@@ -29,7 +29,7 @@ tests item that pins it, and that tests item is run first and must fail
 
 When this milestone is done, `skills/idea/SKILL.md` carries the ambition-ladder bullet in step 4 between the evidence and solution-hunch questions, with its detail block, every pinned phrase and the reconciling Rules sentence, and `lint.py` is clean.
 
-- [ ] **S1 Ladder text tests** — create `tests/test_idea_ambition_ladder.py` with the skill-text cases — size:M
+- [x] **S1 Ladder text tests** — create `tests/test_idea_ambition_ladder.py` with the skill-text cases — size:M
   - Accept: the module reads `skills/idea/SKILL.md` through a `skill_text()` helper that normalises whitespace, and holds these cases. Every phrase in architecture.md's Ladder step pin table is asserted with `assertIn`: the bullet label, the block label, `Showstopper (recommended)`, the anchor, the pick-recorded sentence, the Moonshot sentence, the four test phrases, the spike phrase, both demotion phrases, the three prompts, the tests-written phrase, the scaled-down phrase and the rules sentence. The order pins are asserted with `assertLess` on indexes: `What evidence exists` before `**Ambition ladder.**` before `What's the rough shape of a solution?`; the bullet label before the block label; the four tests in listed order; `**Write the artifact.**` after the block. `text.count` shows each of `Solid`, `Showstopper` and `Moonshot` appears at least twice. `re.search(r"\b(PRD|ADR|WO)-\d{4}\b", text)` is `None`. Run before the edit, the module fails.
   - Blocked by: —
 - [ ] **S2 Ladder step** — add the `**Ambition ladder.**` bullet to Idea's step 4, the `**The ambition ladder.**` block and the Rules sentence — size:M
