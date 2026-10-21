@@ -27,7 +27,7 @@ texts or the cut files (architecture.md, Stack). Nothing here invokes
 
 When this milestone is done, `plugin-evals/decompose/fixtures/csv-export/cuts/` holds a good breakdown and four bad ones, each bad cut differing from the good one by at most two lines, none carrying a template slot or a typed id, and gates.py is clean over them.
 
-- [ ] **S1 Cut fixture tests** — cases over the five cut files, no grader yet — size:M
+- [x] **S1 Cut fixture tests** — cases over the five cut files, no grader yet — size:M
   - Accept: the module holds these cases. The five files `good.md`, `bad-coverage.md`, `bad-dangling.md`, `bad-accept.md` and `bad-sized.md` exist under `plugin-evals/decompose/fixtures/csv-export/cuts/`. Each bad cut differs from `good.md` by at most 2 lines, asserted with a line diff. `good.md` holds none of `TEMPLATE.md`'s `<...>` slots outside backticks, asserted against the slots read from the installed Decompose skill template in this repo's `skills/decompose/TEMPLATE.md`. No cut contains a typed-id token (`PRD-`, `WO-`, `ADR-` followed by digits) or a path under `docs/`. Each cut starts with protocol frontmatter naming the decompose stage. Before the files exist the cases fail on a missing file.
   - Blocked by: —
 - [ ] **S2 Cuts** — author `good.md` and the four bad cuts against the existing csv-export fixture architecture — size:M
