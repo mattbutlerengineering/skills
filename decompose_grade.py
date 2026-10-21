@@ -34,6 +34,7 @@ MIN_NAME = 4
 # sitting (measured in architecture.md: 1 of 205 real rows exceeds 3).
 MAX_SPAN = 3
 _BLOCKED_BY = re.compile(r"blocked by:[ \t]*([^(\n]*)", re.IGNORECASE)
+_BOLD = re.compile(r"\*\*(.*?)\*\*")
 _NO_EDGE = {"", "—", "-", "none"}
 _ACCEPT = re.compile(r"^\s*[-*+]\s+accept:[ \t]*(.*)$", re.IGNORECASE)
 _BULLET = re.compile(r"^\s*[-*+]\s")
@@ -114,14 +115,27 @@ def _fraction(good, total):
     return good / total if total else 1.0
 
 
-def blockers(block):
+def blockers(block, labels=()):
     """The elements of a block's Blocked by clause (sub-bullet or inline),
-    split on `;` and `,`; an empty, dash or `none` element is no edge."""
+    split on `;` and `,`; an empty, dash or `none` element is no edge. A
+    `;` segment that is wholly some item's bold label (`labels`) stays one
+    element, so a label holding a comma is not cut in two."""
     clause = _BLOCKED_BY.search(block)
     if clause is None:
         return []
-    parts = (p.strip(" .`*") for p in re.split(r"[;,]", clause.group(1)))
+    parts = []
+    for segment in clause.group(1).split(";"):
+        whole = segment.strip(" .`*")
+        parts.extend([whole] if "," in whole and any(
+            whole in label for label in labels)
+            else (p.strip(" .`*") for p in segment.split(",")))
     return [p for p in parts if p.lower() not in _NO_EDGE]
+
+
+def _label(item):
+    """The bold span of an item's row line, or ''."""
+    found = _BOLD.search(item["block"].splitlines()[0])
+    return found.group(1) if found else ""
 
 
 def _resolves(element, key):
@@ -131,7 +145,9 @@ def _resolves(element, key):
 def check_dependencies(items):
     """(fraction, feedback): resolved edges over edges. An element
     resolves when it starts with another item's key."""
-    edges = [(i["key"], e) for i in items for e in blockers(i["block"])]
+    labels = [_label(i) for i in items if "," in _label(i)]
+    edges = [(i["key"], e) for i in items
+             for e in blockers(i["block"], labels)]
     dangling = [(key, e) for key, e in edges
                 if not any(_resolves(e, other["key"]) for other in items
                            if other["key"] != key)]

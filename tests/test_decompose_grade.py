@@ -284,6 +284,19 @@ class TestDependencyCheck(unittest.TestCase):
             ' which names no item'])
         self.assertEqual(result["parts"]["dependencies"], round(2 / 3, 3))
 
+    def test_a_blocker_label_holding_a_comma_is_one_element(self):
+        held = row("A1").replace("A1 Thing", "A1 Join, select and order")
+        text = breakdown(held, row("A2", blocked="A1 Join, select and order"))
+        self.assertEqual(dg.grade(text, ARCH)["feedback"], [])
+
+    def test_a_comma_continuation_that_is_not_the_title_is_still_dangling(self):
+        held = row("A1").replace("A1 Thing", "A1 Join, select and order")
+        text = breakdown(held, row("A2", blocked="A1 Join, A9"))
+        self.assertEqual(
+            dg.grade(text, ARCH)["feedback"],
+            ['dangling-blocked-by: A2 is blocked by "A9",'
+             ' which names no item'])
+
     def test_dash_none_and_absent_clauses_make_no_edge(self):
         for blocked in ("—", "-", "none", "None", None):
             text = breakdown(row("A1", blocked=blocked))
