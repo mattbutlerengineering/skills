@@ -2,7 +2,8 @@
 stage: ship
 run: feature:idea-ambition-ladder
 date: 2026-10-20
-outcome: prepared
+outcome: released
+released-at: 2026-10-21
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1052
 assumptions:
   - "Release authorization is the brief's default, prepare and stop. Ship pushes the branch, opens one PR and stops. It does not merge, tag, bump the version or delete a branch, and ran no `claude plugin eval` or model call."
