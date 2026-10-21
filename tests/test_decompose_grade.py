@@ -398,6 +398,16 @@ class TestAcceptCheck(unittest.TestCase):
         self.assertEqual(self.grade_accept(accept)["feedback"],
                          [untestable("A1", "unanchored")])
 
+    def test_three_words_beside_an_anchor_is_the_floor(self):
+        self.assertEqual(self.grade_accept("`POST /alpha` rejects it")
+                         ["feedback"], [untestable("A1", "unanchored")])
+        self.assertEqual(self.grade_accept("`POST /alpha` rejects it now")
+                         ["feedback"], [])
+
+    def test_an_accept_line_continues_onto_its_next_unbulleted_lines(self):
+        accept = "the caller sees a stored record\n  from `POST /alpha` always"
+        self.assertEqual(self.grade_accept(accept)["feedback"], [])
+
     def test_each_anchor_kind_is_accepted(self):
         for accept in (
                 "Alpha Service rejects a malformed request cleanly",
