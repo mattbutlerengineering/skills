@@ -15,6 +15,7 @@ The harness suite under plugin-evals/decompose/ is a separate scorer; the
 two are never compared here (ADR-0114).
 """
 import re
+import sys
 
 from decompose_signals import item_keys
 from knowledge_plane import breakdown_rows
@@ -259,3 +260,51 @@ def grade(breakdown_text, architecture_text, prd_text=""):
     return {"score": combine(parts),
             "parts": {name: round(v, 3) for name, v in parts.items()},
             "feedback": feedback}
+
+
+USAGE = (f"{LABEL}: usage: python3 decompose_grade.py <breakdown.md>"
+         " <architecture.md> [<prd.md>]")
+
+
+def _read_all(paths):
+    """([texts], problem): each path read through cli.read_file; the first
+    failure wins and nothing is scored."""
+    # lean: cli is imported here, not at module level, so the grading core
+    # stays free of it (S4's AST check); upgrade to a top-level import
+    # only if the core ever needs cli itself.
+    from cli import read_file
+    texts = []
+    for path in paths:
+        text, problem = read_file(path, path, str)
+        if problem is None and text is None:
+            problem = f"cannot read {path}: no such file"
+        if problem:
+            return None, f"{LABEL}: {problem}"
+        texts.append(text)
+    return texts, None
+
+
+def main(argv):
+    """`python3 decompose_grade.py <breakdown.md> <architecture.md>
+    [<prd.md>]` — print the summary line and one line per defect. Exit 0
+    with no defect, 1 with one or more, 2 on usage, an unreadable input or
+    an architecture with no components. Writes nothing."""
+    from cli import report
+    if len(argv) not in (2, 3):
+        print(USAGE)
+        return 2
+    texts, problem = _read_all(argv)
+    if problem:
+        print(problem)
+        return 2
+    try:
+        record = grade(texts[0], texts[1], texts[2] if len(texts) == 3 else "")
+    except ValueError as err:
+        print(f"{LABEL}: {argv[1]} {err}")
+        return 2
+    print(summary(record))
+    return report(LABEL, record["feedback"])
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

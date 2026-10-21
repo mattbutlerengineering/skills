@@ -110,6 +110,7 @@ PARTS = ("coverage", "dependencies", "accept", "sizing")
 BANNED_IMPORTS = {"socket", "urllib", "http", "subprocess", "anthropic",
                   "openai", "requests", "cli"}
 ALLOWED_LOCAL = {"knowledge_plane", "decompose_signals"}
+FRONT_DOOR = {"main", "_read_all"}
 
 
 def imported_names(nodes):
@@ -195,9 +196,11 @@ class TestGradeImports(unittest.TestCase):
         self.assertEqual(names & (BANNED_IMPORTS - {"cli"}), set())
 
     def test_the_core_does_not_import_cli(self):
-        # cli is reachable only from main (the front door, S14).
+        # cli is reachable only from the front door (S14): main and the
+        # file-reading helper it calls.
         core = [n for n in self.tree.body
-                if not (isinstance(n, ast.FunctionDef) and n.name == "main")]
+                if not (isinstance(n, ast.FunctionDef)
+                        and n.name in FRONT_DOOR)]
         self.assertNotIn("cli", imported_names(ast.walk(ast.Module(
             body=core, type_ignores=[]))))
 

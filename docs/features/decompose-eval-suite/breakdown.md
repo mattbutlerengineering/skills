@@ -76,7 +76,7 @@ When this milestone is done, `python3 decompose_grade.py <breakdown.md> <archite
 - [x] **S13 Front door tests** — cases for `main` over temp files — size:M
   - Accept: the module holds these cases, each asserting exact output lines and exit codes. A good cut prints `decompose-grade: score <s> (coverage <c>, dependencies <d>, accept <a>, sizing <z>)` with three-place figures and exits 0. A bad cut prints the summary then its defect line and exits 1. A wrong argument count, a missing file or an unreadable file exits 2 and scores nothing, with the guarded-read message. An architecture with no components prints `decompose-grade: <path> holds no components` and exits 2, never a vacuous 1.0. The PRD argument is optional and only widens the anchor vocabulary. No file is written. `tests/test_factory_cli.py` is run and fails on the missing `decompose-grade` verb. Before `main` exists the cases fail.
   - Blocked by: S12 Good-versus-bad table
-- [ ] **S14 Front door** — `main`, the `factory.py` VERBS row `decompose-grade` and the cli import — size:S
+- [x] **S14 Front door** — `main`, the `factory.py` VERBS row `decompose-grade` and the cli import — size:S
   - Accept: the S13 tests pass and every earlier test still passes. Files are read through `cli.read_file` and output goes through `cli.report`. `factory.py`'s VERBS table gains `"decompose-grade": ("decompose_grade", "argv")` beside the decompose-signals row and `tests/test_factory_cli.py` passes. `tests/test_dual_membership.py`'s pin gains `(decompose_grade, cli)`, its pair-count comment reads 54, and the test passes.
   - Blocked by: S13 Front door tests
 
@@ -107,3 +107,4 @@ none.
 ## Notes
 
 - 2026-10-20 S3: with the five cuts present, `python3 gates.py` printed `gates: 0 problem(s)` and `python3 lint.py` printed `lint: 0 problem(s) across 34 skills`; no detector fired, no cut changed.
+- 2026-10-20 S14: S4's no-cli check is read as module-level and core: `cli` is imported only inside the front door (`main` and its file-reading helper `_read_all`), because S14 requires the cli import and S4 forbids it in the core. The S4 AST test names those two functions as the front door; the dual-membership pin sees the function-level import (it walks every depth).
