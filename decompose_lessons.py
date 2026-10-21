@@ -21,6 +21,7 @@ NOT A GATE. An empty pair set and a refused verdict are data.
 """
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -102,6 +103,62 @@ def downvote(lessons, lid, voter):
 # by id (ADR-0113). One validator serves both directions, so a file that
 # loads is a file that dumps.
 
+# The re-plan detail ties break in this order.
+REPLAN_DETAILS = ("added", "dropped", "split", "merged")
+REPLAN_PHRASES = {"added": "adding rows", "dropped": "dropping rows",
+                  "split": "splitting rows", "merged": "merging rows"}
+
+
+# The file is an untrusted-input boundary: the Decompose skill reads it
+# raw at draft time, so a line must be exactly what the tool derives, a
+# fixed template over run names and numbers, never free text.
+
+REF = r"(?:(?:feature|maintenance):[A-Za-z0-9._-]+|product)"
+KINDS = ("feature", "maintenance", "product")
+DETAILS = {"replan": REPLAN_DETAILS, "design_gaps": ("routed",),
+           "review": ("named",)}
+
+
+def _figure_pattern(field):
+    """Regex (name, count, items or None, label) of one text figure."""
+    name, label = r"([A-Za-z0-9._-]+)", r"\((observed|inferred)\)"
+    if field == "design_gaps":
+        return rf"{name} (\d+) route\(s\) {label}"
+    unit = "items" if field == "replan" else "findings"
+    return rf"{name} (\d+) of (\d+) {unit} {label}"
+
+
+def _ref(run_kind, name):
+    return name if run_kind == "product" else f"{run_kind}:{name}"
+
+
+def _template_problem(entry):
+    """Why a lesson is not a derived one (id, refs, text), or None."""
+    parts = entry["id"].split("/")
+    if len(parts) != 3 or parts[0] not in DETAILS \
+            or parts[1] not in KINDS or parts[2] not in DETAILS[parts[0]]:
+        return "id is not a derived lesson id"
+    if not all(re.fullmatch(REF, ref)
+               for ref in entry["sources"] + entry["voted"]):
+        return "a source or voter is not a run ref"
+    field, run_kind, detail = parts
+    figure = _figure_pattern(field)
+    found = re.fullmatch(
+        re.escape(_lead(field, run_kind, detail)) + f": {figure}, {figure}",
+        entry["text"])
+    if not found:
+        return "text is not the derived template"
+    groups = found.groups()
+    half = len(groups) // 2
+    (h_name, h_count, h_label), (c_name, c_count, c_label) = (
+        (g[0], g[1], g[-1]) for g in (groups[:half], groups[half:]))
+    if not (int(h_count) > 0 and int(c_count) == 0 and h_label == c_label
+            and _ref(run_kind, h_name) in entry["sources"]
+            and _ref(run_kind, c_name) in entry["sources"]):
+        return "text does not match its sources"
+    return None
+
+
 def _field_problem(entry):
     """The first reason one lesson object is malformed, or None."""
     for field in FIELDS:
@@ -118,7 +175,7 @@ def _field_problem(entry):
         return "cites no source run"
     if entry["importance"] < 1:
         return f"importance {entry['importance']} is below 1"
-    return None
+    return _template_problem(entry)
 
 
 def _lesson_problems(lessons, shown):
@@ -204,12 +261,6 @@ def dump(path, lessons, seen, shown=None):
 # miss or a retro note has no input to reach. Records are as measure
 # returns them.
 
-# The re-plan detail ties break in this order.
-REPLAN_DETAILS = ("added", "dropped", "split", "merged")
-REPLAN_PHRASES = {"added": "adding rows", "dropped": "dropping rows",
-                  "split": "splitting rows", "merged": "merging rows"}
-
-
 def kind(ref):
     """A run ref's kind, its prefix: feature, maintenance or product."""
     return ref.split(":")[0]
@@ -254,18 +305,21 @@ def _figure(ref, value, label, num, den):
     return f"{_name(ref)} {count} of {value.get(den, 0)} {unit} ({label})"
 
 
+def _lead(field, run_kind, detail):
+    """The fixed opening of a lesson's text, per signal."""
+    if field == "replan":
+        return (f"{run_kind} runs that re-planned mostly by"
+                f" {REPLAN_PHRASES[detail]}")
+    if field == "design_gaps":
+        return f"{run_kind} runs routed back to Architect"
+    return f"{run_kind} runs whose review findings name an item"
+
+
 def _text(field, run_kind, detail, hit, clean, num, den):
     (h_ref, h_val, h_label), (c_ref, c_val, c_label) = hit, clean
     contrast = (f"{_figure(h_ref, h_val, h_label, num, den)},"
                 f" {_figure(c_ref, c_val, c_label, num, den)}")
-    if field == "replan":
-        lead = (f"{run_kind} runs that re-planned mostly by"
-                f" {REPLAN_PHRASES[detail]}")
-    elif field == "design_gaps":
-        lead = f"{run_kind} runs routed back to Architect"
-    else:
-        lead = f"{run_kind} runs whose review findings name an item"
-    return f"{lead}: {contrast}"
+    return f"{_lead(field, run_kind, detail)}: {contrast}"
 
 
 def pairs(records, skip=()):
