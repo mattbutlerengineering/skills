@@ -78,6 +78,11 @@ the user's head at this stage, so this skill interviews — it does not draft.
    it, say so and ask for the Showstopper or Solid pick. If the user
    declines the ladder, record Solid as chosen and note that they declined.
 
+   Prompts for the demo and the tests, one at a time:
+   - What would you show first in a demo?
+   - What does the user do today that they would never have to do again?
+   - What does the product already know that it is not using?
+
    Apply four tests to the Showstopper so "wow" is not left to taste. Each
    is answered in writing, pass or fail with one clause of evidence:
 
@@ -105,11 +110,6 @@ the user's head at this stage, so this skill interviews — it does not draft.
    the same commit as idea.md. Write well-formed lines only: a seed that
    would fail the grammar is not written. If the file cannot be written, say
    so and put the seeds in the Not taken line of the brief instead.
-
-   Prompts for the demo and the tests, one at a time:
-   - What would you show first in a demo?
-   - What does the user do today that they would never have to do again?
-   - What does the product already know that it is not using?
 
    For a feature run, ask the ladder as one question: three one-line rungs
    built from the user's own sentence, Showstopper recommended, pick or

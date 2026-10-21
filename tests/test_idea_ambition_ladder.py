@@ -84,6 +84,11 @@ class TestLadderOrder(unittest.TestCase):
         indexes = [text.index(t) for t in TESTS]
         self.assertEqual(indexes, sorted(indexes))
 
+    def test_the_prompts_come_before_the_tests_they_feed(self):
+        text = skill_text()
+        self.assertLess(text.index(PROMPTS[0]), text.index(TESTS[0]))
+        self.assertLess(text.index(PROMPTS[2]), text.index(TESTS[0]))
+
     def test_the_block_precedes_the_write_step(self):
         text = skill_text()
         self.assertLess(text.index("**The ambition ladder.**"),
