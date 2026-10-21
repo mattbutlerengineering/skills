@@ -504,5 +504,168 @@ class TestVotes(unittest.TestCase):
                           " fatal: bad"])
 
 
+GAP = {"label": "observed", "routes": 1, "source": "subjects"}
+NO_GAP = {"label": "observed", "routes": 0, "source": "subjects"}
+HIT = record("feature:h", hit_replan(), GAP)
+CLEAN = record("feature:c", clean_replan(), NO_GAP)
+ROUTED_TEXT = ("feature runs routed back to Architect: h 1 route(s)"
+               " (observed), c 0 route(s) (observed)")
+
+
+class TestFold(unittest.TestCase):
+    def test_votes_come_first_then_adds_then_the_drop_stays_dropped(self):
+        existing = [lesson("replan/feature/added", 1, ("feature:old",))]
+        ballots = [("downvote", "replan/feature/added", "feature:h")]
+        got, seen, lines, problems = dl.fold(existing, [], [HIT, CLEAN],
+                                             ballots)
+        self.assertEqual(problems, [])
+        self.assertEqual(lines, [
+            "decompose-lessons: DOWNVOTE replan/feature/added",
+            "decompose-lessons: DROP replan/feature/added",
+            "decompose-lessons: ADD design_gaps/feature/routed"])
+        self.assertEqual(got, [lesson("design_gaps/feature/routed", 2,
+                                      ("feature:c", "feature:h"),
+                                      text=ROUTED_TEXT)])
+        self.assertEqual(seen, ["feature:c", "feature:h"])
+        again, seen2, lines2, problems2 = dl.fold(got, seen, [HIT, CLEAN],
+                                                  [])
+        self.assertEqual((again, seen2, lines2, problems2),
+                         (got, seen, [], []))
+
+    def test_an_upvote_prints_one_line_and_moves_the_count(self):
+        existing = [lesson("replan/feature/added")]
+        got, _, lines, _ = dl.fold(
+            existing, ["feature:c", "feature:h"], [HIT, CLEAN],
+            [("upvote", "replan/feature/added", "feature:v")])
+        self.assertEqual(lines,
+                         ["decompose-lessons: UPVOTE replan/feature/added"])
+        self.assertEqual(got[0]["importance"], 3)
+
+    def test_a_new_hit_run_on_a_known_id_edits_its_sources(self):
+        existing = [lesson("replan/feature/added", 3,
+                           ("feature:a", "feature:b"), ("feature:v",))]
+        records = [record("feature:b", clean_replan()),
+                   record("feature:e", replan(1, 6, "observed", added=1))]
+        got, _, lines, problems = dl.fold(existing, ["feature:a"], records,
+                                          [])
+        self.assertEqual(problems, [])
+        self.assertEqual(lines,
+                         ["decompose-lessons: EDIT replan/feature/added"])
+        self.assertEqual(got[0]["importance"], 3)
+        self.assertEqual(got[0]["voted"], ["feature:v"])
+        self.assertEqual(got[0]["sources"],
+                         ["feature:a", "feature:b", "feature:e"])
+
+    def test_a_lesson_operation_problem_abandons_the_whole_fold(self):
+        existing = [lesson()]
+        got, seen, lines, problems = dl.fold(
+            existing, ["feature:s"], [HIT, CLEAN],
+            [("upvote", "replan/feature/added", "feature:v"),
+             ("upvote", "no/such/id", "feature:v")])
+        self.assertEqual((got, seen, lines), (existing, ["feature:s"], []))
+        self.assertEqual(
+            problems,
+            ["decompose-lessons: upvote refused: no lesson no/such/id"])
+
+    def test_every_complete_run_is_folded_into_seen(self):
+        unfinished = {**record("feature:p", clean_replan()),
+                      "implement": UNMEASURABLE}
+        _, seen, _, _ = dl.fold([], ["feature:z"],
+                                [CLEAN, unfinished], [])
+        self.assertEqual(seen, ["feature:c", "feature:z"])
+
+
+class TestUpdate(TempFile):
+    def setUp(self):
+        super().setUp()
+        self.file = self.dir / dl.LESSONS_PATH
+        self.file.parent.mkdir(parents=True)
+
+    def update(self, records, git=None, problems=()):
+        def measure(root, run):
+            return {"runs": records}, list(problems)
+        return dl.update(self.dir, git or GitFake(added=()), measure)
+
+    def test_the_first_update_writes_the_derived_file(self):
+        lines, problems = self.update([HIT, CLEAN])
+        self.assertEqual(problems, [])
+        self.assertEqual(lines, [
+            "decompose-lessons: ADD design_gaps/feature/routed",
+            f"decompose-lessons: wrote {dl.LESSONS_PATH}"])
+        self.assertEqual(
+            self.file.read_text(encoding="utf-8"),
+            jsonl(["feature:c", "feature:h"],
+                  lesson("design_gaps/feature/routed", 2,
+                         ("feature:c", "feature:h"), text=ROUTED_TEXT)))
+
+    def test_a_second_update_from_the_same_runs_is_unchanged(self):
+        self.update([HIT, CLEAN])
+        before = self.file.read_bytes()
+        lines, problems = self.update([HIT, CLEAN])
+        self.assertEqual((lines, problems),
+                         (["decompose-lessons: unchanged"], []))
+        self.assertEqual(self.file.read_bytes(), before)
+
+    def test_a_treated_clean_run_votes_through_update(self):
+        self.update([HIT, CLEAN])
+        voter_run = record("feature:v", clean_replan(), NO_GAP,
+                           sha=TREATED)
+        lines, problems = self.update(
+            [HIT, CLEAN, voter_run],
+            GitFake(descended={TREATED}))
+        self.assertEqual(problems, [])
+        self.assertEqual(lines, [
+            "decompose-lessons: UPVOTE design_gaps/feature/routed",
+            f"decompose-lessons: wrote {dl.LESSONS_PATH}"])
+        lessons, seen, _ = dl.load(self.file)
+        self.assertEqual(lessons[0]["importance"], 3)
+        self.assertEqual(lessons[0]["voted"], ["feature:v"])
+        self.assertIn("feature:v", seen)
+
+    def test_no_pair_and_no_file_writes_nothing(self):
+        lines, problems = self.update([CLEAN])
+        self.assertEqual(problems, [])
+        self.assertEqual(lines, [dl.NO_PAIR, "decompose-lessons: unchanged"])
+        self.assertFalse(self.file.exists())
+
+    def test_a_malformed_existing_file_is_untouched_and_names_its_line(self):
+        self.file.write_text('{"seen": []}\n{oops\n')
+        before = self.file.read_bytes()
+        lines, problems = self.update([HIT, CLEAN])
+        self.assertEqual(lines, [])
+        self.assertEqual(problems, [
+            f"decompose-lessons: {dl.LESSONS_PATH} line 2: not valid JSON"])
+        self.assertEqual(self.file.read_bytes(), before)
+
+    def test_a_measurement_with_problems_writes_nothing(self):
+        lines, problems = self.update([HIT, CLEAN],
+                                      problems=["decompose-signals: boom"])
+        self.assertEqual((lines, problems),
+                         ([], ["decompose-signals: boom"]))
+        self.assertFalse(self.file.exists())
+
+    def test_a_fold_problem_leaves_the_file_byte_identical(self):
+        self.update([HIT, CLEAN])
+        before = self.file.read_bytes()
+        with mock.patch.object(dl, "votes", return_value=(
+                [("upvote", "no/such/id", "feature:v")], [])):
+            lines, problems = self.update([HIT, CLEAN])
+        self.assertEqual(lines, [])
+        self.assertEqual(
+            problems,
+            ["decompose-lessons: upvote refused: no lesson no/such/id"])
+        self.assertEqual(self.file.read_bytes(), before)
+
+
+class TestNoShippedLesson(unittest.TestCase):
+    def test_the_repo_holds_no_hand_written_seed(self):
+        """The only way a lessons file exists is `update`, so one that
+        exists must load clean with every lesson citing a source run."""
+        path = Path(dl.__file__).resolve().parent / dl.LESSONS_PATH
+        lessons, _, problems = dl.load(path)
+        self.assertEqual(problems, [])
+        self.assertTrue(all(entry["sources"] for entry in lessons))
+
+
 if __name__ == "__main__":
     unittest.main()
