@@ -226,6 +226,26 @@ class TestFile(TempFile):
                     " alpha 0 of 8 items (observed), beta 2 of 8 items"
                     " (observed)")))],
                 "lessons.jsonl line 2: text does not match its sources"),
+            "importance true": (
+                [header, json.dumps({**lesson(), "importance": True})],
+                "lessons.jsonl line 2: missing or malformed field"
+                " importance"),
+            "both runs hit": (
+                [header, json.dumps(lesson(text=ALPHA_TEXT.replace(
+                    "beta 0 of 8", "beta 1 of 8")))],
+                "lessons.jsonl line 2: text does not match its sources"),
+            "neither run hit": (
+                [header, json.dumps(lesson(text=ALPHA_TEXT.replace(
+                    "alpha 2 of 8", "alpha 0 of 8")))],
+                "lessons.jsonl line 2: text does not match its sources"),
+            "labels differ": (
+                [header, json.dumps(lesson(text=ALPHA_TEXT.replace(
+                    "beta 0 of 8 items (observed)",
+                    "beta 0 of 8 items (inferred)")))],
+                "lessons.jsonl line 2: text does not match its sources"),
+            "hit run not a source": (
+                [header, json.dumps(lesson(sources=(SRC_B, "feature:z")))],
+                "lessons.jsonl line 2: text does not match its sources"),
             "id not derived": (
                 [header, json.dumps(lesson("a/feature/x"))],
                 "lessons.jsonl line 2: id is not a derived lesson id"),
@@ -372,6 +392,11 @@ class TestPairs(unittest.TestCase):
                     "label": "observed", "findings": 1, "named": 0})])],
             ["feature:c"])
 
+    def test_a_count_without_a_label_is_not_measured(self):
+        hit = record("feature:a", replan(2, 8, "observed", added=2))
+        bare = record("feature:b", {"count": 0, "items_at_d": 8})
+        self.assertEqual(dl.pairs([hit, bare]), [])
+
     def test_the_detail_ties_break_in_added_dropped_split_merged_order(self):
         tie = [record("feature:x", replan(4, 9, "observed", dropped=2,
                                           split=2)),
@@ -481,6 +506,10 @@ class TestTreated(unittest.TestCase):
         git = GitFake(descended={TREATED})
         self.assertEqual(dl.treated(Path("/repo"), git, [gone]),
                          (set(), []))
+        # No git argument may be None: the real runner would crash on it.
+        for call in git.calls:
+            self.assertTrue(all(isinstance(arg, str) for arg in call), call)
+        self.assertNotIn("merge-base", {call[0] for call in git.calls})
 
     def test_a_runner_failure_or_timeout_is_a_problem(self):
         for verb, err, why in (
@@ -539,6 +568,11 @@ class TestVotes(unittest.TestCase):
                                           voter("feature:other")])
         self.assertEqual(ballots, [
             ("upvote", "replan/feature/added", "feature:other")])
+
+    def test_a_count_without_a_label_casts_no_vote(self):
+        ballots, _ = self.cast([ADDED_LESSON], [voter(
+            "feature:bare", {"count": 0, "items_at_d": 8})])
+        self.assertEqual(ballots, [])
 
     def test_a_review_without_a_finding_heading_casts_no_vote(self):
         lessons = [lesson("review/feature/named")]
@@ -630,6 +664,24 @@ class TestFold(unittest.TestCase):
         self.assertEqual([e["id"] for e in got],
                          ["design_gaps/feature/routed"])
         self.assertIn("feature:v", seen)
+
+    def test_a_known_id_whose_sources_do_not_grow_is_not_edited(self):
+        existing = [lesson("replan/feature/added", 2,
+                           ("feature:c", "feature:h"), text=ADDED_TEXT)]
+        before = copy.deepcopy(existing)
+        got, _, lines, problems = dl.fold(existing, [], [HIT, CLEAN], [])
+        self.assertEqual(problems, [])
+        self.assertEqual([line for line in lines if "EDIT" in line], [])
+        self.assertEqual(got[0], before[0])
+
+    def test_a_review_hit_with_no_implement_boundary_is_still_folded(self):
+        late = {**record("feature:late", review={
+            "label": "observed", "findings": 2, "named": 1}),
+            "implement": UNMEASURABLE}
+        clean = record("feature:ok", review={
+            "label": "observed", "findings": 1, "named": 0})
+        _, seen, _, _ = dl.fold([], [], [late, clean], [])
+        self.assertIn("feature:late", seen)
 
     def test_an_upvote_prints_one_line_and_moves_the_count(self):
         existing = [lesson("replan/feature/added")]
