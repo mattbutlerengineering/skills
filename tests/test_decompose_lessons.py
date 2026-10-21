@@ -510,6 +510,12 @@ HIT = record("feature:h", hit_replan(), GAP)
 CLEAN = record("feature:c", clean_replan(), NO_GAP)
 ROUTED_TEXT = ("feature runs routed back to Architect: h 1 route(s)"
                " (observed), c 0 route(s) (observed)")
+ADDED_TEXT = ("feature runs that re-planned mostly by adding rows: h 2 of 8"
+              " items (observed), c 0 of 8 items (observed)")
+BOTH = [lesson("design_gaps/feature/routed", 2, ("feature:c", "feature:h"),
+               text=ROUTED_TEXT),
+        lesson("replan/feature/added", 2, ("feature:c", "feature:h"),
+               text=ADDED_TEXT)]
 
 
 class TestFold(unittest.TestCase):
@@ -591,12 +597,10 @@ class TestUpdate(TempFile):
         self.assertEqual(problems, [])
         self.assertEqual(lines, [
             "decompose-lessons: ADD design_gaps/feature/routed",
+            "decompose-lessons: ADD replan/feature/added",
             f"decompose-lessons: wrote {dl.LESSONS_PATH}"])
-        self.assertEqual(
-            self.file.read_text(encoding="utf-8"),
-            jsonl(["feature:c", "feature:h"],
-                  lesson("design_gaps/feature/routed", 2,
-                         ("feature:c", "feature:h"), text=ROUTED_TEXT)))
+        self.assertEqual(self.file.read_text(encoding="utf-8"),
+                         jsonl(["feature:c", "feature:h"], *BOTH))
 
     def test_a_second_update_from_the_same_runs_is_unchanged(self):
         self.update([HIT, CLEAN])
@@ -616,10 +620,12 @@ class TestUpdate(TempFile):
         self.assertEqual(problems, [])
         self.assertEqual(lines, [
             "decompose-lessons: UPVOTE design_gaps/feature/routed",
+            "decompose-lessons: UPVOTE replan/feature/added",
             f"decompose-lessons: wrote {dl.LESSONS_PATH}"])
         lessons, seen, _ = dl.load(self.file)
-        self.assertEqual(lessons[0]["importance"], 3)
-        self.assertEqual(lessons[0]["voted"], ["feature:v"])
+        self.assertEqual([e["importance"] for e in lessons], [3, 3])
+        self.assertEqual([e["voted"] for e in lessons],
+                         [["feature:v"], ["feature:v"]])
         self.assertIn("feature:v", seen)
 
     def test_no_pair_and_no_file_writes_nothing(self):

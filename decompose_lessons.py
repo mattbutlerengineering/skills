@@ -396,3 +396,97 @@ def votes(root, run, lessons, records, seen):
             if op:
                 ballots.append((op, entry["id"], rec["run"]))
     return ballots, []
+
+
+# The update fold: votes on existing lessons, then ADD or EDIT from new hit
+# runs, then the drop at 0 (a vote that takes a lesson below 1 removes it).
+# A lesson dropped this fold is not re-added by it, and every hit run is
+# folded into `seen`, so it cannot return from the same runs.
+
+def _apply_ballots(lessons, ballots):
+    """(lessons, lines, dropped ids, problems); a problem abandons all."""
+    lines, dropped = [], []
+    for op, lid, voter_ref in ballots:
+        step = upvote if op == "upvote" else downvote
+        lessons, problems = step(lessons, lid, voter_ref)
+        if problems:
+            return lessons, [], [], problems
+        lines.append(f"{LABEL}: {op.upper()} {lid}")
+        if _find(lessons, lid) is None:
+            lines.append(f"{LABEL}: DROP {lid}")
+            dropped.append(lid)
+    return lessons, lines, dropped, []
+
+
+def _apply_candidates(lessons, found, dropped):
+    """(lessons, lines, problems): ADD a new id, EDIT a known id whose
+    sources grew, nothing for an id dropped in this fold."""
+    lines = []
+    for cand in found:
+        lid = cand["id"]
+        at = _find(lessons, lid)
+        if lid in dropped:
+            continue
+        if at is None:
+            lessons, problems = add(lessons, lid, cand["text"],
+                                    cand["sources"])
+            op = "ADD"
+        else:
+            merged = sorted({*lessons[at]["sources"], *cand["sources"]})
+            if merged == sorted(lessons[at]["sources"]):
+                continue
+            lessons, problems = edit(lessons, lid, cand["text"], merged)
+            op = "EDIT"
+        if problems:
+            return lessons, [], problems
+        lines.append(f"{LABEL}: {op} {lid}")
+    return lessons, lines, []
+
+
+def fold(lessons, seen, records, ballots):
+    """(lessons, seen, lines, problems) after one update over `records`
+    and the `ballots` votes() returned. Pure; on a problem the inputs
+    come back unchanged with no lines."""
+    voted, vote_lines, dropped, problems = _apply_ballots(lessons, ballots)
+    if problems:
+        return lessons, seen, [], problems
+    new_pairs = pairs(records, skip=set(seen))
+    grown, add_lines, problems = _apply_candidates(
+        voted, candidates(new_pairs), dropped)
+    if problems:
+        return lessons, seen, [], problems
+    complete = {rec["run"] for rec in records
+                if "sha" in rec["implement"]}
+    folded = (set(seen) | complete | {p["hit"] for p in new_pairs}
+              | {ref for _, _, ref in ballots})
+    return grown, sorted(folded), vote_lines + add_lines, []
+
+
+def update(root, run, measure=decompose_signals.measure):
+    """(lines, problems): load the file, measure, vote, fold and write the
+    whole file once. A problem anywhere leaves the file untouched."""
+    path = Path(root) / LESSONS_PATH
+    lessons, seen, problems = load(path, LESSONS_PATH)
+    if problems:
+        return [], problems
+    result, problems = measure(root, run)
+    if result is None or problems:
+        return [], problems
+    ballots, problems = votes(root, run, lessons, result["runs"], seen)
+    if problems:
+        return [], problems
+    new, new_seen, lines, problems = fold(lessons, seen, result["runs"],
+                                          ballots)
+    if problems:
+        return [], problems
+    old_text, problem = read_file(path, LESSONS_PATH, str)
+    if problem:
+        return [], [f"{LABEL}: {problem}"]
+    if not new and old_text is None:
+        return [NO_PAIR, f"{LABEL}: unchanged"], []
+    if serialize(new, new_seen) == old_text:
+        return [*lines, f"{LABEL}: unchanged"], []
+    problems = dump(path, new, new_seen, LESSONS_PATH)
+    if problems:
+        return [], problems
+    return [*lines, f"{LABEL}: wrote {LESSONS_PATH}"], []

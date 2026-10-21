@@ -64,7 +64,7 @@ When this milestone is done, `decompose_lessons.votes` and the update fold take 
 - [x] **S9 Update fold tests** — cases for the pure update fold and its write over a temp dir — size:M
   - Accept: the module holds these cases, each asserting exact output lines and file contents. The order is votes on existing lessons, then ADD or EDIT from new hit runs, then drop at 0. Each ADD, EDIT, UPVOTE, DOWNVOTE and drop prints one line naming the lesson id, then `decompose-lessons: wrote <path>`, or `decompose-lessons: unchanged` when nothing changed. Every run folded in is added to `seen`. A lesson dropped at 0 does not return on the next update from the same fixture runs, because its hit runs are in `seen`. A history with no pair and no file writes nothing and leaves no file. A lesson operation problem abandons the whole update with the file byte-identical, and so does a malformed existing file, which prints its line number. A `measure` result with problems writes nothing. The tool ships no lesson: the repo holds no `docs/factory/decompose-lessons.jsonl` hand-written seed, asserted on the working tree. Before the fold exists the cases fail.
   - Blocked by: S8 Voting
-- [ ] **S10 Update fold** — the update fold and its single whole-file write — size:M
+- [x] **S10 Update fold** — the update fold and its single whole-file write — size:M
   - Accept: the S9 tests pass and every earlier test still passes. The write is the only one `dump` performs; no command takes lesson text from a person.
   - Blocked by: S9 Update fold tests
 
