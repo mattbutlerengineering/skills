@@ -105,7 +105,8 @@ the offline score is validated only against the hand-built cuts.
 - Responsibility: owns the meaning of untestable for the grader. The Accept
   clause is the sub-bullet `Accept:` in the row's block. Untestable when
   absent, empty, holding an unfilled `<...>` slot outside backticks, or when
-  fewer than 3 words remain after deleting hedge phrases and anchors (see the
+  no anchor was found or fewer than 3 words remain after deleting hedge
+  phrases and anchors (both conditions must hold for it to pass; see the
   assumptions for the anchor definition and the three known limits). The hedge
   list and anchor builder are module constants and a function, not
   configuration.
