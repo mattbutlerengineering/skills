@@ -32,7 +32,7 @@ PROMPT_KEYS = ("description", "tags", "max_turns", "timeout_seconds",
 # Everything the change must leave exactly as main has it.
 UNTOUCHED = ("evals", "LEDGER.md", "plugin-evals/records",
              "plugin-evals/implement", "plugin-evals/knowledge-base",
-             "plugin-evals/lean", "plugin-evals/next", ".claude-plugin")
+             "plugin-evals/lean", "plugin-evals/next")
 
 
 def git(*args):
