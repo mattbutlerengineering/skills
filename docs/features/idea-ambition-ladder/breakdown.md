@@ -85,7 +85,7 @@ When this milestone is done, `plugin-evals/idea/ladder-brief/` is a well-formed 
 - [x] **S12 Suite case** — author `plugin-evals/idea/ladder-brief/` (case.yaml, prompt.md, scaffold.sh, the eleven grader files); never run — size:M
   - Accept: the S11 tests pass. `prompt.md` has frontmatter `description`, `tags: [idea]`, `max_turns`, `timeout_seconds` and `allowed_tools: [Read, Glob, Grep, Skill, Write, Edit]`, with all interview answers supplied up front and the slug fixed. `scaffold.sh` seeds a small committed repo: a docs directory, a one-paragraph pitch for a made-up scheduling tool planting one distinctive phrase, and a `docs/backlog.md` with its header and one existing seed. The regex graders run over the produced files for headings, the planted phrase and the moonshot seed; the three `llm` graders each name one check. The case carries no typed id and no example link, and no script or tool grant runs a checker. `plugin-evals/records/` gains no file.
   - Blocked by: S11 Suite wiring and scope tests
-- [ ] **S13 Detectors over the authored text** — run the detectors that scan every markdown file over the skill text, template, protocol sentence and suite — size:S
+- [x] **S13 Detectors over the authored text** — run the detectors that scan every markdown file over the skill text, template, protocol sentence and suite — size:S
   - Accept: `python3 gates.py` prints `gates: 0 problem(s)` and `python3 lint.py` prints `lint: 0 problem(s)` with the edited skills, template, protocol sentence and suite present. If a detector fires, the authored text is fixed, not the detector. The result is recorded as a dated line in this file's Notes.
   - Blocked by: S12 Suite case
 
@@ -101,3 +101,5 @@ none.
 
 ## Notes
 
+
+- 2026-10-20 S13: `python3 gates.py` printed `gates: 0 problem(s)` and `python3 lint.py` printed `lint: 0 problem(s) across 34 skills` with the edited skills, template, protocol sentence and suite present.
