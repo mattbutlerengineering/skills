@@ -146,6 +146,8 @@ class TestGraders(unittest.TestCase):
         self.assertIn(f"path: {IDEA}",
                       front(CASE / "graders/keeps-users-words.md"))
         self.assertIsNotNone(re.search(rx, script))
+        # Not just any word of the pitch: the user's own distinctive phrase.
+        self.assertIn("self-healing", rx)
 
     def test_each_llm_grader_names_one_check(self):
         keywords = {"showstopper-passes-four-tests": "four tests",
@@ -157,6 +159,9 @@ class TestGraders(unittest.TestCase):
             self.assertIn("PASS if", body, name)
             self.assertIn("FAIL if", body, name)
             self.assertIn(word, body, name)
+        body = (CASE / "graders/moonshot-not-chosen.md").read_text(
+            encoding="utf-8")
+        self.assertIn("FAIL if the brief chooses the Moonshot", body)
 
 
 class TestPromptAndScaffold(unittest.TestCase):
@@ -166,8 +171,15 @@ class TestPromptAndScaffold(unittest.TestCase):
 
     def test_the_prompt_fixes_the_slug_and_supplies_every_answer(self):
         self.assertIn(f"docs/features/{SLUG}/", self.prompt)
-        for answer in ("Showstopper", "demo", "spike", "kill test"):
+        for answer in ("Showstopper", "demo", "spike", "kill test",
+                       "Do not design the\nsolution."):
             self.assertIn(answer, self.prompt)
+
+    def test_the_scaffold_stays_in_its_directory_and_off_the_network(self):
+        for token in ("cd ", "curl", "wget", "ssh", "push", "remote",
+                      "http://", "https://", "rm ", "sudo", "~/", "> /",
+                      "..", "$HOME"):
+            self.assertNotIn(token, self.script, token)
 
     def test_the_scaffold_backlog_parses_under_the_protocol_grammar(self):
         backlog = heredoc(self.script, "docs/backlog.md")

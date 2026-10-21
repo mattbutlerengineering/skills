@@ -50,6 +50,9 @@ class TestLadderPhrases(unittest.TestCase):
                 "answered in writing, pass or fail with one clause of"
                 " evidence",
                 "For a feature run, ask the ladder as one question",
+                "if the user picks it, say so and ask for the Showstopper"
+                " or Solid pick",
+                "record Solid as chosen and note that they declined",
                 "The ladder offers a bigger version anchored on their"
                 " words; it never swaps their idea for yours."):
             self.assertIn(phrase, text)
@@ -158,6 +161,9 @@ class TestTemplate(unittest.TestCase):
             self.assertRegex(self.text,
                              rf"(?m)^{label}: pass \| fail")
 
+    def test_the_none_demo_form_the_prd_skill_reads_is_in_the_template(self):
+        self.assertIn("none — Solid chosen", self.text)
+
     def test_the_template_carries_no_typed_id(self):
         self.assertIsNone(TYPED_ID.search(self.text))
 
@@ -193,6 +199,14 @@ class TestSeedInstruction(unittest.TestCase):
                 "a seed that would fail the grammar is not written",
                 "put the seeds in the Not taken line",
                 "in the same commit as idea.md",
+                "add below the last line", "Stage the append by path",
+                "Ask the prompts only when their framing names no demo"
+                " moment, at most two",
+                "Run the four tests silently and surface only a failure",
+                "zero clicks, zero setup, or it is done before you ask",
+                "Solid** — fixes the problem and ships fast. The fallback.",
+                "After the problem and evidence answers, and before the"
+                " solution hunch",
                 "feature: plus the slug on a feature run",
                 "product on a product run"):
             self.assertIn(phrase, text)
@@ -243,7 +257,9 @@ class TestProtocolProducers(unittest.TestCase):
         sentence = text[start:text.index("**Consumers:**", start)]
         for phrase in ("Idea appends the rungs it did not take",
                        "Operate appends its retro's idea seeds",
-                       "Capture may append a consciously deferred defect"):
+                       "Capture may append a consciously deferred defect",
+                       "Producers append well-formed entries only and"
+                       " never rewrite existing lines"):
             self.assertIn(phrase, sentence)
 
 
@@ -275,6 +291,7 @@ class TestPrdCarriesTheDemo(unittest.TestCase):
         text = prd_text()
         for phrase in ("the demo runs as written", "## The demo",
                        "idea.md",
+                       "with the script as its checkable body",
                        "an absent or none demo writes no criterion"):
             self.assertIn(phrase, text)
 
