@@ -59,7 +59,7 @@ When this milestone is done, `decompose_grade.grade(breakdown_text, architecture
 - [x] **S9 Accept check** — the untestable-accept check with the hedge list and anchor builder as module constants and a function — size:M
   - Accept: the S8 tests pass and every earlier test still passes. The hedge list is a named constant and the anchor builder a named function, neither read from configuration or from the Decompose skill text.
   - Blocked by: S8 Accept tests
-- [ ] **S10 Size tests** — cases for the mis-sized check over inline texts — size:S
+- [x] **S10 Size tests** — cases for the mis-sized check over inline texts — size:S
   - Accept: the module holds these cases, each asserting exact strings. An item whose row text plus sub-bullets name more than `MAX_SPAN` (3) distinct architecture components emits `mis-sized: <item> names <n> components (limit 3)`; an item naming exactly 3 emits nothing; an item naming 0 emits nothing. A declared `size:` band, Accept length and clause count change nothing, asserted by two otherwise equal items. Before the check exists the cases fail.
   - Blocked by: S9 Accept check
 - [ ] **S11 Size check** — the mis-sized check with `MAX_SPAN` as a named constant — size:S

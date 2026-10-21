@@ -411,5 +411,74 @@ class TestAcceptCheck(unittest.TestCase):
         self.assertEqual(self.grade_accept(accept)["feedback"], [])
 
 
+def mis_sized(item, count):
+    return f"mis-sized: {item} names {count} components (limit 3)"
+
+
+FOUR = {"A": "Alpha Service", "B": "Beta Worker", "C": "Gamma Router",
+        "D": "Delta Store"}
+ARCH4 = ARCH.replace(
+    "## Interfaces", "### Gamma Router\n\n- Responsibility: routes.\n\n"
+    "### Delta Store\n\n- Responsibility: stores.\n\n## Interfaces")
+
+
+class TestSizeCheck(unittest.TestCase):
+    def test_an_item_naming_four_components_is_mis_sized(self):
+        result = dg.grade(breakdown(row("A1", title=" ".join(FOUR.values()))),
+                          ARCH4)
+        self.assertEqual(result["feedback"], [mis_sized("A1", 4)])
+        self.assertEqual(result["parts"]["sizing"], 0.0)
+
+    def test_an_item_naming_exactly_three_is_not(self):
+        text = breakdown(row("A1", title="Alpha Service Beta Worker"
+                                         " Gamma Router"),
+                         row("A2", title="Delta Store"))
+        self.assertEqual(dg.grade(text, ARCH4)["feedback"], [])
+
+    def test_an_item_naming_none_is_not_mis_sized(self):
+        text = breakdown(row("A1", title="Alpha Service Beta Worker"
+                                         " Gamma Router"),
+                         row("A2", title="Delta Store"),
+                         row("A3", title="wire it up"))
+        result = dg.grade(text, ARCH4)
+        self.assertEqual(result["feedback"], [])
+        self.assertEqual(result["parts"]["sizing"], 1.0)
+
+    def test_sub_bullets_count_toward_the_span(self):
+        text = breakdown(row("A1", title="Alpha Service",
+                             accept=GOOD_ACCEPT + " Beta Worker, Gamma"
+                                    " Router and Delta Store agree."))
+        self.assertEqual(dg.grade(text, ARCH4)["feedback"],
+                         [mis_sized("A1", 4)])
+
+    def test_the_declared_size_band_changes_nothing(self):
+        wide = " ".join(FOUR.values())
+        small = row("A1", title=wide, inline="—")
+        large = row("A2", title=wide, inline="—").replace("size:S", "size:L")
+        self.assertIn("size:S", small)
+        self.assertIn("size:L", large)
+        self.assertEqual(
+            dg.grade(breakdown(small, large), ARCH4)["feedback"],
+            [mis_sized("A1", 4), mis_sized("A2", 4)])
+
+    def test_accept_length_changes_nothing(self):
+        short = breakdown(row("A1", title="Alpha Service"))
+        long_ = breakdown(row("A1", title="Alpha Service",
+                              accept=GOOD_ACCEPT * 6))
+        self.assertEqual(dg.grade(short, ARCH4)["parts"]["sizing"],
+                         dg.grade(long_, ARCH4)["parts"]["sizing"])
+
+    def test_size_lines_come_last_in_item_order(self):
+        wide = " ".join(FOUR.values())
+        text = breakdown(row("A1", title=wide, accept=""),
+                         row("A2", title=wide, blocked="A9"))
+        self.assertEqual(
+            dg.grade(text, ARCH4)["feedback"],
+            ['dangling-blocked-by: A2 is blocked by "A9",'
+             ' which names no item',
+             untestable("A1", "empty"), mis_sized("A1", 4),
+             mis_sized("A2", 4)])
+
+
 if __name__ == "__main__":
     unittest.main()
