@@ -56,7 +56,7 @@ class TestLadderPhrases(unittest.TestCase):
 
     def test_a_demotion_is_told_to_the_user_and_both_seeds_are_kept(self):
         text = skill_text()
-        for phrase in ("tell the user which test failed and that Solid is"
+        for phrase in ("Tell the user which test failed and that Solid is"
                        " now the pick",
                        "the demoted Showstopper is seeded as well as the"
                        " Moonshot"):
