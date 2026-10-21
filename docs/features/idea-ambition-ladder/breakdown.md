@@ -51,7 +51,7 @@ When this milestone is done, `skills/idea/TEMPLATE.md` has the four new sections
 
 When this milestone is done, the Idea skill tells the agent to append one seed line per unchosen rung larger than the pick, the Moonshot always, in the grammar the protocol owns, and the protocol names Idea as a producer.
 
-- [ ] **S5 Seed tests** — add the seed-instruction and seed-grammar cases to `tests/test_idea_ambition_ladder.py` — size:M
+- [x] **S5 Seed tests** — add the seed-instruction and seed-grammar cases to `tests/test_idea_ambition_ladder.py` — size:M
   - Accept: the module gains these cases. The skill text contains `<seed text> (from: <run-ref>)`, `append only` and `never rewrite`, and states the rule that Solid is never seeded and the Moonshot always is, the failure handling (create the file with its header when absent; a seed that would fail the grammar is not written; seeds go in the brief's Not taken line if the write is refused), and that the append lands in the same commit as the idea brief. The skill text shows no real run slug and no typed id. A grammar case builds the seed line from the documented form in a temp backlog (the file's existing header line, one existing line, the new line) and asserts `protocol.check_backlog` returns `[]`, asserts `protocol.parse_backlog` reports the new line's origin as the run-ref given, and asserts a line missing the suffix yields a problem string. Run before the edit, the skill-text cases fail.
   - Blocked by: S4 Template sections
 - [ ] **S6 Seed instruction** — add the seed rule and its failure handling to the ladder block in `skills/idea/SKILL.md` — size:S

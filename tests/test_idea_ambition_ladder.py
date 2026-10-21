@@ -162,5 +162,59 @@ class TestOldBriefStillValidates(unittest.TestCase):
         self.assertEqual(lint.check_templates(ROOT), [])
 
 
+SEED_FORM = "<seed text> (from: <run-ref>)"
+BACKLOG_HEADER = ("Seed inbox — advisory only, never orientation state.\n\n")
+EXISTING_SEED = "- An older idea (from: session:2026-07-05)"
+
+
+class TestSeedInstruction(unittest.TestCase):
+    def test_the_skill_states_the_form_and_the_append_rules(self):
+        text = skill_text()
+        for phrase in (
+                SEED_FORM, "append only", "never rewrite",
+                "Solid is never seeded and the Moonshot always is",
+                "seed every unchosen rung larger than the pick",
+                "create the file with its header line when it is absent",
+                "a seed that would fail the grammar is not written",
+                "put the seeds in the Not taken line",
+                "in the same commit as idea.md",
+                "feature: plus the slug on a feature run",
+                "product on a product run"):
+            self.assertIn(phrase, text)
+
+    def test_the_seed_text_rule_is_stated(self):
+        text = skill_text()
+        self.assertIn("one line with no parentheses and no typed ids", text)
+
+    def test_the_skill_shows_no_real_slug_and_no_tool_for_the_write(self):
+        text = skill_text()
+        self.assertEqual(re.findall(r"feature:[a-z0-9-]+", text), [])
+        for tool in ("backlog_append", "idea_check", "sed -i"):
+            self.assertNotIn(tool, text)
+
+
+class TestSeedGrammar(unittest.TestCase):
+    def backlog(self, new_line):
+        return BACKLOG_HEADER + EXISTING_SEED + "\n" + new_line + "\n"
+
+    def test_a_seed_in_the_documented_form_passes_the_protocol_check(self):
+        line = "- A bigger take (from: feature:sample-slug)"
+        text = self.backlog(line)
+        self.assertEqual(protocol.check_backlog(text), [])
+        entries = protocol.parse_backlog(text)
+        self.assertEqual(entries[-1]["origin"], "feature:sample-slug")
+        self.assertEqual(entries[-1]["text"], "A bigger take")
+
+    def test_a_product_run_seed_passes(self):
+        text = self.backlog("- A bigger take (from: product)")
+        self.assertEqual(protocol.check_backlog(text), [])
+
+    def test_a_line_missing_the_suffix_is_a_problem(self):
+        self.assertEqual(
+            protocol.check_backlog(self.backlog("- A bigger take")),
+            ["backlog: line 4: entry does not match"
+             " '- <seed text> (from: <run-ref>)'"])
+
+
 if __name__ == "__main__":
     unittest.main()
