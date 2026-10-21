@@ -5,12 +5,15 @@ through the public interface with a fixture record list, a temp dir and
 an injected git runner; no lesson is hand-written in the repo, so every
 lesson here is a fixture built by the helpers below.
 """
+import ast
 import copy
+import io
 import json
 import os
 import subprocess
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -721,6 +724,116 @@ class TestCompare(unittest.TestCase):
         got = dl.compare(COMPARE[:-1], TREATED_SET, 5)
         self.assertEqual(len(got), 1)
         self.assertIn("(observed only; 0 unmeasurable)", got[0])
+
+
+PREFIX = "decompose-lessons:"
+NO_VERDICT = (f"{PREFIX} no verdict: 0 treated run(s) is below the minimum"
+              " of 5")
+NETWORK = {"socket", "urllib", "http", "requests", "ssl", "ftplib",
+           "smtplib", "xmlrpc", "telnetlib"}
+
+
+class TestFrontDoor(TempFile):
+    def setUp(self):
+        super().setUp()
+        self.file = self.dir / dl.LESSONS_PATH
+        self.file.parent.mkdir(parents=True)
+        config = self.dir / ".github" / "factory.json"
+        config.parent.mkdir()
+        config.write_text("{}")
+
+    def main(self, argv, records, git=None, problems=()):
+        def measure(root, run):
+            return {"runs": records}, list(problems)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = dl.main(argv, self.dir, git or GitFake(added=()), measure)
+        return code, out.getvalue().splitlines()
+
+    def test_the_report_prints_pairs_lessons_comparison_and_summary(self):
+        self.file.write_text(jsonl(["feature:c", "feature:h"], *BOTH),
+                             encoding="utf-8")
+        before = self.file.read_bytes()
+        code, lines = self.main([], [HIT, CLEAN])
+        self.assertEqual(lines, [
+            f"{PREFIX} 2 contrast pair(s) from 2 hit run(s): re-plan 1,"
+            " design gaps 1, review-traced 0",
+            f"{PREFIX} design_gaps/feature/routed importance 2 \u2014"
+            f" {ROUTED_TEXT} (sources: feature:c, feature:h)",
+            f"{PREFIX} replan/feature/added importance 2 \u2014"
+            f" {ADDED_TEXT} (sources: feature:c, feature:h)",
+            NO_VERDICT,
+            f"{PREFIX} 2 run(s), 0 problem(s)"])
+        self.assertEqual(code, 0)
+        self.assertEqual(self.file.read_bytes(), before)
+
+    def test_no_pair_prints_the_no_pair_string_and_writes_nothing(self):
+        code, lines = self.main([], [CLEAN])
+        self.assertEqual(lines, [dl.NO_PAIR, NO_VERDICT,
+                                 f"{PREFIX} 1 run(s), 0 problem(s)"])
+        self.assertEqual(code, 0)
+        self.assertFalse(self.file.exists())
+
+    def test_the_comparison_uses_the_configured_floor(self):
+        (self.dir / ".github" / "factory.json").write_text(
+            json.dumps({"conductor": {"calibrate_floor": 1}}))
+        git = GitFake(descended={TREATED})
+        code, lines = self.main([], [voter("feature:v"), CLEAN], git)
+        self.assertEqual(lines[1], (
+            f"{PREFIX} re-plan treated 0/8 over 1 run(s), untreated 0/8"
+            " over 1 run(s) (observed only; 0 unmeasurable); descriptive,"
+            " treated not higher"))
+
+    def test_update_performs_the_fold_and_exits_zero(self):
+        code, lines = self.main(["update"], [HIT, CLEAN])
+        self.assertEqual(lines, [
+            f"{PREFIX} ADD design_gaps/feature/routed",
+            f"{PREFIX} ADD replan/feature/added",
+            f"{PREFIX} wrote {dl.LESSONS_PATH}",
+            f"{PREFIX} 0 problem(s)"])
+        self.assertEqual(code, 0)
+        self.assertEqual(self.file.read_text(encoding="utf-8"),
+                         jsonl(["feature:c", "feature:h"], *BOTH))
+
+    def test_measure_problems_exit_one_and_update_writes_nothing(self):
+        code, lines = self.main(["update"], [HIT, CLEAN],
+                                problems=["decompose-signals: boom"])
+        self.assertEqual(lines, ["decompose-signals: boom",
+                                 f"{PREFIX} 1 problem(s)"])
+        self.assertEqual(code, 1)
+        self.assertFalse(self.file.exists())
+
+    def test_the_report_with_a_measure_problem_still_exits_one(self):
+        code, lines = self.main([], [CLEAN],
+                                problems=["decompose-signals: boom"])
+        self.assertEqual(code, 1)
+        self.assertEqual(lines[-2:], ["decompose-signals: boom",
+                                      f"{PREFIX} 1 run(s), 1 problem(s)"])
+
+    def test_a_malformed_file_exits_one_naming_its_line(self):
+        self.file.write_text('{"seen": []}\n{oops\n')
+        code, lines = self.main([], [HIT, CLEAN])
+        self.assertEqual(lines, [
+            f"{PREFIX} {dl.LESSONS_PATH} line 2: not valid JSON",
+            f"{PREFIX} 1 problem(s)"])
+        self.assertEqual(code, 1)
+
+    def test_an_unknown_argument_prints_usage_and_exits_two(self):
+        code, lines = self.main(["bogus"], [CLEAN])
+        self.assertEqual(code, 2)
+        self.assertEqual(lines, [
+            f"{PREFIX} 'bogus' \u2014 unknown argument", "",
+            "  python3 decompose_lessons.py [update]"])
+
+    def test_the_module_imports_no_network_module(self):
+        tree = ast.parse(Path(dl.__file__).read_text(encoding="utf-8"))
+        names = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names.update(a.name.split(".")[0] for a in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names.add(node.module.split(".")[0])
+        self.assertEqual(names & NETWORK, set())
 
 
 if __name__ == "__main__":
