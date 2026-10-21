@@ -92,7 +92,7 @@ When this milestone is done, the Decompose skill reads the lessons file at draft
 - [x] **S15 Skill step tests** — cases on `skills/decompose/SKILL.md` text — size:S
   - Accept: the module holds a case asserting the skill text names `docs/factory/decompose-lessons.jsonl`, treats each line as a hypothesis ordered by importance and never a rule or a reason to relax an `Accept:` line, and states the absent-or-empty case (draft unchanged, no message) and the malformed case (say so once, draft unchanged). A case asserts the skill text does not tell Decompose to run `decompose_lessons.py` or to write the file. The cases fail against the unedited skill.
   - Blocked by: S14 Report and front door
-- [ ] **S16 Skill step** — one step in `skills/decompose/SKILL.md` between the soft gate and the draft, per architecture.md's Skill step — size:S
+- [x] **S16 Skill step** — one step in `skills/decompose/SKILL.md` between the soft gate and the draft, per architecture.md's Skill step — size:S
   - Accept: the S15 tests pass. `python3 lint.py` is re-run after the edit and prints `lint: 0 problem(s)`. `git diff --name-only main...HEAD -- skills/` lists only paths under `skills/decompose/`. `.claude-plugin/plugin.json` is unchanged (ADR-0095: the wave's release PR bumps it).
   - Blocked by: S15 Skill step tests
 - [ ] **S17 Docs** — the CLAUDE.md "on demand, free" bullet beside `decompose_signals.py` and a CONTEXT.md entry for **Decompose lesson** — size:S
