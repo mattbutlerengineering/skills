@@ -33,7 +33,7 @@ When this milestone is done, `plugin-evals/decompose/fixtures/csv-export/cuts/` 
 - [x] **S2 Cuts** — author `good.md` and the four bad cuts against the existing csv-export fixture architecture — size:M
   - Accept: the S1 tests pass. `good.md` covers all four architecture components (Export API, Export Scheduler, CSV Generator, Delivery) with Accept lines written against the fixture's own contracts (status codes, retry count, header row, the 5-minute bound), uses TEMPLATE-form `Accept:` and `Blocked by:` sub-bullets, and gives each item a short label. `bad-coverage.md` omits every mention of one component; `bad-dangling.md` names a blocker that is no item; `bad-accept.md` replaces one Accept line with a hedge; `bad-sized.md` makes one item name four components. No file under `evals/` is edited; the architecture and PRD are read in place.
   - Blocked by: S1 Cut fixture tests
-- [ ] **S3 Gates over the cuts** — run the detectors that scan every markdown file over the authored cuts — size:S
+- [x] **S3 Gates over the cuts** — run the detectors that scan every markdown file over the authored cuts — size:S
   - Accept: `python3 gates.py` prints `gates: 0 problem(s)` and `python3 lint.py` prints `lint: 0 problem(s)` with the five cuts present. If a detector fires on a cut, the cut is fixed, not the detector. The result is recorded as a dated line in this file's Notes.
   - Blocked by: S2 Cuts
 
@@ -106,3 +106,4 @@ none.
 
 ## Notes
 
+- 2026-10-20 S3: with the five cuts present, `python3 gates.py` printed `gates: 0 problem(s)` and `python3 lint.py` printed `lint: 0 problem(s) across 34 skills`; no detector fired, no cut changed.
