@@ -98,7 +98,7 @@ When this milestone is done, the Decompose skill reads the lessons file at draft
 - [x] **S17 Docs** — the CLAUDE.md "on demand, free" bullet beside `decompose_signals.py` and a CONTEXT.md entry for **Decompose lesson** — size:S
   - Accept: CLAUDE.md names `python3 decompose_lessons.py` as free, outside every gate and making no network call, says `update` is the one writer and is run by the Owner, and names `docs/factory/decompose-lessons.jsonl`. CONTEXT.md defines **Decompose lesson** as a derived, sourced, voted line whose importance starts at 2 and which is removed at 0. Neither doc contains a work-order token or sample lesson id that detectors C and I would scan, and `python3 kb.py drift` still prints `drift: 0 problem(s)`.
   - Blocked by: S16 Skill step
-- [ ] **S18 Whole-repo verify** — the four CI checks and the scope checks over the finished change — size:S
+- [x] **S18 Whole-repo verify** — the four CI checks and the scope checks over the finished change — size:S
   - Accept: `python3 run_tests.py` exits 0; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 kb.py drift` prints `drift: 0 problem(s)`; `python3 gates.py` and `python3 gates.py --selftest` print `gates: 0 problem(s)`. `tests/test_dual_membership.py` passes with 52 pairs. `git diff --name-only main...HEAD` shows `skills/` edits only under `skills/decompose/`, no change to `.claude-plugin/plugin.json`, `factory_init.MIRRORS`, `factory/templates/`, `cost_ledger.py` or `decompose_signals.py`, and no committed `docs/factory/decompose-lessons.jsonl` unless `update` produced it. `python3 decompose_lessons.py` on this clone exits 0 and prints either the no-pair string or the lessons, and a comparison or a no-verdict line.
   - Blocked by: S17 Docs
 
@@ -108,3 +108,28 @@ none.
 
 ## Notes
 
+- 2026-10-20 (S2, S10): `edit` takes an optional `sources` argument and a
+  vote takes the voting run's ref, because architecture.md's EDIT
+  "keeps sources" yet an EDIT can leave none (S1) and `voted` must record
+  the voter. `update` EDITs a known id only when a new hit run grows its
+  sources, so a new hit run is always cited; a lesson dropped in a fold is
+  not re-added by that fold.
+- 2026-10-20 (S5, S6): a pair is one per hit run, with the first clean run
+  of its kind and label (the S5 line), not one per clean run; so the
+  report counts the pairs it derives (18 on this clone today), not the
+  26, 4 and 145 architecture.md measured under the all-clean-runs reading.
+  The report's `<h> hit run(s)` counts (signal, run) hits, with or without
+  a clean run to pair them.
+- 2026-10-20 (S9, S10): `seen` takes every complete run (implement boundary
+  found), every hit run that made a pair and every voter, so an
+  unfinished run is not folded in before it can vote. S9's "the repo holds
+  no hand-written seed" is asserted as "a lessons file that exists loads
+  clean with every lesson sourced": a literal absence test would fail the
+  commit in which the Owner first runs `update`. No lessons file is
+  committed by this run; the Owner runs `update`.
+- 2026-10-20 (S11, S12): when any run's re-plan is unmeasurable, a second
+  line names it (`unmeasurable re-plan run(s): <runs>`), since S11 says
+  they are named and the one-line wording only carries the count. A
+  zero-item untreated pool reads "not higher" (a `lean:` comment).
+- 2026-10-20 (S16): the new Decompose step is step 3, so the later steps
+  renumber 4 to 8; nothing references them by number.
