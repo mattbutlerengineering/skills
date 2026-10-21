@@ -71,6 +71,15 @@ pre-pass, deliberately **not** a gate:
   outside every gate and making no network call, like
   `decompose_signals.py`. It refuses a band below the calibrate floor and
   says so, and excludes unmetered rows with a count, never an estimate.
+- `python3 decompose_lessons.py` — the Decompose lessons ledger (ADR-0113):
+  contrast pairs of a hit run and a clean run, from the three outcome
+  signals only, collapsed to voted, sourced lessons in
+  `docs/factory/decompose-lessons.jsonl`, plus a treated-versus-untreated
+  re-plan comparison. Free, outside every gate and making no network
+  call, like `decompose_signals.py`. With no argument it only reads;
+  `update` is the one writer and the Owner runs it. No command takes
+  lesson text from a person, and the tool ships no lesson.
+  <!-- drift-ignore: docs/factory/decompose-lessons.jsonl -->
 
 ## Hard conventions
 

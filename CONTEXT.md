@@ -105,6 +105,13 @@ against the band's budget, one sample per work order, printed by
 otherwise refused with the band's n.
 _Avoid_: estimate range, confidence interval
 
+**Decompose lesson**:
+A derived, sourced, voted line in the Decompose lessons file, describing a
+contrast between a hit run and a clean run of the same kind. Its importance
+starts at 2, later treated runs move it by 1, and it is removed at 0.
+Decompose reads it as a hypothesis, never a rule.
+_Avoid_: insight, rule, tip
+
 ### Evals
 
 **Trigger eval**:
