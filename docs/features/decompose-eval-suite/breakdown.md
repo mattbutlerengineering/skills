@@ -56,7 +56,7 @@ When this milestone is done, `decompose_grade.grade(breakdown_text, architecture
 - [x] **S8 Accept tests** — cases for the untestable-accept check over inline texts — size:M
   - Accept: the module holds these cases, each asserting exact strings. An item with no `Accept:` sub-bullet, an empty one, one holding an unfilled `<...>` slot outside backticks, or one with fewer than 3 words left after deleting the hedge phrases and every anchor emits `untestable-accept: <item> has no checkable Accept line (empty|placeholder|unanchored)` with the matching reason word. An anchor is a component heading, an interface heading, a backticked span or a digit run found in the given architecture or PRD text. Padding with filler words earns nothing, and a backticked name absent from the fixture earns nothing. A concrete Accept line on an item emits no line. A hedge phrase outside the list plus three other words passes, asserted as a stated known limit in a comment, not hidden. Before the check exists the cases fail.
   - Blocked by: S7 Coverage and dependency checks
-- [ ] **S9 Accept check** — the untestable-accept check with the hedge list and anchor builder as module constants and a function — size:M
+- [x] **S9 Accept check** — the untestable-accept check with the hedge list and anchor builder as module constants and a function — size:M
   - Accept: the S8 tests pass and every earlier test still passes. The hedge list is a named constant and the anchor builder a named function, neither read from configuration or from the Decompose skill text.
   - Blocked by: S8 Accept tests
 - [ ] **S10 Size tests** — cases for the mis-sized check over inline texts — size:S

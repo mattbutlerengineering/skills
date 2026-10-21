@@ -31,6 +31,26 @@ _PAREN = re.compile(r"\s*\([^)]*\)\s*$")
 MIN_NAME = 4
 _BLOCKED_BY = re.compile(r"blocked by:[ \t]*([^(\n]*)", re.IGNORECASE)
 _NO_EDGE = {"", "—", "-", "none"}
+_ACCEPT = re.compile(r"^\s*[-*+]\s+accept:[ \t]*(.*)$", re.IGNORECASE)
+_BULLET = re.compile(r"^\s*[-*+]\s")
+_SLOT = re.compile(r"<[^<>\n]+>")
+_CODE = re.compile(r"`([^`\n]*)`")
+_DIGITS = re.compile(r"\b\d+\b")
+_WORD = re.compile(r"\w+")
+MIN_WORDS = 3
+# Phrases that say an Accept line is done without saying how to check it.
+# The grader's own definition of vague, not read from the skill text; a
+# phrase outside the list passes (a stated limit, architecture.md).
+HEDGES = (
+    "works correctly", "work correctly", "works as expected",
+    "work as expected", "works properly", "works fine", "behaves correctly",
+    "handles errors appropriately", "handles errors gracefully",
+    "handles edge cases", "is complete", "is done", "is implemented",
+    "as appropriate", "as needed",
+)
+_HEDGE = re.compile(
+    r"(?<!\w)(?:" + "|".join(re.escape(h) for h in HEDGES) + r")(?!\w)",
+    re.IGNORECASE)
 
 
 def read_items(breakdown_text):
@@ -116,6 +136,79 @@ def check_dependencies(items):
     return _fraction(len(edges) - len(dangling), len(edges)), feedback
 
 
+def build_anchors(architecture_text, prd_text=""):
+    """The fixture tokens an Accept line can be anchored to: component and
+    interface headings (lowercase), the fixture text a backticked span must
+    appear in, and the digit runs the fixture holds."""
+    text = f"{architecture_text}\n{prd_text}"
+    headings = [_PAREN.sub("", h) for section in ("components", "interfaces")
+                for h in _section_headings(architecture_text, section)]
+    return {"headings": [h.lower() for h in headings], "text": text,
+            "digits": frozenset(_DIGITS.findall(text))}
+
+
+def accept_text(block):
+    """The text of the block's `Accept:` sub-bullet, continuation lines
+    included, or None when it has none."""
+    found = None
+    for line in block.splitlines()[1:]:
+        match = _ACCEPT.match(line)
+        if match:
+            found = [match.group(1)]
+        elif found is not None and not _BULLET.match(line):
+            found.append(line.strip())
+        elif found is not None:
+            break
+    return " ".join(found).strip() if found is not None else None
+
+
+def _drop_anchors(text, anchors):
+    """(text with every anchor removed, anchors found)."""
+    found = 0
+
+    def backticked(match):
+        nonlocal found
+        hit = match.group(1).strip() != "" and match.group(1) in anchors["text"]
+        found += hit
+        return " " if hit else match.group(0)
+
+    def digits(match):
+        nonlocal found
+        hit = match.group(0) in anchors["digits"]
+        found += hit
+        return " " if hit else match.group(0)
+
+    text = _CODE.sub(backticked, text)
+    for heading in anchors["headings"]:
+        text, count = re.subn(rf"(?<!\w){re.escape(heading)}(?!\w)", " ",
+                              text, flags=re.IGNORECASE)
+        found += count
+    return _DIGITS.sub(digits, text), found
+
+
+def accept_reason(block, anchors):
+    """Why the block's Accept line is untestable (empty, placeholder or
+    unanchored), or None when it is checkable."""
+    text = accept_text(block)
+    if text is None or not _WORD.search(text):
+        return "empty"
+    if _SLOT.search(_CODE.sub("", text)):
+        return "placeholder"
+    rest, found = _drop_anchors(_HEDGE.sub(" ", text), anchors)
+    if found == 0 or len(_WORD.findall(rest)) < MIN_WORDS:
+        return "unanchored"
+    return None
+
+
+def check_accept(items, anchors):
+    """(fraction, feedback): the items whose Accept line is checkable."""
+    reasons = [(i["key"], accept_reason(i["block"], anchors)) for i in items]
+    feedback = [f"untestable-accept: {key} has no checkable Accept line"
+                f" ({reason})" for key, reason in reasons if reason]
+    return _fraction(sum(1 for _, r in reasons if r is None),
+                     len(items)), feedback
+
+
 def combine(parts):
     """The score: the mean of the four part fractions, 3 places."""
     return round(sum(parts[name] for name in PARTS) / len(PARTS), 3)
@@ -141,7 +234,9 @@ def grade(breakdown_text, architecture_text, prd_text=""):
     feedback = []
     for name, (fraction, lines) in (
             ("coverage", check_coverage(items, components)),
-            ("dependencies", check_dependencies(items))):
+            ("dependencies", check_dependencies(items)),
+            ("accept", check_accept(
+                items, build_anchors(architecture_text, prd_text)))):
         parts[name] = fraction
         feedback.extend(lines)
     return {"score": combine(parts),
