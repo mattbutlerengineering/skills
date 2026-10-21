@@ -319,5 +319,97 @@ class TestDependencyCheck(unittest.TestCase):
                         ' which names no item'])
 
 
+def untestable(item, reason):
+    return (f"untestable-accept: {item} has no checkable Accept line"
+            f" ({reason})")
+
+
+class TestAcceptCheck(unittest.TestCase):
+    def grade_accept(self, accept):
+        return dg.grade(breakdown(row("A1", accept=accept)), ARCH)
+
+    def test_a_concrete_accept_line_emits_nothing(self):
+        result = self.grade_accept(GOOD_ACCEPT)
+        self.assertEqual(result["feedback"], [])
+        self.assertEqual(result["parts"]["accept"], 1.0)
+
+    def test_an_item_with_no_accept_sub_bullet_is_empty(self):
+        text = breakdown(f"- [ ] **A1 Thing** — {BOTH}\n  - Blocked by: —")
+        self.assertEqual(dg.grade(text, ARCH)["feedback"],
+                         [untestable("A1", "empty")])
+
+    def test_an_empty_accept_line_is_empty(self):
+        for accept in ("", "  ", "."):
+            self.assertEqual(self.grade_accept(accept)["feedback"],
+                             [untestable("A1", "empty")], repr(accept))
+
+    def test_an_unfilled_slot_outside_backticks_is_a_placeholder(self):
+        result = self.grade_accept("<checkable acceptance criterion>")
+        self.assertEqual(result["feedback"],
+                         [untestable("A1", "placeholder")])
+        self.assertEqual(result["parts"]["accept"], 0.0)
+
+    def test_a_slot_inside_backticks_is_not_a_placeholder(self):
+        accept = GOOD_ACCEPT + " The object is named `<prefix>/<slug>.csv`."
+        self.assertEqual(self.grade_accept(accept)["feedback"], [])
+
+    def test_a_listed_hedge_with_an_anchor_leaves_too_few_words(self):
+        for accept in ("`POST /alpha` works correctly.",
+                       "Alpha Service handles errors appropriately.",
+                       "Works correctly and handles errors appropriately."):
+            self.assertEqual(self.grade_accept(accept)["feedback"],
+                             [untestable("A1", "unanchored")], accept)
+
+    def test_filler_words_with_no_anchor_earn_nothing(self):
+        accept = ("the thing behaves nicely under many circumstances and"
+                  " users are happy with the outcome overall")
+        self.assertEqual(self.grade_accept(accept)["feedback"],
+                         [untestable("A1", "unanchored")])
+
+    def test_a_backticked_name_absent_from_the_fixture_earns_nothing(self):
+        accept = "`invented_name` is returned to the caller promptly"
+        self.assertEqual(self.grade_accept(accept)["feedback"],
+                         [untestable("A1", "unanchored")])
+
+    def test_each_anchor_kind_is_accepted(self):
+        for accept in (
+                "Alpha Service rejects a malformed request cleanly",
+                "the route `POST /alpha` rejects a malformed request",
+                "a malformed request is rejected with status 201 always",
+                "POST /alpha rejects a malformed request cleanly"):
+            self.assertEqual(self.grade_accept(accept)["feedback"], [],
+                             accept)
+
+    def test_the_prd_widens_the_anchor_vocabulary(self):
+        accept = "the export lands within 5 minutes of the scheduled time"
+        self.assertEqual(self.grade_accept(accept)["feedback"],
+                         [untestable("A1", "unanchored")])
+        text = breakdown(row("A1", accept=accept))
+        prd = "Success: a CSV within 5 minutes."
+        self.assertEqual(dg.grade(text, ARCH, prd)["feedback"], [])
+
+    def test_an_item_fails_the_accept_part_once(self):
+        text = breakdown(row("A1", accept="<slot>"), row("A2"))
+        result = dg.grade(text, ARCH)
+        self.assertEqual(result["parts"]["accept"], 0.5)
+
+    def test_accept_lines_come_after_dependency_lines_in_item_order(self):
+        text = breakdown(row("A1", accept="", blocked="A9"),
+                         row("A2", accept="fine"))
+        self.assertEqual(
+            dg.grade(text, ARCH)["feedback"],
+            ['dangling-blocked-by: A1 is blocked by "A9",'
+             ' which names no item',
+             untestable("A1", "empty"), untestable("A2", "unanchored")])
+
+    def test_known_limit_an_unlisted_hedge_with_three_other_words_passes(self):
+        # Stated limit (architecture.md, Accept check): the hedge list is
+        # finite, so an unlisted vague phrase that carries an anchor and
+        # three other words is not caught. The harness llm graders are the
+        # in-harness check for this; the grader says nothing here.
+        accept = "`POST /alpha` is basically fine overall"
+        self.assertEqual(self.grade_accept(accept)["feedback"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
