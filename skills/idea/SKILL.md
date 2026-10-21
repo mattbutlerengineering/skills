@@ -97,7 +97,8 @@ the user's head at this stage, so this skill interviews — it does not draft.
 
    When a test fails, say which one and re-scope it once. If it still
    fails, or no spike could prove it, record it as the Moonshot and make
-   Solid the pick.
+   Solid the pick. Tell the user which test failed and that Solid is
+   now the pick; the demoted Showstopper is seeded as well as the Moonshot.
 
    Save the larger rungs you did not take as backlog seeds: seed every
    unchosen rung larger than the pick. Solid is never seeded and the
@@ -105,7 +106,9 @@ the user's head at this stage, so this skill interviews — it does not draft.
    `- <seed text> (from: <run-ref>)`, with the run-ref being feature: plus
    the slug on a feature run and product on a product run. The seed text is
    one line with no parentheses and no typed ids. The file is append only:
-   add below the last line and never rewrite an existing one, and create the
+   add below the last line, start each seed on a new line of its own
+   (add the missing newline first when the last line lacks one), never
+   rewrite an existing one, and create the
    file with its header line when it is absent. Stage the append by path in
    the same commit as idea.md. Write well-formed lines only: a seed that
    would fail the grammar is not written. If the file cannot be written, say

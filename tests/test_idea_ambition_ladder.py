@@ -54,6 +54,14 @@ class TestLadderPhrases(unittest.TestCase):
                 " words; it never swaps their idea for yours."):
             self.assertIn(phrase, text)
 
+    def test_a_demotion_is_told_to_the_user_and_both_seeds_are_kept(self):
+        text = skill_text()
+        for phrase in ("tell the user which test failed and that Solid is"
+                       " now the pick",
+                       "the demoted Showstopper is seeded as well as the"
+                       " Moonshot"):
+            self.assertIn(phrase, text)
+
     def test_the_rules_keep_the_existing_line(self):
         self.assertIn("don't replace their idea with yours", skill_text())
 
@@ -188,6 +196,10 @@ class TestSeedInstruction(unittest.TestCase):
                 "feature: plus the slug on a feature run",
                 "product on a product run"):
             self.assertIn(phrase, text)
+
+    def test_a_last_line_without_a_newline_is_not_glued_to(self):
+        self.assertIn("start each seed on a new line of its own",
+                      skill_text())
 
     def test_the_seed_text_rule_is_stated(self):
         text = skill_text()
