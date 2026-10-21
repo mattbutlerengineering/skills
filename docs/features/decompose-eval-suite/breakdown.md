@@ -73,7 +73,7 @@ When this milestone is done, `decompose_grade.grade(breakdown_text, architecture
 
 When this milestone is done, `python3 decompose_grade.py <breakdown.md> <architecture.md> [<prd.md>]` prints the summary line and the defect lines with the documented exit codes, and `python3 factory.py decompose-grade` reaches it.
 
-- [ ] **S13 Front door tests** — cases for `main` over temp files — size:M
+- [x] **S13 Front door tests** — cases for `main` over temp files — size:M
   - Accept: the module holds these cases, each asserting exact output lines and exit codes. A good cut prints `decompose-grade: score <s> (coverage <c>, dependencies <d>, accept <a>, sizing <z>)` with three-place figures and exits 0. A bad cut prints the summary then its defect line and exits 1. A wrong argument count, a missing file or an unreadable file exits 2 and scores nothing, with the guarded-read message. An architecture with no components prints `decompose-grade: <path> holds no components` and exits 2, never a vacuous 1.0. The PRD argument is optional and only widens the anchor vocabulary. No file is written. `tests/test_factory_cli.py` is run and fails on the missing `decompose-grade` verb. Before `main` exists the cases fail.
   - Blocked by: S12 Good-versus-bad table
 - [ ] **S14 Front door** — `main`, the `factory.py` VERBS row `decompose-grade` and the cli import — size:S

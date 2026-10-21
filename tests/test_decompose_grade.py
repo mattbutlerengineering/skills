@@ -7,9 +7,12 @@ strings; nothing here calls a model or the network.
 """
 import ast
 import difflib
+import io
 import re
 import sys
+import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -527,6 +530,83 @@ class TestGoodVersusBadCuts(unittest.TestCase):
             self.assertNotEqual(after, before, check)
             self.assertEqual(after["feedback"], [], check)
             self.assertEqual(after["score"], 1.0, check)
+
+
+USAGE = ("decompose-grade: usage: python3 decompose_grade.py <breakdown.md>"
+         " <architecture.md> [<prd.md>]")
+GOOD_SUMMARY = ("decompose-grade: score 1.000 (coverage 1.000,"
+                " dependencies 1.000, accept 1.000, sizing 1.000)")
+
+
+class TestFrontDoor(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dir = Path(self.tmp.name)
+        self.arch = self.write("architecture.md", FIXTURE_ARCH)
+        self.prd = self.write("prd.md", FIXTURE_PRD)
+
+    def write(self, name, text):
+        path = self.dir / name
+        path.write_text(text, encoding="utf-8")
+        return str(path)
+
+    def run_main(self, *argv):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            code = dg.main(list(argv))
+        return code, out.getvalue().splitlines()
+
+    def test_a_good_cut_prints_the_summary_and_exits_zero(self):
+        path = self.write("good.md", cut("good"))
+        self.assertEqual(self.run_main(path, self.arch, self.prd), (
+            0, [GOOD_SUMMARY, "decompose-grade: 0 problem(s)"]))
+
+    def test_a_bad_cut_prints_the_summary_then_its_line_and_exits_one(self):
+        path = self.write("bad.md", cut("bad-accept"))
+        self.assertEqual(self.run_main(path, self.arch, self.prd), (1, [
+            "decompose-grade: score 0.958 (coverage 1.000,"
+            " dependencies 1.000, accept 0.833, sizing 1.000)",
+            untestable("S3", "unanchored"), "decompose-grade: 1 problem(s)"]))
+
+    def test_a_wrong_argument_count_exits_two_and_scores_nothing(self):
+        for argv in ([], ["a.md"], ["a", "b", "c", "d"]):
+            self.assertEqual(self.run_main(*argv), (2, [USAGE]), argv)
+
+    def test_a_missing_file_exits_two(self):
+        missing = str(self.dir / "nope.md")
+        self.assertEqual(self.run_main(missing, self.arch), (
+            2, [f"decompose-grade: cannot read {missing}: no such file"]))
+
+    def test_an_unreadable_file_exits_two_with_the_guarded_read_message(self):
+        bad = self.dir / "bad.md"
+        bad.write_bytes(b"\xff\xfe")
+        code, lines = self.run_main(str(bad), self.arch)
+        self.assertEqual(code, 2)
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(
+            lines[0].startswith(f"decompose-grade: cannot read {bad}: "))
+
+    def test_an_architecture_with_no_components_exits_two_not_one(self):
+        arch = self.write("empty-arch.md", "# Architecture\n\n## Approach\n")
+        path = self.write("good.md", cut("good"))
+        self.assertEqual(self.run_main(path, arch), (
+            2, [f"decompose-grade: {arch} holds no components"]))
+
+    def test_the_prd_is_optional_and_only_widens_the_anchors(self):
+        accept = "a due schedule lands the export within 5 minutes"
+        arch = self.write("a.md", ARCH)
+        path = self.write("b.md", breakdown(row("A1", accept=accept)))
+        prd = self.write("p.md", "A CSV within 5 minutes.")
+        code, lines = self.run_main(path, arch)
+        self.assertEqual((code, lines[1]), (1, untestable("A1", "unanchored")))
+        self.assertEqual(self.run_main(path, arch, prd)[0], 0)
+
+    def test_no_file_is_written(self):
+        before = sorted(p.name for p in self.dir.iterdir())
+        self.run_main(self.write("good.md", cut("good")), self.arch)
+        after = sorted(p.name for p in self.dir.iterdir())
+        self.assertEqual(after, sorted(before + ["good.md"]))
 
 
 if __name__ == "__main__":
