@@ -68,7 +68,7 @@ When this milestone is done, the Idea skill tells the agent to append one seed l
 
 When this milestone is done, the PRD skill tells the agent to copy the idea brief's demo into a success criterion worded "the demo runs as written", and `skills/launch-demo` and `skills/verify` are byte-identical to main.
 
-- [ ] **S9 PRD line tests** — add the PRD hand-off and byte-identical cases to `tests/test_idea_ambition_ladder.py` — size:M
+- [x] **S9 PRD line tests** — add the PRD hand-off and byte-identical cases to `tests/test_idea_ambition_ladder.py` — size:M
   - Accept: the module gains these cases. `skills/prd/SKILL.md` contains `the demo runs as written`, `## The demo` and `idea.md`, and states that an absent or `none` demo writes no criterion. `git diff --name-only main -- skills/launch-demo skills/verify` is empty, asserted through a subprocess call to git, and the case skips cleanly when `main` is absent, as the decompose suite's `main_exists` does. A further case asserts that, against main, the only files changed under `skills/` are under `skills/idea` or `skills/prd`. The PRD-text cases fail before the edit; the byte-identical cases pass immediately and stay as scope pins.
   - Blocked by: S8 Producers sentence
 - [ ] **S10 PRD carrying line** — add the one clause to step 4 of `skills/prd/SKILL.md` — size:S
