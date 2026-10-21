@@ -374,7 +374,8 @@ def _ballot(lesson_entry, rec):
     num = {field: n for field, n, _ in _signals()}.get(signal)
     figure = _hit_label(rec[signal], num) if num else None
     if figure is None or kind(rec["run"]) != run_kind \
-            or rec["run"] in lesson_entry["voted"]:
+            or rec["run"] in lesson_entry["voted"] \
+            or rec["run"] in lesson_entry["sources"]:
         return None
     return "downvote" if figure[1] else "upvote"
 

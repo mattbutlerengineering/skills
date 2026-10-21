@@ -474,6 +474,16 @@ class TestVotes(unittest.TestCase):
                                seen=["feature:s"])
         self.assertEqual(ballots, [])
 
+    def test_a_source_run_of_the_lesson_does_not_vote_on_it(self):
+        # Review finding: a clean partner with no implement boundary is not
+        # in seen, so it upvoted the lesson that cites it.
+        source = lesson("replan/feature/added", 2,
+                        ("feature:h", "feature:src"))
+        ballots, _ = self.cast([source], [voter("feature:src"),
+                                          voter("feature:other")])
+        self.assertEqual(ballots, [
+            ("upvote", "replan/feature/added", "feature:other")])
+
     def test_a_voter_of_another_kind_or_unmeasurable_signal_is_skipped(self):
         ballots, _ = self.cast([ADDED_LESSON], [
             voter("maintenance:m"),
