@@ -836,5 +836,48 @@ class TestFrontDoor(TempFile):
         self.assertEqual(names & NETWORK, set())
 
 
+SKILL = (Path(dl.__file__).resolve().parent / "skills" / "decompose"
+         / "SKILL.md")
+
+
+def skill_text():
+    return " ".join(SKILL.read_text(encoding="utf-8").split())
+
+
+class TestSkillStep(unittest.TestCase):
+    def test_the_skill_reads_the_lessons_file_as_hypotheses(self):
+        text = skill_text()
+        for phrase in (
+                "docs/factory/decompose-lessons.jsonl",
+                "as a hypothesis about past outcomes",
+                "highest importance first",
+                "never as a rule and never as a reason to relax an"
+                " `Accept:` line"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_the_skill_states_the_absent_empty_and_malformed_cases(self):
+        text = skill_text()
+        for phrase in (
+                "When the file is absent, or holds only the `seen` header,"
+                " draft as before and say nothing",
+                "When it is malformed, say so once and draft as before"):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
+    def test_the_skill_never_runs_the_tool_or_writes_the_file(self):
+        text = skill_text()
+        self.assertNotIn("decompose_lessons.py", text)
+        self.assertNotIn("decompose-lessons update", text)
+        self.assertIn("This step only reads the file", text)
+
+    def test_the_step_sits_between_the_soft_gate_and_the_draft(self):
+        text = skill_text()
+        self.assertLess(text.index("**Soft gate.**"),
+                        text.index("**Read past lessons.**"))
+        self.assertLess(text.index("**Read past lessons.**"),
+                        text.index("**Draft the breakdown.**"))
+
+
 if __name__ == "__main__":
     unittest.main()

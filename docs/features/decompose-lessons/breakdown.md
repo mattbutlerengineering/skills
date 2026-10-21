@@ -89,7 +89,7 @@ When this milestone is done, `python3 decompose_lessons.py` prints pair count, l
 
 When this milestone is done, the Decompose skill reads the lessons file at draft time, CLAUDE.md and CONTEXT.md name the tool and its vocabulary, and every CI check is green over the finished change with `skills/` touched only under `skills/decompose`.
 
-- [ ] **S15 Skill step tests** — cases on `skills/decompose/SKILL.md` text — size:S
+- [x] **S15 Skill step tests** — cases on `skills/decompose/SKILL.md` text — size:S
   - Accept: the module holds a case asserting the skill text names `docs/factory/decompose-lessons.jsonl`, treats each line as a hypothesis ordered by importance and never a rule or a reason to relax an `Accept:` line, and states the absent-or-empty case (draft unchanged, no message) and the malformed case (say so once, draft unchanged). A case asserts the skill text does not tell Decompose to run `decompose_lessons.py` or to write the file. The cases fail against the unedited skill.
   - Blocked by: S14 Report and front door
 - [ ] **S16 Skill step** — one step in `skills/decompose/SKILL.md` between the soft gate and the draft, per architecture.md's Skill step — size:S
