@@ -24,10 +24,12 @@ import os
 import tempfile
 from pathlib import Path
 
+import decompose_signals
 from cli import read_file
 
 LABEL = "decompose-lessons"
 LESSONS_PATH = "docs/factory/decompose-lessons.jsonl"
+NO_PAIR = f"{LABEL}: no contrast pair found \u2014 no lesson derived"
 FIELDS = ("id", "importance", "text", "sources", "voted")
 
 
@@ -189,3 +191,112 @@ def dump(path, lessons, seen, shown=None):
             Path(temp).unlink(missing_ok=True)
         return [f"{LABEL}: cannot write {shown}: {err}"]
     return []
+
+
+# Pair derivation. Only the three outcome signals decompose_signals
+# measures exist here (re-plan, design gaps, review-traced), so a band
+# miss or a retro note has no input to reach. Records are as measure
+# returns them.
+
+# The re-plan detail ties break in this order.
+REPLAN_DETAILS = ("added", "dropped", "split", "merged")
+REPLAN_PHRASES = {"added": "adding rows", "dropped": "dropping rows",
+                  "split": "splitting rows", "merged": "merging rows"}
+
+
+def kind(ref):
+    """A run ref's kind, its prefix: feature, maintenance or product."""
+    return ref.split(":")[0]
+
+
+def _name(ref):
+    return ref.partition(":")[2] or ref
+
+
+def _signals():
+    """(RunRecord field, count field, denominator field or None) for each
+    signal, in decompose_signals' report order."""
+    return [(field, num, den) for _, field, num, den
+            in decompose_signals.SIGNALS]
+
+
+def _hit_label(value, num):
+    """(label, count) of one measurable signal value, else None."""
+    if "unmeasurable" in value:
+        return None
+    return value.get("label", "observed"), value.get(num, 0)
+
+
+def _detail(field, value):
+    if field == "replan":
+        return max(REPLAN_DETAILS, key=lambda name: value[name])
+    return "routed" if field == "design_gaps" else "named"
+
+
+def _figure(ref, value, label, num, den):
+    count = value.get(num, 0)
+    if den is None:
+        return f"{_name(ref)} {count} route(s) ({label})"
+    unit = "items" if den == "items_at_d" else "findings"
+    return f"{_name(ref)} {count} of {value.get(den, 0)} {unit} ({label})"
+
+
+def _text(field, run_kind, detail, hit, clean, num, den):
+    (h_ref, h_val, h_label), (c_ref, c_val, c_label) = hit, clean
+    contrast = (f"{_figure(h_ref, h_val, h_label, num, den)},"
+                f" {_figure(c_ref, c_val, c_label, num, den)}")
+    if field == "replan":
+        lead = (f"{run_kind} runs that re-planned mostly by"
+                f" {REPLAN_PHRASES[detail]}")
+    elif field == "design_gaps":
+        lead = f"{run_kind} runs routed back to Architect"
+    else:
+        lead = f"{run_kind} runs whose review findings name an item"
+    return f"{lead}: {contrast}"
+
+
+def pairs(records, skip=()):
+    """Contrast pairs {signal, kind, detail, hit, clean, text}: each
+    measurable hit run (count above 0) on a signal, unless its ref is in
+    `skip`, paired with the first clean run (count 0) in record order
+    that has the hit run's kind and label. No clean run, no pair."""
+    found = []
+    for field, num, den in _signals():
+        for hit in records:
+            figure = _hit_label(hit[field], num)
+            if figure is None or figure[1] == 0 or hit["run"] in skip:
+                continue
+            label, run_kind = figure[0], kind(hit["run"])
+            clean = next((r for r in records
+                          if kind(r["run"]) == run_kind
+                          and _hit_label(r[field], num)
+                          == (label, 0)), None)
+            if clean is None:
+                continue
+            detail = _detail(field, hit[field])
+            text = _text(field, run_kind, detail,
+                         (hit["run"], hit[field], label),
+                         (clean["run"], clean[field], label), num, den)
+            found.append({"signal": field, "kind": run_kind,
+                          "detail": detail, "hit": hit["run"],
+                          "clean": clean["run"], "text": text})
+    return found
+
+
+def pair_id(pair):
+    """The lesson id a pair collapses to: <signal>/<kind>/<detail>."""
+    return f"{pair['signal']}/{pair['kind']}/{pair['detail']}"
+
+
+def candidates(pair_list):
+    """The lessons the pairs collapse to, sorted by id: {id, text,
+    sources}. The text is the first pair's; the sources are every hit
+    and clean run of the pairs with that id, sorted."""
+    grouped = {}
+    for pair in pair_list:
+        entry = grouped.setdefault(
+            pair_id(pair), {"id": pair_id(pair), "text": pair["text"],
+                            "sources": set()})
+        entry["sources"].update((pair["hit"], pair["clean"]))
+    return [{**entry, "sources": sorted(entry["sources"])}
+            for _, entry in sorted(grouped.items())]
