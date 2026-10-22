@@ -137,7 +137,7 @@ class TestDemo(RenderCase):
                 f"{hex_of(trigger_set(30))} suite {suite}: "
                 f"2026-07-01 {one_day(12, 30)} -> 2026-07-05 "
                 f"{one_day(24, 30)}; intervals do not overlap "
-                f"({self.t1}, {self.t2})")
+                f"(descriptive, not a significance test) ({self.t1}, {self.t2})")
         self.assertIn(want, self.lines)
 
     def test_the_cost_per_pass_line(self):
@@ -271,7 +271,8 @@ class TestRerunsBesideAnotherDay(RenderCase):
         self.assertIn(
             f"eval-trends: trigger trend set {hex_of(trigger_set(30))} "
             f"suite claude,m,3,0.5: 2026-07-01 {one_day(12, 30)} -> "
-            f"2026-07-05 {day2}; intervals do not overlap ({a}, {b}, {c})",
+            f"2026-07-05 {day2}; intervals do not overlap "
+            f"(descriptive, not a significance test) ({a}, {b}, {c})",
             lines)
         self.assertIn(
             f"eval-trends: trigger rerun spread 2026-07-05 set "
@@ -299,7 +300,8 @@ class TestCharterMetricLabel(RenderCase):
         self.assertIn(
             f"eval-trends: charter rerun spread 2026-09-28 set "
             f"{hex_of(case_set)}: sensitive 1..3 of 4 over 2 run(s) "
-            f"({a}, {b})", lines)
+            f"({a}, {b}); counts only, the sensitive case may differ "
+            f"between runs", lines)
 
     def test_the_trend_line_says_sensitive_not_passed(self):
         a = self.charter("2026-09-28", 30, 10)

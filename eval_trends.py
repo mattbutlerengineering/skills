@@ -37,6 +37,8 @@ SIGNALS_REFUSED = (f"{LABEL}: REFUSED decompose-signals: not an eval run: "
                    "records re-measure one git history; no trend claim")
 OVERLAP = ("intervals overlap: not distinguishable "
            "(descriptive, not a significance test)")
+SEPARATE = ("intervals do not overlap "
+            "(descriptive, not a significance test)")
 DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # A trend needs at least MIN_DAYS distinct days and MIN_CASES cases in every
@@ -417,6 +419,12 @@ def _files(members):
     return ", ".join(r["file"] for r in members)
 
 
+# A charter's case set leaves out the verdicts, so reruns that agree on a
+# count may have found different cases sensitive.
+_SPREAD_CAVEAT = {"charter": "; counts only, the sensitive case may "
+                             "differ between runs"}
+
+
 def _spread_lines(surface, members):
     """One rerun-spread line per day of this group holding 2 or more."""
     return [
@@ -424,6 +432,7 @@ def _spread_lines(surface, members):
         f"{case_set_hex(rows[0]['case_set'])}: {_metric(surface)} "
         f"{min(r['hits'] for r in rows)}..{max(r['hits'] for r in rows)} of "
         f"{rows[0]['n']} over {len(rows)} run(s) ({_files(rows)})"
+        f"{_SPREAD_CAVEAT.get(surface, '')}"
         for day, rows in _by_day(members).items() if len(rows) >= 2]
 
 
@@ -446,8 +455,7 @@ def _trend_lines(surface, members):
     days = _by_day(members)
     first, last = days[min(days)], days[max(days)]
     (lo1, hi1), (lo2, hi2) = day_interval(first), day_interval(last)
-    verdict = OVERLAP if lo2 <= hi1 and lo1 <= hi2 \
-        else "intervals do not overlap"
+    verdict = OVERLAP if lo2 <= hi1 and lo1 <= hi2 else SEPARATE
     trend = (f"{LABEL}: {surface} trend set "
              f"{case_set_hex(members[0]['case_set'])} suite "
              f"{_suite_label(members[0]['suite'])}: {first[0]['day']} "

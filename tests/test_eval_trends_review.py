@@ -107,5 +107,36 @@ class TestPluginCounts(Tree):
         self.assertEqual(len(self.load()[1]), 1)
 
 
+class TestWording(Tree):
+    def lines(self):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            eval_trends.main([str(self.root)])
+        return buf.getvalue().splitlines()
+
+    def test_a_separating_verdict_also_says_it_is_not_a_significance_test(self):
+        for name, date, hits in (("trigger-2026-10-01.json", "2026-10-01", 6),
+                                 ("trigger-2026-10-05.json", "2026-10-05", 27)):
+            fx.write_json(self.root, f"evals/results/{name}",
+                          fx.trigger_record(date,
+                                            fx.numbered_cases(30, hits)))
+        (trend,) = [ln for ln in self.lines() if " trigger trend set " in ln]
+        self.assertIn("; intervals do not overlap (descriptive, not a "
+                      "significance test) (", trend)
+
+    def test_a_charter_spread_says_the_sensitive_case_may_differ(self):
+        for name, sensitive in (("charter-2026-09-28.json", "x"),
+                                ("charter-2026-09-28-2.json", "y")):
+            results = [(i, "swe", "sensitive" if i == sensitive
+                        else "inconclusive") for i in "xy"]
+            fx.write_json(self.root, f"evals/results/{name}",
+                          fx.charter_record("2026-09-28", results))
+        (spread,) = [ln for ln in self.lines()
+                     if "charter rerun spread" in ln]
+        self.assertIn("sensitive 1..1 of 2 over 2 run(s)", spread)
+        self.assertTrue(spread.endswith(
+            "; counts only, the sensitive case may differ between runs"))
+
+
 if __name__ == "__main__":
     unittest.main()
