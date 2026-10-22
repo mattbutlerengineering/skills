@@ -88,5 +88,24 @@ class TestUnhashableValues(Tree):
         self.assertEqual(len(problems), 1)
 
 
+class TestPluginCounts(Tree):
+    def write(self, passed, total=None):
+        data = fx.plugin_record("2026-10-10T01:00:00Z", [("a", "p", [])],
+                                passed=passed)
+        if total is not None:
+            data["aggregates"]["casesTotal"] = total
+        fx.write_json(self.root, "plugin-evals/records/2026-10-10.json", data)
+
+    def test_more_passed_than_total_is_a_problem(self):
+        self.write(passed=5, total=3)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: plugin-evals/records/2026-10-10.json "
+            "aggregates disagree with its cases"]))
+
+    def test_a_total_that_is_not_the_case_count_is_a_problem(self):
+        self.write(passed=1, total=40)
+        self.assertEqual(len(self.load()[1]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -281,6 +281,8 @@ def _plugin_row(rel, data):
     aggregates = _need(data, "aggregates", dict)
     n, hits = _need(aggregates, "casesTotal", int), \
         _need(aggregates, "casesPassed", int)
+    if n != len(cases) or not 0 <= hits <= n:
+        raise RecordError("aggregates disagree with its cases")
     cost = data.get("costUsd")
     if cost is not None and not isinstance(cost, (int, float)):
         raise RecordError("malformed field costUsd")
