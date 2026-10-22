@@ -138,5 +138,33 @@ class TestWording(Tree):
             "; counts only, the sensitive case may differ between runs"))
 
 
+class TestMutationSweepPins(Tree):
+    """Branches a review mutation sweep found unpinned."""
+
+    def test_wilson_clamps_float_error_at_the_unit_interval_edges(self):
+        # unclamped, 0 of 5 has lower -2.8e-17 (printed -0.0) and 5 of 5
+        # has upper 1.0000000000000002
+        self.assertEqual(eval_trends.wilson(0, 5)[0], 0.0)
+        self.assertEqual(eval_trends.wilson(5, 5)[1], 1.0)
+        self.assertEqual(eval_trends._pct(eval_trends.wilson(0, 10)[0]),
+                         "0.0")
+
+    def test_too_few_cases_names_the_largest_record_it_refused(self):
+        # two suites (by model), each over two days: 10 cases and 20 cases
+        for count, model in ((10, "m1"), (20, "m2")):
+            for day in ("2026-10-01", "2026-10-05"):
+                suffix = "" if model == "m1" else "-2"
+                fx.write_json(
+                    self.root, f"evals/results/trigger-{day}{suffix}.json",
+                    fx.trigger_record(day, fx.numbered_cases(count, 5),
+                                      model=model))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            eval_trends.main([str(self.root)])
+        self.assertIn("eval-trends: REFUSED trigger: too few cases: need 30,"
+                      " have 20 in 4 record(s) over 2+ days; no trend claim",
+                      buf.getvalue().splitlines())
+
+
 if __name__ == "__main__":
     unittest.main()
