@@ -2,7 +2,8 @@
 stage: ship
 run: feature:eval-trends
 date: 2026-10-21
-outcome: prepared
+outcome: released
+released-at: 2026-10-21
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1056
 assumptions:
   - "Release authorization is the brief's default, prepare and stop. Ship pushed the branch and opened one PR. It did not merge, tag, bump the version or delete a branch, and ran no `claude plugin eval`, trigger_eval.py, charter_replay.py or model call."
