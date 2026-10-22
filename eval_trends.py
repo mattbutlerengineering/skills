@@ -16,7 +16,16 @@ improved.
 """
 import hashlib
 import math
+import re
 from collections import defaultdict
+from pathlib import Path
+
+from cli import read_file
+from eval_schema import parse_results_stem
+
+LABEL = "eval-trends"
+SURFACES = ("trigger", "charter", "output", "plugin", "decompose-signals")
+DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # A trend needs at least MIN_DAYS distinct days and MIN_CASES cases in every
 # record of the group. A convention, chosen with the Wilson arithmetic in
@@ -109,3 +118,168 @@ def classify(rows):
             state, reason = _group_state(groups[key])
         out.append({**r, "state": state, "reason": reason})
     return out
+
+
+class RecordError(Exception):
+    """One record is malformed; the message is the reason in its problem."""
+
+
+def _need(data, key, kind):
+    """data[key] when present and an instance of kind, else RecordError."""
+    if key not in data:
+        raise RecordError(f"missing field {key}")
+    if not isinstance(data[key], kind):
+        raise RecordError(f"malformed field {key}")
+    return data[key]
+
+
+def _day(text, key):
+    if not isinstance(text, str) or not DAY.match(text[:10]) \
+            or len(text) < 10:
+        raise RecordError(f"malformed field {key}")
+    return text[:10]
+
+
+def _entries(data, key, fields):
+    """The list data[key], each entry an object holding every field."""
+    entries = _need(data, key, list)
+    for entry in entries:
+        if not isinstance(entry, dict) \
+                or any(field not in entry for field in fields):
+            raise RecordError(f"malformed field {key}")
+    return entries
+
+
+def _trigger_row(rel, data):
+    """The row for one trigger record, or RecordError."""
+    parsed = parse_results_stem(rel.stem)
+    if parsed is None or parsed[0] != "trigger":
+        raise RecordError("name fits no results grammar")
+    harness = parsed[1] or "claude"
+    if data.get("harness", harness) != harness:
+        raise RecordError(
+            f"harness {data['harness']!r} disagrees with its name")
+    day = _day(_need(data, "date", str), "date")
+    results = _entries(data, "results", ("id", "expected", "query", "pass"))
+    summary = _need(data, "summary", dict)
+    hits = sum(1 for r in results if r["pass"])
+    if summary.get("total") != len(results) \
+            or summary.get("passed") != hits:
+        raise RecordError("summary disagrees with its results")
+    if summary.get("errors", 0):
+        raise RecordError(f"records {summary['errors']} error(s)")
+    case_set = tuple(sorted((r["id"], r["expected"], r["query"])
+                            for r in results))
+    suite = (harness, data.get("model"), data.get("runs_per_query"),
+             data.get("threshold"))
+    return {"surface": "trigger", "file": rel.name, "day": day,
+            "suite": suite, "case_set": case_set, "n": len(results),
+            "hits": hits, "cost": None}
+
+
+def _charter_row(rel, data):
+    """The row for one charter replay: the metric is the count of
+    `sensitive` verdicts, a charter's guard noticing its own removal,
+    never a pass rate."""
+    parsed = parse_results_stem(rel.stem)
+    if parsed is None or parsed[0] != "charter":
+        raise RecordError("name fits no results grammar")
+    day = _day(_need(data, "date", str), "date")
+    arm = _need(data, "arm", str)
+    charters = _need(data, "charters", dict)
+    results = _entries(data, "results", ("id", "role", "verdict"))
+    suite = (arm, data.get("model"), tuple(sorted(charters.items())))
+    return {"surface": "charter", "file": rel.name, "day": day,
+            "suite": suite,
+            "case_set": tuple(sorted((r["id"], r["role"]) for r in results)),
+            "n": len(results),
+            "hits": sum(1 for r in results if r["verdict"] == "sensitive"),
+            "cost": None}
+
+
+def _output_row(rel, data):
+    """The row for one output grading: the slug and date come from the
+    directory name, through the one results-name parser."""
+    parsed = parse_results_stem(rel.parent.name)
+    if parsed is None or parsed[0] != "output":
+        raise RecordError("name fits no results grammar")
+    expectations = _entries(data, "expectations", ("text", "passed"))
+    summary = _need(data, "summary", dict)
+    hits = sum(1 for e in expectations if e["passed"])
+    if summary.get("total") != len(expectations) \
+            or summary.get("passed") != hits:
+        raise RecordError("summary disagrees with its results")
+    return {"surface": "output", "file": rel.parent.name, "day": parsed[2],
+            "suite": (parsed[4],),
+            "case_set": tuple(sorted((e["text"],) for e in expectations)),
+            "n": len(expectations), "hits": hits, "cost": None}
+
+
+def _plugin_case(case):
+    """One plugin case as (name, prompt, graders' (name, markdown))."""
+    graders = case["graders"]
+    if not isinstance(graders, list) or any(
+            not isinstance(g, dict) or "name" not in g for g in graders):
+        raise RecordError("malformed field cases")
+    return (case["name"], case["promptMarkdown"],
+            tuple(sorted((g["name"], g.get("graderMarkdown") or "")
+                         for g in graders)))
+
+
+def _plugin_row(rel, data):
+    """The row for one `claude plugin eval` record. Cost is the recorded
+    top-level costUsd, never summed across fields, decomposed or
+    estimated."""
+    if data.get("partial") is True:
+        raise RecordError("is partial")
+    day = _day(_need(data, "startedAt", str), "startedAt")
+    suite = _need(data, "suite", dict)
+    tags = _need(suite, "tagFilters", list)
+    cases = _entries(data, "cases", ("name", "promptMarkdown", "graders"))
+    aggregates = _need(data, "aggregates", dict)
+    n, hits = _need(aggregates, "casesTotal", int), \
+        _need(aggregates, "casesPassed", int)
+    cost = data.get("costUsd")
+    if cost is not None and not isinstance(cost, (int, float)):
+        raise RecordError("malformed field costUsd")
+    return {"surface": "plugin", "file": rel.name, "day": day,
+            "suite": (tuple(sorted(tags)), suite.get("ablation"),
+                      suite.get("modelOverride"), suite.get("judgeModel"),
+                      suite.get("threshold")),
+            "case_set": tuple(sorted(_plugin_case(c) for c in cases)),
+            "n": n, "hits": hits, "cost": cost}
+
+
+def _read_surface(root, pattern, row_of):
+    """(rows, problems) for the files matching pattern under root, in
+    sorted path order; each file is read through cli.read_file."""
+    rows, problems = [], []
+    for path in sorted(Path(root).glob(pattern)):
+        rel = path.relative_to(root)
+        data, problem = read_file(path, rel.as_posix(), dict)
+        if problem:
+            problems.append(f"{LABEL}: {problem}")
+            continue
+        try:
+            rows.append(row_of(rel, data))
+        except RecordError as err:
+            problems.append(f"{LABEL}: {rel.as_posix()} {err}")
+    return rows, problems
+
+
+READERS = (("evals/results/trigger*.json", _trigger_row),
+           ("evals/results/charter-*.json", _charter_row),
+           ("evals/results/output/*/grading.json", _output_row),
+           ("plugin-evals/records/*.json", _plugin_row))
+
+
+def load_rows(root):
+    """(rows, problems) for every record under root, surfaces in SURFACES
+    order and files in sorted path order. A malformed record is one
+    labelled problem and no row; an absent location is an empty surface."""
+    rows, problems = [], []
+    for pattern, row_of in READERS:
+        found, bad = _read_surface(root, pattern, row_of)
+        rows += found
+        problems += bad
+    return rows, problems
