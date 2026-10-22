@@ -41,10 +41,10 @@ pins it against `results_path` for every kind.
 
 When this milestone is done, `wilson`, `day_interval`, `cost_per_pass` and `classify` give correct values and states over fixture rows with no file read.
 
-- [ ] **S3 Core tests** — cases for the constants, `wilson`, `day_interval`, `cost_per_pass` and `classify` over fixture rows — size:M
+- [x] **S3 Core tests** — cases for the constants, `wilson`, `day_interval`, `cost_per_pass` and `classify` over fixture rows — size:M
   - Accept: the module holds these cases with expected values worked by hand in the test, none copied from the tool. `MIN_CASES` is 30 and `MIN_DAYS` is 2. `wilson` gives the architecture's checkpoints for a 50 percent rate (n=10 0.24 to 0.76, n=30 0.33 to 0.67, n=47 0.36 to 0.64, to the printed precision) and the edge cases 0 of n and n of n stay inside 0 to 1. `day_interval` is the hull `[min lower, max upper]` of a day's records. `cost_per_pass` is summed cost over summed passed cases to four decimals, and one record with no cost makes it refused. `classify` gives each record exactly one of `single` (with the `case sets differ` or `different suites` sub-reason), `same-day`, `small`, `trend`, and the state counts of a mixed fixture sum to its record count; a surface with fewer than 2 records is `too few records`; a null model equals only a null model; two records on one day in one group never pair with each other. Before the functions exist the cases fail.
   - Blocked by: S2 Name inverse
-- [ ] **S4 Core** — `eval_trends.py` with the constants, `wilson`, `day_interval`, `cost_per_pass` and `classify` — size:M
+- [x] **S4 Core** — `eval_trends.py` with the constants, `wilson`, `day_interval`, `cost_per_pass` and `classify` — size:M
   - Accept: the S3 tests pass. The functions are pure over a list of row dicts and return new values without mutating their input. The module imports the standard library (`hashlib`, `math`, `pathlib`, `re`) and `eval_schema` only, so `tests/test_dual_membership.py` passes unchanged. The case-set fingerprint is the first 8 hex of a sha256 of the sorted tuples, and groups are keyed on the full sorted tuple list. The module docstring's first line states what it does.
   - Blocked by: S3 Core tests
 
