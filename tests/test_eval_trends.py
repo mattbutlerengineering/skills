@@ -8,13 +8,18 @@ calls a model, `claude` or the network.
 """
 import copy
 import hashlib
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import eval_trends  # noqa: E402
+import eval_trends_fixture as fx  # noqa: E402
+import test_dual_membership  # noqa: E402
 
 SUITE_A = ("claude", "m", 3, 0.5)
 SUITE_B = ("omp", "m", 3, 0.5)
@@ -187,6 +192,227 @@ class TestClassify(unittest.TestCase):
         rows = [row("a", "2026-01-01", n=29), row("b", "2026-01-02")]
         self.assertEqual({v[0] for v in self.states(rows).values()},
                          {"small"})
+
+
+class TempRoot(unittest.TestCase):
+    """A temp repo root the test writes record files into."""
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="eval-trends-"))
+        self.addCleanup(shutil.rmtree, self.root)
+
+    def load(self):
+        return eval_trends.load_rows(self.root)
+
+    def rows_of(self, surface):
+        rows, _ = self.load()
+        return [r for r in rows if r["surface"] == surface]
+
+
+class TestLoadTrigger(TempRoot):
+    def test_a_record_becomes_one_row(self):
+        cases = [("a", "idea", "qa", True), ("b", "prd", "qb", False),
+                 ("c", "idea", "qc", True)]
+        fx.write_json(self.root, "evals/results/trigger-2026-07-05-3.json",
+                      fx.trigger_record("2026-07-05", cases, model="m1",
+                                        runs=5, threshold=0.5))
+        rows, problems = self.load()
+        self.assertEqual(problems, [])
+        self.assertEqual(rows, [{
+            "surface": "trigger", "file": "trigger-2026-07-05-3.json",
+            "day": "2026-07-05",
+            "suite": ("claude", "m1", 5, 0.5),
+            "case_set": (("a", "idea", "qa"), ("b", "prd", "qb"),
+                         ("c", "idea", "qc")),
+            "n": 3, "hits": 2, "cost": None}])
+
+    def test_the_harness_comes_from_the_name_and_a_null_model_stays_null(self):
+        fx.write_json(self.root, "evals/results/trigger-omp-2026-07-05.json",
+                      fx.trigger_record("2026-07-05", fx.numbered_cases(2, 1),
+                                        model=None, harness="omp"))
+        (row,) = self.rows_of("trigger")
+        self.assertEqual(row["suite"], ("omp", None, 3, 0.5))
+
+    def test_a_record_harness_that_disagrees_with_its_name_is_a_problem(self):
+        fx.write_json(self.root, "evals/results/trigger-2026-07-05.json",
+                      fx.trigger_record("2026-07-05", fx.numbered_cases(2, 1),
+                                        harness="omp"))
+        rows, problems = self.load()
+        self.assertEqual(rows, [])
+        self.assertEqual(problems, [
+            "eval-trends: evals/results/trigger-2026-07-05.json harness "
+            "'omp' disagrees with its name"])
+
+    def test_files_are_listed_in_sorted_path_order(self):
+        for name in ("trigger-2026-07-05-2.json", "trigger-2026-07-03.json",
+                     "trigger-2026-07-05.json"):
+            fx.write_json(self.root, f"evals/results/{name}",
+                          fx.trigger_record("2026-07-05",
+                                            fx.numbered_cases(1, 1)))
+        self.assertEqual([r["file"] for r in self.rows_of("trigger")], [
+            "trigger-2026-07-03.json", "trigger-2026-07-05-2.json",
+            "trigger-2026-07-05.json"])
+
+    def test_malformed_trigger_records_are_labelled_problems(self):
+        base = fx.trigger_record("2026-07-05", fx.numbered_cases(3, 2))
+        disagree = {**base, "summary": {**base["summary"], "passed": 3}}
+        total = {**base, "summary": {**base["summary"], "total": 4}}
+        errors = fx.trigger_record("2026-07-05", fx.numbered_cases(3, 2),
+                                   errors=2)
+        no_results = {k: v for k, v in base.items() if k != "results"}
+        no_date = {k: v for k, v in base.items() if k != "date"}
+        for name, data in (("trigger-2026-07-01.json", disagree),
+                           ("trigger-2026-07-02.json", total),
+                           ("trigger-2026-07-03.json", errors),
+                           ("trigger-2026-07-04.json", no_results),
+                           ("trigger-2026-07-06.json", no_date),
+                           ("trigger-2026-07-07.json", ["not", "an", "obj"])):
+            fx.write_json(self.root, f"evals/results/{name}", data)
+        (self.root / "evals/results/trigger-2026-07-08.json").write_text(
+            "{not json", encoding="utf-8")
+        rows, problems = self.load()
+        self.assertEqual(rows, [])
+        pre = "eval-trends: evals/results/"
+        self.assertEqual(problems[:6], [
+            f"{pre}trigger-2026-07-01.json summary disagrees with its "
+            "results",
+            f"{pre}trigger-2026-07-02.json summary disagrees with its "
+            "results",
+            f"{pre}trigger-2026-07-03.json records 2 error(s)",
+            f"{pre}trigger-2026-07-04.json missing field results",
+            f"{pre}trigger-2026-07-06.json missing field date",
+            f"{pre}trigger-2026-07-07.json is not a JSON object"])
+        self.assertTrue(problems[6].startswith(
+            f"{pre}trigger-2026-07-08.json is not valid JSON: "), problems)
+        self.assertEqual(len(problems), 7)
+
+    def test_an_unparseable_name_is_a_problem(self):
+        fx.write_json(self.root, "evals/results/trigger-2026-07-05-0.json",
+                      fx.trigger_record("2026-07-05", fx.numbered_cases(1, 1)))
+        rows, problems = self.load()
+        self.assertEqual((rows, problems), ([], [
+            "eval-trends: evals/results/trigger-2026-07-05-0.json name "
+            "fits no results grammar"]))
+
+
+class TestLoadCharter(TempRoot):
+    def test_hits_are_sensitive_verdicts_and_the_suite_carries_the_arm(self):
+        fx.write_json(self.root, "evals/results/charter-2026-09-28-2.json",
+                      fx.charter_record("2026-09-28", [
+                          ("x", "swe", "sensitive"),
+                          ("y", "planner", "inconclusive"),
+                          ("z", "swe", "insensitive")],
+                          arm="control", model="haiku",
+                          charters={"swe": "bb", "planner": "aa"}))
+        (row,) = self.rows_of("charter")
+        self.assertEqual(row, {
+            "surface": "charter", "file": "charter-2026-09-28-2.json",
+            "day": "2026-09-28",
+            "suite": ("control", "haiku", (("planner", "aa"), ("swe", "bb"))),
+            "case_set": (("x", "swe"), ("y", "planner"), ("z", "swe")),
+            "n": 3, "hits": 1, "cost": None})
+
+    def test_a_missing_field_is_a_problem(self):
+        data = fx.charter_record("2026-09-28", [("x", "swe", "sensitive")])
+        del data["arm"]
+        fx.write_json(self.root, "evals/results/charter-2026-09-28.json",
+                      data)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/charter-2026-09-28.json missing "
+            "field arm"]))
+
+
+class TestLoadOutput(TempRoot):
+    def test_date_and_slug_come_from_the_directory_name(self):
+        fx.write_json(
+            self.root, "evals/results/output/decompose-2026-07-01-2/"
+            "grading.json",
+            fx.output_record([("b says x", True), ("a says y", False)]))
+        (row,) = self.rows_of("output")
+        self.assertEqual(row, {
+            "surface": "output", "file": "decompose-2026-07-01-2",
+            "day": "2026-07-01", "suite": ("decompose",),
+            "case_set": (("a says y",), ("b says x",)),
+            "n": 2, "hits": 1, "cost": None})
+
+    def test_a_summary_that_disagrees_is_a_problem(self):
+        data = fx.output_record([("a", True), ("b", True)])
+        data["summary"]["passed"] = 1
+        fx.write_json(self.root, "evals/results/output/x-2026-07-01/"
+                      "grading.json", data)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/output/x-2026-07-01/grading.json "
+            "summary disagrees with its results"]))
+
+    def test_a_directory_without_a_grading_file_is_not_a_record(self):
+        (self.root / "evals/results/output/x-2026-07-01").mkdir(parents=True)
+        self.assertEqual(self.load(), ([], []))
+
+
+class TestLoadPlugin(TempRoot):
+    def test_a_record_becomes_one_row_with_its_recorded_cost(self):
+        cases = [("b-case", "prompt b", [("g2", "md2"), ("g1", None)]),
+                 ("a-case", "prompt a", [("g1", "md1")])]
+        fx.write_json(self.root, "plugin-evals/records/2026-10-10-3.json",
+                      fx.plugin_record("2026-10-10T23:26:53.370Z", cases,
+                                       tags=("lean", "implement"),
+                                       cost=4.057434, passed=1))
+        (row,) = self.rows_of("plugin")
+        self.assertEqual(row, {
+            "surface": "plugin", "file": "2026-10-10-3.json",
+            "day": "2026-10-10",
+            "suite": (("implement", "lean"), "none", "claude-sonnet-5",
+                      "claude-haiku-4-5", 1),
+            "case_set": (("a-case", "prompt a", (("g1", "md1"),)),
+                         ("b-case", "prompt b", (("g1", ""), ("g2", "md2")))),
+            "n": 2, "hits": 1, "cost": 4.057434})
+
+    def test_a_partial_record_is_a_problem(self):
+        fx.write_json(self.root, "plugin-evals/records/2026-10-10.json",
+                      fx.plugin_record("2026-10-10T01:00:00Z",
+                                       [("a", "p", [])], partial=True))
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: plugin-evals/records/2026-10-10.json is partial"]))
+
+    def test_a_record_without_a_cost_has_cost_none(self):
+        data = fx.plugin_record("2026-10-10T01:00:00Z", [("a", "p", [])])
+        del data["costUsd"]
+        fx.write_json(self.root, "plugin-evals/records/2026-10-10.json", data)
+        (row,) = self.rows_of("plugin")
+        self.assertIsNone(row["cost"])
+
+    def test_a_missing_aggregate_is_a_problem(self):
+        data = fx.plugin_record("2026-10-10T01:00:00Z", [("a", "p", [])])
+        del data["aggregates"]
+        fx.write_json(self.root, "plugin-evals/records/2026-10-10.json", data)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: plugin-evals/records/2026-10-10.json missing "
+            "field aggregates"]))
+
+
+class TestLoadDecomposeSignals(TempRoot):
+    def test_a_record_is_an_inventory_row_with_no_measure(self):
+        fx.write_json(
+            self.root, "evals/results/decompose-signals-2026-10-18.json",
+            fx.signals_record("2026-10-18"))
+        (row,) = self.rows_of("decompose-signals")
+        self.assertEqual(row, {
+            "surface": "decompose-signals",
+            "file": "decompose-signals-2026-10-18.json",
+            "day": "2026-10-18", "suite": None, "case_set": None,
+            "n": None, "hits": None, "cost": None})
+
+    def test_an_absent_location_is_an_empty_surface_not_an_error(self):
+        self.assertEqual(self.load(), ([], []))
+
+
+class TestDualMembershipPin(unittest.TestCase):
+    """Red until S6 adds the import: the pin names the new edge."""
+
+    def test_the_pin_holds_the_eval_trends_edge_and_55_pairs(self):
+        pinned = test_dual_membership.ROOT_ONLY_IMPORTS_MIRRORED
+        self.assertIn(("eval_trends", "cli"), pinned)
+        self.assertEqual(len(pinned), 55)
 
 
 if __name__ == "__main__":
