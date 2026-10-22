@@ -121,7 +121,7 @@ When this milestone is done, `docs/research/eval-quality-metrics-2026-10-21.md` 
 - [x] **S21 Docs** — the CLAUDE.md on-demand bullet beside `decompose_signals.py` — size:S
   - Accept: CLAUDE.md names `python3 eval_trends.py` as free, read-only, outside every gate, making no model or network call, printing an inventory and REFUSED lines in place of a trend below the minimum (30 cases, 2 days), citing ADR-0115 and the research note. It says it measures recorded history only and moves no LEDGER maturity. It contains no work-order token or sample id that detectors C and I scan, and `python3 kb.py drift` prints `drift: 0 problem(s)`.
   - Blocked by: S20 Gates after the note
-- [ ] **S22 Whole-repo verify and scope checks** — the four CI checks and the scope checks over the finished change — size:S
+- [x] **S22 Whole-repo verify and scope checks** — the four CI checks and the scope checks over the finished change — size:S
   - Accept: `python3 run_tests.py` exits 0; `python3 lint.py` prints `lint: 0 problem(s)`; `python3 kb.py drift` prints `drift: 0 problem(s)`; `python3 gates.py` and `python3 gates.py --selftest` print `gates: 0 problem(s)`. `tests/test_dual_membership.py` passes with 55 pairs. ADR-0115 and its README row are present. `python3 one_owner.py` names no finding in `eval_trends`. A diff of the change from this run's first implement commit (not `main...HEAD` if the local main ref is behind, per the earlier decompose runs) shows no change under `.claude-plugin/`, `factory/templates/`, `evals/`, `plugin-evals/` or `skills/`, none to `LEDGER.md` or `factory_init.MIRRORS`, and no file written under `evals/results` or `plugin-evals/records`. `python3 eval_trends.py` on the real tree exits 0. The change set equals architecture.md's list plus the frozen fixture and the research note.
   - Blocked by: S21 Docs
 
@@ -214,3 +214,32 @@ none.
   breakdown's own S17 note (a literal link-shaped example inside backticks
   is scanned) and the note text was reworded; no detector, ADR or lint rule
   was edited.
+- 2026-10-21 (Implement) S22 whole-repo verify and scope checks (one-off
+  commands, not tests under `tests/`; the first implement commit is
+  64bc22d whose parent is cfb56e6, the decompose commit, so the diff base is
+  that parent and not a possibly stale local main):
+  - `python3 run_tests.py` last line: `tests: 3765 tests across 117 modules
+    in 25.4s on 8 workers, 0 problem(s)`.
+  - `python3 lint.py`: `lint: 0 problem(s) across 34 skills`.
+  - `python3 kb.py drift`: `drift: 0 problem(s)`.
+  - `python3 gates.py`: `gates: 0 problem(s)`; `python3 gates.py
+    --selftest`: `selftest: ok`.
+  - `python3 -m unittest tests.test_dual_membership`: OK, 55 pairs.
+  - `python3 one_owner.py`: `one-owner: 9 problem(s)`, the baseline count,
+    and `grep -c eval_trends` of its output is 0.
+  - `git diff --name-only cfb56e6 HEAD -- .claude-plugin factory/templates
+    evals plugin-evals skills LEDGER.md factory_init.py` prints nothing;
+    `git diff --name-only cfb56e6 HEAD | grep -E "^(evals|plugin-evals)/"`
+    prints nothing, so no file was written under `evals/results` or
+    `plugin-evals/records` (the 50 frozen copies live under
+    `tests/fixtures/eval_trends_2026_10_21/`).
+  - Change set outside the frozen fixture: `CLAUDE.md`, this breakdown, the
+    research note, `eval_schema.py`, `eval_trends.py`, `factory.py`,
+    `tests/eval_trends_fixture.py`, `tests/test_dual_membership.py`,
+    `tests/test_eval_quality_note.py`, `tests/test_eval_schema.py`,
+    `tests/test_eval_trends.py`, `tests/test_eval_trends_records.py`,
+    `tests/test_eval_trends_render.py`. That is architecture.md's list plus
+    the fixture and the note. ADR-0115 and its README row were already
+    present (written at Architect) and unchanged.
+  - `python3 eval_trends.py` on the real tree exits 0 with
+    `eval-trends: 0 problem(s)`.
