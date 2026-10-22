@@ -322,9 +322,14 @@ def _read_surface(root, pattern, row_of):
             problems.append(f"{LABEL}: {problem}")
             continue
         try:
-            rows.append(row_of(rel, data))
+            row = row_of(rel, data)
+            hash((row["suite"], row["case_set"]))  # groups key on these
+            rows.append(row)
         except RecordError as err:
             problems.append(f"{LABEL}: {rel.as_posix()} {err}")
+        except TypeError:  # an object or list where a scalar belongs
+            problems.append(
+                f"{LABEL}: {rel.as_posix()} malformed field values")
     return rows, problems
 
 

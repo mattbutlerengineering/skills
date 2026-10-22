@@ -68,5 +68,25 @@ class TestDateFields(Tree):
         self.assertEqual(len(problems), 1)
 
 
+class TestUnhashableValues(Tree):
+    def test_an_object_model_is_a_problem_not_a_traceback(self):
+        self.trigger("trigger-2026-10-05.json", "2026-10-05",
+                     model={"a": 1})
+        rows, problems = self.load()
+        self.assertEqual(rows, [])
+        self.assertEqual(problems, [
+            "eval-trends: evals/results/trigger-2026-10-05.json "
+            "malformed field values"])
+
+    def test_a_list_id_is_a_problem_not_a_traceback(self):
+        data = fx.trigger_record("2026-10-05", fx.numbered_cases(30, 15))
+        data["results"][0]["id"] = [1]
+        fx.write_json(self.root, "evals/results/trigger-2026-10-05.json",
+                      data)
+        rows, problems = self.load()
+        self.assertEqual(rows, [])
+        self.assertEqual(len(problems), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
