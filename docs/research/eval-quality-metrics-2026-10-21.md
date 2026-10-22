@@ -146,7 +146,7 @@ overlapping, in percentage points:
 | n | half-width at 50 percent | smallest gap with no overlap |
 |---|---|---|
 | 10 | 26.3 | not computed |
-| 30 | 16.8 | 34 |
+| 30 | 16.8 | 37 |
 | 47 | 13.7 | not computed |
 | 100 | 9.6 | not computed |
 | 185 | 7.1 | 15 |
@@ -164,7 +164,7 @@ questions, and it shows that more samples per question lowers the minimum
 detectable effect (from 13.2 to 7.5 percent in its example). By that
 standard none of this repo's evals (the largest has 185 cases) can show a
 small change. The note therefore supports 30 and 2 only as a floor that
-keeps an interval from being absurd (at 30 cases only a gap of about 34
+keeps an interval from being absurd (at 30 cases only a gap of about 37
 points separates two rates), not as a threshold at which a trend is
 established. The constants are left unchanged, and the tool's wording
 already says the comparison is descriptive and not a significance test.

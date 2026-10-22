@@ -167,7 +167,7 @@ tool relies on: groups are keyed on the full sorted tuple list.
      - a rerun spread, for each group day with 2+ records:
        `eval-trends: <surface> rerun spread <date> set <hex>: passed <lo>..<hi> of <n> over <k> run(s) (<files>)`
      - a trend line, for each `trend` group:
-       `eval-trends: <surface> trend set <hex> suite <label>: <d1> <h1>/<n1> (<p1>% , 95% <lo1>-<hi1>%) -> <d2> <h2>/<n2> (<p2>%, 95% <lo2>-<hi2>%); intervals do not overlap | intervals overlap: not distinguishable (descriptive, not a significance test) (<files>)`
+       `eval-trends: <surface> trend set <hex> suite <label>: <d1> <h1>/<n1> (<p1>% , 95% <lo1>-<hi1>%) -> <d2> <h2>/<n2> (<p2>%, 95% <lo2>-<hi2>%); intervals do not overlap (descriptive, not a significance test) | intervals overlap: not distinguishable (descriptive, not a significance test) (<files>)`
        where a multi-record day prints its hull and its lowest-to-highest rate
      - a cost line per `trend` group: `eval-trends: <surface> cost per pass: <d1> $<x> -> <d2> $<y> (<files>)` for plugin, else
        `eval-trends: <surface> cost: REFUSED cost field absent from <k> of <m> record(s); no trend claim`
@@ -185,7 +185,10 @@ tool relies on: groups are keyed on the full sorted tuple list.
 - Exit: 0 with no problems (a refusal is data); 1 with one or more malformed
   records, each printed as `eval-trends: <path> <reason>` before the summary;
   2 on usage.
-- Failure modes: an absent location is an empty surface, not an error; an
+- Failure modes (Review added): a record whose date field is not a real day
+  or disagrees with the day its name carries, a plugin record whose
+  aggregates disagree with its cases, and a record holding an object or list
+  where a scalar belongs are each one problem, never a row. An absent location is an empty surface, not an error; an
   unreadable or malformed file is one problem and its row is dropped from the
   groups but counted in the problem total, so a dropped file can never lower the
   inventory silently (the inventory prints `<m> record(s)` for rows read and the
@@ -196,7 +199,7 @@ the pin is the Implement stage's, measured at verification):
 
 | Surface | Records | Under the rule |
 |---|---|---|
-| trigger | 41 | 31 case sets. Groups on 2+ days: 4-case and smaller sets (07-03 and 07-05 reruns) are `small` (n below 30). 10-10-2 and 10-10-3 (185 cases) are `same-day`, passed 159 and 163. The remaining records are `single`; the 47-case 07-01 record, the 152-case 10-10 record and the 70-case omp record share no suite key with another record or share one and differ in case set. No trend line, no cost line |
+| trigger | 41 | 31 case sets. Measured at Implement (corrected at Review): no group reaches `small` or `trend`. The 4-case 07-03 and 07-05 reruns are not one group, because the suite key includes `runs_per_query` (1 on 07-03, 3 on 07-05), so they print under `case sets differ` (38 records) with 1 record under `different suites`. 10-10-2 and 10-10-3 (185 cases) are `same-day`, passed 159 and 163. No trend line, no cost line |
 | charter | 2 | one group, both 2026-09-28, 4 cases: `same-day`. No trend line |
 | output | 2 | slug decompose, same day, 6 and 4 expectations: two different case sets, so `case sets differ`. No trend line |
 | plugin | 3 | three suites (next; lean and implement; kb-on and kb-off), one record each: `different suites`. No trend line |
