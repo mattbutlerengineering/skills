@@ -100,7 +100,7 @@ When this milestone is done, the tool's output on a frozen copy of today's recor
 
 When this milestone is done, `docs/research/eval-quality-metrics-2026-10-21.md` exists with real cited sources, a failure mode per metric and a not-verified section, a test asserts its required headings, and the gates are clean with it present.
 
-- [ ] **S16 Research-note heading tests** — a test for the note's required structure — size:S
+- [x] **S16 Research-note heading tests** — a test for the note's required structure — size:S
   - Accept: a test (in `tests/test_eval_trends.py` or a new `tests/test_eval_quality_note.py`, Implement's call, recorded in Notes) asserts the note exists at its path, has a dated first paragraph, the headings `## Metrics and failure modes`, `## What n justifies a trend claim`, `## Sources` and `## Not verified`, a subsection under the first for each of: pass rate with a confidence interval, flake rate, saturation, judge agreement and drift, contamination, cost per point, each containing the words `failure mode`, and that every recommended metric's subsection names at least one source that appears in `## Sources` with a fetch date. It fails now because the note is absent.
   - Blocked by: —
 - [ ] **S17 Gates probe on URLs** — before writing any note text, learn what detectors C and I do with a real URL and with prose near the typed-id forms — size:S
