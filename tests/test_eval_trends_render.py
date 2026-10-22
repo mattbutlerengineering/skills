@@ -354,6 +354,18 @@ class TestProblemsAndExitCodes(RenderCase):
         self.assertEqual(code, 0)
 
 
+class TestFactoryVerb(RenderCase):
+    def test_the_verb_prints_what_the_module_prints(self):
+        import factory
+        self.trigger("2026-07-01", 30, 12)
+        self.trigger("2026-07-05", 30, 24)
+        _, direct = self.run_main()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = factory.main(["eval-trends", str(self.root)])
+        self.assertEqual((code, out.getvalue().splitlines()), (0, direct))
+
+
 class TestReadOnly(RenderCase):
     def snapshot(self):
         return {p.relative_to(self.root).as_posix(): p.read_bytes()

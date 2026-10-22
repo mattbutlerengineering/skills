@@ -47,6 +47,7 @@ VERBS = {
     "decompose-grade": ("decompose_grade", "argv"),
     "decompose-lessons": ("decompose_lessons", "argv"),
     "decompose-signals": ("decompose_signals", "argv"),
+    "eval-trends": ("eval_trends", "argv"),
     "factory-init": ("factory_init", "argv"),
     "fast-path": ("fast_path", "argv"),
     "gate-digest": ("gate_digest", "argv"),

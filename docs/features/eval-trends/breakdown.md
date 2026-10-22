@@ -81,7 +81,7 @@ When this milestone is done, `python3 eval_trends.py` and `python3 factory.py ev
 - [x] **S12 Render and front door** — `render` and `main(argv)` as architecture.md's Interfaces and contracts fixes them — size:L
   - Accept: the S11 tests pass and every earlier test still passes. `main` takes no argument or one repo-root path, sends every line and problem through `cli.report`, and returns 0, 1 or 2 as S11 asserts. The module is runnable as a script and prints its output on the fixture tree.
   - Blocked by: S11 Render and front-door tests
-- [ ] **S13 Factory verb** — the `eval-trends` row in `factory.py`'s VERBS table — size:S
+- [x] **S13 Factory verb** — the `eval-trends` row in `factory.py`'s VERBS table — size:S
   - Accept: `("eval_trends", "argv")` is registered under `eval-trends` in sorted position, `tests/test_factory_cli.py` passes with the verb present and the module existing, and `python3 factory.py eval-trends <fixture root>` prints the same output as the module run directly. Before the row is added, that factory test fails on the module with no row.
   - Blocked by: S12 Render and front door
 
