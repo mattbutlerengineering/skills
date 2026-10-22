@@ -41,7 +41,7 @@ PROMPT_KEYS = ("description", "tags", "max_turns", "timeout_seconds",
 UNTOUCHED = ("evals", "LEDGER.md", "plugin-evals/records",
              "plugin-evals/decompose", "plugin-evals/implement",
              "plugin-evals/knowledge-base", "plugin-evals/lean",
-             "plugin-evals/next", ".claude-plugin", "factory/templates",
+             "plugin-evals/next", "factory/templates",
              "skills/launch-demo", "skills/verify")
 
 

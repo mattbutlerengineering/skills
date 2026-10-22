@@ -2,7 +2,8 @@
 stage: ship
 run: feature:decompose-lessons
 date: 2026-10-20
-outcome: prepared
+outcome: released
+released-at: 2026-10-20
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1050
 assumptions:
   - "Release authorization is the brief's default, prepare and stop. Ship pushes the branch, opens one PR and stops. It does not merge, tag, bump the version or delete a branch."
