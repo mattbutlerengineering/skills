@@ -92,7 +92,7 @@ When this milestone is done, the tool's output on a frozen copy of today's recor
 - [x] **S14 Frozen-record fixture** — copy today's record files into `tests/fixtures/eval_trends_2026_10_21/` byte-for-byte — size:S
   - Accept: the fixture holds the five locations' files exactly as the tree has them (41 trigger, 2 charter, 2 output grading directories, 3 plugin records, 2 decompose-signals), with the same relative layout, and `cmp` of each copy against its source shows no difference. Nothing under `evals/` or `plugin-evals/` is written or changed. Each fixture file name still parses under `parse_results_stem`.
   - Blocked by: S13 Factory verb
-- [ ] **S15 Honest-on-today's-records tests** — the frozen-fixture test and the live smoke test — size:M
+- [x] **S15 Honest-on-today's-records tests** — the frozen-fixture test and the live smoke test — size:M
   - Accept: the frozen test runs `main` on the fixture root and asserts exit 0, the inventory counts 41, 2, 2, 2 and 3 (trigger, charter, output, plugin, decompose-signals as the architecture orders them), no line containing `trend set`, a REFUSED line for every surface with the counts summing to each inventory count, the 185-case same-day pair showing passed 159 and 163 as a rerun spread, and the `not computed` line. The live smoke test runs `main` on the repository root and asserts only: exit 0 with no malformed-record problem, each inventory count equal to an independent glob of its location, and the REFUSED counts summing to each inventory count; it pins no literal count and no absence of a trend line, and its docstring says why. A mutation check is run and logged in Notes: making `classify` return `trend` for a same-day group, and then dropping one REFUSED state from `render`, each turns a named frozen-fixture case red, restored afterwards with `git diff` on the tool clean.
   - Blocked by: S14 Frozen-record fixture
 
@@ -131,3 +131,44 @@ none.
 
 ## Notes
 
+
+- 2026-10-21 (Implement) Deviation, test files: the tool tests are split
+  over four files instead of one, to keep each under the size limit and to
+  share one fixture builder: `tests/test_eval_trends.py` (core and
+  adapters), `tests/test_eval_trends_render.py` (render, main, factory
+  verb, read-only), `tests/test_eval_trends_records.py` (S15), and the
+  builder `tests/eval_trends_fixture.py`. The eval_schema cases are in the
+  existing `tests/test_eval_schema.py` (`TestParseResultsStem`).
+- 2026-10-21 (Implement) Deviation, commit grouping: S6 to S9 landed in
+  one commit (the S5 cases drove each reader in turn, so there was no
+  honest RED between them); S1/S2 and S3/S4 checkboxes were checked in the
+  commit after their code.
+- 2026-10-21 (Implement) Clarification, S15 counts: the S15 criterion lists
+  "41, 2, 2, 2 and 3" but its own parenthesis and S14 give trigger 41,
+  charter 2, output 2, plugin 3, decompose-signals 2. The frozen test pins
+  the latter (printed in the architecture's order: trigger, charter,
+  output, plugin, decompose-signals).
+- 2026-10-21 (Implement) Measured, against architecture.md's prediction:
+  the architecture expected the 4-case 07-03 and 07-05 trigger reruns to
+  classify as `small`. They do not: the trigger suite key includes
+  `runs_per_query`, which is 1 on 07-03 and 3 on 07-05 (and 5 for others),
+  so those records are different suites by the architecture's own suite
+  key, and the tool prints `case sets differ` for 38 trigger records,
+  `different suites` for 1 and `only same-day` for the 185-case pair. No
+  group on today's records reaches `small` or `trend`. The architecture
+  said the exact partition is the tool's to compute; this is that
+  computation, not a design gap.
+- 2026-10-21 (Implement) S15 mutation check (prove-the-mutation-landed;
+  each mutation shown applied by `git diff --stat` reading 1 insertion, 1
+  deletion, then reverted with `git checkout eval_trends.py`, `git diff`
+  clean):
+  1. `_group_state` same-day test changed to `< 0` (so a same-day group is
+     never `same-day`): 9 cases went red, among them
+     `TestFrozenRecords.test_no_trend_line_on_these_records`,
+     `test_the_185_case_same_day_pair_is_a_rerun_spread` and
+     `TestClassify.test_two_records_on_one_day_never_pair_with_each_other`.
+  2. the `case sets differ` REFUSED line made unreachable in
+     `_refused_lines`: 7 cases went red, among them
+     `TestFrozenRecords.test_the_refused_lines_for_the_small_surfaces_exactly`,
+     `TestFrozenRecords.test_every_surface_is_refused_and_the_counts_sum_to_the_inventory`
+     and `TestRefusalStates.test_case_sets_differ`.
