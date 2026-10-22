@@ -405,6 +405,29 @@ class TestLoadDecomposeSignals(TempRoot):
     def test_an_absent_location_is_an_empty_surface_not_an_error(self):
         self.assertEqual(self.load(), ([], []))
 
+    def test_a_signals_record_with_a_bad_name_is_a_problem(self):
+        fx.write_json(
+            self.root, "evals/results/decompose-signals-2026-10-18-0.json",
+            fx.signals_record("2026-10-18"))
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/decompose-signals-2026-10-18-0.json"
+            " name fits no results grammar"]))
+
+    def test_the_surface_can_never_reach_classify(self):
+        """Two signals records on different days share a None suite and a
+        None case set; measured() leaves them out, so no trend, rerun
+        spread or cost line can be built from them."""
+        for day in ("2026-10-17", "2026-10-18"):
+            fx.write_json(
+                self.root, f"evals/results/decompose-signals-{day}.json",
+                fx.signals_record(day))
+        rows, problems = self.load()
+        self.assertEqual((len(rows), problems), (2, []))
+        self.assertEqual(eval_trends.measured(rows), [])
+        mixed = rows + [row("t", "2026-01-01")]
+        self.assertEqual([r["file"] for r in eval_trends.measured(mixed)],
+                         ["t"])
+
 
 class TestDualMembershipPin(unittest.TestCase):
     """Red until S6 adds the import: the pin names the new edge."""

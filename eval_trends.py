@@ -250,6 +250,24 @@ def _plugin_row(rel, data):
             "n": n, "hits": hits, "cost": cost}
 
 
+def _signals_row(rel, data):
+    """The inventory-only row for one decompose-signals record: its
+    aggregates re-measure one git history at a head, not an eval case
+    set, so it carries a day and nothing to compare."""
+    parsed = parse_results_stem(rel.stem)
+    if parsed is None or parsed[0] != "decompose-signals":
+        raise RecordError("name fits no results grammar")
+    return {"surface": "decompose-signals", "file": rel.name,
+            "day": _day(_need(data, "date", str), "date"), "suite": None,
+            "case_set": None, "n": None, "hits": None, "cost": None}
+
+
+def measured(rows):
+    """The rows that are eval runs: everything but the inventory-only
+    surface. Only these may reach classify."""
+    return [r for r in rows if r["surface"] != "decompose-signals"]
+
+
 def _read_surface(root, pattern, row_of):
     """(rows, problems) for the files matching pattern under root, in
     sorted path order; each file is read through cli.read_file."""
@@ -270,7 +288,8 @@ def _read_surface(root, pattern, row_of):
 READERS = (("evals/results/trigger*.json", _trigger_row),
            ("evals/results/charter-*.json", _charter_row),
            ("evals/results/output/*/grading.json", _output_row),
-           ("plugin-evals/records/*.json", _plugin_row))
+           ("plugin-evals/records/*.json", _plugin_row),
+           ("evals/results/decompose-signals-*.json", _signals_row))
 
 
 def load_rows(root):

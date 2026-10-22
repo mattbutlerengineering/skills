@@ -52,22 +52,22 @@ When this milestone is done, `wilson`, `day_interval`, `cost_per_pass` and `clas
 
 When this milestone is done, `load_rows` turns a fixture tree of every surface into rows, and each malformed record into `eval-trends: <path> <reason>`, with decompose-signals kept inventory-only.
 
-- [ ] **S5 Adapter tests** — cases for `load_rows` per surface, plus the pin test that goes red on purpose — size:L
+- [x] **S5 Adapter tests** — cases for `load_rows` per surface, plus the pin test that goes red on purpose — size:L
   - Accept: the module holds these cases over temp trees, one block per surface, expected rows computed by hand in the test. Trigger: row from `date`, `len(results)`, count of `pass`, suite (harness, model, runs_per_query, threshold) and the (id, expected, query) case set; a summary that disagrees with its own `results`, an `errors` above 0, an unparseable name, a non-object file and a missing needed field each yield `eval-trends: <path> <reason>` and no row. Charter: arm, model and charters map suite, (id, role) set, hits are verdict `sensitive`. Output: directory-name date and slug, `expectations` count and `passed` count, text set. Plugin: `startedAt` UTC day, `casesTotal` and `casesPassed`, suite from tagFilters (sorted), ablation, modelOverride, judgeModel, threshold, case set from name, promptMarkdown and grader markdown, `costUsd`; `partial: true` is a problem. Decompose-signals: a row with surface and day and no n. An absent location is an empty surface, not an error. Files are listed in sorted path order. A source grep test is not here. A separate test asserts `tests/test_dual_membership.py`'s expected set contains `(eval_trends, cli)` and its count is 55, and it is red now. Before `load_rows` exists every adapter case fails.
   - Blocked by: S4 Core
-- [ ] **S6 Trigger adapter and the cli import** — `load_rows` for trigger records, reading through `cli.read_file`, plus the dual-membership pin move — size:M
+- [x] **S6 Trigger adapter and the cli import** — `load_rows` for trigger records, reading through `cli.read_file`, plus the dual-membership pin move — size:M
   - Accept: the S5 trigger cases pass. Files are read through `cli.read_file` with no retyped guarded-read logic. `tests/test_dual_membership.py`'s pin gains `(eval_trends, cli)`, its pair-count comment reads 55 and names ADR-0115, and the S5 pin test and the dual-membership test pass.
   - Blocked by: S5 Adapter tests
-- [ ] **S7 Charter adapter** — the charter surface reader — size:S
+- [x] **S7 Charter adapter** — the charter surface reader — size:S
   - Accept: the S5 charter cases pass and the trigger cases and the pin test still pass. The metric is labelled `sensitive`, never a pass rate.
   - Blocked by: S6 Trigger adapter and the cli import
-- [ ] **S8 Output-gradings adapter** — the output surface reader — size:S
+- [x] **S8 Output-gradings adapter** — the output surface reader — size:S
   - Accept: the S5 output cases pass and every earlier case still passes. The slug is taken through `parse_results_stem` on the directory name, with no second regex in `eval_trends.py` (a source grep for `re.compile` of a results-name pattern finds none).
   - Blocked by: S7 Charter adapter
-- [ ] **S9 Plugin-records adapter** — the plugin surface reader — size:M
+- [x] **S9 Plugin-records adapter** — the plugin surface reader — size:M
   - Accept: the S5 plugin cases pass and every earlier case still passes. `costUsd` is read as recorded, never summed across fields, decomposed or estimated.
   - Blocked by: S8 Output-gradings adapter
-- [ ] **S10 Decompose-signals inventory-only** — the decompose-signals surface reader that yields inventory rows and no case set — size:S
+- [x] **S10 Decompose-signals inventory-only** — the decompose-signals surface reader that yields inventory rows and no case set — size:S
   - Accept: the S5 decompose-signals cases pass and every earlier case still passes. Its rows carry no n, no suite and no case set, and `classify` is never given them: a test shows the surface can never produce a trend, rerun spread or cost line.
   - Blocked by: S9 Plugin-records adapter
 
