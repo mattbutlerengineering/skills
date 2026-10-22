@@ -716,5 +716,63 @@ class TestLoadCaseSetGuardsItsValidators(unittest.TestCase):
 
 
 
+class TestParseResultsStem(unittest.TestCase):
+    """parse_results_stem is the inverse of results_path (ADR-0115): any
+    results file stem or output directory name back into (kind, harness,
+    date, suffix, slug), or None when it fits no grammar."""
+
+    DATE = "2026-07-02"
+    # (kind, harness, slug) for every name results_path can build. The
+    # unmarked trigger carries no harness in its stem, so it parses to None.
+    KINDS = (("trigger", None, None), ("trigger", "claude", None),
+             ("trigger", "omp", None), ("charter", None, None),
+             ("decompose-signals", None, None), ("output", None, "decompose"),
+             ("output", None, "csv-export"))
+
+    def setUp(self):
+        self.results = Path(tempfile.mkdtemp(prefix="results-stem-"))
+        self.addCleanup(shutil.rmtree, self.results)
+
+    def build(self, kind, harness, slug, collisions):
+        for _ in range(collisions):
+            path = eval_schema.results_path(
+                self.results, kind, self.DATE, slug=slug, harness=harness)
+            if kind == "output":
+                path.mkdir(parents=True)
+            else:
+                path.touch()
+        return eval_schema.results_path(
+            self.results, kind, self.DATE, slug=slug, harness=harness)
+
+    def test_every_kind_round_trips_with_and_without_a_suffix(self):
+        for kind, harness, slug in self.KINDS:
+            for collisions, suffix in ((0, None), (1, 2), (8, 9), (9, 10)):
+                with self.subTest(kind=kind, harness=harness, slug=slug,
+                                  suffix=suffix):
+                    path = self.build(kind, harness, slug, collisions)
+                    want_harness = None if harness == "claude" else harness
+                    self.assertEqual(
+                        eval_schema.parse_results_stem(path.stem if
+                                                       kind != "output"
+                                                       else path.name),
+                        (kind, want_harness, self.DATE, suffix, slug))
+                    shutil.rmtree(self.results)
+                    self.results.mkdir()
+
+    def test_an_output_directory_name_parses_to_slug_and_date(self):
+        self.assertEqual(
+            eval_schema.parse_results_stem("decompose-2026-07-01-2"),
+            ("output", None, "2026-07-01", 2, "decompose"))
+
+    def test_a_stem_that_fits_no_grammar_is_none(self):
+        for stem in ("", "2026-07-02", "trigger-bogus-2026-07-02",
+                     "trigger-2026-07-02-0", "trigger-2026-07-02-1",
+                     "charter-2026-07-02-0", "trigger", "decompose-2026-07",
+                     "-2026-07-02", "Trigger-2026-07-02",
+                     "charter-omp-2026-07-02"):
+            with self.subTest(stem=stem):
+                self.assertIsNone(eval_schema.parse_results_stem(stem))
+
+
 if __name__ == "__main__":
     unittest.main()
