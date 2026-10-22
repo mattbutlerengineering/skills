@@ -1,0 +1,46 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "mermaid-3",
+      "kind": "situational",
+      "expected": "mermaid",
+      "query": "I need a sequence diagram of the auth handshake for the docs, and it has to stay readable in dark mode",
+      "fired": {
+        "mermaid": 4,
+        "none": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.8,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "by_kind": {
+      "situational": {
+        "total": 1,
+        "passed": 1
+      }
+    },
+    "by_skill": {
+      "mermaid": {
+        "total": 1,
+        "passed": 1
+      }
+    }
+  },
+  "confusion": {
+    "mermaid": {
+      "mermaid": 4,
+      "none": 1
+    }
+  }
+}

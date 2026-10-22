@@ -1,0 +1,92 @@
+{
+  "date": "2026-07-05",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "ship-direct-1",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "The review is done \u2014 ship it to production with pre-flight checks and a rollback plan",
+      "fired": {
+        "ship": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ship-direct-2",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "Let's release this feature \u2014 walk me through the release steps",
+      "fired": {
+        "ship": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "ship-situational-1",
+      "kind": "situational",
+      "expected": "ship",
+      "query": "Review found no blockers \u2014 get this into production",
+      "fired": {
+        "none": 2,
+        "ship": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "impl-vs-ship-1",
+      "kind": "near-miss",
+      "expected": "ship",
+      "query": "The code is done and tests pass \u2014 push this out to users",
+      "fired": {
+        "none": 1,
+        "ship": 2
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 4,
+    "passed": 3,
+    "failed": 1,
+    "by_kind": {
+      "direct": {
+        "total": 2,
+        "passed": 2
+      },
+      "situational": {
+        "total": 1,
+        "passed": 0
+      },
+      "near-miss": {
+        "total": 1,
+        "passed": 1
+      }
+    },
+    "by_skill": {
+      "ship": {
+        "total": 4,
+        "passed": 3
+      }
+    }
+  },
+  "confusion": {
+    "ship": {
+      "ship": 8,
+      "none": 4
+    }
+  }
+}

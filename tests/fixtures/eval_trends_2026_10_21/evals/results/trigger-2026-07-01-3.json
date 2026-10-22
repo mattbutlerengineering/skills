@@ -1,0 +1,135 @@
+{
+  "date": "2026-07-01",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.198 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "review-direct-1",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Give this run's changes a quality pass for defects and security issues before we ship",
+      "fired": {
+        "review": 4,
+        "none": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.8,
+      "pass": true
+    },
+    {
+      "id": "review-direct-2",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Do a code review of the changes from this run and write up the findings",
+      "fired": {
+        "none": 4,
+        "review": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.2,
+      "pass": false
+    },
+    {
+      "id": "ship-direct-1",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "The review is done \u2014 ship it to production with pre-flight checks and a rollback plan",
+      "fired": {
+        "ship": 4,
+        "none": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.8,
+      "pass": true
+    },
+    {
+      "id": "review-situational-1",
+      "kind": "situational",
+      "expected": "review",
+      "query": "verification.md is in place \u2014 the change still needs a defect and security pass before release",
+      "fired": {
+        "review": 5
+      },
+      "runs": 5,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "verify-vs-review-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Give the change a quality check before we ship",
+      "fired": {
+        "review": 5
+      },
+      "runs": 5,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "distractor-2",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Review my coworker's PR in the analytics repo",
+      "fired": {
+        "none": 5
+      },
+      "runs": 5,
+      "correct_rate": 1.0,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 6,
+    "passed": 5,
+    "failed": 1,
+    "by_kind": {
+      "direct": {
+        "total": 3,
+        "passed": 2
+      },
+      "situational": {
+        "total": 1,
+        "passed": 1
+      },
+      "near-miss": {
+        "total": 1,
+        "passed": 1
+      },
+      "distractor": {
+        "total": 1,
+        "passed": 1
+      }
+    },
+    "by_skill": {
+      "review": {
+        "total": 4,
+        "passed": 3
+      },
+      "ship": {
+        "total": 1,
+        "passed": 1
+      },
+      "none": {
+        "total": 1,
+        "passed": 1
+      }
+    }
+  },
+  "confusion": {
+    "review": {
+      "review": 15,
+      "none": 5
+    },
+    "ship": {
+      "ship": 4,
+      "none": 1
+    },
+    "none": {
+      "none": 5
+    }
+  }
+}

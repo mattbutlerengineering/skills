@@ -1,0 +1,44 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "mermaid-2",
+      "kind": "situational",
+      "expected": "mermaid",
+      "query": "This runbook's escalation steps are a wall of text \u2014 turn them into a diagram people can follow at a glance",
+      "fired": {
+        "none": 5
+      },
+      "runs": 5,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "by_kind": {
+      "situational": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "mermaid": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "mermaid": {
+      "none": 5
+    }
+  }
+}

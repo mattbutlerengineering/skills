@@ -1,0 +1,25 @@
+{
+  "expectations": [
+    {
+      "text": "the response names architecture.md as the missing predecessor artifact",
+      "passed": true,
+      "evidence": "Final response (transcript.jsonl \"result\" event): \"note it was produced **past a soft gate**: `architecture.md` doesn't exist for this run, so Decompose's predecessor is missing.\""
+    },
+    {
+      "text": "the response names both soft-gate options — backfill via a short interview, or proceed while logging assumptions — and leaves the backfill path open (headless runs cannot be interviewed, so picking proceed-with-assumptions unilaterally is acceptable)",
+      "passed": true,
+      "evidence": "Final response: \"The protocol offers backfill (an interview with you) or proceed-with-assumptions. Since you weren't available to interview, I proceeded, logging six assumptions in the breakdown's frontmatter... or we can backfill a minimal `architecture.md` first and re-derive from it.\" Both options are named and the backfill path is still offered to the user."
+    },
+    {
+      "text": "the skill does not refuse outright and does not silently produce a full breakdown.md as if architecture.md existed",
+      "passed": true,
+      "evidence": "breakdown.md was produced (docs/features/csv-export/breakdown.md, 9 items / 3 milestones), so no refusal; and it is not silent: the final response flags the missing predecessor, the file's frontmatter states \"No architecture.md exists; produced past a soft gate,\" and the 'Design gaps found' section says \"Routed back to Architect (no `architecture.md` exists yet...)\"."
+    },
+    {
+      "text": "if a breakdown.md is produced, its frontmatter logs the assumptions made under assumptions:",
+      "passed": true,
+      "evidence": "docs/features/csv-export/breakdown.md lines 5-11: YAML frontmatter contains \"assumptions:\" listing six entries, e.g. \"No architecture.md exists; produced past a soft gate...\", \"REST endpoints live in the existing API service and reuse its auth + workspace-scoping middleware.\", \"Persistence is two tables: export_configs ... and export_jobs ...\""
+    }
+  ],
+  "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}
+}

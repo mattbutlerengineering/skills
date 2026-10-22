@@ -1,0 +1,1135 @@
+{
+  "date": "2026-10-18",
+  "head": "4f727c1bdeed70a19a6dca248e79090919657e5c",
+  "refs": {
+    "refs/heads": 401,
+    "refs/pr": 13,
+    "refs/remotes/origin": 184,
+    "refs/remotes/pr": 488
+  },
+  "refs_digest": "802d11762774043d56978d8d459e8ef2722b3e6077498086c8724ef4b03ac165",
+  "rule": "a boundary is observed when its commit subject reads docs(<any scope>): <stage>, the stage a whole word, and the commit changes that stage's artifact in the run's own directory; any other boundary is inferred (ADR-0109)",
+  "runs": [
+    {
+      "run": "feature:codex-style-standards-enforcement",
+      "path": "docs/features/codex-style-standards-enforcement",
+      "decompose": {
+        "sha": "ebe8b2a5a2cd6544e6b17819bc091f6759dfef78",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "5f307601fd30c762eca56a820db8119d78c50cf8",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 14,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 14,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 12,
+        "named": 3
+      }
+    },
+    {
+      "run": "feature:decompose-outcome-signals",
+      "path": "docs/features/decompose-outcome-signals",
+      "decompose": {
+        "sha": "de92f3c32b4021800a54f3c78e1eb4bf26392415",
+        "label": "observed"
+      },
+      "implement": {
+        "sha": "a8dbcb967ee1f756f6bfe0db63ff7c1f99cab01b",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 13,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "subjects"
+      },
+      "review": {
+        "unmeasurable": "no review.md"
+      }
+    },
+    {
+      "run": "feature:docs-audit",
+      "path": "docs/features/docs-audit",
+      "decompose": {
+        "sha": "da4b751149b303055b825826d788253660560bc4",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "bdac9347e72e875bf691bdfd3b5f3f7705dc1d1b",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 11,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 9,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:factory-evolution-v1",
+      "path": "docs/features/factory-evolution-v1",
+      "decompose": {
+        "sha": "abed3010cb71bd6c1c197767ec2a78ac59de9b27",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "aa5e19ff266ac26241206ab4379e4a2f7d379ea7",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 8,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 10,
+        "named": 3
+      }
+    },
+    {
+      "run": "feature:fail-closed-roll-up",
+      "path": "docs/features/fail-closed-roll-up",
+      "decompose": {
+        "sha": "637f2e780004068c2d5846f411c69067ea7e61d8",
+        "label": "observed"
+      },
+      "implement": {
+        "sha": "27467df1798f8ab3a79dd99f3ab58f06bc93f7a4",
+        "label": "observed"
+      },
+      "replan": {
+        "label": "observed",
+        "items_at_d": 7,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "observed",
+        "routes": 0,
+        "source": "subjects"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 11,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:faster-sdlc",
+      "path": "docs/features/faster-sdlc",
+      "decompose": {
+        "sha": "406c370fa07d416a17949bd5b7fc103f5778679f",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "76053d1db178bddca912ae33931792ea2fb68066",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 11,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "unmeasurable": "no review.md"
+      }
+    },
+    {
+      "run": "feature:first-live-dispatch",
+      "path": "docs/features/first-live-dispatch",
+      "decompose": {
+        "sha": "5540dd926b59965a394621c40edab5843ec61921",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "fbfa3c34e913052c1ddcaee8bbdd08eaa1beba13",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 8,
+        "added": 1,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 1
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 13,
+        "named": 10
+      }
+    },
+    {
+      "run": "feature:launch-demo",
+      "path": "docs/features/launch-demo",
+      "decompose": {
+        "sha": "c9808b1dea6e5fb1605104dc53b3d07ab9fde6b6",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "d4ff04446d21759b7148064ff0865b8536e53d74",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 14,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 10,
+        "named": 3
+      }
+    },
+    {
+      "run": "feature:lean-and-polish",
+      "path": "docs/features/lean-and-polish",
+      "decompose": {
+        "sha": "e24b6b3d8b54ae52ce122788245471c9f9b0bda9",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "bdba36ebc5eaa57397797c9d199910442433fd0f",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 3,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "unmeasurable": "no \"Design gaps found\" section at the decompose boundary"
+      },
+      "review": {
+        "findings": 0,
+        "reason": "no finding heading"
+      }
+    },
+    {
+      "run": "feature:lean-in-the-build",
+      "path": "docs/features/lean-in-the-build",
+      "decompose": {
+        "sha": "faddef2e4148891ea33e31e2792c689b089858ae",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "833b22c211b552778f8d78636bd06653c1709675",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 3,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 3,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:orchestrator",
+      "path": "docs/features/orchestrator",
+      "decompose": {
+        "sha": "75e3bf7300c864c71a2780957688e82a8ca9679a",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "0724c312371d390287af13b51dc7e9c1447f15e8",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 12,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 8,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:pipeline-board",
+      "path": "docs/features/pipeline-board",
+      "decompose": {
+        "sha": "4b1b72a503dead2ed8b09b4e714ce5db1d0cbf01",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "44385dac45415592b62e97af5ce59182410ba683",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 6,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 4,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:pocock-1-3-takeaways",
+      "path": "docs/features/pocock-1-3-takeaways",
+      "decompose": {
+        "sha": "9129d6194a3f859166d3a9e88bb9d53ffdf52ebd",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "7c195d64e1d0d3f4832aa6a3cde2478f55166023",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 14,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 5,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:pr-body-preflight",
+      "path": "docs/features/pr-body-preflight",
+      "decompose": {
+        "sha": "772e374f4e7bfd038bea1352dd42ad6888610c48",
+        "label": "observed"
+      },
+      "implement": {
+        "sha": "766292ce2ea587aeb2178c88eae91c3a4e9b73dd",
+        "label": "observed"
+      },
+      "replan": {
+        "label": "observed",
+        "items_at_d": 9,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "observed",
+        "routes": 1,
+        "source": "subjects"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 15,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:process-dashboard",
+      "path": "docs/features/process-dashboard",
+      "decompose": {
+        "sha": "87b59eb47fae0d4c8258b262b3e05c84156d16f2",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "c7d51cfd61d94c08859f0322c0d2ff893a5af6ff",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 11,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 4,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:readme-skill-map",
+      "path": "docs/features/readme-skill-map",
+      "decompose": {
+        "sha": "2973bbc7f1ad435cdaf283cd53c1fd5494149291",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "4e87871f1e90ee11e06e3ed1910012ca08c5b555",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 6,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 4,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:seed-backlog",
+      "path": "docs/features/seed-backlog",
+      "decompose": {
+        "sha": "1ac1042b6e3776115da917c4ab0e5feffbac61eb",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "d8c822fd7f6a30c0fb680e12ad4965add6e33cc9",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 7,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 2,
+        "named": 0
+      }
+    },
+    {
+      "run": "feature:software-factory",
+      "path": "docs/features/software-factory",
+      "decompose": {
+        "sha": "06616820341abb5386435a48a48d58c780394fc0",
+        "label": "observed"
+      },
+      "implement": {
+        "sha": "0b706b5e1daa0c0d9cf34154c19eef1db6c057cc",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 18,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "subjects"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 5,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:a-blind-find-is-not-a-failed-agent",
+      "path": "docs/fixes/a-blind-find-is-not-a-failed-agent",
+      "decompose": {
+        "sha": "b28d9535a745bab2bf450ed42efabb4545cd0bc3",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "69bb5a4e8ea1c05f1b08fab28392a04f0d6500a3",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 4,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "unmeasurable": "no \"Design gaps found\" section at the decompose boundary"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 4,
+        "named": 1
+      }
+    },
+    {
+      "run": "maintenance:a-timestamp-the-digest-cannot-parse",
+      "path": "docs/fixes/a-timestamp-the-digest-cannot-parse",
+      "decompose": {
+        "sha": "e8aae36dbdeed51ba220dd0ce908b75842d98464",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "6adb359859171d22783e90dbc3b92cdecc84a2ef",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 7,
+        "added": 0,
+        "dropped": 6,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 6
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 1,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:closed-intake-mutes-the-detector",
+      "path": "docs/fixes/closed-intake-mutes-the-detector",
+      "decompose": {
+        "sha": "ee5532c79cf4d78dc0dfd5f9e6ed90be79282675",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "664d8c194eb34b9f47936dc213ca73918c267b90",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 4,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "unmeasurable": "no \"Design gaps found\" section at the decompose boundary"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 4,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:dedup-identity-has-two-owners",
+      "path": "docs/fixes/dedup-identity-has-two-owners",
+      "decompose": {
+        "sha": "88fbb34231060d6b29c7cddf2c02207623a615cd",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "befc6e24dcbd9d9724407db0aa82de553b1aa70f",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 3,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "unmeasurable": "no \"Design gaps found\" section at the decompose boundary"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 1,
+        "named": 1
+      }
+    },
+    {
+      "run": "maintenance:deepening-cli-seams",
+      "path": "docs/fixes/deepening-cli-seams",
+      "decompose": {
+        "unmeasurable": "the first version (ec957eb) already checks 9 of 9 rows"
+      },
+      "implement": {
+        "unmeasurable": "the first version (ec957eb) already checks 9 of 9 rows"
+      },
+      "replan": {
+        "unmeasurable": "the first version (ec957eb) already checks 9 of 9 rows"
+      },
+      "design_gaps": {
+        "unmeasurable": "the first version (ec957eb) already checks 9 of 9 rows"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 5,
+        "named": 2
+      }
+    },
+    {
+      "run": "maintenance:deepening-tool-seams",
+      "path": "docs/fixes/deepening-tool-seams",
+      "decompose": {
+        "sha": "4a287ff09522d00c2b13c48cf63adbac04f764c0",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "80f5496c1390bdeccae32ca21c162112a5d945d1",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 15,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 4,
+        "named": 3
+      }
+    },
+    {
+      "run": "maintenance:empty-is-not-the-same-as-broken",
+      "path": "docs/fixes/empty-is-not-the-same-as-broken",
+      "decompose": {
+        "sha": "738573f3e4612acd75273f6e31578bc5c2bc3885",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "8d7e5de7efe37bf54120293e5b49072924da5f7a",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 4,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "unmeasurable": "no \"Design gaps found\" section at the decompose boundary"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 2,
+        "named": 1
+      }
+    },
+    {
+      "run": "maintenance:gate-timeline-timestamp-trust",
+      "path": "docs/fixes/gate-timeline-timestamp-trust",
+      "decompose": {
+        "unmeasurable": "the first version (b4dd17a) already checks 2 of 2 rows"
+      },
+      "implement": {
+        "unmeasurable": "the first version (b4dd17a) already checks 2 of 2 rows"
+      },
+      "replan": {
+        "unmeasurable": "the first version (b4dd17a) already checks 2 of 2 rows"
+      },
+      "design_gaps": {
+        "unmeasurable": "the first version (b4dd17a) already checks 2 of 2 rows"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 3,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:marker-diagnostics-that-lie",
+      "path": "docs/fixes/marker-diagnostics-that-lie",
+      "decompose": {
+        "sha": "5d993dc9b367b4c6c267bc949cbda5a38e91609a",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "7b7ad04ea66db6bf9d4818f3fd5e5971ec5ac3b9",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 5,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "unmeasurable": "no \"Design gaps found\" section at the decompose boundary"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 5,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:one-fact-one-owner",
+      "path": "docs/fixes/one-fact-one-owner",
+      "decompose": {
+        "unmeasurable": "the first version (a527688) already checks 1 of 13 rows"
+      },
+      "implement": {
+        "unmeasurable": "the first version (a527688) already checks 1 of 13 rows"
+      },
+      "replan": {
+        "unmeasurable": "the first version (a527688) already checks 1 of 13 rows"
+      },
+      "design_gaps": {
+        "unmeasurable": "the first version (a527688) already checks 1 of 13 rows"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 8,
+        "named": 3
+      }
+    },
+    {
+      "run": "maintenance:one-fence-rule",
+      "path": "docs/fixes/one-fence-rule",
+      "decompose": {
+        "sha": "7da232df5c36d3ee2d8c04fd3e5183b0cb141664",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "e72f05947da284d216615d467ed8570b57312635",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 4,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 4,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:one-guarded-file-read",
+      "path": "docs/fixes/one-guarded-file-read",
+      "decompose": {
+        "sha": "110ffc6b145443bc68d46eba072008a8ee5726b2",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "5e5f4943d8caa1f9a3e985cad78dc8542103a53f",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 18,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "inferred",
+        "routes": 0,
+        "source": "section"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 11,
+        "named": 1
+      }
+    },
+    {
+      "run": "maintenance:one-labels-walk",
+      "path": "docs/fixes/one-labels-walk",
+      "decompose": {
+        "unmeasurable": "the first version (45f4b43) already checks 1 of 3 rows"
+      },
+      "implement": {
+        "unmeasurable": "the first version (45f4b43) already checks 1 of 3 rows"
+      },
+      "replan": {
+        "unmeasurable": "the first version (45f4b43) already checks 1 of 3 rows"
+      },
+      "design_gaps": {
+        "unmeasurable": "the first version (45f4b43) already checks 1 of 3 rows"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 2,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:quoted-token-is-not-a-claim",
+      "path": "docs/fixes/quoted-token-is-not-a-claim",
+      "decompose": {
+        "unmeasurable": "the first version (5210702) already checks 1 of 2 rows"
+      },
+      "implement": {
+        "unmeasurable": "the first version (5210702) already checks 1 of 2 rows"
+      },
+      "replan": {
+        "unmeasurable": "the first version (5210702) already checks 1 of 2 rows"
+      },
+      "design_gaps": {
+        "unmeasurable": "the first version (5210702) already checks 1 of 2 rows"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 3,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:row-done-guard",
+      "path": "docs/fixes/row-done-guard",
+      "decompose": {
+        "unmeasurable": "the first version (4520083) already checks 1 of 1 rows"
+      },
+      "implement": {
+        "unmeasurable": "the first version (4520083) already checks 1 of 1 rows"
+      },
+      "replan": {
+        "unmeasurable": "the first version (4520083) already checks 1 of 1 rows"
+      },
+      "design_gaps": {
+        "unmeasurable": "the first version (4520083) already checks 1 of 1 rows"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 3,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:run-discovery-ignores-open-prs",
+      "path": "docs/fixes/run-discovery-ignores-open-prs",
+      "decompose": {
+        "sha": "e142434f19ae76f3b4b35ffbc53cc383224ba026",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "d0a8a6cbddac7505d8d44a3e2cd336a1d5ce6c41",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 4,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "unmeasurable": "no \"Design gaps found\" section at the decompose boundary"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 2,
+        "named": 1
+      }
+    },
+    {
+      "run": "maintenance:the-digest-says-what-it-could-read",
+      "path": "docs/fixes/the-digest-says-what-it-could-read",
+      "decompose": {
+        "sha": "ca717be814ead0c7d9c6943afc926e8bcd4e283d",
+        "label": "inferred"
+      },
+      "implement": {
+        "sha": "fa1954f15d29bae07928e62a7bef8cf4001615cb",
+        "label": "inferred"
+      },
+      "replan": {
+        "label": "inferred",
+        "items_at_d": 5,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "unmeasurable": "no \"Design gaps found\" section at the decompose boundary"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 2,
+        "named": 0
+      }
+    },
+    {
+      "run": "maintenance:the-reviewer-token-runs-agent-code",
+      "path": "docs/fixes/the-reviewer-token-runs-agent-code",
+      "decompose": {
+        "sha": "ba286e5f12a5bad67309233463d61847959b8759",
+        "label": "observed"
+      },
+      "implement": {
+        "sha": "755dc8c3545a201e5eaff8a29ebe4568cc1c2eff",
+        "label": "observed"
+      },
+      "replan": {
+        "label": "observed",
+        "items_at_d": 13,
+        "added": 0,
+        "dropped": 0,
+        "split": 0,
+        "merged": 0,
+        "renamed": 0,
+        "count": 0
+      },
+      "design_gaps": {
+        "label": "observed",
+        "routes": 0,
+        "source": "subjects"
+      },
+      "review": {
+        "label": "observed",
+        "findings": 5,
+        "named": 0
+      }
+    }
+  ],
+  "aggregate": {
+    "re-plan": {
+      "observed": {
+        "runs": 3,
+        "numerator": 0,
+        "denominator": 29
+      },
+      "inferred": {
+        "runs": 27,
+        "numerator": 7,
+        "denominator": 232
+      },
+      "combined": {
+        "runs": 30,
+        "numerator": 7,
+        "denominator": 261
+      },
+      "unmeasurable": 6
+    },
+    "design gaps": {
+      "observed": {
+        "runs": 3,
+        "numerator": 1,
+        "denominator": 3
+      },
+      "inferred": {
+        "runs": 19,
+        "numerator": 0,
+        "denominator": 19
+      },
+      "combined": {
+        "runs": 22,
+        "numerator": 1,
+        "denominator": 22
+      },
+      "unmeasurable": 14
+    },
+    "review-traced": {
+      "observed": {
+        "runs": 34,
+        "numerator": 32,
+        "denominator": 184
+      },
+      "inferred": {
+        "runs": 0,
+        "numerator": 0,
+        "denominator": 0
+      },
+      "combined": {
+        "runs": 34,
+        "numerator": 32,
+        "denominator": 184
+      },
+      "unmeasurable": 2
+    }
+  }
+}

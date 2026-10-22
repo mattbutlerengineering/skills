@@ -89,7 +89,7 @@ When this milestone is done, `python3 eval_trends.py` and `python3 factory.py ev
 
 When this milestone is done, the tool's output on a frozen copy of today's records is pinned, and a separate live test checks the real tree without pinning anything that rots.
 
-- [ ] **S14 Frozen-record fixture** — copy today's record files into `tests/fixtures/eval_trends_2026_10_21/` byte-for-byte — size:S
+- [x] **S14 Frozen-record fixture** — copy today's record files into `tests/fixtures/eval_trends_2026_10_21/` byte-for-byte — size:S
   - Accept: the fixture holds the five locations' files exactly as the tree has them (41 trigger, 2 charter, 2 output grading directories, 3 plugin records, 2 decompose-signals), with the same relative layout, and `cmp` of each copy against its source shows no difference. Nothing under `evals/` or `plugin-evals/` is written or changed. Each fixture file name still parses under `parse_results_stem`.
   - Blocked by: S13 Factory verb
 - [ ] **S15 Honest-on-today's-records tests** — the frozen-fixture test and the live smoke test — size:M

@@ -1,0 +1,46 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "apr-2",
+      "kind": "situational",
+      "expected": "address-pr-review",
+      "query": "Reviewers left feedback on my pull request and it now has merge conflicts with main",
+      "fired": {
+        "review": 3,
+        "none": 2
+      },
+      "runs": 5,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "by_kind": {
+      "situational": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "address-pr-review": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "address-pr-review": {
+      "review": 3,
+      "none": 2
+    }
+  }
+}

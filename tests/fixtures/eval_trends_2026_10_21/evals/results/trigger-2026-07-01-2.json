@@ -1,0 +1,236 @@
+{
+  "date": "2026-07-01",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.198 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "implement-direct-1",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "The breakdown is ready \u2014 let's start building, working through the items test-first",
+      "fired": {
+        "implement": 5
+      },
+      "runs": 5,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "implement-direct-2",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "Start coding the work items in the breakdown and check them off as their acceptance criteria pass",
+      "fired": {
+        "none": 3,
+        "implement": 2
+      },
+      "runs": 5,
+      "correct_rate": 0.4,
+      "pass": false
+    },
+    {
+      "id": "verify-direct-1",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Implementation is finished \u2014 verify the work meets the PRD's success criteria and collect the evidence",
+      "fired": {
+        "verify": 5
+      },
+      "runs": 5,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-direct-1",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Give this run's changes a quality pass for defects and security issues before we ship",
+      "fired": {
+        "review": 2,
+        "none": 3
+      },
+      "runs": 5,
+      "correct_rate": 0.4,
+      "pass": false
+    },
+    {
+      "id": "review-direct-2",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Do a code review of the changes from this run and write up the findings",
+      "fired": {
+        "none": 5
+      },
+      "runs": 5,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "ship-direct-1",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "The review is done \u2014 ship it to production with pre-flight checks and a rollback plan",
+      "fired": {
+        "none": 2,
+        "ship": 3
+      },
+      "runs": 5,
+      "correct_rate": 0.6,
+      "pass": true
+    },
+    {
+      "id": "implement-situational-1",
+      "kind": "situational",
+      "expected": "implement",
+      "query": "breakdown.md is sitting there with unchecked items \u2014 time to write the code",
+      "fired": {
+        "implement": 5
+      },
+      "runs": 5,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-situational-1",
+      "kind": "situational",
+      "expected": "review",
+      "query": "verification.md is in place \u2014 the change still needs a defect and security pass before release",
+      "fired": {
+        "review": 4,
+        "none": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.8,
+      "pass": true
+    },
+    {
+      "id": "ship-situational-1",
+      "kind": "situational",
+      "expected": "ship",
+      "query": "Review found no blockers \u2014 get this into production",
+      "fired": {
+        "none": 5
+      },
+      "runs": 5,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "decomp-vs-impl-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "Start working through the breakdown",
+      "fired": {
+        "implement": 5
+      },
+      "runs": 5,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "verify-vs-review-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Give the change a quality check before we ship",
+      "fired": {
+        "review": 4,
+        "none": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.8,
+      "pass": true
+    },
+    {
+      "id": "impl-vs-ship-1",
+      "kind": "near-miss",
+      "expected": "ship",
+      "query": "The code is done and tests pass \u2014 push this out to users",
+      "fired": {
+        "none": 5
+      },
+      "runs": 5,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "distractor-2",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Review my coworker's PR in the analytics repo",
+      "fired": {
+        "none": 5
+      },
+      "runs": 5,
+      "correct_rate": 1.0,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 13,
+    "passed": 8,
+    "failed": 5,
+    "by_kind": {
+      "direct": {
+        "total": 6,
+        "passed": 3
+      },
+      "situational": {
+        "total": 3,
+        "passed": 2
+      },
+      "near-miss": {
+        "total": 3,
+        "passed": 2
+      },
+      "distractor": {
+        "total": 1,
+        "passed": 1
+      }
+    },
+    "by_skill": {
+      "implement": {
+        "total": 4,
+        "passed": 3
+      },
+      "verify": {
+        "total": 1,
+        "passed": 1
+      },
+      "review": {
+        "total": 4,
+        "passed": 2
+      },
+      "ship": {
+        "total": 3,
+        "passed": 1
+      },
+      "none": {
+        "total": 1,
+        "passed": 1
+      }
+    }
+  },
+  "confusion": {
+    "implement": {
+      "implement": 17,
+      "none": 3
+    },
+    "verify": {
+      "verify": 5
+    },
+    "review": {
+      "review": 10,
+      "none": 10
+    },
+    "ship": {
+      "none": 12,
+      "ship": 3
+    },
+    "none": {
+      "none": 5
+    }
+  }
+}

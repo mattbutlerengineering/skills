@@ -1,0 +1,75 @@
+{
+  "date": "2026-07-05",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "verify-direct-1",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Implementation is finished \u2014 verify the work meets the PRD's success criteria and collect the evidence",
+      "fired": {
+        "verify": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "verify-direct-2",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Run the tests and put together verification evidence against the success criteria",
+      "fired": {
+        "none": 2,
+        "verify": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "verify-situational-1",
+      "kind": "situational",
+      "expected": "verify",
+      "query": "All the work items are checked off \u2014 demonstrate the feature meets its success criteria",
+      "fired": {
+        "verify": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "passed": 2,
+    "failed": 1,
+    "by_kind": {
+      "direct": {
+        "total": 2,
+        "passed": 1
+      },
+      "situational": {
+        "total": 1,
+        "passed": 1
+      }
+    },
+    "by_skill": {
+      "verify": {
+        "total": 3,
+        "passed": 2
+      }
+    }
+  },
+  "confusion": {
+    "verify": {
+      "verify": 6,
+      "none": 3
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "date": "2026-07-05",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "operate-direct-1",
+      "kind": "direct",
+      "expected": "operate",
+      "query": "The feature has been live for two weeks \u2014 capture user feedback and run the retrospective",
+      "fired": {
+        "operate": 4,
+        "none": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.8,
+      "pass": true
+    },
+    {
+      "id": "operate-direct-2",
+      "kind": "direct",
+      "expected": "operate",
+      "query": "Close the loop on this run: collect what users said and write the retro",
+      "fired": {
+        "none": 3,
+        "operate": 2
+      },
+      "runs": 5,
+      "correct_rate": 0.4,
+      "pass": false
+    },
+    {
+      "id": "operate-situational-1",
+      "kind": "situational",
+      "expected": "operate",
+      "query": "release.md is done and users have had the feature for a month \u2014 what did we learn?",
+      "fired": {
+        "operate": 4,
+        "none": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.8,
+      "pass": true
+    },
+    {
+      "id": "ship-vs-operate-1",
+      "kind": "near-miss",
+      "expected": "operate",
+      "query": "The release went out yesterday \u2014 check how it's landing with users",
+      "fired": {
+        "none": 3,
+        "operate": 2
+      },
+      "runs": 5,
+      "correct_rate": 0.4,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 4,
+    "passed": 2,
+    "failed": 2,
+    "by_kind": {
+      "direct": {
+        "total": 2,
+        "passed": 1
+      },
+      "situational": {
+        "total": 1,
+        "passed": 1
+      },
+      "near-miss": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "operate": {
+        "total": 4,
+        "passed": 2
+      }
+    }
+  },
+  "confusion": {
+    "operate": {
+      "operate": 12,
+      "none": 8
+    }
+  }
+}
