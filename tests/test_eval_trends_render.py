@@ -279,6 +279,39 @@ class TestRerunsBesideAnotherDay(RenderCase):
             f"run(s) ({b}, {c})", lines)
 
 
+class TestCharterMetricLabel(RenderCase):
+    """A charter's metric is `sensitive` verdicts, never a pass rate."""
+
+    def charter(self, date, count, sensitive, suffix=""):
+        results = [(f"id{i}", "swe",
+                    "sensitive" if i < sensitive else "insensitive")
+                   for i in range(count)]
+        name = f"charter-{date}{suffix}.json"
+        fx.write_json(self.root, f"evals/results/{name}",
+                      fx.charter_record(date, results))
+        return name
+
+    def test_the_spread_line_says_sensitive_not_passed(self):
+        a = self.charter("2026-09-28", 4, 1)
+        b = self.charter("2026-09-28", 4, 3, suffix="-2")
+        _, lines = self.run_main()
+        case_set = tuple((f"id{i}", "swe") for i in range(4))
+        self.assertIn(
+            f"eval-trends: charter rerun spread 2026-09-28 set "
+            f"{hex_of(case_set)}: sensitive 1..3 of 4 over 2 run(s) "
+            f"({a}, {b})", lines)
+
+    def test_the_trend_line_says_sensitive_not_passed(self):
+        a = self.charter("2026-09-28", 30, 10)
+        b = self.charter("2026-10-02", 30, 25)
+        _, lines = self.run_main()
+        (trend,) = [ln for ln in lines if " charter trend set " in ln]
+        want = (f"2026-09-28 10/30 sensitive ({pct(10 / 30)}%, 95% "
+                f"{pct(interval(10, 30)[0])}-{pct(interval(10, 30)[1])}%)")
+        self.assertIn(want, trend)
+        self.assertNotIn("passed", trend)
+
+
 class TestProblemsAndExitCodes(RenderCase):
     def test_a_malformed_record_prints_before_the_summary_and_exits_one(self):
         self.trigger("2026-07-01", 30, 12)

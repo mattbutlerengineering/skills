@@ -8,8 +8,8 @@ Wilson 95 percent interval, cost per pass where a record carries one,
 and a REFUSED line wherever the records cannot support a trend claim
 (ADR-0115; the run is docs/features/eval-trends/).
 
-READ-ONLY, FREE AND LOCAL. It opens every record for reading, writes
-nothing, and calls no model, no `claude` and no network. NOT A GATE: a
+READ-ONLY, FREE AND LOCAL. It reads every record, writes nothing, and
+calls no model, no CLI and no network. NOT A GATE: a
 refusal is data and exits 0. Descriptive only: an interval comparison is
 not a significance test, and a trend line is never a claim that an eval
 improved.
@@ -17,14 +17,25 @@ improved.
 import hashlib
 import math
 import re
+import sys
 from collections import defaultdict
 from pathlib import Path
 
-from cli import read_file
-from eval_schema import parse_results_stem
+from cli import read_file, report
+from eval_schema import HARNESSES, parse_results_stem
 
 LABEL = "eval-trends"
 SURFACES = ("trigger", "charter", "output", "plugin", "decompose-signals")
+NOTE = "docs/research/eval-quality-metrics-2026-10-21.md"
+USAGE = "python3 eval_trends.py [<repo-root>]"
+HEADER = (f"{LABEL}: descriptive only; a REFUSED line means the records "
+          "cannot support a trend claim, not that nothing changed")
+NOT_COMPUTED = (f"{LABEL}: not computed from any record: judge drift, "
+                f"contamination, saturation, flake rate; see {NOTE}")
+SIGNALS_REFUSED = (f"{LABEL}: REFUSED decompose-signals: not an eval run: "
+                   "records re-measure one git history; no trend claim")
+OVERLAP = ("intervals overlap: not distinguishable "
+           "(descriptive, not a significance test)")
 DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # A trend needs at least MIN_DAYS distinct days and MIN_CASES cases in every
@@ -32,6 +43,7 @@ DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 # docs/features/eval-trends/architecture.md; the research note argues it.
 MIN_CASES = 30
 MIN_DAYS = 2
+MIN_RECORDS = 2
 Z = 1.96
 
 
@@ -71,12 +83,24 @@ def case_set_hex(case_set):
         repr(tuple(sorted(case_set))).encode("utf-8")).hexdigest()[:8]
 
 
+_ORDER = re.compile(r"\d{4}-\d{2}-\d{2}(?:-(\d+))?(?:\.json)?$")
+
+
+def _order(file):
+    """A file's place among same-day collisions: the unsuffixed name is
+    first, then -2, -3 ... (plain string order puts -2 before the bare
+    name, since - sorts before .)."""
+    match = _ORDER.search(file)
+    return int(match[1]) if match and match[1] else 1
+
+
 def group_rows(rows):
-    """{(suite, case_set): rows ordered by (day, file)} for one surface."""
+    """{(suite, case_set): rows ordered by (day, collision order, file)}
+    for one surface."""
     groups = defaultdict(list)
     for r in rows:
         groups[(r["suite"], r["case_set"])].append(r)
-    return {key: sorted(members, key=lambda r: (r["day"], r["file"]))
+    return {key: sorted(members, key=lambda r: (r["day"], _order(r["file"]), r["file"]))
             for key, members in groups.items()}
 
 
@@ -155,7 +179,7 @@ def _trigger_row(rel, data):
     parsed = parse_results_stem(rel.stem)
     if parsed is None or parsed[0] != "trigger":
         raise RecordError("name fits no results grammar")
-    harness = parsed[1] or "claude"
+    harness = parsed[1] or HARNESSES[0]  # the unmarked primary harness
     if data.get("harness", harness) != harness:
         raise RecordError(
             f"harness {data['harness']!r} disagrees with its name")
@@ -227,7 +251,7 @@ def _plugin_case(case):
 
 
 def _plugin_row(rel, data):
-    """The row for one `claude plugin eval` record. Cost is the recorded
+    """The row for one plugin-eval record. Cost is the recorded
     top-level costUsd, never summed across fields, decomposed or
     estimated."""
     if data.get("partial") is True:
@@ -302,3 +326,191 @@ def load_rows(root):
         rows += found
         problems += bad
     return rows, problems
+
+
+def _pct(x):
+    return f"{x * 100:.1f}"
+
+
+def _label(value):
+    """A suite key as one printable token: scalars joined by commas,
+    nested keys by plus signs, None as none."""
+    if value is None:
+        return "none"
+    if isinstance(value, (tuple, list)):
+        return "+".join(_label(v) for v in value)
+    return str(value)
+
+
+def _suite_label(suite):
+    return ",".join(_label(part) for part in suite)
+
+
+def _inventory_line(surface, rows):
+    if not rows:
+        return f"{LABEL}: {surface}: 0 record(s)"
+    days = sorted({r["day"] for r in rows})
+    head = (f"{LABEL}: {surface}: {len(rows)} record(s), "
+            f"{days[0]}..{days[-1]}, {len(days)} day(s)")
+    if surface == "decompose-signals":
+        return head
+    sizes = [r["n"] for r in rows]
+    return f"{head}, cases {min(sizes)}-{max(sizes)} per record"
+
+
+def _by_day(members):
+    """{day: rows} for one group, days in order."""
+    days = defaultdict(list)
+    for r in members:
+        days[r["day"]].append(r)
+    return dict(sorted(days.items()))
+
+
+def _metric(surface):
+    """What a row's hits count: a charter's metric is its guard noticing
+    its own removal, never a pass rate."""
+    return "sensitive" if surface == "charter" else "passed"
+
+
+def _day_text(rows):
+    """hits/n, the rate and the 95 percent hull for one day of one group;
+    a day of reruns prints its lowest-to-highest hits and rate."""
+    lo, hi = day_interval(rows)
+    n = rows[0]["n"]  # one case set, one n
+    hits = sorted(r["hits"] for r in rows)
+    if len(rows) == 1:
+        counts, rate = f"{hits[0]}/{n}", _pct(hits[0] / n)
+    else:
+        counts = f"{hits[0]}..{hits[-1]}/{n}"
+        rate = f"{_pct(hits[0] / n)}..{_pct(hits[-1] / n)}"
+    word = " sensitive" if rows[0]["surface"] == "charter" else ""
+    return f"{counts}{word} ({rate}%, 95% {_pct(lo)}-{_pct(hi)}%)"
+
+
+def _files(members):
+    return ", ".join(r["file"] for r in members)
+
+
+def _spread_lines(surface, members):
+    """One rerun-spread line per day of this group holding 2 or more."""
+    return [
+        f"{LABEL}: {surface} rerun spread {day} set "
+        f"{case_set_hex(rows[0]['case_set'])}: {_metric(surface)} "
+        f"{min(r['hits'] for r in rows)}..{max(r['hits'] for r in rows)} of "
+        f"{rows[0]['n']} over {len(rows)} run(s) ({_files(rows)})"
+        for day, rows in _by_day(members).items() if len(rows) >= 2]
+
+
+def _cost_line(surface, members, first, last):
+    """The cost-per-pass line for a trend group, or its refusal."""
+    before, after = cost_per_pass(first), cost_per_pass(last)
+    if before is not None and after is not None:
+        return (f"{LABEL}: {surface} cost per pass: {first[0]['day']} "
+                f"${before:.4f} -> {last[0]['day']} ${after:.4f} "
+                f"({_files(members)})")
+    absent = sum(1 for r in members if r["cost"] is None)
+    why = (f"cost field absent from {absent} of {len(members)} record(s)"
+           if absent else "no passed case to divide by")
+    return f"{LABEL}: {surface} cost: REFUSED {why}; no trend claim"
+
+
+def _trend_lines(surface, members):
+    """The trend line and its cost line for one comparable group: first
+    day against last day by interval overlap, never a verdict word."""
+    days = _by_day(members)
+    first, last = days[min(days)], days[max(days)]
+    (lo1, hi1), (lo2, hi2) = day_interval(first), day_interval(last)
+    verdict = OVERLAP if lo2 <= hi1 and lo1 <= hi2 \
+        else "intervals do not overlap"
+    trend = (f"{LABEL}: {surface} trend set "
+             f"{case_set_hex(members[0]['case_set'])} suite "
+             f"{_suite_label(members[0]['suite'])}: {first[0]['day']} "
+             f"{_day_text(first)} -> {last[0]['day']} {_day_text(last)}; "
+             f"{verdict} ({_files(members)})")
+    return [trend, _cost_line(surface, members, first, last)]
+
+
+def _refused_lines(surface, classified):
+    """One REFUSED line per state present among the surface's records."""
+    def of(state):
+        return [r for r in classified if r["state"] == state]
+
+    def reasoned(reason):
+        return [r for r in of("single") if r["reason"] == reason]
+
+    lines = []
+    if len(classified) < MIN_RECORDS:  # also an empty surface
+        lines.append(f"too few records: need {MIN_RECORDS}, "
+                     f"have {len(classified)}")
+    if reasoned("different suites"):
+        lines.append(f"different suites: {len(reasoned('different suites'))}"
+                     " record(s) share no suite with another record")
+    if reasoned("case sets differ"):
+        lines.append(f"case sets differ: {len(reasoned('case sets differ'))}"
+                     " record(s) share a suite with another record but not"
+                     " its case set")
+    if of("same-day"):
+        groups = len({(r["suite"], r["case_set"]) for r in of("same-day")})
+        lines.append(f"only same-day records: {len(of('same-day'))} "
+                     f"record(s) in {groups} group(s), each on one day")
+    if of("small"):
+        lines.append(f"too few cases: need {MIN_CASES}, have "
+                     f"{max(r['n'] for r in of('small'))} in "
+                     f"{len(of('small'))} record(s) over {MIN_DAYS}+ days")
+    return [f"{LABEL}: REFUSED {surface}: {line}; no trend claim"
+            for line in lines]
+
+
+def _surface_lines(surface, rows):
+    """Spread, trend, cost and REFUSED lines for one eval surface."""
+    classified = classify(rows)
+    state = {(r["suite"], r["case_set"]): r["state"] for r in classified}
+    groups = sorted(group_rows(rows).items(),
+                    key=lambda kv: (kv[1][0]["day"], _order(kv[1][0]["file"]),
+                                    kv[1][0]["file"]))
+    lines = [ln for _, members in groups
+             for ln in _spread_lines(surface, members)]
+    for key, members in groups:
+        if state[key] == "trend":
+            lines += _trend_lines(surface, members)
+    return lines + _refused_lines(surface, classified)
+
+
+def render(rows):
+    """The whole view as lines, in the fixed order: header, one inventory
+    line per surface, each surface's detail, the not-computed line."""
+    by_surface = {s: [r for r in rows if r["surface"] == s]
+                  for s in SURFACES}
+    lines = [HEADER]
+    lines += [_inventory_line(s, by_surface[s]) for s in SURFACES]
+    for surface in SURFACES:
+        if surface == "decompose-signals":
+            lines.append(SIGNALS_REFUSED)
+        else:
+            lines += _surface_lines(surface, by_surface[surface])
+    return lines + [NOT_COMPUTED]
+
+
+def _usage(why):
+    print(f"{LABEL}: {why}\n\n  {USAGE}")
+    return 2
+
+
+def main(argv):
+    """`python3 eval_trends.py [<repo-root>]` — print the trend view of the
+    records under the repo root (default: this module's directory). Exit 0
+    when no record is malformed (a refusal is data), 1 with problems, 2 on
+    a usage error."""
+    if len(argv) > 1 or any(a.startswith("-") for a in argv):
+        return _usage(f"{' '.join(argv)!r} — unknown argument")
+    root = Path(argv[0]) if argv else Path(__file__).resolve().parent
+    if not root.is_dir():
+        return _usage(f"{str(root)!r} is not a directory")
+    rows, problems = load_rows(root)
+    for line in render(rows):
+        print(line)
+    return report(LABEL, problems)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
