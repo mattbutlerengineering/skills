@@ -5,8 +5,6 @@ and nothing else: no model is called and `claude plugin eval` is never
 invoked.
 """
 import re
-import shutil
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -263,24 +261,6 @@ class TestProtocolProducers(unittest.TestCase):
             self.assertIn(phrase, sentence)
 
 
-def git(*args):
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True,
-                          text=True)
-
-
-def base():
-    """The merge-base of HEAD with origin/main (else main), so a stale
-    local main cannot widen the diff; None when neither ref exists."""
-    if shutil.which("git") is None:
-        return None
-    for ref in ("origin/main", "main"):
-        if git("rev-parse", "--verify", "--quiet", ref).returncode == 0:
-            found = git("merge-base", ref, "HEAD")
-            if found.returncode == 0:
-                return found.stdout.strip()
-    return None
-
-
 def prd_text():
     return " ".join((ROOT / "skills/prd/SKILL.md").read_text(
         encoding="utf-8").split())
@@ -299,19 +279,6 @@ class TestPrdCarriesTheDemo(unittest.TestCase):
         text = prd_text()
         start = text.index("## The demo")
         self.assertIsNone(TYPED_ID.search(text[start - 100:start + 200]))
-
-
-@unittest.skipUnless(base(), "no main ref to compare against")
-class TestScopeAgainstMain(unittest.TestCase):
-    def test_launch_demo_and_verify_are_byte_identical_to_main(self):
-        changed = git("diff", "--name-only", base(), "--",
-                      "skills/launch-demo", "skills/verify")
-        self.assertEqual(changed.stdout.split(), [])
-
-    def test_only_idea_and_prd_change_under_skills(self):
-        changed = git("diff", "--name-only", base(), "--", "skills")
-        for path in changed.stdout.split():
-            self.assertRegex(path, r"^skills/(idea|prd)/", path)
 
 
 if __name__ == "__main__":

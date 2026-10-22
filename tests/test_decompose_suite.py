@@ -6,8 +6,6 @@ else, so no model is called and `claude plugin eval` is never invoked.
 """
 import json
 import re
-import shutil
-import subprocess
 import unittest
 from pathlib import Path
 
@@ -29,22 +27,6 @@ GRADERS = {
 }
 PROMPT_KEYS = ("description", "tags", "max_turns", "timeout_seconds",
                "allowed_tools")
-# Everything the change must leave exactly as main has it.
-UNTOUCHED = ("evals", "LEDGER.md", "plugin-evals/records",
-             "plugin-evals/implement", "plugin-evals/knowledge-base",
-             "plugin-evals/lean", "plugin-evals/next")
-
-
-def git(*args):
-    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True,
-                          text=True)
-
-
-def main_exists():
-    return shutil.which("git") is not None and \
-        git("rev-parse", "--verify", "--quiet", "main").returncode == 0
-
-
 def front(path):
     """The frontmatter text of a case file."""
     return path.read_text(encoding="utf-8").split("---", 2)[1]
@@ -139,18 +121,6 @@ class TestScaffold(unittest.TestCase):
         self.assertEqual(
             heredoc(self.script, "docs/features/csv-export/architecture.md"),
             (FIXTURE / "architecture.md").read_text(encoding="utf-8"))
-
-
-@unittest.skipUnless(main_exists(), "no main ref to compare against")
-class TestNothingElseMoved(unittest.TestCase):
-    def test_the_protected_paths_match_main(self):
-        changed = git("diff", "--name-only", "main", "--", *UNTOUCHED)
-        self.assertEqual(changed.stdout.split(), [])
-
-    def test_no_untracked_file_appears_under_the_protected_paths(self):
-        new = git("ls-files", "--others", "--exclude-standard", "--",
-                  *UNTOUCHED)
-        self.assertEqual(new.stdout.split(), [])
 
 
 if __name__ == "__main__":

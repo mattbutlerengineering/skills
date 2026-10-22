@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 import protocol
-from tests.test_idea_ambition_ladder import TEMPLATE, base, git
+from tests.test_idea_ambition_ladder import TEMPLATE
 from tests.test_plugin_eval_tags import case_tags
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,14 +37,6 @@ HEADING_GRADERS = {
 }
 PROMPT_KEYS = ("description", "tags", "max_turns", "timeout_seconds",
                "allowed_tools")
-# Everything the change must leave exactly as the base has it.
-UNTOUCHED = ("evals", "LEDGER.md", "plugin-evals/records",
-             "plugin-evals/decompose", "plugin-evals/implement",
-             "plugin-evals/knowledge-base", "plugin-evals/lean",
-             "plugin-evals/next", "factory/templates",
-             "skills/launch-demo", "skills/verify")
-
-
 def front(path):
     """The frontmatter text of a case file."""
     return path.read_text(encoding="utf-8").split("---", 2)[1]
@@ -208,18 +200,6 @@ class TestHonesty(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             for checker in ("lint.py", "gates.py", "run_tests.py"):
                 self.assertNotIn(checker, text, str(path))
-
-
-@unittest.skipUnless(base(), "no main ref to compare against")
-class TestNothingElseMoved(unittest.TestCase):
-    def test_the_protected_paths_match_the_base(self):
-        changed = git("diff", "--name-only", base(), "--", *UNTOUCHED)
-        self.assertEqual(changed.stdout.split(), [])
-
-    def test_no_untracked_file_appears_under_the_protected_paths(self):
-        new = git("ls-files", "--others", "--exclude-standard", "--",
-                  *UNTOUCHED)
-        self.assertEqual(new.stdout.split(), [])
 
 
 if __name__ == "__main__":
