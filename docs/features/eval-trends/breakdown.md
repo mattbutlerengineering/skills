@@ -30,10 +30,10 @@ When this milestone is done, `eval_schema.parse_results_stem` turns any
 results file stem or output directory name back into its parts, and a test
 pins it against `results_path` for every kind.
 
-- [ ] **S1 Name inverse tests** — cases for `parse_results_stem` in the eval_schema test module — size:S
+- [x] **S1 Name inverse tests** — cases for `parse_results_stem` in the eval_schema test module — size:S
   - Accept: the module holds these cases. For every kind `results_path` can build (each harness token, charter, decompose-signals, decompose, with and without a `-N` suffix), `parse_results_stem(path.stem)` returns the `(kind, harness, date, suffix, slug)` the path was built from, asserted by looping over the same kind list the test uses to build paths. An output directory name with a slug parses to its slug and date. A stem that fits no grammar (empty, a bare date, an unknown harness token, a trailing `-0`) returns `None`. Before the function exists the cases fail on the missing attribute.
   - Blocked by: —
-- [ ] **S2 Name inverse** — `parse_results_stem` in `eval_schema.py` built from `_HARNESS` and `_SUFFIX` — size:S
+- [x] **S2 Name inverse** — `parse_results_stem` in `eval_schema.py` built from `_HARNESS` and `_SUFFIX` — size:S
   - Accept: the S1 tests pass and every existing eval_schema test still passes. The function is pure and builds its pattern from the module's own `_HARNESS` and `_SUFFIX` pieces; a count of the harness token list in the module shows it appears once. `eval_schema.py` still imports only the standard library and is not in `factory_init.MIRRORS`.
   - Blocked by: S1 Name inverse tests
 
