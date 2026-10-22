@@ -118,7 +118,7 @@ When this milestone is done, `docs/research/eval-quality-metrics-2026-10-21.md` 
 
 ## Milestone 7: the docs name the tool and the whole change verifies
 
-- [ ] **S21 Docs** — the CLAUDE.md on-demand bullet beside `decompose_signals.py` — size:S
+- [x] **S21 Docs** — the CLAUDE.md on-demand bullet beside `decompose_signals.py` — size:S
   - Accept: CLAUDE.md names `python3 eval_trends.py` as free, read-only, outside every gate, making no model or network call, printing an inventory and REFUSED lines in place of a trend below the minimum (30 cases, 2 days), citing ADR-0115 and the research note. It says it measures recorded history only and moves no LEDGER maturity. It contains no work-order token or sample id that detectors C and I scan, and `python3 kb.py drift` prints `drift: 0 problem(s)`.
   - Blocked by: S20 Gates after the note
 - [ ] **S22 Whole-repo verify and scope checks** — the four CI checks and the scope checks over the finished change — size:S
@@ -174,8 +174,8 @@ none.
      and `TestRefusalStates.test_case_sets_differ`.
 - 2026-10-21 (Implement) S17 gates probe, by reading `gates.py` and
   `knowledge_plane.py` (no scratch repo needed; no file in the repo
-  changed). Detector I: only inline markdown links of the form `](dest)`
-  are checked, and `knowledge_plane.local_link_targets` drops any
+  changed). Detector I: only inline markdown links (bracket text followed by a
+  parenthesised destination) are checked, and `knowledge_plane.local_link_targets` drops any
   destination with a URL scheme (`URL_TARGET`), so a bare URL and a
   markdown link to an http URL never trip I; a markdown link to a repo
   path trips I when that path is missing. Detector C: the tokens
@@ -205,3 +205,12 @@ none.
   stricter floor is the one-line `MIN_CASES` change if wanted. The
   not-computed line names `docs/research/eval-quality-metrics-2026-10-21.md`
   and `tests/test_eval_quality_note.py` asserts that path exists.
+- 2026-10-21 (Implement) S20 gates after the note, with the note, the frozen
+  fixture and all code on disk: `python3 gates.py` printed
+  `gates: 0 problem(s)`, `python3 gates.py --selftest` printed
+  `selftest: ok` (that is the selftest's own final line; it does not print
+  the gates summary), `python3 lint.py` printed
+  `lint: 0 problem(s) across 34 skills`. One detector I hit fired on this
+  breakdown's own S17 note (a literal link-shaped example inside backticks
+  is scanned) and the note text was reworded; no detector, ADR or lint rule
+  was edited.
