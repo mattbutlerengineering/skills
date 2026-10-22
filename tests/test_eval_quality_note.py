@@ -73,10 +73,9 @@ class TestNoteStructure(unittest.TestCase):
         subs = sections(top.get("Metrics and failure modes", ""), 3)
         sources = top.get("Sources", "")
         listed = {}
-        for line in sources.splitlines():
-            tag = TAG.search(line)
-            if tag:
-                listed[tag[1]] = line
+        for item in re.split(r"(?m)^- (?=\[S\d+\])", sources)[1:]:
+            tag = TAG.search(item)  # an item may wrap over several lines
+            listed[tag[1]] = " ".join(item.split())
         for tag, line in listed.items():
             with self.subTest(source=tag):
                 self.assertRegex(line, r"fetched \d{4}-\d{2}-\d{2}")

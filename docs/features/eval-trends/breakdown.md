@@ -103,16 +103,16 @@ When this milestone is done, `docs/research/eval-quality-metrics-2026-10-21.md` 
 - [x] **S16 Research-note heading tests** — a test for the note's required structure — size:S
   - Accept: a test (in `tests/test_eval_trends.py` or a new `tests/test_eval_quality_note.py`, Implement's call, recorded in Notes) asserts the note exists at its path, has a dated first paragraph, the headings `## Metrics and failure modes`, `## What n justifies a trend claim`, `## Sources` and `## Not verified`, a subsection under the first for each of: pass rate with a confidence interval, flake rate, saturation, judge agreement and drift, contamination, cost per point, each containing the words `failure mode`, and that every recommended metric's subsection names at least one source that appears in `## Sources` with a fetch date. It fails now because the note is absent.
   - Blocked by: —
-- [ ] **S17 Gates probe on URLs** — before writing any note text, learn what detectors C and I do with a real URL and with prose near the typed-id forms — size:S
+- [x] **S17 Gates probe on URLs** — before writing any note text, learn what detectors C and I do with a real URL and with prose near the typed-id forms — size:S
   - Accept: a scratch markdown file in the scratchpad directory (not committed, not in the repo) is not enough because the detectors scan the repo, so the probe instead reads `gates.py` and the modules it calls for how links and typed tokens are matched, and records in Notes: whether a bare URL, a markdown link to a URL and a link to a repo path trip detector I; and which exact token forms trip detector C. The result decides how S18 cites sources (plain text URLs or links). If reading leaves it unknown, a throwaway copy of the repo in the scratchpad runs `python3 gates.py` over one candidate line; the real tree is never written. No file in the repo changes.
   - Blocked by: —
-- [ ] **S18 Research note** — find and read real sources with WebSearch and WebFetch, then write the dated note — size:L
+- [x] **S18 Research note** — find and read real sources with WebSearch and WebFetch, then write the dated note — size:L
   - Accept: the note is `docs/research/eval-quality-metrics-2026-10-21.md` in the form of the existing dated notes there. It covers each named metric with a recommendation grounded in a source actually fetched, the source's title, author, URL and fetch date, and what part was read; a failure mode per metric; what n justifies a trend claim, with the Wilson arithmetic from architecture.md checked against the records and the 30-case minimum either supported or flagged for change; and a `## Not verified` section naming each item it could not reach a primary source for, with the reason. It states that fetched material was treated as untrusted data. It holds no example typed id and no link to a missing path, following the S17 finding. S16's test passes.
   - Blocked by: S16 Research-note heading tests, S17 Gates probe on URLs
-- [ ] **S19 Note against the constants** — reconcile the note's n argument with `MIN_CASES` and `MIN_DAYS` — size:S
+- [x] **S19 Note against the constants** — reconcile the note's n argument with `MIN_CASES` and `MIN_DAYS` — size:S
   - Accept: Notes records, dated, either that the note supports 30 and 2, or that it argues for a different value and the one-line constant change (with its S3 and S11 fixtures updated in the same commit and the tests re-run) was made or deferred with the reason. Either way the `not computed` line still names the note's real path and a test confirms that path exists.
   - Blocked by: S18 Research note, S15 Honest-on-today's-records tests
-- [ ] **S20 Gates after the note** — run the detectors with the note and the fixtures present — size:S
+- [x] **S20 Gates after the note** — run the detectors with the note and the fixtures present — size:S
   - Accept: `python3 gates.py` and `python3 gates.py --selftest` print `gates: 0 problem(s)` and `python3 lint.py` prints `lint: 0 problem(s)` with the note, the frozen fixture and all code on disk. If a detector fires on the note, the note text is fixed and the run repeated; no detector, ADR or lint rule is edited to make it pass.
   - Blocked by: S19 Note against the constants
 
@@ -172,3 +172,36 @@ none.
      `TestFrozenRecords.test_the_refused_lines_for_the_small_surfaces_exactly`,
      `TestFrozenRecords.test_every_surface_is_refused_and_the_counts_sum_to_the_inventory`
      and `TestRefusalStates.test_case_sets_differ`.
+- 2026-10-21 (Implement) S17 gates probe, by reading `gates.py` and
+  `knowledge_plane.py` (no scratch repo needed; no file in the repo
+  changed). Detector I: only inline markdown links of the form `](dest)`
+  are checked, and `knowledge_plane.local_link_targets` drops any
+  destination with a URL scheme (`URL_TARGET`), so a bare URL and a
+  markdown link to an http URL never trip I; a markdown link to a repo
+  path trips I when that path is missing. Detector C: the tokens
+  `\bPRD-\d{4}\b`, `\bWO-\d{4}\b` and `\bADR-(\d{4})\b` are matched on every
+  line of every scanned markdown file, fenced or not; PRD and WO tokens
+  must resolve to a declared id and a breakdown row, and an ADR token
+  must have a file under `docs/adr`. Decision for S18: sources are cited as
+  plain-text URLs (no repo-path links), and the note holds no typed-id
+  token other than the existing ADR-0115.
+- 2026-10-21 (Implement) S18 research done with WebSearch and WebFetch (not
+  from memory): 9 sources fetched 2026-10-21, listed in the note with what
+  was read. Fetch limits are disclosed in the note: the fetch tool answers
+  through a small model, only abstract pages were reachable for five of
+  the papers, the error-bars PDF was unreadable binary (its HTML body
+  was read), and the primary Wilson-interval paper could not be fetched
+  (empty content and a 403), so it is under `## Not verified`. S16's
+  parse of `## Sources` was corrected to read an entry that wraps over
+  several lines (a bug in the S16 test, not a weakening: the dated-source
+  assertion still applies to every entry).
+- 2026-10-21 (Implement) S19 note against the constants: the note supports
+  30 cases and 2 days only as a floor (a 50 percent rate has a Wilson
+  half-width of 16.8 points at 30 cases, 7.1 at 185, 3.1 at 1000; two
+  intervals first stop overlapping at a 34-point gap for n=30, 15 for 185,
+  7 for 1000) and says no fetched source gives a floor of 30. The error-bars
+  paper's illustrative power calculation suggests 1,000 questions for a new
+  eval. Decision: constants unchanged (no S3 or S11 fixture change), the
+  stricter floor is the one-line `MIN_CASES` change if wanted. The
+  not-computed line names `docs/research/eval-quality-metrics-2026-10-21.md`
+  and `tests/test_eval_quality_note.py` asserts that path exists.
