@@ -1,0 +1,46 @@
+{
+  "date": "2026-07-03",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.201 (Claude Code)",
+  "runs_per_query": 5,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "apr-3",
+      "kind": "situational",
+      "expected": "address-pr-review",
+      "query": "CI is green on my open PR but two review threads are still unresolved \u2014 get it ready to merge",
+      "fired": {
+        "none": 4,
+        "review": 1
+      },
+      "runs": 5,
+      "correct_rate": 0.0,
+      "pass": false
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "by_kind": {
+      "situational": {
+        "total": 1,
+        "passed": 0
+      }
+    },
+    "by_skill": {
+      "address-pr-review": {
+        "total": 1,
+        "passed": 0
+      }
+    }
+  },
+  "confusion": {
+    "address-pr-review": {
+      "none": 4,
+      "review": 1
+    }
+  }
+}

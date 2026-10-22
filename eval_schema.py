@@ -37,6 +37,36 @@ _RESULTS_LINK = re.compile(
     rf"|output/[a-z0-9-]+-\d{{4}}-\d{{2}}-\d{{2}}{_SUFFIX}/grading\.json)$")
 
 
+# The inverse of results_path (ADR-0115), built from the same _HARNESS and
+# _SUFFIX pieces so the harness token list and the -N rule exist once. An
+# output slug may not open with another kind's name, or "trigger-bogus-<date>"
+# would parse as an output directory.
+_STEM = re.compile(
+    rf"^(?:(?P<head>trigger{_HARNESS}|charter|decompose-signals)"
+    rf"|(?!(?:trigger|charter|decompose-signals)-)(?P<slug>[a-z0-9][a-z0-9-]*))"
+    rf"-(?P<date>\d{{4}}-\d{{2}}-\d{{2}})(?P<suffix>{_SUFFIX})$")
+
+
+def parse_results_stem(stem):
+    """(kind, harness, date, suffix, slug) for a results file stem or an
+    output directory name, or None when it fits no grammar.
+
+    The inverse of results_path: harness is the marked token or None (the
+    primary claude harness is unmarked), suffix the -N as an int or None,
+    slug set only for an output directory (kind "output")."""
+    match = _STEM.match(stem)
+    if not match:
+        return None
+    head = match["head"]
+    kind = "trigger" if head and head.startswith("trigger") \
+        else head or "output"
+    harness = head[len("trigger-"):] if head != kind and kind == "trigger" \
+        else None
+    suffix = match["suffix"]
+    return (kind, harness, match["date"],
+            int(suffix[1:]) if suffix else None, match["slug"])
+
+
 def valid_results_link(target):
     """True when a LEDGER evidence link target follows the results grammar."""
     return bool(_RESULTS_LINK.match(target))

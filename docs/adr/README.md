@@ -135,3 +135,4 @@ the canonical vocabulary.
 | [0112](0112-size-band-calibration-joins-the-root-only-importers.md) | size_band_calibration joins the root-only importers of cli.py, knowledge_plane.py, cost_ledger.py and factory_config.py | provisional |
 | [0113](0113-the-lessons-file-is-a-jsonl-ledger-of-voted-sourced-lessons.md) | The Decompose lessons file is a JSONL ledger of voted, sourced lessons, and decompose_lessons joins the root-only importers | provisional |
 | [0114](0114-decompose-grade-is-an-offline-scorer-beside-a-harness-suite-and-joins-the-root-only-importers.md) | decompose_grade is an offline scorer beside a harness suite, and joins the root-only importers | provisional |
+| [0115](0115-eval-trends-reads-records-through-eval-schema-and-joins-the-root-only-importers.md) | eval_trends reads records through eval_schema's name inverse and joins the root-only importers of cli.py | provisional |

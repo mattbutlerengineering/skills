@@ -65,6 +65,18 @@ pre-pass, deliberately **not** a gate:
   '+refs/pull/*/head:refs/remotes/pr/*'`. `--record` writes the result
   append-only to `evals/results/decompose-signals-<date>[-N].json`, on a
   clean `docs/` only; factory evidence, never LEDGER evidence.
+- `python3 eval_trends.py` — a per-surface pass-rate trend view over the
+  records the repo already holds (`evals/results/`, `plugin-evals/records/`),
+  grouped by comparable suite and case set, each rate with a Wilson 95
+  percent interval, and cost per pass where a plugin record carries a cost
+  (ADR-0115; the metric set and its failure modes are in
+  `docs/research/eval-quality-metrics-2026-10-21.md`). Free, read-only and
+  outside every gate: it makes no model or network call and writes nothing,
+  so it also sits outside `make check`. Below the minimum (30 cases in every
+  record, 2 distinct days) it prints an inventory and `REFUSED` lines in
+  place of a trend, and a refusal exits 0 (it is data); only a malformed
+  record exits 1. It measures recorded history only and moves no LEDGER
+  maturity. `python3 factory.py eval-trends` is the same tool.
 - `python3 size_band_calibration.py` — each S/M/L band's past cost
   error against its budget, from the cost ledger joined at read time to
   the breakdown row's `size:`, beside its cost and re-plan rate. Free,

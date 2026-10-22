@@ -1,0 +1,35 @@
+{
+  "expectations": [
+    {
+      "text": "breakdown.md exists in docs/features/csv-export/ with YAML frontmatter containing stage: decompose and run: feature:csv-export",
+      "passed": true,
+      "evidence": "docs/features/csv-export/breakdown.md exists; frontmatter lines 1-5 read: `---\\nstage: decompose\\nrun: feature:csv-export\\ndate: 2026-07-01\\n---`"
+    },
+    {
+      "text": "every component named in architecture.md (Export API, Export Scheduler, CSV Generator, Delivery) appears in at least one work item",
+      "passed": true,
+      "evidence": "Export API → items 'POST /exports (happy path)' (line 19), 'POST /exports validation' (line 53), 'GET /exports/{id}/jobs' (line 59); Export Scheduler → 'Scheduler tick — once-per-minute tick finds due ExportConfigs and enqueues one ExportJob' (line 24); CSV Generator → 'CSV Generator (happy path)' (line 30); Delivery → 'Delivery (single attempt)' (line 37) and 'Delivery retries' (line 65)."
+    },
+    {
+      "text": "every success criterion in prd.md is covered by at least one item's acceptance criterion",
+      "passed": true,
+      "evidence": "All 5 PRD criteria are cited in Accept lines: criterion 1 (201 echoing config) in 'POST /exports (happy path)' Accept ('gets a 201 echoing the stored configuration (PRD criterion 1)'); criterion 2 (CSV within 5 minutes) in 'End-to-end wiring' Accept ('within 5 minutes of its scheduled time (PRD criterion 2)'); criterion 3 (header + RFC 4180) in 'CSV Generator' Accept ('passes an RFC 4180 quoting/escaping check (PRD criterion 3)'); criterion 4 (3 retries, failure visible) in 'Delivery retries' Accept ('attempt_count 3, status failed, and the error is visible via GET /exports/{id}/jobs (PRD criterion 4)'); criterion 5 (tenant scoping) in 'Tenant isolation tests' Accept ('all fail to return another tenant's data (PRD criterion 5)')."
+    },
+    {
+      "text": "every work item is a markdown checkbox with an explicit acceptance criterion (no item lacks an Accept line)",
+      "passed": true,
+      "evidence": "All 11 work items (6 in Milestone 1, 5 in Milestone 2) begin with '- [ ]' and each has an '  - Accept:' sub-line — e.g. Data model (lines 14-17), Streaming memory check (lines 79-83). grep confirms 11 '- [ ]' items and 11 'Accept:' lines."
+    },
+    {
+      "text": "items are grouped into milestones and blocking edges between items are stated explicitly",
+      "passed": true,
+      "evidence": "Items are grouped under '## Milestone 1: Thin end-to-end slice...' (line 12) and '## Milestone 2: Production-ready...' (line 51). Every item carries an explicit '- Blocked by:' line naming its blockers or '—' for none, e.g. 'Blocked by: POST /exports (happy path), Scheduler tick, Delivery (single attempt)' (lines 48-49)."
+    },
+    {
+      "text": "the breakdown introduces no design decisions absent from architecture.md (no new components, storage choices, or delivery targets)",
+      "passed": true,
+      "evidence": "All breakdown details trace to architecture.md: the four components only; tables ExportConfig/ExportJob with denormalized workspace_id (arch 'Data model'); once-per-minute scheduler tick on the existing queue (arch 'Export Scheduler'); aws-sdk S3 client and object name `<prefix>/<dashboard-slug>-<scheduled_for>.csv` (arch 'Delivery → S3'); 3 retries with exponential backoff (arch failure modes); 422/403/404 semantics (arch 'Interfaces & contracts'); streaming/flat-memory check (arch 'Streaming generation' decision). No new components, storage, or delivery targets appear."
+    }
+  ],
+  "summary": {"passed": 6, "failed": 0, "total": 6, "pass_rate": 1.0}
+}

@@ -1,0 +1,2709 @@
+{
+  "date": "2026-10-10",
+  "harness": "claude",
+  "model": null,
+  "cli_version": "2.1.296 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "idea-direct-1",
+      "kind": "direct",
+      "expected": "idea",
+      "query": "I have a raw idea for a meal-planning app \u2014 help me flesh it out into a brief",
+      "fired": {
+        "idea": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "idea-direct-2",
+      "kind": "direct",
+      "expected": "idea",
+      "query": "What if we let users share their dashboards publicly? Just a hunch, nothing written down yet",
+      "fired": {
+        "idea": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "prd-direct-1",
+      "kind": "direct",
+      "expected": "prd",
+      "query": "Write a PRD for the CSV export feature",
+      "fired": {
+        "prd": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "prd-direct-2",
+      "kind": "direct",
+      "expected": "prd",
+      "query": "Turn this idea brief into a PRD with scope and success criteria",
+      "fired": {
+        "prd": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-design-direct-1",
+      "kind": "direct",
+      "expected": "ux-design",
+      "query": "Design the UX flows for the onboarding screens",
+      "fired": {
+        "ux-design": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-design-direct-2",
+      "kind": "direct",
+      "expected": "ux-design",
+      "query": "The PRD marks ux as required \u2014 design the flows and screens before we do any technical work",
+      "fired": {
+        "ux-design": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "architect-direct-1",
+      "kind": "direct",
+      "expected": "architect",
+      "query": "Draft the technical design for this feature \u2014 architecture, data model, and interfaces",
+      "fired": {
+        "architect": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "architect-direct-2",
+      "kind": "direct",
+      "expected": "architect",
+      "query": "What stack and data model should we use here? Put together the architecture doc",
+      "fired": {
+        "architect": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "decompose-direct-1",
+      "kind": "direct",
+      "expected": "decompose",
+      "query": "Break this technical design into ordered, implementable work items",
+      "fired": {
+        "decompose": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "decompose-direct-2",
+      "kind": "direct",
+      "expected": "decompose",
+      "query": "Take the architecture and produce milestones and issues with their dependencies",
+      "fired": {
+        "decompose": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "implement-direct-1",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "The breakdown is ready \u2014 let's start building, working through the items test-first",
+      "fired": {
+        "implement": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "implement-direct-2",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "Start coding the work items in the breakdown and check them off as their acceptance criteria pass",
+      "fired": {
+        "implement": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "verify-direct-1",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Implementation is finished \u2014 verify the work meets the PRD's success criteria and collect the evidence",
+      "fired": {
+        "verify": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "verify-direct-2",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Run the tests and put together verification evidence against the success criteria",
+      "fired": {
+        "verify": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-direct-1",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Give this run's changes a quality pass for defects and security issues before we ship",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-direct-2",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Do a code review of the changes from this run and write up the findings",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ship-direct-1",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "The review is done \u2014 ship it to production with pre-flight checks and a rollback plan",
+      "fired": {
+        "ship": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ship-direct-2",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "Let's release this feature \u2014 walk me through the release steps",
+      "fired": {
+        "ship": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "operate-direct-1",
+      "kind": "direct",
+      "expected": "operate",
+      "query": "The feature has been live for two weeks \u2014 capture user feedback and run the retrospective",
+      "fired": {
+        "operate": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "operate-direct-2",
+      "kind": "direct",
+      "expected": "operate",
+      "query": "Close the loop on this run: collect what users said and write the retro",
+      "fired": {
+        "operate": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "next-direct-1",
+      "kind": "direct",
+      "expected": "next",
+      "query": "What's next for the dark-mode run?",
+      "fired": {
+        "next": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "next-direct-2",
+      "kind": "direct",
+      "expected": "next",
+      "query": "Where are we in the pipeline for this feature?",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "next-maintenance-1",
+      "kind": "direct",
+      "expected": "next",
+      "query": "The login-timeout fix run is mid-flight \u2014 what's next?",
+      "fired": {
+        "next": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "idea-situational-1",
+      "kind": "situational",
+      "expected": "idea",
+      "query": "Something feels off about our onboarding funnel \u2014 I think there's a product opportunity here but nothing concrete yet",
+      "fired": {
+        "idea": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "prd-situational-1",
+      "kind": "situational",
+      "expected": "prd",
+      "query": "The idea brief for the export feature is done \u2014 nail down the requirements and success criteria",
+      "fired": {
+        "prd": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-design-situational-1",
+      "kind": "situational",
+      "expected": "ux-design",
+      "query": "The PRD is finished and it declares a user-facing surface \u2014 what flows and screens do we need?",
+      "fired": {
+        "ux-design": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "architect-situational-1",
+      "kind": "situational",
+      "expected": "architect",
+      "query": "Requirements are locked; we need to settle the data model and interfaces before anyone writes code",
+      "fired": {
+        "architect": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "decompose-situational-1",
+      "kind": "situational",
+      "expected": "decompose",
+      "query": "The architecture doc is approved \u2014 turn it into ordered work items we can pick up",
+      "fired": {
+        "decompose": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "implement-situational-1",
+      "kind": "situational",
+      "expected": "implement",
+      "query": "breakdown.md is sitting there with unchecked items \u2014 time to write the code",
+      "fired": {
+        "implement": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "verify-situational-1",
+      "kind": "situational",
+      "expected": "verify",
+      "query": "All the work items are checked off \u2014 demonstrate the feature meets its success criteria",
+      "fired": {
+        "verify": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-situational-1",
+      "kind": "situational",
+      "expected": "review",
+      "query": "verification.md is in place \u2014 the change still needs a defect and security pass before release",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ship-situational-1",
+      "kind": "situational",
+      "expected": "ship",
+      "query": "Review found no blockers \u2014 get this into production",
+      "fired": {
+        "ship": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "operate-situational-1",
+      "kind": "situational",
+      "expected": "operate",
+      "query": "release.md is done and users have had the feature for a month \u2014 what did we learn?",
+      "fired": {
+        "operate": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "arch-vs-decomp-1",
+      "kind": "near-miss",
+      "expected": "decompose",
+      "query": "Turn the technical design into milestones",
+      "fired": {
+        "decompose": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "decomp-vs-impl-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "Start working through the breakdown",
+      "fired": {
+        "implement": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "verify-vs-review-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Give the change a quality check before we ship",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "impl-vs-ship-1",
+      "kind": "near-miss",
+      "expected": "ship",
+      "query": "The code is done and tests pass \u2014 push this out to users",
+      "fired": {
+        "ship": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "idea-vs-prd-1",
+      "kind": "near-miss",
+      "expected": "prd",
+      "query": "I know exactly what I want to build \u2014 write up the requirements",
+      "fired": {
+        "prd": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "ux-vs-arch-1",
+      "kind": "near-miss",
+      "expected": "ux-design",
+      "query": "Design how the settings screen should work for users",
+      "fired": {
+        "ux-design": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "ship-vs-operate-1",
+      "kind": "near-miss",
+      "expected": "operate",
+      "query": "The release went out yesterday \u2014 check how it's landing with users",
+      "fired": {
+        "operate": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "apr-1",
+      "kind": "direct",
+      "expected": "address-pr-review",
+      "query": "Address the review comments on my open PR and resolve the threads",
+      "fired": {
+        "address-pr-review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "apr-2",
+      "kind": "situational",
+      "expected": "address-pr-review",
+      "query": "Reviewers left feedback on my pull request and it now has merge conflicts with main",
+      "fired": {
+        "address-pr-review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "apr-3",
+      "kind": "situational",
+      "expected": "address-pr-review",
+      "query": "CI is green on my open PR but two review threads are still unresolved \u2014 get it ready to merge",
+      "fired": {
+        "address-pr-review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "apr-vs-review-1",
+      "kind": "near-miss",
+      "expected": "address-pr-review",
+      "query": "The PR I put up got review comments \u2014 take care of them",
+      "fired": {
+        "address-pr-review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "apr-vs-watch-1",
+      "kind": "near-miss",
+      "expected": null,
+      "query": "Keep an eye on my PR and let me know when CI goes green",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-vs-apr-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Look over this run's diff for defects before I put up the PR",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "autorun-1",
+      "kind": "direct",
+      "expected": "autorun",
+      "query": "Run the whole pipeline on this feature end to end \u2014 here's the brief with my answers, don't stop to interview me",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "autorun-2",
+      "kind": "situational",
+      "expected": "autorun",
+      "query": "I'm heading out for the afternoon \u2014 take this feature description and drive it through every stage to ship, noting anything you had to assume",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "autorun-3",
+      "kind": "situational",
+      "expected": "autorun",
+      "query": "I don't want to sit through the stage interviews. I've written down the users, scope, and success criteria \u2014 take it all the way through and log your assumptions",
+      "fired": {
+        "autorun": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "autorun-vs-next-1",
+      "kind": "near-miss",
+      "expected": "next",
+      "query": "Pick up my run and move it along to the next stage",
+      "fired": {
+        "next": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "bridge-import-1",
+      "kind": "situational",
+      "expected": "decompose",
+      "query": "The architecture is settled \u2014 break the work down, and pull the open issues from our tracker into the breakdown as work items",
+      "fired": {
+        "decompose": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "bridge-autorun-1",
+      "kind": "situational",
+      "expected": "autorun",
+      "query": "Here's my brief with the answers up front \u2014 drive the run all the way to ship without stopping to interview me, seeding the breakdown from our existing issue backlog",
+      "fired": {
+        "autorun": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "bridge-vs-decompose-1",
+      "kind": "near-miss",
+      "expected": null,
+      "query": "Go through our issue tracker and close out anything stale",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "mermaid-1",
+      "kind": "direct",
+      "expected": "mermaid",
+      "query": "Create a mermaid diagram of our deployment process",
+      "fired": {
+        "mermaid": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "mermaid-2",
+      "kind": "situational",
+      "expected": "mermaid",
+      "query": "This runbook's escalation steps are a wall of text \u2014 turn them into a diagram people can follow at a glance",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "mermaid-3",
+      "kind": "situational",
+      "expected": "mermaid",
+      "query": "I need a sequence diagram of the auth handshake for the docs, and it has to stay readable in dark mode",
+      "fired": {
+        "mermaid": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "mermaid-vs-ux-1",
+      "kind": "near-miss",
+      "expected": "ux-design",
+      "query": "Diagram the onboarding flow \u2014 which screens users see and where each takes them",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "mermaid-vs-docs-1",
+      "kind": "near-miss",
+      "expected": null,
+      "query": "Write up the deployment process in the operations guide",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "iad-1",
+      "kind": "direct",
+      "expected": "interactive-architecture-diagram",
+      "query": "Create an interactive architecture diagram I can step through while presenting how our system works",
+      "fired": {
+        "interactive-architecture-diagram": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "iad-2",
+      "kind": "situational",
+      "expected": "interactive-architecture-diagram",
+      "query": "I'm demoing the pipeline at Friday's all-hands \u2014 I want an animated diagram where each stage lights up as I talk through it",
+      "fired": {
+        "interactive-architecture-diagram": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "iad-3",
+      "kind": "situational",
+      "expected": "interactive-architecture-diagram",
+      "query": "Make a self-contained HTML page showing requests flowing through our services, with clickable boxes that explain each component",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "iad-vs-mermaid-1",
+      "kind": "near-miss",
+      "expected": "mermaid",
+      "query": "Draw an architecture diagram for the design doc \u2014 something I can paste into markdown",
+      "fired": {
+        "none": 2,
+        "mermaid": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "ad-1",
+      "kind": "direct",
+      "expected": "animated-diagram",
+      "query": "Create an animated diagram of our ETL pipeline for the README \u2014 flowing dashed connectors that show which way the data moves",
+      "fired": {
+        "animated-diagram": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ad-2",
+      "kind": "situational",
+      "expected": "animated-diagram",
+      "query": "Turn this mermaid flowchart into a version that moves \u2014 arrows streaming and a dot traveling the happy path",
+      "fired": {
+        "none": 2,
+        "animated-diagram": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "ad-3",
+      "kind": "situational",
+      "expected": "animated-diagram",
+      "query": "The docs homepage needs an architecture picture that looks alive \u2014 requests visibly flowing from the client through the gateway to the database, looping forever",
+      "fired": {
+        "animated-diagram": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ad-vs-iad-1",
+      "kind": "near-miss",
+      "expected": "interactive-architecture-diagram",
+      "query": "Build an animated diagram I can click through service by service while I narrate our architecture during the demo",
+      "fired": {
+        "interactive-architecture-diagram": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ad-vs-mermaid-1",
+      "kind": "near-miss",
+      "expected": "mermaid",
+      "query": "Sketch our queue topology as a diagram for the wiki",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "archd-1",
+      "kind": "direct",
+      "expected": "architecture-diagram",
+      "query": "Create a static architecture diagram of our system as an SVG file I can commit and embed in the README",
+      "fired": {
+        "architecture-diagram": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "archd-2",
+      "kind": "situational",
+      "expected": "architecture-diagram",
+      "query": "The design doc needs a polished system-overview figure \u2014 services, database, queue \u2014 as an image that looks right in both light and dark mode",
+      "fired": {
+        "architecture-diagram": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "archd-3",
+      "kind": "situational",
+      "expected": "architecture-diagram",
+      "query": "Draw our AWS topology as a clean, designed picture for the docs site \u2014 no animation, no clicking, just a well-made still figure",
+      "fired": {
+        "architecture-diagram": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "archd-vs-ad-1",
+      "kind": "near-miss",
+      "expected": "animated-diagram",
+      "query": "Make an architecture SVG for the README where you can watch requests flowing through the services",
+      "fired": {
+        "animated-diagram": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "archd-vs-mermaid-1",
+      "kind": "near-miss",
+      "expected": "mermaid",
+      "query": "Add a quick architecture sketch to the RFC, just something I can paste in as text",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "capture-1",
+      "kind": "direct",
+      "expected": "capture",
+      "query": "Checkout has been throwing 500s since yesterday's deploy \u2014 write up the defect brief so we can run the fix as a maintenance run",
+      "fired": {
+        "capture": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "capture-2",
+      "kind": "situational",
+      "expected": "capture",
+      "query": "Users are reporting login times out after the last deploy \u2014 I want to fix it properly, with a regression test, not just patch and pray",
+      "fired": {
+        "capture": 1,
+        "none": 2
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "capture-3",
+      "kind": "situational",
+      "expected": "capture",
+      "query": "We're three major versions behind on our web framework and it's starting to bite \u2014 set the upgrade up as a tracked run with evidence and a target state",
+      "fired": {
+        "capture": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "capture-vs-idea-1",
+      "kind": "near-miss",
+      "expected": "idea",
+      "query": "It really bugs me that there's no way to export your data \u2014 we should do something about that",
+      "fired": {
+        "none": 2,
+        "idea": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "capture-vs-implement-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "The defect brief for the login fix is written and its work items are still unchecked \u2014 keep working through them",
+      "fired": {
+        "implement": 1,
+        "none": 2
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "factory-init-1",
+      "kind": "direct",
+      "expected": "factory-init",
+      "query": "Run factory-init on the new billing repo so it can take factory work orders",
+      "fired": {
+        "factory-init": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "factory-init-2",
+      "kind": "situational",
+      "expected": "factory-init",
+      "query": "I just created a fresh product repo \u2014 stamp the factory tooling into it so make check and the gate detectors run there",
+      "fired": {
+        "factory-init": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "factory-init-3",
+      "kind": "situational",
+      "expected": "factory-init",
+      "query": "I edited the factory templates and now detector E is failing the build \u2014 regenerate the checksum manifest",
+      "fired": {
+        "factory-init": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "factory-init-vs-idea-1",
+      "kind": "near-miss",
+      "expected": "idea",
+      "query": "Set up a run for the new invoicing product we want to build",
+      "fired": {
+        "idea": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "doctor-1",
+      "kind": "direct",
+      "expected": "doctor",
+      "query": "Run doctor on this repo \u2014 I want to know whether the pipeline skills and the factory tooling are actually installed correctly here",
+      "fired": {
+        "doctor": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "doctor-2",
+      "kind": "situational",
+      "expected": "doctor",
+      "query": "I installed the plugin and stamped the factory last week and I have no idea whether any of it is wired up right \u2014 check the install over and tell me what's broken",
+      "fired": {
+        "doctor": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "doctor-3",
+      "kind": "situational",
+      "expected": "doctor",
+      "query": "make check just blew up on a repo I stamped yesterday and the error reads like the tool itself is broken \u2014 work out what's wrong with the setup",
+      "fired": {
+        "doctor": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "doctor-vs-factory-init-1",
+      "kind": "near-miss",
+      "expected": "doctor",
+      "query": "Check whether the factory stamp in this repo is still intact \u2014 I don't want to re-stamp anything, just find out",
+      "fired": {
+        "doctor": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "doctor-vs-next-1",
+      "kind": "near-miss",
+      "expected": "doctor",
+      "query": "Is this repo even set up to run the pipeline at all?",
+      "fired": {
+        "doctor": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "factory-init-vs-doctor-1",
+      "kind": "near-miss",
+      "expected": "factory-init",
+      "query": "Someone hand-edited the stamped mirror under tools/factory and detector E is red \u2014 put it back the way the templates define it",
+      "fired": {
+        "none": 2,
+        "factory-init": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "work-queue-1",
+      "kind": "direct",
+      "expected": "work-queue",
+      "query": "Work the ready queue \u2014 take the next few work orders and run them in parallel instead of one at a time",
+      "fired": {
+        "work-queue": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "work-queue-2",
+      "kind": "situational",
+      "expected": "work-queue",
+      "query": "There are several work orders sitting at ready-for-agent and I'd rather not babysit them one by one \u2014 drain the backlog and open a PR for each",
+      "fired": {
+        "work-queue": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "work-queue-3",
+      "kind": "situational",
+      "expected": "work-queue",
+      "query": "Can we run three of the approved work orders at once, each in its own worktree, and stop at merge-ready PRs?",
+      "fired": {
+        "work-queue": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "work-queue-vs-autorun-1",
+      "kind": "near-miss",
+      "expected": "work-queue",
+      "query": "Run the ready work orders concurrently and open a PR for each one",
+      "fired": {
+        "work-queue": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "autorun-vs-work-queue-1",
+      "kind": "near-miss",
+      "expected": "autorun",
+      "query": "Take this one feature brief and drive it from idea all the way through to ship without stopping to interview me",
+      "fired": {
+        "autorun": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "work-queue-vs-implement-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "Implement WO-0007 \u2014 just that one work order, following its acceptance criteria",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "audit-1",
+      "kind": "direct",
+      "expected": "audit",
+      "query": "Audit this codebase and tell me what the highest-leverage things to fix are",
+      "fired": {
+        "audit": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "audit-2",
+      "kind": "situational",
+      "expected": "audit",
+      "query": "Nobody has looked at this repo end to end in months \u2014 go hunting for bugs, security holes and dead weight, and come back with what is actually worth doing",
+      "fired": {
+        "audit": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "audit-3",
+      "kind": "situational",
+      "expected": "audit",
+      "query": "We have shipped the obvious stuff. Read the code and tell me where this project should go next, with evidence from the repo rather than generic advice",
+      "fired": {
+        "audit": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "audit-vs-review-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Go through the whole codebase and find what is wrong with it",
+      "fired": {
+        "none": 1,
+        "audit": 2
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "audit-vs-doctor-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Check this repo over and tell me what is in bad shape",
+      "fired": {
+        "audit": 1,
+        "none": 2
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "audit-vs-capture-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Something in here is rotting and I cannot name it \u2014 find the problems and tell me which ones deserve a run",
+      "fired": {
+        "audit": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "capture-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "capture",
+      "query": "Checkout is throwing a 500 for logged-out users since Tuesday \u2014 let us start a fix for it",
+      "fired": {
+        "capture": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "The work orders for the dark-mode feature are all implemented \u2014 review the run before we ship it",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "deepen-1",
+      "kind": "direct",
+      "expected": "deepen",
+      "query": "Review this codebase for architecture improvements \u2014 where are the modules too shallow and what should be consolidated?",
+      "fired": {
+        "deepen": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "deepen-2",
+      "kind": "situational",
+      "expected": "deepen",
+      "query": "Everything in here is a thin wrapper around something else and I have to open six files to follow one request \u2014 what should the shape actually be?",
+      "fired": {
+        "deepen": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "deepen-3",
+      "kind": "situational",
+      "expected": "deepen",
+      "query": "This code is miserable to test \u2014 the unit tests all pass and the bugs are in how the pieces are wired together. Find the refactors worth doing",
+      "fired": {
+        "deepen": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "deepen-vs-architect-1",
+      "kind": "near-miss",
+      "expected": "deepen",
+      "query": "Take a look at the architecture and tell me what to improve",
+      "fired": {
+        "deepen": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "architect-vs-deepen-1",
+      "kind": "near-miss",
+      "expected": "architect",
+      "query": "The PRD is approved \u2014 settle the data model and the interfaces before anyone writes code for this feature",
+      "fired": {
+        "architect": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "deepen-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "deepen",
+      "query": "The coupling in this repo is the problem \u2014 find where the modules leak into each other and what to merge",
+      "fired": {
+        "deepen": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "audit-vs-deepen-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Sweep the whole repo \u2014 bugs, security holes, missing tests, stale dependencies \u2014 and tell me what is worth doing",
+      "fired": {
+        "audit": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "deepen-vs-diagram-1",
+      "kind": "near-miss",
+      "expected": "deepen",
+      "query": "Show me how the services here fit together and where the design is going wrong",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "automate-1",
+      "kind": "direct",
+      "expected": "automate",
+      "query": "Recommend some Claude Code automations for this project \u2014 what hooks or subagents should I be running?",
+      "fired": {
+        "automate": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "automate-2",
+      "kind": "situational",
+      "expected": "automate",
+      "query": "I keep forgetting to regenerate the manifest after I touch a template and CI catches it every time. What should I put in place so I stop doing that by hand?",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "automate-3",
+      "kind": "situational",
+      "expected": "automate",
+      "query": "Our contributor docs are full of rules nobody checks \u2014 what's worth automating here?",
+      "fired": {
+        "automate": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "automate-vs-doctor-1",
+      "kind": "near-miss",
+      "expected": "automate",
+      "query": "We've got a CLAUDE.md and a couple of skills installed and that's it \u2014 what else should we be running here?",
+      "fired": {
+        "automate": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "doctor-vs-automate-1",
+      "kind": "near-miss",
+      "expected": "doctor",
+      "query": "None of the skills seem to be loading and make check fails on a fresh stamp \u2014 is any of this actually installed right?",
+      "fired": {
+        "doctor": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "automate-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "automate",
+      "query": "What should we be automating in this repo \u2014 where are we still doing things by hand?",
+      "fired": {
+        "automate": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "audit-vs-automate-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Go through the repo and tell me what's broken or rotting \u2014 bugs, security, coverage, stale deps",
+      "fired": {
+        "audit": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "router-1",
+      "kind": "router",
+      "expected": "next",
+      "query": "Continue the pipeline",
+      "fired": {
+        "next": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "router-2",
+      "kind": "router",
+      "expected": "next",
+      "query": "Resume the payments feature run where we left off",
+      "fired": {
+        "next": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "router-3",
+      "kind": "router",
+      "expected": "next",
+      "query": "I want to start a new product run",
+      "fired": {
+        "idea": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "distractor-1",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Why is this regex failing on multiline input?",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "distractor-2",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Review my coworker's PR in the analytics repo",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "distractor-3",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Write a blog post announcing our Series A",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "distractor-4",
+      "kind": "distractor",
+      "expected": null,
+      "query": "What does this segfault stack trace mean?",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "distractor-5",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Rename the userId variable to accountId across the codebase",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "pb-1",
+      "kind": "direct",
+      "expected": "pipeline-board",
+      "query": "Generate the pipeline board so I can see which run is on which stage",
+      "fired": {
+        "pipeline-board": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "pb-2",
+      "kind": "situational",
+      "expected": "pipeline-board",
+      "query": "I've got several features and fixes in flight and I can't tell where each one stands \u2014 draw me a picture of which task is on which step",
+      "fired": {
+        "pipeline-board": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "pb-3",
+      "kind": "situational",
+      "expected": "pipeline-board",
+      "query": "Show me all the active runs in this repo placed on their current pipeline stages, at a glance, without me running commands",
+      "fired": {
+        "pipeline-board": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ld-1",
+      "kind": "direct",
+      "expected": "launch-demo",
+      "query": "Make the launch video and the launch copy for the feature we just shipped",
+      "fired": {
+        "launch-demo": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ld-2",
+      "kind": "situational",
+      "expected": "launch-demo",
+      "query": "The release went out this morning and nobody outside the team can say what it does \u2014 I want a one-minute narrated clip and a plain-words write-up of it",
+      "fired": {
+        "launch-demo": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ld-vs-ship-1",
+      "kind": "near-miss",
+      "expected": "launch-demo",
+      "query": "The dark-mode feature already shipped last week \u2014 record its launch video now",
+      "fired": {
+        "launch-demo": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ship-vs-ld-1",
+      "kind": "near-miss",
+      "expected": "ship",
+      "query": "Everything is reviewed \u2014 ship it, with the pre-flight checks and a rollback plan",
+      "fired": {
+        "ship": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "lean-1",
+      "kind": "direct",
+      "expected": "lean",
+      "query": "I need to remember a user's theme choice between visits. Give me the simplest thing that works, with no new dependency and no abstraction I don't need yet",
+      "fired": {
+        "lean": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "lean-2",
+      "kind": "situational",
+      "expected": "lean",
+      "query": "I asked for a date field and got a four-hundred-line picker component with its own stylesheet and a new package. Redo it with the least code that actually does the job",
+      "fired": {
+        "lean": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "lean-3",
+      "kind": "situational",
+      "expected": "lean",
+      "query": "Before I merge this branch, go through the diff and tell me what could simply be deleted or swapped for something the language already ships",
+      "fired": {
+        "lean": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "lean-4",
+      "kind": "situational",
+      "expected": "lean",
+      "query": "We left deliberate shortcuts all over this code with comments promising to come back. Collect them into one list so later doesn't quietly become never",
+      "fired": {
+        "lean": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "lean-vs-review-1",
+      "kind": "near-miss",
+      "expected": "lean",
+      "query": "Look over my changes. I'm not worried about bugs, I think I over-built it. What in here is unnecessary?",
+      "fired": {
+        "lean": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-vs-lean-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "The change is verified. Give it a proper quality pass for logic errors, missed edge cases and security problems before it ships",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "lean-vs-deepen-1",
+      "kind": "near-miss",
+      "expected": "lean",
+      "query": "This service has an interface with exactly one implementation, a factory that builds one thing, and settings nobody sets. What can just go?",
+      "fired": {
+        "lean": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "deepen-vs-lean-1",
+      "kind": "near-miss",
+      "expected": "deepen",
+      "query": "Following one request means reading five tiny modules that each hand it to the next. Which of them should become one module, and what should its interface promise?",
+      "fired": {
+        "deepen": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "lean-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "lean",
+      "query": "Sweep this repo for bloat: packages we don't need, hand-rolled versions of things the standard library has, code nothing calls",
+      "fired": {
+        "lean": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "audit-vs-lean-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "I don't have a specific problem in mind. Go looking across this codebase for whatever is wrong, bugs, security, missing tests, and tell me what deserves work",
+      "fired": {
+        "audit": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "polish-1",
+      "kind": "direct",
+      "expected": "polish",
+      "query": "Polish the settings page before we ship: spacing, alignment, hierarchy, the lot",
+      "fired": {
+        "polish": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "polish-2",
+      "kind": "situational",
+      "expected": "polish",
+      "query": "The dashboard works but it looks like every other generated app: purple gradient, cards inside cards, the same font as everything else. Make it look like someone chose it",
+      "fired": {
+        "polish": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "polish-3",
+      "kind": "situational",
+      "expected": "polish",
+      "query": "Give me a design critique of the checkout screen. What does the eye land on first, and what is getting in the way?",
+      "fired": {
+        "polish": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "polish-4",
+      "kind": "situational",
+      "expected": "polish",
+      "query": "The empty state and the error messages on this form are an afterthought. Sort them out, and check the page holds up on a phone and with only a keyboard",
+      "fired": {
+        "polish": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "polish-vs-ux-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "The onboarding screens are built and the flow through them is right. They just feel flat and generic. Improve how they look and read",
+      "fired": {
+        "polish": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "ux-design",
+      "query": "The PRD says this feature has a user interface. Work out the screens and the path through them with me before anyone designs the technical side",
+      "fired": {
+        "ux-design": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "polish-vs-review-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "Review the new pricing page for me. Not the code, the page itself: does it read well and does the layout hold together?",
+      "fired": {
+        "polish": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Review the code behind the new pricing page for bugs and anything that would bite us in production",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "polish-vs-lean-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "This screen is too busy. Strip it back to what the user actually needs to see",
+      "fired": {
+        "polish": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "lean-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "lean",
+      "query": "This toggle is three wrapper components and a context provider. Strip the code back to something sane",
+      "fired": {
+        "lean": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "polish-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "Check this page for accessibility problems: contrast, focus order, missing labels",
+      "fired": {
+        "none": 1,
+        "polish": 2
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "ux-writing-1",
+      "kind": "direct",
+      "expected": "ux-writing",
+      "query": "Audit the UX copy across our app: buttons, labels, error messages, empty states. Tell me what is unclear or inconsistent",
+      "fired": {
+        "ux-writing": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-writing-2",
+      "kind": "situational",
+      "expected": "ux-writing",
+      "query": "Our error messages just say 'Something went wrong' or show a raw error code. Rewrite them so people know what happened and what to do next",
+      "fired": {
+        "ux-writing": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-writing-3",
+      "kind": "situational",
+      "expected": "ux-writing",
+      "query": "Half the app calls it a workspace and the other half calls it a project, and the buttons switch between Title Case and sentence case. Pick one and make every string agree",
+      "fired": {
+        "ux-writing": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-writing-4",
+      "kind": "situational",
+      "expected": "ux-writing",
+      "query": "We're about to send our strings to translators. Check the message catalogue first for glued-together sentences, hand-rolled plurals and anything that won't survive translation",
+      "fired": {
+        "none": 1,
+        "ux-writing": 2
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "ux-writing-5",
+      "kind": "situational",
+      "expected": "ux-writing",
+      "query": "We have no written voice and tone. Draft one from the copy we already ship, with a glossary of the terms we use",
+      "fired": {
+        "ux-writing": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-patterns-1",
+      "kind": "direct",
+      "expected": "ux-patterns",
+      "query": "Write down the UX patterns for this app, how we handle loading, errors, empty states, deletes and form validation, so every new screen behaves the same way",
+      "fired": {
+        "ux-patterns": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-patterns-2",
+      "kind": "situational",
+      "expected": "ux-patterns",
+      "query": "Deleting a file asks 'Are you sure?', deleting a folder just happens with an undo toast, and deleting a user does neither. Decide how destructive actions should work everywhere and write it down",
+      "fired": {
+        "ux-patterns": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-patterns-3",
+      "kind": "situational",
+      "expected": "ux-patterns",
+      "query": "Some forms validate on every keystroke, some only on submit, and some disable the submit button until everything is valid. I want one rule for the whole product",
+      "fired": {
+        "ux-patterns": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-patterns-4",
+      "kind": "situational",
+      "expected": "ux-patterns",
+      "query": "We already have interaction guidelines in docs/ux-patterns.md. Sweep the admin screens and tell me where they don't follow them",
+      "fired": {
+        "ux-patterns": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-writing-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "ux-writing",
+      "query": "Go through every string in the product, not just this page, and make the wording consistent with one voice",
+      "fired": {
+        "ux-writing": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "polish-vs-ux-writing-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "This settings page feels cluttered and the spacing is off. Clean it up visually",
+      "fired": {
+        "polish": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-writing-vs-ux-1",
+      "kind": "near-miss",
+      "expected": "ux-writing",
+      "query": "The signup flow is built and the steps are right. The words on each step are clumsy, so rewrite the headings, helper text and button labels",
+      "fired": {
+        "ux-writing": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-writing-vs-review-1",
+      "kind": "near-miss",
+      "expected": "ux-writing",
+      "query": "Review the text in the new billing screens. Not the code, the words: are the messages clear and do they use our terms?",
+      "fired": {
+        "ux-writing": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-patterns-vs-polish-1",
+      "kind": "near-miss",
+      "expected": "ux-patterns",
+      "query": "Every screen shows loading differently, some spinners, some skeletons, some nothing. Define the rule once for the whole app",
+      "fired": {
+        "ux-patterns": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "polish-vs-ux-patterns-1",
+      "kind": "near-miss",
+      "expected": "polish",
+      "query": "Design the empty, loading and error states for this one dashboard screen and make them look considered",
+      "fired": {
+        "polish": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "ux-patterns-vs-ux-1",
+      "kind": "near-miss",
+      "expected": "ux-patterns",
+      "query": "Before anyone designs another screen, I want our existing conventions for confirmations, toasts and keyboard focus pulled out of the code into one document",
+      "fired": {
+        "ux-patterns": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-vs-ux-patterns-1",
+      "kind": "near-miss",
+      "expected": "ux-design",
+      "query": "The PRD for team invites says it has a UI. Walk me through designing the invite flow and its screens",
+      "fired": {
+        "ux-design": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-patterns-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "ux-patterns",
+      "query": "Check our screens for inconsistent interaction behaviour: how they confirm, undo, paginate and notify",
+      "fired": {
+        "ux-patterns": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "audit-vs-ux-patterns-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Sweep the frontend code for bugs, missing tests and security issues and rank what needs work",
+      "fired": {
+        "audit": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-writing-vs-ux-patterns-1",
+      "kind": "near-miss",
+      "expected": "ux-writing",
+      "query": "Our delete confirmations all behave the same, but the wording is all over the place. Make the dialog text consistent",
+      "fired": {
+        "ux-writing": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "ux-patterns-vs-ux-writing-1",
+      "kind": "near-miss",
+      "expected": "ux-patterns",
+      "query": "The words are fine. The problem is that some deletes confirm and some undo. Settle the behaviour for the whole app",
+      "fired": {
+        "ux-patterns": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "knowledge-base-1",
+      "kind": "direct",
+      "expected": "knowledge-base",
+      "query": "Set up a knowledge base for this repo so future agent sessions know the things that aren't obvious from the code",
+      "fired": {
+        "knowledge-base": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "knowledge-base-2",
+      "kind": "situational",
+      "expected": "knowledge-base",
+      "query": "Every new session trips over the same thing: the deploy script exits zero even when the upload fails. Write that down somewhere the next agent will actually see it",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "knowledge-base-3",
+      "kind": "situational",
+      "expected": "knowledge-base",
+      "query": "This PR just merged and taught us why the cache has to be keyed by tenant. Propose what should go into our project notes from it",
+      "fired": {
+        "knowledge-base": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "knowledge-base-4",
+      "kind": "situational",
+      "expected": "knowledge-base",
+      "query": "Our docs/kb pages cite files that have changed a lot since. Which of them are stale, and what needs re-checking?",
+      "fired": {
+        "knowledge-base": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "knowledge-base-vs-audit-1",
+      "kind": "near-miss",
+      "expected": "knowledge-base",
+      "query": "Go through the ADRs and review findings and pull out the gotchas and invariants an agent would get wrong, as short pages with sources",
+      "fired": {
+        "knowledge-base": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "audit-vs-knowledge-base-1",
+      "kind": "near-miss",
+      "expected": "audit",
+      "query": "Nothing specific is broken, but I want to know where this codebase is weakest: bugs, security holes, untested paths. Rank what deserves work",
+      "fired": {
+        "audit": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "knowledge-base-vs-deepen-1",
+      "kind": "near-miss",
+      "expected": "knowledge-base",
+      "query": "A request flows through four modules and no single file shows the whole path. Record that flow and why it is shaped that way so nobody has to rediscover it",
+      "fired": {
+        "knowledge-base": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "deepen-vs-knowledge-base-1",
+      "kind": "near-miss",
+      "expected": "deepen",
+      "query": "A request flows through four thin modules that each just pass it on. Should they be one module, and what interface should it have?",
+      "fired": {
+        "deepen": 1,
+        "none": 2
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "knowledge-base-vs-doctor-1",
+      "kind": "near-miss",
+      "expected": "knowledge-base",
+      "query": "Check whether our project knowledge pages are still true: broken links, orphan pages, anything whose code moved on since it was verified",
+      "fired": {
+        "knowledge-base": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "doctor-vs-knowledge-base-1",
+      "kind": "near-miss",
+      "expected": "doctor",
+      "query": "Is the pipeline actually installed properly here? Check the stamp, the workflows and the labels it was supposed to leave behind",
+      "fired": {
+        "doctor": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "knowledge-base-vs-automate-1",
+      "kind": "near-miss",
+      "expected": "knowledge-base",
+      "query": "Agents keep relearning the same quirks of this repo. I don't want a hook or a new tool, I want the quirks written down where every session reads them",
+      "fired": {
+        "knowledge-base": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "automate-vs-knowledge-base-1",
+      "kind": "near-miss",
+      "expected": "automate",
+      "query": "Agents keep forgetting to run the formatter before committing in this repo. What hook or automation should enforce it?",
+      "fired": {
+        "automate": 3
+      },
+      "runs": 3,
+      "errors": 0,
+      "correct_rate": 1.0,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 185,
+    "passed": 163,
+    "failed": 22,
+    "errors": 0,
+    "by_kind": {
+      "direct": {
+        "total": 43,
+        "passed": 41
+      },
+      "situational": {
+        "total": 57,
+        "passed": 50
+      },
+      "near-miss": {
+        "total": 77,
+        "passed": 65
+      },
+      "router": {
+        "total": 3,
+        "passed": 2
+      },
+      "distractor": {
+        "total": 5,
+        "passed": 5
+      }
+    },
+    "by_skill": {
+      "idea": {
+        "total": 5,
+        "passed": 4
+      },
+      "prd": {
+        "total": 4,
+        "passed": 4
+      },
+      "ux-design": {
+        "total": 7,
+        "passed": 6
+      },
+      "architect": {
+        "total": 4,
+        "passed": 4
+      },
+      "decompose": {
+        "total": 5,
+        "passed": 5
+      },
+      "implement": {
+        "total": 6,
+        "passed": 4
+      },
+      "verify": {
+        "total": 3,
+        "passed": 3
+      },
+      "review": {
+        "total": 8,
+        "passed": 7
+      },
+      "ship": {
+        "total": 5,
+        "passed": 5
+      },
+      "operate": {
+        "total": 4,
+        "passed": 4
+      },
+      "next": {
+        "total": 7,
+        "passed": 5
+      },
+      "address-pr-review": {
+        "total": 4,
+        "passed": 4
+      },
+      "none": {
+        "total": 8,
+        "passed": 8
+      },
+      "autorun": {
+        "total": 5,
+        "passed": 3
+      },
+      "mermaid": {
+        "total": 6,
+        "passed": 2
+      },
+      "interactive-architecture-diagram": {
+        "total": 4,
+        "passed": 3
+      },
+      "animated-diagram": {
+        "total": 4,
+        "passed": 3
+      },
+      "architecture-diagram": {
+        "total": 3,
+        "passed": 3
+      },
+      "capture": {
+        "total": 4,
+        "passed": 3
+      },
+      "factory-init": {
+        "total": 4,
+        "passed": 3
+      },
+      "doctor": {
+        "total": 7,
+        "passed": 7
+      },
+      "work-queue": {
+        "total": 4,
+        "passed": 4
+      },
+      "audit": {
+        "total": 11,
+        "passed": 10
+      },
+      "deepen": {
+        "total": 8,
+        "passed": 6
+      },
+      "automate": {
+        "total": 6,
+        "passed": 5
+      },
+      "pipeline-board": {
+        "total": 3,
+        "passed": 3
+      },
+      "launch-demo": {
+        "total": 3,
+        "passed": 3
+      },
+      "lean": {
+        "total": 8,
+        "passed": 8
+      },
+      "polish": {
+        "total": 10,
+        "passed": 10
+      },
+      "ux-writing": {
+        "total": 9,
+        "passed": 9
+      },
+      "ux-patterns": {
+        "total": 8,
+        "passed": 8
+      },
+      "knowledge-base": {
+        "total": 8,
+        "passed": 7
+      }
+    }
+  },
+  "confusion": {
+    "idea": {
+      "idea": 13,
+      "none": 2
+    },
+    "prd": {
+      "prd": 11,
+      "none": 1
+    },
+    "ux-design": {
+      "ux-design": 17,
+      "none": 4
+    },
+    "architect": {
+      "architect": 12
+    },
+    "decompose": {
+      "decompose": 15
+    },
+    "implement": {
+      "implement": 13,
+      "none": 5
+    },
+    "verify": {
+      "verify": 9
+    },
+    "review": {
+      "review": 21,
+      "none": 3
+    },
+    "ship": {
+      "ship": 15
+    },
+    "operate": {
+      "operate": 12
+    },
+    "next": {
+      "next": 15,
+      "none": 3,
+      "idea": 3
+    },
+    "address-pr-review": {
+      "address-pr-review": 12
+    },
+    "none": {
+      "none": 24
+    },
+    "autorun": {
+      "none": 6,
+      "autorun": 9
+    },
+    "mermaid": {
+      "mermaid": 7,
+      "none": 11
+    },
+    "interactive-architecture-diagram": {
+      "interactive-architecture-diagram": 9,
+      "none": 3
+    },
+    "animated-diagram": {
+      "animated-diagram": 10,
+      "none": 2
+    },
+    "architecture-diagram": {
+      "architecture-diagram": 9
+    },
+    "capture": {
+      "capture": 10,
+      "none": 2
+    },
+    "factory-init": {
+      "factory-init": 10,
+      "none": 2
+    },
+    "doctor": {
+      "doctor": 21
+    },
+    "work-queue": {
+      "work-queue": 12
+    },
+    "audit": {
+      "audit": 30,
+      "none": 3
+    },
+    "deepen": {
+      "deepen": 18,
+      "none": 6
+    },
+    "automate": {
+      "automate": 15,
+      "none": 3
+    },
+    "pipeline-board": {
+      "pipeline-board": 9
+    },
+    "launch-demo": {
+      "launch-demo": 9
+    },
+    "lean": {
+      "lean": 23,
+      "none": 1
+    },
+    "polish": {
+      "polish": 28,
+      "none": 2
+    },
+    "ux-writing": {
+      "ux-writing": 25,
+      "none": 2
+    },
+    "ux-patterns": {
+      "ux-patterns": 24
+    },
+    "knowledge-base": {
+      "knowledge-base": 21,
+      "none": 3
+    }
+  }
+}

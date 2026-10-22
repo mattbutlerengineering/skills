@@ -1,0 +1,713 @@
+{
+  "date": "2026-07-01",
+  "model": "claude-sonnet-5",
+  "cli_version": "2.1.198 (Claude Code)",
+  "runs_per_query": 3,
+  "threshold": 0.5,
+  "isolated_settings": true,
+  "results": [
+    {
+      "id": "idea-direct-1",
+      "kind": "direct",
+      "expected": "idea",
+      "query": "I have a raw idea for a meal-planning app \u2014 help me flesh it out into a brief",
+      "fired": {
+        "idea": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "idea-direct-2",
+      "kind": "direct",
+      "expected": "idea",
+      "query": "What if we let users share their dashboards publicly? Just a hunch, nothing written down yet",
+      "fired": {
+        "idea": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "prd-direct-1",
+      "kind": "direct",
+      "expected": "prd",
+      "query": "Write a PRD for the CSV export feature",
+      "fired": {
+        "prd": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "prd-direct-2",
+      "kind": "direct",
+      "expected": "prd",
+      "query": "Turn this idea brief into a PRD with scope and success criteria",
+      "fired": {
+        "none": 1,
+        "prd": 2
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "ux-design-direct-1",
+      "kind": "direct",
+      "expected": "ux-design",
+      "query": "Design the UX flows for the onboarding screens",
+      "fired": {
+        "ux-design": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-design-direct-2",
+      "kind": "direct",
+      "expected": "ux-design",
+      "query": "The PRD marks ux as required \u2014 design the flows and screens before we do any technical work",
+      "fired": {
+        "ux-design": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "architect-direct-1",
+      "kind": "direct",
+      "expected": "architect",
+      "query": "Draft the technical design for this feature \u2014 architecture, data model, and interfaces",
+      "fired": {
+        "architect": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "architect-direct-2",
+      "kind": "direct",
+      "expected": "architect",
+      "query": "What stack and data model should we use here? Put together the architecture doc",
+      "fired": {
+        "architect": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "decompose-direct-1",
+      "kind": "direct",
+      "expected": "decompose",
+      "query": "Break this technical design into ordered, implementable work items",
+      "fired": {
+        "decompose": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "decompose-direct-2",
+      "kind": "direct",
+      "expected": "decompose",
+      "query": "Take the architecture and produce milestones and issues with their dependencies",
+      "fired": {
+        "none": 2,
+        "decompose": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "implement-direct-1",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "The breakdown is ready \u2014 let's start building, working through the items test-first",
+      "fired": {
+        "implement": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "implement-direct-2",
+      "kind": "direct",
+      "expected": "implement",
+      "query": "Start coding the work items in the breakdown and check them off as their acceptance criteria pass",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "verify-direct-1",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Implementation is finished \u2014 verify the work meets the PRD's success criteria and collect the evidence",
+      "fired": {
+        "verify": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "verify-direct-2",
+      "kind": "direct",
+      "expected": "verify",
+      "query": "Run the tests and put together verification evidence against the success criteria",
+      "fired": {
+        "none": 2,
+        "verify": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "review-direct-1",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Give this run's changes a quality pass for defects and security issues before we ship",
+      "fired": {
+        "review": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-direct-2",
+      "kind": "direct",
+      "expected": "review",
+      "query": "Do a code review of the changes from this run and write up the findings",
+      "fired": {
+        "none": 2,
+        "review": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "ship-direct-1",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "The review is done \u2014 ship it to production with pre-flight checks and a rollback plan",
+      "fired": {
+        "ship": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ship-direct-2",
+      "kind": "direct",
+      "expected": "ship",
+      "query": "Let's release this feature \u2014 walk me through the release steps",
+      "fired": {
+        "ship": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "operate-direct-1",
+      "kind": "direct",
+      "expected": "operate",
+      "query": "The feature has been live for two weeks \u2014 capture user feedback and run the retrospective",
+      "fired": {
+        "operate": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "operate-direct-2",
+      "kind": "direct",
+      "expected": "operate",
+      "query": "Close the loop on this run: collect what users said and write the retro",
+      "fired": {
+        "operate": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "next-direct-1",
+      "kind": "direct",
+      "expected": "next",
+      "query": "What's next for the dark-mode run?",
+      "fired": {
+        "next": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "next-direct-2",
+      "kind": "direct",
+      "expected": "next",
+      "query": "Where are we in the pipeline for this feature?",
+      "fired": {
+        "none": 2,
+        "next": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "idea-situational-1",
+      "kind": "situational",
+      "expected": "idea",
+      "query": "Something feels off about our onboarding funnel \u2014 I think there's a product opportunity here but nothing concrete yet",
+      "fired": {
+        "idea": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "prd-situational-1",
+      "kind": "situational",
+      "expected": "prd",
+      "query": "The idea brief for the export feature is done \u2014 nail down the requirements and success criteria",
+      "fired": {
+        "prd": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "ux-design-situational-1",
+      "kind": "situational",
+      "expected": "ux-design",
+      "query": "The PRD is finished and it declares a user-facing surface \u2014 what flows and screens do we need?",
+      "fired": {
+        "ux-design": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "architect-situational-1",
+      "kind": "situational",
+      "expected": "architect",
+      "query": "Requirements are locked; we need to settle the data model and interfaces before anyone writes code",
+      "fired": {
+        "architect": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "decompose-situational-1",
+      "kind": "situational",
+      "expected": "decompose",
+      "query": "The architecture doc is approved \u2014 turn it into ordered work items we can pick up",
+      "fired": {
+        "decompose": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "implement-situational-1",
+      "kind": "situational",
+      "expected": "implement",
+      "query": "breakdown.md is sitting there with unchecked items \u2014 time to write the code",
+      "fired": {
+        "implement": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "verify-situational-1",
+      "kind": "situational",
+      "expected": "verify",
+      "query": "All the work items are checked off \u2014 demonstrate the feature meets its success criteria",
+      "fired": {
+        "verify": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "review-situational-1",
+      "kind": "situational",
+      "expected": "review",
+      "query": "verification.md is in place \u2014 the change still needs a defect and security pass before release",
+      "fired": {
+        "none": 2,
+        "review": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "ship-situational-1",
+      "kind": "situational",
+      "expected": "ship",
+      "query": "Review found no blockers \u2014 get this into production",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "operate-situational-1",
+      "kind": "situational",
+      "expected": "operate",
+      "query": "release.md is done and users have had the feature for a month \u2014 what did we learn?",
+      "fired": {
+        "none": 2,
+        "operate": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "arch-vs-decomp-1",
+      "kind": "near-miss",
+      "expected": "decompose",
+      "query": "Turn the technical design into milestones",
+      "fired": {
+        "decompose": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "decomp-vs-impl-1",
+      "kind": "near-miss",
+      "expected": "implement",
+      "query": "Start working through the breakdown",
+      "fired": {
+        "none": 2,
+        "implement": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "verify-vs-review-1",
+      "kind": "near-miss",
+      "expected": "review",
+      "query": "Give the change a quality check before we ship",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "impl-vs-ship-1",
+      "kind": "near-miss",
+      "expected": "ship",
+      "query": "The code is done and tests pass \u2014 push this out to users",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "idea-vs-prd-1",
+      "kind": "near-miss",
+      "expected": "prd",
+      "query": "I know exactly what I want to build \u2014 write up the requirements",
+      "fired": {
+        "prd": 2,
+        "none": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "ux-vs-arch-1",
+      "kind": "near-miss",
+      "expected": "ux-design",
+      "query": "Design how the settings screen should work for users",
+      "fired": {
+        "none": 2,
+        "ux-design": 1
+      },
+      "runs": 3,
+      "correct_rate": 0.333,
+      "pass": false
+    },
+    {
+      "id": "ship-vs-operate-1",
+      "kind": "near-miss",
+      "expected": "operate",
+      "query": "The release went out yesterday \u2014 check how it's landing with users",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 0.0,
+      "pass": false
+    },
+    {
+      "id": "router-1",
+      "kind": "router",
+      "expected": "next",
+      "query": "Continue the pipeline",
+      "fired": {
+        "next": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "router-2",
+      "kind": "router",
+      "expected": "next",
+      "query": "Resume the payments feature run where we left off",
+      "fired": {
+        "next": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "router-3",
+      "kind": "router",
+      "expected": "next",
+      "query": "I want to start a new product run",
+      "fired": {
+        "idea": 1,
+        "next": 2
+      },
+      "runs": 3,
+      "correct_rate": 0.667,
+      "pass": true
+    },
+    {
+      "id": "distractor-1",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Why is this regex failing on multiline input?",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "distractor-2",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Review my coworker's PR in the analytics repo",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "distractor-3",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Write a blog post announcing our Series A",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "distractor-4",
+      "kind": "distractor",
+      "expected": null,
+      "query": "What does this segfault stack trace mean?",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    },
+    {
+      "id": "distractor-5",
+      "kind": "distractor",
+      "expected": null,
+      "query": "Rename the userId variable to accountId across the codebase",
+      "fired": {
+        "none": 3
+      },
+      "runs": 3,
+      "correct_rate": 1.0,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 47,
+    "passed": 34,
+    "failed": 13,
+    "by_kind": {
+      "direct": {
+        "total": 22,
+        "passed": 17
+      },
+      "situational": {
+        "total": 10,
+        "passed": 7
+      },
+      "near-miss": {
+        "total": 7,
+        "passed": 2
+      },
+      "router": {
+        "total": 3,
+        "passed": 3
+      },
+      "distractor": {
+        "total": 5,
+        "passed": 5
+      }
+    },
+    "by_skill": {
+      "idea": {
+        "total": 3,
+        "passed": 3
+      },
+      "prd": {
+        "total": 4,
+        "passed": 4
+      },
+      "ux-design": {
+        "total": 4,
+        "passed": 3
+      },
+      "architect": {
+        "total": 3,
+        "passed": 3
+      },
+      "decompose": {
+        "total": 4,
+        "passed": 3
+      },
+      "implement": {
+        "total": 4,
+        "passed": 2
+      },
+      "verify": {
+        "total": 3,
+        "passed": 2
+      },
+      "review": {
+        "total": 4,
+        "passed": 1
+      },
+      "ship": {
+        "total": 4,
+        "passed": 2
+      },
+      "operate": {
+        "total": 4,
+        "passed": 2
+      },
+      "next": {
+        "total": 5,
+        "passed": 4
+      },
+      "none": {
+        "total": 5,
+        "passed": 5
+      }
+    }
+  },
+  "confusion": {
+    "idea": {
+      "idea": 9
+    },
+    "prd": {
+      "prd": 10,
+      "none": 2
+    },
+    "ux-design": {
+      "ux-design": 10,
+      "none": 2
+    },
+    "architect": {
+      "architect": 9
+    },
+    "decompose": {
+      "decompose": 10,
+      "none": 2
+    },
+    "implement": {
+      "implement": 6,
+      "none": 6
+    },
+    "verify": {
+      "verify": 7,
+      "none": 2
+    },
+    "review": {
+      "review": 5,
+      "none": 7
+    },
+    "ship": {
+      "ship": 5,
+      "none": 7
+    },
+    "operate": {
+      "operate": 7,
+      "none": 5
+    },
+    "next": {
+      "next": 11,
+      "none": 3,
+      "idea": 1
+    },
+    "none": {
+      "none": 15
+    }
+  }
+}

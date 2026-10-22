@@ -1,0 +1,713 @@
+{
+  "schemaVersion": 1,
+  "claudeVersion": "2.1.296",
+  "startedAt": "2026-10-10T23:26:53.370Z",
+  "durationSeconds": 1052,
+  "costUsd": 4.057434,
+  "partial": false,
+  "suite": {
+    "root": "/Users/mbutler/github/skills/.claude/worktrees/close-out",
+    "ablation": "none",
+    "modelOverride": "claude-sonnet-5",
+    "judgeModel": "claude-haiku-4-5",
+    "tagFilters": [
+      "kb-on",
+      "kb-off"
+    ],
+    "threshold": 1,
+    "concurrency": 1,
+    "plugins": [
+      {
+        "name": "idea-to-prod",
+        "version": "0.7.0",
+        "path": "/Users/mbutler/github/skills/.claude/worktrees/close-out"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "gates-scan-off",
+      "dir": "plugin-evals/knowledge-base/gates-scan-off",
+      "source": "mixed",
+      "promptMarkdown": "I'm adding a short how-to under docs/ that shows a sample run artifact inside a fenced code block, including a made-up id like PRD-0099 and a link to docs/features/example/prd.md that doesn't exist. Will CI be fine with that? Answer from this repo; don't change any files.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 600,
+      "maxTurns": 25,
+      "graders": [
+        {
+          "name": "knows-the-gotcha",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the reply warns that this will fail CI because the gate detectors scan every repo markdown file, code fences included, so the made-up PRD id and/or the dead sample link get flagged, and suggests a way around it.\nFAIL if it says code fences are ignored or that CI will pass.",
+          "config": {
+            "criteria": "PASS if the reply warns that this will fail CI because the gate detectors scan every repo markdown file, code fences included, so the made-up PRD id and/or the dead sample link get flagged, and suggests a way around it.\nFAIL if it says code fences are ignored or that CI will pass.",
+            "focus": "last_message"
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 19,
+            "costUsd": 0.5615474,
+            "judgeCostUsd": 0.002328,
+            "durationSeconds": 111,
+            "startedAt": "2026-10-10T23:26:53.430Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-7UeuBC/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "No — it will break CI. This repo runs its own doc-consistency gates (`gates.py`, invoked by `make check`, which `.github/workflows/validator.yml` runs verbatim), and two of them scan **every** `docs/**/*.md` file's raw lines, including text inside fenced code blocks:\n\n1. **Detector C (LINK-INTEGRITY)** — `check_link_integrity` in gates.py:402-439 — finds every `PRD-\\d{4}` token (`knowledge_plane.py:29`) in every scanned file and fails if no `prd.md` declares that id. `PRD-0099` would trigger:\n   ```\n   C: docs/<your-file>.md:<line> dangling PRD-0099 (no prd.md declares this id)\n   ```\n   This check does not exempt fenced blocks — `tests/test_gates.py:119-127` (`test_dangling_tokens_are_flagged`) pins exactly this behavior on plain prose, and there's no fenced-content carve-out for detector C anywhere in the test suite.\n\n2. **Detector I (STALENESS)** — `check_staleness` in gates.py:723-750 — finds every markdown link `[...](...)` and fails if the target path doesn't exist on disk. A link to `docs/features/example/prd.md` would trigger:\n   ```\n   I: docs/<your-file>.md:<line> stale link docs/features/example/prd.md (no such path)\n   ```\n   Same story: `tests/test_gates.py:560-567` shows this firing on plain text, and this detector likewise has no fence exemption.\n\nBy contrast, detector D (blueprint drift, for `architecture.md`) and the needs-clarification/PRD-coverage detectors (N/O) *do* treat fenced content as inert quoting — but C and I don't get that treatment, and your new doc would be scanned by all of them since `_scannable_files` (gates.py:287-317) walks all of `docs/`.\n\n**To make this safe**, avoid the exact token/link shapes those regexes key on:\n- Don't write a literal `PRD-dddd` pattern — e.g. use `PRD-XXXX` or spell it differently in the sample.\n- Don't write a real markdown link syntax to the nonexistent path — describe the path in prose without `[text](docs/features/example/prd.md)`, or point it at a file that actually exists."
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 19,
+            "costUsd": 0.4608276,
+            "judgeCostUsd": 0.0022200000000000006,
+            "durationSeconds": 107,
+            "startedAt": "2026-10-10T23:28:44.168Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-VuwKAS/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Checked this repo's actual CI gate (`.github/workflows/validator.yml` → `make check` → `lint.py` + `gates.py` + tests). Two different answers for your two risks:\n\n**The dead link to `docs/features/example/prd.md` — fine, nothing checks it.** There's no generic \"do markdown links resolve\" checker for arbitrary docs pages. The only link-shape checks in this repo are scoped narrowly: `lint.py`'s `check_skill_assets` validates links only inside `skills/**/*.md`, and `gates.py` validates only three *typed tokens* (`PRD-####`, `ADR-####`, `WO-####`), not markdown hrefs in general. A plain `[text](docs/features/example/prd.md)` pointing nowhere will pass silently.\n\n**The made-up `PRD-0099` id — this will fail CI.** `gates.py`'s detector C (`check_link_integrity`, gates.py:402) scans every line of every file under `docs/**/*.md` (via `_scannable_files`, gates.py:287) for the token `PRD-\\d{4}`, and that includes text inside fenced code blocks — unlike detector D's architecture-drift check, which explicitly treats fenced examples as inert (gates.py:525-556), detector C has no such fence exemption; it just regex-matches every line. Since no real `prd.md` anywhere declares `id: PRD-0099`, this will produce:\n\n```\nC: docs/<your-file>.md:<N> dangling PRD-0099 (no prd.md declares this id)\n```\n\nThis is a hard CI failure (`make check` is exactly what `validator.yml`'s required `check` job runs).\n\n**Fix:** keep the link, but don't use the literal 4-digit `PRD-dddd` shape for the fake id in your sample artifact. Either spell it non-numerically (`PRD-xxxx`, `PRD-sample`) or use a digit count the regex won't match as a whole token (e.g. `PRD-00099` — 5 digits, no word boundary after the 4th digit, so `\\bPRD-\\d{4}\\b` won't match). Same caution applies if your sample also includes `ADR-####` or `WO-####` placeholders — both are checked the same way."
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 16,
+            "costUsd": 0.3924312,
+            "judgeCostUsd": 0.002363999999999999,
+            "durationSeconds": 77,
+            "startedAt": "2026-10-10T23:30:30.887Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-zV3zLw/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Confirmed — both detectors run as part of `make check`. Here's the answer:\n\n**No, CI will fail on both counts.** This repo (the idea-to-prod factory) runs `gates.py` as part of `make check`, which scans every `.md` file under `docs/` (plus root `*.md`, `.github/`, `skills/`, `factory/`) line-by-line, **including inside fenced code blocks** — neither detector strips code fences before scanning:\n\n1. **`PRD-0099` in your sample artifact** will trip **detector C** (`check_link_integrity`, `gates.py:402`): it regex-matches `\\bPRD-\\d{4}\\b` anywhere in scannable text and fails with `C: <file>:<line> dangling PRD-0099 (no prd.md declares this id)`, since no `prd.md` in the repo declares that id. (Notably, `PRD-0099` is the literal example this repo's own test suite uses for \"the dangling-id case\" — see `gates.py:1791`.)\n\n2. **The link to `docs/features/example/prd.md`** will trip **detector I** (`check_staleness`, `gates.py:723`): it extracts every markdown link target and checks it exists on disk, failing with `I: <file>:<line> stale link docs/features/example/prd.md (no such path)`.\n\nBoth checks apply to real content the way the file is read — fenced code blocks aren't given an exemption, so \"it's just a sample in a code block\" doesn't save you.\n\nTo stay green while keeping the illustrative content, pick one:\n- Use an ID format that doesn't match `PRD-\\d{4}` (e.g. `PRD-xxxx` or `PRD-EXAMPLE`) and a path that doesn't parse as a markdown link, or\n- Use real existing ids/paths (e.g. an id from an actual `prd.md` already in the repo, and a link to a file that actually exists), or\n- Escape/break the pattern inside the fence (e.g. split as `` PRD-`0099` `` isn't idiomatic, but something like writing `PRD‑0099` with a non-matching separator, or just adding a code comment noting it's illustrative won't help — the regex doesn't care about comments).\n\nThe simplest safe fix: don't use a `PRD-####`-shaped string or a `[text](path)`-shaped link inside the example; use clearly non-matching placeholders instead."
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 1,
+        "passRate": 1
+      }
+    },
+    {
+      "name": "gates-scan-on",
+      "dir": "plugin-evals/knowledge-base/gates-scan-on",
+      "source": "mixed",
+      "promptMarkdown": "I'm adding a short how-to under docs/ that shows a sample run artifact inside a fenced code block, including a made-up id like PRD-0099 and a link to docs/features/example/prd.md that doesn't exist. Will CI be fine with that? Answer from this repo; don't change any files.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 600,
+      "maxTurns": 25,
+      "graders": [
+        {
+          "name": "knows-the-gotcha",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the reply warns that this will fail CI because the gate detectors scan every repo markdown file, code fences included, so the made-up PRD id and/or the dead sample link get flagged, and suggests a way around it.\nFAIL if it says code fences are ignored or that CI will pass.",
+          "config": {
+            "criteria": "PASS if the reply warns that this will fail CI because the gate detectors scan every repo markdown file, code fences included, so the made-up PRD id and/or the dead sample link get flagged, and suggests a way around it.\nFAIL if it says code fences are ignored or that CI will pass.",
+            "focus": "last_message"
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 12,
+            "costUsd": 0.4138046000000001,
+            "judgeCostUsd": 0.002057999999999999,
+            "durationSeconds": 65,
+            "startedAt": "2026-10-10T23:31:48.166Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-gGvbIA/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "No — CI will fail on both things, via the `make check` gate detectors in `gates.py`.\n\n**The fake ID will be caught.** Detector **C (LINK-INTEGRITY)** scans every line of every file under `docs/` (via `_scannable_files`, `gates.py:304-306`) for `PRD-\\d{4}` tokens and checks that some `prd.md` declares that id (`check_link_integrity`, `gates.py:402-439`). Critically, this scan is **not fence-aware** — `parse_run` just reads raw `splitlines()` for \"scannable\" files (`knowledge_plane.py:406-407`) with no code-block stripping, unlike detectors D and H which explicitly track fence state and treat fenced content as inert. So `PRD-0099` inside your fenced sample output will be flagged as a dangling PRD id just as if it appeared in prose.\n\n**The dead link will be caught too.** Detector **I (STALENESS)** applies the same fence-blind line scan looking for markdown link syntax `[...](...)` and verifies the target exists on disk (`check_staleness`, `gates.py:723-750`). A literal link to `docs/features/example/prd.md` that doesn't exist will fail as a \"stale link,\" fence or no fence.\n\nBoth run locally via `make check` and in CI via `.github/workflows/validator.yml`'s `check` job, so this isn't something that only shows up after push — `make check` would fail on your machine too.\n\n**To do what you want without tripping these:**\n- Avoid a real `PRD-####` shaped token — use something that doesn't match `\\bPRD-\\d{4}\\b`, e.g. `PRD-XXXX` or spell it out as \"a PRD id.\"\n- Avoid actual markdown link syntax `[text](path)` for the illustrative path — write it as plain text/inline code (`` `docs/features/example/prd.md` ``) instead of a link, since detector I only matches the `[...](...)` link form, not bare paths."
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 20,
+            "costUsd": 0.29212659999999996,
+            "judgeCostUsd": 0.0018719999999999987,
+            "durationSeconds": 85,
+            "startedAt": "2026-10-10T23:32:53.447Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-7k7fVi/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "No — this repo's CI will fail on that doc. Two gate detectors in `gates.py` (run via `make check` in `.github/workflows/validator.yml`) scan every file under `docs/`, including inside fenced code blocks — neither strips fences the way detector D does:\n\n1. **Detector C** (`check_link_integrity`, gates.py:402) regex-matches `\\bPRD-\\d{4}\\b` (gates.py:29/`PRD_TOKEN`) across all scannable text. `PRD-0099` will match even inside a fenced block, and since no `prd.md` declares that id, it reports `C: <file>:<line> dangling PRD-0099 (no prd.md declares this id)`.\n2. **Detector I** (`check_staleness`, gates.py:723) finds markdown-link targets (`MD_LINK`, gates.py:123) in the same raw, un-fence-stripped text and checks they resolve on disk. A link to `docs/features/example/prd.md` that doesn't exist reports `I: <file>:<line> stale link docs/features/example/prd.md (no such path)`.\n\nBoth detectors walk raw lines with no fence-awareness (unlike D's `_architecture_drift`, which explicitly tracks fence state and treats fenced examples as inert except for its own `tree-claims` block). So wrapping the artifact in a fenced code block does **not** exempt it — `make check` will fail on both findings.\n\nTo write this how-to safely: use a non-matching placeholder (e.g. `PRD-XXXX` instead of a real 4-digit id) and avoid real `[text](path)` markdown-link syntax for the fake path — use an inline code span (`` `docs/features/example/prd.md` ``) instead, which `MD_LINK` won't pick up."
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 8,
+            "costUsd": 0.126872,
+            "judgeCostUsd": 0.0017459999999999976,
+            "durationSeconds": 30,
+            "startedAt": "2026-10-10T23:34:18.409Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-bCngRT/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "This repo's own gates would flag exactly that. There's a kb entry for this (`docs/kb/gates-scan-every-doc.md`) spelling it out:\n\n- **Detector C** (`gates.py`) scans every markdown file under `docs/`, root, `.github/`, `skills/`, `factory/` (minus `factory/templates/` and `factory/evals/fixtures/`), line by line, **including inside fenced code blocks** — nothing is stripped. Any four-digit `PRD-####` / `ADR-####` / `WO-####` token must resolve to a real `prd.md` declaration, ADR file, or breakdown row. `PRD-0099` is literally used as the canonical \"dangling id\" example in the gates self-tests (gates.py:1791, 2165) — it will fail as a dangling token even inside your fenced block.\n- **Detector I** requires every non-URL, non-anchor markdown link target to actually exist on disk, relative to the file — `docs/features/example/prd.md` not existing will fail as a stale link, also checked inside backticks.\n\nSo: no, CI (the `validator.py`/`gates.py` detectors, run via `.github/workflows/validator.yml` and `make check`) will **not** be fine with this as written.\n\nTo keep it CI-clean, the kb note says what actually works: use placeholders that can't match, e.g. `PRD-####` or `PRD-00xx` (fewer than four literal digits) instead of `PRD-0099`, and make the sample link URL-shaped or point at a real file rather than a dangling relative path like `docs/features/example/prd.md`."
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 1,
+        "passRate": 1
+      }
+    },
+    {
+      "name": "manifest-regen-off",
+      "dir": "plugin-evals/knowledge-base/manifest-regen-off",
+      "source": "mixed",
+      "promptMarkdown": "I just applied a patch that touched factory/templates/tools/factory/protocol.py, and the patch tool left a protocol.py.orig next to it. What exactly do I run before I commit, and in what order? Answer from this repo; don't change any files.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 600,
+      "maxTurns": 25,
+      "graders": [
+        {
+          "name": "knows-the-gotcha",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the reply says to delete the stray .orig (and any .rej) file BEFORE running `python3 factory_init.py update-manifest`, because the manifest regeneration hashes every file under factory/templates/ and would checksum-pin the stray file.\nFAIL if it says to regenerate first and clean up after, does not mention removing the .orig file before regenerating, or omits update-manifest.",
+          "config": {
+            "criteria": "PASS if the reply says to delete the stray .orig (and any .rej) file BEFORE running `python3 factory_init.py update-manifest`, because the manifest regeneration hashes every file under factory/templates/ and would checksum-pin the stray file.\nFAIL if it says to regenerate first and clean up after, does not mention removing the .orig file before regenerating, or omits update-manifest.",
+            "focus": "last_message"
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 25,
+            "costUsd": 0.32601579999999997,
+            "judgeCostUsd": 0.0023070000000000018,
+            "durationSeconds": 138,
+            "startedAt": "2026-10-10T23:34:48.513Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-uu2Q9h/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Here's what's going on and the exact sequence, based on `factory_init.py`, `gates.py`, and the root `Makefile` in this repo.\n\n**The catch:** `factory/templates/tools/factory/protocol.py` is a *generated mirror*, not a source file. The real source is `/protocol.py` at the repo root; `factory_init.py`'s `MIRRORS` table (factory_init.py:215) copies it into the template payload and `factory/manifest.json` pins its checksum. The Makefile even says it outright: \"edit here, then run `update-manifest`, never edit the twin.\" So the patch landed on the twin.\n\n**Run, in this order:**\n\n1. **Port the change to the real source**, `/protocol.py` at repo root — not the templates copy. (If the patch already matches what you want in `protocol.py` too, just make sure both reflect the same intended change.)\n2. **Delete the stray file:**\n   ```\n   rm factory/templates/tools/factory/protocol.py.orig\n   ```\n   This isn't cosmetic — detector E (`check_scaffold_sync` in gates.py:839) walks every file under `factory/templates/` and fails with `E: factory/templates/tools/factory/protocol.py.orig is not in the manifest` if you leave it.\n3. **Regenerate the mirror + manifest:**\n   ```\n   python3 factory_init.py update-manifest\n   ```\n   This rewrites `factory/templates/tools/factory/protocol.py` from your updated root `protocol.py` and recomputes `factory/manifest.json`'s checksums. Any hand-edit left in the templates copy that doesn't match the root file would otherwise trip `E: ... does not match its manifest checksum`.\n4. **Run the gate exactly as CI does:**\n   ```\n   make check\n   ```\n   which runs `python3 lint.py`, `python3 gates.py`, `python3 gates.py --selftest`, and `python3 -m unittest discover tests`, in that order (Makefile:41-45).\n5. Only then `git add` / `git commit`.\n\nIf the patch was *only* ever meant to affect the template payload (not root behavior), say so and I'll double check whether `protocol.py` is even supposed to differ there — but as wired today, editing the mirror directly is exactly the mistake detector E exists to catch."
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 21,
+            "costUsd": 0.2182596,
+            "judgeCostUsd": 0.002441999999999998,
+            "durationSeconds": 86,
+            "startedAt": "2026-10-10T23:37:06.357Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-hJ8lwo/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "This confirms it: `update_manifest` overwrites `factory/templates/tools/factory/protocol.py` from the root `protocol.py` — it's a one-way mirror, root → template. I now have everything needed to answer precisely.\n\n## What this means for you\n\n`factory/templates/tools/factory/protocol.py` isn't an independent file — it's a generated mirror of the root `protocol.py` (byte-for-byte, per `factory_init.py`'s `MIRRORS` list). The real source of truth is root `protocol.py`.\n\n**If your patch only touched the template copy and not root `protocol.py`, your change will be silently discarded** the next time anyone runs `update-manifest` (it regenerates the template from root, not the other way around). Diff the two files before anything else:\n\n```\ndiff protocol.py factory/templates/tools/factory/protocol.py\n```\n\n- If root already has the change too (e.g. the patch applied to both), you're fine — just regenerate the manifest so the checksum in `factory/manifest.json` matches the new bytes.\n- If root does *not* have the change, apply it there first (root `protocol.py` is canonical), then regenerate from root — don't hand-edit the template to \"fix\" the diff, since that's exactly what detector E and the header comment warn against.\n\n## Order to run, before committing\n\n1. **Clean up the patch artifact**: `rm factory/templates/tools/factory/protocol.py.orig` — it's not a tracked file and shouldn't be committed.\n2. **Confirm/fix drift** per the diff above (edit root `protocol.py` if the template-only edit needs to be mirrored back).\n3. **Regenerate the manifest** (this also re-syncs the template mirror from root): `python3 factory_init.py update-manifest`\n4. **Run the canonical local gate**, which is exactly what CI runs:\n   ```\n   make check\n   ```\n   (expands to `python3 lint.py`, `python3 gates.py`, `python3 gates.py --selftest`, `python3 -m unittest discover tests`) — this is what exercises detector E (`check_scaffold_sync`) against the manifest you just regenerated.\n5. If `make check` passes, `git status` to confirm `.orig` is gone and only the intended files (root `protocol.py`, the template mirror, `factory/manifest.json`) are staged, then commit.\n\nSkipping step 3 is the likely failure mode here: detector E will fail the build because the manifest checksum won't match your patched template bytes."
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 15,
+            "costUsd": 0.2222914,
+            "judgeCostUsd": 0.0022740000000000017,
+            "durationSeconds": 95,
+            "startedAt": "2026-10-10T23:38:32.376Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-VczU27/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Based on this repo's actual conventions (the comment block in `Makefile:1-13`, and detector E in `gates.py`), here's the exact sequence, and why order matters:\n\n**1. Check where the real edit lives.**\n`factory/templates/tools/factory/protocol.py` is a generated mirror — the Makefile comment says explicitly: *\"edit here [root `protocol.py`], then run `python3 factory_init.py update-manifest`, never edit the twin.\"* `MIRRORS` in `factory_init.py:215` confirms root `protocol.py` → `factory/templates/tools/factory/protocol.py` via an identity copy.\n\nIf your patch only touched the template copy and not root `protocol.py`, your change will be silently discarded in step 3 below, because `update-manifest` overwrites the template from the root file. Move the edit to root `protocol.py` first if that's the case.\n\n**2. Delete `protocol.py.orig`.**\n```\nrm factory/templates/tools/factory/protocol.py.orig\n```\nThis isn't optional cleanup — `check_scaffold_sync` (`gates.py:839`) walks every file under `factory/templates/` and fails detector E with `\"E: factory/... is not in the manifest\"` for any file that doesn't appear in `factory/manifest.json`. A stray `.orig` there will break `make check`.\n\n**3. Regenerate the manifest.**\n```\npython3 factory_init.py update-manifest\n```\nThis re-mirrors root tool files into `factory/templates/` and rewrites `factory/manifest.json`'s checksums (`factory_init.py:284`). Required any time a file under `factory/templates/` changes — otherwise detector E fails with a checksum mismatch.\n\n**4. Run the gate, exactly as CI does (`Makefile:41-45`):**\n```\nmake check\n```\nwhich is:\n```\npython3 lint.py\npython3 gates.py\npython3 gates.py --selftest\npython3 -m unittest discover tests\n```\n\nOnly after `make check` passes clean should you `git add` and commit — that order (orig cleanup → manifest regen → check) matches the dependency chain: step 2 and 1 fix what step 3 needs to be correct, and step 3 is what step 4's detector E checks."
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 1,
+        "passRate": 1
+      }
+    },
+    {
+      "name": "manifest-regen-on",
+      "dir": "plugin-evals/knowledge-base/manifest-regen-on",
+      "source": "mixed",
+      "promptMarkdown": "I just applied a patch that touched factory/templates/tools/factory/protocol.py, and the patch tool left a protocol.py.orig next to it. What exactly do I run before I commit, and in what order? Answer from this repo; don't change any files.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 600,
+      "maxTurns": 25,
+      "graders": [
+        {
+          "name": "knows-the-gotcha",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the reply says to delete the stray .orig (and any .rej) file BEFORE running `python3 factory_init.py update-manifest`, because the manifest regeneration hashes every file under factory/templates/ and would checksum-pin the stray file.\nFAIL if it says to regenerate first and clean up after, does not mention removing the .orig file before regenerating, or omits update-manifest.",
+          "config": {
+            "criteria": "PASS if the reply says to delete the stray .orig (and any .rej) file BEFORE running `python3 factory_init.py update-manifest`, because the manifest regeneration hashes every file under factory/templates/ and would checksum-pin the stray file.\nFAIL if it says to regenerate first and clean up after, does not mention removing the .orig file before regenerating, or omits update-manifest.",
+            "focus": "last_message"
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 9,
+            "costUsd": 0.12605840000000001,
+            "judgeCostUsd": 0.0017520000000000036,
+            "durationSeconds": 29,
+            "startedAt": "2026-10-10T23:40:07.766Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-laKX1e/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "This repo has exact documented guidance for this (`docs/kb/manifest-regen.md`), so here's the order:\n\n1. **Delete the leftover first** — `rm factory/templates/tools/factory/protocol.py.orig`. This must happen *before* the manifest regen: `gates.manifest_files` hashes every file under `factory/templates/` (except `__pycache__/`), so a stray `.orig`/`.rej` gets checksum-pinned into the manifest as if it were real payload — and since it's untracked, it's invisible to the `git status` noise filters you might be relying on.\n\n2. **Regenerate the manifest** — `python3 factory_init.py update-manifest`. This is owed any time you edit a file under `factory/templates/`, which a patch to `protocol.py` does.\n\n3. **Run the local gate** — `make check`, which runs, in order:\n   - `python3 lint.py`\n   - `python3 gates.py`\n   - `python3 gates.py --selftest`\n   - `python3 -m unittest discover tests`\n\n   This is exactly what CI runs (`Makefile:3-4`), so passing it locally means the validator workflow will pass too.\n\nOnly after `make check` is clean should you commit. One extra wrinkle noted in the kb entry: the manifest also stamps the plugin version from `.claude-plugin/plugin.json` at regen time — nothing gates that field, so if you also bumped the plugin version, make sure that bump happened *before* step 2, or the manifest will silently carry the old version."
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 8,
+            "costUsd": 0.12536039999999998,
+            "judgeCostUsd": 0.0017700000000000007,
+            "durationSeconds": 30,
+            "startedAt": "2026-10-10T23:40:36.475Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-69ecQj/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "This repo has an explicit KB page on exactly this situation (`docs/kb/manifest-regen.md`). Here's the order:\n\n1. **Delete the `.orig` leftover first** — `rm factory/templates/tools/factory/protocol.py.orig`. `update-manifest` hashes *every* file under `factory/templates/` (except `__pycache__/`), so a stray patch leftover gets checksum-pinned into the manifest as if it were real payload, and it's invisible to normal `git status` filters. Must happen before step 2, not after.\n\n2. **Regenerate the manifest** — `python3 factory_init.py update-manifest`. This is owed any time a file under `factory/templates/**` changes (CLAUDE.md:81‑87), and `protocol.py` is explicitly called out as mirrored content.\n\n3. **Run the full local gate** (CLAUDE.md:8‑15, mirrors CI exactly) — `make check`, i.e.:\n   ```\n   python3 lint.py\n   python3 gates.py\n   python3 gates.py --selftest\n   python3 -m unittest discover tests\n   ```\n   Detector E in `gates.py` is what checks manifest↔payload consistency, so this must run *after* the manifest is regenerated or it'll fail.\n\n4. **Commit the manifest together with the code change** — `factory/manifest.json` and `protocol.py` go in the same commit (per the \"commit the manifest with the change\" rule).\n\nSo: delete `.orig` → `factory_init.py update-manifest` → `make check` → commit both files together."
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 8,
+            "costUsd": 0.1172892,
+            "judgeCostUsd": 0.0018269999999999953,
+            "durationSeconds": 33,
+            "startedAt": "2026-10-10T23:41:06.519Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-FPZH83/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "I now have what's needed — this matches the repo's own documented procedure exactly (CLAUDE.md + `docs/kb/manifest-regen.md`).\n\n## Before committing\n\n1. **Delete the patch leftover first — order matters.**\n   ```\n   rm factory/templates/tools/factory/protocol.py.orig\n   ```\n   `update-manifest` hashes *every* file under `factory/templates/` (except `__pycache__/`), so if the `.orig` is still there when you regenerate, it gets checksum-pinned into `factory/manifest.json` as if it were real payload — and since it's untracked, `git status` filters you rely on won't flag it. It must go *before* step 2, not after. (`docs/kb/manifest-regen.md`)\n\n2. **Regenerate the template manifest**, since `protocol.py` lives under `factory/templates/`:\n   ```\n   python3 factory_init.py update-manifest\n   ```\n   Commit the updated `factory/manifest.json` together with your `protocol.py` change (CLAUDE.md, \"Factory templates are checksum-pinned\").\n\n3. **Run the local gate** (identical to what CI's `validator.yml` runs):\n   ```\n   make check\n   ```\n   which runs, in order: `python3 lint.py` → `python3 gates.py` → `python3 gates.py --selftest` → `python3 -m unittest discover tests`. Detector E (in `gates.py`) is what verifies manifest↔payload, so this will catch it if step 2 was skipped or done against a dirty tree.\n\nThen commit `protocol.py` + `factory/manifest.json` together."
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 1,
+        "passRate": 1
+      }
+    },
+    {
+      "name": "pr-body-off",
+      "dir": "plugin-evals/knowledge-base/pr-body-off",
+      "source": "mixed",
+      "promptMarkdown": "Draft the pull-request body for a branch in this repo that only fixes a typo in README.md. There is no work order for it and no GitHub issue. Give me the body text only; don't change any files.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 600,
+      "maxTurns": 25,
+      "graders": [
+        {
+          "name": "knows-the-gotcha",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the drafted body contains a line beginning \"No work order:\" (a waiver stating why there is no WO id), as this repo's PR-body check requires.\nFAIL if the body has neither a WO-#### id nor a \"No work order:\" line.",
+          "config": {
+            "criteria": "PASS if the drafted body contains a line beginning \"No work order:\" (a waiver stating why there is no WO id), as this repo's PR-body check requires.\nFAIL if the body has neither a WO-#### id nor a \"No work order:\" line.",
+            "focus": "last_message"
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 0,
+            "passed": false,
+            "turns": 1,
+            "costUsd": 0.06377260000000001,
+            "judgeCostUsd": 0.0006600000000000043,
+            "durationSeconds": 14,
+            "startedAt": "2026-10-10T23:41:39.136Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-j5NHhB/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Fixes a typo in README.md.\n\n---\n\n## Summary\n\nFixes a typo in README.md.\n\n## Type of change\n\n- [x] Documentation\n\n## Testing\n\nN/A — text-only change, no functional impact."
+              }
+            ]
+          },
+          {
+            "score": 0,
+            "passed": false,
+            "turns": 1,
+            "costUsd": 0.06339260000000001,
+            "judgeCostUsd": 0.0006600000000000043,
+            "durationSeconds": 10,
+            "startedAt": "2026-10-10T23:41:53.483Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-xDIF1f/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Fixes a typo in README.md.\n\n## What changed\nCorrected a typo in README.md.\n\n## Why\nImproves readability/accuracy of the documentation.\n\n## Testing\nN/A — documentation-only change."
+              }
+            ]
+          },
+          {
+            "score": 0,
+            "passed": false,
+            "turns": 5,
+            "costUsd": 0.2887826,
+            "judgeCostUsd": 0.0008370000000000044,
+            "durationSeconds": 97,
+            "startedAt": "2026-10-10T23:42:03.122Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-9g7lFd/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Here's a draft PR body for a README typo fix:\n\n---\n\n## Summary\n\nFixes a typo in `README.md`. No functional or behavioral changes.\n\n## Why\n\nCaught while reading through the README — small wording/spelling fix to keep the docs accurate. No associated issue or work order; this is a trivial, self-contained correction.\n\n## Changes\n\n- Corrected the typo in `README.md`\n\n## Testing\n\nN/A — documentation-only change, no code paths affected."
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 0,
+        "passRate": 0
+      }
+    },
+    {
+      "name": "pr-body-on",
+      "dir": "plugin-evals/knowledge-base/pr-body-on",
+      "source": "mixed",
+      "promptMarkdown": "Draft the pull-request body for a branch in this repo that only fixes a typo in README.md. There is no work order for it and no GitHub issue. Give me the body text only; don't change any files.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 600,
+      "maxTurns": 25,
+      "graders": [
+        {
+          "name": "knows-the-gotcha",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the drafted body contains a line beginning \"No work order:\" (a waiver stating why there is no WO id), as this repo's PR-body check requires.\nFAIL if the body has neither a WO-#### id nor a \"No work order:\" line.",
+          "config": {
+            "criteria": "PASS if the drafted body contains a line beginning \"No work order:\" (a waiver stating why there is no WO id), as this repo's PR-body check requires.\nFAIL if the body has neither a WO-#### id nor a \"No work order:\" line.",
+            "focus": "last_message"
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 0,
+            "passed": false,
+            "turns": 4,
+            "costUsd": 0.11110740000000001,
+            "judgeCostUsd": 0.0008609999999999972,
+            "durationSeconds": 22,
+            "startedAt": "2026-10-10T23:43:40.323Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-W6lrbz/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Here's the PR body text:\n\n---\n\n## Summary\nFixes a typo in README.md. No functional or behavioral changes.\n\n## Why\nNo work order or issue tracks this — it's a trivial documentation fix caught in passing.\n\n## Testing\nN/A — docs-only change.\n\n---\n\nThat's generic since I don't have the actual typo diff to reference (git status shows no tracked changes in this snapshot). If you want, tell me the specific word/line that was fixed and I'll tighten the Summary to name it directly."
+              }
+            ]
+          },
+          {
+            "score": 0,
+            "passed": false,
+            "turns": 1,
+            "costUsd": 0.06342260000000001,
+            "judgeCostUsd": 0.0006600000000000043,
+            "durationSeconds": 6,
+            "startedAt": "2026-10-10T23:44:02.679Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-QXAL6z/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Fix typo in README.md\n\n## Summary\nCorrects a typo in README.md.\n\n## Changes\n- Fixed a typo in README.md\n\n## Testing\nN/A — documentation-only change, no code or behavior affected."
+              }
+            ]
+          },
+          {
+            "score": 0,
+            "passed": false,
+            "turns": 3,
+            "costUsd": 0.084072,
+            "judgeCostUsd": 0.0009300000000000037,
+            "durationSeconds": 17,
+            "startedAt": "2026-10-10T23:44:08.490Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-YWYpzL/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "knows-the-gotcha",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Here's a draft PR body for a README typo fix:\n\n---\n\n## Summary\nFixes a typo in README.md.\n\n## Why\nNo functional change — just a documentation correction for clarity/accuracy.\n\n## Changes\n- Corrected the typo in README.md\n\n## Testing\nN/A — documentation-only change, no code paths affected.\n\n---\n\nNote: I don't have a way to see the actual diff in this session (no shell access and no uncommitted README changes are showing in git status), so I kept the \"Changes\" line generic. If you want, tell me the exact before/after text and I'll make that line specific."
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 0,
+        "passRate": 0
+      }
+    }
+  ],
+  "aggregates": {
+    "casesTotal": 6,
+    "casesPassed": 4,
+    "overallScore": 0.6666666666666666,
+    "overallPassRate": 0.6666666666666666
+  }
+}
