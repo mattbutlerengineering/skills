@@ -14,6 +14,7 @@ refusal is data and exits 0. Descriptive only: an interval comparison is
 not a significance test, and a trend line is never a claim that an eval
 improved.
 """
+import datetime
 import hashlib
 import math
 import re
@@ -158,10 +159,26 @@ def _need(data, key, kind):
 
 
 def _day(text, key):
+    """The YYYY-MM-DD day a date or timestamp field opens with, which
+    must be a real calendar day."""
     if not isinstance(text, str) or not DAY.match(text[:10]) \
             or len(text) < 10:
         raise RecordError(f"malformed field {key}")
+    try:
+        datetime.date.fromisoformat(text[:10])
+    except ValueError:
+        raise RecordError(f"malformed field {key}") from None
     return text[:10]
+
+
+def _named_day(text, key, name_day):
+    """_day, and the day must be the one the file's name carries: a
+    record the name dates differently is not read, so it cannot move
+    between days (or into a same-day group) by its content alone."""
+    day = _day(text, key)
+    if day != name_day:
+        raise RecordError(f"{key} disagrees with its name")
+    return day
 
 
 def _entries(data, key, fields):
@@ -183,7 +200,7 @@ def _trigger_row(rel, data):
     if data.get("harness", harness) != harness:
         raise RecordError(
             f"harness {data['harness']!r} disagrees with its name")
-    day = _day(_need(data, "date", str), "date")
+    day = _named_day(_need(data, "date", str), "date", parsed[2])
     results = _entries(data, "results", ("id", "expected", "query", "pass"))
     summary = _need(data, "summary", dict)
     hits = sum(1 for r in results if r["pass"])
@@ -208,7 +225,7 @@ def _charter_row(rel, data):
     parsed = parse_results_stem(rel.stem)
     if parsed is None or parsed[0] != "charter":
         raise RecordError("name fits no results grammar")
-    day = _day(_need(data, "date", str), "date")
+    day = _named_day(_need(data, "date", str), "date", parsed[2])
     arm = _need(data, "arm", str)
     charters = _need(data, "charters", dict)
     results = _entries(data, "results", ("id", "role", "verdict"))
@@ -256,7 +273,8 @@ def _plugin_row(rel, data):
     estimated."""
     if data.get("partial") is True:
         raise RecordError("is partial")
-    day = _day(_need(data, "startedAt", str), "startedAt")
+    day = _named_day(_need(data, "startedAt", str), "startedAt",
+                     rel.stem[:10])  # plugin records are named <date>[-N]
     suite = _need(data, "suite", dict)
     tags = _need(suite, "tagFilters", list)
     cases = _entries(data, "cases", ("name", "promptMarkdown", "graders"))
@@ -282,7 +300,8 @@ def _signals_row(rel, data):
     if parsed is None or parsed[0] != "decompose-signals":
         raise RecordError("name fits no results grammar")
     return {"surface": "decompose-signals", "file": rel.name,
-            "day": _day(_need(data, "date", str), "date"), "suite": None,
+            "day": _named_day(_need(data, "date", str), "date", parsed[2]),
+            "suite": None,
             "case_set": None, "n": None, "hits": None, "cost": None}
 
 

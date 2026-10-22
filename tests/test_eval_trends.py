@@ -247,7 +247,7 @@ class TestLoadTrigger(TempRoot):
         for name in ("trigger-2026-07-05-2.json", "trigger-2026-07-03.json",
                      "trigger-2026-07-05.json"):
             fx.write_json(self.root, f"evals/results/{name}",
-                          fx.trigger_record("2026-07-05",
+                          fx.trigger_record(name[8:18],
                                             fx.numbered_cases(1, 1)))
         self.assertEqual([r["file"] for r in self.rows_of("trigger")], [
             "trigger-2026-07-03.json", "trigger-2026-07-05-2.json",
@@ -267,6 +267,8 @@ class TestLoadTrigger(TempRoot):
                            ("trigger-2026-07-04.json", no_results),
                            ("trigger-2026-07-06.json", no_date),
                            ("trigger-2026-07-07.json", ["not", "an", "obj"])):
+            if isinstance(data, dict) and "date" in data:
+                data = {**data, "date": name[8:18]}  # the name's own day
             fx.write_json(self.root, f"evals/results/{name}", data)
         (self.root / "evals/results/trigger-2026-07-08.json").write_text(
             "{not json", encoding="utf-8")

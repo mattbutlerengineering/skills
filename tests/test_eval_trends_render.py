@@ -231,13 +231,13 @@ class TestRefusalStates(RenderCase):
             " in 2 record(s) over 2+ days; no trend claim"])
 
     def test_the_cost_refusal_names_the_records_that_lack_it(self):
-        self.plugin("a.json", "2026-07-01T10:00:00Z", 30, 15, 3.0)
+        self.plugin("2026-07-01.json", "2026-07-01T10:00:00Z", 30, 15, 3.0)
         data = fx.plugin_record(
             "2026-07-05T10:00:00Z",
             [(f"case{i}", "prompt", [("g", "md")]) for i in range(30)],
             passed=20)
         del data["costUsd"]
-        fx.write_json(self.root, "plugin-evals/records/b.json", data)
+        fx.write_json(self.root, "plugin-evals/records/2026-07-05.json", data)
         _, lines = self.run_main()
         self.assertIn("eval-trends: plugin cost: REFUSED cost field absent"
                       " from 1 of 2 record(s); no trend claim", lines)
@@ -376,7 +376,7 @@ class TestReadOnly(RenderCase):
     def test_main_leaves_the_tree_byte_for_byte_identical(self):
         self.trigger("2026-07-01", 30, 12)
         self.trigger("2026-07-05", 30, 24)
-        self.plugin("a.json", "2026-07-01T10:00:00Z", 3, 2, 1.0)
+        self.plugin("2026-07-01.json", "2026-07-01T10:00:00Z", 3, 2, 1.0)
         fx.write_json(self.root, "evals/results/charter-2026-09-28.json",
                       fx.charter_record("2026-09-28", [("a", "swe", "x")]))
         before = self.snapshot()
