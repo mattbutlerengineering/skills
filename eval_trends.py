@@ -49,6 +49,12 @@ MIN_DAYS = 2
 MIN_RECORDS = 2
 Z = 1.96
 
+# A record above this many bytes is refused unread. Measured 2026-10-22:
+# the largest real record anywhere (evals/results, plugin-evals/records,
+# tests/fixtures/eval_trends_2026_10_21) is 70,641 bytes; 4 MiB is about
+# 59x that, so no real record nears it and a runaway file never loads whole.
+MAX_RECORD_BYTES = 4 * 1024 * 1024
+
 
 def wilson(hits, n):
     """The 95 percent Wilson score interval for hits of n, as fractions."""
@@ -315,15 +321,44 @@ def measured(rows):
     return [r for r in rows if r["surface"] != "decompose-signals"]
 
 
+def _refusal(root, rel):
+    """Why the record at root/rel is not read (a symlink, a symlinked
+    directory below the root, or a file above MAX_RECORD_BYTES), or None.
+    A missing or non-regular path is left to cli.read_file."""
+    path = Path(root) / rel
+    if path.is_symlink():
+        return "is a symlink; not read"
+    if any((Path(root) / parent).is_symlink()
+           for parent in rel.parents if parent != Path(".")):
+        return "is under a symlinked directory; not read"
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None  # read_file reports it
+    if size > MAX_RECORD_BYTES:
+        return (f"is {size} bytes, above the {MAX_RECORD_BYTES}-byte "
+                "bound; not read")
+    return None
+
+
 def _read_surface(root, pattern, row_of):
     """(rows, problems) for the files matching pattern under root, in
-    sorted path order; each file is read through cli.read_file."""
+    sorted path order; each file is read through cli.read_file, after
+    _refusal has turned away links and oversize files."""
     rows, problems = [], []
     for path in sorted(Path(root).glob(pattern)):
         rel = path.relative_to(root)
+        why = _refusal(root, rel)
+        if why:
+            problems.append(f"{LABEL}: {rel.as_posix()} {why}")
+            continue
         data, problem = read_file(path, rel.as_posix(), dict)
         if problem:
             problems.append(f"{LABEL}: {problem}")
+            continue
+        if data is None:  # read_file's (None, None): no regular file here
+            problems.append(f"{LABEL}: {rel.as_posix()} "
+                            "is not a regular file; not read")
             continue
         try:
             row = row_of(rel, data)
@@ -401,8 +436,11 @@ def _metric(surface):
 
 
 def _day_text(rows):
-    """hits/n, the rate and the 95 percent hull for one day of one group;
-    a day of reruns prints its lowest-to-highest hits and rate."""
+    """hits/n, the rate and the interval for one day of one group. A lone
+    record prints its own Wilson 95 percent interval; a day of reruns
+    prints its lowest-to-highest hits and rate and the `range` its reruns'
+    intervals cover (lowest lower to highest upper), which is no interval
+    of any stated confidence level."""
     lo, hi = day_interval(rows)
     n = rows[0]["n"]  # one case set, one n
     hits = sorted(r["hits"] for r in rows)
@@ -412,7 +450,8 @@ def _day_text(rows):
         counts = f"{hits[0]}..{hits[-1]}/{n}"
         rate = f"{_pct(hits[0] / n)}..{_pct(hits[-1] / n)}"
     word = " sensitive" if rows[0]["surface"] == "charter" else ""
-    return f"{counts}{word} ({rate}%, 95% {_pct(lo)}-{_pct(hi)}%)"
+    label = "95%" if len(rows) == 1 else "range"
+    return f"{counts}{word} ({rate}%, {label} {_pct(lo)}-{_pct(hi)}%)"
 
 
 def _files(members):
@@ -533,14 +572,17 @@ def _usage(why):
 def main(argv):
     """`python3 eval_trends.py [<repo-root>]` — print the trend view of the
     records under the repo root (default: this module's directory). Exit 0
-    when no record is malformed (a refusal is data), 1 with problems, 2 on
-    a usage error."""
+    when no record is malformed (a refusal is data, and a root with no
+    records says so in one line), 1 with problems, 2 on a usage error."""
     if len(argv) > 1 or any(a.startswith("-") for a in argv):
         return _usage(f"{' '.join(argv)!r} — unknown argument")
     root = Path(argv[0]) if argv else Path(__file__).resolve().parent
     if not root.is_dir():
         return _usage(f"{str(root)!r} is not a directory")
     rows, problems = load_rows(root)
+    if not rows and not problems:  # empty or mistyped root, not a quiet one
+        print(f"{LABEL}: no records found under {root}")
+        return report(LABEL, problems)
     for line in render(rows):
         print(line)
     return report(LABEL, problems)

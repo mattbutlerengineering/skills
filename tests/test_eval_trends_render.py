@@ -95,6 +95,31 @@ class RenderCase(unittest.TestCase):
                 if ln.startswith(f"eval-trends: REFUSED {surface}:")]
 
 
+class TestNoRecordsFound(RenderCase):
+    """An existing root with no records is said so in one line, so a
+    mistyped root cannot pass for a quiet one."""
+
+    def test_an_empty_root_prints_one_line_and_exits_zero(self):
+        code, lines = self.run_main()
+        self.assertEqual(code, 0)
+        self.assertEqual(lines, [
+            f"eval-trends: no records found under {self.root}",
+            "eval-trends: 0 problem(s)"])
+
+    def test_a_root_with_a_record_is_unchanged(self):
+        self.trigger("2026-07-01", 30, 12)
+        code, lines = self.run_main()
+        self.assertEqual(code, 0)
+        self.assertEqual(lines[0], HEADER)
+        self.assertFalse([ln for ln in lines if "no records found" in ln])
+
+    def test_a_root_whose_only_record_is_malformed_is_not_empty(self):
+        fx.write_json(self.root, "evals/results/trigger-2026-07-01.json", {})
+        code, lines = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertFalse([ln for ln in lines if "no records found" in ln])
+
+
 class TestDemo(RenderCase):
     """The PRD demo: one surface with a comparable pair, one without."""
 
@@ -267,7 +292,8 @@ class TestRerunsBesideAnotherDay(RenderCase):
         lo = interval(24, 30)[0]
         hi = interval(27, 30)[1]
         day2 = (f"24..27/30 ({pct(24 / 30)}..{pct(27 / 30)}%, "
-                f"95% {pct(lo)}-{pct(hi)}%)")
+                f"range {pct(lo)}-{pct(hi)}%)")
+        self.assertNotIn("95%", day2)
         self.assertIn(
             f"eval-trends: trigger trend set {hex_of(trigger_set(30))} "
             f"suite claude,m,3,0.5: 2026-07-01 {one_day(12, 30)} -> "

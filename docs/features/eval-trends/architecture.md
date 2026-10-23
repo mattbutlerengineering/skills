@@ -167,8 +167,8 @@ tool relies on: groups are keyed on the full sorted tuple list.
      - a rerun spread, for each group day with 2+ records:
        `eval-trends: <surface> rerun spread <date> set <hex>: passed <lo>..<hi> of <n> over <k> run(s) (<files>)`
      - a trend line, for each `trend` group:
-       `eval-trends: <surface> trend set <hex> suite <label>: <d1> <h1>/<n1> (<p1>% , 95% <lo1>-<hi1>%) -> <d2> <h2>/<n2> (<p2>%, 95% <lo2>-<hi2>%); intervals do not overlap (descriptive, not a significance test) | intervals overlap: not distinguishable (descriptive, not a significance test) (<files>)`
-       where a multi-record day prints its hull and its lowest-to-highest rate
+       `eval-trends: <surface> trend set <hex> suite <label>: <d1> <h1>/<n1> (<p1>% , {95%|range} <lo1>-<hi1>%) -> <d2> <h2>/<n2> (<p2>%, {95%|range} <lo2>-<hi2>%); intervals do not overlap (descriptive, not a significance test) | intervals overlap: not distinguishable (descriptive, not a significance test) (<files>)`
+       where a single-record day prints its Wilson interval as `95% <lo>-<hi>%`, and a multi-record day prints its lowest-to-highest rate and, in place of `95%`, `range <lo>-<hi>%`: the span its reruns' own intervals cover (no confidence level claimed)
      - a cost line per `trend` group: `eval-trends: <surface> cost per pass: <d1> $<x> -> <d2> $<y> (<files>)` for plugin, else
        `eval-trends: <surface> cost: REFUSED cost field absent from <k> of <m> record(s); no trend claim`
      - REFUSED lines, one per state present among the surface's records, with
