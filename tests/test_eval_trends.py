@@ -504,6 +504,13 @@ class TestUnreadableLocations(TempRoot):
             "eval-trends: evals/results/trigger-2026-07-01.json "
             "is not a regular file; not read"]))
 
+    def test_a_symlinked_root_is_read_only_links_below_it_are_refused(self):
+        self.record()
+        link = self.outside() / "root-link"
+        link.symlink_to(self.root, target_is_directory=True)
+        rows, problems = eval_trends.load_rows(link)
+        self.assertEqual((len(rows), problems), (1, []))
+
     def test_a_file_at_the_bound_is_read(self):
         size = self.record().stat().st_size
         with mock.patch.object(eval_trends, "MAX_RECORD_BYTES", size):
