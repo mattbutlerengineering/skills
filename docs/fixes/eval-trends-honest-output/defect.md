@@ -183,7 +183,7 @@ reads the tool. Small: Review and Ship scale down.
 Test first for each, in `tests/test_eval_trends*.py`, with the reason
 recorded in the commit body wherever a pinned string changes.
 
-- [ ] **No-records line** — when `load_rows` yields no rows and no
+- [x] **No-records line** — when `load_rows` yields no rows and no
   problems, print `eval-trends: no records found under <root>` (root as
   given); decide in Implement whether the per-surface detail still
   follows (recommended: the one line plus the unchanged `0 problem(s)`
@@ -191,7 +191,7 @@ recorded in the commit body wherever a pinned string changes.
   - Accept: `python3 eval_trends.py $S/empty` and `... docs` print the
     line naming the root; a root with at least one record is unchanged;
     `tests/test_eval_trends_render.py:129-132` amended with the reason.
-- [ ] **Honest hull label** — print a label that claims no confidence
+- [x] **Honest hull label** — print a label that claims no confidence
   level for a multi-record day (candidate `range lo-hi`, per the brief),
   keep `95% lo-hi` for a single-record day, and fix the `_day_text`
   docstring ("95 percent hull") at eval_trends.py:404.
@@ -199,23 +199,18 @@ recorded in the commit body wherever a pinned string changes.
     no `95%` in it, and the single-record text (`:53`, `:311`) still has
     it; `grep -n "95% " eval_trends.py` shows only the single-record
     path; `architecture.md:170` updated for the new text.
-- [ ] **Refuse a symlinked record** — in `_read_surface`, a matched path
+- [x] **Refuse a symlinked record** — in `_read_surface`, a matched path
   that is a symlink, or has a symlinked parent below the root, is one
   labelled problem, no row, exit 1.
   - Accept: scratch repro of the file link and the directory link each
     print `eval-trends: <rel> ...` problem and exit 1, not a record.
-- [ ] **Refuse an oversize record** — a named constant (candidate 4 MiB,
+- [x] **Refuse an oversize record** — a named constant (candidate 4 MiB,
   about 59x the largest real record at 70,641 bytes), checked by `stat`
   before the read; above it is one labelled problem, exit 1, never read.
   - Accept: a file one byte over the bound is refused without being
     parsed; one at the bound is read; the real 50 records still produce
     the unchanged output (`0 problem(s)`); the measurement is recorded
     in the constant's comment.
-- [ ] **Docs for the documented non-changes** — state in the tool
-  docstring or the research note nothing new; the future-dated and
-  multiple-comparison decisions stay where review.md and the header put
-  them.
-  - Accept: no edit needed beyond the above (checked, not assumed).
 
 ## Notes
 
@@ -236,3 +231,19 @@ recorded in the commit body wherever a pinned string changes.
   label is an output string, not a decision of the ADR.
 - LEDGER.md unchanged (ADR-0012, ADR-0019); `plugin.json` untouched
   (ADR-0095); stdlib only; no paid run.
+- **Implement (2026-10-22).** Four items done test-first, one commit each.
+  The fifth item (docs for the documented non-changes) is dropped: it
+  asserted "no edit needed", which checks nothing real; future-dated and
+  multiple-comparison stay where review.md and the header put them.
+- **Choices.** Hull word: `range` (`range lo-hi`), single-record day keeps
+  `95%`. Size bound: `MAX_RECORD_BYTES = 4 * 1024 * 1024` (about 59x the
+  largest real record, 70,641 bytes). Empty root: one line, then the
+  unchanged `0 problem(s)`, exit 0; the per-surface detail no longer prints
+  on a record-less root. No existing pinned test changed for item 1 (none
+  ran main on a record-less root; the `:129-132` lines belong to the demo
+  fixture with records); item 2 amended the multi-record case only.
+- **Symlinks.** A symlinked record (dangling too) and a record under a
+  symlinked directory below the root are refused in `_read_surface`
+  (`cli.read_file` untouched). The root itself may be a link.
+- **Checked.** On the real tree the tool's output is byte-identical to
+  main's (no multi-record trend day prints today); no new import, pin 55.
