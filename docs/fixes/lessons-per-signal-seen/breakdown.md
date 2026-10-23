@@ -55,7 +55,7 @@ When this milestone is done, no live document describes the per-run header as cu
 - [x] **S7 Doc lines that quote the old shape** — note ADR-0116 in the shipped feature architecture and confirm the live docs — size:S
   - Accept: `docs/features/decompose-lessons/architecture.md` gains a dated one-line note at its Data model sketch and its ADRs entry saying the line-1 entries are `<signal>:<run ref>` from ADR-0116; its other lines are not rewritten. `review.md`, `release.md`, `verification.md` and that run's `breakdown.md` are untouched. `CLAUDE.md` and `CONTEXT.md` are checked: neither names the header shape, so neither is edited, and the result is logged in Notes. `skills/decompose/SKILL.md` is not edited and the phrase pin near the end of the skill tests still passes. `python3 gates.py`, `python3 lint.py` and `python3 kb.py drift` stay at 0 problems.
   - Blocked by: S4 Header and bound, S6 Zero-item pool
-- [ ] **S8 ADR trail check** — ADR-0116's status, ADR-0113's status line and the index rows agree — size:S
+- [x] **S8 ADR trail check** — ADR-0116's status, ADR-0113's status line and the index rows agree — size:S
   - Accept: ADR-0116 is `provisional`, ADR-0113's status line reads `superseded in part by ADR-0116 (...)` and both index rows match their files' status lines. ADR-0116 states the code's final strings and constant; where Implement changed one, the ADR and architecture.md are corrected in the same commit and the change is logged in Notes. `python3 kb.py drift` stays at 0 problems.
   - Blocked by: S4 Header and bound, S6 Zero-item pool
 
@@ -83,3 +83,9 @@ names the header shape (no match), so neither is edited. `review.md`,
 `release.md`, `verification.md`, that run's `breakdown.md` and
 `skills/decompose/SKILL.md` are untouched. `lint.py`, `kb.py drift` and
 `gates.py` each report 0 problem(s).
+
+2026-10-23 S8: ADR-0116 is `provisional`; ADR-0113's status line reads
+`superseded in part by ADR-0116 (...)`; the README rows for 0113 and 0116
+match their files. ADR-0116 names `MAX_LESSONS_BYTES` (1 MiB) and the
+code's entry form; no string or constant changed in Implement, so neither
+the ADR nor architecture.md was corrected. `kb.py drift` stays at 0.
