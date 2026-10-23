@@ -356,6 +356,10 @@ def _read_surface(root, pattern, row_of):
         if problem:
             problems.append(f"{LABEL}: {problem}")
             continue
+        if data is None:  # read_file's (None, None): no regular file here
+            problems.append(f"{LABEL}: {rel.as_posix()} "
+                            "is not a regular file; not read")
+            continue
         try:
             row = row_of(rel, data)
             hash((row["suite"], row["case_set"]))  # groups key on these

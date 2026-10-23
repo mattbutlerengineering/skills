@@ -8,6 +8,7 @@ calls a model, `claude` or the network.
 """
 import copy
 import hashlib
+import os
 import shutil
 import sys
 import tempfile
@@ -487,6 +488,21 @@ class TestUnreadableLocations(TempRoot):
         self.assertEqual(problems, [
             f"eval-trends: evals/results/trigger-2026-07-01.json is "
             f"{size} bytes, above the {size - 1}-byte bound; not read"])
+
+    def test_a_directory_named_like_a_record_is_a_problem_not_a_crash(self):
+        (self.root / "evals/results/trigger-2026-07-01.json").mkdir(
+            parents=True)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/trigger-2026-07-01.json "
+            "is not a regular file; not read"]))
+
+    def test_a_fifo_named_like_a_record_is_refused_unopened(self):
+        path = self.root / "evals/results/trigger-2026-07-01.json"
+        path.parent.mkdir(parents=True)
+        os.mkfifo(path)  # an open() for read would block forever
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/trigger-2026-07-01.json "
+            "is not a regular file; not read"]))
 
     def test_a_file_at_the_bound_is_read(self):
         size = self.record().stat().st_size
