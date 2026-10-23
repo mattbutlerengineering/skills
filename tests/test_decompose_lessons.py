@@ -162,14 +162,14 @@ class TempFile(unittest.TestCase):
 
 class TestFile(TempFile):
     def test_a_file_round_trips_byte_identically(self):
-        text = jsonl(["feature:a", "feature:b"],
+        text = jsonl(["replan:feature:a", "review:feature:b"],
                      lesson("replan/feature/added"),
                      lesson("replan/feature/dropped", 3, (SRC_A, SRC_B),
                             ("feature:c",), DROPPED_TEXT))
         self.path.write_text(text, encoding="utf-8")
         lessons, seen, problems = dl.load(self.path)
         self.assertEqual(problems, [])
-        self.assertEqual(seen, ["feature:a", "feature:b"])
+        self.assertEqual(seen, ["replan:feature:a", "review:feature:b"])
         self.assertEqual([entry["id"] for entry in lessons],
                          ["replan/feature/added", "replan/feature/dropped"])
         self.assertEqual(dl.dump(self.path, lessons, seen), [])
@@ -179,12 +179,22 @@ class TestFile(TempFile):
         problems = dl.dump(
             self.path, [lesson("replan/feature/dropped", text=DROPPED_TEXT),
                         lesson("replan/feature/added")],
-            ["feature:b", "feature:a"])
+            ["review:feature:b", "replan:feature:a"])
         self.assertEqual(problems, [])
         self.assertEqual(
             self.path.read_text(encoding="utf-8"),
-            jsonl(["feature:a", "feature:b"], lesson("replan/feature/added"),
+            jsonl(["replan:feature:a", "review:feature:b"],
+                  lesson("replan/feature/added"),
                   lesson("replan/feature/dropped", text=DROPPED_TEXT)))
+
+    def test_serialize_writes_sorted_unique_keys_and_unchanged_lessons(self):
+        text = dl.serialize(
+            [lesson()], ["review:feature:a", "replan:feature:a",
+                         "replan:feature:a"])
+        header, body = text.splitlines()
+        self.assertEqual(
+            header, '{"seen": ["replan:feature:a", "review:feature:a"]}')
+        self.assertEqual(body, json.dumps(lesson(), ensure_ascii=False))
 
     def test_a_missing_file_loads_as_nothing(self):
         self.assertEqual(dl.load(self.path), ([], [], []))
@@ -274,7 +284,7 @@ class TestFile(TempFile):
         self.assertFalse(self.path.exists())
 
     def test_a_failing_replace_leaves_the_original_byte_identical(self):
-        text = jsonl(["feature:a"], lesson())
+        text = jsonl(["replan:feature:a"], lesson())
         self.path.write_text(text, encoding="utf-8")
         with mock.patch.object(dl.os, "replace",
                                side_effect=OSError("disk full")):
@@ -408,9 +418,28 @@ class TestPairs(unittest.TestCase):
         self.assertEqual(dl.pairs(tie)[0]["detail"], "split")
 
     def test_skipped_hit_runs_make_no_pair_but_may_still_be_clean(self):
-        got = dl.pairs(HISTORY, skip={"feature:a", "feature:c"})
+        got = dl.pairs(HISTORY, skip={
+            "replan:feature:a", "design_gaps:feature:a",
+            "review:feature:a", "replan:feature:c"})
         self.assertEqual([p["hit"] for p in got],
                          ["feature:e", "maintenance:m"])
+
+    def test_a_hit_run_is_skipped_only_for_the_signal_it_is_seen_for(self):
+        got = dl.pairs(HISTORY, skip={"replan:feature:a"})
+        self.assertEqual(
+            [(p["signal"], p["hit"]) for p in got
+             if p["hit"] == "feature:a"],
+            [("design_gaps", "feature:a"), ("review", "feature:a")])
+
+    def test_a_clean_run_is_never_consulted_against_skip(self):
+        got = dl.pairs(HISTORY, skip={"replan:feature:b",
+                                      "design_gaps:feature:b"})
+        self.assertEqual(got, HAND_PAIRS)
+
+    def test_seen_key_builds_signal_colon_run_ref(self):
+        self.assertEqual(dl.seen_key("review", "feature:a"),
+                         "review:feature:a")
+        self.assertEqual(dl.seen_key("replan", "product"), "replan:product")
 
     def test_two_pairs_with_one_id_collapse_to_one_lesson_with_both_sources(
             self):
@@ -556,8 +585,24 @@ class TestVotes(unittest.TestCase):
         already = lesson("replan/feature/added", voted=["feature:v"])
         ballots, _ = self.cast([already], [voter("feature:v"),
                                            voter("feature:s")],
-                               seen=["feature:s"])
+                               seen=["replan:feature:s"])
         self.assertEqual(ballots, [])
+
+    def test_a_run_seen_for_replan_can_still_vote_on_a_review_lesson(self):
+        lessons = [ADDED_LESSON, lesson("review/feature/named")]
+        mature = voter("feature:s", review={
+            "label": "observed", "findings": 1, "named": 0})
+        ballots, _ = self.cast(lessons, [mature],
+                               seen=["replan:feature:s"])
+        self.assertEqual(ballots, [
+            ("upvote", "review/feature/named", "feature:s")])
+
+    def test_a_run_seen_for_every_signal_its_lessons_use_costs_no_git(self):
+        lessons = [ADDED_LESSON, lesson("review/feature/named")]
+        ballots, git = self.cast(
+            lessons, [voter("feature:s")],
+            seen=["replan:feature:s", "review:feature:s"])
+        self.assertEqual((ballots, git.calls), ([], []))
 
     def test_a_source_run_of_the_lesson_does_not_vote_on_it(self):
         # Review finding: a clean partner with no implement boundary is not
@@ -617,6 +662,15 @@ GAP = {"label": "observed", "routes": 1, "source": "subjects"}
 NO_GAP = {"label": "observed", "routes": 0, "source": "subjects"}
 HIT = record("feature:h", hit_replan(), GAP)
 CLEAN = record("feature:c", clean_replan(), NO_GAP)
+CLEAN_REVIEW = {"label": "observed", "findings": 0, "named": 0}
+REVIEW_HIT = {"label": "observed", "findings": 2, "named": 1}
+H_WITH_REVIEW = record("feature:h", hit_replan(), GAP, CLEAN_REVIEW)
+R_PENDING = record("feature:r", clean_replan(), NO_GAP)
+R_REVIEWED = record("feature:r", clean_replan(), NO_GAP, REVIEW_HIT)
+SEEN_HC = ["design_gaps:feature:c", "design_gaps:feature:h",
+           "replan:feature:c", "replan:feature:h"]
+REVIEW_TEXT = ("feature runs whose review findings name an item: r 1 of 2"
+               " findings (observed), h 0 of 0 findings (observed)")
 ROUTED_TEXT = ("feature runs routed back to Architect: h 1 route(s)"
                " (observed), c 0 route(s) (observed)")
 ADDED_TEXT = ("feature runs that re-planned mostly by adding rows: h 2 of 8"
@@ -641,7 +695,7 @@ class TestFold(unittest.TestCase):
         self.assertEqual(got, [lesson("design_gaps/feature/routed", 2,
                                       ("feature:c", "feature:h"),
                                       text=ROUTED_TEXT)])
-        self.assertEqual(seen, ["feature:c", "feature:h"])
+        self.assertEqual(seen, SEEN_HC)
         again, seen2, lines2, problems2 = dl.fold(got, seen, [HIT, CLEAN],
                                                   [])
         self.assertEqual((again, seen2, lines2, problems2),
@@ -681,12 +735,12 @@ class TestFold(unittest.TestCase):
         clean = record("feature:ok", review={
             "label": "observed", "findings": 1, "named": 0})
         _, seen, _, _ = dl.fold([], [], [late, clean], [])
-        self.assertIn("feature:late", seen)
+        self.assertIn("review:feature:late", seen)
 
     def test_an_upvote_prints_one_line_and_moves_the_count(self):
         existing = [lesson("replan/feature/added")]
         got, _, lines, _ = dl.fold(
-            existing, ["feature:c", "feature:h"], [HIT, CLEAN],
+            existing, SEEN_HC, [HIT, CLEAN],
             [("upvote", "replan/feature/added", "feature:v")])
         self.assertEqual(lines,
                          ["decompose-lessons: UPVOTE replan/feature/added"])
@@ -697,8 +751,8 @@ class TestFold(unittest.TestCase):
                            ("feature:a", "feature:b"), ("feature:v",))]
         records = [record("feature:b", clean_replan()),
                    record("feature:e", replan(1, 6, "observed", added=1))]
-        got, _, lines, problems = dl.fold(existing, ["feature:a"], records,
-                                          [])
+        got, _, lines, problems = dl.fold(
+            existing, ["replan:feature:a"], records, [])
         self.assertEqual(problems, [])
         self.assertEqual(lines,
                          ["decompose-lessons: EDIT replan/feature/added"])
@@ -710,20 +764,53 @@ class TestFold(unittest.TestCase):
     def test_a_lesson_operation_problem_abandons_the_whole_fold(self):
         existing = [lesson()]
         got, seen, lines, problems = dl.fold(
-            existing, ["feature:s"], [HIT, CLEAN],
+            existing, ["replan:feature:s"], [HIT, CLEAN],
             [("upvote", "replan/feature/added", "feature:v"),
              ("upvote", "no/such/id", "feature:v")])
-        self.assertEqual((got, seen, lines), (existing, ["feature:s"], []))
+        self.assertEqual((got, seen, lines),
+                         (existing, ["replan:feature:s"], []))
         self.assertEqual(
             problems,
             ["decompose-lessons: upvote refused: no lesson no/such/id"])
 
-    def test_every_complete_run_is_folded_into_seen(self):
+    def test_seen_is_every_measured_signal_and_run_sorted(self):
+        # was test_every_complete_run_is_folded_into_seen: seen is per
+        # (signal, run) now (ADR-0116), so a run is in seen for exactly
+        # the signals measured for it, whether or not it is complete.
         unfinished = {**record("feature:p", clean_replan()),
                       "implement": UNMEASURABLE}
-        _, seen, _, _ = dl.fold([], ["feature:z"],
+        _, seen, _, _ = dl.fold([], ["replan:feature:z"],
                                 [CLEAN, unfinished], [])
-        self.assertEqual(seen, ["feature:c", "feature:z"])
+        self.assertEqual(seen, [
+            "design_gaps:feature:c", "replan:feature:c",
+            "replan:feature:p", "replan:feature:z"])
+
+    def test_a_run_unmeasurable_for_a_signal_is_not_seen_for_it(self):
+        no_review = record("feature:r", clean_replan(), NO_GAP)
+        blank = record("feature:b", clean_replan(), NO_GAP, NO_HEADING)
+        done = record("feature:d", clean_replan(), NO_GAP, CLEAN_REVIEW)
+        _, seen, _, _ = dl.fold([], [], [no_review, blank, done], [])
+        self.assertNotIn("review:feature:r", seen)
+        self.assertNotIn("review:feature:b", seen)
+        self.assertIn("review:feature:d", seen)
+        self.assertIn("replan:feature:r", seen)
+        self.assertIn("design_gaps:feature:r", seen)
+
+    def test_a_second_fold_over_the_same_records_changes_nothing(self):
+        records = [H_WITH_REVIEW, CLEAN, R_PENDING]
+        first = dl.fold([], [], records, [])
+        second = dl.fold(*first[:2], records, [])
+        self.assertEqual(second, (first[0], first[1], [], []))
+
+    def test_a_lesson_dropped_at_zero_is_not_re_added_from_its_runs(self):
+        existing = [lesson("replan/feature/added", 1, ("feature:old",))]
+        got, seen, _, _ = dl.fold(
+            existing, [], [HIT, CLEAN],
+            [("downvote", "replan/feature/added", "feature:v")])
+        self.assertNotIn("replan/feature/added", [e["id"] for e in got])
+        again, _, lines, _ = dl.fold(got, seen, [HIT, CLEAN], [])
+        self.assertEqual(lines, [])
+        self.assertEqual(again, got)
 
 
 class TestUpdate(TempFile):
@@ -745,7 +832,7 @@ class TestUpdate(TempFile):
             "decompose-lessons: ADD replan/feature/added",
             f"decompose-lessons: wrote {dl.LESSONS_PATH}"])
         self.assertEqual(self.file.read_text(encoding="utf-8"),
-                         jsonl(["feature:c", "feature:h"], *BOTH))
+                         jsonl(SEEN_HC, *BOTH))
 
     def test_a_second_update_from_the_same_runs_is_unchanged(self):
         self.update([HIT, CLEAN])
@@ -771,7 +858,33 @@ class TestUpdate(TempFile):
         self.assertEqual([e["importance"] for e in lessons], [3, 3])
         self.assertEqual([e["voted"] for e in lessons],
                          [["feature:v"], ["feature:v"]])
-        self.assertIn("feature:v", seen)
+        self.assertIn("replan:feature:v", seen)
+        self.assertIn("design_gaps:feature:v", seen)
+
+    def test_a_review_that_matures_after_an_update_is_still_derived(self):
+        # The lost signal (#1061): R is folded with its review
+        # unmeasurable; when the review lands the lesson must still come.
+        before = [H_WITH_REVIEW, CLEAN, R_PENDING]
+        after = [H_WITH_REVIEW, CLEAN, R_REVIEWED]
+        lines, problems = self.update(before)
+        self.assertEqual(problems, [])
+        self.assertNotIn("decompose-lessons: ADD review/feature/named",
+                         lines)
+        lines, problems = self.update(after)
+        self.assertEqual(problems, [])
+        self.assertEqual(lines, [
+            "decompose-lessons: ADD review/feature/named",
+            f"decompose-lessons: wrote {dl.LESSONS_PATH}"])
+        staged = self.file.read_text(encoding="utf-8")
+        self.file.unlink()
+        self.update(after)  # control: the first update is after Review
+        self.assertEqual(self.file.read_text(encoding="utf-8"), staged)
+        lessons, seen, _ = dl.load(self.file)
+        by_id = {entry["id"]: entry for entry in lessons}
+        self.assertEqual(by_id["review/feature/named"]["text"], REVIEW_TEXT)
+        self.assertEqual(by_id["review/feature/named"]["sources"],
+                         ["feature:h", "feature:r"])
+        self.assertIn("review:feature:r", seen)
 
     def test_no_pair_and_no_file_writes_nothing(self):
         lines, problems = self.update([CLEAN])
@@ -893,7 +1006,7 @@ class TestFrontDoor(TempFile):
         return code, out.getvalue().splitlines()
 
     def test_the_report_prints_pairs_lessons_comparison_and_summary(self):
-        self.file.write_text(jsonl(["feature:c", "feature:h"], *BOTH),
+        self.file.write_text(jsonl(SEEN_HC, *BOTH),
                              encoding="utf-8")
         before = self.file.read_bytes()
         code, lines = self.main([], [HIT, CLEAN])
@@ -935,7 +1048,7 @@ class TestFrontDoor(TempFile):
             f"{PREFIX} 0 problem(s)"])
         self.assertEqual(code, 0)
         self.assertEqual(self.file.read_text(encoding="utf-8"),
-                         jsonl(["feature:c", "feature:h"], *BOTH))
+                         jsonl(SEEN_HC, *BOTH))
 
     def test_measure_problems_exit_one_and_update_writes_nothing(self):
         code, lines = self.main(["update"], [HIT, CLEAN],
