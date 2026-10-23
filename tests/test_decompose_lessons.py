@@ -1034,6 +1034,47 @@ class TestCompare(unittest.TestCase):
         self.assertIn("treated 2/38 over 5 run(s), untreated 7/20 over 2",
                       got[0])
 
+    def pools(self, treated, untreated):
+        """(records, treated set) for (count, items) pairs per run."""
+        records = [rp_run(f"t{n}", *figure)
+                   for n, figure in enumerate(treated)]
+        records += [rp_run(f"u{n}", *figure)
+                    for n, figure in enumerate(untreated)]
+        return records, {f"feature:t{n}" for n in range(len(treated))}
+
+    def test_a_zero_item_pool_has_no_rate_and_the_line_says_so(self):
+        cases = (
+            ([(0, 0)] * 5, [(0, 10), (1, 10)],
+             "treated 0/0 over 5 run(s), untreated 1/20 over 2 run(s)",
+             "the treated pool"),
+            ([(1, 8)] * 5, [(0, 0)],
+             "treated 5/40 over 5 run(s), untreated 0/0 over 1 run(s)",
+             "the untreated pool"),
+            ([(0, 0)] * 5, [(0, 0)],
+             "treated 0/0 over 5 run(s), untreated 0/0 over 1 run(s)",
+             "both pools"))
+        for treated, untreated, figures, which in cases:
+            with self.subTest(which):
+                records, chosen = self.pools(treated, untreated)
+                self.assertEqual(dl.compare(records, chosen, 5), [
+                    f"decompose-lessons: re-plan {figures} (observed only;"
+                    " 0 unmeasurable); descriptive, no comparison: rate"
+                    f" undefined for {which} (0 items)"])
+
+    def test_pools_with_items_still_end_higher_or_not_higher(self):
+        records, chosen = self.pools([(1, 8)] * 5, [(0, 10)])
+        self.assertTrue(dl.compare(records, chosen, 5)[0].endswith(
+            "descriptive, treated higher"))
+        records, chosen = self.pools([(0, 8)] * 5, [(1, 10)])
+        self.assertTrue(dl.compare(records, chosen, 5)[0].endswith(
+            "descriptive, treated not higher"))
+
+    def test_a_zero_item_pool_below_the_floor_keeps_the_floor_line(self):
+        records, chosen = self.pools([(0, 0)] * 4, [(0, 0)])
+        self.assertEqual(dl.compare(records, chosen, 5), [
+            "decompose-lessons: no verdict: 4 treated run(s) is below the"
+            " minimum of 5"])
+
     def test_below_the_floor_no_rate_is_printed(self):
         few = TREATED_SET - {"feature:t5"}
         self.assertEqual(dl.compare(COMPARE, few, 5), [
@@ -1111,6 +1152,19 @@ class TestFrontDoor(TempFile):
             f"{PREFIX} re-plan treated 0/8 over 1 run(s), untreated 0/8"
             " over 1 run(s) (observed only; 0 unmeasurable); descriptive,"
             " treated not higher"))
+
+    def test_a_zero_item_pool_prints_the_tail_and_exits_zero(self):
+        (self.dir / ".github" / "factory.json").write_text(
+            json.dumps({"conductor": {"calibrate_floor": 1}}))
+        git = GitFake(descended={TREATED})
+        zero = voter("feature:v", replan(0, 0, "observed"))
+        code, lines = self.main([], [zero, CLEAN], git)
+        self.assertEqual(code, 0)
+        self.assertEqual(lines[1], (
+            f"{PREFIX} re-plan treated 0/0 over 1 run(s), untreated 0/8"
+            " over 1 run(s) (observed only; 0 unmeasurable); descriptive,"
+            " no comparison: rate undefined for the treated pool (0"
+            " items)"))
 
     def test_update_performs_the_fold_and_exits_zero(self):
         code, lines = self.main(["update"], [HIT, CLEAN])
