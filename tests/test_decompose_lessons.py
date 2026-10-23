@@ -708,8 +708,10 @@ class TestFold(unittest.TestCase):
         existing = [lesson("replan/feature/added", 1, ("feature:old",))]
         ballots = [("downvote", "replan/feature/added", "feature:h"),
                    ("upvote", "replan/feature/added", "feature:v")]
-        got, seen, lines, problems = dl.fold(existing, [], [HIT, CLEAN],
-                                             ballots)
+        # The voter is a measured record, so it enters seen as a measured
+        # run (ADR-0116), not as a ballot caster.
+        got, seen, lines, problems = dl.fold(
+            existing, [], [HIT, CLEAN, voter("feature:v")], ballots)
         self.assertEqual(problems, [])
         self.assertEqual(lines, [
             "decompose-lessons: DOWNVOTE replan/feature/added",
@@ -717,7 +719,7 @@ class TestFold(unittest.TestCase):
             "decompose-lessons: ADD design_gaps/feature/routed"])
         self.assertEqual([e["id"] for e in got],
                          ["design_gaps/feature/routed"])
-        self.assertIn("feature:v", seen)
+        self.assertIn("replan:feature:v", seen)
 
     def test_a_known_id_whose_sources_do_not_grow_is_not_edited(self):
         existing = [lesson("replan/feature/added", 2,

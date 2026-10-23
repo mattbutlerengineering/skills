@@ -99,7 +99,8 @@ def downvote(lessons, lid, voter):
     return _vote("downvote", -1, lessons, lid, voter)
 
 
-# The file: line 1 is {"seen": [...]}, every other line one lesson, sorted
+# The file: line 1 is {"seen": [...]}, one <signal>:<run ref> entry per
+# measured (signal, run) (ADR-0116); every other line one lesson, sorted
 # by id (ADR-0113). One validator serves both directions, so a file that
 # loads is a file that dumps.
 
@@ -115,8 +116,15 @@ REPLAN_PHRASES = {"added": "adding rows", "dropped": "dropping rows",
 
 REF = r"(?:(?:feature|maintenance):[A-Za-z0-9._-]+|product)"
 KINDS = ("feature", "maintenance", "product")
+SIGNAL_NAMES = tuple(field for _, field, _, _ in decompose_signals.SIGNALS)
 DETAILS = {"replan": REPLAN_DETAILS, "design_gaps": ("routed",),
            "review": ("named",)}
+
+
+def seen_key(signal, ref):
+    """The header entry for one measured (signal, run): <signal>:<run ref>
+    (ADR-0116)."""
+    return f"{signal}:{ref}"
 
 
 def _figure_pattern(field):
@@ -226,7 +234,7 @@ def load(path, shown=None):
 
 def serialize(lessons, seen):
     """The file text: the seen header, then lessons sorted by id."""
-    rows = [{"seen": sorted(seen)}, *sorted(lessons, key=lambda e: e["id"])]
+    rows = [{"seen": sorted(set(seen))}, *sorted(lessons, key=lambda e: e["id"])]
     return "".join(json.dumps(row, ensure_ascii=False) + "\n"
                    for row in rows)
 
@@ -324,14 +332,15 @@ def _text(field, run_kind, detail, hit, clean, num, den):
 
 def pairs(records, skip=()):
     """Contrast pairs {signal, kind, detail, hit, clean, text}: each
-    measurable hit run (count above 0) on a signal, unless its ref is in
-    `skip`, paired with the first clean run (count 0) in record order
+    measurable hit run (count above 0) on a signal, unless its seen key
+    for that signal is in `skip`, paired with the first clean run (count 0) in record order
     that has the hit run's kind and label. No clean run, no pair."""
     found = []
     for field, num, den in _signals():
         for hit in records:
             figure = _hit_label(hit[field], num)
-            if figure is None or figure[1] == 0 or hit["run"] in skip:
+            if figure is None or figure[1] == 0 \
+                    or seen_key(field, hit["run"]) in skip:
                 continue
             label, run_kind = figure[0], kind(hit["run"])
             clean = next((r for r in records
@@ -431,12 +440,15 @@ def _lesson_parts(lid):
     return signal, run_kind
 
 
-def _ballot(lesson_entry, rec):
-    """The vote one voter casts on one lesson, or None when it may not."""
+def _ballot(lesson_entry, rec, seen):
+    """The vote one voter casts on one lesson, or None when it may not:
+    the voter is seen for the lesson's signal, already voted, or a
+    source."""
     signal, run_kind = _lesson_parts(lesson_entry["id"])
     num = {field: n for field, n, _ in _signals()}.get(signal)
     figure = _hit_label(rec[signal], num) if num else None
     if figure is None or kind(rec["run"]) != run_kind \
+            or seen_key(signal, rec["run"]) in seen \
             or rec["run"] in lesson_entry["voted"] \
             or rec["run"] in lesson_entry["sources"]:
         return None
@@ -444,13 +456,15 @@ def _ballot(lesson_entry, rec):
 
 
 def votes(root, run, lessons, records, seen):
-    """(ballots, problems): (op, lesson id, run ref) for each treated,
-    unseen run with an observed decompose boundary and a measurable
+    """(ballots, problems): (op, lesson id, run ref) for each treated run,
+    unseen for the lesson's signal, with an observed decompose boundary and a measurable
     signal, once per lesson. A git failure gives no ballots."""
-    kinds = {_lesson_parts(entry["id"])[1] for entry in lessons}
+    parts = [_lesson_parts(entry["id"]) for entry in lessons]
     eligible = [rec for rec in records
-                if rec["run"] not in seen and kind(rec["run"]) in kinds
-                and rec["decompose"].get("label") == "observed"]
+                if rec["decompose"].get("label") == "observed"
+                and any(run_kind == kind(rec["run"])
+                        and seen_key(signal, rec["run"]) not in seen
+                        for signal, run_kind in parts)]
     if not eligible:
         return [], []
     voters, problems = treated(root, run, eligible)
@@ -459,7 +473,7 @@ def votes(root, run, lessons, records, seen):
     ballots = []
     for entry in lessons:
         for rec in eligible:
-            op = _ballot(entry, rec) if rec["run"] in voters else None
+            op = _ballot(entry, rec, seen) if rec["run"] in voters else None
             if op:
                 ballots.append((op, entry["id"], rec["run"]))
     return ballots, []
@@ -467,8 +481,9 @@ def votes(root, run, lessons, records, seen):
 
 # The update fold: votes on existing lessons, then ADD or EDIT from new hit
 # runs, then the drop at 0 (a vote that takes a lesson below 1 removes it).
-# A lesson dropped this fold is not re-added by it, and every hit run is
-# folded into `seen`, so it cannot return from the same runs.
+# A lesson dropped this fold is not re-added by it, and every measured
+# (signal, run) is folded into `seen`, so it cannot return from the same
+# runs.
 
 def _apply_ballots(lessons, ballots):
     """(lessons, lines, dropped ids, problems); a problem abandons all."""
@@ -512,6 +527,12 @@ def _apply_candidates(lessons, found, dropped):
     return lessons, lines, []
 
 
+def _measured(records):
+    """The seen key of every (signal, run) the records measure."""
+    return {seen_key(field, rec["run"]) for field, num, _ in _signals()
+            for rec in records if _hit_label(rec[field], num) is not None}
+
+
 def fold(lessons, seen, records, ballots):
     """(lessons, seen, lines, problems) after one update over `records`
     and the `ballots` votes() returned. Pure; on a problem the inputs
@@ -524,11 +545,8 @@ def fold(lessons, seen, records, ballots):
         voted, candidates(new_pairs), dropped)
     if problems:
         return lessons, seen, [], problems
-    complete = {rec["run"] for rec in records
-                if "sha" in rec["implement"]}
-    folded = (set(seen) | complete | {p["hit"] for p in new_pairs}
-              | {ref for _, _, ref in ballots})
-    return grown, sorted(folded), vote_lines + add_lines, []
+    return grown, sorted({*seen, *_measured(records)}), \
+        vote_lines + add_lines, []
 
 
 def update(root, run, measure=decompose_signals.measure):
