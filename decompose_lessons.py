@@ -34,6 +34,12 @@ from cli import CLI_FAILURES, detail, read_file, report, runner
 LABEL = "decompose-lessons"
 USAGE = "python3 decompose_lessons.py [update]"
 LESSONS_PATH = "docs/factory/decompose-lessons.jsonl"
+# Measured 2026-10-23 (ADR-0116): a worst-case lesson line is 838 bytes and
+# a realistic file about 6.5 KB, with a 5,336-byte header over 41 runs.
+# 1 MiB is about 160x that and 2.7x a deliberately extreme ledger (300
+# worst-case lessons, 250 KB, plus 1,000 runs, 130 KB). The Decompose skill
+# reads the file whole into a draft, so the bound protects that reader.
+MAX_LESSONS_BYTES = 1024 * 1024
 NO_PAIR = f"{LABEL}: no contrast pair found \u2014 no lesson derived"
 FIELDS = ("id", "importance", "text", "sources", "voted")
 
@@ -121,6 +127,9 @@ DETAILS = {"replan": REPLAN_DETAILS, "design_gaps": ("routed",),
            "review": ("named",)}
 
 
+SEEN_ENTRY = "(?:" + "|".join(SIGNAL_NAMES) + f"):{REF}"
+
+
 def seen_key(signal, ref):
     """The header entry for one measured (signal, run): <signal>:<run ref>
     (ADR-0116)."""
@@ -199,6 +208,25 @@ def _lesson_problems(lessons, shown):
     return problems
 
 
+def _entry_problem(entry):
+    """Why a header entry is not <signal>:<run ref>, or None."""
+    if re.fullmatch(SEEN_ENTRY, entry):
+        return None
+    if re.fullmatch(REF, entry):
+        return (f"seen entry '{entry}' is the old per-run shape (ADR-0116);"
+                " delete the file and run update to rebuild it")
+    return f"seen entry '{entry[:60]}' is not <signal>:<run ref>"
+
+
+def _header_problem(head):
+    """Why line 1's `seen` value is not a header of valid entries, or
+    None."""
+    if not isinstance(head, list) \
+            or not all(isinstance(ref, str) for ref in head):
+        return "expected the seen header"
+    return next((why for why in map(_entry_problem, head) if why), None)
+
+
 def _parse(text, shown):
     """(lessons, seen, problems) for the file text."""
     lessons, seen, problems = [], [], []
@@ -210,11 +238,9 @@ def _parse(text, shown):
         if not isinstance(value, dict):
             return [], [], [f"{LABEL}: {shown} line {n}: not a JSON object"]
         if n == 1:
-            head = value.get("seen")
-            if not isinstance(head, list) \
-                    or not all(isinstance(ref, str) for ref in head):
-                return [], [], [f"{LABEL}: {shown} line 1: expected the"
-                                " seen header"]
+            why = _header_problem(value.get("seen"))
+            if why:
+                return [], [], [f"{LABEL}: {shown} line 1: {why}"]
             seen = value["seen"]
         else:
             lessons.append(value)
@@ -222,10 +248,27 @@ def _parse(text, shown):
     return ([], [], problems) if problems else (lessons, seen, [])
 
 
+def _oversize(path, shown):
+    """The problem for a file above MAX_LESSONS_BYTES, else None. A
+    missing path or a stat error is left to read_file."""
+    try:
+        size = Path(path).stat().st_size
+    except OSError:
+        return None
+    if size > MAX_LESSONS_BYTES:
+        return (f"{LABEL}: {shown} is {size} bytes, above the"
+                f" {MAX_LESSONS_BYTES}-byte bound; not read")
+    return None
+
+
 def load(path, shown=None):
     """(lessons, seen, problems) from the lessons file. A missing or empty
-    file is no lessons and no seen; any problem returns nothing else."""
+    file is no lessons and no seen; any problem returns nothing else. A
+    file above MAX_LESSONS_BYTES is refused before it is read."""
     shown = shown or Path(path).name
+    refusal = _oversize(path, shown)
+    if refusal:
+        return [], [], [refusal]
     text, problem = read_file(path, shown, str)
     if problem:
         return [], [], [f"{LABEL}: {problem}"]
