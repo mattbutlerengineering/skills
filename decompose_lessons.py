@@ -633,6 +633,18 @@ def _pool(runs):
             len(runs))
 
 
+def _verdict(t, u):
+    """The tail of the comparison line: an order, or why there is none
+    when a pool holds no items and so has no rate."""
+    empty = [name for name, pool in (("treated", t), ("untreated", u))
+             if pool[1] == 0]
+    if empty:
+        which = "both pools" if len(empty) == 2 else f"the {empty[0]} pool"
+        return f"no comparison: rate undefined for {which} (0 items)"
+    higher = t[0] * u[1] > u[0] * t[1]
+    return f"treated {'higher' if higher else 'not higher'}"
+
+
 def compare(records, treated_set, floor):
     """The comparison lines: the verdict or refusal, then the unmeasurable
     runs by name when there are any. Unmeasurable and inferred runs are
@@ -646,14 +658,10 @@ def compare(records, treated_set, floor):
         lines = [f"{LABEL}: no verdict: {t[2]} treated run(s) is below the"
                  f" minimum of {floor}"]
     else:
-        # lean: a zero-item untreated pool has no rate, so it reads "not
-        # higher"; upgrade to a third wording if a repo ever reaches it.
-        higher = u[1] > 0 and t[0] * u[1] > u[0] * t[1]
         lines = [f"{LABEL}: re-plan treated {t[0]}/{t[1]} over {t[2]}"
                  f" run(s), untreated {u[0]}/{u[1]} over {u[2]} run(s)"
                  f" (observed only; {len(unmeasurable)} unmeasurable);"
-                 " descriptive, treated"
-                 f" {'higher' if higher else 'not higher'}"]
+                 f" descriptive, {_verdict(t, u)}"]
     if unmeasurable:
         lines.append(f"{LABEL}: unmeasurable re-plan run(s):"
                      f" {', '.join(unmeasurable)}")

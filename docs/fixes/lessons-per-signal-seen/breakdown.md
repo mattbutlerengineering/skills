@@ -44,7 +44,7 @@ When this milestone is done, `load` refuses the old per-run header and a file ab
 - [x] **S5 Zero-item pool tests** — cases for both zero-item pools in `compare` — size:S
   - Accept: the module holds these cases through `compare` and `main`. A treated pool of 5 runs and 0 items against an untreated 1/20 gives the line ending `descriptive, no comparison: rate undefined for the treated pool (0 items)`. A treated 5/40 against an untreated 0/0 over 1 run ends `... for the untreated pool (0 items)`. Both zero ends `... for both pools (0 items)`. A pool with items still ends `treated higher` or `treated not higher` exactly as before, and the below-floor line is unchanged. Exit stays 0. Before S6 the cases fail.
   - Blocked by: S2 Per-signal seen
-- [ ] **S6 Zero-item pool** — the no-comparison tails in `compare` — size:S
+- [x] **S6 Zero-item pool** — the no-comparison tails in `compare` — size:S
   - Accept: the S5 tests pass and every earlier test still passes. The stale `lean:` comment at the old guard is gone with the guard.
   - Blocked by: S5 Zero-item pool tests
 
