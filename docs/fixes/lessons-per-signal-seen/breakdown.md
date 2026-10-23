@@ -61,7 +61,7 @@ When this milestone is done, no live document describes the per-run header as cu
 
 ## Milestone 4: the whole repo agrees
 
-- [ ] **S9 Whole-repo verify** — full suite and one-off scope checks — size:S
+- [x] **S9 Whole-repo verify** — full suite and one-off scope checks — size:S
   - Accept: `python3 run_tests.py`, `python3 lint.py`, `python3 kb.py drift` and `python3 gates.py && python3 gates.py --selftest` all pass. One-off checks, run and reported but not kept as tests: `git diff main...HEAD --name-only` lists no file under `skills/` and not `.claude-plugin/plugin.json`; `tests/test_dual_membership.py` still pins 55 pairs; no `docs/factory/decompose-lessons.jsonl` exists in the tree; `grep -n "MAX_LESSONS_BYTES" decompose_lessons.py` shows one definition. `git status --porcelain` prints nothing after the commit.
   - Blocked by: S7 Doc lines that quote the old shape, S8 ADR trail check
 
@@ -89,3 +89,27 @@ names the header shape (no match), so neither is edited. `review.md`,
 match their files. ADR-0116 names `MAX_LESSONS_BYTES` (1 MiB) and the
 code's entry form; no string or constant changed in Implement, so neither
 the ADR nor architecture.md was corrected. `kb.py drift` stays at 0.
+
+2026-10-23 S9 (one-off checks, not kept as tests):
+
+- `python3 run_tests.py`: `tests: 3806 tests across 118 modules in 25.9s on
+  8 workers, 0 problem(s)`; `lint.py`: `lint: 0 problem(s) across 34
+  skills`; `kb.py drift`: `drift: 0 problem(s)`; `gates.py`: `gates: 0
+  problem(s)`; `gates.py --selftest`: `selftest: ok`. `one_owner.py`: 9
+  problem(s), none naming decompose_lessons (baseline 9).
+- `python3 decompose_lessons.py` on this clone, exit 0, and the same call
+  from a `git archive origin/main` copy (explicit root) printed the same
+  four lines: `diff` reports no difference. The line is `20 contrast
+  pair(s) from 20 hit run(s)` and `42 run(s), 0 problem(s)`.
+- `git diff --stat origin/main...HEAD` lists decompose_lessons.py,
+  tests/test_decompose_lessons.py, ADR-0116, ADR-0113, docs/adr/README.md,
+  docs/features/decompose-lessons/architecture.md and the four run docs;
+  nothing under `skills/`, `.claude-plugin/`, `factory/` or `LEDGER.md`.
+- `tests.test_dual_membership` passes (pin still 55); `grep -n
+  MAX_LESSONS_BYTES decompose_lessons.py` shows one definition (line 42);
+  `docs/factory/decompose-lessons.jsonl` does not exist.
+- Amended pins, each in its item's commit: the per-run seen fixtures and
+  header literals (S1), `test_every_complete_run_is_folded_into_seen`
+  became `test_seen_is_every_measured_signal_and_run_sorted` (S1), and the
+  dropped-lesson ballot test now passes its voter as a measured record
+  (S2).
