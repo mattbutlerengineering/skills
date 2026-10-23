@@ -292,7 +292,8 @@ class TestRerunsBesideAnotherDay(RenderCase):
         lo = interval(24, 30)[0]
         hi = interval(27, 30)[1]
         day2 = (f"24..27/30 ({pct(24 / 30)}..{pct(27 / 30)}%, "
-                f"95% {pct(lo)}-{pct(hi)}%)")
+                f"range {pct(lo)}-{pct(hi)}%)")
+        self.assertNotIn("95%", day2)
         self.assertIn(
             f"eval-trends: trigger trend set {hex_of(trigger_set(30))} "
             f"suite claude,m,3,0.5: 2026-07-01 {one_day(12, 30)} -> "

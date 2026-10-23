@@ -401,8 +401,11 @@ def _metric(surface):
 
 
 def _day_text(rows):
-    """hits/n, the rate and the 95 percent hull for one day of one group;
-    a day of reruns prints its lowest-to-highest hits and rate."""
+    """hits/n, the rate and the interval for one day of one group. A lone
+    record prints its own Wilson 95 percent interval; a day of reruns
+    prints its lowest-to-highest hits and rate and the `range` its reruns'
+    intervals cover (lowest lower to highest upper), which is no interval
+    of any stated confidence level."""
     lo, hi = day_interval(rows)
     n = rows[0]["n"]  # one case set, one n
     hits = sorted(r["hits"] for r in rows)
@@ -412,7 +415,8 @@ def _day_text(rows):
         counts = f"{hits[0]}..{hits[-1]}/{n}"
         rate = f"{_pct(hits[0] / n)}..{_pct(hits[-1] / n)}"
     word = " sensitive" if rows[0]["surface"] == "charter" else ""
-    return f"{counts}{word} ({rate}%, 95% {_pct(lo)}-{_pct(hi)}%)"
+    label = "95%" if len(rows) == 1 else "range"
+    return f"{counts}{word} ({rate}%, {label} {_pct(lo)}-{_pct(hi)}%)"
 
 
 def _files(members):
