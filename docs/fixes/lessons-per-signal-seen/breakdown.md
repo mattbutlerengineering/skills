@@ -35,7 +35,7 @@ one `<signal>:<run ref>` entry per measured (signal, run).
 
 When this milestone is done, `load` refuses the old per-run header and a file above the bound with labelled problems, and the comparison line no longer calls an undefined rate "not higher".
 
-- [ ] **S3 Header and bound tests** — cases for header validation, the old-shape refusal and the size bound — size:M
+- [x] **S3 Header and bound tests** — cases for header validation, the old-shape refusal and the size bound — size:M
   - Accept: the module holds these cases. A header of new keys loads and round-trips byte-identically. A header entry of the old per-run shape (`feature:c`, `product`) gives exactly `decompose-lessons: <shown> line 1: seen entry '<entry>' is the old per-run shape (ADR-0116); delete the file and run update to rebuild it` and nothing else is returned. A string entry that is neither shape gives `decompose-lessons: <shown> line 1: seen entry '<first 60 characters>' is not <signal>:<run ref>`. A non-list or non-string header still gives `expected the seen header`. `update` and the read-only report over an old-shape file return that problem, exit 1 through `main`, and write nothing. A file one byte above `MAX_LESSONS_BYTES` gives exactly `decompose-lessons: <shown> is <size> bytes, above the 1048576-byte bound; not read`, a file at the bound loads, a missing file still loads as empty, and the read is never attempted above the bound (asserted by patching `cli.read_file` to raise). Before S4 the cases fail.
   - Blocked by: S2 Per-signal seen
 - [ ] **S4 Header and bound** — `_parse` entry validation and `MAX_LESSONS_BYTES` in `load` — size:S

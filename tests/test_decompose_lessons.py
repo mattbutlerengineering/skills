@@ -196,6 +196,66 @@ class TestFile(TempFile):
             header, '{"seen": ["replan:feature:a", "review:feature:a"]}')
         self.assertEqual(body, json.dumps(lesson(), ensure_ascii=False))
 
+    def header_problem(self, *entries):
+        self.path.write_text(json.dumps({"seen": list(entries)}) + "\n")
+        return dl.load(self.path)
+
+    def test_an_old_per_run_entry_is_refused_with_the_recovery(self):
+        for entry in ("feature:c", "maintenance:m", "product"):
+            with self.subTest(entry):
+                self.assertEqual(
+                    self.header_problem("replan:feature:a", entry),
+                    ([], [], [
+                        f"decompose-lessons: lessons.jsonl line 1: seen"
+                        f" entry '{entry}' is the old per-run shape"
+                        " (ADR-0116); delete the file and run update to"
+                        " rebuild it"]))
+
+    def test_an_entry_that_is_neither_shape_is_refused(self):
+        long = "x" * 70
+        for entry, shown in (("bogus", "bogus"), ("replan:", "replan:"),
+                             ("other:feature:a", "other:feature:a"),
+                             ("replan:feature:a b", "replan:feature:a b"),
+                             (long, "x" * 60)):
+            with self.subTest(entry):
+                self.assertEqual(
+                    self.header_problem(entry),
+                    ([], [], [
+                        f"decompose-lessons: lessons.jsonl line 1: seen"
+                        f" entry '{shown}' is not <signal>:<run ref>"]))
+
+    def test_a_header_of_new_keys_loads_each_signal_and_run_kind(self):
+        keys = ["design_gaps:maintenance:m", "replan:feature:a",
+                "review:product"]
+        self.assertEqual(self.header_problem(*keys), ([], keys, []))
+
+    def test_a_non_list_or_non_string_header_still_says_expected(self):
+        for header in ({"seen": "replan:feature:a"}, {"seen": [1]},
+                       {"seen": None}):
+            with self.subTest(header):
+                self.path.write_text(json.dumps(header) + "\n")
+                self.assertEqual(dl.load(self.path), ([], [], [
+                    "decompose-lessons: lessons.jsonl line 1: expected the"
+                    " seen header"]))
+
+    def test_a_file_above_the_bound_is_refused_unread(self):
+        self.assertEqual(dl.MAX_LESSONS_BYTES, 1024 * 1024)
+        self.path.write_bytes(b"x" * (dl.MAX_LESSONS_BYTES + 1))
+        with mock.patch.object(dl, "read_file",
+                               side_effect=AssertionError("read")):
+            got = dl.load(self.path)
+        self.assertEqual(got, ([], [], [
+            "decompose-lessons: lessons.jsonl is 1048577 bytes, above the"
+            " 1048576-byte bound; not read"]))
+
+    def test_a_file_at_the_bound_loads(self):
+        head = '{"seen": [], "pad": "'
+        tail = '"}\n'
+        pad = "x" * (dl.MAX_LESSONS_BYTES - len(head) - len(tail))
+        self.path.write_text(head + pad + tail)
+        self.assertEqual(self.path.stat().st_size, dl.MAX_LESSONS_BYTES)
+        self.assertEqual(dl.load(self.path), ([], [], []))
+
     def test_a_missing_file_loads_as_nothing(self):
         self.assertEqual(dl.load(self.path), ([], [], []))
 
@@ -903,6 +963,14 @@ class TestUpdate(TempFile):
             f"decompose-lessons: {dl.LESSONS_PATH} line 2: not valid JSON"])
         self.assertEqual(self.file.read_bytes(), before)
 
+    def test_an_old_shape_file_is_refused_by_update_and_left_alone(self):
+        self.file.write_text('{"seen": ["feature:h"]}\n')
+        before = self.file.read_bytes()
+        lines, problems = self.update([HIT, CLEAN])
+        self.assertEqual(lines, [])
+        self.assertEqual(problems, [OLD_SHAPE])
+        self.assertEqual(self.file.read_bytes(), before)
+
     def test_a_measurement_with_problems_writes_nothing(self):
         lines, problems = self.update([HIT, CLEAN],
                                       problems=["decompose-signals: boom"])
@@ -986,6 +1054,9 @@ class TestCompare(unittest.TestCase):
 PREFIX = "decompose-lessons:"
 NO_VERDICT = (f"{PREFIX} no verdict: 0 treated run(s) is below the minimum"
               " of 5")
+OLD_SHAPE = (f"{PREFIX} {dl.LESSONS_PATH} line 1: seen entry 'feature:h'"
+             " is the old per-run shape (ADR-0116); delete the file and run"
+             " update to rebuild it")
 NETWORK = {"socket", "urllib", "http", "requests", "ssl", "ftplib",
            "smtplib", "xmlrpc", "telnetlib"}
 
@@ -1074,6 +1145,17 @@ class TestFrontDoor(TempFile):
             f"{PREFIX} {dl.LESSONS_PATH} line 2: not valid JSON",
             f"{PREFIX} 1 problem(s)"])
         self.assertEqual(code, 1)
+
+    def test_an_old_shape_file_exits_one_for_the_report_and_update(self):
+        self.file.write_text('{"seen": ["feature:h"]}\n')
+        before = self.file.read_bytes()
+        for argv in ([], ["update"]):
+            with self.subTest(argv):
+                code, lines = self.main(argv, [HIT, CLEAN])
+                self.assertEqual(lines, [OLD_SHAPE,
+                                         f"{PREFIX} 1 problem(s)"])
+                self.assertEqual(code, 1)
+                self.assertEqual(self.file.read_bytes(), before)
 
     def test_an_unknown_argument_prints_usage_and_exits_two(self):
         code, lines = self.main(["bogus"], [CLEAN])
