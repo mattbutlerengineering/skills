@@ -12,6 +12,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -429,6 +430,72 @@ class TestLoadDecomposeSignals(TempRoot):
         mixed = rows + [row("t", "2026-01-01")]
         self.assertEqual([r["file"] for r in eval_trends.measured(mixed)],
                          ["t"])
+
+
+class TestUnreadableLocations(TempRoot):
+    """A symlinked record or directory, or an oversize file, is one
+    labelled problem and no row; it is refused before any read."""
+
+    def record(self, rel="evals/results/trigger-2026-07-01.json"):
+        fx.write_json(self.root, rel, fx.trigger_record(
+            "2026-07-01", fx.numbered_cases(3, 1)))
+        return self.root / rel
+
+    def outside(self):
+        out = Path(tempfile.mkdtemp(prefix="eval-trends-outside-"))
+        self.addCleanup(shutil.rmtree, out)
+        return out
+
+    def test_a_symlinked_record_is_a_problem_not_a_row(self):
+        target = self.outside() / "t.json"
+        target.write_text(self.record().read_text())
+        (self.root / "evals/results/trigger-2026-07-01.json").unlink()
+        (self.root / "evals/results/trigger-2026-07-01.json").symlink_to(
+            target)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/trigger-2026-07-01.json "
+            "is a symlink; not read"]))
+
+    def test_a_dangling_symlink_is_a_problem_too(self):
+        (self.root / "evals/results").mkdir(parents=True)
+        (self.root / "evals/results/trigger-2026-07-01.json").symlink_to(
+            self.outside() / "gone.json")
+        _, problems = self.load()
+        self.assertEqual(problems, [
+            "eval-trends: evals/results/trigger-2026-07-01.json "
+            "is a symlink; not read"])
+
+    def test_a_symlinked_directory_above_a_record_is_a_problem(self):
+        real = self.outside() / "decompose-2026-07-01"
+        real.mkdir()
+        (real / "grading.json").write_text("{}")
+        (self.root / "evals/results/output").mkdir(parents=True)
+        (self.root / "evals/results/output/decompose-2026-07-01").symlink_to(
+            real, target_is_directory=True)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/output/decompose-2026-07-01/"
+            "grading.json is under a symlinked directory; not read"]))
+
+    def test_one_byte_over_the_bound_is_refused_unparsed(self):
+        path = self.record()
+        size = path.stat().st_size
+        with mock.patch.object(eval_trends, "MAX_RECORD_BYTES", size - 1), \
+                mock.patch.object(eval_trends, "read_file") as read:
+            rows, problems = self.load()
+        read.assert_not_called()
+        self.assertEqual(rows, [])
+        self.assertEqual(problems, [
+            f"eval-trends: evals/results/trigger-2026-07-01.json is "
+            f"{size} bytes, above the {size - 1}-byte bound; not read"])
+
+    def test_a_file_at_the_bound_is_read(self):
+        size = self.record().stat().st_size
+        with mock.patch.object(eval_trends, "MAX_RECORD_BYTES", size):
+            rows, problems = self.load()
+        self.assertEqual((len(rows), problems), (1, []))
+
+    def test_the_bound_is_a_clear_multiple_of_the_largest_real_record(self):
+        self.assertGreaterEqual(eval_trends.MAX_RECORD_BYTES, 50 * 70641)
 
 
 class TestDualMembershipPin(unittest.TestCase):

@@ -49,6 +49,12 @@ MIN_DAYS = 2
 MIN_RECORDS = 2
 Z = 1.96
 
+# A record above this many bytes is refused unread. Measured 2026-10-22:
+# the largest real record anywhere (evals/results, plugin-evals/records,
+# tests/fixtures/eval_trends_2026_10_21) is 70,641 bytes; 4 MiB is about
+# 59x that, so no real record nears it and a runaway file never loads whole.
+MAX_RECORD_BYTES = 4 * 1024 * 1024
+
 
 def wilson(hits, n):
     """The 95 percent Wilson score interval for hits of n, as fractions."""
@@ -315,12 +321,37 @@ def measured(rows):
     return [r for r in rows if r["surface"] != "decompose-signals"]
 
 
+def _refusal(root, rel):
+    """Why the record at root/rel is not read (a symlink, a symlinked
+    directory below the root, or a file above MAX_RECORD_BYTES), or None.
+    A missing or non-regular path is left to cli.read_file."""
+    path = Path(root) / rel
+    if path.is_symlink():
+        return "is a symlink; not read"
+    if any((Path(root) / parent).is_symlink()
+           for parent in rel.parents if parent != Path(".")):
+        return "is under a symlinked directory; not read"
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return None  # read_file reports it
+    if size > MAX_RECORD_BYTES:
+        return (f"is {size} bytes, above the {MAX_RECORD_BYTES}-byte "
+                "bound; not read")
+    return None
+
+
 def _read_surface(root, pattern, row_of):
     """(rows, problems) for the files matching pattern under root, in
-    sorted path order; each file is read through cli.read_file."""
+    sorted path order; each file is read through cli.read_file, after
+    _refusal has turned away links and oversize files."""
     rows, problems = [], []
     for path in sorted(Path(root).glob(pattern)):
         rel = path.relative_to(root)
+        why = _refusal(root, rel)
+        if why:
+            problems.append(f"{LABEL}: {rel.as_posix()} {why}")
+            continue
         data, problem = read_file(path, rel.as_posix(), dict)
         if problem:
             problems.append(f"{LABEL}: {problem}")
