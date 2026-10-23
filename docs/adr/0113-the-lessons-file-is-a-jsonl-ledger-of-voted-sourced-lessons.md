@@ -1,6 +1,6 @@
 # The Decompose lessons file is a JSONL ledger of voted, sourced lessons, and decompose_lessons joins the root-only importers
 
-- Status: provisional
+- Status: superseded in part by ADR-0116 (the line-1 seen header entry shape; provisional)
 - Date: 2026-10-20
 
 Recorded by the `decompose-lessons` feature run
