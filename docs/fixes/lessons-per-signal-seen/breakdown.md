@@ -52,7 +52,7 @@ When this milestone is done, `load` refuses the old per-run header and a file ab
 
 When this milestone is done, no live document describes the per-run header as current, and the ADR trail is consistent.
 
-- [ ] **S7 Doc lines that quote the old shape** — note ADR-0116 in the shipped feature architecture and confirm the live docs — size:S
+- [x] **S7 Doc lines that quote the old shape** — note ADR-0116 in the shipped feature architecture and confirm the live docs — size:S
   - Accept: `docs/features/decompose-lessons/architecture.md` gains a dated one-line note at its Data model sketch and its ADRs entry saying the line-1 entries are `<signal>:<run ref>` from ADR-0116; its other lines are not rewritten. `review.md`, `release.md`, `verification.md` and that run's `breakdown.md` are untouched. `CLAUDE.md` and `CONTEXT.md` are checked: neither names the header shape, so neither is edited, and the result is logged in Notes. `skills/decompose/SKILL.md` is not edited and the phrase pin near the end of the skill tests still passes. `python3 gates.py`, `python3 lint.py` and `python3 kb.py drift` stay at 0 problems.
   - Blocked by: S4 Header and bound, S6 Zero-item pool
 - [ ] **S8 ADR trail check** — ADR-0116's status, ADR-0113's status line and the index rows agree — size:S
@@ -75,3 +75,11 @@ Release: no skill text changes, so no wave release PR is owed by this run;
 if Implement finds the skill must change, that is a skill change, recorded
 here as an Owner follow-up (ADR-0095), never a `plugin.json` edit on this
 branch.
+
+2026-10-23 S7: `docs/features/decompose-lessons/architecture.md` gained two
+dated one-line notes (Data model sketch, ADRs entry) pointing at ADR-0116.
+`CLAUDE.md` and `CONTEXT.md` were checked with `grep -n seen`: neither
+names the header shape (no match), so neither is edited. `review.md`,
+`release.md`, `verification.md`, that run's `breakdown.md` and
+`skills/decompose/SKILL.md` are untouched. `lint.py`, `kb.py drift` and
+`gates.py` each report 0 problem(s).

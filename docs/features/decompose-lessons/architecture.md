@@ -137,6 +137,8 @@ Treated  the commit first adding the file is an ancestor of the run's
          decompose boundary commit
 ```
 
+2026-10-23 note: the line-1 entries are `<signal>:<run ref>`, one per measured (signal, run), from ADR-0116; the sketch above is the shape as first shipped.
+
 Invariants and owners: run records and labels belong to `decompose_signals`;
 the floor belongs to `factory_config`; importance, source and removal rules
 belong to Lesson operations; `seen` belongs to File and is what stops a
@@ -233,3 +235,4 @@ dropped lesson being re-derived.
   header, the single derived writer, and decompose_lessons joining the
   root-only importers of cli.py and factory_config.py. The other
   decisions fail the hard-to-reverse leg: one commit changes them.
+  2026-10-23 note: ADR-0116 supersedes the `seen` header's entry shape in part (`<signal>:<run ref>` entries).
