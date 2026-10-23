@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:eval-trends-honest-output
 date: 2026-10-22
-outcome: prepared
+outcome: released
+released-at: 2026-10-23
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1066
 assumptions:
   - "Release authorization is the brief's default, prepare and stop. This pass pushed the branch and opened one pull request. It did not merge, tag, bump the version, delete a branch, or touch .claude-plugin/plugin.json."
