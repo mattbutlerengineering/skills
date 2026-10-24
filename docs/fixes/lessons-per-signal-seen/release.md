@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:lessons-per-signal-seen
 date: 2026-10-22
-outcome: prepared
+outcome: released
+released-at: 2026-10-24
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1070
 assumptions:
   - "Release authorization was not granted, so this pass prepares and stops: branch pushed, PR #1070 opened, nothing merged, deployed, tagged or published. Not an Owner answer."
@@ -51,10 +52,11 @@ git revert <squash-sha> && git push   # on a branch, then open a PR
 
 ## Outcome
 
-Prepared and stopped, waiting on PR 1070. Owner steps:
-
-1. Review PR 1070 and its CI checks.
-2. Merge it (squash) once green: gh pr merge 1070 --squash.
-3. No version bump and no release PR: skills/ is unchanged (ADR-0095).
-4. Confirm #1061 closed and #1069 still open.
-5. Re-run the Ship stage so its Release step records outcome: released and released-at.
+Released. The Owner answered "Yes, squash-merge #1070" in the autorun
+session on 2026-10-24, and #1070 was squash-merged as `ec8159f` at
+2026-10-24T16:39:51Z (`gh pr view 1070 --json state,mergeCommit,mergedAt`
+-> `MERGED`). #1061 closed with it; #1069 is still open by decision.
+No version bump and no release PR: `skills/` is unchanged (ADR-0095).
+Operate does not run (the brief has no `operate:` section), so the run
+stays active. Deferred minors still stand: three lines over 79 columns
+in `decompose_lessons.py` and the `_ballot` docstring.
