@@ -433,6 +433,16 @@ class TestPairs(unittest.TestCase):
     def test_pairs_match_the_hand_worked_history(self):
         self.assertEqual(dl.pairs(HISTORY), HAND_PAIRS)
 
+    def test_the_first_clean_run_in_record_order_is_the_exemplar(self):
+        c1 = record("feature:c1", clean_replan())
+        c2 = record("feature:c2", clean_replan())
+        h = record("feature:h", hit_replan())
+        for order, first in (([c1, c2, h], "feature:c1"),
+                             ([c2, c1, h], "feature:c2")):
+            with self.subTest(first=first):
+                self.assertEqual(
+                    [p["clean"] for p in dl.pairs(order)], [first])
+
     def test_a_hit_run_with_no_clean_run_of_its_kind_and_label_has_no_pair(
             self):
         hits = {p["hit"] for p in dl.pairs(HISTORY)}
