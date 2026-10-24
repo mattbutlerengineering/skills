@@ -277,7 +277,8 @@ def load(path, shown=None):
 
 def serialize(lessons, seen):
     """The file text: the seen header, then lessons sorted by id."""
-    rows = [{"seen": sorted(set(seen))}, *sorted(lessons, key=lambda e: e["id"])]
+    rows = [{"seen": sorted(set(seen))},
+            *sorted(lessons, key=lambda e: e["id"])]
     return "".join(json.dumps(row, ensure_ascii=False) + "\n"
                    for row in rows)
 
@@ -400,8 +401,9 @@ def _spent(records, seen):
 def pairs(records, skip=()):
     """Contrast pairs {signal, kind, detail, hit, clean, text}: each
     measurable hit run (count above 0) on a signal, unless its seen key
-    for that signal is in `skip`, paired with the first clean run (count 0) in record order
-    that has the hit run's kind and label. No clean run, no pair."""
+    for that signal is in `skip`, paired with the first clean run (count 0)
+    in record order that has the hit run's kind and label. No clean run,
+    no pair."""
     found = []
     for field, num, den in _signals():
         for hit in records:
@@ -522,8 +524,8 @@ def _ballot(lesson_entry, rec, seen):
 
 def votes(root, run, lessons, records, seen):
     """(ballots, problems): (op, lesson id, run ref) for each treated run,
-    unseen for the lesson's signal, with an observed decompose boundary and a measurable
-    signal, once per lesson. A git failure gives no ballots."""
+    unseen for the lesson's signal, with an observed decompose boundary and
+    a measurable signal, once per lesson. A git failure gives no ballots."""
     parts = [_lesson_parts(entry["id"]) for entry in lessons]
     eligible = [rec for rec in records
                 if rec["decompose"].get("label") == "observed"
