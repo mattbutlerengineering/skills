@@ -59,3 +59,10 @@ P3: ADR-0117 and ADR-0116's status line and both index rows already agree
 with the code. One deviation: ADR-0117's rejected-alternatives list said
 "211 of 3,000 sequences" where architecture.md and the ADR's own Context
 say 211 of 1,500; corrected to 1,500 in the ADR.
+
+Follow-ups after Review (Owner chose to close both Minors in this PR):
+`test_the_first_clean_run_in_record_order_is_the_exemplar` pins which
+clean run `pairs` uses (the m5 mutation, `pairs` taking the last partner,
+now turns it red in both record orders), and the three lines over 79
+columns in `decompose_lessons.py` are rewrapped with no change of words
+or behaviour.

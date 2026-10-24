@@ -20,7 +20,7 @@ assumptions:
 - [x] No secrets in diff; no target configuration needed (a root-only stdlib tool).
 - [x] Migrations/data changes: none. The on-disk shape and header are unchanged (ADR-0117), so existing lessons files load as before.
 - [x] ADR numbering: ADR-0117 is free on origin/main and has its row in docs/adr/README.md; ADR-0116 is marked superseded in part (its pairing-skip sentence only).
-- [x] Review: no unfixed critical or major. Two Minors deferred by the Owner, no issues filed: m5 (no test pins the exemplar clean run `pairs` picks; pre-existing on main; Owner option to add the one test to this PR) and three over-79-column lines already on main.
+- [x] Review: no unfixed critical or major. Two Minors, both closed in this PR at the Owner's request after Review: m5 (a test now pins the first clean run in record order as the exemplar `pairs` picks) and the three over-79-column lines (rewrapped, no behaviour change).
 - [x] Rollback plan concrete (below).
 
 ## Rollback plan
@@ -43,6 +43,7 @@ git revert <squash-sha> && git push   # on a branch, then open a PR
 3. git push -u origin fix/seen-before-partner -> new branch pushed.
 4. gh pr create -> https://github.com/mattbutlerengineering/skills/pull/1074 (carries a No work order line and Closes #1069).
 5. Merge, deploy, tag, publish -> not executed (no release authorization).
+6. Follow-up commits after Review: test(decompose-lessons) pins the first clean run (m5 killed in a scratch mutation); refactor(decompose-lessons) rewraps three long lines; module 110 tests OK, no line over 79 columns.
 
 ## Post-release checks
 
@@ -54,7 +55,7 @@ git revert <squash-sha> && git push   # on a branch, then open a PR
 
 Prepared and stopped, waiting on PR 1074. Owner steps:
 
-1. Review PR 1074 and its CI checks; optionally ask for the m5 exemplar test to be added to it.
+1. Review PR 1074 and its CI checks (it now includes the m5 exemplar test and the rewrap).
 2. Merge it (squash) once green: gh pr merge 1074 --squash.
 3. No version bump and no release PR: skills/ is unchanged (ADR-0095).
 4. Confirm #1069 closed.
