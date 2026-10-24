@@ -56,6 +56,52 @@ pre-pass, deliberately **not** a gate:
   recorded with a `# one-owner:` marker at the definition it excuses
   (ADR-0061), and the pass re-derives that carve-out in both directions
   on every run.
+- `python3 decompose_signals.py` — Decompose outcome signals (re-plan,
+  design gaps routed to Architect, review-traced findings) per run and in
+  aggregate, read from the git refs the clone already holds, each
+  boundary labelled observed or inferred (ADR-0109). Free and outside
+  every gate, like `one_owner.py`. It never fetches: PR head refs count
+  only after the manual `git fetch origin
+  '+refs/pull/*/head:refs/remotes/pr/*'`. `--record` writes the result
+  append-only to `evals/results/decompose-signals-<date>[-N].json`, on a
+  clean `docs/` only; factory evidence, never LEDGER evidence.
+- `python3 eval_trends.py` — a per-surface pass-rate trend view over the
+  records the repo already holds (`evals/results/`, `plugin-evals/records/`),
+  grouped by comparable suite and case set, each rate with a Wilson 95
+  percent interval, and cost per pass where a plugin record carries a cost
+  (ADR-0115; the metric set and its failure modes are in
+  `docs/research/eval-quality-metrics-2026-10-21.md`). Free, read-only and
+  outside every gate: it makes no model or network call and writes nothing,
+  so it also sits outside `make check`. Below the minimum (30 cases in every
+  record, 2 distinct days) it prints an inventory and `REFUSED` lines in
+  place of a trend, and a refusal exits 0 (it is data); only a malformed
+  record exits 1. It measures recorded history only and moves no LEDGER
+  maturity. `python3 factory.py eval-trends` is the same tool.
+- `python3 size_band_calibration.py` — each S/M/L band's past cost
+  error against its budget, from the cost ledger joined at read time to
+  the breakdown row's `size:`, beside its cost and re-plan rate. Free,
+  outside every gate and making no network call, like
+  `decompose_signals.py`. It refuses a band below the calibrate floor and
+  says so, and excludes unmetered rows with a count, never an estimate.
+- `python3 decompose_lessons.py` — the Decompose lessons ledger (ADR-0113):
+  contrast pairs of a hit run and a clean run, from the three outcome
+  signals only, collapsed to voted, sourced lessons in
+  `docs/factory/decompose-lessons.jsonl`, plus a treated-versus-untreated
+  re-plan comparison. Free, outside every gate and making no network
+  call, like `decompose_signals.py`. With no argument it only reads;
+  `update` is the one writer and the Owner runs it. No command takes
+  lesson text from a person, and the tool ships no lesson.
+  <!-- drift-ignore: docs/factory/decompose-lessons.jsonl -->
+- `python3 decompose_grade.py <breakdown.md> <architecture.md> [<prd.md>]` —
+  scores a produced Decompose breakdown against the architecture it was
+  drafted from and prints one line per defect (a component no item names, a
+  dangling `Blocked by`, an uncheckable `Accept` line, an item spanning more
+  than three components), exit 0 clean, 1 with defects, 2 on bad input
+  (ADR-0114). Free and outside every gate, making no model or network call,
+  like the two above. It is calibrated to fixture-spelled breakdowns and is
+  not a retroactive audit of shipped runs. Its harness counterpart,
+  `plugin-evals/decompose/`, is authored and has never been run; there is no
+  LEDGER change.
 
 ## Hard conventions
 
