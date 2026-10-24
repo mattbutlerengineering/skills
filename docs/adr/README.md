@@ -133,6 +133,7 @@ the canonical vocabulary.
 | [0110](0110-decompose-signals-joins-the-root-only-importers.md) | decompose_signals joins the root-only importers of cli.py, knowledge_plane.py and protocol.py | provisional |
 | [0111](0111-the-inferred-implement-boundary-is-the-commit-that-checks-the-last-row.md) | The inferred implement boundary is the commit that checks the last row | provisional |
 | [0112](0112-size-band-calibration-joins-the-root-only-importers.md) | size_band_calibration joins the root-only importers of cli.py, knowledge_plane.py, cost_ledger.py and factory_config.py | provisional |
-| [0113](0113-the-lessons-file-is-a-jsonl-ledger-of-voted-sourced-lessons.md) | The Decompose lessons file is a JSONL ledger of voted, sourced lessons, and decompose_lessons joins the root-only importers | provisional |
+| [0113](0113-the-lessons-file-is-a-jsonl-ledger-of-voted-sourced-lessons.md) | The Decompose lessons file is a JSONL ledger of voted, sourced lessons, and decompose_lessons joins the root-only importers | superseded in part by ADR-0116 (the line-1 seen header entry shape; provisional) |
 | [0114](0114-decompose-grade-is-an-offline-scorer-beside-a-harness-suite-and-joins-the-root-only-importers.md) | decompose_grade is an offline scorer beside a harness suite, and joins the root-only importers | provisional |
 | [0115](0115-eval-trends-reads-records-through-eval-schema-and-joins-the-root-only-importers.md) | eval_trends reads records through eval_schema's name inverse and joins the root-only importers of cli.py | provisional |
+| [0116](0116-the-lessons-seen-header-is-one-entry-per-signal-and-run.md) | The lessons file's seen header is one entry per signal and run | provisional |

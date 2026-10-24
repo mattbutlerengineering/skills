@@ -34,6 +34,12 @@ from cli import CLI_FAILURES, detail, read_file, report, runner
 LABEL = "decompose-lessons"
 USAGE = "python3 decompose_lessons.py [update]"
 LESSONS_PATH = "docs/factory/decompose-lessons.jsonl"
+# Measured 2026-10-23 (ADR-0116): a worst-case lesson line is 838 bytes and
+# a realistic file about 6.5 KB, with a 5,336-byte header over 41 runs.
+# 1 MiB is about 160x that and 2.7x a deliberately extreme ledger (300
+# worst-case lessons, 250 KB, plus 1,000 runs, 130 KB). The Decompose skill
+# reads the file whole into a draft, so the bound protects that reader.
+MAX_LESSONS_BYTES = 1024 * 1024
 NO_PAIR = f"{LABEL}: no contrast pair found \u2014 no lesson derived"
 FIELDS = ("id", "importance", "text", "sources", "voted")
 
@@ -99,7 +105,8 @@ def downvote(lessons, lid, voter):
     return _vote("downvote", -1, lessons, lid, voter)
 
 
-# The file: line 1 is {"seen": [...]}, every other line one lesson, sorted
+# The file: line 1 is {"seen": [...]}, one <signal>:<run ref> entry per
+# measured (signal, run) (ADR-0116); every other line one lesson, sorted
 # by id (ADR-0113). One validator serves both directions, so a file that
 # loads is a file that dumps.
 
@@ -115,8 +122,18 @@ REPLAN_PHRASES = {"added": "adding rows", "dropped": "dropping rows",
 
 REF = r"(?:(?:feature|maintenance):[A-Za-z0-9._-]+|product)"
 KINDS = ("feature", "maintenance", "product")
+SIGNAL_NAMES = tuple(field for _, field, _, _ in decompose_signals.SIGNALS)
 DETAILS = {"replan": REPLAN_DETAILS, "design_gaps": ("routed",),
            "review": ("named",)}
+
+
+SEEN_ENTRY = "(?:" + "|".join(SIGNAL_NAMES) + f"):{REF}"
+
+
+def seen_key(signal, ref):
+    """The header entry for one measured (signal, run): <signal>:<run ref>
+    (ADR-0116)."""
+    return f"{signal}:{ref}"
 
 
 def _figure_pattern(field):
@@ -191,6 +208,25 @@ def _lesson_problems(lessons, shown):
     return problems
 
 
+def _entry_problem(entry):
+    """Why a header entry is not <signal>:<run ref>, or None."""
+    if re.fullmatch(SEEN_ENTRY, entry):
+        return None
+    if re.fullmatch(REF, entry):
+        return (f"seen entry '{entry}' is the old per-run shape (ADR-0116);"
+                " delete the file and run update to rebuild it")
+    return f"seen entry '{entry[:60]}' is not <signal>:<run ref>"
+
+
+def _header_problem(head):
+    """Why line 1's `seen` value is not a header of valid entries, or
+    None."""
+    if not isinstance(head, list) \
+            or not all(isinstance(ref, str) for ref in head):
+        return "expected the seen header"
+    return next((why for why in map(_entry_problem, head) if why), None)
+
+
 def _parse(text, shown):
     """(lessons, seen, problems) for the file text."""
     lessons, seen, problems = [], [], []
@@ -202,11 +238,9 @@ def _parse(text, shown):
         if not isinstance(value, dict):
             return [], [], [f"{LABEL}: {shown} line {n}: not a JSON object"]
         if n == 1:
-            head = value.get("seen")
-            if not isinstance(head, list) \
-                    or not all(isinstance(ref, str) for ref in head):
-                return [], [], [f"{LABEL}: {shown} line 1: expected the"
-                                " seen header"]
+            why = _header_problem(value.get("seen"))
+            if why:
+                return [], [], [f"{LABEL}: {shown} line 1: {why}"]
             seen = value["seen"]
         else:
             lessons.append(value)
@@ -214,10 +248,27 @@ def _parse(text, shown):
     return ([], [], problems) if problems else (lessons, seen, [])
 
 
+def _oversize(path, shown):
+    """The problem for a file above MAX_LESSONS_BYTES, else None. A
+    missing path or a stat error is left to read_file."""
+    try:
+        size = Path(path).stat().st_size
+    except OSError:
+        return None
+    if size > MAX_LESSONS_BYTES:
+        return (f"{LABEL}: {shown} is {size} bytes, above the"
+                f" {MAX_LESSONS_BYTES}-byte bound; not read")
+    return None
+
+
 def load(path, shown=None):
     """(lessons, seen, problems) from the lessons file. A missing or empty
-    file is no lessons and no seen; any problem returns nothing else."""
+    file is no lessons and no seen; any problem returns nothing else. A
+    file above MAX_LESSONS_BYTES is refused before it is read."""
     shown = shown or Path(path).name
+    refusal = _oversize(path, shown)
+    if refusal:
+        return [], [], [refusal]
     text, problem = read_file(path, shown, str)
     if problem:
         return [], [], [f"{LABEL}: {problem}"]
@@ -226,7 +277,7 @@ def load(path, shown=None):
 
 def serialize(lessons, seen):
     """The file text: the seen header, then lessons sorted by id."""
-    rows = [{"seen": sorted(seen)}, *sorted(lessons, key=lambda e: e["id"])]
+    rows = [{"seen": sorted(set(seen))}, *sorted(lessons, key=lambda e: e["id"])]
     return "".join(json.dumps(row, ensure_ascii=False) + "\n"
                    for row in rows)
 
@@ -324,14 +375,15 @@ def _text(field, run_kind, detail, hit, clean, num, den):
 
 def pairs(records, skip=()):
     """Contrast pairs {signal, kind, detail, hit, clean, text}: each
-    measurable hit run (count above 0) on a signal, unless its ref is in
-    `skip`, paired with the first clean run (count 0) in record order
+    measurable hit run (count above 0) on a signal, unless its seen key
+    for that signal is in `skip`, paired with the first clean run (count 0) in record order
     that has the hit run's kind and label. No clean run, no pair."""
     found = []
     for field, num, den in _signals():
         for hit in records:
             figure = _hit_label(hit[field], num)
-            if figure is None or figure[1] == 0 or hit["run"] in skip:
+            if figure is None or figure[1] == 0 \
+                    or seen_key(field, hit["run"]) in skip:
                 continue
             label, run_kind = figure[0], kind(hit["run"])
             clean = next((r for r in records
@@ -431,12 +483,15 @@ def _lesson_parts(lid):
     return signal, run_kind
 
 
-def _ballot(lesson_entry, rec):
-    """The vote one voter casts on one lesson, or None when it may not."""
+def _ballot(lesson_entry, rec, seen):
+    """The vote one voter casts on one lesson, or None when it may not:
+    the voter is seen for the lesson's signal, already voted, or a
+    source."""
     signal, run_kind = _lesson_parts(lesson_entry["id"])
     num = {field: n for field, n, _ in _signals()}.get(signal)
     figure = _hit_label(rec[signal], num) if num else None
     if figure is None or kind(rec["run"]) != run_kind \
+            or seen_key(signal, rec["run"]) in seen \
             or rec["run"] in lesson_entry["voted"] \
             or rec["run"] in lesson_entry["sources"]:
         return None
@@ -444,13 +499,15 @@ def _ballot(lesson_entry, rec):
 
 
 def votes(root, run, lessons, records, seen):
-    """(ballots, problems): (op, lesson id, run ref) for each treated,
-    unseen run with an observed decompose boundary and a measurable
+    """(ballots, problems): (op, lesson id, run ref) for each treated run,
+    unseen for the lesson's signal, with an observed decompose boundary and a measurable
     signal, once per lesson. A git failure gives no ballots."""
-    kinds = {_lesson_parts(entry["id"])[1] for entry in lessons}
+    parts = [_lesson_parts(entry["id"]) for entry in lessons]
     eligible = [rec for rec in records
-                if rec["run"] not in seen and kind(rec["run"]) in kinds
-                and rec["decompose"].get("label") == "observed"]
+                if rec["decompose"].get("label") == "observed"
+                and any(run_kind == kind(rec["run"])
+                        and seen_key(signal, rec["run"]) not in seen
+                        for signal, run_kind in parts)]
     if not eligible:
         return [], []
     voters, problems = treated(root, run, eligible)
@@ -459,7 +516,7 @@ def votes(root, run, lessons, records, seen):
     ballots = []
     for entry in lessons:
         for rec in eligible:
-            op = _ballot(entry, rec) if rec["run"] in voters else None
+            op = _ballot(entry, rec, seen) if rec["run"] in voters else None
             if op:
                 ballots.append((op, entry["id"], rec["run"]))
     return ballots, []
@@ -467,8 +524,9 @@ def votes(root, run, lessons, records, seen):
 
 # The update fold: votes on existing lessons, then ADD or EDIT from new hit
 # runs, then the drop at 0 (a vote that takes a lesson below 1 removes it).
-# A lesson dropped this fold is not re-added by it, and every hit run is
-# folded into `seen`, so it cannot return from the same runs.
+# A lesson dropped this fold is not re-added by it, and every measured
+# (signal, run) is folded into `seen`, so it cannot return from the same
+# runs.
 
 def _apply_ballots(lessons, ballots):
     """(lessons, lines, dropped ids, problems); a problem abandons all."""
@@ -512,6 +570,12 @@ def _apply_candidates(lessons, found, dropped):
     return lessons, lines, []
 
 
+def _measured(records):
+    """The seen key of every (signal, run) the records measure."""
+    return {seen_key(field, rec["run"]) for field, num, _ in _signals()
+            for rec in records if _hit_label(rec[field], num) is not None}
+
+
 def fold(lessons, seen, records, ballots):
     """(lessons, seen, lines, problems) after one update over `records`
     and the `ballots` votes() returned. Pure; on a problem the inputs
@@ -524,11 +588,8 @@ def fold(lessons, seen, records, ballots):
         voted, candidates(new_pairs), dropped)
     if problems:
         return lessons, seen, [], problems
-    complete = {rec["run"] for rec in records
-                if "sha" in rec["implement"]}
-    folded = (set(seen) | complete | {p["hit"] for p in new_pairs}
-              | {ref for _, _, ref in ballots})
-    return grown, sorted(folded), vote_lines + add_lines, []
+    return grown, sorted({*seen, *_measured(records)}), \
+        vote_lines + add_lines, []
 
 
 def update(root, run, measure=decompose_signals.measure):
@@ -572,6 +633,18 @@ def _pool(runs):
             len(runs))
 
 
+def _verdict(t, u):
+    """The tail of the comparison line: an order, or why there is none
+    when a pool holds no items and so has no rate."""
+    empty = [name for name, pool in (("treated", t), ("untreated", u))
+             if pool[1] == 0]
+    if empty:
+        which = "both pools" if len(empty) == 2 else f"the {empty[0]} pool"
+        return f"no comparison: rate undefined for {which} (0 items)"
+    higher = t[0] * u[1] > u[0] * t[1]
+    return f"treated {'higher' if higher else 'not higher'}"
+
+
 def compare(records, treated_set, floor):
     """The comparison lines: the verdict or refusal, then the unmeasurable
     runs by name when there are any. Unmeasurable and inferred runs are
@@ -585,14 +658,10 @@ def compare(records, treated_set, floor):
         lines = [f"{LABEL}: no verdict: {t[2]} treated run(s) is below the"
                  f" minimum of {floor}"]
     else:
-        # lean: a zero-item untreated pool has no rate, so it reads "not
-        # higher"; upgrade to a third wording if a repo ever reaches it.
-        higher = u[1] > 0 and t[0] * u[1] > u[0] * t[1]
         lines = [f"{LABEL}: re-plan treated {t[0]}/{t[1]} over {t[2]}"
                  f" run(s), untreated {u[0]}/{u[1]} over {u[2]} run(s)"
                  f" (observed only; {len(unmeasurable)} unmeasurable);"
-                 " descriptive, treated"
-                 f" {'higher' if higher else 'not higher'}"]
+                 f" descriptive, {_verdict(t, u)}"]
     if unmeasurable:
         lines.append(f"{LABEL}: unmeasurable re-plan run(s):"
                      f" {', '.join(unmeasurable)}")
