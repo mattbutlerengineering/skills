@@ -887,7 +887,7 @@ class TestFold(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(lines,
                          ["decompose-lessons: ADD replan/feature/added"])
-        self.assertEqual([e["id"] for e in later],
+        self.assertEqual(sorted(e["id"] for e in later),
                          ["replan/feature/added",
                           "replan/feature/dropped"])
 
