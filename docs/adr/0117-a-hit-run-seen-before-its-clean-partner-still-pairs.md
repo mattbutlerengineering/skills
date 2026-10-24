@@ -67,7 +67,7 @@ instead reproduces the original loss through the vote path.
 - **Fold a hit run only once it paired, and every other measured run as
   now.** Reproduced: the vote guard no longer covers an unpaired hit run,
   so it votes on lessons derived after it was first measured (211 of
-  3,000 sequences changed the file on a second update).
+  1,500 sequences changed the file on a second update).
 - **Two header sets (measured and paired)**, which keeps the vote guard
   and fixes pairing but adds a second shape and a decision on every old
   entry, for a distinction the partner test recovers from the one set.

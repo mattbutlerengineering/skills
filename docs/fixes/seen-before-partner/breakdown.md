@@ -37,7 +37,7 @@ both, and a repeated `update` writes nothing.
 
 When this milestone is done, the ADR trail matches the code and every check passes.
 
-- [ ] **P3 ADR trail check** — ADR-0117, ADR-0116's status line and the index rows agree with the code — size:S
+- [x] **P3 ADR trail check** — ADR-0117, ADR-0116's status line and the index rows agree with the code — size:S
   - Accept: ADR-0117 is `provisional` and states the final behaviour (the skip is decided from `seen` plus a seen partner; `seen` itself unchanged); ADR-0116's status line reads `superseded in part by ADR-0117 (the pairing skip rule; provisional)`; the docs/adr/README.md rows for 0116 and 0117 match their files' status lines. Where Implement changed a name or rule from architecture.md, the ADR and architecture.md are corrected in the same commit and the change is logged in Notes. `python3 kb.py drift` stays at 0 problems.
   - Blocked by: P2 Partner lookup and spent hit runs
 - [ ] **P4 Whole-repo verify** — full suite and one-off scope checks — size:S
@@ -54,3 +54,8 @@ Release: no skill text changes, so no wave release PR is owed by this run;
 if Implement finds the skill must change, that is a skill change, recorded
 here as an Owner follow-up (ADR-0095), never a `plugin.json` edit on this
 branch.
+
+P3: ADR-0117 and ADR-0116's status line and both index rows already agree
+with the code. One deviation: ADR-0117's rejected-alternatives list said
+"211 of 3,000 sequences" where architecture.md and the ADR's own Context
+say 211 of 1,500; corrected to 1,500 in the ADR.
