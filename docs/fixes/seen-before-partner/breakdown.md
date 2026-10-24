@@ -40,7 +40,7 @@ When this milestone is done, the ADR trail matches the code and every check pass
 - [x] **P3 ADR trail check** — ADR-0117, ADR-0116's status line and the index rows agree with the code — size:S
   - Accept: ADR-0117 is `provisional` and states the final behaviour (the skip is decided from `seen` plus a seen partner; `seen` itself unchanged); ADR-0116's status line reads `superseded in part by ADR-0117 (the pairing skip rule; provisional)`; the docs/adr/README.md rows for 0116 and 0117 match their files' status lines. Where Implement changed a name or rule from architecture.md, the ADR and architecture.md are corrected in the same commit and the change is logged in Notes. `python3 kb.py drift` stays at 0 problems.
   - Blocked by: P2 Partner lookup and spent hit runs
-- [ ] **P4 Whole-repo verify** — full suite and one-off scope checks — size:S
+- [x] **P4 Whole-repo verify** — full suite and one-off scope checks — size:S
   - Accept: `python3 run_tests.py`, `python3 lint.py`, `python3 kb.py drift` and `python3 gates.py && python3 gates.py --selftest` all pass. One-off checks, run and reported but not kept as tests: `git diff main...HEAD --name-only` lists no file under `skills/` and not `.claude-plugin/plugin.json`; `tests/test_dual_membership.py` still pins 55 pairs; no `docs/factory/decompose-lessons.jsonl` exists in the tree; `decompose_lessons.py` gains no import line. `git status --porcelain` prints nothing after the commit.
   - Blocked by: P3 ADR trail check
 
