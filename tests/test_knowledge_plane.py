@@ -205,6 +205,30 @@ class TestActiveRuns(unittest.TestCase):
             self.assertIsNone(found[0][2])
             self.assertIsInstance(found[1][2], UnicodeDecodeError)
 
+    def test_an_unreadable_run_directory_is_listed_with_its_error(self):
+        # Python 3.13 and earlier raise PermissionError from is_file() on
+        # a directory the walk cannot enter (3.14 answers False). The
+        # presence check sits inside the guard, so the board's per-run
+        # honesty holds (review of this run, major 1).
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for slug in ("ok", "locked"):
+                (root / "docs/features" / slug).mkdir(parents=True)
+                (root / "docs/features" / slug / "idea.md").write_text("x")
+            real = Path.is_file
+
+            def is_file(path):
+                if path.parent.name == "locked":
+                    raise PermissionError(13, "Permission denied", str(path))
+                return real(path)
+
+            with mock.patch.object(Path, "is_file", is_file):
+                found = active_runs(root)
+            self.assertEqual([(d.name, stage) for d, stage, _ in found],
+                             [("locked", None), ("ok", "prd")])
+            self.assertIsInstance(found[0][2], PermissionError)
+
 
 class TestBreakdownFiles(unittest.TestCase):
     def test_yields_each_runs_breakdown_with_its_lines(self):
@@ -634,7 +658,8 @@ class TestRepoPath(unittest.TestCase):
                             ("docs/factory/costs.jsonl",
                              "docs/factory/costs.jsonl"),
                             ("assets/board.svg", "assets/board.svg"),
-                            ("pkgs/@scope/index.js", "pkgs/@scope/index.js")):
+                            ("pkgs/@scope/index.js", "pkgs/@scope/index.js"),
+                            ("src/routes/+page.ts", "src/routes/+page.ts")):
             with self.subTest(token=token):
                 self.assertEqual(repo_path(token), path)
 

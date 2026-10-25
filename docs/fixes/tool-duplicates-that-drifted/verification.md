@@ -71,9 +71,15 @@ date: 2026-10-25
      1 svg
   > md-claims: docs/backlog.md:99: path 'docs/factory/corrections.jsonl' does not exist
   ```
-  - Every added finding is a dangling path whose extension md_claims' old
-    list did not know, for example `docs/factory/corrections.jsonl`, which
-    no file writes.
+  - Every added finding names a path with an extension md_claims' old list
+    did not know.
+  - Some are truly dangling: `docs/factory/corrections.jsonl` is written by
+    nothing.
+  - About 20 name files that exist only once a tool has run, for example
+    `docs/factory/decompose-lessons.jsonl` (written by `decompose_lessons
+    update`) and launch-demo's `title.html` and `outro.html`. md_claims
+    cannot tell those from dangling paths. That is new noise in an
+    on-demand pass that is not a gate (corrected after review).
   - No finding was lost.
   - kb drift, the one of the two in CI, is unchanged.
 - Result: PASS

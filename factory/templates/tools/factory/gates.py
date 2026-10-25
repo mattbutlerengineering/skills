@@ -818,6 +818,11 @@ PRISTINE_PREFIXES = ("templates/tools/factory/",
 # manifest without the marker is a full stamp's, checked as always.
 INSTALL_KEY = "install"
 TOOLS_ONLY = "tools-only"
+# The payload a manifest records: factory_init copies these keys from the
+# source manifest into a tools-only stamp's, and conductor_plan reads them
+# back for `conductor.py --version` (one owner since the 2026-10-25
+# consolidation; the writer and the reader each named them before).
+MANIFEST_PAYLOAD_KEYS = ("plugin", "version")
 
 
 def install_destination(rel):

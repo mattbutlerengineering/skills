@@ -192,8 +192,10 @@ def resolve_link(root, doc, target):
 
 
 # A plain repo path: no glob, placeholder, whitespace, quote or URL
-# scheme. gates' tree-claims and repo_path below both read it.
-PLAIN_PATH = re.compile(r"^[\w.@/-]+$")
+# scheme. `+` is allowed: routing conventions name real files with it
+# (SvelteKit's `+page.ts`). gates' tree-claims and repo_path below both
+# read it.
+PLAIN_PATH = re.compile(r"^[\w.@+/-]+$")
 # What a doc appends to a path it cites: a line (:12), a line and column
 # (:12:4) or a line range (:12-20).
 LINE_SUFFIX = re.compile(r":\d+(?:[:-]\d+)?$")
@@ -455,10 +457,12 @@ def active_runs(root):
     the dashboard's had no per-run guard)."""
     found = []
     for run_dir in run_dirs(Path(root)):
-        if not any((run_dir / artifact).is_file()
-                   for artifact in RUN_ARTIFACTS):
-            continue
         try:
+            # Inside the guard: before 3.14, is_file() raises on a
+            # directory the walk cannot enter rather than answering False.
+            if not any((run_dir / artifact).is_file()
+                       for artifact in RUN_ARTIFACTS):
+                continue
             stage = next_stage(run_dir)
         except (OSError, ValueError) as err:
             found.append((run_dir, None, err))

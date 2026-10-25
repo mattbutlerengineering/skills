@@ -147,9 +147,11 @@ backlog seed pending a routing eval.
   broken run instead of aborting.
   - Accept: a fixture with one unreadable run renders the rest, and the
     problem is named.
-- [x] **Mark the coincidences** — paired `# one-owner:` markers for the five
-  pairs that are not one fact. Four cite ADR-0061, and eval_schema against
-  trigger_eval cites ADR-0022.
+- [x] **Mark the coincidences** — paired `# one-owner:` markers for the four
+  pairs that are not one fact. Three cite ADR-0061, and eval_schema against
+  trigger_eval cites ADR-0022. The fifth pair, the manifest's
+  `plugin`/`version` keys, turned out in review to be one fact. It is
+  folded into `gates.MANIFEST_PAYLOAD_KEYS` instead of being marked.
   - Accept: `python3 one_owner.py` prints `one-owner: 0 problem(s)` once
     #1106 is merged in.
 - [x] **Backlog** — claim the one-owner seed in `docs/backlog.md`, and seed
@@ -175,6 +177,21 @@ backlog seed pending a routing eval.
   join as duplicates. One already has a single owner for its rule, and the
   other is two different questions. Both moved to Ruled out instead of
   being built, so the run adds no owner that the code did not need.
+- 2026-10-25, Review: the shared upsert and gate-issue read (item 2) meet
+  CLAUDE.md's bar on one_owner's evidence: the LIST_ARGS/ISSUE_ARGS pair
+  and the body/number/state key group were already flagged as two owners.
+  The two posting functions themselves had not yet diverged beyond their
+  label and title. `conductor.numbered` still states the "non-blank
+  line" rule beside `cli.json_lines`, and is left as a small second owner
+  for its line-number callers.
+- 2026-10-25, Review: the path rule's whitelist reads some tokens kb_drift
+  used to accept as paths differently, and the reverse.
+  - Now refused: `%`, `!`, `&`, `;` and `^` in a path. `+` is allowed again,
+    after review, for SvelteKit's `+page.ts`.
+  - Now checked: a mid-path `@`, an uppercase extension, a `#fragment` span
+    and a `:12-20` range.
+  - kb drift prints 0 problems before and after on this repo, and kb_drift
+    is root-only (not in MIRRORS), so stamped repos are unaffected.
 - 2026-10-25: Run B of the Owner-approved consolidation wave. Scope: tool
   duplicates that have drifted, with no skill merges. Sibling runs:
   `a-spend-row-stalls-the-merge` (#1106) and

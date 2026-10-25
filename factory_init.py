@@ -375,17 +375,14 @@ def is_tools_only(dest):
     return dest.startswith(TOOLS_ONLY_DESTINATIONS)
 
 
-# one-owner: conductor_plan.payload_version (ADR-0061) — the writer of the
-# manifest conductor_plan reads
 def tools_only_manifest(manifest, files):
     """The manifest a tools-only target gets, as bytes: the plugin and
     version the source manifest records (what `conductor.py --version`
     reads back), the marker detector E and update both honour, and only
     the keys the stamp lands."""
-    return (json.dumps({"plugin": manifest.get("plugin"),
-                        "version": manifest.get("version"),
-                        gates.INSTALL_KEY: gates.TOOLS_ONLY, "files": files},
-                       indent=2) + "\n").encode("utf-8")
+    recorded = {key: manifest.get(key) for key in gates.MANIFEST_PAYLOAD_KEYS}
+    return (json.dumps({**recorded, gates.INSTALL_KEY: gates.TOOLS_ONLY,
+                        "files": files}, indent=2) + "\n").encode("utf-8")
 
 
 def payload_bytes(src):

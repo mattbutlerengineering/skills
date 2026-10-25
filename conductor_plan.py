@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 import assembler
 import factory_config
 import work_queue
+from gates import MANIFEST_PAYLOAD_KEYS
 from cli import CLI_FAILURES, detail, gh_read, label_names, read_file
 from conductor import LEDGER, WORKTREES, ask, batch_branch, batch_dir, \
     batch_name_problems, batch_worktree, is_text, load, stamp
@@ -503,9 +504,6 @@ def _repeated(numbers):
                                   if numbers.count(n) > 1})]
 
 
-# one-owner: factory_init.tools_only_manifest (ADR-0061) — the reader of
-# the manifest factory_init writes; a writer and its reader name one file's
-# keys
 def payload_version(root):
     """The payload these tools were stamped from (#941): the plugin name
     and version factory/manifest.json records, which every stamp lands,
@@ -520,7 +518,7 @@ def payload_version(root):
         return ("unversioned (no factory/manifest.json: these tools were"
                 " copied by hand, not stamped — factory-init update"
                 " --tools-only records one)")
-    plugin, version = manifest.get("plugin"), manifest.get("version")
+    plugin, version = (manifest.get(key) for key in MANIFEST_PAYLOAD_KEYS)
     if not isinstance(version, str):
         return "unversioned (factory/manifest.json records no version)"
     return f"{plugin} {version}" if isinstance(plugin, str) else version
