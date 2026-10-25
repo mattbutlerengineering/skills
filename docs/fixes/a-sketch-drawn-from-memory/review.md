@@ -19,7 +19,7 @@ date: 2026-10-25
   most three minors. This is the same rule the fix adds to ux-design.
 
 The fixes landed in `0ddb8c1`. On that commit
-`python3 -m unittest tests.test_ux_design_grounding` printed `OK` (14
+`python3 -m unittest tests.test_ux_design_grounding` printed `OK` (13
 tests), and the full checks printed `tests: 3907 tests across 122 modules
 in 27.1s on 8 workers, 0 problem(s)`, `lint: 0 problem(s) across 35
 skills`, `drift: 0 problem(s)`, `gates: 0 problem(s)`, `selftest: ok`.
