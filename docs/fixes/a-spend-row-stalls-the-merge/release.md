@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:a-spend-row-stalls-the-merge
 date: 2026-10-25
-outcome: prepared
+outcome: released
+released-at: 2026-10-25
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1106
 ---
 
@@ -65,6 +66,7 @@ gh pr create --base main --body-file <body>   # "No work order:" + "Closes #N"
 5. `git push -u origin fix/a-spend-row-stalls-the-merge` -> new branch.
 6. `gh pr create --base main` ->
    https://github.com/mattbutlerengineering/skills/pull/1106
+7. Write-back (2026-10-25): the Owner answered "Merge all + release" in session for the consolidation wave. Merged in order #1106, #1110 (after merging main and regenerating the manifest, CI green), #1108. `gh pr merge 1106 --squash` -> `c8d63c0`; `gh pr view 1106 --json state,mergedAt` -> `MERGED`, `2026-10-25T21:56:18Z`. On main afterwards `python3 one_owner.py` -> `one-owner: 0 problem(s)`. The 0.23.2 release PR carries this write-back.
 
 ## Post-release checks
 
