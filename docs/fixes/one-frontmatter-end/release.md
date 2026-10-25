@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:one-frontmatter-end
 date: 2026-10-24
-outcome: prepared
+outcome: released
+released-at: 2026-10-25
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1081
 assumptions:
   - "Prepare and stop: the autorun brief's release authorization is none. This pass pushed the branch, filed one type:defect issue (#1080) and opened one pull request (#1081). It did not merge, tag, delete a branch, or touch .claude-plugin/plugin.json's version (ADR-0095)."
@@ -188,9 +189,4 @@ runs these once it merges:
 
 ## Outcome
 
-Prepared and stopped, waiting on the pull request `pending-merge:`
-names (#1081). CI is green on `e322057`. Operate is skip (autorun
-brief), so after the write-back the run stays active with no retro.
-Flags for the Owner: ADR-0118 is provisional; the merge-order conflicts
-with #1079 and #1074 above; the launch brief was not produced; the
-version bump belongs to the wave's release PR.
+Released. The Owner said "merge all prs if they are ready" in session on 2026-10-25, and #1081 was squash-merged as `f2ba566` at 2026-10-25T05:04:50Z (`gh pr view 1081 --json state,mergeCommit,mergedAt` -> `MERGED`). #1080 closed with it. Merged last in the wave: main was merged into the branch as `62f9693`, the `docs/adr/README.md` conflict was resolved by keeping both the 0117 and 0118 rows, and `factory/manifest.json` was taken from main and regenerated (`factory-init: 0 problem(s)`); the battery on the merged tree was 3827 tests, 0 problems, and CI was green before the merge. ADR-0118 is still provisional. The version bump belongs to the wave's `chore(release)` PR (ADR-0095). Operate is skip per the brief, so the run stays active.
