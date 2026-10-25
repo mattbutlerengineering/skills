@@ -1112,6 +1112,12 @@ class TestOneFrontmatterAnswer(unittest.TestCase):
 
     OPENERS = ("---", "--- ")
 
+    def test_skip_frontmatter_gives_the_owners_body_index(self):
+        for name, text, end in SHAPES:
+            with self.subTest(shape=name):
+                self.assertEqual(gates._skip_frontmatter(text.splitlines()),
+                                 0 if end is None else end + 1)
+
     def test_a_grandfathered_capture_brief_is_silent_under_either_opener(self):
         for opener in self.OPENERS:
             with self.subTest(opener=opener), \

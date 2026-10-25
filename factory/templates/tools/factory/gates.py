@@ -99,7 +99,7 @@ from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
                              local_link_targets, parse_run, repo_root,
                              resolve_link, run_dirs, status_head, unfenced,
                              work_orders)
-from protocol import parse_frontmatter, read_frontmatter
+from protocol import frontmatter_end, parse_frontmatter, read_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
 # `WO-####`. Such a PR declares that EXPLICITLY — the same "declared, never
@@ -178,12 +178,6 @@ RESULT_LINE = re.compile(
     r"|disposition|decision|ruling|appraisal)\**"
     r"\s*:\s*(\S.*?)\s*(?:\|\s*|</summary>\s*)?$",
     re.IGNORECASE)
-# YAML frontmatter is METADATA, not the author's assertion. `status: draft` is
-# a stage field, and reading it as a labelled verdict both false-positived on
-# an honest artifact ("(untitled)" asserts draft) and — worse — parked a
-# `results` entry in the artifact, which switched the artifact-wide backstop
-# off entirely. The frontmatter block is skipped, not scanned.
-FRONTMATTER_FENCE = re.compile(r"^---\s*$")
 # The disclaimer must be explicit, and it must be WRITTEN: read from body
 # text, never from a heading. TEMPLATE.md ships a `## Not verified` slot in
 # EVERY artifact, so a heading that counted as a disclosure would let the
@@ -1107,6 +1101,12 @@ def _is_disclosure(verdict):
     return bool(DISCLOSURE_VERDICT.match(VERDICT_LEAD.sub("", verdict)))
 
 
+# YAML frontmatter is METADATA, not the author's assertion. `status: draft` is
+# a stage field, and reading it as a labelled verdict both false-positived on
+# an honest artifact ("(untitled)" asserts draft) and — worse — parked a
+# `results` entry in the artifact, which switched the artifact-wide backstop
+# off entirely. The frontmatter block is skipped, not scanned; where it ends
+# is protocol.frontmatter_end's answer (ADR-0118).
 def _skip_frontmatter(lines):
     """The index of the first BODY line of an artifact's LINES: content
     after a closing `---` fence, when the artifact opens with a YAML
@@ -1116,12 +1116,8 @@ def _skip_frontmatter(lines):
     same convention verification_sections has always used. Shared by
     every section-splitting caller (verification_sections for H,
     capture_sections for M) so frontmatter skipping has one home."""
-    if lines and FRONTMATTER_FENCE.match(lines[0]):
-        for index in range(1, len(lines)):
-            if FRONTMATTER_FENCE.match(lines[index]):
-                return index + 1
-        # An unterminated opener is not frontmatter: fall through to 0.
-    return 0
+    end = frontmatter_end(lines)
+    return 0 if end is None else end + 1
 
 
 def _walk_sections(lines, body_start):
