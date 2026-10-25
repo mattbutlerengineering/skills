@@ -25,7 +25,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fake_gh import FakeGh  # noqa: E402
 from human_gates import (GATES, Waiting, completed_stays, gate_labels,
                          gate_passages, gate_rejections, label_events,
-                         open_queues, read_timelines, waited_seconds,
+                         open_queues, read_gate_issues, read_timelines,
+                         waited_seconds,
                          waiting_issues, waiting_since)
 
 
@@ -266,6 +267,43 @@ NOW = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
 def open_issue(number, *labels):
     return {"number": number, "title": f"WO #{number}", "state": "OPEN",
             "labels": [{"name": name} for name in labels]}
+
+
+class TestReadGateIssues(unittest.TestCase):
+    """The listing and its mirrored issues' timelines: the startup the
+    gate digest and the rejection miner shared as two copies (the
+    2026-10-25 consolidation)."""
+
+    LISTING = [{"number": 3, "state": "OPEN", "body": ""},
+               {"number": 5, "state": "CLOSED", "body": ""},
+               {"number": 8, "state": "OPEN", "body": ""}]
+
+    def gh(self, **kwargs):
+        def timeline(args):
+            return json.dumps([[]])
+        return FakeGh(answers={("issue", "list"): json.dumps(self.LISTING),
+                               ("api",): timeline}, **kwargs)
+
+    def test_only_mirrored_issues_have_their_timelines_read(self):
+        run = self.gh()
+        issues = read_gate_issues({3: "WO-0001", 5: "WO-0002"}, run, "gd",
+                                  window=1000)
+        self.assertEqual(issues.listing, self.LISTING)
+        self.assertEqual(issues.mirrored, [3, 5])
+        self.assertEqual(issues.events, {3: [], 5: []})
+        self.assertEqual((issues.truncated, issues.problems), (False, []))
+        self.assertEqual(run.calls[0], [
+            "issue", "list", "--state", "all", "--json",
+            "number,title,state,labels,body", "--limit", "1000"])
+
+    def test_an_unreadable_listing_reads_no_timelines(self):
+        run = self.gh(failing=["issue", "list"])
+        issues = read_gate_issues({3: "WO-0001"}, run, "rm", window=1000)
+        self.assertIsNone(issues.listing)
+        self.assertEqual((issues.mirrored, issues.events), ([], {}))
+        self.assertEqual(len(issues.problems), 1)
+        self.assertTrue(issues.problems[0].startswith("rm: gh issue list"))
+        self.assertEqual(len(run.calls), 1)
 
 
 class TestOpenQueues(unittest.TestCase):

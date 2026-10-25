@@ -405,6 +405,8 @@ def run_single_query(query, descriptions, timeout, model, isolate,
         shutil.rmtree(project_dir, ignore_errors=True)
 
 
+# one-owner: eval_schema.validate (ADR-0022) — the consumer of the case
+# shape eval_schema owns
 def score_case(case, fired_counts, runs, threshold, errors=0):
     """Score one case from its Counter of fired slugs ('none' for None).
 

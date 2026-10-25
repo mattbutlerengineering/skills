@@ -13,10 +13,12 @@ from gates_selftest import (clean_repo_fixture,
                             link_integrity_defect_fixture,
                             wo_citation_defect_fixture)
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
+                             active_runs,
                              PRD_TOKEN, ROW, WO_TOKEN, Fence,
                              breakdown_files, breakdown_rows, fenced,
                              local_link_targets, mirror_map, parse_row,
-                             parse_run, repo_root, resolve_link, run_dirs,
+                             parse_run, repo_path, repo_root, resolve_link,
+                             run_dirs,
                              sanitize, unfenced)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -175,6 +177,57 @@ class TestRunDirs(unittest.TestCase):
     def test_a_tree_without_docs_walks_to_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(run_dirs(Path(tmp)), [])
+
+
+class TestActiveRuns(unittest.TestCase):
+    """The protocol's active runs (an artifact present, not complete),
+    each oriented once, a run that cannot be oriented answered with its
+    error instead of raised: the walk board and dashboard shared."""
+
+    def test_partition_and_the_unorientable_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel, text in (("docs/features/a/idea.md", "# Idea\n"),
+                              ("docs/features/done/idea.md", "x"),
+                              ("docs/features/done/retro.md", "# Retro\n"),
+                              ("docs/features/empty/notes.txt", "x")):
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text(text, encoding="utf-8")
+            bad = root / "docs/fixes/bad/defect.md"
+            bad.parent.mkdir(parents=True)
+            bad.write_bytes(b"---\nstage: capture\nre-entry: implement\n"
+                            b"---\n- [ ] broken \xff\xfe\n")
+            found = active_runs(root)
+            self.assertEqual([(d.relative_to(root).as_posix(), stage)
+                              for d, stage, _ in found],
+                             [("docs/features/a", "prd"),
+                              ("docs/fixes/bad", None)])
+            self.assertIsNone(found[0][2])
+            self.assertIsInstance(found[1][2], UnicodeDecodeError)
+
+    def test_an_unreadable_run_directory_is_listed_with_its_error(self):
+        # Python 3.13 and earlier raise PermissionError from is_file() on
+        # a directory the walk cannot enter (3.14 answers False). The
+        # presence check sits inside the guard, so the board's per-run
+        # honesty holds (review of this run, major 1).
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for slug in ("ok", "locked"):
+                (root / "docs/features" / slug).mkdir(parents=True)
+                (root / "docs/features" / slug / "idea.md").write_text("x")
+            real = Path.is_file
+
+            def is_file(path):
+                if path.parent.name == "locked":
+                    raise PermissionError(13, "Permission denied", str(path))
+                return real(path)
+
+            with mock.patch.object(Path, "is_file", is_file):
+                found = active_runs(root)
+            self.assertEqual([(d.name, stage) for d, stage, _ in found],
+                             [("locked", None), ("ok", "prd")])
+            self.assertIsInstance(found[0][2], PermissionError)
 
 
 class TestBreakdownFiles(unittest.TestCase):
@@ -590,6 +643,46 @@ class TestResolveLink(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertIsNone(resolve_link(Path("/r"), Path("/r/a.md"),
                                                target))
+
+
+class TestRepoPath(unittest.TestCase):
+    """One rule for "does this markdown token name a repo path" (the
+    2026-10-25 consolidation: kb_drift and md_claims each held a copy,
+    and they disagreed on line ranges, fragments, @ and the extension
+    list). It returns the path the token names, normalized."""
+
+    def test_a_file_with_a_known_extension_is_a_path(self):
+        for token, path in (("docs/a.md", "docs/a.md"),
+                            ("./tools/x.py", "tools/x.py"),
+                            ("../README.md", "../README.md"),
+                            ("docs/factory/costs.jsonl",
+                             "docs/factory/costs.jsonl"),
+                            ("assets/board.svg", "assets/board.svg"),
+                            ("pkgs/@scope/index.js", "pkgs/@scope/index.js"),
+                            ("src/routes/+page.ts", "src/routes/+page.ts")):
+            with self.subTest(token=token):
+                self.assertEqual(repo_path(token), path)
+
+    def test_line_suffixes_and_fragments_are_not_part_of_the_path(self):
+        for token in ("gates.py:12", "gates.py:12:4", "gates.py:12-20",
+                      "gates.py#detector-b", " gates.py "):
+            with self.subTest(token=token):
+                self.assertEqual(repo_path(token), "gates.py")
+
+    def test_non_paths(self):
+        for token in ("", "#top", ".py", "x.y", "owner/repo", "a b.md",
+                      "-v.md", "/abs/x.md", "~/x.md", "@AGENTS.md",
+                      "<slug>.md", "*.md", "x{1}.md", "$HOME/x.md",
+                      "https://x.io/a.md", "a,b.md"):
+            with self.subTest(token=token):
+                self.assertIsNone(repo_path(token))
+
+    def test_a_top_level_directory_is_the_callers_policy(self):
+        self.assertEqual(repo_path("docs/"), "docs/")
+        self.assertIsNone(repo_path("docs/", top_level_dirs=False))
+        self.assertEqual(repo_path("docs/adr/", top_level_dirs=False),
+                         "docs/adr/")
+        self.assertIsNone(repo_path("/"))
 
 
 if __name__ == "__main__":

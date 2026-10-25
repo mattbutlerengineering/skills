@@ -37,7 +37,7 @@ import sys
 from pathlib import Path
 
 import cli
-from knowledge_plane import fenced, local_link_targets, resolve_link
+from knowledge_plane import fenced, local_link_targets, repo_path, resolve_link
 
 LABEL = "md-claims"
 USAGE = "usage: md_claims.py check|extract [root] [path ...]"
@@ -56,10 +56,6 @@ SEPARATORS = {"&&", "||", ";", "|", "&"}
 REDIRECTS = {">", ">>", "<", "<<", "<<<", ">&", "<&", "&>"}
 INLINE_CODE = re.compile(r"(`+)([^`\n]+?)\1")
 PLACEHOLDER = re.compile(r"[<>{}$*?\[\]~|\s]|\.\.\.")
-FILE_EXT = re.compile(
-    r"\.(md|py|json|ya?ml|toml|sh|js|mjs|cjs|ts|tsx|txt|cfg|ini|lock)$")
-PATH_CHARS = re.compile(r"^[\w.@/-]+$")
-LINE_SUFFIX = re.compile(r":\d+(-\d+)?$")
 TEMPLATE = re.compile(r"<[A-Za-z][^<>]*>")
 HEREDOC = re.compile(r"<<-?\s*['\"]?(\w+)['\"]?")
 MAKE_RULE = re.compile(r"^([^\s:=#][^:=#]*?)\s*::?(?!=)")
@@ -127,8 +123,9 @@ def _fence_claims(fence, ignored, block):
 
 
 def _prose_claims(number, line):
-    found = [(number, "path", span)
-             for _, span in INLINE_CODE.findall(line) if _is_path(span)]
+    found = [(number, "path", path) for path in
+             (_is_path(span) for _, span in INLINE_CODE.findall(line))
+             if path]
     bare = INLINE_CODE.sub(lambda m: " " * len(m.group(0)), line)
     links = [(number, "link", target)
              for target in local_link_targets(bare)]
@@ -136,18 +133,10 @@ def _prose_claims(number, line):
 
 
 def _is_path(span):
-    """Does an inline-code span name a repo path? It must be path-shaped
-    (no placeholder, glob, whitespace or URL), not absolute or a flag, and
-    either be a directory below the top level (`src/lib/`) or a file with
-    a named stem and a known extension — `owner/repo`, `x.y`, `.py` and a
-    bare `routine/` prefix are not paths."""
-    span = LINE_SUFFIX.sub("", span.strip())
-    if not PATH_CHARS.match(span) or span.startswith(("-", "/")):
-        return False
-    if span.endswith("/"):
-        return "/" in span[:-1]
-    ext = FILE_EXT.search(span.rsplit("/", 1)[-1])
-    return bool(ext) and ext.start() > 0
+    """The repo path an inline-code span names, or None
+    (knowledge_plane.repo_path). A bare top-level prefix (`routine/`) is
+    not a path here: prose names directories below the top level."""
+    return repo_path(span, top_level_dirs=False)
 
 
 def _block_claims(lang, skipped, block):
@@ -247,12 +236,12 @@ def _verify(root, index, doc, kind, text):
         return []
     if kind == "path":
         return [] if _path_exists(root, index, doc_dir, text) else [
-            f"path {LINE_SUFFIX.sub('', text.strip())!r} does not exist"]
+            f"path {text!r} does not exist"]
     return _verify_command(root, doc_dir, text)
 
 
 def _path_exists(root, index, doc_dir, span):
-    span = LINE_SUFFIX.sub("", span.strip()).rstrip("/")
+    span = span.rstrip("/")
     rels, names = index
     if (root / span).exists() or (doc_dir / span).exists():
         return True

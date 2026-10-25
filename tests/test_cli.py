@@ -377,6 +377,56 @@ class TestGhRead(unittest.TestCase):
         self.assertEqual(result.problems, [f"sweeps: gh issue list {note}"])
 
 
+class TestUpsertPinnedIssue(unittest.TestCase):
+    """The pinned-issue upsert the gate digest and the rejection miner
+    shared as two copies (the 2026-10-25 consolidation)."""
+
+    def gh(self, fail=()):
+        calls = []
+
+        def run(args):
+            calls.append(args)
+            if args[1] in fail:
+                raise subprocess.CalledProcessError(1, args, stderr="nope")
+            return "https://github.com/o/r/issues/9\n"
+        return run, calls
+
+    def test_the_open_marked_issue_is_the_lowest_numbered(self):
+        issues = [{"number": 7, "body": "<!-- m -->\nx"},
+                  {"number": 3, "body": "<!-- m -->\ny"},
+                  {"number": 1, "body": "other"}]
+        self.assertEqual(cli.marked_issue(issues, "<!-- m -->"), 3)
+        self.assertIsNone(cli.marked_issue([{"number": 1, "body": None}],
+                                           "<!-- m -->"))
+
+    def test_an_existing_issue_is_edited_then_repinned(self):
+        run, calls = self.gh(fail=("pin",))
+        self.assertEqual(cli.upsert_pinned_issue(4, "T", "b", "gd", run), [])
+        self.assertEqual(calls, [["issue", "edit", "4", "--body", "b"],
+                                 ["issue", "pin", "4"]])
+
+    def test_a_failed_edit_is_a_problem_and_stops(self):
+        run, calls = self.gh(fail=("edit",))
+        self.assertEqual(cli.upsert_pinned_issue(4, "T", "b", "rm", run),
+                         ["rm: gh issue edit 4 failed: nope"])
+        self.assertEqual(len(calls), 1)
+
+    def test_a_new_issue_is_created_and_pinned(self):
+        run, calls = self.gh()
+        self.assertEqual(cli.upsert_pinned_issue(None, "T", "b", "gd", run),
+                         [])
+        self.assertEqual(calls, [["issue", "create", "--title", "T",
+                                  "--body", "b"], ["issue", "pin", "9"]])
+
+    def test_a_new_issue_that_will_not_pin_is_a_problem(self):
+        run, _ = self.gh(fail=("pin",))
+        self.assertEqual(cli.upsert_pinned_issue(None, "T", "b", "gd", run),
+                         ["gd: gh issue pin failed: nope"])
+        run, _ = self.gh(fail=("create",))
+        self.assertEqual(cli.upsert_pinned_issue(None, "T", "b", "gd", run),
+                         ["gd: gh issue create failed: nope"])
+
+
 class TestLabelNames(unittest.TestCase):
     def test_names_come_off_an_issue_payload_in_order(self):
         payload = {"labels": [{"name": "wo:merged"}, {"name": "size:M"}]}

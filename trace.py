@@ -59,6 +59,8 @@ FEEDBACK_STAGES = {"verify", "review", "ship", "operate"}
 # The ADR's own `- Date:` line: the start of its validity window, and
 # the end of the window of any ADR it supersedes.
 ADR_DATE = re.compile(r"^-\s*Date:\s*(\d{4}-\d{2}-\d{2})\b")
+# one-owner: cost_ledger.AT_DATE (ADR-0061) — the --since argument's shape,
+# not a ledger row's at field; the pattern is shared, the fact is not
 DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
 SCALES = ("feature:", "maintenance:")
 

@@ -380,10 +380,9 @@ def tools_only_manifest(manifest, files):
     version the source manifest records (what `conductor.py --version`
     reads back), the marker detector E and update both honour, and only
     the keys the stamp lands."""
-    return (json.dumps({"plugin": manifest.get("plugin"),
-                        "version": manifest.get("version"),
-                        gates.INSTALL_KEY: gates.TOOLS_ONLY, "files": files},
-                       indent=2) + "\n").encode("utf-8")
+    recorded = {key: manifest.get(key) for key in gates.MANIFEST_PAYLOAD_KEYS}
+    return (json.dumps({**recorded, gates.INSTALL_KEY: gates.TOOLS_ONLY,
+                        "files": files}, indent=2) + "\n").encode("utf-8")
 
 
 def payload_bytes(src):

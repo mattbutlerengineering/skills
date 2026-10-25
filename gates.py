@@ -94,7 +94,8 @@ import factory_config
 import standards_index
 from cli import read_event, read_file, report
 from cost_ledger import COST_LEDGER
-from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
+from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PLAIN_PATH, PRD_TOKEN,
+                             WO_TOKEN,
                              adr_record, breakdown_rows, fenced,
                              local_link_targets, parse_run, repo_root,
                              resolve_link, run_dirs, status_head, unfenced,
@@ -328,8 +329,8 @@ ARCH_CLAIM = re.compile(
     r"^\s*(?P<verb>exists|absent)\s*:\s*(?P<path>\S+)\s*$", re.IGNORECASE)
 # A claim must name a plain repo path. A glob or a `..` is not resolvable
 # against the tree, and quietly resolving it anyway is how a detector starts
-# reporting things it did not check.
-ARCH_PLAIN_PATH = re.compile(r"^[\w.@/-]+$")
+# reporting things it did not check. knowledge_plane owns what "plain" means.
+ARCH_PLAIN_PATH = PLAIN_PATH
 
 
 def _scannable_files(root):
@@ -817,6 +818,11 @@ PRISTINE_PREFIXES = ("templates/tools/factory/",
 # manifest without the marker is a full stamp's, checked as always.
 INSTALL_KEY = "install"
 TOOLS_ONLY = "tools-only"
+# The payload a manifest records: factory_init copies these keys from the
+# source manifest into a tools-only stamp's, and conductor_plan reads them
+# back for `conductor.py --version` (one owner since the 2026-10-25
+# consolidation; the writer and the reader each named them before).
+MANIFEST_PAYLOAD_KEYS = ("plugin", "version")
 
 
 def install_destination(rel):
