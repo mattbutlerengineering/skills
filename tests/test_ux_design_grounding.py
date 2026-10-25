@@ -38,6 +38,12 @@ class TestCodeFacts(unittest.TestCase):
     def test_the_template_has_the_section(self):
         self.assertIn("## Code facts", headings(TEMPLATE))
 
+    def test_a_contradicting_fact_reopens_the_flow_or_reaches_architect(self):
+        self.assertIn("re-open the affected flow with the user", flat(SKILL))
+        self.assertIn("Dependencies surfaced for Architect", flat(SKILL))
+        self.assertIn("## Dependencies surfaced for Architect",
+                      headings(TEMPLATE))
+
 
 class TestScenarioWalkthroughs(unittest.TestCase):
     def test_the_skill_writes_the_hardest_scenarios_as_walkthroughs(self):
@@ -45,7 +51,8 @@ class TestScenarioWalkthroughs(unittest.TestCase):
         for phrase in ("**Scenario walkthroughs first.**",
                        "the hardest scenarios in `idea.md` and `prd.md`",
                        "using only controls this doc defines",
-                       "A walkthrough that cannot finish is a gap"):
+                       "A walkthrough that cannot finish is a gap",
+                       "Confirm the list with the user"):
             self.assertIn(phrase, text)
 
     def test_walkthroughs_come_before_the_flow_interview(self):
@@ -63,11 +70,16 @@ class TestIndependentReview(unittest.TestCase):
         for phrase in ("**Independent review before hand-off.**",
                        "Give the reviewer the files, not your conclusions",
                        "Critical and High findings only",
-                       "Fix or record each finding before committing"):
+                       "Fix or record each finding before committing",
+                       "`idea.md`, `prd.md`, `ux.md`",
+                       "re-walk the walkthroughs after the fixes"):
             self.assertIn(phrase, text)
 
     def test_the_inline_fallback_is_labelled(self):
         self.assertIn("`review: inline, not independent`", flat(SKILL))
+
+    def test_an_unattended_fallback_reaches_the_assumptions(self):
+        self.assertIn("also log it under `assumptions:`", flat(SKILL))
 
     def test_the_review_comes_before_the_hand_off(self):
         text = flat(SKILL)

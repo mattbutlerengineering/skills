@@ -42,6 +42,11 @@ date: YYYY-MM-DD
 
 - <Existing UI conventions this must follow.>
 
+## Dependencies surfaced for Architect
+
+- <A code fact the design depends on that needs a technical change, e.g. a
+  role that is not enforced today — or "none".>
+
 ## Deliberately not designed
 
 - <Deferred polish / out-of-scope UX.>

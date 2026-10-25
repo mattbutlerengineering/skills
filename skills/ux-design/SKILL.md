@@ -24,8 +24,10 @@ Interview-driven: taste and intent live with the user.
    the hardest scenarios in `idea.md` and `prd.md` (the edge cases, the
    bulk edits, the one-off exception to a recurring rule) and write each
    as an acceptance walkthrough: the actor, the goal, and the steps that
-   reach it. They are the test the flows must pass. Before the artifact
-   is written, walk each one again using only controls this doc defines.
+   reach it. Confirm the list with the user before going on: they know
+   which cases hurt. They are the test the flows must pass. Before the
+   artifact is written, walk each one again using only controls this doc
+   defines.
    A walkthrough that cannot finish is a gap: fix the flow, or record it
    under Deliberately not designed with the reason.
 
@@ -51,7 +53,8 @@ Interview-driven: taste and intent live with the user.
    depends on (what the form calls, which channels a message goes out
    on, what a component can show, what a role actually enforces). Never
    sketch an existing surface from memory. A fact that contradicts the
-   flow changes the flow, or becomes a dependency for Architect.
+   flow means you re-open the affected flow with the user, or record it
+   under Dependencies surfaced for Architect when the fix is technical.
 
 6. **Sketch.** Wireframe each screen as an ASCII sketch or a tight textual
    description — enough for Architect and Implement to build from without
@@ -62,16 +65,18 @@ Interview-driven: taste and intent live with the user.
 
 8. **Independent review before hand-off.** Dispatch a fresh reviewer
    (a subagent with its own context) on the written `ux.md`. Give the
-   reviewer the files, not your conclusions: `prd.md`, `ux.md`, and the
-   code paths listed under Code facts, with the instruction to report
-   Critical and High findings only (a walkthrough that cannot finish, a
-   sketch that contradicts its flow, a code fact the design ignores,
-   terms that drift). Fix or record each finding before committing, and
-   list each one under Review with its disposition. Where the harness
-   cannot start a fresh agent context, re-read `ux.md` cold against the
-   walkthroughs and the code facts yourself, and record
-   `review: inline, not independent` under Review. Never present a
-   self-review as an independent one.
+   reviewer the files, not your conclusions: `idea.md`, `prd.md`, `ux.md`,
+   and the code paths listed under Code facts, with the instruction to
+   report Critical and High findings only (a walkthrough that cannot
+   finish, a hard scenario left out, a sketch that contradicts its flow,
+   a code fact the design ignores, terms that drift). Fix or record each
+   finding before committing, re-walk the walkthroughs after the fixes,
+   and list each finding under Review with its disposition. Where the
+   harness cannot start a fresh agent context, re-read `ux.md` cold
+   against the walkthroughs and the code facts yourself, and record
+   `review: inline, not independent` under Review; in an unattended run,
+   also log it under `assumptions:` in the frontmatter, so the run's
+   report shows it. Never present a self-review as an independent one.
 
 9. **Hand off.** Next stage is Architect. Commit the artifact on the run's
    branch — the protocol's "Commit at the stage boundary" section owns the
