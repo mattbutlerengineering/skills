@@ -266,6 +266,17 @@ SUMMARY_ZERO_COUNT = re.compile(
     r"(?<![\w.])(?:0|zero|no|none|nothing)(?:\s+(?!pass|fail)[^\W\d_]+)?"
     r"(?:\s+(?:were|was))?[\s*_`]*$",
     re.IGNORECASE)
+# How far back from a SUMMARY_UNKNOWN_TERM match SUMMARY_ZERO_COUNT reads.
+# A zero count is a few words long, so a fixed window keeps the roll-up
+# linear in line length; reading the whole prefix for every match was
+# quadratic (a 22 kB line of "0 not run, " took 1.5 s). The search's `pos`
+# does not hide the text before it from the leading `(?<![\w.])`, so the
+# window's edge invents no word boundary. 17 is len("no criteria were "),
+# the widest zero count a test or fixture uses, and the smallest width
+# that keeps them all green (maintenance:a-long-line-stalls-the-gate).
+# lean: a wider count ("zero criteria were skipped" is 19) falls outside
+# the window and names; widen this on a real artifact that uses one.
+SUMMARY_ZERO_COUNT_WINDOW = 17
 # The roll-up's grandfather cutoff: ADR-0107's own date, compared with the
 # artifact's frontmatter `date:` through _grandfathered, as O and M compare
 # theirs. A verification.md shipped before the rule existed does not owe
@@ -1171,9 +1182,12 @@ def _walk_sections(lines, body_start):
 def _names_unknown(line):
     """Does LINE name the unknown kind (ADR-0107, ADR-0108)? True when some
     SUMMARY_UNKNOWN_TERM match in it is not directly preceded by a zero
-    count (SUMMARY_ZERO_COUNT). Judged per match, so "0 NOT RUN, 1
-    skipped" names on its second mention."""
-    return any(not SUMMARY_ZERO_COUNT.search(line, 0, match.start())
+    count (SUMMARY_ZERO_COUNT), read within SUMMARY_ZERO_COUNT_WINDOW
+    characters before it. Judged per match, so "0 NOT RUN, 1 skipped"
+    names on its second mention."""
+    return any(not SUMMARY_ZERO_COUNT.search(
+                   line, max(0, match.start() - SUMMARY_ZERO_COUNT_WINDOW),
+                   match.start())
                for match in SUMMARY_UNKNOWN_TERM.finditer(line))
 
 

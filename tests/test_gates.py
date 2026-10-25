@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -3086,6 +3087,21 @@ class TestEvidenceRollUp(unittest.TestCase):
         self.assertEqual([(s["title"], s["names_unknown"]) for s in sections],
                          [("(untitled)", False), ("Zero", False),
                           ("Mixed", True)])
+
+    # The long-line pin (maintenance:a-long-line-stalls-the-gate): a 44 kB
+    # line of zero-preceded matches took 5.9 s when every zero-count read
+    # scanned the whole prefix (quadratic), and takes milliseconds with the
+    # bounded window. The bound sits far from both, so a loaded runner
+    # never flakes it and a quadratic read never passes it.
+    LONG_LINE_SECONDS = 1.0
+
+    def test_a_long_zero_count_line_reads_in_linear_time(self):
+        line = "0 not run, " * 4000
+        started = time.perf_counter()
+        names = gates._names_unknown(line)
+        elapsed = time.perf_counter() - started
+        self.assertFalse(names)
+        self.assertLess(elapsed, self.LONG_LINE_SECONDS)
 
     def test_wrapper_prefixes_the_rollup_problem(self):
         root = Path("/repo")
