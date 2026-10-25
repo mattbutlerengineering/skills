@@ -406,3 +406,22 @@ as lean-in-the-build (PRD-0012) did:
   a reply voice ships as a utility skill with an opt-in output style, never
   forced; the style is a pinned copy; `voice_grade` joins the root-only
   importers of `cli.py` (provisional).
+
+## Review note (2026-10-25)
+
+Four statements above changed in the Review stage; the text above is left
+as written.
+
+- The Data model's `binary-contrast` pattern is now
+  `\bnot just\b(?:[^.\n]|\n(?![ \t]*\n)){0,120}\bbut\b|...` (the second
+  alternative unchanged). The open `[^.]*` graded a 200 kB reply without a
+  period in 14.7 seconds and matched a "but" paragraphs away.
+- The opt-in style name is `idea-to-prod:house-voice`, for
+  `/output-style` and for the `outputStyle` setting (ADR-0119's review
+  note).
+- "caveman's own table claims about 5%" is a suite-total figure; caveman's
+  README states 3% at the median (the research note's review note). The
+  no-margin decision does not change.
+- The style's body is still the rules block byte for byte, and the block
+  now opens by handing files, questions to the user and prescribed forms
+  back to their own rules, so the always-on path keeps the Exemptions.

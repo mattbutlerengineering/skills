@@ -218,3 +218,53 @@ community plugins do) would put one voice on every user of a general plugin
 and override their own style choice. A CLAUDE.md line cannot be shipped and
 reaches the rules only if Claude decides to open them. The design that
 follows is in `docs/features/house-voice/architecture.md` and ADR-0119.
+
+## Review note (2026-10-25)
+
+The Review stage refetched every source in the table above with curl (raw
+files and the docs pages' `.md` form) and compared each claim. Most hold
+as written. These do not, and are corrected here rather than in place:
+
+- **caveman, "about 5%".** The README's own sentence is "`/caveman` cuts
+  3% more at the median". The 5% is the suite totals (4,334 to 4,119 is
+  4.96%). Its "Measured on the 3.1.0 rules, not yet re-run" covers all
+  four figures, not `/ultracave` alone. The skill's conflicts row now
+  cites the 3% median figure.
+- **caveman, the 20-word cap.** It is in the skill itself (rule 5,
+  "ASD-STE100 is the floor: 20 words max"), not only the README.
+- **caveman, "clarity beats brevity".** Not the skill's wording. It says
+  "Clarity beats compression" (Why, 4) and "Compression and clarity
+  conflict? Clarity wins." (rule 5). The meaning is the same.
+- **caveman, 65%.** The figure is in the repository's GitHub description
+  ("cuts 65% of tokens"), read through `gh api`, not in a README line.
+- **stop-slop, phrase categories.** There is no "filler" category: "It's
+  worth noting" and "At the end of the day" are listed under Adverbs. The
+  list above also omits two categories the file has, Performative Emphasis
+  and Telling Instead of Showing.
+- **Activation, plugin style names.** The plugin manifest reference does
+  document namespacing: Claude Code "namespaces every component" under the
+  plugin's name. The plugin components page
+  (code.claude.com/docs/en/plugins/components, fetched in Review) says a
+  plugin style appears "in `/output-style`, as `<plugin>:<name>`". With
+  the output-styles page's rule that a non-matching `outputStyle` value
+  gives the Default style, the opt-in value is `idea-to-prod:house-voice`.
+- **Activation, `keep-coding-instructions`.** The output-styles page adds
+  that the field only matters on the full system prompt: "The shorter
+  system prompt doesn't include that section, so the field has no effect
+  there."
+
+Confirmed as written: ponytail's skill rule and benchmark figures (39
+tasks, Opus 5.5, 5 runs, -45% tokens, output tokens 55%, -53% code, -26%
+cost, "never fewest tokens") and its three hooks; caveman's four
+output-token figures, tiktoken o200k, 1,160 input tokens, JetBrains 8.5%
+over 86 tasks, its rules and exceptions, its four hooks and "auto-starts
+every interactive session, subagents too"; stop-slop's eight rules,
+scoring, structure names and activation; Concise's rules and full-length
+cases; the skills page's single message, 5,000 and 25,000 token figures;
+`force-for-plugin` and its override; styles in forks and not other
+subagents; "nothing enforces it"; the cache-preserving switch; a
+plugin-root CLAUDE.md not loaded; `${CLAUDE_PLUGIN_ROOT}` changing on
+update; the `outputStyles` field replacing the default scan; and the
+plugin-evals facts (only the plugin loads, `last_message` default,
+`not_contains`, `costUsd` with no token field), and the memory page's
+"sees `AGENTS.md` only if it decides to open the file".
