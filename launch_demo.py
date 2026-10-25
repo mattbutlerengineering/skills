@@ -30,6 +30,7 @@ from urllib.parse import urlsplit
 import cli
 import launch_demo_drivers as drivers
 from launch_demo_drivers import HEIGHT, TYPING_SPEED, WIDTH
+from protocol import frontmatter_end
 
 LABEL = "launch-demo"
 CONFIG = "docs/launch-demo.json"
@@ -549,12 +550,11 @@ ADAPTERS = {
 
 
 def _body(text):
-    """launch.md's body: the text after its frontmatter block."""
-    if text.startswith("---\n"):
-        end = text.find("\n---\n", 4)
-        if end != -1:
-            return text[end + 5:]
-    return text
+    """launch.md's body: the text after its frontmatter block, whose end
+    is protocol.frontmatter_end's answer (ADR-0118)."""
+    lines = text.splitlines(keepends=True)
+    end = frontmatter_end(lines)
+    return text if end is None else "".join(lines[end + 1:])
 
 
 def _narration_lines(board):

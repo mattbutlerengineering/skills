@@ -22,6 +22,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
+from frontmatter_shapes import SHAPES  # noqa: E402
 
 import launch_demo  # noqa: E402
 
@@ -479,6 +480,18 @@ def storyboard(**changes):
     board["steps"] = [dict(step) for step in STORYBOARD["steps"]]
     board.update(changes)
     return board
+
+
+class TestBody(unittest.TestCase):
+    """launch.md's body starts after the line protocol.frontmatter_end
+    names (ADR-0118), with the body's bytes kept exactly."""
+
+    def test_every_shape(self):
+        for name, text, end in SHAPES:
+            with self.subTest(shape=name):
+                expected = (text if end is None else "".join(
+                    text.splitlines(keepends=True)[end + 1:]))
+                self.assertEqual(launch_demo._body(text), expected)
 
 
 class TestCheckStoryboard(unittest.TestCase):
