@@ -375,6 +375,8 @@ def is_tools_only(dest):
     return dest.startswith(TOOLS_ONLY_DESTINATIONS)
 
 
+# one-owner: conductor_plan.payload_version (ADR-0061) — the writer of the
+# manifest conductor_plan reads
 def tools_only_manifest(manifest, files):
     """The manifest a tools-only target gets, as bytes: the plugin and
     version the source manifest records (what `conductor.py --version`

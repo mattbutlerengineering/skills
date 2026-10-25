@@ -47,6 +47,8 @@ LEDGER_OPTIONAL_FIELDS = ("at",)
 # alone is looser (basic "20260802", week dates) — a row in those shapes
 # would pass the shape check yet fall out of every month window, the
 # fail-open direction the breaker must not have.
+# one-owner: trace.DAY (ADR-0061) — the same pattern for a different
+# job: this is a ledger row's at field, trace's checks its --since argument
 AT_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 # Gate-latency observations (ADR-0041): a $0, zero-token row recording how

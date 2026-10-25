@@ -291,6 +291,8 @@ def validate_output(data, slug, label):
     )
 
 
+# one-owner: trigger_eval.score_case (ADR-0022) — the schema owner and its
+# consumer read the same case keys by design
 def validate(data, skills, label):
     """Return problem strings for a parsed eval-set dict; [] means valid.
 
