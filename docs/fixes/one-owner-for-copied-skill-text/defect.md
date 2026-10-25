@@ -106,7 +106,7 @@ preserved, only ownership moves. Review and Ship scale small.
   and `../audit/references/routing.md` and keeps only what differs.
   - Accept: the recon and routing cases of the test pass; meaning of
     both skills unchanged.
-- [ ] **Diagram dark palette** — animated-diagram's design system owns
+- [x] **Diagram dark palette** — animated-diagram's design system owns
   the dark palette; interactive's cites
   `../../animated-diagram/references/design-system.md` for it and keeps
   its own rules; the keep-in-step instruction leaves both.

@@ -12,9 +12,10 @@ on a projector.
 
 Two resources, loaded when reached:
 
-- **`references/design-system.md`** — palette (exact hex), type scale, shape
+- **`references/design-system.md`** — palette (exact hex, owned by
+  `../animated-diagram/references/design-system.md`), type scale, shape
   specs, spacing, interaction states (dimming, pulses), assumed-marker specs,
-  and presenter chrome. Every visual value comes from here.
+  and presenter chrome. Every visual value comes from here or that owner.
 - **`assets/boilerplate.html`** — the working scaffold: themed canvas, export
   toolbar, presenter deck, inspect panel, all interaction JS, and a complete
   sample system (order pipeline) demonstrating every pattern. Copy it to the
@@ -61,8 +62,10 @@ sample's Prev/Next stepping works.
 
 ## 4. Style from the design system
 
-Draw each node from its **type**'s row in `references/design-system.md`: that
-row is the source of its stroke and fill — color *is* the type. Text sits in
+Draw each node from its **type**'s row in the dark palette, which
+`references/design-system.md` takes from its owner,
+`../animated-diagram/references/design-system.md`: that row is the source
+of its stroke and fill — color *is* the type. Text sits in
 the three-tier scale.
 
 Done when: every node's stroke and fill match its type row and every label is
