@@ -94,7 +94,8 @@ import factory_config
 import standards_index
 from cli import read_event, read_file, report
 from cost_ledger import COST_LEDGER
-from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
+from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PLAIN_PATH, PRD_TOKEN,
+                             WO_TOKEN,
                              adr_record, breakdown_rows, fenced,
                              local_link_targets, parse_run, repo_root,
                              resolve_link, run_dirs, status_head, unfenced,
@@ -328,8 +329,8 @@ ARCH_CLAIM = re.compile(
     r"^\s*(?P<verb>exists|absent)\s*:\s*(?P<path>\S+)\s*$", re.IGNORECASE)
 # A claim must name a plain repo path. A glob or a `..` is not resolvable
 # against the tree, and quietly resolving it anyway is how a detector starts
-# reporting things it did not check.
-ARCH_PLAIN_PATH = re.compile(r"^[\w.@/-]+$")
+# reporting things it did not check. knowledge_plane owns what "plain" means.
+ARCH_PLAIN_PATH = PLAIN_PATH
 
 
 def _scannable_files(root):

@@ -100,7 +100,19 @@ a new shared function:
 - `_read_all` in decompose_grade and voice_grade;
 - the batch planners' shared over-the-cap test;
 - the two budget calibrators;
-- each module's `LIST_WINDOW` value (see Notes).
+- each module's `LIST_WINDOW` value (see Notes);
+- month-to-date spend: `work_queue.month_to_date` and
+  `cost_report.aggregate` already share the row rule,
+  `cost_ledger.dispatched`, and both docstrings say so. They differ only
+  in rounding at display, so a third function would add an owner, not
+  remove one (Notes);
+- the PR-closes-issue joins: `assembler._find_pr` finds the agent's own PR
+  for one issue, and its fork guard is a security control, because that
+  number is dispatched to a validator that runs the PR's code.
+  `dashboard._pr_by_issue` maps every issue to the PR that closed it, for
+  acceptance and rework rates, ranking merged over open over closed. A
+  merged fork PR did close its issue, so copying the guard would make the
+  metric wrong. They are two joins, not one (Notes).
 
 `fast_path`'s gate paths omit `.claude-plugin/plugin.json`. That is
 harmless today, since only `docs/` paths are low-risk, so it is seeded,
@@ -135,21 +147,16 @@ backlog seed pending a routing eval.
   broken run instead of aborting.
   - Accept: a fixture with one unreadable run renders the rest, and the
     problem is named.
-- [ ] **One month-to-date spend** — `cost_ledger.month_spend`. work_queue
-  and cost_report call it, and rounding stays at display.
-  - Accept: both suites pass, and one test pins the shared figure.
-- [ ] **One PR-closes-issue join** — in `knowledge_plane`, with the fork
-  guard, called by dashboard and assembler.
-  - Accept: a fork PR's `Closes #N` maps to nothing in the dashboard.
-- [ ] **Mark the coincidences** — `# one-owner:` markers for the pairs that
-  are not one fact.
+- [x] **Mark the coincidences** — paired `# one-owner:` markers for the five
+  pairs that are not one fact. Four cite ADR-0061, and eval_schema against
+  trigger_eval cites ADR-0022.
   - Accept: `python3 one_owner.py` prints `one-owner: 0 problem(s)` once
     #1106 is merged in.
-- [ ] **Backlog** — claim the one-owner seed in `docs/backlog.md`, and seed
+- [x] **Backlog** — claim the one-owner seed in `docs/backlog.md`, and seed
   the `fast_path` gate-path gap and the deferred skill merge.
   - Accept: the seed lines carry `(claimed: maintenance:...)` and the new
     seeds follow the protocol's grammar.
-- [ ] **Payload and checks** — `update-manifest`, then the four CI commands.
+- [x] **Payload and checks** — `update-manifest`, then the four CI commands.
   - Accept: each prints 0 problems and the selftest prints ok.
 
 ## Notes
@@ -163,6 +170,11 @@ backlog seed pending a routing eval.
 - 2026-10-25, Implement: `decompose_lessons._parse` keeps its own loop. It
   reads its own file, where a blank line is a defect, not a separator, so
   `json_lines`' blank-line skip would change its contract.
+- 2026-10-25, Implement: two of the audit's items fell on reading the
+  code. The audit had listed month-to-date spend and the PR-closes-issue
+  join as duplicates. One already has a single owner for its rule, and the
+  other is two different questions. Both moved to Ruled out instead of
+  being built, so the run adds no owner that the code did not need.
 - 2026-10-25: Run B of the Owner-approved consolidation wave. Scope: tool
   duplicates that have drifted, with no skill merges. Sibling runs:
   `a-spend-row-stalls-the-merge` (#1106) and

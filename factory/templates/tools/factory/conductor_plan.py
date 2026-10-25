@@ -503,6 +503,9 @@ def _repeated(numbers):
                                   if numbers.count(n) > 1})]
 
 
+# one-owner: factory_init.tools_only_manifest (ADR-0061) — the reader of
+# the manifest factory_init writes; a writer and its reader name one file's
+# keys
 def payload_version(root):
     """The payload these tools were stamped from (#941): the plugin name
     and version factory/manifest.json records, which every stamp lands,
