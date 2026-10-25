@@ -304,6 +304,11 @@ def _capture_problems(label, text):
 # maintenance entry, and those are protocol.py's to name.
 RUN_STARTING = (STAGES[0], *MAINTENANCE_STAGES)
 IN_FLIGHT_HEADING = "Work already in flight"
+# Waiting for review is not the only place finished work hides: a run
+# whose verify failed never opened a PR, and sits on an unmerged branch
+# or worktree. The protocol names the worktree; the skills own the recipe.
+IN_FLIGHT_BRANCH_RECIPE = "git branch -a --no-merged"
+IN_FLIGHT_WORKTREE = "worktree"
 
 
 def _states(text, phrase):
@@ -331,11 +336,15 @@ def _in_flight_problems(label, text):
     words, and every one of these documents is hard-wrapped near 72
     columns — so a raw substring test fails a correct recital that happens
     to wrap. `_states` owns that comparison for both callers."""
-    if _states(text, IN_FLIGHT_HEADING):
-        return []
-    return [f"{label} never names the protocol's "
-            f"{IN_FLIGHT_HEADING!r} check, which is where a run that is "
-            "already open in review gets caught"]
+    if not _states(text, IN_FLIGHT_HEADING):
+        return [f"{label} never names the protocol's "
+                f"{IN_FLIGHT_HEADING!r} check, which is where a run that "
+                "is already open in review gets caught"]
+    if not _states(text, IN_FLIGHT_BRANCH_RECIPE):
+        return [f"{label} never gives the unmerged-branch recipe "
+                f"{IN_FLIGHT_BRANCH_RECIPE!r}, which is where a run that "
+                "never opened a pull request gets caught"]
+    return []
 
 
 def check_skill_recitals(root):
@@ -825,10 +834,18 @@ def check_protocol(root):
     path = root / "docs" / "pipeline-protocol.md"
     if not path.is_file():
         return ["missing docs/pipeline-protocol.md"]
-    if _states(path.read_text(encoding="utf-8"), IN_FLIGHT_HEADING):
-        return []
-    return [f"docs/pipeline-protocol.md no longer states "
-            f"{IN_FLIGHT_HEADING!r}, which capture and idea both recite"]
+    doc = path.read_text(encoding="utf-8")
+    if not _states(doc, IN_FLIGHT_HEADING):
+        return [f"docs/pipeline-protocol.md no longer states "
+                f"{IN_FLIGHT_HEADING!r}, which capture and idea both "
+                "recite"]
+    _, _, rest = doc.partition(f"### {IN_FLIGHT_HEADING}")
+    section = rest.split("\n### ", 1)[0]
+    if not _states(section, IN_FLIGHT_WORKTREE):
+        return [f"docs/pipeline-protocol.md's {IN_FLIGHT_HEADING!r} "
+                f"section never names {IN_FLIGHT_WORKTREE!r}s, where "
+                "finished work with no pull request lives"]
+    return []
 
 
 # A row of either orientation table in the protocol doc:
