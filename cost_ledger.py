@@ -21,7 +21,7 @@ import re
 from datetime import date
 from pathlib import Path
 
-from cli import read_file
+from cli import json_lines, read_file
 from knowledge_plane import WO_TOKEN
 
 # The append-only cost ledger (ADR-0034). The outcome vocabulary is
@@ -376,12 +376,8 @@ def parse(text):
     too, or the monthly cap check raises where it promises to fail
     closed."""
     parsed = []
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-        except (ValueError, RecursionError) as err:
+    for lineno, record, err in json_lines(text):
+        if err is not None:
             parsed.append((lineno, None, [f"is not valid JSON: {err}"]))
             continue
         if not isinstance(record, dict):

@@ -240,12 +240,8 @@ def recurring(errors):
 
 def _records(text):
     records, skipped = [], 0
-    for line in text.splitlines():
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-        except ValueError:
+    for _, record, err in cli.json_lines(text):
+        if err is not None:
             skipped += 1
             continue
         if isinstance(record, dict):

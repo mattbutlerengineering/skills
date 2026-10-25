@@ -601,6 +601,23 @@ def gh_read(args, operation, label=None, run=gh_runner, expect=list,
     return GhResult(value, [], False)
 
 
+def json_lines(text):
+    """(lineno, value, error) for every non-blank line of a JSON-lines
+    text, numbered as the file is. error is json's message, or None when
+    the line parsed. A line json.loads refuses any way (ValueError, or
+    RecursionError past the nesting it can follow, ADR-0075) is an error,
+    never a raise; what an error means — skip, refuse the file, report
+    and go on — stays each caller's. Seven readers held copies until the
+    2026-10-25 consolidation, and three of them raised on deep nesting."""
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            yield lineno, json.loads(line), None
+        except (ValueError, RecursionError) as err:
+            yield lineno, None, str(err)
+
+
 def marked_issue(open_issues, marker):
     """The lowest-numbered open issue whose body starts with `marker` —
     how a scheduled writer finds the one issue it owns — or None."""

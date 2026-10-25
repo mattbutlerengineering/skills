@@ -44,7 +44,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from cli import CLI_FAILURES, gh_read, gh_runner, label_names
-from cli import read_file, report, runner
+from cli import json_lines, read_file, report, runner
 import cost_ledger
 import cost_report
 import factory_config
@@ -290,12 +290,8 @@ def _corrections(root, problems):
     if text is None:
         return {}
     counts = {}
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if not line.strip():
-            continue
-        try:
-            record = json.loads(line)
-        except json.JSONDecodeError as err:
+    for lineno, record, err in json_lines(text):
+        if err is not None:
             problems.append(f"dashboard: {CORRECTIONS}:{lineno} is not"
                             f" valid JSON: {err}")
             continue

@@ -122,10 +122,13 @@ backlog seed pending a routing eval.
   - Accept: the gate_digest and rejection_mining suites pass unchanged in
     their asserted strings, and `one_owner.py` no longer names
     LIST_ARGS/ISSUE_ARGS or the body/number/state group for those two.
-- [ ] **One JSON-lines reader** — `cli.json_lines(text)` yields `(lineno,
-  value, error)` under the ADR-0075 guard. Callers keep their own policy.
-  - Accept: a `RecursionError` line is an error for every reader. A test
-    pins `dashboard`'s case, which raised before.
+- [x] **One JSON-lines reader** — `cli.json_lines(text)` yields `(lineno,
+  value, error)` under the ADR-0075 guard, and each caller keeps its own
+  policy. The callers are cost_ledger.parse, conductor.parse,
+  conductor_close.history, kb_harvest and dashboard._corrections.
+  - Accept: a `RecursionError` line is an error for every reader. Tests pin
+    the three that raised before: conductor_close, dashboard and
+    kb_harvest.
 - [ ] **One active-run walk** — `protocol.active_runs(root)`. dashboard and
   board call it, and dashboard reports a broken run instead of aborting.
   - Accept: a fixture with one unreadable run renders the rest, and the
@@ -155,6 +158,9 @@ backlog seed pending a routing eval.
   check tests), and each caller owns its own value. Folding the five
   1000s together would merge five policies, not one fact. Moved to Ruled
   out.
+- 2026-10-25, Implement: `decompose_lessons._parse` keeps its own loop. It
+  reads its own file, where a blank line is a defect, not a separator, so
+  `json_lines`' blank-line skip would change its contract.
 - 2026-10-25: Run B of the Owner-approved consolidation wave. Scope: tool
   duplicates that have drifted, with no skill merges. Sibling runs:
   `a-spend-row-stalls-the-merge` (#1106) and
