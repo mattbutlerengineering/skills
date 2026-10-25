@@ -19,6 +19,8 @@ assumptions:
 
 ## Problem statement
 
+<!-- coverage-waiver: context for the requirements below; the Solution and Success criteria carry the work the breakdown rows cite -->
+
 Reading an agent's reply costs more than it should. Replies run long and
 hedge, restate the question, carry AI tells ("Great question", em-dash
 cascades, needless summaries), and spend output tokens on prose instead of
@@ -149,6 +151,8 @@ records the live ones NOT RUN.
 
 ## Out of scope
 
+<!-- coverage-waiver: exclusions, nothing to build; row WO-0188 checks the no-spend and no-version-bump ones -->
+
 - Rewriting any other skill's prose to match the voice.
 - Any paid model run, a cited record under `plugin-evals/records/`, and any
   LEDGER maturity change.
@@ -158,6 +162,8 @@ records the live ones NOT RUN.
 - Merging, tagging or a plugin version bump (prepare and stop; ADR-0095).
 
 ## Open questions
+
+<!-- coverage-waiver: architecture.md answers each question, so nothing is left to build from them -->
 
 - Output style, CLAUDE.md line, or both, as the activation companion; can a
   plugin ship an output style at all? For Architect (the idea's spike).
