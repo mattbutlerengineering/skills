@@ -68,6 +68,7 @@ VERBS = {
     "trace": ("trace", "argv"),
     "trigger-eval": ("trigger_eval", "bare"),
     "validator": ("validator", "argv"),
+    "voice-grade": ("voice_grade", "argv"),
     "work-queue": ("work_queue", "argv"),
 }
 
