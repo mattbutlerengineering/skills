@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:seen-before-partner
 date: 2026-10-24
-outcome: prepared
+outcome: released
+released-at: 2026-10-25
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1074
 assumptions:
   - "Release authorization was not granted, so this pass prepares and stops: branch pushed, PR 1074 opened, nothing merged, deployed, tagged or published. Not an Owner answer."
@@ -53,10 +54,4 @@ git revert <squash-sha> && git push   # on a branch, then open a PR
 
 ## Outcome
 
-Prepared and stopped, waiting on PR 1074. Owner steps:
-
-1. Review PR 1074 and its CI checks (it now includes the m5 exemplar test and the rewrap).
-2. Merge it (squash) once green: gh pr merge 1074 --squash.
-3. No version bump and no release PR: skills/ is unchanged (ADR-0095).
-4. Confirm #1069 closed.
-5. Re-run the Ship stage so its Release step records outcome: released and released-at.
+Released. The Owner said "merge all prs if they are ready" in session on 2026-10-25, and #1074 was squash-merged as `132c08a` at 2026-10-25T05:00:59Z (`gh pr view 1074 --json state,mergeCommit,mergedAt` -> `MERGED`). #1069 closed with it. No version bump in this run (ADR-0095); the wave's `chore(release)` PR carries it.
