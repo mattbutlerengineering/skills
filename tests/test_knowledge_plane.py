@@ -16,7 +16,8 @@ from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              PRD_TOKEN, ROW, WO_TOKEN, Fence,
                              breakdown_files, breakdown_rows, fenced,
                              local_link_targets, mirror_map, parse_row,
-                             parse_run, repo_root, resolve_link, run_dirs,
+                             parse_run, repo_path, repo_root, resolve_link,
+                             run_dirs,
                              sanitize, unfenced)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -590,6 +591,45 @@ class TestResolveLink(unittest.TestCase):
             with self.subTest(target=target):
                 self.assertIsNone(resolve_link(Path("/r"), Path("/r/a.md"),
                                                target))
+
+
+class TestRepoPath(unittest.TestCase):
+    """One rule for "does this markdown token name a repo path" (the
+    2026-10-25 consolidation: kb_drift and md_claims each held a copy,
+    and they disagreed on line ranges, fragments, @ and the extension
+    list). It returns the path the token names, normalized."""
+
+    def test_a_file_with_a_known_extension_is_a_path(self):
+        for token, path in (("docs/a.md", "docs/a.md"),
+                            ("./tools/x.py", "tools/x.py"),
+                            ("../README.md", "../README.md"),
+                            ("docs/factory/costs.jsonl",
+                             "docs/factory/costs.jsonl"),
+                            ("assets/board.svg", "assets/board.svg"),
+                            ("pkgs/@scope/index.js", "pkgs/@scope/index.js")):
+            with self.subTest(token=token):
+                self.assertEqual(repo_path(token), path)
+
+    def test_line_suffixes_and_fragments_are_not_part_of_the_path(self):
+        for token in ("gates.py:12", "gates.py:12:4", "gates.py:12-20",
+                      "gates.py#detector-b", " gates.py "):
+            with self.subTest(token=token):
+                self.assertEqual(repo_path(token), "gates.py")
+
+    def test_non_paths(self):
+        for token in ("", "#top", ".py", "x.y", "owner/repo", "a b.md",
+                      "-v.md", "/abs/x.md", "~/x.md", "@AGENTS.md",
+                      "<slug>.md", "*.md", "x{1}.md", "$HOME/x.md",
+                      "https://x.io/a.md", "a,b.md"):
+            with self.subTest(token=token):
+                self.assertIsNone(repo_path(token))
+
+    def test_a_top_level_directory_is_the_callers_policy(self):
+        self.assertEqual(repo_path("docs/"), "docs/")
+        self.assertIsNone(repo_path("docs/", top_level_dirs=False))
+        self.assertEqual(repo_path("docs/adr/", top_level_dirs=False),
+                         "docs/adr/")
+        self.assertIsNone(repo_path("/"))
 
 
 if __name__ == "__main__":

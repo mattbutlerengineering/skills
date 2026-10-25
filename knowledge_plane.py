@@ -189,6 +189,40 @@ def resolve_link(root, doc, target):
         return Path(root) / path.lstrip("/")
     return Path(doc).parent / path
 
+
+# A plain repo path: no glob, placeholder, whitespace, quote or URL
+# scheme. gates' tree-claims and repo_path below both read it.
+PLAIN_PATH = re.compile(r"^[\w.@/-]+$")
+# What a doc appends to a path it cites: a line (:12), a line and column
+# (:12:4) or a line range (:12-20).
+LINE_SUFFIX = re.compile(r":\d+(?:[:-]\d+)?$")
+PATH_EXTENSIONS = frozenset((
+    "md", "mdx", "py", "js", "mjs", "cjs", "ts", "tsx", "jsx", "json",
+    "jsonl", "sh", "bash", "zsh", "yml", "yaml", "toml", "txt", "html",
+    "css", "scss", "sql", "go", "rs", "rb", "java", "kt", "swift", "lock",
+    "cfg", "ini", "csv", "xml", "svg", "png", "prisma", "graphql", "tf"))
+
+
+def repo_path(token, top_level_dirs=True):
+    """The repo path a markdown token names, normalized (fragment, line
+    suffix and a leading ./ dropped), or None when it names none. A file
+    needs a named stem and a known extension; a directory needs its
+    trailing slash, and a top-level one (`docs/`) counts only when the
+    caller says so. One owner for kb_drift and md_claims, which held
+    diverging copies until the 2026-10-25 consolidation."""
+    token = LINE_SUFFIX.sub("", token.strip().split("#", 1)[0])
+    if token.startswith("./"):
+        token = token[2:]
+    if not PLAIN_PATH.match(token) or token.startswith(("-", "/", "@")):
+        return None
+    if token.endswith("/"):
+        inner = token[:-1]
+        return token if inner and (top_level_dirs or "/" in inner) else None
+    name = token.rsplit("/", 1)[-1]
+    stem, dot, ext = name.rpartition(".")
+    return token if dot and stem and ext.lower() in PATH_EXTENSIONS \
+        else None
+
 # A breakdown row is a checkbox bullet line; its work order is its FIRST
 # WO token (later tokens are blocking edges). Notes and Accept: sub-bullets
 # are prose, never rows. One grammar for the whole dispatch plane:

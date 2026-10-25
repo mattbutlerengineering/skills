@@ -108,7 +108,7 @@ backlog seed pending a routing eval.
 
 ## Work items
 
-- [ ] **One repo-path rule** — `knowledge_plane.repo_path(token,
+- [x] **One repo-path rule** — `knowledge_plane.repo_path(token,
   top_level_dirs=True)` and `knowledge_plane.PLAIN_PATH`. kb_drift and
   md_claims call it, with md_claims passing `top_level_dirs=False`, and
   `gates.ARCH_PLAIN_PATH` is `PLAIN_PATH`.

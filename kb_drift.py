@@ -39,7 +39,7 @@ import re
 from pathlib import Path
 
 import cli
-from knowledge_plane import fenced, local_link_targets, resolve_link
+from knowledge_plane import fenced, local_link_targets, repo_path, resolve_link
 from protocol import read_frontmatter
 
 LABEL = "drift"
@@ -48,11 +48,6 @@ RULES_DIR = Path(".claude") / "rules"
 SURFACES = (".claude/agents", ".claude/commands", ".claude/skills",
             ".claude/hooks", "plugins")
 SURFACE_MIN = 2
-EXTENSIONS = frozenset((
-    "md", "mdx", "py", "js", "mjs", "cjs", "ts", "tsx", "jsx", "json",
-    "jsonl", "sh", "bash", "zsh", "yml", "yaml", "toml", "txt", "html",
-    "css", "scss", "sql", "go", "rs", "rb", "java", "kt", "swift", "lock",
-    "cfg", "ini", "csv", "xml", "svg", "png", "prisma", "graphql", "tf"))
 BUILTINS = frozenset((
     "add-dir", "agents", "bug", "clear", "compact", "config", "context",
     "cost", "doctor", "exit", "export", "help", "hooks", "ide", "init",
@@ -69,8 +64,6 @@ COMMAND = re.compile(r"(?:^|\s)(?:python3?|node|bash|sh|zsh|bun|deno|"
                      r"ruby|tsx)\s+(\S+)")
 SLASH = re.compile(r"^/([a-z][a-z0-9_-]*)(?::([a-z][a-z0-9_-]*))?(?:\s|$)")
 IGNORE = re.compile(r"<!--\s*drift-ignore:\s*(.*?)\s*-->")
-LINE_SUFFIX = re.compile(r":\d+(?::\d+)?$")
-NOT_PATH = re.compile(r"[<>*{}$?\[\]|\"'=,()@\\]|://|^[~/-]")
 TABLE_NAME = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 SEPARATOR = re.compile(r"^\|?[\s:|-]+\|?$")
 
@@ -88,20 +81,9 @@ def instruction_files(root):
 
 
 def path_token(token):
-    """The repo path a token names, or None when it is not one."""
-    token = LINE_SUFFIX.sub("", token.split("#")[0])
-    if token.startswith("./"):
-        token = token[2:]
-    if not token or NOT_PATH.search(token) or any(c.isspace() for c in token):
-        return None
-    if token.endswith("/") and len(token) > 1:
-        return token
-    name = token.rsplit("/", 1)[-1]
-    if name.startswith(".") and name[1:].lower() in EXTENSIONS:
-        return None
-    if "." in name and name.rsplit(".", 1)[1].lower() in EXTENSIONS:
-        return token
-    return None
+    """The repo path a token names, or None when it is not one: the one
+    rule knowledge_plane.repo_path owns, top-level directories included."""
+    return repo_path(token)
 
 
 def _basenames(root):
