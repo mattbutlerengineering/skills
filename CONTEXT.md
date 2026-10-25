@@ -57,6 +57,16 @@ contrast-safe diagrams. The living roster is `protocol.py`'s
 `UTILITY_SKILLS` (ADR-0023).
 _Avoid_: helper skill, tool skill
 
+**House voice**:
+The voice the agent writes its own conversational replies in: the answer
+first, no ceremony and no tells of generated prose, every fact and payload
+kept, and full length where safety or the user needs it. The house-voice
+utility skill owns its rules; an opt-in output style the plugin ships
+carries a pinned copy into every session, never forced (ADR-0119). It
+does not govern persisted artifacts, interviews, interface strings or any
+output whose form a skill prescribes.
+_Avoid_: tone, persona, concise mode
+
 **Project reference file**:
 A file at a target repo's docs root that a utility skill writes outside
 any run, which outlives every run and which skills read before they work.

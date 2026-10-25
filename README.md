@@ -129,13 +129,16 @@ table's Moment column.
 | `factory-init` | Installing the factory | Stamps the factory scaffold (offline gates, dispatch workflows, the cost ledger) into a product repo, and regenerates the template manifest after an edit. |
 | `doctor` | Installing the factory | Answers whether the install is actually wired up, tier by tier and read-only, reporting each problem with the fix rather than applying it. |
 | `prisma-migrations` | Looking things up | Reference for getting a Prisma schema change to every database safely: `migrate dev` versus `migrate deploy` versus `db push`, deploy ordering, baselining a database built without migrations, CI/CD wiring and failed-migration recovery, with copyable workflow and script templates. |
+| `house-voice` | Around every reply | Sets a voice for the agent's own replies: the answer first, no ceremony or tells of generated prose, every fact and payload kept, and full length where safety needs it; an opt-in output style carries it into every session, and it never rewrites persisted artifacts. |
 
-`lean`, `polish`, `ux-writing` and `ux-patterns` restate, in this
-pipeline's terms, ideas from open-source work —
+`lean`, `polish`, `ux-writing`, `ux-patterns` and `house-voice` restate,
+in this pipeline's terms, ideas from open-source work —
 [Ponytail](https://github.com/DietrichGebert/ponytail),
 [Impeccable](https://github.com/pbakaus/impeccable),
-[ux-writing-skill](https://github.com/content-designer/ux-writing-skill) and
-[web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines)
+[ux-writing-skill](https://github.com/content-designer/ux-writing-skill),
+[web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines),
+[caveman](https://github.com/JuliusBrussee/caveman) and
+[stop-slop](https://github.com/hardikpandya/stop-slop)
 — and each skill says what it borrowed.
 
 The shared rules (run discovery, orientation table, soft gating, frontmatter

@@ -1318,6 +1318,38 @@
       "expected": "conduct",
       "query": "Take issues 41, 42 and 47 as one batch, price it first, and ask me before each merge",
       "notes": "adjacency: implement-queue vs conduct — an Owner-named, priced batch with in-session answers is conduct's"
+    },
+    {
+      "id": "house-voice-1",
+      "kind": "direct",
+      "expected": "house-voice",
+      "query": "Set a house voice for your replies: answer first, no filler, no summary at the end."
+    },
+    {
+      "id": "house-voice-2",
+      "kind": "situational",
+      "expected": "house-voice",
+      "query": "Your replies keep restating my question and ending with a recap. Stop doing that for the rest of the session."
+    },
+    {
+      "id": "house-voice-3",
+      "kind": "situational",
+      "expected": "house-voice",
+      "query": "Every session I have to type 'shorter, no summary' again. Make it stick."
+    },
+    {
+      "id": "house-voice-vs-ux-writing-1",
+      "kind": "near-miss",
+      "expected": "ux-writing",
+      "query": "Rewrite our app's error messages so they are shorter and plainer.",
+      "notes": "adjacency: house-voice vs ux-writing — interface strings in the product are ux-writing's; house-voice covers only the agent's own replies"
+    },
+    {
+      "id": "house-voice-vs-lean-1",
+      "kind": "near-miss",
+      "expected": "lean",
+      "query": "This function is too long, make it shorter.",
+      "notes": "adjacency: house-voice vs lean — shortening code is lean's; house-voice shortens the agent's prose replies"
     }
   ]
 }
