@@ -529,6 +529,22 @@ class TestReviewDrift(unittest.TestCase):
             " docs/features/other/review.md after the review of h; merged"
             " code must be reviewed code, so it needs a re-review")
 
+    def test_an_added_file_passes_only_as_a_run_spend_file(self):
+        # Only what cost_ledger.run_ledger_path writes: a nested or
+        # non-.jsonl file under RUNS_DIR is read by no gate (review of
+        # this run, major 1), so it would merge unreviewed and unchecked.
+        run_file = "docs/factory/costs/runs/r-1.jsonl"
+        self.assertIsNone(merge.review_drift(
+            "#12", "h", [run_file], set(), False, [run_file]))
+        for path in ("src/new.py", "docs/factory/costs/runs/sub/evil.py",
+                     "docs/factory/costs/runs/r-1.py",
+                     "docs/factory/costs/runs/.hidden.jsonl"):
+            with self.subTest(path=path):
+                self.assertEqual(merge.review_drift(
+                    "#12", "h", [path], set(), False, [path]),
+                    f"#12 changed {path} after the review of h; merged"
+                    " code must be reviewed code, so it needs a re-review")
+
 
 class TestConductorCommits(TurnCase):
     """The Conductor's own commits stage only the files it wrote, never
@@ -568,6 +584,44 @@ class TestReviewedTree(TurnCase):
         summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
         self.assertEqual((problems, summary["stall"]), ([], None))
         self.assertEqual(self.rows[-1]["to"], "merged")
+
+    def test_the_ship_steps_own_spend_file_may_follow_the_review(self):
+        # Spend rows are one file per run under cost_ledger.RUNS_DIR
+        # (#954); the ship Worker's row lands after the reviewed head.
+        self.item(VERIFIED)
+        reviewed_at = self.head()
+        self.item({"docs/features/x/release.md": "notes\n",
+                   "docs/factory/costs/runs/conductor-b1-12-ship-1.jsonl":
+                   '{"row": "ship"}\n'})
+        summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
+        self.assertEqual((problems, summary["stall"]), ([], None))
+        self.assertEqual(self.rows[-1]["to"], "merged")
+
+    def test_a_rewritten_spend_file_after_the_review_stalls_the_merge(self):
+        # A run file is written once; one changed after the review was
+        # never reviewed, like a dropped aggregate row (re-review R4).
+        build = "docs/factory/costs/runs/conductor-b1-12-build-1.jsonl"
+        self.item(dict(VERIFIED, **{build: '{"row": "build"}\n'}))
+        reviewed_at = self.head()
+        self.item({build: '{"row": "build", "cost": 0}\n'})
+        summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"], (
+            f"#12 changed {build} after the review of {reviewed_at[:12]};"
+            " merged code must be reviewed code, so it needs a re-review"))
+
+    def test_a_rename_onto_an_allowed_path_stalls_the_merge(self):
+        # Rename detection would list only release.md, and the deletion
+        # of src.txt would merge unreviewed (review of this run, major 2).
+        self.item(dict(VERIFIED, **{"src.txt": "reviewed code\n"}))
+        reviewed_at = self.head()
+        sh(self.wt, "mv", "src.txt", "docs/features/x/release.md")
+        sh(self.wt, "commit", "-q", "-m", "ship")
+        summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"], (
+            f"#12 changed src.txt after the review of {reviewed_at[:12]};"
+            " merged code must be reviewed code, so it needs a re-review"))
 
     def test_a_code_change_after_the_review_stalls_the_merge(self):
         self.item(VERIFIED)
