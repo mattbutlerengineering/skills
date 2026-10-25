@@ -96,13 +96,13 @@ the wave's version bump (ADR-0095).
   against `98b220e`'s text.
   - Accept: the new module fails on `main` and passes after the items below,
     and `python3 -m unittest tests.test_ux_design_grounding` exits 0.
-- [ ] **Code facts before sketches** — in SKILL.md, before Sketch: for each
+- [x] **Code facts before sketches** — in SKILL.md, before Sketch: for each
   existing surface a flow changes, read the code that implements it today and
   record the facts (file, what it does now) in `ux.md`. Never sketch an
   existing surface from memory. TEMPLATE.md gains a `## Code facts` section.
   - Accept: SKILL.md names the step and its "never from memory" rule; the
     template has the section; the test pins both.
-- [ ] **Walkthroughs first** — in SKILL.md, before the flow interview: pick
+- [x] **Walkthroughs first** — in SKILL.md, before the flow interview: pick
   the hardest scenarios from `idea.md` / `prd.md` and write each as an
   acceptance walkthrough. Before finishing, each walkthrough must complete
   using only controls the doc defines, and one that cannot is a gap to fix
@@ -110,7 +110,7 @@ the wave's version bump (ADR-0095).
   - Accept: SKILL.md orders walkthroughs before flows and states the
     "only controls the doc defines" rule; the template has the section; the
     test pins both, including the order.
-- [ ] **Independent review before hand-off** — in SKILL.md, before Hand off:
+- [x] **Independent review before hand-off** — in SKILL.md, before Hand off:
   dispatch a fresh reviewer given the files (prd.md, ux.md, the code paths
   in Code facts), not the designer's conclusions, asked for Critical and High
   findings only. Fix or record each one before committing. Without fresh
@@ -121,12 +121,12 @@ the wave's version bump (ADR-0095).
   - Accept: SKILL.md names the files-not-conclusions rule, the
     Critical/High scope and the labelled inline fallback; the template has
     the section; the test pins all three.
-- [ ] **ux-patterns suggestion** — in the interview's conventions bullet:
+- [x] **ux-patterns suggestion** — in the interview's conventions bullet:
   when `docs/ux-patterns.md` is absent, suggest running `ux-patterns` first,
   as a suggestion only; the stage proceeds either way.
   - Accept: SKILL.md carries the suggestion and says it is optional; the
     test pins it.
-- [ ] **Checks green** — `python3 run_tests.py`, `python3 lint.py`,
+- [x] **Checks green** — `python3 run_tests.py`, `python3 lint.py`,
   `python3 kb.py drift`, `python3 gates.py && python3 gates.py --selftest`.
   `plugin.json`'s `version` stays untouched (ADR-0095).
   - Accept: each prints 0 problems and the selftest prints ok.
