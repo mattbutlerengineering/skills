@@ -102,6 +102,13 @@ pre-pass, deliberately **not** a gate:
   not a retroactive audit of shipped runs. Its harness counterpart,
   `plugin-evals/decompose/`, is authored and has never been run; there is no
   LEDGER change.
+- `python3 voice_grade.py <reply.md> [<reply.md> ...]` — prints each
+  reply's proxy token count and one line per house-voice slop pattern
+  found outside code, exit 0 clean, 1 on any slop, 2 on bad input
+  (ADR-0119). Free and offline, outside every gate and outside `make
+  check`, like the three above. The count is a proxy, not Claude's
+  tokenizer: it is valid only for comparing two replies to the same
+  prompt. `python3 factory.py voice-grade` is the same tool.
 
 ## Hard conventions
 
