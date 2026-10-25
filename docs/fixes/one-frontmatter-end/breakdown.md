@@ -11,6 +11,7 @@ assumptions:
   - "The dual-membership pin pair (launch_demo, protocol) lands in B2, the same commit as the new import, because tests/test_dual_membership.py fails the moment the edge exists without it. Adding a pair an ADR records is the pin's designed change (architecture.md's assumptions), not editing a test to make it pass."
   - "The old-against-new sweep over every tracked *.md is run in C2 as an Implement pre-check so a surprise surfaces before Verify. architecture.md names Verify as its owner, so Verify re-runs it and records the evidence in verification.md; C2 only logs the count under Notes."
   - "docs/factory/decompose-lessons.jsonl does not exist in this repo, so no lessons were weighed (skill step 3)."
+  - "(Implement, 2026-10-25) C1's detector is wider than its Accept line words it, so a launch_demo-style copy is caught: a fence definition is an re.* pattern that finds a three-dash fence (alone, inside text, or as a two-fence block) but not the same probe with two dashes, or a string constant stripping to `---` passed to a method call or on either side of ==, !=, in or not in (alone or in a tuple, list or set literal). Under it gates.SETEXT_UNDERLINE (it takes `--` too), charter_replay's delimiters and frontmatter writers count zero, pinned by a test; lint.py's table-separator membership test counts one and is pinned as a known non-owner. The Accept's 'each at its current count' reads as these counts. Blind spots kept: a fence built at run time (concatenation, a variable), a fence regex loose enough to take `--` too (such as `^-{2,}\\s*$`, which the two-dash probe reads as a dash-run rule), and receivers other than the bare name `re` (`import re as r`)."
 ---
 
 # Breakdown: one owner of where frontmatter ends
@@ -67,7 +68,7 @@ rule of its own. B1, B2 and B3 are independent of each other once A2 lands.
 - [x] **B1** `gates._skip_frontmatter` calls the owner (detectors H and M) — size:S, blocked by: A2
   - Accept: a caller-agreement test in `tests/test_gates.py` iterates `SHAPES` and asserts `_skip_frontmatter(text.splitlines())` equals `end + 1` when the row's end is not None, else 0. It passes on today's code and after the change (a characterization pin, see assumptions), and the commit message says so.
   - Accept: `_skip_frontmatter` returns `end + 1` from `protocol.frontmatter_end`, else 0, with its signature unchanged; `gates.FRONTMATTER_FENCE` is deleted (`grep -n "FRONTMATTER_FENCE" *.py factory/templates/tools/factory/*.py` prints nothing). `TestEvidenceHonesty`, `TestCaptureCompleteness` and the A2 reproductions pass unedited. The `gates.py` twin is synced, the manifest regenerated, and the battery is green.
-- [ ] **B2** `launch_demo._body` calls the owner, with the dual-membership pin pair — size:S, blocked by: A2
+- [x] **B2** `launch_demo._body` calls the owner, with the dual-membership pin pair — size:S, blocked by: A2
   - Accept: a caller-agreement test in `tests/test_launch_demo.py` iterates `SHAPES` and asserts `_body(text)` equals `"".join(text.splitlines(keepends=True)[end + 1:])` when the row's end is not None, else `text` unchanged. It is written first and fails on today's code for the CRLF, trailing-space, empty-block and end-of-file rows.
   - Accept: `_body` splits with `splitlines(keepends=True)`, asks `protocol.frontmatter_end`, and returns the joined body or the text unchanged; its literal `---\n` string search is gone. `tests/test_dual_membership.py`'s `ROOT_ONLY_IMPORTS_MIRRORED` gains `("launch_demo", "protocol")` citing ADR-0118, taking the set from 55 pairs to 56, and that suite passes. Every existing `tests/test_launch_demo.py` case passes unedited. `launch_demo.py` gains no payload twin, and the battery is green.
 - [x] **B3** `knowledge_plane._declared_status` calls the owner — size:S, blocked by: A2
@@ -79,10 +80,10 @@ rule of its own. B1, B2 and B3 are independent of each other once A2 lands.
 Demonstrable at the close: a counted pin fails if a second fence definition
 appears anywhere in tracked Python, and the whole repo agrees old against new.
 
-- [ ] **C1** the AST count pin for one fence definition — size:S, blocked by: B1, B2, B3
+- [x] **C1** the AST count pin for one fence definition — size:S, blocked by: B1, B2, B3
   - Accept: a test in `tests/test_protocol_frontmatter.py` walks the AST of every tracked non-test `.py` file, root and `factory/templates/tools/factory/` alike, collects each string constant that defines a frontmatter fence matcher (a `---` regex passed to `re.compile`, or a `"---"` literal compared with `==`), and asserts with `assertEqual` the exact per-module count map: one in `protocol.py`, one in its payload twin, and the known non-owners from defect.md (`gates.SETEXT_UNDERLINE` and its twin, `lint.py`'s table separator, `charter_replay.py`'s prompt delimiters) each at its current count, with zero in `gates.py`, `launch_demo.py` and `knowledge_plane.py`.
   - Accept: a mutation check re-adding `FRONTMATTER_FENCE = re.compile(r"^---\s*$")` to `gates.py` makes the pin fail, and reverting it makes it pass; both runs are recorded in the commit message. The battery is green.
-- [ ] **C2** close-out: Payload twins, manifest, battery and the old-against-new sweep — size:M, blocked by: C1
+- [x] **C2** close-out: Payload twins, manifest, battery and the old-against-new sweep — size:M, blocked by: C1
   - Accept: `cmp` exits 0 for each of `protocol.py`, `gates.py` and `knowledge_plane.py` against its `factory/templates/tools/factory/` twin; `git ls-files -o --exclude-standard` lists no `.orig`/`.rej`; a fresh `python3 factory_init.py update-manifest` leaves `git status --porcelain` empty.
   - Accept: `python3 run_tests.py` exits 0, `python3 lint.py` prints `lint: 0 problem(s)`, `python3 kb.py drift` prints `drift: 0 problem(s)`, and `python3 gates.py && python3 gates.py --selftest` prints `gates: 0 problem(s)`.
   - Accept: a throwaway script outside the repo loads the four readers from `main` (via `git show main:<file>`) and from this branch, runs `parse_frontmatter`, `_skip_frontmatter`, `_body` and `_declared_status` over every file `git ls-files '*.md'` lists, and prints every file whose verdict differs between old and new, then a total. The total and any listed file are logged under Notes, dated; defect.md predicts 0. A nonzero total is not fixed here: it is reported to Verify and, if it shows a shape the rule table did not predict, routed to Architect as a design gap.
@@ -104,6 +105,13 @@ appears anywhere in tracked Python, and the whole repo agrees old against new.
   constraints forbid without a decision. B2 is not committed; C1 and C2,
   blocked by it, are not started. Routed back for an Owner/Architect
   decision on that pin.
+- 2026-10-25 resolved (Owner, in session): asked how to treat the second
+  pin, the Owner answered "Drop the count, keep assertIn". The
+  `assertEqual(len(pinned), 55)` line is deleted, its `assertIn(("eval_trends",
+  "cli"), pinned)` kept, and the method renamed
+  `test_the_pin_holds_the_eval_trends_edge`; `tests/test_dual_membership.py`
+  alone owns the set and its size. This is the run's one authorized edit
+  to an existing test outside B2's planned pair. Commit 976ef33. B2 resumed.
 
 ## Notes
 
@@ -153,3 +161,40 @@ appears anywhere in tracked Python, and the whole repo agrees old against new.
   each in protocol.py and its twin and nothing else; widened to
   string-method arguments and membership tests it would also find
   launch_demo.py (2, until B2 lands) and lint.py (1).
+- 2026-10-25 (Implement) Owner decision recorded under Design gaps found
+  ("Drop the count, keep assertIn"); `tests/test_eval_trends.py` edited
+  as decided, commit 976ef33.
+- 2026-10-25 (Implement) B2 checked: the saved patch re-applied. RED
+  re-run with only `launch_demo.py` reverted: `TestBody` failed 8 of 15
+  shapes (crlf, opener and closer with trailing whitespace, empty block,
+  closer at end of file, empty block with a later fence line, tab after
+  the opener, lone carriage returns). GREEN after; `tests.test_launch_demo`
+  and `tests.test_dual_membership` (56 pairs) pass, existing launch_demo
+  cases unedited, no payload twin. Battery green (3813 tests). Commit
+  76bd161.
+- 2026-10-25 (Implement) C1 checked: `TestOneFenceDefinition` pins the
+  exact map `{protocol.py: [^---\s*$], its twin: [^---\s*$], lint.py:
+  [---]}` with the widened detector (assumptions), plus a test that it
+  sees each copy shape (line regex, block regex, startswith, find, ==,
+  membership) and one that the known non-owners count zero. Run over
+  origin/main's sources it reports protocol `_FRONTMATTER`, gates
+  `FRONTMATTER_FENCE`, launch_demo's `---\n` / `\n---\n` pair and
+  knowledge_plane's two `---` comparisons. Mutation 1: adding
+  `FRONTMATTER_FENCE = re.compile(r"^---\s*$")` to gates.py failed the
+  pin (`'gates.py': ['^---\\s*$']`); reverted, OK. Mutation 2: adding
+  `if not text.startswith("---\n"): return text` to `launch_demo._body`
+  failed it (`'launch_demo.py': ['---\n']`); reverted, OK. Both re-run
+  after the final detector edit. Battery green (3816 tests). Commit
+  59a7c64.
+- 2026-10-25 (Implement) C2 checked: `cmp` exits 0 for protocol.py,
+  gates.py and knowledge_plane.py against their twins; no `.orig`/`.rej`
+  listed; a fresh `python3 factory_init.py update-manifest` printed
+  `factory-init: 0 problem(s)` and left `git status --porcelain` empty.
+  Old-against-new sweep (old = origin/main ec8159f's root .py via
+  `git archive` into the scratchpad, each side in its own `python3 -I`
+  process): 1014 tracked `*.md` files, 736 with frontmatter, 0 changed
+  verdicts across `parse_frontmatter`, `_skip_frontmatter`, `_body` and
+  `_declared_status`, as defect.md predicts. Verify re-runs it. Battery:
+  `tests: 3816 tests across 118 modules ... 0 problem(s)`, `lint: 0
+  problem(s) across 34 skills`, `drift: 0 problem(s)`, `gates: 0
+  problem(s)` / `selftest: ok`.
