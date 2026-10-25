@@ -116,7 +116,7 @@ preserved, only ownership moves. Review and Ship scale small.
   numbered 9.
   - Accept: `skills/work-queue/SKILL.md` step 4's list numbers 1–9 in
     order, and nothing cites a step-4 item by its old number.
-- [ ] **Checks green** — `python3 run_tests.py`, `python3 lint.py`,
+- [x] **Checks green** — `python3 run_tests.py`, `python3 lint.py`,
   `python3 kb.py drift`, `python3 gates.py && python3 gates.py
   --selftest`.
   - Accept: each exits 0 with its clean output line.
