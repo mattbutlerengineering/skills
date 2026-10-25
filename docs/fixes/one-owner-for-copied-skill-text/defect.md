@@ -94,12 +94,12 @@ preserved, only ownership moves. Review and Ship scale small.
 
 ## Work items
 
-- [ ] **Regression test** — `tests/test_skill_shared_references.py`:
+- [x] **Regression test** — `tests/test_skill_shared_references.py`:
   for each moved passage a distinctive sentence occurs exactly once
   across owner and consumer files (counted, whitespace-normalised),
   lives in the owner, and each consumer cites the owner's path.
   - Accept: the test fails on the current text, before any move.
-- [ ] **audit/automate recon** — shared recon, in-flight check and REST
+- [x] **audit/automate recon** — shared recon, in-flight check and REST
   fallback move to `skills/audit/references/recon.md`; the routing
   ladder and dedupe rule to `skills/audit/references/routing.md`; audit
   cites its references, automate cites `../audit/references/recon.md`

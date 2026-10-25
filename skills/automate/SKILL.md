@@ -26,7 +26,9 @@ suspicions list.
 
 ### 1. Recon — name the tree, then read what is already there
 
-State the **absolute repo root** and `git rev-parse --short HEAD` in the
+The recon both skills share is `audit`'s: read
+`../audit/references/recon.md` now. Its first step comes first here too —
+state the **absolute repo root** and `git rev-parse --short HEAD` in the
 report's first two lines. A recommendation is scoped to a tree at a commit.
 
 Then read what the repo already has, because recommending something that
@@ -48,25 +50,12 @@ that is **inert** — installed and unable to fire — is one of the best
 findings available, and it belongs in the report as a defect, not a
 recommendation.
 
-**Then check what is already in flight, before recommending anything:**
-
-    gh pr list --state open
-    gh issue list --state open --limit 50
-
-In a cloud session (Claude Code Remote), where the GraphQL-backed
-`gh pr list` and `gh issue list` return HTTP 403 while `gh api` REST
-calls succeed: `gh api 'repos/{owner}/{repo}/pulls?state=open'` and
-`gh api 'repos/{owner}/{repo}/issues?state=open&per_page=50'`, dropping
-every entry that carries a `pull_request` key — the REST issues
-endpoint lists pull requests too.
-
-An automation an unmerged PR already adds is not a recommendation — it is
-a duplicate of work in flight, and it reads as new, which is worse than
-saying nothing. The same goes for an open issue that already proposes it
-and for a seed already sitting in `docs/backlog.md`. Read all three
-before the sweep, not after. This is not hypothetical bookkeeping: a run
-in this repo rebuilt a one-line fix that was sitting in an open PR the
-whole time, because discovery listed open issues and never open PRs.
+**Then check what is already in flight, before recommending anything** —
+open PRs, open issues and `docs/backlog.md`, with the cloud-session
+fallback, as the recon reference's second step says. An automation an
+unmerged PR already adds, an open issue already proposes, or a seed
+already carries is not a recommendation. Read all three before the
+sweep, not after.
 
 ### 2. Find the friction
 
@@ -178,17 +167,14 @@ omitted category reads as clean.
 ### 7. Route each recommendation to a carrier that already exists
 
 Where the lifecycle pipeline is installed, the ladder is `audit`'s:
+read `../audit/references/routing.md`, which also holds the dedupe read
+every `docs/backlog.md` append waits on. What differs here is which
+recommendation takes which rung:
 
-1. **A seed in `docs/backlog.md`** — the default for anything worth
-   remembering and not worth a run today. One line, the protocol's grammar,
-   origin `session:YYYY-MM-DD`.
-2. **A maintenance run** via `capture` — when an automation the repo already
-   has is inert or wrong. That is a defect, and it has a defect's entry.
-3. **A feature run** via `idea` — when the recommendation is a build.
-4. **Nothing** — a verdict, recorded in the report.
-
-Read `docs/backlog.md` before appending and drop what it already carries;
-the dedupe happens before the write, not after.
+- **A maintenance run** via `capture` — when an automation the repo
+  already has is inert or wrong. That is a defect, and it has a defect's
+  entry.
+- **A feature run** via `idea` — when the recommendation is a build.
 
 Where the pipeline is not installed, the report plus an agreed spec for the
 top recommendation is a complete result, and the hand-off is that spec.
