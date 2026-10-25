@@ -137,3 +137,4 @@ the canonical vocabulary.
 | [0114](0114-decompose-grade-is-an-offline-scorer-beside-a-harness-suite-and-joins-the-root-only-importers.md) | decompose_grade is an offline scorer beside a harness suite, and joins the root-only importers | provisional |
 | [0115](0115-eval-trends-reads-records-through-eval-schema-and-joins-the-root-only-importers.md) | eval_trends reads records through eval_schema's name inverse and joins the root-only importers of cli.py | provisional |
 | [0116](0116-the-lessons-seen-header-is-one-entry-per-signal-and-run.md) | The lessons file's seen header is one entry per signal and run | provisional |
+| [0118](0118-protocol-owns-where-frontmatter-ends.md) | protocol.py owns where frontmatter ends, and a fence line may carry trailing whitespace | provisional |
