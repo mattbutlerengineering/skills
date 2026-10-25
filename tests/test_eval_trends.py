@@ -524,10 +524,10 @@ class TestUnreadableLocations(TempRoot):
 class TestDualMembershipPin(unittest.TestCase):
     """Red until S6 adds the import: the pin names the new edge."""
 
-    def test_the_pin_holds_the_eval_trends_edge_and_55_pairs(self):
+    def test_the_pin_holds_the_eval_trends_edge(self):
+        # test_dual_membership alone owns the set and its size.
         pinned = test_dual_membership.ROOT_ONLY_IMPORTS_MIRRORED
         self.assertIn(("eval_trends", "cli"), pinned)
-        self.assertEqual(len(pinned), 55)
 
 
 if __name__ == "__main__":

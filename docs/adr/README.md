@@ -138,3 +138,4 @@ the canonical vocabulary.
 | [0115](0115-eval-trends-reads-records-through-eval-schema-and-joins-the-root-only-importers.md) | eval_trends reads records through eval_schema's name inverse and joins the root-only importers of cli.py | provisional |
 | [0116](0116-the-lessons-seen-header-is-one-entry-per-signal-and-run.md) | The lessons file's seen header is one entry per signal and run | superseded in part by ADR-0117 (the pairing skip rule; provisional) |
 | [0117](0117-a-hit-run-seen-before-its-clean-partner-still-pairs.md) | A hit run seen before its clean partner still pairs when the partner arrives | provisional |
+| [0118](0118-protocol-owns-where-frontmatter-ends.md) | protocol.py owns where frontmatter ends, and a fence line may carry trailing whitespace | provisional |

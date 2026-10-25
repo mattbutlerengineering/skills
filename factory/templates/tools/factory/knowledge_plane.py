@@ -28,7 +28,7 @@ from collections import namedtuple
 from pathlib import Path
 
 from cli import read_file
-from protocol import parse_frontmatter
+from protocol import frontmatter_end, parse_frontmatter
 
 PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
 ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
@@ -580,15 +580,15 @@ def standing(text):
 
 def _declared_status(lines):
     """(lineno, raw status text) from the `- Status:` line, else from a
-    frontmatter `status:` field, else (0, None)."""
+    frontmatter `status:` field, else (0, None). The block is the one
+    protocol.frontmatter_end bounds (ADR-0118)."""
     for lineno, line in enumerate(lines, 1):
         match = ADR_STATUS_LINE.match(line)
         if match:
             return lineno, match.group(1)
-    if lines and lines[0].strip() == "---":
-        for lineno, line in enumerate(lines[1:], 2):
-            if line.strip() == "---":
-                break
+    end = frontmatter_end(lines)
+    if end is not None:
+        for lineno, line in enumerate(lines[1:end], 2):
             match = _FRONTMATTER_STATUS.match(line)
             if match and match.group(1):
                 return lineno, match.group(1)

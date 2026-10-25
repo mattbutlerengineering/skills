@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from factory_fixture import CONFIG  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
+from frontmatter_shapes import SHAPES  # noqa: E402
 from make_parse import make_recipe, make_targets, phony_targets  # noqa: E402
 from test_work_orders import (  # noqa: E402
     DUP_ISSUE, DUP_WO, NEWER, OLDER, Tree as WorkOrderTree)
@@ -1101,6 +1102,42 @@ class TestCaptureCompleteness(unittest.TestCase):
             self.assertTrue(
                 all("docs/fixes/one/defect.md" in p for p in problems))
             self.assertTrue(problems)
+
+
+class TestOneFrontmatterAnswer(unittest.TestCase):
+    """Where frontmatter ends has one owner, protocol.frontmatter_end
+    (ADR-0118), so gates' section walk and its date read cannot disagree
+    about one file. Before it, a `--- ` opener was frontmatter to the
+    section walk and not to parse_frontmatter, so a grandfathered brief
+    or verification lost its date and was judged."""
+
+    OPENERS = ("---", "--- ")
+
+    def test_skip_frontmatter_gives_the_owners_body_index(self):
+        for name, text, end in SHAPES:
+            with self.subTest(shape=name):
+                self.assertEqual(gates._skip_frontmatter(text.splitlines()),
+                                 0 if end is None else end + 1)
+
+    def test_a_grandfathered_capture_brief_is_silent_under_either_opener(self):
+        for opener in self.OPENERS:
+            with self.subTest(opener=opener), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = FixtureTree(tmp)
+                tree.write("docs/fixes/old/defect.md",
+                           f"{opener}\nstage: capture\nrun: maintenance:old\n"
+                           "date: 2026-01-01\nre-entry: implement\n---\n\n"
+                           "# Defect: old\n\nNo sections at all.\n")
+                self.assertEqual(gates.check_capture_completeness(tree.root),
+                                 [])
+
+    def test_a_grandfathered_verification_skips_the_rollup_under_either_opener(
+            self):
+        for opener in self.OPENERS:
+            with self.subTest(opener=opener):
+                text = (f"{opener}\nstage: verify\ndate: 2026-01-01\n---\n"
+                        "# Verification\n\n## Summary\n\nAll green.\n")
+                self.assertFalse(gates._rollup_applies(text))
 
 
 class TestArchitectureDrift(unittest.TestCase):
