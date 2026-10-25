@@ -601,6 +601,45 @@ def gh_read(args, operation, label=None, run=gh_runner, expect=list,
     return GhResult(value, [], False)
 
 
+def marked_issue(open_issues, marker):
+    """The lowest-numbered open issue whose body starts with `marker` —
+    how a scheduled writer finds the one issue it owns — or None."""
+    return next((entry["number"] for entry in
+                 sorted(open_issues, key=lambda e: e["number"])
+                 if (entry.get("body") or "").startswith(marker)), None)
+
+
+def upsert_pinned_issue(existing, title, body, label, run=gh_runner):
+    """(problems): create-or-update a writer's pinned issue. The edit path
+    re-pins and tolerates the refusal: re-pinning a pinned issue fails,
+    and gh gives no cheap way to tell that steady state from a real one,
+    so the retry exists for a human unpin to heal on the next run. The
+    create path's pin failure IS a problem: nothing else would retry an
+    issue born unpinned. The gate digest and the rejection miner share
+    it (they held two copies until the 2026-10-25 consolidation)."""
+    if existing is not None:
+        try:
+            run(["issue", "edit", str(existing), "--body", body])
+        except CLI_FAILURES as err:
+            return [f"{label}: gh issue edit {existing} failed:"
+                    f" {detail(err)}"]
+        try:
+            run(["issue", "pin", str(existing)])
+        except CLI_FAILURES:
+            pass
+        return []
+    try:
+        url = run(["issue", "create", "--title", title,
+                   "--body", body]).strip()
+    except CLI_FAILURES as err:
+        return [f"{label}: gh issue create failed: {detail(err)}"]
+    try:
+        run(["issue", "pin", url.rsplit("/", 1)[-1]])
+    except CLI_FAILURES as err:
+        return [f"{label}: gh issue pin failed: {detail(err)}"]
+    return []
+
+
 def label_names(payload):
     """The label names on a gh label-carrying payload, in payload order.
     Accepts both shapes gh answers with: an object carrying a `labels`

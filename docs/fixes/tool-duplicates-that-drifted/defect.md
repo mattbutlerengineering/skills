@@ -99,7 +99,8 @@ a new shared function:
   cosmetically;
 - `_read_all` in decompose_grade and voice_grade;
 - the batch planners' shared over-the-cap test;
-- the two budget calibrators.
+- the two budget calibrators;
+- each module's `LIST_WINDOW` value (see Notes).
 
 `fast_path`'s gate paths omit `.claude-plugin/plugin.json`. That is
 harmless today, since only `docs/` paths are low-risk, so it is seeded,
@@ -115,9 +116,9 @@ backlog seed pending a routing eval.
   - Accept: `TestRepoPath` passes. `kb.py drift` prints 0 problems before
     and after. md_claims' before/after diff over the same tree is
     explained.
-- [ ] **One issue upsert and one queue read** — upsert-and-pin in `cli.py`.
-  The list-and-timelines startup goes in `human_gates.py`. `LIST_WINDOW`
-  lives once in `cli`.
+- [x] **One issue upsert and one queue read** — upsert-and-pin and the
+  marked-issue lookup in `cli.py`. The list-and-timelines startup goes in
+  `human_gates.py` as `read_gate_issues`.
   - Accept: the gate_digest and rejection_mining suites pass unchanged in
     their asserted strings, and `one_owner.py` no longer names
     LIST_ARGS/ISSUE_ARGS or the body/number/state group for those two.
@@ -148,6 +149,12 @@ backlog seed pending a routing eval.
 
 ## Notes
 
+- 2026-10-25, Implement: `LIST_WINDOW` stays per module. It is 100 in
+  work_queue, 500 in sweeps and 1000 in five others. `cli.gh_read` owns
+  the window mechanism (the limit sent equals the limit the truncation
+  check tests), and each caller owns its own value. Folding the five
+  1000s together would merge five policies, not one fact. Moved to Ruled
+  out.
 - 2026-10-25: Run B of the Owner-approved consolidation wave. Scope: tool
   duplicates that have drifted, with no skill merges. Sibling runs:
   `a-spend-row-stalls-the-merge` (#1106) and
