@@ -269,5 +269,27 @@ class TestFrontDoor(unittest.TestCase):
         ]))
 
 
+class TestBinaryContrastBounds(unittest.TestCase):
+    """Review (2026-10-25): binary-contrast's open `[^.]*` scanned to the
+    end of the text from every "not just", so a long reply without a
+    period graded in quadratic time and a "but" paragraphs later matched."""
+
+    def test_a_200_kb_reply_of_not_just_grades_in_linear_time(self):
+        import time
+        text = "not just " * 22000
+        start = time.monotonic()
+        self.assertEqual(vg.slop(text), [])
+        self.assertLess(time.monotonic() - start, 2.0)
+
+    def test_a_but_past_a_blank_line_is_not_a_contrast(self):
+        text = ("- Not just the index changes\n\nRun the tests\n\n"
+                "The commit is local, but it is safe")
+        self.assertEqual(vg.slop(text), [])
+
+    def test_a_contrast_inside_one_paragraph_still_counts(self):
+        self.assertEqual(vg.slop("It is not just a\ntypo problem but data."),
+                         [("binary-contrast", "not just a\ntypo problem but")])
+
+
 if __name__ == "__main__":
     unittest.main()

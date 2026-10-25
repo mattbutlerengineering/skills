@@ -49,7 +49,11 @@ SLOP_PATTERNS = (
      r"\b(?:literally|genuinely|honestly|truly|fundamentally|inherently)\b",
      "i"),
     ("binary-contrast",
-     r"\bnot just\b[^.]*\bbut\b|\bisn['’]t (?:just )?[^.]{1,40}\. it['’]s\b",
+     # Bounded, and stopped by a blank line: an open [^.]* rescanned the
+     # rest of the text from every "not just" (quadratic) and crossed
+     # paragraphs. A single line break is still crossed (hard wrap).
+     r"\bnot just\b(?:[^.\n]|\n(?![ \t]*\n)){0,120}\bbut\b"
+     r"|\bisn['’]t (?:just )?[^.]{1,40}\. it['’]s\b",
      "i"),
     ("narration",
      r"\blet me (?:start|begin|take a look|check|explain)\b"
