@@ -26,7 +26,13 @@ the user's head at this stage, so this skill interviews — it does not draft.
    awaiting review and ask whether one of them does this: the protocol's
    *Work already in flight* section. Run discovery sees the working tree,
    and a run someone else has already built sits on a branch where no
-   directory listing reaches it. Say which of the three outcomes happened;
+   directory listing reaches it. Review is not the only place: a run whose
+   verify failed never opened a pull request and sits on an unmerged
+   branch or worktree. Run `git branch -a --no-merged origin/main` and
+   `git worktree list`; for candidates whose name touches the same surface,
+   `git ls-tree --name-only <branch> docs/features/ docs/fixes/`. A branch
+   carrying run artifacts for the same surface is something already doing
+   this work: stop and surface it. Say which of the three outcomes happened;
    a check that could not run is reported as that, never as a clean one. A
    greenfield product run with no review surface to read satisfies this by
    saying so.

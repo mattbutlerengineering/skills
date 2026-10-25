@@ -35,7 +35,13 @@ interviews — it does not draft.
    review and ask whether one of them does this — the protocol's *Work
    already in flight* section. Say which of its three outcomes happened:
    nothing matched, the check could not run, or something already does
-   this and the run stops here instead of building it twice. Reporting a
+   this and the run stops here instead of building it twice. Review is
+   not the only place: a run whose verify failed never opened a pull
+   request and sits on an unmerged branch or worktree. Run `git branch -a
+   --no-merged origin/main` and `git worktree list`; for candidates whose
+   name touches the same surface, `git ls-tree --name-only <branch>
+   docs/features/ docs/fixes/`. A branch carrying run artifacts for the
+   same surface is something already doing this work. Reporting a
    check that could not run as a clean result is the one failure this
    step must never produce.
 

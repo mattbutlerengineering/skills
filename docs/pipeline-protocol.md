@@ -30,15 +30,18 @@ which one.
 ### Work already in flight
 
 Run discovery sees the working tree. Work that another agent has already
-finished does not live in the working tree — it lives on a branch, waiting
-for a human, as a pull request, merge request, or patch in review. No
-enumeration of run directories can see it.
+finished does not live in the working tree — it lives on a branch, either
+waiting for a human as a pull request, merge request, or patch in review,
+or never submitted at all: an unmerged branch or worktree whose verify
+failed carries a complete run and no review item. No enumeration of run
+directories can see either.
 
 So the moment a run **starts** is where that is checked: `capture` claiming
 a seed or seeding from tracker intake, `idea` claiming a seed. Before
-writing the first artifact, look over the work already waiting for review
-and ask whether one of them already does this. Three outcomes, and each
-must be visible:
+writing the first artifact, look over the work already in flight — what
+is waiting for review, and the unmerged branches and worktrees that carry
+run artifacts — and ask whether one of them already does this. Three
+outcomes, and each must be visible:
 
 - **Nothing matches** — proceed, and say the check ran.
 - **The check could not run** — no review surface, no credentials, no
@@ -53,7 +56,9 @@ This is a **guard, not a door**. It can only ever stop a run from starting,
 so the one-way bound above is untouched: nothing here polls, nothing here
 seeds a run, and orientation inside an active run still reads run artifacts
 alone. The concrete command that lists work awaiting review is packaging's,
-like the tracker CLI — the shape of the check is what lives here.
+like the tracker CLI; the git recipe for unmerged branches and worktrees
+is in the skills that start a run — the shape of the check is what lives
+here.
 
 A related rule, deliberately not the same one, is the next section's: open
 pull requests are drained before new work starts, to keep branches from

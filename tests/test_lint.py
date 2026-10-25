@@ -33,7 +33,8 @@ def _in_flight_line():
     guard. Taken from lint's own constant so the clean tree tracks a
     reworded heading instead of pinning a stale copy of it."""
     return (f"Before claiming a seed, run the protocol's "
-            f"{lint.IN_FLIGHT_HEADING!r} check.")
+            f"{lint.IN_FLIGHT_HEADING!r} check. "
+            f"`{lint.IN_FLIGHT_BRANCH_RECIPE} origin/main`.")
 
 
 def recital_body(slug):
@@ -150,6 +151,7 @@ def make_clean_tree(root):
     # smallest tree every checker passes on genuinely has to carry them.
     (root / "docs" / "pipeline-protocol.md").write_text(
         f"spec\n\n### {lint.IN_FLIGHT_HEADING}\n\n"
+        "Unmerged branches and worktrees count.\n\n"
         "## Artifacts are the state\n\n"
         + protocol_table(protocol.STAGE_ARTIFACTS)
         + "\n### Maintenance-run orientation\n\n"
@@ -650,6 +652,22 @@ class TestSkillRecitals(CheckerTreeTest):
              f"{lint.IN_FLIGHT_HEADING!r} check, which is where a run "
              "that is already open in review gets caught"])
 
+    def test_a_run_starting_skill_must_give_the_branch_recipe(self):
+        """Naming the section is not enough: the skill owns the concrete
+        git recipe that reaches an unmerged branch."""
+        self.seed("capture",
+                  "1. Look over the work awaiting review - the protocol's"
+                  " *Work already in flight* section.\n"
+                  "2. Record `re-entry: implement` or `re-entry: "
+                  "architect`.\n"
+                  "3. Write the artifact as `defect.md`.\n"
+                  "4. Hand off per the recorded re-entry.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            ["skills/capture/SKILL.md never gives the unmerged-branch "
+             f"recipe {lint.IN_FLIGHT_BRANCH_RECIPE!r}, which is where a "
+             "run that never opened a pull request gets caught"])
+
     def test_a_recital_that_wraps_still_counts(self):
         """Found by the pin failing on a correct recital. These documents
         are hard-wrapped near 72 columns, so a four-word phrase lands
@@ -658,7 +676,8 @@ class TestSkillRecitals(CheckerTreeTest):
         it the fact. The wrap here is the real one from capture."""
         self.seed("capture",
                   "1. Look over the work awaiting review — the protocol's"
-                  " *Work\n   already in flight* section.\n"
+                  " *Work\n   already in flight* section, "
+                  "`git branch -a --no-merged origin/main`.\n"
                   "2. Record `re-entry: implement` or `re-entry: "
                   "architect`.\n"
                   "3. Write the artifact as `defect.md`.\n"
@@ -1589,6 +1608,21 @@ class TestProtocol(CheckerTreeTest):
             [f"docs/pipeline-protocol.md no longer states "
              f"{lint.IN_FLIGHT_HEADING!r}, which capture and idea both "
              "recite"])
+
+    def test_in_flight_section_must_name_worktrees(self):
+        """In flight is wider than open review: a run whose verify
+        failed never opened a pull request and lives on an unmerged
+        branch or worktree."""
+        path = self.root / "docs" / "pipeline-protocol.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace(
+                "Unmerged branches and worktrees count.", "Only PRs."),
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_protocol(self.root),
+            [f"docs/pipeline-protocol.md's {lint.IN_FLIGHT_HEADING!r} "
+             "section never names 'worktree's, where finished work with "
+             "no pull request lives"])
 
 
 class TestEvals(CheckerTreeTest):
