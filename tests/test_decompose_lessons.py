@@ -433,6 +433,16 @@ class TestPairs(unittest.TestCase):
     def test_pairs_match_the_hand_worked_history(self):
         self.assertEqual(dl.pairs(HISTORY), HAND_PAIRS)
 
+    def test_the_first_clean_run_in_record_order_is_the_exemplar(self):
+        c1 = record("feature:c1", clean_replan())
+        c2 = record("feature:c2", clean_replan())
+        h = record("feature:h", hit_replan())
+        for order, first in (([c1, c2, h], "feature:c1"),
+                             ([c2, c1, h], "feature:c2")):
+            with self.subTest(first=first):
+                self.assertEqual(
+                    [p["clean"] for p in dl.pairs(order)], [first])
+
     def test_a_hit_run_with_no_clean_run_of_its_kind_and_label_has_no_pair(
             self):
         hits = {p["hit"] for p in dl.pairs(HISTORY)}
@@ -731,6 +741,8 @@ SEEN_HC = ["design_gaps:feature:c", "design_gaps:feature:h",
            "replan:feature:c", "replan:feature:h"]
 REVIEW_TEXT = ("feature runs whose review findings name an item: r 1 of 2"
                " findings (observed), h 0 of 0 findings (observed)")
+H_ONLY = record("feature:h", hit_replan())
+C_ONLY = record("feature:c", clean_replan())
 ROUTED_TEXT = ("feature runs routed back to Architect: h 1 route(s)"
                " (observed), c 0 route(s) (observed)")
 ADDED_TEXT = ("feature runs that re-planned mostly by adding rows: h 2 of 8"
@@ -874,6 +886,62 @@ class TestFold(unittest.TestCase):
         self.assertEqual(lines, [])
         self.assertEqual(again, got)
 
+    def test_a_seen_hit_run_pairs_when_its_partner_arrives_later(self):
+        # Review finding of ADR-0116 (#1069): H measured before C exists
+        # was skipped for ever, so the lesson was never derived.
+        existing = [lesson("replan/feature/dropped", 3, ("feature:x",))]
+        got, seen, lines, problems = dl.fold(existing, [], [H_ONLY], [])
+        self.assertEqual((got, lines, problems), (existing, [], []))
+        self.assertEqual(seen, ["replan:feature:h"])
+        later, _, lines, problems = dl.fold(got, seen, [H_ONLY, C_ONLY], [])
+        self.assertEqual(problems, [])
+        self.assertEqual(lines,
+                         ["decompose-lessons: ADD replan/feature/added"])
+        self.assertEqual(sorted(e["id"] for e in later),
+                         ["replan/feature/added",
+                          "replan/feature/dropped"])
+
+    def test_an_unpaired_hit_run_that_votes_still_pairs_later(self):
+        existing = [lesson("replan/feature/dropped", 3, ("feature:x",))]
+        ballots = [("downvote", "replan/feature/dropped", "feature:h")]
+        got, seen, lines, _ = dl.fold(existing, [], [H_ONLY], ballots)
+        self.assertEqual(lines, [
+            "decompose-lessons: DOWNVOTE replan/feature/dropped"])
+        self.assertEqual(got[0]["importance"], 2)
+        later, _, lines, _ = dl.fold(got, seen, [H_ONLY, C_ONLY], [])
+        self.assertEqual(lines,
+                         ["decompose-lessons: ADD replan/feature/added"])
+        added = [e for e in later if e["id"] == "replan/feature/added"]
+        self.assertEqual(added[0]["sources"], ["feature:c", "feature:h"])
+
+    def test_a_seen_hit_run_with_a_seen_partner_stays_skipped(self):
+        seen = ["replan:feature:c", "replan:feature:h"]
+        got, kept, lines, _ = dl.fold([], seen, [H_ONLY, C_ONLY], [])
+        self.assertEqual((got, kept, lines), ([], seen, []))
+        earlier = record("feature:a", clean_replan())
+        got, _, lines, _ = dl.fold([], seen, [earlier, H_ONLY, C_ONLY], [])
+        self.assertEqual((got, lines), ([], []))
+
+    def test_partners_are_the_clean_runs_of_a_kind_and_label_in_order(self):
+        other = record("feature:o", replan(0, 5, "inferred"))
+        later = record("feature:d", clean_replan())
+        records = [H_ONLY, other, C_ONLY, record("maintenance:m",
+                   clean_replan()), later]
+        got = dl._partners(records, "replan", "count", "feature",
+                           "observed")
+        self.assertEqual([r["run"] for r in got],
+                         ["feature:c", "feature:d"])
+
+    def test_spent_is_only_a_seen_hit_run_with_a_seen_partner(self):
+        unseen = record("feature:e", replan(1, 6, "observed", added=1))
+        no_partner = record("feature:x", replan(3, 9, "inferred",
+                                                added=3))
+        records = [H_ONLY, C_ONLY, unseen, no_partner]
+        seen = {"replan:feature:c", "replan:feature:h",
+                "replan:feature:x"}
+        self.assertEqual(dl._spent(records, seen), {"replan:feature:h"})
+        self.assertEqual(dl._spent(records, {"replan:feature:h"}), set())
+
 
 class TestUpdate(TempFile):
     def setUp(self):
@@ -947,6 +1015,44 @@ class TestUpdate(TempFile):
         self.assertEqual(by_id["review/feature/named"]["sources"],
                          ["feature:h", "feature:r"])
         self.assertIn("review:feature:r", seen)
+
+    def ledger(self, *extra):
+        """Records of a maintenance pair, so a lessons file exists after
+        the first update whatever the feature runs do."""
+        return [*extra, record("maintenance:m", replan(6, 7, "inferred",
+                                                       dropped=6)),
+                record("maintenance:n", replan(0, 5, "inferred"))]
+
+    def test_a_hit_run_seen_before_its_partner_is_derived_later(self):
+        h = record("feature:h", replan(2, 10, "observed", added=2))
+        c = record("feature:c", replan(0, 8, "observed"))
+        self.update(self.ledger(h))
+        lines, problems = self.update(self.ledger(h, c))
+        self.assertEqual(problems, [])
+        self.assertIn("decompose-lessons: ADD replan/feature/added", lines)
+        staged = self.file.read_bytes()
+        self.file.unlink()
+        self.update(self.ledger(h, c))  # control: one update over both
+        self.assertEqual(self.file.read_bytes(), staged)
+
+    def test_a_repeat_after_the_late_partner_is_unchanged(self):
+        h = record("feature:h", replan(2, 10, "observed", added=2))
+        c = record("feature:c", replan(0, 8, "observed"))
+        self.update(self.ledger(h))
+        self.update(self.ledger(h, c))
+        before = self.file.read_bytes()
+        lines, problems = self.update(self.ledger(h, c))
+        self.assertEqual((lines, problems),
+                         (["decompose-lessons: unchanged"], []))
+        self.assertEqual(self.file.read_bytes(), before)
+
+    def test_a_clean_run_seen_before_any_hit_still_derives_later(self):
+        h = record("feature:h", replan(2, 10, "observed", added=2))
+        c = record("feature:c", replan(0, 8, "observed"))
+        self.update(self.ledger(c))
+        lines, problems = self.update(self.ledger(h, c))
+        self.assertEqual(problems, [])
+        self.assertIn("decompose-lessons: ADD replan/feature/added", lines)
 
     def test_no_pair_and_no_file_writes_nothing(self):
         lines, problems = self.update([CLEAN])
