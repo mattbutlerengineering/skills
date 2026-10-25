@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:a-sketch-drawn-from-memory
 date: 2026-10-25
-outcome: prepared
+outcome: released
+released-at: 2026-10-25
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1100
 ---
 
@@ -80,6 +81,7 @@ gh pr create --base main --body-file <body>   # needs a "No work order:" line an
    origin.
 6. `gh pr create --base main --body-file <scratchpad>/fix-body.md` ->
    https://github.com/mattbutlerengineering/skills/pull/1100
+7. Write-back (2026-10-25): PR 1100's CI was green (`check`, `review`: SUCCESS). The Owner answered "Merge, write back, bump" in session. `gh pr merge 1100 --squash` -> `51a1f5a`; `gh pr view 1100 --json state,mergedAt` -> `MERGED`, `2026-10-25T18:04:57Z`. Intake #1093 closed through `Closes #1093` and got a comment naming this run directory. The 0.23.1 release bump follows as its own PR.
 
 ## Post-release checks
 
