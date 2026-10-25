@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:a-long-line-stalls-the-gate
 date: 2026-10-24
-outcome: prepared
+outcome: released
+released-at: 2026-10-25
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1079
 assumptions:
   - "Verify was not re-run after Review's fix. verification.md measured the 17-wide window at `20ccc5d`. Review widened it to 64 in `dc1570f` and re-ran the four checks, the whole-tree sweep and the timing itself (review.md, Final checks). Ship re-ran the four checks on `4137538` and compared the two gates.py copies with `cmp` (quoted below). That stands in for a Verify pass at 64. verification.md is not rewritten."
@@ -177,20 +178,4 @@ unmerged. The write-back runs these checks once it merges:
 
 ## Outcome
 
-Prepared and stopped. The run waits on
-https://github.com/mattbutlerengineering/skills/pull/1079 (the
-`pending-merge:` above) and stays at Ship until the merge is written
-back. Flags for the Owner:
-
-- **Window width changed after Verify.** Verify measured at 17. Review
-  set it to 64 because 17 failed open, and re-ran the battery after. The
-  PR body says so.
-- **Deferred Minor:** a zero count wider than 64 characters still
-  names. It is recorded in ADR-0108 and the `lean:` marker.
-- **Launch brief:** `launch_demo.py config` returned the verdict SHIP,
-  but the brief was not produced in this unattended pass. Run the
-  `launch-demo` skill for this run if wanted.
-- **Version bump:** not done here (ADR-0095). It belongs to the Owner's
-  `chore(release)` PR after merge.
-- **Operate:** skipped per the autorun brief (prevention, with no user
-  signal expected). The run stays active.
+Released. The Owner said "merge all prs if they are ready" in session on 2026-10-25, and #1079 was squash-merged as `bff792c` at 2026-10-25T05:02:05Z (`gh pr view 1079 --json state,mergeCommit,mergedAt` -> `MERGED`). #1078 closed with it. Merged onto main after #1073, #1077 and #1074; the merged tree was checked first in a detached worktree (3817 tests, lint, drift, gates, selftest all clean). The window width is 64, as Review set it. The deferred Minor (a zero count wider than 64 characters) still stands. The version bump belongs to the wave's `chore(release)` PR (ADR-0095). Operate is skip per the brief, so the run stays active.
