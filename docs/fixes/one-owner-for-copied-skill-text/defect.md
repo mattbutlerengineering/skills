@@ -112,7 +112,7 @@ preserved, only ownership moves. Review and Ship scale small.
   its own rules; the keep-in-step instruction leaves both.
   - Accept: the palette case of the test passes; no "match it in the
     other" wording remains in either dark design-system file.
-- [ ] **work-queue numbering** — the ninth agent-prompt item is
+- [x] **work-queue numbering** — the ninth agent-prompt item is
   numbered 9.
   - Accept: `skills/work-queue/SKILL.md` step 4's list numbers 1–9 in
     order, and nothing cites a step-4 item by its old number.

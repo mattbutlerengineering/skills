@@ -96,7 +96,7 @@ Each agent's prompt must carry:
    declaring done, so the branch applies cleanly to the tip as of hand-off.
 8. **Open a PR and stop.** Do not merge. Do not approve. Do not apply
    `wo:merged`.
-6. **Say what it doubts.** Finished work it is unsure of goes in a
+9. **Say what it doubts.** Finished work it is unsure of goes in a
    `## Concerns` section of the PR body, one line per doubt, rather than
    shipping as if it were certain. Unfinished work escalates instead.
 
