@@ -82,7 +82,7 @@ only affects which keys `trace` accepts.
 
 ## Work items
 
-- [ ] **Reproduce, then allow an added run spend file** — the two
+- [x] **Reproduce, then allow an added run spend file** — the two
   `TestReviewedTree` cases (added ship file merges; a pre-review run file
   rewritten afterwards stalls) plus a pure `review_drift` case (an added
   path outside `RUNS_DIR` still stalls). `review_drift` takes `added`, and

@@ -42,7 +42,7 @@ import factory_config
 from cli import CLI_FAILURES, detail, gh_read
 from conductor import BLOCK, append, current_state, is_text, \
     item_view, load, stamp
-from cost_ledger import ISSUE_KEY
+from cost_ledger import COST_LEDGER, ISSUE_KEY, RUNS_DIR
 from knowledge_plane import adr_citation, adr_digits, adr_file_number
 
 def _refused(text):
@@ -69,22 +69,27 @@ def _reviewed_problems(rows, item):
 
 # What may change on the item branch after the review run's launch head:
 # the review and ship steps' own artifacts, in the run directory whose
-# VERIFICATION the item changed before the review, and spend rows
-# appended to COSTS. Anything else was never reviewed (review major 1,
-# re-review R4, breakdown Notes 2026-10-11).
-COSTS = "docs/factory/costs.jsonl"
+# VERIFICATION the item changed before the review, spend rows appended
+# to COSTS, and a spend file a later run added under RUNS_DIR (#954: one
+# file per run, written once). Anything else was never reviewed (review
+# major 1, re-review R4, breakdown Notes 2026-10-11).
+COSTS = COST_LEDGER
 VERIFICATION = re.compile(r"docs/(?:(?:features|fixes)/[^/]+/)?"
                           r"verification\.md")
 AFTER_REVIEW = ("review.md", "release.md")
 
 
-def review_drift(item, head, changed, own_dirs, appended):
+def review_drift(item, head, changed, own_dirs, appended, added=()):
     """The stall reason when a path changed between the reviewed head and
     the branch other than a run directory in `own_dirs`' AFTER_REVIEW
-    artifacts, or COSTS when `appended` (its old text is a prefix of its
-    new one), else None. PURE."""
-    allowed = {run_dir + name for run_dir in own_dirs
-               for name in AFTER_REVIEW} | ({COSTS} if appended else set())
+    artifacts, COSTS when `appended` (its old text is a prefix of its
+    new one), or a spend file under RUNS_DIR that `added` names (new
+    since the head, never rewritten), else None. PURE."""
+    allowed = ({run_dir + name for run_dir in own_dirs
+                for name in AFTER_REVIEW}
+               | ({COSTS} if appended else set())
+               | {path for path in added
+                  if path.startswith(RUNS_DIR + "/")})
     unreviewed = sorted(path for path in changed if path not in allowed)
     if not unreviewed:
         return None
@@ -685,6 +690,8 @@ def _drift(rows, item, git, branch, worktree):
             if row["to"] == "reviewed"][-1]["reviewed_head"]
     try:
         changed = git(["diff", "--name-only", head, branch]).stdout.split()
+        added = git(["diff", "--name-only", "--diff-filter=A", head,
+                     branch]).stdout.split()
         verified = git(["diff", "--name-only",
                         f"origin/main...{head}"]).stdout.split()
     except CLI_FAILURES as err:
@@ -695,7 +702,7 @@ def _drift(rows, item, git, branch, worktree):
     grown = _show(git, branch, COSTS) if COSTS in changed else None
     appended = grown is not None and grown.startswith(
         _show(git, head, COSTS) or "")
-    return review_drift(item, head, changed, own_dirs, appended), []
+    return review_drift(item, head, changed, own_dirs, appended, added), []
 
 
 def _show(git, ref, path):
