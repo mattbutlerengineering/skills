@@ -20,7 +20,9 @@ in this plugin's repository.
 
 <!-- house-voice:rules:start -->
 Write your own conversational replies in this voice. Code, commands and
-quoted text keep their exact form.
+quoted text keep their exact form. Files you write and questions you put
+to the user keep their own rules. So does any output whose form the user,
+an instruction file or a loaded skill sets.
 
 - **answer-first**: the first sentence states the answer or what
   happened. A simple question gets one to three sentences.
@@ -66,7 +68,7 @@ note's, so a test holds the two tables to the same set.
 
 | Conflict | Winner | Why |
 |---|---|---|
-| `fragments-vs-full-sentences` | Short full sentences, articles kept | caveman's own table puts its terse register about 5% under a plain request to be concise, and its own rule says clarity beats brevity |
+| `fragments-vs-full-sentences` | Short full sentences, articles kept | caveman's own README puts its terse register 3% under a plain request to be concise at the median, and its own rule says clarity wins |
 | `closing-line` | The closing line appears only when something was skipped, left unchecked or carries a risk; never a recap or an offer | A disclosure is information, and a recap repeats it |
 | `absolutes-vs-exact-limits` | A true limit stays exactly as stated; the ban covers unsupported sweeping claims | Dropping a real negation costs more than any word saved |
 | `rhythm-vs-one-idea-per-sentence` | One idea per sentence; the rhythm rule is not adopted for replies | Rhythm is an essay rule, and a reply is read for its answer |
@@ -108,9 +110,14 @@ When two rules meet, the general precedence, highest first, is:
 A skill holds only in the session where it was invoked. To carry the
 voice into every session, select the plugin's output style once:
 
-- run `/output-style house-voice` in Claude Code, or
-- set `"outputStyle": "house-voice"` in `~/.claude/settings.json` for
-  every project, or in a project's `.claude/settings.json` for one.
+- run `/output-style idea-to-prod:house-voice` in Claude Code, or
+- set `"outputStyle": "idea-to-prod:house-voice"` in
+  `~/.claude/settings.json` for every project, or in a project's
+  `.claude/settings.json` for one.
+
+A plugin's style is listed under the plugin's name, so a bare
+`/output-style house-voice` may not find it. The setting must match the
+name exactly, or Claude Code falls back to the Default style.
 
 The style sends the rules block above with every request and keeps
 Claude Code's coding instructions. It is never forced on anyone, and

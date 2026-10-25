@@ -213,5 +213,25 @@ class TestOutputStyle(unittest.TestCase):
         self.assertNotIn("outputStyles", manifest)
 
 
+class TestReviewCorrections(unittest.TestCase):
+    """Review (2026-10-25). A plugin's output style is listed as
+    `<plugin>:<name>` (plugins components docs), and an `outputStyle`
+    value that does not match a style name exactly gives the Default
+    style (output-styles docs), so the bare name silently does nothing.
+    The style carries only the rules block, so the block itself states
+    what keeps its own rules."""
+
+    def test_the_opt_in_names_the_namespaced_style(self):
+        body = section(skill_text(), "Make it stick")
+        self.assertIn("/output-style idea-to-prod:house-voice", body)
+        self.assertIn('"outputStyle": "idea-to-prod:house-voice"', body)
+        self.assertNotIn('"outputStyle": "house-voice"', body)
+
+    def test_the_rules_block_hands_prescribed_forms_back(self):
+        block = " ".join(rules_block(skill_text()).split())
+        for needle in ("questions you put to the user", "a loaded skill"):
+            self.assertIn(needle, block, needle)
+
+
 if __name__ == "__main__":
     unittest.main()

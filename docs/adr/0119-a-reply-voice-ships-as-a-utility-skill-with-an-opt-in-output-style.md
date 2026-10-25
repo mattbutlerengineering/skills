@@ -68,3 +68,18 @@ behaviour change pushed to everyone.
   release if it differs.
 - oh-my-pi and Grok users get the skill without the style, because output
   styles are a Claude Code feature.
+
+## Review note (2026-10-25)
+
+The namespacing question above is answered by a page the run did fetch
+and one it did not. The plugin manifest reference says Claude Code
+"namespaces every component" under the plugin's name, and the plugin
+components page says a plugin style appears "in `/output-style`, as
+`<plugin>:<name>`". The output-styles page says an `outputStyle` value
+that does not match a style name exactly gives the Default style. So the
+opt-in in the Decision's third bullet is `/output-style
+idea-to-prod:house-voice` or `"outputStyle": "idea-to-prod:house-voice"`;
+the bare `house-voice` setting would silently select Default. The skill's
+Make it stick section was corrected in the Review stage. The Decision is
+unchanged: an opt-in style, never forced. The Owner's hand session still
+confirms the name the menu shows.
