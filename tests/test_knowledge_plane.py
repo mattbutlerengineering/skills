@@ -2,6 +2,7 @@
 the dispatch-plane row grammar, the run walk, and repo_root — asserted
 at the seam's own interface instead of once per caller suite.
 """
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,6 +18,9 @@ from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
                              local_link_targets, mirror_map, parse_row,
                              parse_run, repo_root, resolve_link, run_dirs,
                              sanitize, unfenced)
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from frontmatter_shapes import SHAPES  # noqa: E402
 
 
 class TestTokens(unittest.TestCase):
@@ -689,6 +693,22 @@ class TestAdrRecord(unittest.TestCase):
                           record["title"], record["lines"]),
                          ("0062", "active", "X",
                           ["# X", "", "- Status: accepted"]))
+
+
+class TestDeclaredStatusFallback(unittest.TestCase):
+    """With no `- Status:` line, an ADR's status comes from the block
+    protocol.frontmatter_end bounds, and from nowhere when it finds no
+    end (ADR-0118)."""
+
+    def test_every_shape(self):
+        for name, text, end in SHAPES:
+            with self.subTest(shape=name):
+                lines = text.splitlines()
+                block = [] if end is None else lines[1:end]
+                expected = ((lines.index("status: ok") + 1, "ok")
+                            if "status: ok" in block else (0, None))
+                self.assertEqual(knowledge_plane._declared_status(lines),
+                                 expected)
 
 
 class TestGuardedAdrRead(unittest.TestCase):
