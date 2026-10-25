@@ -223,4 +223,10 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   skills`, `python3 kb.py drift` printed `drift: 0 problem(s)`, and
   `python3 gates.py && python3 gates.py --selftest` printed `gates: 0
   problem(s)` and `selftest: ok`.
+- 2026-10-24 (Review): the window is now 64, not 17 (`dc1570f`). At
+  17 the window cut one-word counts such as "zero criteria were
+  skipped" and "no criteria were **skipped**", so they named and H
+  passed a stale Summary over a disclosed NOT RUN (fail open, review.md
+  Major 1). The Implement assumption above and verification.md record
+  the 17 as it was; they are not rewritten.
 - Next stage: Verify.
