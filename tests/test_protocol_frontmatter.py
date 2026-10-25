@@ -10,7 +10,10 @@ skill_frontmatter_problems is the single frontmatter error contract
 behind lint's skill checker and the trigger-eval loader — exact strings,
 since lint prints them verbatim.
 """
+import ast
+import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -238,6 +241,123 @@ class TestSkillFrontmatterProblems(unittest.TestCase):
         self.assertEqual(
             skill_frontmatter_problems(self.root, "idea"),
             ["skills/idea/SKILL.md frontmatter has no description"])
+
+
+# The fence-definition detector (ADR-0118). A string constant counts as a
+# frontmatter fence definition when it is
+#   - the pattern of an re.* call that finds "---" but not "--" (so a
+#     dash-run rule such as gates.SETEXT_UNDERLINE, which takes "--" too,
+#     is not a fence), or
+#   - a constant that strips to "---" handed to a method call (the
+#     startswith("---\n") / find("\n---\n") form) or standing on either
+#     side of ==, !=, in or not in (the strip() == "---" form), alone or
+#     inside a tuple, list or set literal there.
+# String bodies that merely contain a fence (writers, fixtures, the
+# charter_replay "--- YOUR CHARTER ---" delimiters) are none of these.
+_REGEX_CALLS = frozenset({"compile", "match", "fullmatch", "search", "sub",
+                          "subn", "split", "findall", "finditer"})
+_COMPARISONS = (ast.Eq, ast.NotEq, ast.In, ast.NotIn)
+# A fence line alone, inside text, and as a whole block (the old
+# protocol._FRONTMATTER shape, a block regex that needs both fences).
+_FENCE_PROBES = ("---", "\n---\n", "---\nx\n---\n")
+
+
+def _is_fence_regex(pattern):
+    try:
+        compiled = re.compile(pattern)
+    except re.error:
+        return False
+    finds = any(compiled.search(s) for s in _FENCE_PROBES)
+    return finds and not any(compiled.search(s.replace("---", "--"))
+                             for s in _FENCE_PROBES)
+
+
+def _fence_literals(nodes):
+    for node in nodes:
+        elements = (node.elts if isinstance(node, (ast.Tuple, ast.List,
+                                                   ast.Set)) else [node])
+        for element in elements:
+            if (isinstance(element, ast.Constant)
+                    and isinstance(element.value, str)
+                    and element.value.strip() == "---"):
+                yield element.value
+
+
+def fence_definitions(source):
+    """Every fence-defining string constant in SOURCE, in walk order."""
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Call) and isinstance(node.func,
+                                                     ast.Attribute):
+            func = node.func
+            if (isinstance(func.value, ast.Name) and func.value.id == "re"
+                    and func.attr in _REGEX_CALLS):
+                first = node.args[:1]
+                if (first and isinstance(first[0], ast.Constant)
+                        and isinstance(first[0].value, str)
+                        and _is_fence_regex(first[0].value)):
+                    found.append(first[0].value)
+                continue
+            found.extend(_fence_literals(node.args))
+        elif isinstance(node, ast.Compare) and any(
+                isinstance(op, _COMPARISONS) for op in node.ops):
+            found.extend(_fence_literals([node.left, *node.comparators]))
+    return found
+
+
+def _tracked_non_test_python():
+    listed = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "-z", "--", "*.py"],
+        capture_output=True, text=True, check=True).stdout
+    for rel in sorted(r for r in listed.split("\0") if r):
+        parts = Path(rel).parts
+        if "tests" in parts or parts[-1].startswith("test_"):
+            continue
+        yield rel, (ROOT / rel).read_text(encoding="utf-8")
+
+
+class TestOneFenceDefinition(unittest.TestCase):
+    """protocol.frontmatter_end holds the one fence rule (ADR-0118): a
+    second definition anywhere in tracked Python fails this count."""
+
+    def test_the_exact_count_map(self):
+        counts = {}
+        for rel, source in _tracked_non_test_python():
+            found = fence_definitions(source)
+            if found:
+                counts[rel] = sorted(found)
+        self.assertEqual(counts, {
+            "protocol.py": [r"^---\s*$"],
+            "factory/templates/tools/factory/protocol.py": [r"^---\s*$"],
+            # Not a fence: the markdown table separator row lint skips.
+            "lint.py": ["---"],
+        })
+
+    def test_the_detector_sees_each_copy_shape(self):
+        copies = {
+            "regex": 'FENCE = re.compile(r"^---\\s*$")\n',
+            "block regex": ('BLOCK = re.compile(r"\\A---\\n(.*?)\\n---\\n", '
+                            're.DOTALL)\n'),
+            "string method": 'text.startswith("---\\n")\n',
+            "string search": 'text.find("\\n---\\n", 4)\n',
+            "comparison": 'line.strip() == "---"\n',
+            "membership": 'cell in ("stage", "---")\n',
+        }
+        for shape, source in copies.items():
+            with self.subTest(shape=shape):
+                self.assertEqual(len(fence_definitions(source)), 1)
+
+    def test_the_known_non_owners_count_zero(self):
+        import gates
+        non_owners = {
+            "setext underline": (
+                f"SETEXT_UNDERLINE = re.compile({gates.SETEXT_UNDERLINE.pattern!r})\n"),
+            "charter delimiters": 'PROMPT = """--- YOUR CHARTER ---\n"""\n',
+            "frontmatter writer": 'text = "---\\nname: " + name\n',
+        }
+        for shape, source in non_owners.items():
+            with self.subTest(shape=shape):
+                self.assertEqual(fence_definitions(source), [])
 
 
 if __name__ == "__main__":
