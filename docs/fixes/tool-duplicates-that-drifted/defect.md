@@ -129,8 +129,10 @@ backlog seed pending a routing eval.
   - Accept: a `RecursionError` line is an error for every reader. Tests pin
     the three that raised before: conductor_close, dashboard and
     kb_harvest.
-- [ ] **One active-run walk** — `protocol.active_runs(root)`. dashboard and
-  board call it, and dashboard reports a broken run instead of aborting.
+- [x] **One active-run walk** — `knowledge_plane.active_runs(root)`, next to
+  the `run_dirs` it walks. It is not in `protocol`, which must not import
+  knowledge_plane. dashboard and board call it, and dashboard reports a
+  broken run instead of aborting.
   - Accept: a fixture with one unreadable run renders the rest, and the
     problem is named.
 - [ ] **One month-to-date spend** — `cost_ledger.month_spend`. work_queue

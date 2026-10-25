@@ -13,6 +13,7 @@ from gates_selftest import (clean_repo_fixture,
                             link_integrity_defect_fixture,
                             wo_citation_defect_fixture)
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, FIELD_LIMIT,
+                             active_runs,
                              PRD_TOKEN, ROW, WO_TOKEN, Fence,
                              breakdown_files, breakdown_rows, fenced,
                              local_link_targets, mirror_map, parse_row,
@@ -176,6 +177,33 @@ class TestRunDirs(unittest.TestCase):
     def test_a_tree_without_docs_walks_to_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(run_dirs(Path(tmp)), [])
+
+
+class TestActiveRuns(unittest.TestCase):
+    """The protocol's active runs (an artifact present, not complete),
+    each oriented once, a run that cannot be oriented answered with its
+    error instead of raised: the walk board and dashboard shared."""
+
+    def test_partition_and_the_unorientable_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel, text in (("docs/features/a/idea.md", "# Idea\n"),
+                              ("docs/features/done/idea.md", "x"),
+                              ("docs/features/done/retro.md", "# Retro\n"),
+                              ("docs/features/empty/notes.txt", "x")):
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text(text, encoding="utf-8")
+            bad = root / "docs/fixes/bad/defect.md"
+            bad.parent.mkdir(parents=True)
+            bad.write_bytes(b"---\nstage: capture\nre-entry: implement\n"
+                            b"---\n- [ ] broken \xff\xfe\n")
+            found = active_runs(root)
+            self.assertEqual([(d.relative_to(root).as_posix(), stage)
+                              for d, stage, _ in found],
+                             [("docs/features/a", "prd"),
+                              ("docs/fixes/bad", None)])
+            self.assertIsNone(found[0][2])
+            self.assertIsInstance(found[1][2], UnicodeDecodeError)
 
 
 class TestBreakdownFiles(unittest.TestCase):

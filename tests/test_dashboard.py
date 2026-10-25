@@ -123,6 +123,23 @@ class TestGather(unittest.TestCase):
             self.assertNotIn("feature:done", refs)
             self.assertNotIn("product", refs)
 
+    def test_a_run_that_cannot_be_oriented_is_a_problem_not_a_crash(self):
+        # The board's per-run honesty, which the dashboard's own walk
+        # lacked until knowledge_plane.active_runs (2026-10-25).
+        with tempfile.TemporaryDirectory() as tmp:
+            repo(tmp)
+            bad = Path(tmp) / "docs" / "fixes" / "bad" / "defect.md"
+            bad.parent.mkdir(parents=True)
+            bad.write_bytes(b"---\nstage: capture\nre-entry: implement\n"
+                            b"---\n- [ ] broken \xff\xfe\n")
+            state = dashboard.gather(tmp)
+            self.assertEqual([run["ref"] for run in state["runs"]],
+                             ["feature:alpha", "maintenance:bug"])
+            self.assertEqual(len(state["problems"]), 1)
+            self.assertTrue(state["problems"][0].startswith(
+                "dashboard: docs/fixes/bad cannot be oriented: "),
+                state["problems"])
+
     def test_a_product_run_at_the_docs_root_is_active(self):
         with tempfile.TemporaryDirectory() as tmp:
             FixtureTree(tmp).write("docs/idea.md", "# Idea\n")

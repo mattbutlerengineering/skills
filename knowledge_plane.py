@@ -28,7 +28,8 @@ from collections import namedtuple
 from pathlib import Path
 
 from cli import read_file
-from protocol import frontmatter_end, parse_frontmatter
+from protocol import (RUN_ARTIFACTS, frontmatter_end, next_stage,
+                      parse_frontmatter)
 
 PRD_TOKEN = re.compile(r"\bPRD-\d{4}\b")
 ADR_TOKEN = re.compile(r"\bADR-(\d{4})\b")
@@ -442,6 +443,29 @@ def run_dirs(root):
         if base.is_dir():
             dirs.extend(p for p in sorted(base.iterdir()) if p.is_dir())
     return [d for d in dirs if d.is_dir()]
+
+
+def active_runs(root):
+    """[(run_dir, stage, error)] for the protocol's active runs: a
+    candidate directory holding at least one run artifact whose next
+    stage is not `complete`. A run whose artifacts cannot be read
+    (unreadable, undecodable) is still listed, with stage None and the
+    error, so a reader reports it instead of aborting on it. board and
+    dashboard share it (two walks until the 2026-10-25 consolidation;
+    the dashboard's had no per-run guard)."""
+    found = []
+    for run_dir in run_dirs(Path(root)):
+        if not any((run_dir / artifact).is_file()
+                   for artifact in RUN_ARTIFACTS):
+            continue
+        try:
+            stage = next_stage(run_dir)
+        except (OSError, ValueError) as err:
+            found.append((run_dir, None, err))
+            continue
+        if stage != "complete":
+            found.append((run_dir, stage, None))
+    return found
 
 
 def breakdown_files(root):

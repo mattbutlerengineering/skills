@@ -5,8 +5,8 @@ The operator-level console over the state the process already writes —
 run artifacts (knowledge plane), the tracker mirror (dispatch plane),
 the cost ledger. This module is the compute side: one repo path in, one
 state dict out, built on the seams that already answer every question —
-knowledge_plane.run_dirs walks the candidate run directories and
-protocol.next_stage orients each one — so the console renders state, it
+knowledge_plane.active_runs walks the candidate run directories and
+orients each one through protocol.next_stage — so the console renders state, it
 never re-derives it. Operator-level, never stamped (the console
 observes stamped repos from one seat; it is not in factory_init.MIRRORS
 and no product repo runs it in CI).
@@ -49,10 +49,10 @@ import cost_ledger
 import cost_report
 import factory_config
 from human_gates import open_queues, read_timelines, waiting_issues
-from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, breakdown_files,
-                             breakdown_rows, mirror_map, run_dirs)
+from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, active_runs,
+                             breakdown_files, breakdown_rows, mirror_map)
 import plane_drift
-from protocol import (RUN_ARTIFACTS, next_stage, parse_backlog, run_ref)
+from protocol import parse_backlog, run_ref
 
 CONFIG_PATH = Path.home() / ".process-dashboard.json"
 
@@ -353,12 +353,12 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
             f"dashboard: {repo_path} is not a directory")
         return state
     state["backlog"] = _backlog(root, state["problems"])
-    for run_dir in run_dirs(root):
-        if not any((run_dir / artifact).is_file()
-                   for artifact in RUN_ARTIFACTS):
-            continue
-        stage = next_stage(run_dir)
-        if stage == "complete":
+    for run_dir, stage, error in active_runs(root):
+        if error is not None:
+            reason = " ".join(str(error).split()) or type(error).__name__
+            state["problems"].append(
+                f"dashboard: {run_dir.relative_to(root)} cannot be"
+                f" oriented: {reason[:300]}")
             continue
         state["runs"].append({
             "ref": run_ref(root, run_dir),
