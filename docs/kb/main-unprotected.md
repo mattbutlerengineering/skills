@@ -1,7 +1,7 @@
 ---
 summary: main has no branch protection or rulesets — ADR-0036's required checks are convention, and the ADR-0070 merge queue is off.
 sources: docs/adr/0036-agent-merge-under-independent-review.md, docs/adr/0070-github-merge-queue-composes-with-agent-merge.md
-verified: 97507559df22791a05186404e7453a281b164bae
+verified: f2ba566331b8ff91d0113fdf97833e91edb43ca8
 related: pr-body-contract, cross-pr-merge-hazards
 ---
 
