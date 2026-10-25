@@ -132,7 +132,9 @@ def main(argv):
     problems = []
     for path, text in texts:
         print(f"{LABEL}: {path}: {count_tokens(text)} tokens")
-        problems += [f'{LABEL}: {path}: {name}: "{matched}"'
+        # A match can span a line break; its whitespace is collapsed so
+        # each problem string stays one line.
+        problems += [f'{LABEL}: {path}: {name}: "{" ".join(matched.split())}"'
                      for name, matched in slop(text)]
     return report(LABEL, problems)
 

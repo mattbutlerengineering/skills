@@ -13,6 +13,10 @@ from pathlib import Path
 
 import voice_grade as vg
 
+ROOT = Path(__file__).resolve().parents[1]
+FIXTURES = ROOT / "plugin-evals/house-voice/fixtures"
+CASES = ("undo-unpushed-commit", "read-a-traceback", "pick-a-date-library")
+
 # architecture.md's Data model table, in its order.
 NAMES = (
     "praise-opener", "throat-clearing", "restated-question", "hedge",
@@ -152,6 +156,52 @@ class TestCountTokens(unittest.TestCase):
             self.assertEqual(vg.count_tokens(text), scan_count(text), text)
 
 
+def fixture(*parts):
+    return FIXTURES.joinpath(*parts).read_text(encoding="utf-8")
+
+
+class TestFixtures(unittest.TestCase):
+    """The authored replies both scorers rest on, and the PRD's demo,
+    offline half: each after reply is shorter and clean."""
+
+    def test_the_readme_says_every_file_is_authored(self):
+        text = fixture("README.md")
+        self.assertIn("authored", text)
+        self.assertIn("not recorded model output", text)
+
+    def test_each_slop_file_names_exactly_its_own_pattern(self):
+        for name in NAMES:
+            found = {n for n, _ in vg.slop(fixture("slop", f"{name}.md"))}
+            self.assertEqual(found, {name}, name)
+
+    def test_the_slop_directory_holds_one_file_per_pattern_and_clean(self):
+        held = sorted(p.name for p in (FIXTURES / "slop").iterdir())
+        self.assertEqual(held, sorted([f"{n}.md" for n in NAMES]
+                                      + ["clean.md"]))
+
+    def test_the_clean_file_is_clean(self):
+        self.assertEqual(vg.slop(fixture("slop", "clean.md")), [])
+
+    def test_each_after_reply_is_shorter_than_its_before(self):
+        for case in CASES:
+            before = vg.count_tokens(fixture(case, "before.md"))
+            after = vg.count_tokens(fixture(case, "after.md"))
+            self.assertLess(after, before, case)
+
+    def test_each_after_reply_is_clean(self):
+        for case in CASES:
+            self.assertEqual(vg.slop(fixture(case, "after.md")), [], case)
+
+    def test_each_before_reply_names_a_pattern(self):
+        for case in CASES:
+            self.assertTrue(vg.slop(fixture(case, "before.md")), case)
+
+    def test_no_fixture_is_named_like_a_harness_case(self):
+        names = {p.name for p in FIXTURES.rglob("*")}
+        self.assertTrue(names)
+        self.assertEqual(names & {"prompt.md", "case.yaml"}, set())
+
+
 USAGE = "voice-grade: usage: python3 voice_grade.py <reply.md> [<reply.md> ...]"
 
 
@@ -194,6 +244,14 @@ class TestFrontDoor(unittest.TestCase):
             f'voice-grade: {dirty}: praise-opener: "Great question"',
             f'voice-grade: {dirty}: closing-offer: "Hope this helps"',
             "voice-grade: 2 problem(s)",
+        ]))
+
+    def test_a_match_across_a_line_break_prints_on_one_line(self):
+        path = self.write("wrapped.md", "It is not just\nslow but wrong.")
+        self.assertEqual(self.run_main(path), (1, [
+            f"voice-grade: {path}: 8 tokens",
+            f'voice-grade: {path}: binary-contrast: "not just slow but"',
+            "voice-grade: 1 problem(s)",
         ]))
 
     def test_a_missing_file_exits_two_before_any_count(self):
