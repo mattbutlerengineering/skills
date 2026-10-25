@@ -14,6 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -3123,6 +3124,38 @@ class TestEvidenceRollUp(unittest.TestCase):
         self.assertEqual([(s["title"], s["names_unknown"]) for s in sections],
                          [("(untitled)", False), ("Zero", False),
                           ("Mixed", True)])
+
+    # The long-line pin (maintenance:a-long-line-stalls-the-gate): a 44 kB
+    # line of zero-preceded matches took 5.9 s when every zero-count read
+    # scanned the whole prefix (quadratic), and takes milliseconds with the
+    # bounded window. The bound sits far from both, so a loaded runner
+    # never flakes it and a quadratic read never passes it.
+    LONG_LINE_SECONDS = 1.0
+
+    def test_a_long_zero_count_line_reads_in_linear_time(self):
+        line = "0 not run, " * 4000
+        started = time.perf_counter()
+        names = gates._names_unknown(line)
+        elapsed = time.perf_counter() - started
+        self.assertFalse(names)
+        self.assertLess(elapsed, self.LONG_LINE_SECONDS)
+
+    def test_a_wide_zero_count_over_a_disclosure_stays_refused(self):
+        # Review major (maintenance:a-long-line-stalls-the-gate): a 17-char
+        # window cut each count below in half, so it named and H passed a
+        # stale Summary (fail open). ADR-0108's grammar admits any one
+        # word; the last shape is the longest English dictionary word.
+        head = self.DATED.count("\n")
+        for summary in ("1 PASS; zero criteria were skipped.",
+                        "1 PASS; no criteria were **skipped**.",
+                        "1 PASS; no requirements were skipped.",
+                        "1 PASS; nothing further was skipped.",
+                        "1 PASS; nothing pneumonoultramicroscopicsilico"
+                        "volcanoconiosis were **skipped**."):
+            with self.subTest(summary=summary):
+                self.assertEqual(
+                    gates.evidence_problems(self.DATED + self.body(summary)),
+                    [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
 
     def test_wrapper_prefixes_the_rollup_problem(self):
         root = Path("/repo")

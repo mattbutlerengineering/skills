@@ -1,6 +1,6 @@
 # The lessons file's seen header is one entry per signal and run
 
-- Status: provisional
+- Status: superseded in part by ADR-0117 (the pairing skip rule; provisional)
 - Date: 2026-10-23
 
 Recorded by the `lessons-per-signal-seen` maintenance run
