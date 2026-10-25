@@ -182,3 +182,11 @@
 {"wo": "WO-0144", "run_id": "session-2026-10-10-wo-0144", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
 {"wo": "WO-0145", "run_id": "session-2026-10-10-wo-0145", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
 {"wo": "WO-0149", "run_id": "session-2026-10-10-wo-0149", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-10"}
+{"wo": "WO-0181", "run_id": "session-2026-10-25-wo-0181", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-25"}
+{"wo": "WO-0182", "run_id": "session-2026-10-25-wo-0182", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-25"}
+{"wo": "WO-0183", "run_id": "session-2026-10-25-wo-0183", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-25"}
+{"wo": "WO-0184", "run_id": "session-2026-10-25-wo-0184", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-25"}
+{"wo": "WO-0185", "run_id": "session-2026-10-25-wo-0185", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-25"}
+{"wo": "WO-0186", "run_id": "session-2026-10-25-wo-0186", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-25"}
+{"wo": "WO-0187", "run_id": "session-2026-10-25-wo-0187", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-25"}
+{"wo": "WO-0188", "run_id": "session-2026-10-25-wo-0188", "model": "claude-opus-5-5", "tokens": 0, "cost": 0.0, "outcome": "owner-session:unmetered", "at": "2026-10-25"}
