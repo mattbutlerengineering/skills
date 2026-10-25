@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:tool-duplicates-that-drifted
 date: 2026-10-25
-outcome: prepared
+outcome: released
+released-at: 2026-10-25
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1110
 ---
 
@@ -74,6 +75,7 @@ gh pr create --base main --body-file <body>   # "No work order:" + "Closes #N"
 5. `git push -u origin fix/tool-duplicates-that-drifted` -> new branch.
 6. `gh pr create --base main` ->
    https://github.com/mattbutlerengineering/skills/pull/1110
+7. Write-back (2026-10-25): the Owner answered "Merge all + release" in session for the consolidation wave. Merged in order #1106, #1110 (after merging main and regenerating the manifest, CI green), #1108. `gh pr merge 1110 --squash` -> `b4f055d`; `gh pr view 1110 --json state,mergedAt` -> `MERGED`, `2026-10-25T21:59:33Z`. On main afterwards `python3 one_owner.py` -> `one-owner: 0 problem(s)`. The 0.23.2 release PR carries this write-back.
 
 ## Post-release checks
 
