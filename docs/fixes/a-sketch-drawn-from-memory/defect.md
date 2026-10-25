@@ -91,7 +91,7 @@ the wave's version bump (ADR-0095).
 
 ## Work items
 
-- [ ] **Regression test first** — add `tests/test_ux_design_grounding.py`
+- [x] **Regression test first** — add `tests/test_ux_design_grounding.py`
   pinning, through the skill and template text, each item below. Run it red
   against `98b220e`'s text.
   - Accept: the new module fails on `main` and passes after the items below,
