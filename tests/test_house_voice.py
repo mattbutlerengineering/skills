@@ -9,12 +9,16 @@ import re
 import unittest
 from pathlib import Path
 
+import json
+
 import protocol
 import voice_grade
 
 ROOT = Path(__file__).resolve().parents[1]
 SKILL_DIR = ROOT / "skills/house-voice"
 SKILL = SKILL_DIR / "SKILL.md"
+STYLE = ROOT / "output-styles/house-voice.md"
+PLUGIN = ROOT / ".claude-plugin/plugin.json"
 RESEARCH = "docs/research/house-voice-sources-2026-10-25.md"
 START = "<!-- house-voice:rules:start -->"
 END = "<!-- house-voice:rules:end -->"
@@ -56,6 +60,28 @@ def table_rows(text):
 def rules_block(text):
     """The text strictly between the two markers."""
     return text.split(START, 1)[1].split(END, 1)[0]
+
+
+def style_body(text):
+    """The style file's text after its frontmatter's closing fence."""
+    lines = text.splitlines(keepends=True)
+    end = protocol.frontmatter_end(lines)
+    return "".join(lines[end + 1:])
+
+
+def first_difference(expected, actual):
+    """None when the two texts are byte-equal, else a message naming the
+    first line that differs, 1-based, with both versions of it."""
+    if expected == actual:
+        return None
+    want, got = expected.splitlines(), actual.splitlines()
+    for number, (a, b) in enumerate(zip(want, got), start=1):
+        if a != b:
+            return f"line {number} differs: {a!r} in the skill, {b!r} in the style"
+    number = min(len(want), len(got)) + 1
+    if len(want) == len(got):
+        return "the texts differ only in line endings"
+    return f"line {number} is in only one of the two texts"
 
 
 class TestFrontmatter(unittest.TestCase):
@@ -153,6 +179,38 @@ class TestTheFile(unittest.TestCase):
 
     def test_the_skill_follows_the_voice_it_defines(self):
         self.assertEqual(voice_grade.slop(self.text), [])
+
+
+class TestOutputStyle(unittest.TestCase):
+    """The opt-in style is a pinned byte copy of the rules block
+    (ADR-0119): the skill is the one owner."""
+
+    def setUp(self):
+        self.text = STYLE.read_text(encoding="utf-8")
+        self.fields = protocol.parse_frontmatter(self.text)
+
+    def test_the_frontmatter(self):
+        self.assertEqual(self.fields["name"], "house-voice")
+        self.assertTrue(self.fields.get("description"))
+        self.assertEqual(self.fields["keep-coding-instructions"], "true")
+        self.assertNotIn("force-for-plugin", self.fields)
+
+    def test_the_body_equals_the_rules_block_byte_for_byte(self):
+        block = rules_block(skill_text())
+        problem = first_difference(block, style_body(self.text))
+        self.assertIsNone(problem, problem)
+
+    def test_a_one_line_edit_is_named_by_its_line(self):
+        block = rules_block(skill_text())
+        lines = block.splitlines(keepends=True)
+        edited = "".join(lines[:3] + ["an edited line\n"] + lines[4:])
+        self.assertEqual(first_difference(block, edited),
+                         f"line 4 differs: {lines[3].rstrip(chr(10))!r} in"
+                         " the skill, 'an edited line' in the style")
+
+    def test_the_plugin_manifest_names_no_output_styles_field(self):
+        manifest = json.loads(PLUGIN.read_text(encoding="utf-8"))
+        self.assertNotIn("outputStyles", manifest)
 
 
 if __name__ == "__main__":
