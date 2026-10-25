@@ -217,6 +217,11 @@ class TestKeyResolution(Repo):
             "docs/kb/none.md": "trace: docs/kb/none.md does not exist",
             "#30": "trace: #30 has no tracker row or Closes line in any"
                    " run, and issue history was not read (CI is set)",
+            # The issue key has no leading zero (cost_ledger.ISSUE_KEY).
+            "#0": "trace: #0 is not a run ref, typed id, issue number"
+                  " (#N) or docs/kb/ page",
+            "#012": "trace: #012 is not a run ref, typed id, issue number"
+                    " (#N) or docs/kb/ page",
         }
         for key, problem in cases.items():
             with self.subTest(key=key):
