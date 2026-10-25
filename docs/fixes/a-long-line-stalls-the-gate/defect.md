@@ -4,7 +4,7 @@ run: maintenance:a-long-line-stalls-the-gate
 date: 2026-10-24
 re-entry: implement
 origin: docs/backlog.md seed (from maintenance:a-zero-count-names-nothing), detector H's zero-count read is quadratic in line length
-assumptions: ["Capture: a defect brief, not a condition brief. The brief files it under Defect, and the verdict is never wrong, only slow; the skill offers the two variants with no default, and the brief's heading is taken as the answer", "Capture: the work items' order and shape (a timing pin first, then the window as a named constant beside SUMMARY_ZERO_COUNT, then the payload copy and manifest regen) come from the orchestrator's dispatch and the brief's Defect and Blast radius sections, not from a separate Owner answer", "Capture: the timing pin's form (a wall-clock bound, or a bound that does not depend on the clock) is left to Implement; the brief says test first and does not name the form"]
+assumptions: ["Capture: a defect brief, not a condition brief. The brief files it under Defect, and the verdict is never wrong, only slow; the skill offers the two variants with no default, and the brief's heading is taken as the answer", "Capture: the work items' order and shape (a timing pin first, then the window as a named constant beside SUMMARY_ZERO_COUNT, then the payload copy and manifest regen) come from the orchestrator's dispatch and the brief's Defect and Blast radius sections, not from a separate Owner answer", "Capture: the timing pin's form (a wall-clock bound, or a bound that does not depend on the clock) is left to Implement; the brief says test first and does not name the form", "Implement: the timing pin is a wall-clock bound, not a clock-free structural check (a structural check would pin the search span, which a later linear rewrite would break). It runs _names_unknown on a 44 kB line ('0 not run, ' x 4000, twice the item's 22 kB floor) under a 1.0 s bound: 5.8 s before the fix and 0.007 s after, so the bound sits about 6 times under the slow path and over 100 times over the fast one, and a loaded runner should not flake it", "Implement: SUMMARY_ZERO_COUNT_WINDOW is 17, the smallest width that keeps every test and fixture green. That is len('no criteria were '), the widest zero count a test or fixture uses. Measured with a temporary width knob: 16 or less fails 1 to 10 tests in tests.test_gates, and 17 passes them all, gates.py --selftest included. The ceiling: a wider count, such as 'zero criteria were skipped' (19), now falls outside the window and names, where the whole-prefix read counted it as zero. No test or fixture pins that shape. The brief sets the width rule, so the ceiling is a lean: comment in gates.py, not a wider width"]
 ---
 
 # Defect: a long line stalls the gate
@@ -145,7 +145,7 @@ boundary at the window's edge. `SUMMARY_ZERO_COUNT`'s leading
 
 Re-entry is Implement, so these checkboxes are the run's breakdown.
 
-- [ ] **Timing pin first (RED)**: in `tests/test_gates.py`, beside the
+- [x] **Timing pin first (RED)**: in `tests/test_gates.py`, beside the
   `_names_unknown` coverage in `TestEvidenceRollUp`
   (`tests/test_gates.py:2823`), add a test that runs `_names_unknown`
   (or `verification_sections`) on a long line of zero-preceded matches,
@@ -155,7 +155,7 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   of the bound and records it.
   - Accept: the test fails on `85e1558`'s `gates.py` and passes after
     the fix. Its verdict half passes both before and after.
-- [ ] **The bounded window**: add a named constant beside
+- [x] **The bounded window**: add a named constant beside
   `SUMMARY_ZERO_COUNT` in `gates.py` for the width of the zero-count
   window, with a comment saying why it is bounded. Make `_names_unknown`
   search `SUMMARY_ZERO_COUNT` from `max(0, match.start() - <width>)`
@@ -166,18 +166,18 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   Stdlib only.
   - Accept: the timing pin goes GREEN, and `python3 -m unittest
     tests.test_gates` passes with no existing test edited.
-- [ ] **Payload mirror and manifest**: copy `gates.py` to
+- [x] **Payload mirror and manifest**: copy `gates.py` to
   `factory/templates/tools/factory/gates.py`. Delete any stray
   `.orig`/`.rej` files first, then run `python3 factory_init.py
   update-manifest` and commit the manifest.
   - Accept: `cmp` shows the two files are identical, and detector E is
     clean.
-- [ ] **Backlog claim**: the claim on `docs/backlog.md` line 131 landed
+- [x] **Backlog claim**: the claim on `docs/backlog.md` line 131 landed
   with this capture commit. Confirm it is still there and well-formed,
   then check this box.
   - Accept: the seed line ends in
     `(claimed: maintenance:a-long-line-stalls-the-gate)`.
-- [ ] **Whole-repo checks**: `python3 run_tests.py`, `python3 lint.py`,
+- [x] **Whole-repo checks**: `python3 run_tests.py`, `python3 lint.py`,
   `python3 kb.py drift`, and `python3 gates.py && python3 gates.py
   --selftest`.
   - Accept: all pass, and `gates.py` reports `gates: 0 problem(s)` on
@@ -192,4 +192,35 @@ Re-entry is Implement, so these checkboxes are the run's breakdown.
   the fix changes how long the rule takes, not what it decides. The
   zero-count grammar's accepted limits (the seed at `docs/backlog.md`
   line 130) are a separate seed and out of this run's scope.
-- Next stage: Implement.
+- 2026-10-24 (Implement): RED. The new
+  `test_a_long_zero_count_line_reads_in_linear_time` failed on the
+  unfixed `gates.py` with `AssertionError: 5.842317083966918 not less
+  than 1.0`, and its verdict assertion passed. GREEN after the window:
+  the test passed in 0.007 s, and `python3 -m unittest tests.test_gates`
+  ran 295 tests, OK, with no existing test edited. Mutation check: with
+  the search start set back to `0`, the pin failed again (`5.899414207902737
+  not less than 1.0`); the window was then restored.
+- 2026-10-24 (Implement): the same probe as Capture's, re-timed after
+  the fix: `_names_unknown` on the zero-preceded line takes 0.003 s at
+  22 kB and 0.018 s at 110 kB (it was 1.530 s and 36.807 s), and
+  `verification_sections` takes 0.004 s and 0.017 s. The growth is now
+  linear.
+- 2026-10-24 (Implement): width ceiling. At 17, `1 PASS; zero criteria
+  were skipped.` now names the unknown kind; with a wider window it did
+  not. That is a verdict change for a shape no test or fixture uses,
+  and the `lean:` comment at `SUMMARY_ZERO_COUNT_WINDOW` records it.
+  Review should decide whether to keep the brief's smallest-green rule
+  or widen the window (32 covers that shape).
+- 2026-10-24 (Implement): payload. `cmp` shows `gates.py` and
+  `factory/templates/tools/factory/gates.py` are identical. No stray
+  `.orig`/`.rej` files were found. `python3 factory_init.py
+  update-manifest` printed `factory-init: 0 problem(s)`, and
+  `tests.test_factory_init` passed. The backlog line 131 claim ends in
+  `(claimed: maintenance:a-long-line-stalls-the-gate)`.
+- 2026-10-24 (Implement): battery. `python3 run_tests.py` printed
+  `tests: 3807 tests across 118 modules in 26.4s on 8 workers, 0
+  problem(s)`. `python3 lint.py` printed `lint: 0 problem(s) across 34
+  skills`, `python3 kb.py drift` printed `drift: 0 problem(s)`, and
+  `python3 gates.py && python3 gates.py --selftest` printed `gates: 0
+  problem(s)` and `selftest: ok`.
+- Next stage: Verify.
