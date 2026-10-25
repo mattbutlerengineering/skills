@@ -271,12 +271,14 @@ SUMMARY_ZERO_COUNT = re.compile(
 # linear in line length; reading the whole prefix for every match was
 # quadratic (a 22 kB line of "0 not run, " took 1.5 s). The search's `pos`
 # does not hide the text before it from the leading `(?<![\w.])`, so the
-# window's edge invents no word boundary. 17 is len("no criteria were "),
-# the widest zero count a test or fixture uses, and the smallest width
-# that keeps them all green (maintenance:a-long-line-stalls-the-gate).
-# lean: a wider count ("zero criteria were skipped" is 19) falls outside
-# the window and names; widen this on a real artifact that uses one.
-SUMMARY_ZERO_COUNT_WINDOW = 17
+# window's edge invents no word boundary. A count cut by the edge names,
+# so a narrow window fails open (H passes a stale Summary). 64 is
+# len("nothing") + 1 + 45 (the longest English dictionary word) + 1 +
+# len("were") + 6 for spaces and emphasis, so any one-word count fits
+# (maintenance:a-long-line-stalls-the-gate, review).
+# lean: a count wider than 64 (a run of spaces or markers) still names;
+# read the prefix in reverse instead on a real artifact that uses one.
+SUMMARY_ZERO_COUNT_WINDOW = 64
 # The roll-up's grandfather cutoff: ADR-0107's own date, compared with the
 # artifact's frontmatter `date:` through _grandfathered, as O and M compare
 # theirs. A verification.md shipped before the rule existed does not owe

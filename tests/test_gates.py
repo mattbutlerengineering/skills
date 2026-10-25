@@ -3103,6 +3103,23 @@ class TestEvidenceRollUp(unittest.TestCase):
         self.assertFalse(names)
         self.assertLess(elapsed, self.LONG_LINE_SECONDS)
 
+    def test_a_wide_zero_count_over_a_disclosure_stays_refused(self):
+        # Review major (maintenance:a-long-line-stalls-the-gate): a 17-char
+        # window cut each count below in half, so it named and H passed a
+        # stale Summary (fail open). ADR-0108's grammar admits any one
+        # word; the last shape is the longest English dictionary word.
+        head = self.DATED.count("\n")
+        for summary in ("1 PASS; zero criteria were skipped.",
+                        "1 PASS; no criteria were **skipped**.",
+                        "1 PASS; no requirements were skipped.",
+                        "1 PASS; nothing further was skipped.",
+                        "1 PASS; nothing pneumonoultramicroscopicsilico"
+                        "volcanoconiosis were **skipped**."):
+            with self.subTest(summary=summary):
+                self.assertEqual(
+                    gates.evidence_problems(self.DATED + self.body(summary)),
+                    [(head + 1, self.rollup(1, "Live dispatch", head + 15))])
+
     def test_wrapper_prefixes_the_rollup_problem(self):
         root = Path("/repo")
         parsed = parsed_run(runs=[run_entry(

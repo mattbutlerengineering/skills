@@ -100,3 +100,11 @@ artifact on main changes outcome.
   spaced hyphen joins them ("0 - NOT RUN"), and so does a zero whose
   one word starts `pass` or `fail` ("nothing passing was skipped").
   Widen on a real artifact, as for the longer negation.
+- Amended 2026-10-24 (maintenance run a-long-line-stalls-the-gate):
+  `_names_unknown` reads the zero count only within
+  `SUMMARY_ZERO_COUNT_WINDOW` (64) characters before each match, so the
+  roll-up is linear in line length. Any count of one dictionary word
+  fits; a wider one (a long run of spaces or emphasis markers) is cut by
+  the window and names. That limit fails open (H passes a stale
+  Summary), which is why the window is not narrower; on a real artifact
+  that uses one, read the prefix in reverse instead of widening.
