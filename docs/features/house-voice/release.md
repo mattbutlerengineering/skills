@@ -2,7 +2,8 @@
 stage: ship
 run: feature:house-voice
 date: 2026-10-25
-outcome: prepared
+outcome: released
+released-at: 2026-10-25
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1094
 assumptions:
   - "Release authorization is NONE (autorun brief): prepare and stop. Ship pushed the branch and opened one PR. It did not merge, tag, bump the version, delete a branch or file an issue, and ran no `claude plugin eval`, trigger_eval.py, charter_replay.py, `claude -p` or other model call."
@@ -74,6 +75,7 @@ gh pr create --base main --body-file <body>   # needs a "No work order:" line an
 7. PR body judged first: `gates.pr_body_problems(body)` -> `[]`; four-digit work-order tokens in the body -> 0.
 8. `git push -u origin feat/house-voice` -> new branch on origin, tracking set.
 9. `gh pr create --base main --head feat/house-voice --body-file <scratchpad>/pr-body.md` -> https://github.com/mattbutlerengineering/skills/pull/1094
+10. Write-back (2026-10-25): the Owner answered "merge both" in session. Before merging, a chain simulation of origin/main `446fcc2` + PR 1094 + PR 1095 in a detached worktree was clean: `tests: 3894 tests across 121 modules in 33.2s on 8 workers, 0 problem(s)`, `lint: 0 problem(s) across 35 skills`, `drift: 0 problem(s)`, `gates: 0 problem(s)`, `selftest: ok`. `gh pr merge 1094 --squash` -> `90500ea`; `gh pr view 1094 --json state,mergedAt` -> `MERGED`, `2026-10-25T16:39:53Z`. The version bump (Owner step 4) is still open.
 
 ## Post-release checks
 
