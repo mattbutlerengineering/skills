@@ -1,8 +1,12 @@
 # Design system — professional dark, interactive
 
-The source for every visual value. `assets/boilerplate.html`'s `:root` and CSS
-classes mirror the palette below; change a color in one place and match it in
-the other.
+The source for every interactive-only visual value. The dark palette —
+canvas, text tiers, font stacks and node-type colors — is not restated
+here: its one owner is
+`../../animated-diagram/references/design-system.md`, and its Canvas,
+Text — three tiers and architecture-mode Node types sections are the
+values this skill draws with. `assets/boilerplate.html`'s `:root` and CSS
+classes mirror that palette plus the values this file adds.
 
 The look is **flat and precise**: restrained accents on a deep slate canvas,
 one soft shadow for lift, no neon glow. Color earns its place by encoding a
@@ -10,51 +14,28 @@ node's **type**, never for decoration.
 
 ## Contents
 
-- [Canvas](#canvas) · [Text tiers](#text--three-tiers) · [Node types](#node-types--color-is-the-type)
+- [Palette](#palette--owned-by-animated-diagram) — what this skill adds to the shared one
 - [Shapes](#shapes) · [Spacing](#spacing--8px-grid)
 - [Interaction states](#interaction-states-presenter-mode) — dimming, pulses, live edges
 - [Assumed markers](#assumed-markers) — flagging unverified detail
 - [Presenter chrome](#presenter-chrome) — deck, panel, keyboard
 
-## Canvas
+## Palette — owned by animated-diagram
 
-| Role | Value |
-|------|-------|
-| Background | `#0d1117` |
-| Dot grid | `#1c2128` |
-| Node surface (mask) | `#161b22` |
-| Default border | `#30363d` |
-| Edge / connector | `#6e7681` |
-| Edge, emphasis | `#8b949e` |
+Every canvas, text-tier, font and node-type value comes from the owner
+file named above. Each node draws with its type's stroke and fill from
+that file's architecture-mode table — color *is* the type. What differs
+here:
 
-## Text — three tiers
-
-| Tier | Value | Use |
-|------|-------|-----|
-| Primary | `#e6edf3` | node titles — 13px / 600 sans |
-| Secondary | `#8b949e` | sublabels, edge labels — 11px sans / 10px mono |
-| Tertiary | `#6e7681` | annotations, boundary + tier labels — 9px / 500, uppercase, `letter-spacing 0.04em` |
-
-Sans: `system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`
-Mono: `ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace`
-
-System stacks keep the file self-contained and rasterize correctly on PNG
-export. A pinned web font is the one allowed exception.
-
-## Node types — color *is* the type
-
-Each node draws with its type's stroke and fill. The fill is a hint (~0.10–0.12
-alpha); the stroke carries the meaning.
-
-| Type | Meaning | Stroke | Fill |
-|------|---------|--------|------|
-| service | app / compute / API | `#4493f8` | `rgba(68,147,248,0.12)` |
-| data | database / store of record | `#a371f7` | `rgba(163,113,247,0.12)` |
-| storage | cache / object / block store | `#39c5cf` | `rgba(57,197,207,0.10)` |
-| gateway | load balancer / gateway / edge | `#3fb950` | `rgba(63,185,80,0.12)` |
-| queue | event / message bus | `#d29922` | `rgba(210,153,34,0.12)` |
-| external | third-party / SaaS | `#8b949e` | `rgba(139,148,158,0.10)` |
-| security | auth / secrets / trust zone | `#e5606a` | `rgba(229,96,106,0.12)` |
+- **Edges** are the owner's Connector, `#6e7681`. One addition: **edge,
+  emphasis** `#8b949e` (the secondary text tier's value), used for the
+  live edge in presenter mode.
+- **Tertiary text** labels tiers as well as boundaries.
+- **Node types**: the architecture-mode table only — this skill has no
+  flow mode. The owner's traveling-dot row does not apply either; the motion
+  here is flow pulses (below).
+- **System font stacks** also rasterize correctly on PNG export, which
+  this skill offers.
 
 ## Shapes
 

@@ -19,11 +19,10 @@ fixing things has spent its budget on the cheap half.
 
 ### 1. Recon — and name the tree you audited
 
-State, in the report's first two lines, the **absolute repo root** and
-`git rev-parse --short HEAD`. Never "this repo": a finding is scoped to a
-tree at a commit, and the reader's tree is not yours. Deriving the target
-from whatever directory you happen to be standing in is how an audit ends
-up describing a different repo than the one it names.
+Read [`references/recon.md`](references/recon.md) now. Its first step
+comes first here too: name the absolute repo root and the short HEAD in
+the report's first two lines, before anything else is said about the
+tree.
 
 Then map the territory:
 
@@ -35,23 +34,10 @@ Then map the territory:
   shared seams are and what the repo says about adding another one.
 - `git log --oneline -30` and churn: what is evolving versus frozen.
 
-**Then check what is already in flight, before judging anything:**
-
-    gh pr list --state open
-    gh issue list --state open --limit 50
-
-In a cloud session (Claude Code Remote), where the GraphQL-backed
-`gh pr list` and `gh issue list` return HTTP 403 while `gh api` REST
-calls succeed: `gh api 'repos/{owner}/{repo}/pulls?state=open'` and
-`gh api 'repos/{owner}/{repo}/issues?state=open&per_page=50'`, dropping
-every entry that carries a `pull_request` key — the REST issues
-endpoint lists pull requests too.
-
-A defect an unmerged PR already fixes is not a finding — it is a duplicate
-of work in flight, and a fresh diagnosis of it is worse than useless
-because it reads as new. The same goes for an open issue that already
-names it, and for a seed already sitting in `docs/backlog.md`. Read all
-three before the sweep, not after: recon is cheap and re-litigation is not.
+**Then check what is already in flight, before judging anything** —
+open PRs, open issues and `docs/backlog.md`, with the cloud-session
+fallback, as the recon reference's second step says. Read all three
+before the sweep, not after.
 
 If the repo has no working verification command, that is finding #1 and
 everything risky ranks behind it.
@@ -148,25 +134,10 @@ Say the same about depth: which directories the sweep actually reached.
 
 ### 6. Route each finding to a carrier that already exists
 
-One finding, one carrier. The ladder:
-
-1. **A seed in `docs/backlog.md`** — the default for anything worth
-   remembering and not worth a run today. One line, the protocol's
-   grammar, origin `session:YYYY-MM-DD`:
-
-       - <finding one-liner> (from: session:2026-08-08)
-
-2. **A maintenance run** — hand it to `capture` when something is broken
-   or degraded and is worth a run now. Capture interviews; audit does not
-   write `defect.md` on its behalf.
-3. **A feature run** — hand it to `idea` when the finding is a direction
-   worth building.
-4. **Nothing.** A verdict, recorded in the report.
-
-Before appending anything: **read `docs/backlog.md` first and drop
-findings it already carries.** The dedupe happens before the write, not
-after — an append is not undone by noticing, and a backlog that repeats
-itself stops being read.
+One finding, one carrier, on the ladder in
+[`references/routing.md`](references/routing.md) — read it now. It also
+holds the dedupe read every `docs/backlog.md` append waits on: drop what
+the backlog already carries before the write, not after.
 
 What audit never writes, in any disposition: a `breakdown.md` row, a
 `WO-####` issue, or run artifacts for a run that does not exist. Rows
