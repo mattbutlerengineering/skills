@@ -23,7 +23,8 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from frontmatter_shapes import SHAPES  # noqa: E402
 from protocol import (SKILL_DESCRIPTION_LIMIT, frontmatter_end,  # noqa: E402
-                      read_frontmatter, skill_frontmatter_problems,
+                      parse_frontmatter, read_frontmatter,
+                      skill_frontmatter_problems,
                       skill_path)
 
 
@@ -86,6 +87,23 @@ class TestFrontmatterEnd(unittest.TestCase):
                 self.assertEqual(frontmatter_end(text.splitlines()), end)
                 self.assertEqual(
                     frontmatter_end(text.splitlines(keepends=True)), end)
+
+
+class TestParseFrontmatterAgreesWithTheOwner(unittest.TestCase):
+    """parse_frontmatter reads the block frontmatter_end bounds, so it is
+    None exactly when there is no end, and otherwise parses lines[1:end]
+    (ADR-0118)."""
+
+    def test_every_shape(self):
+        for name, text, end in SHAPES:
+            with self.subTest(shape=name):
+                if end is None:
+                    self.assertIsNone(parse_frontmatter(text))
+                    continue
+                block = text.splitlines()[1:end]
+                expected = ({"status": "ok"} if "status: ok" in block
+                            else {})
+                self.assertEqual(parse_frontmatter(text), expected)
 
 
 class TestSkillPath(unittest.TestCase):

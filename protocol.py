@@ -75,7 +75,6 @@ MAINTENANCE_STAGE_ARTIFACTS = [
 RUN_ARTIFACTS = sorted({artifact for _, artifact
                         in STAGE_ARTIFACTS + MAINTENANCE_STAGE_ARTIFACTS})
 
-_FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 # The one frontmatter fence (ADR-0118): `---` at column 0, trailing
 # whitespace allowed. `\s*` also absorbs a kept line end, so lines from
 # splitlines() and from splitlines(keepends=True) give one answer.
@@ -107,8 +106,8 @@ def read_frontmatter(path):
     Single error contract: returns None when the file has no frontmatter
     block; a present-but-fieldless block is an empty dict. Callers decide
     what a missing block means for them. Values may be `|` literal block
-    scalars (following indented lines joined with newlines); CRLF files
-    are normalized before matching.
+    scalars (following indented lines joined with newlines). The block
+    is the one frontmatter_end bounds; CRLF files split like LF ones.
     """
     return parse_frontmatter(path.read_text(encoding="utf-8"))
 
@@ -117,14 +116,14 @@ def parse_frontmatter(text):
     """read_frontmatter's parse of text a caller already read (ADR-0094:
     parse_run reads prd.md once, guarded, and parses its frontmatter
     from that text)."""
-    text = text.replace("\r\n", "\n")
-    match = _FRONTMATTER.match(text)
-    if not match:
+    lines = text.splitlines()
+    end = frontmatter_end(lines)
+    if end is None:
         return None
     fields = {}
     key = None
     block_lines = None
-    for line in match.group(1).splitlines():
+    for line in lines[1:end]:
         if block_lines is not None and (line.startswith("  ") or not line.strip()):
             block_lines.append(line[2:])
             continue
