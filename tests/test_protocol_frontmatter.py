@@ -19,8 +19,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from protocol import (SKILL_DESCRIPTION_LIMIT, read_frontmatter,  # noqa: E402
-                      skill_frontmatter_problems, skill_path)
+sys.path.insert(0, str(ROOT / "tests"))
+
+from frontmatter_shapes import SHAPES  # noqa: E402
+from protocol import (SKILL_DESCRIPTION_LIMIT, frontmatter_end,  # noqa: E402
+                      read_frontmatter, skill_frontmatter_problems,
+                      skill_path)
 
 
 def write(text):
@@ -70,6 +74,18 @@ class TestLineEndings(unittest.TestCase):
         path = write("---\r\nname: idea\r\ndescription: d\r\n---\r\n\r\nbody\r\n")
         self.assertEqual(read_frontmatter(path),
                          {"name": "idea", "description": "d"})
+
+
+class TestFrontmatterEnd(unittest.TestCase):
+    """The one answer to where frontmatter ends (ADR-0118), over the
+    shared shape table, from lines split with or without their ends."""
+
+    def test_every_shape_from_bare_and_kept_line_ends(self):
+        for name, text, end in SHAPES:
+            with self.subTest(shape=name):
+                self.assertEqual(frontmatter_end(text.splitlines()), end)
+                self.assertEqual(
+                    frontmatter_end(text.splitlines(keepends=True)), end)
 
 
 class TestSkillPath(unittest.TestCase):

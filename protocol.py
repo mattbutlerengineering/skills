@@ -3,7 +3,7 @@
 docs/pipeline-protocol.md is the spec; this module is its one
 implementation. It owns the stage/skill taxonomy, the artifact tables
 (product/feature and maintenance, ADR-0025), artifact-frontmatter
-reading, the skill-file contract (path shape and frontmatter rules,
+reading and where a file's frontmatter ends (ADR-0118), the skill-file contract (path shape and frontmatter rules,
 ADR-0052), the UX conditional, the re-entry conditional, the Ship
 outcome (ADR-0101), the checkbox rule, the Operate population
 (ADR-0102), the retro short-circuit, and
@@ -76,11 +76,29 @@ RUN_ARTIFACTS = sorted({artifact for _, artifact
                         in STAGE_ARTIFACTS + MAINTENANCE_STAGE_ARTIFACTS})
 
 _FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
+# The one frontmatter fence (ADR-0118): `---` at column 0, trailing
+# whitespace allowed. `\s*` also absorbs a kept line end, so lines from
+# splitlines() and from splitlines(keepends=True) give one answer.
+_FENCE = re.compile(r"^---\s*$")
 # Bullet-and-whitespace shape aligned with knowledge_plane.ROW (the
 # dispatch-plane row grammar) so completion counting and dispatch agree
 # about the same line; separate owner by design — this seam stays
 # factory-agnostic and captures the checked state.
 _CHECKBOX = re.compile(r"^\s*[-*+]\s+\[([ xX])\]", re.MULTILINE)
+
+
+def frontmatter_end(lines):
+    """The index of the line that closes the frontmatter block opening
+    LINES, else None (ADR-0118). The block is lines[1:end] and the body
+    lines[end + 1:]. None when LINES is empty, its first line is not a
+    fence (an indented opener included), or no later line closes it;
+    the first closing fence wins, so an empty block ends at 1."""
+    if not lines or not _FENCE.match(lines[0]):
+        return None
+    for index in range(1, len(lines)):
+        if _FENCE.match(lines[index]):
+            return index
+    return None
 
 
 def read_frontmatter(path):

@@ -48,7 +48,7 @@
     "templates/tools/factory/knowledge_plane.py": "5323b6c109ac686ee7a77eb60b7cf3d1c83b57db6b14586b614b64ac085ca207",
     "templates/tools/factory/label_sync.py": "301b047146a81a2580b1987efda5808bf75ea56b8729e503da9cd9cd22051b8c",
     "templates/tools/factory/orientation_pack.py": "5ff8c5d1739aadd2f9d08194143278c37fe8c8b8586ef9b5e831dad70efa43e7",
-    "templates/tools/factory/protocol.py": "3c1f1ab9fe15798ad164ee8262493b70749aafa3dfaffd38bae5bf91aed739d2",
+    "templates/tools/factory/protocol.py": "a2c36144ac158e5a3c2a1050a82aa09c22a8965a5027d57f3b501afe3617f1f6",
     "templates/tools/factory/rejection_mining.py": "38330731af6fc1cb7e5ab0102689e91c174f05d377de64c77917626119012437",
     "templates/tools/factory/standards_index.py": "c605153119c8ce5ee28f5647c3d75ab94684cda4026c4bac69b3e5cf2420e2e4",
     "templates/tools/factory/trace.py": "eda41380d3b6dea5280682b494b59331a8cedb8b4b86d67a8333f5b91c410694",
