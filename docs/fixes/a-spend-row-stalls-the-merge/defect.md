@@ -91,10 +91,10 @@ only affects which keys `trace` accepts.
   - Accept: the ship-file case fails on main and passes after;
     `python3 -m unittest tests.test_conductor_merge` exits 0; `one_owner.py`
     no longer names the COSTS pair.
-- [ ] **One issue key** — `trace.py` imports `cost_ledger.ISSUE_KEY`.
+- [x] **One issue key** — `trace.py` imports `cost_ledger.ISSUE_KEY`.
   - Accept: the `#0` and `#012` cases fail on main and pass after;
     `python3 -m unittest tests.test_trace` exits 0.
-- [ ] **Payload and checks** — `python3 factory_init.py update-manifest`
+- [x] **Payload and checks** — `python3 factory_init.py update-manifest`
   (both modules are mirrored), then the four CI commands.
   - Accept: `factory-init: 0 problem(s)`, and every check prints 0
     problems and `selftest: ok`.

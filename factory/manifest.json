@@ -32,7 +32,7 @@
     "templates/tools/factory/conductor_consent.py": "807d8e229486ead63436dc7d8843a91e42c5419b28d76f0ad24b612e4fd581bd",
     "templates/tools/factory/conductor_flow.py": "652cf5e6f7d826b70a510f0f082174c370e7230de398225a284fecec8a91f4fd",
     "templates/tools/factory/conductor_landed.py": "d39825659b40f20bcc73af9600888f7a36acf36a1e3aaa1fa9913adef36cc91d",
-    "templates/tools/factory/conductor_merge.py": "912d53afe82b5ec2df03d3969466c646576ac08cb65231d7c400f10305b0a0b7",
+    "templates/tools/factory/conductor_merge.py": "a692d35df92731fd3bf7bb0a323129df9d858ff40a52ef30bb12ea9584fdfc8d",
     "templates/tools/factory/conductor_next.py": "2aaf04bd7b6bf1634c28dc258f929ddef40258a67cbff51bd4f2b1b34cf96166",
     "templates/tools/factory/conductor_plan.py": "4c3fbd714db26574c8ffd4d3e7f797a12b30c11ade94a881b21f196a97a14acb",
     "templates/tools/factory/conductor_run.py": "19b9c3368ee65fd28a76a1c35946d4c4b301940af8bcd0236012a800a8a63868",
@@ -51,7 +51,7 @@
     "templates/tools/factory/protocol.py": "4edba80357f700f5de032df2d155a6fe0282e134bbf378900bfe888cbc9ba21d",
     "templates/tools/factory/rejection_mining.py": "38330731af6fc1cb7e5ab0102689e91c174f05d377de64c77917626119012437",
     "templates/tools/factory/standards_index.py": "c605153119c8ce5ee28f5647c3d75ab94684cda4026c4bac69b3e5cf2420e2e4",
-    "templates/tools/factory/trace.py": "eda41380d3b6dea5280682b494b59331a8cedb8b4b86d67a8333f5b91c410694",
+    "templates/tools/factory/trace.py": "db5e741f7568db630c98291080dfd8e07afae95b20c512ec2c8991a04ddecd97",
     "templates/tools/factory/validator.py": "48b91e0940fc6fd92a27a87a4069049720022df318808d766fe5a1414ab93e52",
     "templates/tools/factory/work_queue.py": "8bf1204f3b68861e696d7f2dc7155b0e81c023ef5ca7af71c9e84a50f016ef39"
   }
