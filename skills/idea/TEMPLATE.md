@@ -6,6 +6,8 @@ date: YYYY-MM-DD
 
 # Idea: <working title>
 
+> <The user's own framing of the idea, verbatim: the sentence from their pitch or first message that names it, coined phrases kept.>
+
 ## Problem
 
 <The problem from the sufferer's perspective, in their words, sharpened.>

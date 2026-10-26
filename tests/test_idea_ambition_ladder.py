@@ -166,6 +166,20 @@ class TestTemplate(unittest.TestCase):
         self.assertIsNone(TYPED_ID.search(self.text))
 
 
+class TestTheUsersFraming(unittest.TestCase):
+    # #1118: three of three briefs dropped the pitch's coined phrase; the
+    # template had no place for the user's own framing of the idea.
+    def test_the_template_quotes_the_framing_under_the_title(self):
+        lines = TEMPLATE.read_text(encoding="utf-8").splitlines()
+        title = lines.index("# Idea: <working title>")
+        self.assertTrue(lines[title + 2].startswith("> <The user's own"
+                                                    " framing"))
+
+    def test_the_write_step_points_at_the_framing_line(self):
+        self.assertIn("Quote the user's own framing of the idea verbatim"
+                      " under the title", skill_text())
+
+
 class TestOldBriefStillValidates(unittest.TestCase):
     """Pins a measured fact: nothing parses idea.md sections."""
 
