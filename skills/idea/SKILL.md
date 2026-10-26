@@ -132,7 +132,9 @@ the user's head at this stage, so this skill interviews — it does not draft.
    one at a time.
 
 5. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
-   into the run directory as `idea.md`, with protocol frontmatter.
+   into the run directory as `idea.md`, with protocol frontmatter. Quote
+   the user's own framing of the idea verbatim under the title, from their
+   pitch or first message, so a phrase they coined survives the sharpening.
 
 6. **Hand off.** State that the next stage is PRD and how to get there
    (the `prd` skill, or the router). Commit the artifact on the run's branch

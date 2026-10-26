@@ -1,0 +1,545 @@
+{
+  "schemaVersion": 1,
+  "claudeVersion": "2.1.310",
+  "startedAt": "2026-10-26T05:10:18.842Z",
+  "durationSeconds": 316,
+  "costUsd": 1.1576246000000001,
+  "partial": false,
+  "suite": {
+    "root": "/private/tmp/claude-501/-Users-mbutler-github-skills/9f0023b1-59ec-4c0e-9ea9-08cb96f93996/scratchpad/plugin-export-coined",
+    "ablation": "none",
+    "modelOverride": "claude-sonnet-5",
+    "judgeModel": "claude-haiku-4-5",
+    "tagFilters": [
+      "idea"
+    ],
+    "threshold": 1,
+    "concurrency": 1,
+    "plugins": [
+      {
+        "name": "idea-to-prod",
+        "version": "0.23.3",
+        "path": "/private/tmp/claude-501/-Users-mbutler-github-skills/9f0023b1-59ec-4c0e-9ea9-08cb96f93996/scratchpad/plugin-export-coined"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "ladder-brief",
+      "dir": "plugin-evals/idea/ladder-brief",
+      "source": "mixed",
+      "promptMarkdown": "I have an idea for a feature. The pitch is in docs/pitch.md. Take it\nthrough the idea stage as a feature run with the slug slot-finder.\n\nAnswers to the questions you would ask me, so do not stop to ask them:\nthe problem is that shift managers spend an evening each week rebuilding\nthe rota by hand after call-outs; the people who have it are\nshift managers at small restaurants, who cope with a spreadsheet and a\ngroup chat; why now is that call-outs have gone up since the schedule\nmoved to a phone app; the evidence is anecdote, three managers complained\nin the last month. For the ambition ladder, my pick is Showstopper. The\ndemo I would show first is a manager tapping one call-out and the rota\nfilling the gap before they put the phone down. The product already knows\nwho is free and who is certified for each station. The riskiest piece is\nranking the replacements; a two-day spike on last month's call-outs would\nprove it. The cheapest kill test is to hand-fill ten real call-outs and\nsee whether the ranking agrees with the manager. Success is one sentence:\na call-out is covered with no more than one tap. Do not design the\nsolution.\n\nWrite the brief to docs/features/slot-finder/idea.md, append any seeds to\ndocs/backlog.md, then print the whole brief in your reply.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 900,
+      "maxTurns": 30,
+      "graders": [
+        {
+          "name": "has-ambition-rung",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "docs/features/slot-finder/idea.md"
+            },
+            "pattern": "^## Ambition rung\\s*$",
+            "flags": "m",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "has-kill-test",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "docs/features/slot-finder/idea.md"
+            },
+            "pattern": "^## Cheapest kill test\\s*$",
+            "flags": "m",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "has-riskiest-piece",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "docs/features/slot-finder/idea.md"
+            },
+            "pattern": "^## Riskiest piece \\+ spike\\s*$",
+            "flags": "m",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "has-the-demo",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "docs/features/slot-finder/idea.md"
+            },
+            "pattern": "^## The demo\\s*$",
+            "flags": "m",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "idea-exists",
+          "type": "file_exists",
+          "weight": 1,
+          "config": {
+            "path": "docs/features/slot-finder/idea.md",
+            "exists": true
+          }
+        },
+        {
+          "name": "keeps-users-words",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "docs/features/slot-finder/idea.md"
+            },
+            "pattern": "self-healing shift\\s+rota",
+            "flags": "m",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "moonshot-not-chosen",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the Moonshot appears in the brief only as a rung not taken, saved as a backlog seed, and the chosen rung is the one the user picked.\nFAIL if the brief chooses the Moonshot, plans to build it in this run, or leaves the Moonshot out of the rungs not taken.",
+          "config": {
+            "criteria": "PASS if the Moonshot appears in the brief only as a rung not taken, saved as a backlog seed, and the chosen rung is the one the user picked.\nFAIL if the brief chooses the Moonshot, plans to build it in this run, or leaves the Moonshot out of the rungs not taken.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "moonshot-seed-appended",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "docs/backlog.md"
+            },
+            "pattern": "^- .+ \\(from: feature:slot-finder\\)$",
+            "flags": "m",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "rung-anchored-on-framing",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the rungs the brief offers are built from the user's own words in the pitch and the interview answers, quoting their sentence under Ambition rung, and the idea stays the same self-healing rota idea at every rung.\nFAIL if the brief renames the user's idea, swaps it for a different product, or states the chosen rung without quoting the user's own words.",
+          "config": {
+            "criteria": "PASS if the rungs the brief offers are built from the user's own words in the pitch and the interview answers, quoting their sentence under Ambition rung, and the idea stays the same self-healing rota idea at every rung.\nFAIL if the brief renames the user's idea, swaps it for a different product, or states the chosen rung without quoting the user's own words.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "showstopper-passes-four-tests",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the brief the reply prints names the Showstopper as the chosen rung and answers all four tests under Ambition rung (Demo, Removes a step, Only this product, Achievable), each as pass with a clause of evidence, with a 30-second demo whose after is something seen and a riskiest piece named with a spike of about two days.\nFAIL if the brief omits any of the four tests, marks one fail yet keeps the Showstopper, gives a metric instead of something seen as the demo's after, or names no spike for the riskiest piece.",
+          "config": {
+            "criteria": "PASS if the brief the reply prints names the Showstopper as the chosen rung and answers all four tests under Ambition rung (Demo, Removes a step, Only this product, Achievable), each as pass with a clause of evidence, with a 30-second demo whose after is something seen and a riskiest piece named with a spike of about two days.\nFAIL if the brief omits any of the four tests, marks one fail yet keeps the Showstopper, gives a metric instead of something seen as the demo's after, or names no spike for the riskiest piece.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "skill-fired",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Skill",
+            "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?idea\""
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 0.7272727272727273,
+            "passed": false,
+            "turns": 22,
+            "costUsd": 0.4110894,
+            "judgeCostUsd": 0.004582000000000001,
+            "durationSeconds": 96,
+            "startedAt": "2026-10-26T05:10:19.048Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-kEN0uw/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "has-ambition-rung",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## Ambition rung\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "has-kill-test",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## Cheapest kill test\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "has-riskiest-piece",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## Riskiest piece \\+ spike\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "has-the-demo",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## The demo\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "idea-exists",
+                "passed": true,
+                "weight": 1,
+                "explanation": "docs/features/slot-finder/idea.md exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "keeps-users-words",
+                "passed": false,
+                "weight": 1,
+                "explanation": "pattern not found in file docs/features/slot-finder/idea.md",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "moonshot-not-chosen",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "**Summary:** Written to `docs/features/slot-finder/idea.md`, and the Moonshot (proactive reshuffling before a call-out happens) seeded to `docs/backlog.md`. The Showstopper pick passed all four tests, so nothing was demoted. Git is broken in this sandbox (every command fails on an `xcode-select` cache-file error), so I couldn't run the \"work already in flight\" check or commit — the directory was clean when I listed it manually, but you should run the two `git` commands above yourself, and re-run the in-flight check (`git branch -a --no-merged origin/main`, `git worktree list`) once git is working. Next stage is PRD, via the `prd` skill or `next`."
+              },
+              {
+                "name": "moonshot-seed-appended",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^- .+ \\(from: feature:slot-finder\\)$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "rung-anchored-on-framing",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "**Summary:** Written to `docs/features/slot-finder/idea.md`, and the Moonshot (proactive reshuffling before a call-out happens) seeded to `docs/backlog.md`. The Showstopper pick passed all four tests, so nothing was demoted. Git is broken in this sandbox (every command fails on an `xcode-select` cache-file error), so I couldn't run the \"work already in flight\" check or commit — the directory was clean when I listed it manually, but you should run the two `git` commands above yourself, and re-run the in-flight check (`git branch -a --no-merged origin/main`, `git worktree list`) once git is working. Next stage is PRD, via the `prd` skill or `next`."
+              },
+              {
+                "name": "showstopper-passes-four-tests",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "**Summary:** Written to `docs/features/slot-finder/idea.md`, and the Moonshot (proactive reshuffling before a call-out happens) seeded to `docs/backlog.md`. The Showstopper pick passed all four tests, so nothing was demoted. Git is broken in this sandbox (every command fails on an `xcode-select` cache-file error), so I couldn't run the \"work already in flight\" check or commit — the directory was clean when I listed it manually, but you should run the two `git` commands above yourself, and re-run the in-flight check (`git branch -a --no-merged origin/main`, `git worktree list`) once git is working. Next stage is PRD, via the `prd` skill or `next`."
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": false,
+                "scored": true
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 12,
+            "costUsd": 0.32300000000000006,
+            "judgeCostUsd": 0.012747000000000003,
+            "durationSeconds": 99,
+            "startedAt": "2026-10-26T05:11:55.456Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-6uE78a/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "has-ambition-rung",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## Ambition rung\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "has-kill-test",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## Cheapest kill test\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "has-riskiest-piece",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## Riskiest piece \\+ spike\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "has-the-demo",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## The demo\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "idea-exists",
+                "passed": true,
+                "weight": 1,
+                "explanation": "docs/features/slot-finder/idea.md exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "keeps-users-words",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched self-healing shift\\s+rota",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "moonshot-not-chosen",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Both files are written. One thing to flag before the brief: git itself doesn't run in this sandbox — every git command (even `git status`) fails because `xcode-select`/`xcrun` can't locate git here. That means I couldn't run the \"work already in flight\" branch/worktree check from the idea skill's protocol, and I couldn't commit `idea.md` or the backlog append at the stage boundary as the pipeline protocol expects. Both files are written to disk; you'll need to `git add` and commit them yourself (or let me know if you want me to try again once git is reachable).\n\nHere's the full brief:\n\n---\n\n```markdown\n---\nstage: idea\nrun: feature:slot-finder\ndate: 2026-10-25\n---\n\n# Idea: Slot finder\n\n> Our scheduling app should become a self-healing shift rota: when someone\n> calls out, it should find who can cover the station and fill the gap, so\n> the manager stops rebuilding the week by hand.\n\n## Problem\n\nShift managers at small restaurants lose an evening every week to the\ncall-out shuffle — rebuilding the rota by hand after someone drops a shift.\n\n## Who has it\n\nShift managers at small restaurants. Today they cope with a spreadsheet and\na group chat: post the gap, wait for a reply, manually patch the schedule.\n\n## Why now\n\nCall-outs have gone up since the schedule moved to a phone app — easier to\nflake on a shift than it used to be.\n\n## Evidence\n\nAnecdote: three managers complained about this in the last month.\n\n## Ambition rung\n\nChosen: Showstopper, in the user's words: \"when someone calls out, it\nshould find who can cover the station and fill the gap\"\nNot taken: Solid: surface a ranked list of available, certified\nreplacements for the manager to pick from, instead of auto-filling;\nMoonshot: a self-healing rota that predicts call-outs before they happen\nand auto-notifies and confirms replacements with no manager involvement at\nall, across every location.\nDemo: pass — before: a manager facing a gap after a call-out; after: the\nrota shows the gap already filled.\nRemoves a step: pass — the manual rebuild (checking who's free, texting\nthe group chat, patching the spreadsheet) is gone; one tap replaces it.\nOnly this product: pass — built on data only this product holds: who is\nfree and who is certified for each station.\nAchievable: pass — riskiest piece is ranking the replacements; a two-day\nspike against last month's call-outs could prove it.\n\n## The demo\n\nBefore: a manager taps a call-out on their phone, looking at a gap in the\nrota. After: the rota shows the gap filled, without the manager doing\nanything else.\n\n## Riskiest piece + spike\n\nRanking the replacements — deciding who to offer first when more than one\nperson is free and certified for the station. A two-day spike replaying\nlast month's call-outs against a candidate ranking would show whether it\nwould have picked who the manager actually picked.\n\n## Cheapest kill test\n\nHand-fill ten real call-outs and check whether the ranking agrees with\nwhat the manager actually did. If it doesn't agree on most of them, the\nidea is wrong about what \"best replacement\" means.\n\n## Solution hunch\n\nA self-healing shift rota: when a manager logs a call-out, the system\nfinds who's free and certified for that station and fills the gap,\ninstead of the manager doing it by hand.\n\n## Success in one sentence\n\nA call-out is covered with no more than one tap.\n\n## Unknowns & risks\n\n- The riskiest piece is also the central bet: does an automated ranking\n  agree with what a manager would have picked? The kill test (hand-filling\n  ten real call-outs) is the first read on this.\n- No certified, free replacement exists for some call-outs — what the\n  product does then (manager still has to work it by hand) is undefined,\n  and could be most of the real-world cases.\n- A one-tap auto-fill may clash with manager trust: managers may want to\n  confirm a pick rather than have it auto-assigned, which would cost the\n  \"no more than one tap\" bar.\n- Picking the \"best\" available person by certification and availability\n  alone could ignore overtime limits or fairness (always picking the same\n  person), creating payroll or morale problems the current manual process\n  avoids by human judgment.\n- The evidence is thin — three managers' complaints in a month, anecdote\n  only. The problem could be smaller, or specific to how one phone app\n  rolled out shift changes, rather than a general pattern.\n```\n\n---\n\nBacklog seed appended to `docs/backlog.md`:\n\n```\n- A self-healing rota that predicts call-outs before they happen and auto-notifies and confirms replacements with no manager involvement at all, across every location (from: feature:slot-finder)\n```\n\nNext stage is PRD — run the `prd` skill (or `next`) once you're ready, and commit `idea.md` + the backlog line together first."
+              },
+              {
+                "name": "moonshot-seed-appended",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^- .+ \\(from: feature:slot-finder\\)$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "rung-anchored-on-framing",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Both files are written. One thing to flag before the brief: git itself doesn't run in this sandbox — every git command (even `git status`) fails because `xcode-select`/`xcrun` can't locate git here. That means I couldn't run the \"work already in flight\" branch/worktree check from the idea skill's protocol, and I couldn't commit `idea.md` or the backlog append at the stage boundary as the pipeline protocol expects. Both files are written to disk; you'll need to `git add` and commit them yourself (or let me know if you want me to try again once git is reachable).\n\nHere's the full brief:\n\n---\n\n```markdown\n---\nstage: idea\nrun: feature:slot-finder\ndate: 2026-10-25\n---\n\n# Idea: Slot finder\n\n> Our scheduling app should become a self-healing shift rota: when someone\n> calls out, it should find who can cover the station and fill the gap, so\n> the manager stops rebuilding the week by hand.\n\n## Problem\n\nShift managers at small restaurants lose an evening every week to the\ncall-out shuffle — rebuilding the rota by hand after someone drops a shift.\n\n## Who has it\n\nShift managers at small restaurants. Today they cope with a spreadsheet and\na group chat: post the gap, wait for a reply, manually patch the schedule.\n\n## Why now\n\nCall-outs have gone up since the schedule moved to a phone app — easier to\nflake on a shift than it used to be.\n\n## Evidence\n\nAnecdote: three managers complained about this in the last month.\n\n## Ambition rung\n\nChosen: Showstopper, in the user's words: \"when someone calls out, it\nshould find who can cover the station and fill the gap\"\nNot taken: Solid: surface a ranked list of available, certified\nreplacements for the manager to pick from, instead of auto-filling;\nMoonshot: a self-healing rota that predicts call-outs before they happen\nand auto-notifies and confirms replacements with no manager involvement at\nall, across every location.\nDemo: pass — before: a manager facing a gap after a call-out; after: the\nrota shows the gap already filled.\nRemoves a step: pass — the manual rebuild (checking who's free, texting\nthe group chat, patching the spreadsheet) is gone; one tap replaces it.\nOnly this product: pass — built on data only this product holds: who is\nfree and who is certified for each station.\nAchievable: pass — riskiest piece is ranking the replacements; a two-day\nspike against last month's call-outs could prove it.\n\n## The demo\n\nBefore: a manager taps a call-out on their phone, looking at a gap in the\nrota. After: the rota shows the gap filled, without the manager doing\nanything else.\n\n## Riskiest piece + spike\n\nRanking the replacements — deciding who to offer first when more than one\nperson is free and certified for the station. A two-day spike replaying\nlast month's call-outs against a candidate ranking would show whether it\nwould have picked who the manager actually picked.\n\n## Cheapest kill test\n\nHand-fill ten real call-outs and check whether the ranking agrees with\nwhat the manager actually did. If it doesn't agree on most of them, the\nidea is wrong about what \"best replacement\" means.\n\n## Solution hunch\n\nA self-healing shift rota: when a manager logs a call-out, the system\nfinds who's free and certified for that station and fills the gap,\ninstead of the manager doing it by hand.\n\n## Success in one sentence\n\nA call-out is covered with no more than one tap.\n\n## Unknowns & risks\n\n- The riskiest piece is also the central bet: does an automated ranking\n  agree with what a manager would have picked? The kill test (hand-filling\n  ten real call-outs) is the first read on this.\n- No certified, free replacement exists for some call-outs — what the\n  product does then (manager still has to work it by hand) is undefined,\n  and could be most of the real-world cases.\n- A one-tap auto-fill may clash with manager trust: managers may want to\n  confirm a pick rather than have it auto-assigned, which would cost the\n  \"no more than one tap\" bar.\n- Picking the \"best\" available person by certification and availability\n  alone could ignore overtime limits or fairness (always picking the same\n  person), creating payroll or morale problems the current manual process\n  avoids by human judgment.\n- The evidence is thin — three managers' complaints in a month, anecdote\n  only. The problem could be smaller, or specific to how one phone app\n  rolled out shift changes, rather than a general pattern.\n```\n\n---\n\nBacklog seed appended to `docs/backlog.md`:\n\n```\n- A self-healing rota that predicts call-outs before they happen and auto-notifies and confirms replacements with no manager involvement at all, across every location (from: feature:slot-finder)\n```\n\nNext stage is PRD — run the `prd` skill (or `next`) once you're ready, and commit `idea.md` + the backlog line together first."
+              },
+              {
+                "name": "showstopper-passes-four-tests",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Both files are written. One thing to flag before the brief: git itself doesn't run in this sandbox — every git command (even `git status`) fails because `xcode-select`/`xcrun` can't locate git here. That means I couldn't run the \"work already in flight\" branch/worktree check from the idea skill's protocol, and I couldn't commit `idea.md` or the backlog append at the stage boundary as the pipeline protocol expects. Both files are written to disk; you'll need to `git add` and commit them yourself (or let me know if you want me to try again once git is reachable).\n\nHere's the full brief:\n\n---\n\n```markdown\n---\nstage: idea\nrun: feature:slot-finder\ndate: 2026-10-25\n---\n\n# Idea: Slot finder\n\n> Our scheduling app should become a self-healing shift rota: when someone\n> calls out, it should find who can cover the station and fill the gap, so\n> the manager stops rebuilding the week by hand.\n\n## Problem\n\nShift managers at small restaurants lose an evening every week to the\ncall-out shuffle — rebuilding the rota by hand after someone drops a shift.\n\n## Who has it\n\nShift managers at small restaurants. Today they cope with a spreadsheet and\na group chat: post the gap, wait for a reply, manually patch the schedule.\n\n## Why now\n\nCall-outs have gone up since the schedule moved to a phone app — easier to\nflake on a shift than it used to be.\n\n## Evidence\n\nAnecdote: three managers complained about this in the last month.\n\n## Ambition rung\n\nChosen: Showstopper, in the user's words: \"when someone calls out, it\nshould find who can cover the station and fill the gap\"\nNot taken: Solid: surface a ranked list of available, certified\nreplacements for the manager to pick from, instead of auto-filling;\nMoonshot: a self-healing rota that predicts call-outs before they happen\nand auto-notifies and confirms replacements with no manager involvement at\nall, across every location.\nDemo: pass — before: a manager facing a gap after a call-out; after: the\nrota shows the gap already filled.\nRemoves a step: pass — the manual rebuild (checking who's free, texting\nthe group chat, patching the spreadsheet) is gone; one tap replaces it.\nOnly this product: pass — built on data only this product holds: who is\nfree and who is certified for each station.\nAchievable: pass — riskiest piece is ranking the replacements; a two-day\nspike against last month's call-outs could prove it.\n\n## The demo\n\nBefore: a manager taps a call-out on their phone, looking at a gap in the\nrota. After: the rota shows the gap filled, without the manager doing\nanything else.\n\n## Riskiest piece + spike\n\nRanking the replacements — deciding who to offer first when more than one\nperson is free and certified for the station. A two-day spike replaying\nlast month's call-outs against a candidate ranking would show whether it\nwould have picked who the manager actually picked.\n\n## Cheapest kill test\n\nHand-fill ten real call-outs and check whether the ranking agrees with\nwhat the manager actually did. If it doesn't agree on most of them, the\nidea is wrong about what \"best replacement\" means.\n\n## Solution hunch\n\nA self-healing shift rota: when a manager logs a call-out, the system\nfinds who's free and certified for that station and fills the gap,\ninstead of the manager doing it by hand.\n\n## Success in one sentence\n\nA call-out is covered with no more than one tap.\n\n## Unknowns & risks\n\n- The riskiest piece is also the central bet: does an automated ranking\n  agree with what a manager would have picked? The kill test (hand-filling\n  ten real call-outs) is the first read on this.\n- No certified, free replacement exists for some call-outs — what the\n  product does then (manager still has to work it by hand) is undefined,\n  and could be most of the real-world cases.\n- A one-tap auto-fill may clash with manager trust: managers may want to\n  confirm a pick rather than have it auto-assigned, which would cost the\n  \"no more than one tap\" bar.\n- Picking the \"best\" available person by certification and availability\n  alone could ignore overtime limits or fairness (always picking the same\n  person), creating payroll or morale problems the current manual process\n  avoids by human judgment.\n- The evidence is thin — three managers' complaints in a month, anecdote\n  only. The problem could be smaller, or specific to how one phone app\n  rolled out shift changes, rather than a general pattern.\n```\n\n---\n\nBacklog seed appended to `docs/backlog.md`:\n\n```\n- A self-healing rota that predicts call-outs before they happen and auto-notifies and confirms replacements with no manager involvement at all, across every location (from: feature:slot-finder)\n```\n\nNext stage is PRD — run the `prd` skill (or `next`) once you're ready, and commit `idea.md` + the backlog line together first."
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": false,
+                "scored": true
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 18,
+            "costUsd": 0.42353520000000006,
+            "judgeCostUsd": 0.010911000000000004,
+            "durationSeconds": 121,
+            "startedAt": "2026-10-26T05:13:34.768Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-8H3BTV/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "has-ambition-rung",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## Ambition rung\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "has-kill-test",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## Cheapest kill test\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "has-riskiest-piece",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## Riskiest piece \\+ spike\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "has-the-demo",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^## The demo\\s*$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "idea-exists",
+                "passed": true,
+                "weight": 1,
+                "explanation": "docs/features/slot-finder/idea.md exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "keeps-users-words",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched self-healing shift\\s+rota",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "moonshot-not-chosen",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "I created the files, but hit an environment issue trying to commit at the stage boundary (as the pipeline protocol expects a `docs(slot-finder): idea — ...` commit): `git` on this machine is the Xcode command-line-tools stub, and it needs to write a cache file under `/var/folders/.../T/`, which this sandbox's write allowlist doesn't include — it only allows `$TMPDIR` and a few explicit paths. That's a sandbox restriction, not something I should route around, so I'll leave the commit to you. Everything else is done:\n\n- `docs/features/slot-finder/idea.md` — written\n- `docs/backlog.md` — appended the Moonshot seed (`Heal the whole week's schedule automatically with no manager involved, proactively contacting replacements (from: feature:slot-finder)`)\n\nIf you want these committed, you can run, from the repo root:\n```\ngit add docs/features/slot-finder/idea.md docs/backlog.md\ngit commit -m \"docs(slot-finder): idea — self-healing rota for call-outs\"\n```\n\nHere's the full brief:\n\n```markdown\n---\nstage: idea\nrun: feature:slot-finder\ndate: 2026-10-25\n---\n\n# Idea: Slot finder\n\n> Our scheduling app should become a self-healing shift rota: when someone calls out, it should find who can cover the station and fill the gap, so the manager stops rebuilding the week by hand.\n\n## Problem\n\nShift managers spend an evening every week rebuilding the rota by hand after call-outs.\n\n## Who has it\n\nShift managers at small restaurants. Today they cope with a spreadsheet and a group chat — manually working out who's free and certified for the station, then texting around to beg for coverage.\n\n## Why now\n\nCall-outs have gone up since the schedule moved to a phone app.\n\n## Evidence\n\nAnecdotal: three managers complained about this in the last month.\n\n## Ambition rung\n\nChosen: Showstopper, in the user's words: \"it should find who can cover the station and fill the gap, so the manager stops rebuilding the week by hand\"\nNot taken: Moonshot: the schedule heals itself across the whole week with no manager involved at all — seeded to backlog.\nDemo: pass — before (manager opens a group chat to beg for coverage) and after (the gap is already filled on screen) fit in two sentences, and the after is seen, not a metric.\nRemoves a step: pass — manually finding and verifying an eligible replacement is gone; the manager confirms instead of searching.\nOnly this product: pass — built on data only this product holds: who is free and who is certified for each station.\nAchievable: pass — riskiest piece is ranking the replacements; a two-day spike against last month's call-outs could prove it.\n\n## The demo\n\nBefore: a manager sees a call-out and opens the group chat to beg for coverage. After: the manager taps the call-out and sees the gap already filled with a qualified replacement, before they put the phone down.\n\n## Riskiest piece + spike\n\nRanking the replacements — whether the system's ranked pick matches who the manager would actually choose. A two-day spike replaying last month's call-outs against the ranking would prove or kill this.\n\n## Cheapest kill test\n\nHand-fill ten real call-outs and see whether the ranking agrees with the manager's own pick.\n\n## Solution hunch\n\nWhen a call-out is marked, use what the product already knows — who's free and who's certified for the station — to surface a replacement and let the manager confirm it in one tap, instead of the manager working that out by hand.\n\n## Success in one sentence\n\nA call-out is covered with no more than one tap.\n\n## Unknowns & risks\n\n- The ranking may not agree with the manager's judgment — the named riskiest piece, untested until the kill test runs.\n- Evidence is anecdotal (three managers in a month) — not yet corroborated at scale.\n- No named fallback yet for a call-out with no free, certified replacement.\n- Depends on availability and certification data staying accurate; stale data would silently produce bad rankings.\n```\n\nNext stage is PRD — run the `prd` skill (or `next`) when you're ready to turn this into requirements."
+              },
+              {
+                "name": "moonshot-seed-appended",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^- .+ \\(from: feature:slot-finder\\)$",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "rung-anchored-on-framing",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "I created the files, but hit an environment issue trying to commit at the stage boundary (as the pipeline protocol expects a `docs(slot-finder): idea — ...` commit): `git` on this machine is the Xcode command-line-tools stub, and it needs to write a cache file under `/var/folders/.../T/`, which this sandbox's write allowlist doesn't include — it only allows `$TMPDIR` and a few explicit paths. That's a sandbox restriction, not something I should route around, so I'll leave the commit to you. Everything else is done:\n\n- `docs/features/slot-finder/idea.md` — written\n- `docs/backlog.md` — appended the Moonshot seed (`Heal the whole week's schedule automatically with no manager involved, proactively contacting replacements (from: feature:slot-finder)`)\n\nIf you want these committed, you can run, from the repo root:\n```\ngit add docs/features/slot-finder/idea.md docs/backlog.md\ngit commit -m \"docs(slot-finder): idea — self-healing rota for call-outs\"\n```\n\nHere's the full brief:\n\n```markdown\n---\nstage: idea\nrun: feature:slot-finder\ndate: 2026-10-25\n---\n\n# Idea: Slot finder\n\n> Our scheduling app should become a self-healing shift rota: when someone calls out, it should find who can cover the station and fill the gap, so the manager stops rebuilding the week by hand.\n\n## Problem\n\nShift managers spend an evening every week rebuilding the rota by hand after call-outs.\n\n## Who has it\n\nShift managers at small restaurants. Today they cope with a spreadsheet and a group chat — manually working out who's free and certified for the station, then texting around to beg for coverage.\n\n## Why now\n\nCall-outs have gone up since the schedule moved to a phone app.\n\n## Evidence\n\nAnecdotal: three managers complained about this in the last month.\n\n## Ambition rung\n\nChosen: Showstopper, in the user's words: \"it should find who can cover the station and fill the gap, so the manager stops rebuilding the week by hand\"\nNot taken: Moonshot: the schedule heals itself across the whole week with no manager involved at all — seeded to backlog.\nDemo: pass — before (manager opens a group chat to beg for coverage) and after (the gap is already filled on screen) fit in two sentences, and the after is seen, not a metric.\nRemoves a step: pass — manually finding and verifying an eligible replacement is gone; the manager confirms instead of searching.\nOnly this product: pass — built on data only this product holds: who is free and who is certified for each station.\nAchievable: pass — riskiest piece is ranking the replacements; a two-day spike against last month's call-outs could prove it.\n\n## The demo\n\nBefore: a manager sees a call-out and opens the group chat to beg for coverage. After: the manager taps the call-out and sees the gap already filled with a qualified replacement, before they put the phone down.\n\n## Riskiest piece + spike\n\nRanking the replacements — whether the system's ranked pick matches who the manager would actually choose. A two-day spike replaying last month's call-outs against the ranking would prove or kill this.\n\n## Cheapest kill test\n\nHand-fill ten real call-outs and see whether the ranking agrees with the manager's own pick.\n\n## Solution hunch\n\nWhen a call-out is marked, use what the product already knows — who's free and who's certified for the station — to surface a replacement and let the manager confirm it in one tap, instead of the manager working that out by hand.\n\n## Success in one sentence\n\nA call-out is covered with no more than one tap.\n\n## Unknowns & risks\n\n- The ranking may not agree with the manager's judgment — the named riskiest piece, untested until the kill test runs.\n- Evidence is anecdotal (three managers in a month) — not yet corroborated at scale.\n- No named fallback yet for a call-out with no free, certified replacement.\n- Depends on availability and certification data staying accurate; stale data would silently produce bad rankings.\n```\n\nNext stage is PRD — run the `prd` skill (or `next`) when you're ready to turn this into requirements."
+              },
+              {
+                "name": "showstopper-passes-four-tests",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "I created the files, but hit an environment issue trying to commit at the stage boundary (as the pipeline protocol expects a `docs(slot-finder): idea — ...` commit): `git` on this machine is the Xcode command-line-tools stub, and it needs to write a cache file under `/var/folders/.../T/`, which this sandbox's write allowlist doesn't include — it only allows `$TMPDIR` and a few explicit paths. That's a sandbox restriction, not something I should route around, so I'll leave the commit to you. Everything else is done:\n\n- `docs/features/slot-finder/idea.md` — written\n- `docs/backlog.md` — appended the Moonshot seed (`Heal the whole week's schedule automatically with no manager involved, proactively contacting replacements (from: feature:slot-finder)`)\n\nIf you want these committed, you can run, from the repo root:\n```\ngit add docs/features/slot-finder/idea.md docs/backlog.md\ngit commit -m \"docs(slot-finder): idea — self-healing rota for call-outs\"\n```\n\nHere's the full brief:\n\n```markdown\n---\nstage: idea\nrun: feature:slot-finder\ndate: 2026-10-25\n---\n\n# Idea: Slot finder\n\n> Our scheduling app should become a self-healing shift rota: when someone calls out, it should find who can cover the station and fill the gap, so the manager stops rebuilding the week by hand.\n\n## Problem\n\nShift managers spend an evening every week rebuilding the rota by hand after call-outs.\n\n## Who has it\n\nShift managers at small restaurants. Today they cope with a spreadsheet and a group chat — manually working out who's free and certified for the station, then texting around to beg for coverage.\n\n## Why now\n\nCall-outs have gone up since the schedule moved to a phone app.\n\n## Evidence\n\nAnecdotal: three managers complained about this in the last month.\n\n## Ambition rung\n\nChosen: Showstopper, in the user's words: \"it should find who can cover the station and fill the gap, so the manager stops rebuilding the week by hand\"\nNot taken: Moonshot: the schedule heals itself across the whole week with no manager involved at all — seeded to backlog.\nDemo: pass — before (manager opens a group chat to beg for coverage) and after (the gap is already filled on screen) fit in two sentences, and the after is seen, not a metric.\nRemoves a step: pass — manually finding and verifying an eligible replacement is gone; the manager confirms instead of searching.\nOnly this product: pass — built on data only this product holds: who is free and who is certified for each station.\nAchievable: pass — riskiest piece is ranking the replacements; a two-day spike against last month's call-outs could prove it.\n\n## The demo\n\nBefore: a manager sees a call-out and opens the group chat to beg for coverage. After: the manager taps the call-out and sees the gap already filled with a qualified replacement, before they put the phone down.\n\n## Riskiest piece + spike\n\nRanking the replacements — whether the system's ranked pick matches who the manager would actually choose. A two-day spike replaying last month's call-outs against the ranking would prove or kill this.\n\n## Cheapest kill test\n\nHand-fill ten real call-outs and see whether the ranking agrees with the manager's own pick.\n\n## Solution hunch\n\nWhen a call-out is marked, use what the product already knows — who's free and who's certified for the station — to surface a replacement and let the manager confirm it in one tap, instead of the manager working that out by hand.\n\n## Success in one sentence\n\nA call-out is covered with no more than one tap.\n\n## Unknowns & risks\n\n- The ranking may not agree with the manager's judgment — the named riskiest piece, untested until the kill test runs.\n- Evidence is anecdotal (three managers in a month) — not yet corroborated at scale.\n- No named fallback yet for a call-out with no free, certified replacement.\n- Depends on availability and certification data staying accurate; stale data would silently produce bad rankings.\n```\n\nNext stage is PRD — run the `prd` skill (or `next`) when you're ready to turn this into requirements."
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": false,
+                "scored": true
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 0.9090909090909092,
+        "passRate": 0.6666666666666666
+      }
+    }
+  ],
+  "aggregates": {
+    "casesTotal": 1,
+    "casesPassed": 0,
+    "overallScore": 0.9090909090909092,
+    "overallPassRate": 0.6666666666666666
+  }
+}
