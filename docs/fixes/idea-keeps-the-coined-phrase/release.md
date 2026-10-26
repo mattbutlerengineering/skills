@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:idea-keeps-the-coined-phrase
 date: 2026-10-25
-outcome: prepared
+outcome: released
+released-at: 2026-10-25
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1124
 ---
 
@@ -39,6 +40,8 @@ gh pr create --base main --body-file <body>   # "No work order:" + "Closes #N"
 3. Eval spend for #1118, authorized by the Owner in session (about $3): the
    diagnosis run cost $1.51 and the proving run $1.16, $2.67 in all.
 
+4. Write-back (2026-10-25): the Owner answered "Merge + release" in session. `gh pr merge 1124 --squash` -> `88589a9`; `gh pr view 1124 --json state` -> `MERGED`; #1118 closed. The 0.23.4 release PR carries this write-back.
+
 ## Post-release checks
 
 - First live observation: the next Idea brief opens with the user's own
@@ -46,4 +49,4 @@ gh pr create --base main --body-file <body>   # "No work order:" + "Closes #N"
 
 ## Outcome
 
-Prepared and stopped, waiting on the pull request `pending-merge:` names.
+Released: #1124 merged as `88589a9`, version 0.23.4 via the release PR.
