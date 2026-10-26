@@ -223,6 +223,12 @@ class TestSeedInstruction(unittest.TestCase):
         self.assertIn("append only a rung none of them already carries",
                       text)
 
+    def test_a_phrase_the_user_coined_is_kept_verbatim(self):
+        # #1064's first paid run: 3 of 3 briefs paraphrased the pitch's
+        # own phrase away (keeps-users-words).
+        self.assertIn("A phrase the user coined for the idea stays"
+                      " verbatim in the brief", skill_text())
+
     def test_the_seed_text_rule_is_stated(self):
         text = skill_text()
         self.assertIn("one line with no parentheses and no typed ids", text)

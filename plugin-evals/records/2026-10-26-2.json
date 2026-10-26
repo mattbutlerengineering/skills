@@ -1,0 +1,671 @@
+{
+  "schemaVersion": 1,
+  "claudeVersion": "2.1.310",
+  "startedAt": "2026-10-26T02:55:58.776Z",
+  "durationSeconds": 500,
+  "costUsd": 1.4332820000000002,
+  "partial": false,
+  "suite": {
+    "root": "/private/tmp/claude-501/-Users-mbutler-github-skills/9f0023b1-59ec-4c0e-9ea9-08cb96f93996/scratchpad/plugin-export",
+    "ablation": "with-without",
+    "modelOverride": "claude-sonnet-5",
+    "judgeModel": "claude-haiku-4-5",
+    "tagFilters": [
+      "decompose"
+    ],
+    "threshold": 1,
+    "concurrency": 1,
+    "plugins": [
+      {
+        "name": "idea-to-prod",
+        "version": "0.23.2",
+        "path": "/private/tmp/claude-501/-Users-mbutler-github-skills/9f0023b1-59ec-4c0e-9ea9-08cb96f93996/scratchpad/plugin-export"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "csv-export-cut",
+      "dir": "plugin-evals/decompose/csv-export-cut",
+      "source": "mixed",
+      "promptMarkdown": "Break the csv-export feature down into work items. The PRD and the\narchitecture are in docs/features/csv-export/.\n\nAnswers to the questions you would ask me, so do not stop to ask them:\nwrite the breakdown for a single engineer working one item per sitting;\nuse two or three milestones, each one demonstrable on its own; keep each\ncomponent's name exactly as the architecture spells it; label items S1, S2\nand so on; do not track items anywhere outside the breakdown. Write it to\ndocs/features/csv-export/breakdown.md, then print the whole breakdown in\nyour reply.",
+      "runsPerCase": 3,
+      "timeoutSeconds": 900,
+      "maxTurns": 30,
+      "graders": [
+        {
+          "name": "accept-is-checkable",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if every work item in the breakdown the reply prints has an Accept line that someone could check without asking the author: it names a concrete behaviour, status code, count, bound or output from the PRD or the architecture.\nFAIL if any Accept line is empty, an unfilled template slot, or a vague claim such as \"works correctly\" or \"handles errors appropriately\" with nothing to check it against.",
+          "config": {
+            "criteria": "PASS if every work item in the breakdown the reply prints has an Accept line that someone could check without asking the author: it names a concrete behaviour, status code, count, bound or output from the PRD or the architecture.\nFAIL if any Accept line is empty, an unfilled template slot, or a vague claim such as \"works correctly\" or \"handles errors appropriately\" with nothing to check it against.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "blocked-by-names-real-items",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if every Blocked by line in the breakdown the reply prints names an item that exists in that same breakdown, or says there is no blocker.\nFAIL if any Blocked by line names an item that is not in the breakdown, an item that blocks itself, or a placeholder.",
+          "config": {
+            "criteria": "PASS if every Blocked by line in the breakdown the reply prints names an item that exists in that same breakdown, or says there is no blocker.\nFAIL if any Blocked by line names an item that is not in the breakdown, an item that blocks itself, or a placeholder.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "breakdown-exists",
+          "type": "file_exists",
+          "weight": 1,
+          "config": {
+            "path": "docs/features/csv-export/breakdown.md",
+            "exists": true
+          }
+        },
+        {
+          "name": "covers-every-component",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if the breakdown the reply prints has at least one work item that names each of the architecture's four components by its exact name: Export API, Export Scheduler, CSV Generator and Delivery.\nFAIL if any one of those four component names appears in no work item, or if the reply prints no breakdown.",
+          "config": {
+            "criteria": "PASS if the breakdown the reply prints has at least one work item that names each of the architecture's four components by its exact name: Export API, Export Scheduler, CSV Generator and Delivery.\nFAIL if any one of those four component names appears in no work item, or if the reply prints no breakdown.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "has-rows",
+          "type": "regex",
+          "weight": 1,
+          "config": {
+            "target": {
+              "source": "file",
+              "path": "docs/features/csv-export/breakdown.md"
+            },
+            "pattern": "^- \\[ \\] \\*\\*",
+            "flags": "m",
+            "match": "contains"
+          }
+        },
+        {
+          "name": "items-are-one-sitting",
+          "type": "llm",
+          "weight": 1,
+          "graderMarkdown": "PASS if each work item in the breakdown the reply prints is small enough for one sitting: it builds one component or one thin slice, and does not take on the whole feature or several components at once.\nFAIL if any single item spans the whole pipeline or builds three or more of the architecture's components at the same time.",
+          "config": {
+            "criteria": "PASS if each work item in the breakdown the reply prints is small enough for one sitting: it builds one component or one thin slice, and does not take on the whole feature or several components at once.\nFAIL if any single item spans the whole pipeline or builds three or more of the architecture's components at the same time.",
+            "focus": "last_message"
+          }
+        },
+        {
+          "name": "skill-fired",
+          "type": "tool_used",
+          "weight": 1,
+          "config": {
+            "tool": "Skill",
+            "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?decompose\""
+          }
+        }
+      ],
+      "arms": {
+        "with": [
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 10,
+            "costUsd": 0.2884336,
+            "judgeCostUsd": 0.014457,
+            "durationSeconds": 79,
+            "startedAt": "2026-10-26T02:55:58.937Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-ArVYGj/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "accept-is-checkable",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Breakdown saved to `docs/features/csv-export/breakdown.md`. Full contents:\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met.\n\n## Milestone 1: Admins can configure exports and see job status\n\n- [ ] **S1: ExportConfig data model** — add the ExportConfig table and migration.\n  - Accept: migration creates an `exportconfigs` table with `id`, `workspace_id`, `dashboard_id`, `schedule`, `s3_bucket`, `s3_prefix`, `created_by`, `active`; a round-trip insert/read test passes.\n  - Blocked by: —\n- [ ] **S2: POST /exports** — Export API endpoint to create an export configuration.\n  - Accept: `POST /exports` with a valid `dashboard_id`/`schedule`/`s3_bucket`/`s3_prefix` returns 201 echoing the stored ExportConfig; an invalid cron expression or unknown `dashboard_id` returns 422; a `dashboard_id` belonging to another workspace returns 403.\n  - Blocked by: S1\n- [ ] **S3: ExportJob data model** — add the ExportJob table and migration.\n  - Accept: migration creates an `exportjobs` table with `id`, `config_id`, `scheduled_for`, `started_at`, `finished_at`, `status`, `attempt_count`, `error`, `workspace_id`, with a foreign key to `exportconfigs` enforced.\n  - Blocked by: S1\n- [ ] **S4: GET /exports/{id}/jobs** — Export API endpoint to list job status.\n  - Accept: `GET /exports/{id}/jobs` returns the config's ExportJobs newest-first; an optional status filter narrows results; a config id outside the caller's workspace returns 404 (no existence leak).\n  - Blocked by: S3\n\n## Milestone 2: A due schedule delivers a CSV to S3, with failures visible\n\n- [ ] **S5: Export Scheduler** — tick that finds due ExportConfigs and enqueues ExportJobs.\n  - Accept: running the scheduler tick against ExportConfigs with a schedule due now enqueues exactly one ExportJob per due config onto the existing job queue; configs not yet due enqueue nothing.\n  - Blocked by: S3\n- [ ] **S6: CSV Generator** — stream one ExportJob's dashboard query into an RFC 4180 CSV.\n  - Accept: given an ExportJob, the generator streams the dashboard's query results into a CSV with a header row matching the dashboard's field list; values containing commas, quotes, or newlines are quoted/escaped per RFC 4180; memory stays flat (via the query layer's streaming cursor) for a dashboard whose result set exceeds one batch.\n  - Blocked by: S5\n- [ ] **S7: Delivery** — upload the generated CSV stream to S3 with retries and record final job status.\n  - Accept: a generated CSV uploads to the config's `s3_bucket`/`s3_prefix` as `<prefix>/<dashboard-slug>-<scheduled_for>.csv`; a failing upload is retried up to 3 times with backoff; after final failure the ExportJob status is `failed` with the S3 error recorded and visible via `GET /exports/{id}/jobs`; on success the status is set to `delivered`, and a due schedule reaches `delivered` within 5 minutes of its scheduled time end-to-end.\n  - Blocked by: S6\n\n## Design gaps found\n\nNone — the architecture's components, data model, and interfaces were sufficient to decompose without new design decisions.\n\n## Notes\n\n<Deviations discovered during Implement get logged here, dated.>\n```\n\nTwo milestones, seven items (S1–S7), each sized for one sitting. Every component from the architecture (Export API, Export Scheduler, CSV Generator, Delivery) and both data-model entities (ExportConfig, ExportJob) appear, and every PRD success criterion is covered by at least one `Accept:` line. No tracker references, per your instruction.\n\nThe pipeline convention is to commit this artifact at the stage boundary — let me know if you'd like me to do that now."
+              },
+              {
+                "name": "blocked-by-names-real-items",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Breakdown saved to `docs/features/csv-export/breakdown.md`. Full contents:\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met.\n\n## Milestone 1: Admins can configure exports and see job status\n\n- [ ] **S1: ExportConfig data model** — add the ExportConfig table and migration.\n  - Accept: migration creates an `exportconfigs` table with `id`, `workspace_id`, `dashboard_id`, `schedule`, `s3_bucket`, `s3_prefix`, `created_by`, `active`; a round-trip insert/read test passes.\n  - Blocked by: —\n- [ ] **S2: POST /exports** — Export API endpoint to create an export configuration.\n  - Accept: `POST /exports` with a valid `dashboard_id`/`schedule`/`s3_bucket`/`s3_prefix` returns 201 echoing the stored ExportConfig; an invalid cron expression or unknown `dashboard_id` returns 422; a `dashboard_id` belonging to another workspace returns 403.\n  - Blocked by: S1\n- [ ] **S3: ExportJob data model** — add the ExportJob table and migration.\n  - Accept: migration creates an `exportjobs` table with `id`, `config_id`, `scheduled_for`, `started_at`, `finished_at`, `status`, `attempt_count`, `error`, `workspace_id`, with a foreign key to `exportconfigs` enforced.\n  - Blocked by: S1\n- [ ] **S4: GET /exports/{id}/jobs** — Export API endpoint to list job status.\n  - Accept: `GET /exports/{id}/jobs` returns the config's ExportJobs newest-first; an optional status filter narrows results; a config id outside the caller's workspace returns 404 (no existence leak).\n  - Blocked by: S3\n\n## Milestone 2: A due schedule delivers a CSV to S3, with failures visible\n\n- [ ] **S5: Export Scheduler** — tick that finds due ExportConfigs and enqueues ExportJobs.\n  - Accept: running the scheduler tick against ExportConfigs with a schedule due now enqueues exactly one ExportJob per due config onto the existing job queue; configs not yet due enqueue nothing.\n  - Blocked by: S3\n- [ ] **S6: CSV Generator** — stream one ExportJob's dashboard query into an RFC 4180 CSV.\n  - Accept: given an ExportJob, the generator streams the dashboard's query results into a CSV with a header row matching the dashboard's field list; values containing commas, quotes, or newlines are quoted/escaped per RFC 4180; memory stays flat (via the query layer's streaming cursor) for a dashboard whose result set exceeds one batch.\n  - Blocked by: S5\n- [ ] **S7: Delivery** — upload the generated CSV stream to S3 with retries and record final job status.\n  - Accept: a generated CSV uploads to the config's `s3_bucket`/`s3_prefix` as `<prefix>/<dashboard-slug>-<scheduled_for>.csv`; a failing upload is retried up to 3 times with backoff; after final failure the ExportJob status is `failed` with the S3 error recorded and visible via `GET /exports/{id}/jobs`; on success the status is set to `delivered`, and a due schedule reaches `delivered` within 5 minutes of its scheduled time end-to-end.\n  - Blocked by: S6\n\n## Design gaps found\n\nNone — the architecture's components, data model, and interfaces were sufficient to decompose without new design decisions.\n\n## Notes\n\n<Deviations discovered during Implement get logged here, dated.>\n```\n\nTwo milestones, seven items (S1–S7), each sized for one sitting. Every component from the architecture (Export API, Export Scheduler, CSV Generator, Delivery) and both data-model entities (ExportConfig, ExportJob) appear, and every PRD success criterion is covered by at least one `Accept:` line. No tracker references, per your instruction.\n\nThe pipeline convention is to commit this artifact at the stage boundary — let me know if you'd like me to do that now."
+              },
+              {
+                "name": "breakdown-exists",
+                "passed": true,
+                "weight": 1,
+                "explanation": "docs/features/csv-export/breakdown.md exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "covers-every-component",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Breakdown saved to `docs/features/csv-export/breakdown.md`. Full contents:\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met.\n\n## Milestone 1: Admins can configure exports and see job status\n\n- [ ] **S1: ExportConfig data model** — add the ExportConfig table and migration.\n  - Accept: migration creates an `exportconfigs` table with `id`, `workspace_id`, `dashboard_id`, `schedule`, `s3_bucket`, `s3_prefix`, `created_by`, `active`; a round-trip insert/read test passes.\n  - Blocked by: —\n- [ ] **S2: POST /exports** — Export API endpoint to create an export configuration.\n  - Accept: `POST /exports` with a valid `dashboard_id`/`schedule`/`s3_bucket`/`s3_prefix` returns 201 echoing the stored ExportConfig; an invalid cron expression or unknown `dashboard_id` returns 422; a `dashboard_id` belonging to another workspace returns 403.\n  - Blocked by: S1\n- [ ] **S3: ExportJob data model** — add the ExportJob table and migration.\n  - Accept: migration creates an `exportjobs` table with `id`, `config_id`, `scheduled_for`, `started_at`, `finished_at`, `status`, `attempt_count`, `error`, `workspace_id`, with a foreign key to `exportconfigs` enforced.\n  - Blocked by: S1\n- [ ] **S4: GET /exports/{id}/jobs** — Export API endpoint to list job status.\n  - Accept: `GET /exports/{id}/jobs` returns the config's ExportJobs newest-first; an optional status filter narrows results; a config id outside the caller's workspace returns 404 (no existence leak).\n  - Blocked by: S3\n\n## Milestone 2: A due schedule delivers a CSV to S3, with failures visible\n\n- [ ] **S5: Export Scheduler** — tick that finds due ExportConfigs and enqueues ExportJobs.\n  - Accept: running the scheduler tick against ExportConfigs with a schedule due now enqueues exactly one ExportJob per due config onto the existing job queue; configs not yet due enqueue nothing.\n  - Blocked by: S3\n- [ ] **S6: CSV Generator** — stream one ExportJob's dashboard query into an RFC 4180 CSV.\n  - Accept: given an ExportJob, the generator streams the dashboard's query results into a CSV with a header row matching the dashboard's field list; values containing commas, quotes, or newlines are quoted/escaped per RFC 4180; memory stays flat (via the query layer's streaming cursor) for a dashboard whose result set exceeds one batch.\n  - Blocked by: S5\n- [ ] **S7: Delivery** — upload the generated CSV stream to S3 with retries and record final job status.\n  - Accept: a generated CSV uploads to the config's `s3_bucket`/`s3_prefix` as `<prefix>/<dashboard-slug>-<scheduled_for>.csv`; a failing upload is retried up to 3 times with backoff; after final failure the ExportJob status is `failed` with the S3 error recorded and visible via `GET /exports/{id}/jobs`; on success the status is set to `delivered`, and a due schedule reaches `delivered` within 5 minutes of its scheduled time end-to-end.\n  - Blocked by: S6\n\n## Design gaps found\n\nNone — the architecture's components, data model, and interfaces were sufficient to decompose without new design decisions.\n\n## Notes\n\n<Deviations discovered during Implement get logged here, dated.>\n```\n\nTwo milestones, seven items (S1–S7), each sized for one sitting. Every component from the architecture (Export API, Export Scheduler, CSV Generator, Delivery) and both data-model entities (ExportConfig, ExportJob) appear, and every PRD success criterion is covered by at least one `Accept:` line. No tracker references, per your instruction.\n\nThe pipeline convention is to commit this artifact at the stage boundary — let me know if you'd like me to do that now."
+              },
+              {
+                "name": "has-rows",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^- \\[ \\] \\*\\*",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "items-are-one-sitting",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Breakdown saved to `docs/features/csv-export/breakdown.md`. Full contents:\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met.\n\n## Milestone 1: Admins can configure exports and see job status\n\n- [ ] **S1: ExportConfig data model** — add the ExportConfig table and migration.\n  - Accept: migration creates an `exportconfigs` table with `id`, `workspace_id`, `dashboard_id`, `schedule`, `s3_bucket`, `s3_prefix`, `created_by`, `active`; a round-trip insert/read test passes.\n  - Blocked by: —\n- [ ] **S2: POST /exports** — Export API endpoint to create an export configuration.\n  - Accept: `POST /exports` with a valid `dashboard_id`/`schedule`/`s3_bucket`/`s3_prefix` returns 201 echoing the stored ExportConfig; an invalid cron expression or unknown `dashboard_id` returns 422; a `dashboard_id` belonging to another workspace returns 403.\n  - Blocked by: S1\n- [ ] **S3: ExportJob data model** — add the ExportJob table and migration.\n  - Accept: migration creates an `exportjobs` table with `id`, `config_id`, `scheduled_for`, `started_at`, `finished_at`, `status`, `attempt_count`, `error`, `workspace_id`, with a foreign key to `exportconfigs` enforced.\n  - Blocked by: S1\n- [ ] **S4: GET /exports/{id}/jobs** — Export API endpoint to list job status.\n  - Accept: `GET /exports/{id}/jobs` returns the config's ExportJobs newest-first; an optional status filter narrows results; a config id outside the caller's workspace returns 404 (no existence leak).\n  - Blocked by: S3\n\n## Milestone 2: A due schedule delivers a CSV to S3, with failures visible\n\n- [ ] **S5: Export Scheduler** — tick that finds due ExportConfigs and enqueues ExportJobs.\n  - Accept: running the scheduler tick against ExportConfigs with a schedule due now enqueues exactly one ExportJob per due config onto the existing job queue; configs not yet due enqueue nothing.\n  - Blocked by: S3\n- [ ] **S6: CSV Generator** — stream one ExportJob's dashboard query into an RFC 4180 CSV.\n  - Accept: given an ExportJob, the generator streams the dashboard's query results into a CSV with a header row matching the dashboard's field list; values containing commas, quotes, or newlines are quoted/escaped per RFC 4180; memory stays flat (via the query layer's streaming cursor) for a dashboard whose result set exceeds one batch.\n  - Blocked by: S5\n- [ ] **S7: Delivery** — upload the generated CSV stream to S3 with retries and record final job status.\n  - Accept: a generated CSV uploads to the config's `s3_bucket`/`s3_prefix` as `<prefix>/<dashboard-slug>-<scheduled_for>.csv`; a failing upload is retried up to 3 times with backoff; after final failure the ExportJob status is `failed` with the S3 error recorded and visible via `GET /exports/{id}/jobs`; on success the status is set to `delivered`, and a due schedule reaches `delivered` within 5 minutes of its scheduled time end-to-end.\n  - Blocked by: S6\n\n## Design gaps found\n\nNone — the architecture's components, data model, and interfaces were sufficient to decompose without new design decisions.\n\n## Notes\n\n<Deviations discovered during Implement get logged here, dated.>\n```\n\nTwo milestones, seven items (S1–S7), each sized for one sitting. Every component from the architecture (Export API, Export Scheduler, CSV Generator, Delivery) and both data-model entities (ExportConfig, ExportJob) appear, and every PRD success criterion is covered by at least one `Accept:` line. No tracker references, per your instruction.\n\nThe pipeline convention is to commit this artifact at the stage boundary — let me know if you'd like me to do that now."
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": true,
+                "scored": false
+              }
+            ]
+          },
+          {
+            "score": 0.8333333333333334,
+            "passed": false,
+            "turns": 11,
+            "costUsd": 0.3185348,
+            "judgeCostUsd": 0.019736999999999998,
+            "durationSeconds": 101,
+            "startedAt": "2026-10-26T02:57:18.137Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-epaLCK/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "accept-is-checkable",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Wrote the breakdown to `docs/features/csv-export/breakdown.md`. I did not commit it — let me know if you'd like that done (per the project's convention, commit subject would be `docs(csv-export): decompose — <summary>`).\n\nHere's the full breakdown:\n\n---\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met. Sized for a single engineer, one item per\nsitting.\n\n## Milestone 1: Export configuration & job visibility API\n\nDemonstrable: an admin can create a scheduled export via `POST /exports` and\nquery its job history via `GET /exports/{id}/jobs`, both correctly scoped to\nthe caller's workspace.\n\n- [ ] **S1 — Data model** — Add the `ExportConfig` and `ExportJob` tables\n  (migration): `ExportConfig` carries id, workspace_id, dashboard_id,\n  schedule (cron expr), s3_bucket, s3_prefix, created_by, active flag;\n  `ExportJob` carries id, config_id, scheduled_for, started_at, finished_at,\n  status (pending | running | delivered | failed), attempt_count, error.\n  Both rows denormalize workspace_id.\n  - Accept: migration creates both tables with the fields above; both carry\n    a `workspace_id` column (schema inspection or a migration test confirms\n    this directly, not via a round-trip through the API).\n  - Blocked by: —\n\n- [ ] **S2 — Export API: create** — Implement `POST /exports`: validates\n  the cron expression and that `dashboard_id` resolves to a dashboard in the\n  caller's workspace, then creates an `ExportConfig`.\n  - Accept: a request with a valid dashboard_id/schedule/s3_bucket/s3_prefix\n    in the caller's own workspace returns 201 echoing the stored config; an\n    invalid cron expression or unknown dashboard_id returns 422; a\n    dashboard_id belonging to another workspace returns 403.\n  - Blocked by: S1 — Data model\n\n- [ ] **S3 — Export API: job status** — Implement `GET /exports/{id}/jobs`:\n  returns the config's `ExportJob` rows, newest first, with an optional\n  status filter, including error detail on failed jobs.\n  - Accept: a request for a config in the caller's own workspace returns its\n    jobs newest-first, with the `error` field populated on failed jobs; a\n    request for a config id belonging to another workspace returns 404 (no\n    existence leak).\n  - Blocked by: S1 — Data model\n\n## Milestone 2: Scheduled generation & delivery pipeline\n\nDemonstrable: an active, due `ExportConfig` produces a correctly formatted\nCSV in the configured S3 bucket without any manual trigger, and a delivery\nfailure is retried and then surfaced through the Milestone 1 API.\n\n- [ ] **S4 — Export Scheduler** — Implement the once-per-minute tick that\n  finds due, active `ExportConfig` rows and enqueues exactly one\n  `ExportJob` each onto the existing job queue. The scheduler never\n  generates or delivers itself.\n  - Accept: running a tick against an active `ExportConfig` whose schedule\n    is due creates exactly one `ExportJob` row (status pending) and one\n    message on the existing job queue; a config that is inactive or not yet\n    due produces nothing.\n  - Blocked by: S1 — Data model\n\n- [ ] **S5 — CSV Generator** — Implement the step that consumes one\n  `ExportJob`, runs the dashboard's query through the query layer's\n  tenant-scoped streaming cursor API, and writes RFC 4180 rows with a header\n  row from the dashboard's field list, handing the resulting stream off to\n  Delivery.\n  - Accept: given an `ExportJob` for a dashboard with known fields, the\n    generator produces a CSV stream whose header row matches the dashboard's\n    field list exactly, and whose data rows round-trip correctly for values\n    containing commas, quotes, and embedded newlines (RFC 4180\n    quoting/escaping); the underlying query is scoped to the job's\n    workspace_id.\n  - Blocked by: S4 — Export Scheduler\n\n- [ ] **S6 — Delivery** — Implement the upload of the CSV stream to the\n  config's S3 target, named `<prefix>/<dashboard-slug>-<scheduled_for>.csv`,\n  retrying up to 3 times with exponential backoff, and recording the final\n  `ExportJob` status.\n  - Accept: a successful upload sets the job's status to `delivered` with\n    the object key in the documented format; a simulated S3 failure is\n    retried 3 times with backoff and the final failure sets status `failed`\n    with the S3 error preserved in the `error` field, visible via\n    `GET /exports/{id}/jobs` (S3); end to end, a due `ExportConfig` produces\n    a delivered object in the bucket within 5 minutes of its scheduled time.\n  - Blocked by: S5 — CSV Generator, S3 — Export API: job status\n\n## Design gaps found\n\nnone.\n\n## Notes\n\n- The PRD's open question — max rows per export before pagination into\n  multiple files is needed — is a production data-size survey for the data\n  team, not a design gap; no item here implements pagination, matching the\n  architecture's scope.\n```\n\nTwo milestones: Milestone 1 covers `Export API` and the data model (demonstrable via the two REST endpoints); Milestone 2 covers `Export Scheduler`, `CSV Generator`, and `Delivery` (demonstrable end-to-end as a CSV landing in S3). Every architecture component appears in exactly one item, and all five PRD success criteria map to at least one acceptance criterion (creation → S2, header/RFC 4180 → S5, retry+visibility → S6, workspace scoping → S2/S3, 5-minute delivery → S6)."
+              },
+              {
+                "name": "blocked-by-names-real-items",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Wrote the breakdown to `docs/features/csv-export/breakdown.md`. I did not commit it — let me know if you'd like that done (per the project's convention, commit subject would be `docs(csv-export): decompose — <summary>`).\n\nHere's the full breakdown:\n\n---\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met. Sized for a single engineer, one item per\nsitting.\n\n## Milestone 1: Export configuration & job visibility API\n\nDemonstrable: an admin can create a scheduled export via `POST /exports` and\nquery its job history via `GET /exports/{id}/jobs`, both correctly scoped to\nthe caller's workspace.\n\n- [ ] **S1 — Data model** — Add the `ExportConfig` and `ExportJob` tables\n  (migration): `ExportConfig` carries id, workspace_id, dashboard_id,\n  schedule (cron expr), s3_bucket, s3_prefix, created_by, active flag;\n  `ExportJob` carries id, config_id, scheduled_for, started_at, finished_at,\n  status (pending | running | delivered | failed), attempt_count, error.\n  Both rows denormalize workspace_id.\n  - Accept: migration creates both tables with the fields above; both carry\n    a `workspace_id` column (schema inspection or a migration test confirms\n    this directly, not via a round-trip through the API).\n  - Blocked by: —\n\n- [ ] **S2 — Export API: create** — Implement `POST /exports`: validates\n  the cron expression and that `dashboard_id` resolves to a dashboard in the\n  caller's workspace, then creates an `ExportConfig`.\n  - Accept: a request with a valid dashboard_id/schedule/s3_bucket/s3_prefix\n    in the caller's own workspace returns 201 echoing the stored config; an\n    invalid cron expression or unknown dashboard_id returns 422; a\n    dashboard_id belonging to another workspace returns 403.\n  - Blocked by: S1 — Data model\n\n- [ ] **S3 — Export API: job status** — Implement `GET /exports/{id}/jobs`:\n  returns the config's `ExportJob` rows, newest first, with an optional\n  status filter, including error detail on failed jobs.\n  - Accept: a request for a config in the caller's own workspace returns its\n    jobs newest-first, with the `error` field populated on failed jobs; a\n    request for a config id belonging to another workspace returns 404 (no\n    existence leak).\n  - Blocked by: S1 — Data model\n\n## Milestone 2: Scheduled generation & delivery pipeline\n\nDemonstrable: an active, due `ExportConfig` produces a correctly formatted\nCSV in the configured S3 bucket without any manual trigger, and a delivery\nfailure is retried and then surfaced through the Milestone 1 API.\n\n- [ ] **S4 — Export Scheduler** — Implement the once-per-minute tick that\n  finds due, active `ExportConfig` rows and enqueues exactly one\n  `ExportJob` each onto the existing job queue. The scheduler never\n  generates or delivers itself.\n  - Accept: running a tick against an active `ExportConfig` whose schedule\n    is due creates exactly one `ExportJob` row (status pending) and one\n    message on the existing job queue; a config that is inactive or not yet\n    due produces nothing.\n  - Blocked by: S1 — Data model\n\n- [ ] **S5 — CSV Generator** — Implement the step that consumes one\n  `ExportJob`, runs the dashboard's query through the query layer's\n  tenant-scoped streaming cursor API, and writes RFC 4180 rows with a header\n  row from the dashboard's field list, handing the resulting stream off to\n  Delivery.\n  - Accept: given an `ExportJob` for a dashboard with known fields, the\n    generator produces a CSV stream whose header row matches the dashboard's\n    field list exactly, and whose data rows round-trip correctly for values\n    containing commas, quotes, and embedded newlines (RFC 4180\n    quoting/escaping); the underlying query is scoped to the job's\n    workspace_id.\n  - Blocked by: S4 — Export Scheduler\n\n- [ ] **S6 — Delivery** — Implement the upload of the CSV stream to the\n  config's S3 target, named `<prefix>/<dashboard-slug>-<scheduled_for>.csv`,\n  retrying up to 3 times with exponential backoff, and recording the final\n  `ExportJob` status.\n  - Accept: a successful upload sets the job's status to `delivered` with\n    the object key in the documented format; a simulated S3 failure is\n    retried 3 times with backoff and the final failure sets status `failed`\n    with the S3 error preserved in the `error` field, visible via\n    `GET /exports/{id}/jobs` (S3); end to end, a due `ExportConfig` produces\n    a delivered object in the bucket within 5 minutes of its scheduled time.\n  - Blocked by: S5 — CSV Generator, S3 — Export API: job status\n\n## Design gaps found\n\nnone.\n\n## Notes\n\n- The PRD's open question — max rows per export before pagination into\n  multiple files is needed — is a production data-size survey for the data\n  team, not a design gap; no item here implements pagination, matching the\n  architecture's scope.\n```\n\nTwo milestones: Milestone 1 covers `Export API` and the data model (demonstrable via the two REST endpoints); Milestone 2 covers `Export Scheduler`, `CSV Generator`, and `Delivery` (demonstrable end-to-end as a CSV landing in S3). Every architecture component appears in exactly one item, and all five PRD success criteria map to at least one acceptance criterion (creation → S2, header/RFC 4180 → S5, retry+visibility → S6, workspace scoping → S2/S3, 5-minute delivery → S6)."
+              },
+              {
+                "name": "breakdown-exists",
+                "passed": true,
+                "weight": 1,
+                "explanation": "docs/features/csv-export/breakdown.md exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "covers-every-component",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Wrote the breakdown to `docs/features/csv-export/breakdown.md`. I did not commit it — let me know if you'd like that done (per the project's convention, commit subject would be `docs(csv-export): decompose — <summary>`).\n\nHere's the full breakdown:\n\n---\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met. Sized for a single engineer, one item per\nsitting.\n\n## Milestone 1: Export configuration & job visibility API\n\nDemonstrable: an admin can create a scheduled export via `POST /exports` and\nquery its job history via `GET /exports/{id}/jobs`, both correctly scoped to\nthe caller's workspace.\n\n- [ ] **S1 — Data model** — Add the `ExportConfig` and `ExportJob` tables\n  (migration): `ExportConfig` carries id, workspace_id, dashboard_id,\n  schedule (cron expr), s3_bucket, s3_prefix, created_by, active flag;\n  `ExportJob` carries id, config_id, scheduled_for, started_at, finished_at,\n  status (pending | running | delivered | failed), attempt_count, error.\n  Both rows denormalize workspace_id.\n  - Accept: migration creates both tables with the fields above; both carry\n    a `workspace_id` column (schema inspection or a migration test confirms\n    this directly, not via a round-trip through the API).\n  - Blocked by: —\n\n- [ ] **S2 — Export API: create** — Implement `POST /exports`: validates\n  the cron expression and that `dashboard_id` resolves to a dashboard in the\n  caller's workspace, then creates an `ExportConfig`.\n  - Accept: a request with a valid dashboard_id/schedule/s3_bucket/s3_prefix\n    in the caller's own workspace returns 201 echoing the stored config; an\n    invalid cron expression or unknown dashboard_id returns 422; a\n    dashboard_id belonging to another workspace returns 403.\n  - Blocked by: S1 — Data model\n\n- [ ] **S3 — Export API: job status** — Implement `GET /exports/{id}/jobs`:\n  returns the config's `ExportJob` rows, newest first, with an optional\n  status filter, including error detail on failed jobs.\n  - Accept: a request for a config in the caller's own workspace returns its\n    jobs newest-first, with the `error` field populated on failed jobs; a\n    request for a config id belonging to another workspace returns 404 (no\n    existence leak).\n  - Blocked by: S1 — Data model\n\n## Milestone 2: Scheduled generation & delivery pipeline\n\nDemonstrable: an active, due `ExportConfig` produces a correctly formatted\nCSV in the configured S3 bucket without any manual trigger, and a delivery\nfailure is retried and then surfaced through the Milestone 1 API.\n\n- [ ] **S4 — Export Scheduler** — Implement the once-per-minute tick that\n  finds due, active `ExportConfig` rows and enqueues exactly one\n  `ExportJob` each onto the existing job queue. The scheduler never\n  generates or delivers itself.\n  - Accept: running a tick against an active `ExportConfig` whose schedule\n    is due creates exactly one `ExportJob` row (status pending) and one\n    message on the existing job queue; a config that is inactive or not yet\n    due produces nothing.\n  - Blocked by: S1 — Data model\n\n- [ ] **S5 — CSV Generator** — Implement the step that consumes one\n  `ExportJob`, runs the dashboard's query through the query layer's\n  tenant-scoped streaming cursor API, and writes RFC 4180 rows with a header\n  row from the dashboard's field list, handing the resulting stream off to\n  Delivery.\n  - Accept: given an `ExportJob` for a dashboard with known fields, the\n    generator produces a CSV stream whose header row matches the dashboard's\n    field list exactly, and whose data rows round-trip correctly for values\n    containing commas, quotes, and embedded newlines (RFC 4180\n    quoting/escaping); the underlying query is scoped to the job's\n    workspace_id.\n  - Blocked by: S4 — Export Scheduler\n\n- [ ] **S6 — Delivery** — Implement the upload of the CSV stream to the\n  config's S3 target, named `<prefix>/<dashboard-slug>-<scheduled_for>.csv`,\n  retrying up to 3 times with exponential backoff, and recording the final\n  `ExportJob` status.\n  - Accept: a successful upload sets the job's status to `delivered` with\n    the object key in the documented format; a simulated S3 failure is\n    retried 3 times with backoff and the final failure sets status `failed`\n    with the S3 error preserved in the `error` field, visible via\n    `GET /exports/{id}/jobs` (S3); end to end, a due `ExportConfig` produces\n    a delivered object in the bucket within 5 minutes of its scheduled time.\n  - Blocked by: S5 — CSV Generator, S3 — Export API: job status\n\n## Design gaps found\n\nnone.\n\n## Notes\n\n- The PRD's open question — max rows per export before pagination into\n  multiple files is needed — is a production data-size survey for the data\n  team, not a design gap; no item here implements pagination, matching the\n  architecture's scope.\n```\n\nTwo milestones: Milestone 1 covers `Export API` and the data model (demonstrable via the two REST endpoints); Milestone 2 covers `Export Scheduler`, `CSV Generator`, and `Delivery` (demonstrable end-to-end as a CSV landing in S3). Every architecture component appears in exactly one item, and all five PRD success criteria map to at least one acceptance criterion (creation → S2, header/RFC 4180 → S5, retry+visibility → S6, workspace scoping → S2/S3, 5-minute delivery → S6)."
+              },
+              {
+                "name": "has-rows",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^- \\[ \\] \\*\\*",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "items-are-one-sitting",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Wrote the breakdown to `docs/features/csv-export/breakdown.md`. I did not commit it — let me know if you'd like that done (per the project's convention, commit subject would be `docs(csv-export): decompose — <summary>`).\n\nHere's the full breakdown:\n\n---\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met. Sized for a single engineer, one item per\nsitting.\n\n## Milestone 1: Export configuration & job visibility API\n\nDemonstrable: an admin can create a scheduled export via `POST /exports` and\nquery its job history via `GET /exports/{id}/jobs`, both correctly scoped to\nthe caller's workspace.\n\n- [ ] **S1 — Data model** — Add the `ExportConfig` and `ExportJob` tables\n  (migration): `ExportConfig` carries id, workspace_id, dashboard_id,\n  schedule (cron expr), s3_bucket, s3_prefix, created_by, active flag;\n  `ExportJob` carries id, config_id, scheduled_for, started_at, finished_at,\n  status (pending | running | delivered | failed), attempt_count, error.\n  Both rows denormalize workspace_id.\n  - Accept: migration creates both tables with the fields above; both carry\n    a `workspace_id` column (schema inspection or a migration test confirms\n    this directly, not via a round-trip through the API).\n  - Blocked by: —\n\n- [ ] **S2 — Export API: create** — Implement `POST /exports`: validates\n  the cron expression and that `dashboard_id` resolves to a dashboard in the\n  caller's workspace, then creates an `ExportConfig`.\n  - Accept: a request with a valid dashboard_id/schedule/s3_bucket/s3_prefix\n    in the caller's own workspace returns 201 echoing the stored config; an\n    invalid cron expression or unknown dashboard_id returns 422; a\n    dashboard_id belonging to another workspace returns 403.\n  - Blocked by: S1 — Data model\n\n- [ ] **S3 — Export API: job status** — Implement `GET /exports/{id}/jobs`:\n  returns the config's `ExportJob` rows, newest first, with an optional\n  status filter, including error detail on failed jobs.\n  - Accept: a request for a config in the caller's own workspace returns its\n    jobs newest-first, with the `error` field populated on failed jobs; a\n    request for a config id belonging to another workspace returns 404 (no\n    existence leak).\n  - Blocked by: S1 — Data model\n\n## Milestone 2: Scheduled generation & delivery pipeline\n\nDemonstrable: an active, due `ExportConfig` produces a correctly formatted\nCSV in the configured S3 bucket without any manual trigger, and a delivery\nfailure is retried and then surfaced through the Milestone 1 API.\n\n- [ ] **S4 — Export Scheduler** — Implement the once-per-minute tick that\n  finds due, active `ExportConfig` rows and enqueues exactly one\n  `ExportJob` each onto the existing job queue. The scheduler never\n  generates or delivers itself.\n  - Accept: running a tick against an active `ExportConfig` whose schedule\n    is due creates exactly one `ExportJob` row (status pending) and one\n    message on the existing job queue; a config that is inactive or not yet\n    due produces nothing.\n  - Blocked by: S1 — Data model\n\n- [ ] **S5 — CSV Generator** — Implement the step that consumes one\n  `ExportJob`, runs the dashboard's query through the query layer's\n  tenant-scoped streaming cursor API, and writes RFC 4180 rows with a header\n  row from the dashboard's field list, handing the resulting stream off to\n  Delivery.\n  - Accept: given an `ExportJob` for a dashboard with known fields, the\n    generator produces a CSV stream whose header row matches the dashboard's\n    field list exactly, and whose data rows round-trip correctly for values\n    containing commas, quotes, and embedded newlines (RFC 4180\n    quoting/escaping); the underlying query is scoped to the job's\n    workspace_id.\n  - Blocked by: S4 — Export Scheduler\n\n- [ ] **S6 — Delivery** — Implement the upload of the CSV stream to the\n  config's S3 target, named `<prefix>/<dashboard-slug>-<scheduled_for>.csv`,\n  retrying up to 3 times with exponential backoff, and recording the final\n  `ExportJob` status.\n  - Accept: a successful upload sets the job's status to `delivered` with\n    the object key in the documented format; a simulated S3 failure is\n    retried 3 times with backoff and the final failure sets status `failed`\n    with the S3 error preserved in the `error` field, visible via\n    `GET /exports/{id}/jobs` (S3); end to end, a due `ExportConfig` produces\n    a delivered object in the bucket within 5 minutes of its scheduled time.\n  - Blocked by: S5 — CSV Generator, S3 — Export API: job status\n\n## Design gaps found\n\nnone.\n\n## Notes\n\n- The PRD's open question — max rows per export before pagination into\n  multiple files is needed — is a production data-size survey for the data\n  team, not a design gap; no item here implements pagination, matching the\n  architecture's scope.\n```\n\nTwo milestones: Milestone 1 covers `Export API` and the data model (demonstrable via the two REST endpoints); Milestone 2 covers `Export Scheduler`, `CSV Generator`, and `Delivery` (demonstrable end-to-end as a CSV landing in S3). Every architecture component appears in exactly one item, and all five PRD success criteria map to at least one acceptance criterion (creation → S2, header/RFC 4180 → S5, retry+visibility → S6, workspace scoping → S2/S3, 5-minute delivery → S6)."
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": true,
+                "scored": false
+              }
+            ]
+          },
+          {
+            "score": 1,
+            "passed": true,
+            "turns": 15,
+            "costUsd": 0.28727860000000005,
+            "judgeCostUsd": 0.016041000000000014,
+            "durationSeconds": 98,
+            "startedAt": "2026-10-26T02:58:58.952Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-UASx5a/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "accept-is-checkable",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full contents:\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met.\n\n## Milestone 1: Admins can configure exports and check job status\n\n- [ ] **S1: Data model** — Add the `ExportConfig` and `ExportJob` tables\n  (id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix,\n  created_by, active on ExportConfig; id, config_id, scheduled_for,\n  started_at, finished_at, status, attempt_count, error on ExportJob),\n  with workspace_id denormalized on both.\n  - Accept: migration creates both tables; `ExportJob.config_id` is a\n    foreign key into `ExportConfig`; both tables carry a `workspace_id`\n    column.\n  - Blocked by: —\n- [ ] **S2: Export API — create config** — Implement `POST /exports`,\n  storing a new `ExportConfig` and enforcing workspace scoping on the\n  referenced dashboard.\n  - Accept: `POST /exports` with a valid `dashboard_id`, `schedule`,\n    `s3_bucket`, `s3_prefix` returns 201 echoing the stored config; an\n    invalid cron expression or unknown `dashboard_id` returns 422; a\n    `dashboard_id` belonging to another workspace returns 403.\n  - Blocked by: S1\n- [ ] **S3: Export API — read job status** — Implement\n  `GET /exports/{id}/jobs`, including the optional status filter and\n  workspace scoping.\n  - Accept: `GET /exports/{id}/jobs` returns that config's `ExportJob`\n    rows newest-first, including error detail on failed jobs, and\n    returns an empty list for a config with no jobs yet; a config id\n    outside the caller's workspace returns 404 (no existence leak).\n  - Blocked by: S1\n\n## Milestone 2: A due schedule reliably delivers a correct CSV to S3\n\n- [ ] **S4: Export Scheduler** — Add the once-a-minute tick that finds due,\n  active `ExportConfig`s and enqueues one `ExportJob` each on the\n  existing job queue.\n  - Accept: running the tick against a due `ExportConfig` enqueues\n    exactly one `ExportJob` with status `pending`; running it when no\n    config is due enqueues nothing; a config due at time T has its job\n    enqueued within 1 minute of T.\n  - Blocked by: S1\n- [ ] **S5: CSV Generator** — Turn one `ExportJob` into a CSV stream: run\n  the dashboard's query through the query layer's tenant-scoped\n  streaming cursor API, writing a header row from the dashboard's field\n  list and RFC 4180-quoted/escaped data rows.\n  - Accept: given an `ExportJob`, the generator produces a CSV stream\n    whose header row matches the dashboard's field list and whose rows\n    correctly round-trip values containing commas, quotes, and\n    newlines under RFC 4180 quoting; the query layer call is scoped to\n    the job's `workspace_id`, so a job for workspace A cannot pull rows\n    belonging to another workspace.\n  - Blocked by: S4\n- [ ] **S6: Delivery** — Upload the CSV stream to the config's S3\n  bucket/prefix, retrying up to 3 times with exponential backoff, and\n  record the final `ExportJob` status.\n  - Accept: a successful upload writes an object named\n    `<prefix>/<dashboard-slug>-<scheduled_for>.csv` and sets the job's\n    status to `delivered`; an S3 call that keeps failing is retried 3\n    times and then sets the job's status to `failed` with the S3 error\n    preserved on the job, visible via `GET /exports/{id}/jobs`; for a\n    config due at time T, the object exists in the bucket within 5\n    minutes of T.\n  - Blocked by: S5, S3\n\n## Design gaps found\n\nnone.\n\n## Notes\n\n- PRD's open question on max rows per export / pagination into multiple\n  files is explicitly deferred pending a data-team production data-size\n  survey — not addressed by this breakdown, per prd.md's \"Open questions\".\n```\n\nTwo milestones, each demonstrable on its own: M1 proves configuration + status querying via the API; M2 proves the full scheduled generation-and-delivery path. All four architecture components (Export API, Export Scheduler, CSV Generator, Delivery) and all five PRD success criteria are covered across S1–S6."
+              },
+              {
+                "name": "blocked-by-names-real-items",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full contents:\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met.\n\n## Milestone 1: Admins can configure exports and check job status\n\n- [ ] **S1: Data model** — Add the `ExportConfig` and `ExportJob` tables\n  (id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix,\n  created_by, active on ExportConfig; id, config_id, scheduled_for,\n  started_at, finished_at, status, attempt_count, error on ExportJob),\n  with workspace_id denormalized on both.\n  - Accept: migration creates both tables; `ExportJob.config_id` is a\n    foreign key into `ExportConfig`; both tables carry a `workspace_id`\n    column.\n  - Blocked by: —\n- [ ] **S2: Export API — create config** — Implement `POST /exports`,\n  storing a new `ExportConfig` and enforcing workspace scoping on the\n  referenced dashboard.\n  - Accept: `POST /exports` with a valid `dashboard_id`, `schedule`,\n    `s3_bucket`, `s3_prefix` returns 201 echoing the stored config; an\n    invalid cron expression or unknown `dashboard_id` returns 422; a\n    `dashboard_id` belonging to another workspace returns 403.\n  - Blocked by: S1\n- [ ] **S3: Export API — read job status** — Implement\n  `GET /exports/{id}/jobs`, including the optional status filter and\n  workspace scoping.\n  - Accept: `GET /exports/{id}/jobs` returns that config's `ExportJob`\n    rows newest-first, including error detail on failed jobs, and\n    returns an empty list for a config with no jobs yet; a config id\n    outside the caller's workspace returns 404 (no existence leak).\n  - Blocked by: S1\n\n## Milestone 2: A due schedule reliably delivers a correct CSV to S3\n\n- [ ] **S4: Export Scheduler** — Add the once-a-minute tick that finds due,\n  active `ExportConfig`s and enqueues one `ExportJob` each on the\n  existing job queue.\n  - Accept: running the tick against a due `ExportConfig` enqueues\n    exactly one `ExportJob` with status `pending`; running it when no\n    config is due enqueues nothing; a config due at time T has its job\n    enqueued within 1 minute of T.\n  - Blocked by: S1\n- [ ] **S5: CSV Generator** — Turn one `ExportJob` into a CSV stream: run\n  the dashboard's query through the query layer's tenant-scoped\n  streaming cursor API, writing a header row from the dashboard's field\n  list and RFC 4180-quoted/escaped data rows.\n  - Accept: given an `ExportJob`, the generator produces a CSV stream\n    whose header row matches the dashboard's field list and whose rows\n    correctly round-trip values containing commas, quotes, and\n    newlines under RFC 4180 quoting; the query layer call is scoped to\n    the job's `workspace_id`, so a job for workspace A cannot pull rows\n    belonging to another workspace.\n  - Blocked by: S4\n- [ ] **S6: Delivery** — Upload the CSV stream to the config's S3\n  bucket/prefix, retrying up to 3 times with exponential backoff, and\n  record the final `ExportJob` status.\n  - Accept: a successful upload writes an object named\n    `<prefix>/<dashboard-slug>-<scheduled_for>.csv` and sets the job's\n    status to `delivered`; an S3 call that keeps failing is retried 3\n    times and then sets the job's status to `failed` with the S3 error\n    preserved on the job, visible via `GET /exports/{id}/jobs`; for a\n    config due at time T, the object exists in the bucket within 5\n    minutes of T.\n  - Blocked by: S5, S3\n\n## Design gaps found\n\nnone.\n\n## Notes\n\n- PRD's open question on max rows per export / pagination into multiple\n  files is explicitly deferred pending a data-team production data-size\n  survey — not addressed by this breakdown, per prd.md's \"Open questions\".\n```\n\nTwo milestones, each demonstrable on its own: M1 proves configuration + status querying via the API; M2 proves the full scheduled generation-and-delivery path. All four architecture components (Export API, Export Scheduler, CSV Generator, Delivery) and all five PRD success criteria are covered across S1–S6."
+              },
+              {
+                "name": "breakdown-exists",
+                "passed": true,
+                "weight": 1,
+                "explanation": "docs/features/csv-export/breakdown.md exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "covers-every-component",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full contents:\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met.\n\n## Milestone 1: Admins can configure exports and check job status\n\n- [ ] **S1: Data model** — Add the `ExportConfig` and `ExportJob` tables\n  (id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix,\n  created_by, active on ExportConfig; id, config_id, scheduled_for,\n  started_at, finished_at, status, attempt_count, error on ExportJob),\n  with workspace_id denormalized on both.\n  - Accept: migration creates both tables; `ExportJob.config_id` is a\n    foreign key into `ExportConfig`; both tables carry a `workspace_id`\n    column.\n  - Blocked by: —\n- [ ] **S2: Export API — create config** — Implement `POST /exports`,\n  storing a new `ExportConfig` and enforcing workspace scoping on the\n  referenced dashboard.\n  - Accept: `POST /exports` with a valid `dashboard_id`, `schedule`,\n    `s3_bucket`, `s3_prefix` returns 201 echoing the stored config; an\n    invalid cron expression or unknown `dashboard_id` returns 422; a\n    `dashboard_id` belonging to another workspace returns 403.\n  - Blocked by: S1\n- [ ] **S3: Export API — read job status** — Implement\n  `GET /exports/{id}/jobs`, including the optional status filter and\n  workspace scoping.\n  - Accept: `GET /exports/{id}/jobs` returns that config's `ExportJob`\n    rows newest-first, including error detail on failed jobs, and\n    returns an empty list for a config with no jobs yet; a config id\n    outside the caller's workspace returns 404 (no existence leak).\n  - Blocked by: S1\n\n## Milestone 2: A due schedule reliably delivers a correct CSV to S3\n\n- [ ] **S4: Export Scheduler** — Add the once-a-minute tick that finds due,\n  active `ExportConfig`s and enqueues one `ExportJob` each on the\n  existing job queue.\n  - Accept: running the tick against a due `ExportConfig` enqueues\n    exactly one `ExportJob` with status `pending`; running it when no\n    config is due enqueues nothing; a config due at time T has its job\n    enqueued within 1 minute of T.\n  - Blocked by: S1\n- [ ] **S5: CSV Generator** — Turn one `ExportJob` into a CSV stream: run\n  the dashboard's query through the query layer's tenant-scoped\n  streaming cursor API, writing a header row from the dashboard's field\n  list and RFC 4180-quoted/escaped data rows.\n  - Accept: given an `ExportJob`, the generator produces a CSV stream\n    whose header row matches the dashboard's field list and whose rows\n    correctly round-trip values containing commas, quotes, and\n    newlines under RFC 4180 quoting; the query layer call is scoped to\n    the job's `workspace_id`, so a job for workspace A cannot pull rows\n    belonging to another workspace.\n  - Blocked by: S4\n- [ ] **S6: Delivery** — Upload the CSV stream to the config's S3\n  bucket/prefix, retrying up to 3 times with exponential backoff, and\n  record the final `ExportJob` status.\n  - Accept: a successful upload writes an object named\n    `<prefix>/<dashboard-slug>-<scheduled_for>.csv` and sets the job's\n    status to `delivered`; an S3 call that keeps failing is retried 3\n    times and then sets the job's status to `failed` with the S3 error\n    preserved on the job, visible via `GET /exports/{id}/jobs`; for a\n    config due at time T, the object exists in the bucket within 5\n    minutes of T.\n  - Blocked by: S5, S3\n\n## Design gaps found\n\nnone.\n\n## Notes\n\n- PRD's open question on max rows per export / pagination into multiple\n  files is explicitly deferred pending a data-team production data-size\n  survey — not addressed by this breakdown, per prd.md's \"Open questions\".\n```\n\nTwo milestones, each demonstrable on its own: M1 proves configuration + status querying via the API; M2 proves the full scheduled generation-and-delivery path. All four architecture components (Export API, Export Scheduler, CSV Generator, Delivery) and all five PRD success criteria are covered across S1–S6."
+              },
+              {
+                "name": "has-rows",
+                "passed": true,
+                "weight": 1,
+                "explanation": "matched ^- \\[ \\] \\*\\*",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "items-are-one-sitting",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full contents:\n\n```markdown\n---\nstage: decompose\nrun: feature:csv-export\ndate: 2026-10-25\n---\n\n# Breakdown: Scheduled CSV export\n\nProgress lives in the checkboxes below — Implement checks items off as their\nacceptance criteria are met.\n\n## Milestone 1: Admins can configure exports and check job status\n\n- [ ] **S1: Data model** — Add the `ExportConfig` and `ExportJob` tables\n  (id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix,\n  created_by, active on ExportConfig; id, config_id, scheduled_for,\n  started_at, finished_at, status, attempt_count, error on ExportJob),\n  with workspace_id denormalized on both.\n  - Accept: migration creates both tables; `ExportJob.config_id` is a\n    foreign key into `ExportConfig`; both tables carry a `workspace_id`\n    column.\n  - Blocked by: —\n- [ ] **S2: Export API — create config** — Implement `POST /exports`,\n  storing a new `ExportConfig` and enforcing workspace scoping on the\n  referenced dashboard.\n  - Accept: `POST /exports` with a valid `dashboard_id`, `schedule`,\n    `s3_bucket`, `s3_prefix` returns 201 echoing the stored config; an\n    invalid cron expression or unknown `dashboard_id` returns 422; a\n    `dashboard_id` belonging to another workspace returns 403.\n  - Blocked by: S1\n- [ ] **S3: Export API — read job status** — Implement\n  `GET /exports/{id}/jobs`, including the optional status filter and\n  workspace scoping.\n  - Accept: `GET /exports/{id}/jobs` returns that config's `ExportJob`\n    rows newest-first, including error detail on failed jobs, and\n    returns an empty list for a config with no jobs yet; a config id\n    outside the caller's workspace returns 404 (no existence leak).\n  - Blocked by: S1\n\n## Milestone 2: A due schedule reliably delivers a correct CSV to S3\n\n- [ ] **S4: Export Scheduler** — Add the once-a-minute tick that finds due,\n  active `ExportConfig`s and enqueues one `ExportJob` each on the\n  existing job queue.\n  - Accept: running the tick against a due `ExportConfig` enqueues\n    exactly one `ExportJob` with status `pending`; running it when no\n    config is due enqueues nothing; a config due at time T has its job\n    enqueued within 1 minute of T.\n  - Blocked by: S1\n- [ ] **S5: CSV Generator** — Turn one `ExportJob` into a CSV stream: run\n  the dashboard's query through the query layer's tenant-scoped\n  streaming cursor API, writing a header row from the dashboard's field\n  list and RFC 4180-quoted/escaped data rows.\n  - Accept: given an `ExportJob`, the generator produces a CSV stream\n    whose header row matches the dashboard's field list and whose rows\n    correctly round-trip values containing commas, quotes, and\n    newlines under RFC 4180 quoting; the query layer call is scoped to\n    the job's `workspace_id`, so a job for workspace A cannot pull rows\n    belonging to another workspace.\n  - Blocked by: S4\n- [ ] **S6: Delivery** — Upload the CSV stream to the config's S3\n  bucket/prefix, retrying up to 3 times with exponential backoff, and\n  record the final `ExportJob` status.\n  - Accept: a successful upload writes an object named\n    `<prefix>/<dashboard-slug>-<scheduled_for>.csv` and sets the job's\n    status to `delivered`; an S3 call that keeps failing is retried 3\n    times and then sets the job's status to `failed` with the S3 error\n    preserved on the job, visible via `GET /exports/{id}/jobs`; for a\n    config due at time T, the object exists in the bucket within 5\n    minutes of T.\n  - Blocked by: S5, S3\n\n## Design gaps found\n\nnone.\n\n## Notes\n\n- PRD's open question on max rows per export / pagination into multiple\n  files is explicitly deferred pending a data-team production data-size\n  survey — not addressed by this breakdown, per prd.md's \"Open questions\".\n```\n\nTwo milestones, each demonstrable on its own: M1 proves configuration + status querying via the API; M2 proves the full scheduled generation-and-delivery path. All four architecture components (Export API, Export Scheduler, CSV Generator, Delivery) and all five PRD success criteria are covered across S1–S6."
+              },
+              {
+                "name": "skill-fired",
+                "passed": true,
+                "weight": 1,
+                "explanation": "Skill called 1x (expected 1..∞)",
+                "withOnly": true,
+                "scored": false
+              }
+            ]
+          }
+        ],
+        "without": [
+          {
+            "score": 0.6666666666666666,
+            "passed": false,
+            "turns": 5,
+            "costUsd": 0.1700106,
+            "judgeCostUsd": 0.011134000000000012,
+            "durationSeconds": 68,
+            "startedAt": "2026-10-26T03:00:36.721Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-ULwUN2/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "accept-is-checkable",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nSized for a single engineer, one item per sitting. Three milestones, each independently demonstrable.\n\n## Milestone 1 — Configuration & status API\n\nDemonstrable: an admin can create a scheduled export with `POST /exports` and query its job history with `GET /exports/{id}/jobs` (empty until Milestone 2 runs), with workspace scoping enforced on both.\n\n- **S1 — Data model.** Add the `ExportConfig` and `ExportJob` tables (id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix, created_by, active flag on config; id, config_id, scheduled_for, started_at, finished_at, status, attempt_count, error on job). Denormalize `workspace_id` onto both tables.\n- **S2 — Export API: create.** Implement `POST /exports` — validate the cron expression and that the dashboard belongs to the caller's workspace, persist the `ExportConfig`, return 201 with the stored config, 422 on invalid cron or unknown dashboard, 403 on a cross-workspace dashboard.\n- **S3 — Export API: job status.** Implement `GET /exports/{id}/jobs` — return recent `ExportJob`s newest-first with an optional status filter and error detail on failures; 404 (not 403) for configs outside the caller's workspace to avoid an existence leak.\n\n## Milestone 2 — End-to-end delivery pipeline\n\nDemonstrable: a due `ExportConfig` produces a real CSV object in the configured S3 bucket, and the job shows `delivered` via the Milestone 1 API.\n\n- **S4 — Export Scheduler.** Add the once-per-minute tick that finds due, active `ExportConfig`s and enqueues one `ExportJob` each onto the existing job queue. No generation or delivery logic lives here.\n- **S5 — CSV Generator.** Turn one `ExportJob` into a CSV stream: run the dashboard's query through the query layer's streaming cursor, write a header row from the dashboard's field list, and body rows with RFC 4180 quoting/escaping.\n- **S6 — Delivery.** Upload the CSV stream to the config's S3 target as `<prefix>/<dashboard-slug>-<scheduled_for>.csv` and record the job as `delivered` on success.\n\n## Milestone 3 — Delivery resilience\n\nDemonstrable: a failing S3 upload is retried three times with backoff, and the final failure — including the underlying S3 error — is visible via `GET /exports/{id}/jobs`.\n\n- **S7 — Delivery retries.** Wrap the S3 upload from S6 in up to 3 attempts with exponential backoff; on final failure, set the job status to `failed`, increment `attempt_count`, and persist the S3 error to `ExportJob.error`."
+              },
+              {
+                "name": "blocked-by-names-real-items",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nSized for a single engineer, one item per sitting. Three milestones, each independently demonstrable.\n\n## Milestone 1 — Configuration & status API\n\nDemonstrable: an admin can create a scheduled export with `POST /exports` and query its job history with `GET /exports/{id}/jobs` (empty until Milestone 2 runs), with workspace scoping enforced on both.\n\n- **S1 — Data model.** Add the `ExportConfig` and `ExportJob` tables (id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix, created_by, active flag on config; id, config_id, scheduled_for, started_at, finished_at, status, attempt_count, error on job). Denormalize `workspace_id` onto both tables.\n- **S2 — Export API: create.** Implement `POST /exports` — validate the cron expression and that the dashboard belongs to the caller's workspace, persist the `ExportConfig`, return 201 with the stored config, 422 on invalid cron or unknown dashboard, 403 on a cross-workspace dashboard.\n- **S3 — Export API: job status.** Implement `GET /exports/{id}/jobs` — return recent `ExportJob`s newest-first with an optional status filter and error detail on failures; 404 (not 403) for configs outside the caller's workspace to avoid an existence leak.\n\n## Milestone 2 — End-to-end delivery pipeline\n\nDemonstrable: a due `ExportConfig` produces a real CSV object in the configured S3 bucket, and the job shows `delivered` via the Milestone 1 API.\n\n- **S4 — Export Scheduler.** Add the once-per-minute tick that finds due, active `ExportConfig`s and enqueues one `ExportJob` each onto the existing job queue. No generation or delivery logic lives here.\n- **S5 — CSV Generator.** Turn one `ExportJob` into a CSV stream: run the dashboard's query through the query layer's streaming cursor, write a header row from the dashboard's field list, and body rows with RFC 4180 quoting/escaping.\n- **S6 — Delivery.** Upload the CSV stream to the config's S3 target as `<prefix>/<dashboard-slug>-<scheduled_for>.csv` and record the job as `delivered` on success.\n\n## Milestone 3 — Delivery resilience\n\nDemonstrable: a failing S3 upload is retried three times with backoff, and the final failure — including the underlying S3 error — is visible via `GET /exports/{id}/jobs`.\n\n- **S7 — Delivery retries.** Wrap the S3 upload from S6 in up to 3 attempts with exponential backoff; on final failure, set the job status to `failed`, increment `attempt_count`, and persist the S3 error to `ExportJob.error`."
+              },
+              {
+                "name": "breakdown-exists",
+                "passed": true,
+                "weight": 1,
+                "explanation": "docs/features/csv-export/breakdown.md exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "covers-every-component",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nSized for a single engineer, one item per sitting. Three milestones, each independently demonstrable.\n\n## Milestone 1 — Configuration & status API\n\nDemonstrable: an admin can create a scheduled export with `POST /exports` and query its job history with `GET /exports/{id}/jobs` (empty until Milestone 2 runs), with workspace scoping enforced on both.\n\n- **S1 — Data model.** Add the `ExportConfig` and `ExportJob` tables (id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix, created_by, active flag on config; id, config_id, scheduled_for, started_at, finished_at, status, attempt_count, error on job). Denormalize `workspace_id` onto both tables.\n- **S2 — Export API: create.** Implement `POST /exports` — validate the cron expression and that the dashboard belongs to the caller's workspace, persist the `ExportConfig`, return 201 with the stored config, 422 on invalid cron or unknown dashboard, 403 on a cross-workspace dashboard.\n- **S3 — Export API: job status.** Implement `GET /exports/{id}/jobs` — return recent `ExportJob`s newest-first with an optional status filter and error detail on failures; 404 (not 403) for configs outside the caller's workspace to avoid an existence leak.\n\n## Milestone 2 — End-to-end delivery pipeline\n\nDemonstrable: a due `ExportConfig` produces a real CSV object in the configured S3 bucket, and the job shows `delivered` via the Milestone 1 API.\n\n- **S4 — Export Scheduler.** Add the once-per-minute tick that finds due, active `ExportConfig`s and enqueues one `ExportJob` each onto the existing job queue. No generation or delivery logic lives here.\n- **S5 — CSV Generator.** Turn one `ExportJob` into a CSV stream: run the dashboard's query through the query layer's streaming cursor, write a header row from the dashboard's field list, and body rows with RFC 4180 quoting/escaping.\n- **S6 — Delivery.** Upload the CSV stream to the config's S3 target as `<prefix>/<dashboard-slug>-<scheduled_for>.csv` and record the job as `delivered` on success.\n\n## Milestone 3 — Delivery resilience\n\nDemonstrable: a failing S3 upload is retried three times with backoff, and the final failure — including the underlying S3 error — is visible via `GET /exports/{id}/jobs`.\n\n- **S7 — Delivery retries.** Wrap the S3 upload from S6 in up to 3 attempts with exponential backoff; on final failure, set the job status to `failed`, increment `attempt_count`, and persist the S3 error to `ExportJob.error`."
+              },
+              {
+                "name": "has-rows",
+                "passed": false,
+                "weight": 1,
+                "explanation": "pattern not found in file docs/features/csv-export/breakdown.md",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "items-are-one-sitting",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nSized for a single engineer, one item per sitting. Three milestones, each independently demonstrable.\n\n## Milestone 1 — Configuration & status API\n\nDemonstrable: an admin can create a scheduled export with `POST /exports` and query its job history with `GET /exports/{id}/jobs` (empty until Milestone 2 runs), with workspace scoping enforced on both.\n\n- **S1 — Data model.** Add the `ExportConfig` and `ExportJob` tables (id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix, created_by, active flag on config; id, config_id, scheduled_for, started_at, finished_at, status, attempt_count, error on job). Denormalize `workspace_id` onto both tables.\n- **S2 — Export API: create.** Implement `POST /exports` — validate the cron expression and that the dashboard belongs to the caller's workspace, persist the `ExportConfig`, return 201 with the stored config, 422 on invalid cron or unknown dashboard, 403 on a cross-workspace dashboard.\n- **S3 — Export API: job status.** Implement `GET /exports/{id}/jobs` — return recent `ExportJob`s newest-first with an optional status filter and error detail on failures; 404 (not 403) for configs outside the caller's workspace to avoid an existence leak.\n\n## Milestone 2 — End-to-end delivery pipeline\n\nDemonstrable: a due `ExportConfig` produces a real CSV object in the configured S3 bucket, and the job shows `delivered` via the Milestone 1 API.\n\n- **S4 — Export Scheduler.** Add the once-per-minute tick that finds due, active `ExportConfig`s and enqueues one `ExportJob` each onto the existing job queue. No generation or delivery logic lives here.\n- **S5 — CSV Generator.** Turn one `ExportJob` into a CSV stream: run the dashboard's query through the query layer's streaming cursor, write a header row from the dashboard's field list, and body rows with RFC 4180 quoting/escaping.\n- **S6 — Delivery.** Upload the CSV stream to the config's S3 target as `<prefix>/<dashboard-slug>-<scheduled_for>.csv` and record the job as `delivered` on success.\n\n## Milestone 3 — Delivery resilience\n\nDemonstrable: a failing S3 upload is retried three times with backoff, and the final failure — including the underlying S3 error — is visible via `GET /exports/{id}/jobs`.\n\n- **S7 — Delivery retries.** Wrap the S3 upload from S6 in up to 3 attempts with exponential backoff; on final failure, set the job status to `failed`, increment `attempt_count`, and persist the S3 error to `ExportJob.error`."
+              }
+            ]
+          },
+          {
+            "score": 0.6666666666666666,
+            "passed": false,
+            "turns": 5,
+            "costUsd": 0.19207380000000002,
+            "judgeCostUsd": 0.011698,
+            "durationSeconds": 82,
+            "startedAt": "2026-10-26T03:01:45.089Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-Xlo7tm/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "accept-is-checkable",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nOne item per sitting, for a single engineer. Each milestone is independently demonstrable; component names match `architecture.md` exactly.\n\n## Milestone 1 — Export configuration API\n\nDemonstrable: an admin can create an export config and list its (empty) job history through the API, with workspace scoping enforced on both.\n\n- **S1 — Data model.** Add the `ExportConfig` and `ExportJob` tables/models: id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix, created_by, active flag on `ExportConfig`; id, config_id, scheduled_for, started_at, finished_at, status, attempt_count, error on `ExportJob`. Denormalize workspace_id onto both rows.\n- **S2 — Export API: create.** Implement `POST /exports` — validate the cron expression and that `dashboard_id` belongs to the caller's workspace, persist the `ExportConfig`, return 201 with the stored config, 422 on invalid cron/unknown dashboard, 403 on cross-workspace dashboard.\n- **S3 — Export API: job status.** Implement `GET /exports/{id}/jobs` — return that config's `ExportJob` rows newest-first with an optional status filter, including error detail on failures; 404 (not 403) when the config belongs to another workspace.\n\n## Milestone 2 — Scheduled CSV generation\n\nDemonstrable: a due `ExportConfig` is picked up automatically and turned into a correctly formatted CSV stream (verified against a test sink, since delivery doesn't exist yet).\n\n- **S4 — Export Scheduler.** Build the once-a-minute tick that finds due, active `ExportConfig`s and enqueues one `ExportJob` each onto the existing job queue; never generates or delivers itself.\n- **S5 — CSV Generator.** Build the worker that takes one `ExportJob`, runs the dashboard's query through the query layer's streaming cursor API, and writes RFC 4180 rows with a header row from the dashboard's field list, keeping memory flat regardless of dashboard size.\n\n## Milestone 3 — Delivery & reliability\n\nDemonstrable: the full pipeline runs end to end — a due schedule delivers a CSV to the customer's S3 bucket within 5 minutes, and a delivery that keeps failing ends in a visible, final failure.\n\n- **S6 — Delivery (happy path).** Stream the generated CSV to the config's S3 bucket/prefix, named `<prefix>/<dashboard-slug>-<scheduled_for>.csv`, and mark the `ExportJob` delivered on success.\n- **S7 — Delivery (retries & failure).** Add retry with exponential backoff on upload failure, up to 3 attempts; on final failure set the job status to `failed` with the S3 error preserved, and confirm it's visible via `GET /exports/{id}/jobs`."
+              },
+              {
+                "name": "blocked-by-names-real-items",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS FAIL PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  false,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nOne item per sitting, for a single engineer. Each milestone is independently demonstrable; component names match `architecture.md` exactly.\n\n## Milestone 1 — Export configuration API\n\nDemonstrable: an admin can create an export config and list its (empty) job history through the API, with workspace scoping enforced on both.\n\n- **S1 — Data model.** Add the `ExportConfig` and `ExportJob` tables/models: id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix, created_by, active flag on `ExportConfig`; id, config_id, scheduled_for, started_at, finished_at, status, attempt_count, error on `ExportJob`. Denormalize workspace_id onto both rows.\n- **S2 — Export API: create.** Implement `POST /exports` — validate the cron expression and that `dashboard_id` belongs to the caller's workspace, persist the `ExportConfig`, return 201 with the stored config, 422 on invalid cron/unknown dashboard, 403 on cross-workspace dashboard.\n- **S3 — Export API: job status.** Implement `GET /exports/{id}/jobs` — return that config's `ExportJob` rows newest-first with an optional status filter, including error detail on failures; 404 (not 403) when the config belongs to another workspace.\n\n## Milestone 2 — Scheduled CSV generation\n\nDemonstrable: a due `ExportConfig` is picked up automatically and turned into a correctly formatted CSV stream (verified against a test sink, since delivery doesn't exist yet).\n\n- **S4 — Export Scheduler.** Build the once-a-minute tick that finds due, active `ExportConfig`s and enqueues one `ExportJob` each onto the existing job queue; never generates or delivers itself.\n- **S5 — CSV Generator.** Build the worker that takes one `ExportJob`, runs the dashboard's query through the query layer's streaming cursor API, and writes RFC 4180 rows with a header row from the dashboard's field list, keeping memory flat regardless of dashboard size.\n\n## Milestone 3 — Delivery & reliability\n\nDemonstrable: the full pipeline runs end to end — a due schedule delivers a CSV to the customer's S3 bucket within 5 minutes, and a delivery that keeps failing ends in a visible, final failure.\n\n- **S6 — Delivery (happy path).** Stream the generated CSV to the config's S3 bucket/prefix, named `<prefix>/<dashboard-slug>-<scheduled_for>.csv`, and mark the `ExportJob` delivered on success.\n- **S7 — Delivery (retries & failure).** Add retry with exponential backoff on upload failure, up to 3 attempts; on final failure set the job status to `failed` with the S3 error preserved, and confirm it's visible via `GET /exports/{id}/jobs`."
+              },
+              {
+                "name": "breakdown-exists",
+                "passed": true,
+                "weight": 1,
+                "explanation": "docs/features/csv-export/breakdown.md exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "covers-every-component",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nOne item per sitting, for a single engineer. Each milestone is independently demonstrable; component names match `architecture.md` exactly.\n\n## Milestone 1 — Export configuration API\n\nDemonstrable: an admin can create an export config and list its (empty) job history through the API, with workspace scoping enforced on both.\n\n- **S1 — Data model.** Add the `ExportConfig` and `ExportJob` tables/models: id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix, created_by, active flag on `ExportConfig`; id, config_id, scheduled_for, started_at, finished_at, status, attempt_count, error on `ExportJob`. Denormalize workspace_id onto both rows.\n- **S2 — Export API: create.** Implement `POST /exports` — validate the cron expression and that `dashboard_id` belongs to the caller's workspace, persist the `ExportConfig`, return 201 with the stored config, 422 on invalid cron/unknown dashboard, 403 on cross-workspace dashboard.\n- **S3 — Export API: job status.** Implement `GET /exports/{id}/jobs` — return that config's `ExportJob` rows newest-first with an optional status filter, including error detail on failures; 404 (not 403) when the config belongs to another workspace.\n\n## Milestone 2 — Scheduled CSV generation\n\nDemonstrable: a due `ExportConfig` is picked up automatically and turned into a correctly formatted CSV stream (verified against a test sink, since delivery doesn't exist yet).\n\n- **S4 — Export Scheduler.** Build the once-a-minute tick that finds due, active `ExportConfig`s and enqueues one `ExportJob` each onto the existing job queue; never generates or delivers itself.\n- **S5 — CSV Generator.** Build the worker that takes one `ExportJob`, runs the dashboard's query through the query layer's streaming cursor API, and writes RFC 4180 rows with a header row from the dashboard's field list, keeping memory flat regardless of dashboard size.\n\n## Milestone 3 — Delivery & reliability\n\nDemonstrable: the full pipeline runs end to end — a due schedule delivers a CSV to the customer's S3 bucket within 5 minutes, and a delivery that keeps failing ends in a visible, final failure.\n\n- **S6 — Delivery (happy path).** Stream the generated CSV to the config's S3 bucket/prefix, named `<prefix>/<dashboard-slug>-<scheduled_for>.csv`, and mark the `ExportJob` delivered on success.\n- **S7 — Delivery (retries & failure).** Add retry with exponential backoff on upload failure, up to 3 attempts; on final failure set the job status to `failed` with the S3 error preserved, and confirm it's visible via `GET /exports/{id}/jobs`."
+              },
+              {
+                "name": "has-rows",
+                "passed": false,
+                "weight": 1,
+                "explanation": "pattern not found in file docs/features/csv-export/breakdown.md",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "items-are-one-sitting",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nOne item per sitting, for a single engineer. Each milestone is independently demonstrable; component names match `architecture.md` exactly.\n\n## Milestone 1 — Export configuration API\n\nDemonstrable: an admin can create an export config and list its (empty) job history through the API, with workspace scoping enforced on both.\n\n- **S1 — Data model.** Add the `ExportConfig` and `ExportJob` tables/models: id, workspace_id, dashboard_id, schedule, s3_bucket, s3_prefix, created_by, active flag on `ExportConfig`; id, config_id, scheduled_for, started_at, finished_at, status, attempt_count, error on `ExportJob`. Denormalize workspace_id onto both rows.\n- **S2 — Export API: create.** Implement `POST /exports` — validate the cron expression and that `dashboard_id` belongs to the caller's workspace, persist the `ExportConfig`, return 201 with the stored config, 422 on invalid cron/unknown dashboard, 403 on cross-workspace dashboard.\n- **S3 — Export API: job status.** Implement `GET /exports/{id}/jobs` — return that config's `ExportJob` rows newest-first with an optional status filter, including error detail on failures; 404 (not 403) when the config belongs to another workspace.\n\n## Milestone 2 — Scheduled CSV generation\n\nDemonstrable: a due `ExportConfig` is picked up automatically and turned into a correctly formatted CSV stream (verified against a test sink, since delivery doesn't exist yet).\n\n- **S4 — Export Scheduler.** Build the once-a-minute tick that finds due, active `ExportConfig`s and enqueues one `ExportJob` each onto the existing job queue; never generates or delivers itself.\n- **S5 — CSV Generator.** Build the worker that takes one `ExportJob`, runs the dashboard's query through the query layer's streaming cursor API, and writes RFC 4180 rows with a header row from the dashboard's field list, keeping memory flat regardless of dashboard size.\n\n## Milestone 3 — Delivery & reliability\n\nDemonstrable: the full pipeline runs end to end — a due schedule delivers a CSV to the customer's S3 bucket within 5 minutes, and a delivery that keeps failing ends in a visible, final failure.\n\n- **S6 — Delivery (happy path).** Stream the generated CSV to the config's S3 bucket/prefix, named `<prefix>/<dashboard-slug>-<scheduled_for>.csv`, and mark the `ExportJob` delivered on success.\n- **S7 — Delivery (retries & failure).** Add retry with exponential backoff on upload failure, up to 3 attempts; on final failure set the job status to `failed` with the S3 error preserved, and confirm it's visible via `GET /exports/{id}/jobs`."
+              }
+            ]
+          },
+          {
+            "score": 0.6666666666666666,
+            "passed": false,
+            "turns": 5,
+            "costUsd": 0.1769506,
+            "judgeCostUsd": 0.015319,
+            "durationSeconds": 71,
+            "startedAt": "2026-10-26T03:03:07.375Z",
+            "error": null,
+            "tracePath": "/private/tmp/e-pZFEtn/out/trace.jsonl",
+            "skippedPaidGraders": false,
+            "graders": [
+              {
+                "name": "accept-is-checkable",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  false
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nSized for one engineer, one item per sitting. Items are ordered; each\ndepends only on earlier items. Component names match architecture.md\nexactly.\n\n## Milestone 1 — Export configuration API\n\nDemonstrable on its own: an admin can create a scheduled export via\n`POST /exports` and gets back the stored config; `GET /exports/{id}/jobs`\nreturns an empty job list for it; both are workspace-scoped.\n\n### S1 — Data model\n\n- Component: none (shared foundation for Export API)\n- Add the `ExportConfig` and `ExportJob` tables per architecture.md's data\n  model: ExportConfig (id, workspace_id, dashboard_id, schedule, s3_bucket,\n  s3_prefix, created_by, active) and ExportJob (id, config_id,\n  scheduled_for, started_at, finished_at, status, attempt_count, error),\n  with workspace_id denormalized on both.\n- Done when: migrations run cleanly and both tables exist with the\n  ExportConfig 1—N ExportJob relationship enforced at the DB level.\n\n### S2 — Export API: POST /exports\n\n- Component: Export API\n- Implement `POST /exports`: validate dashboard_id belongs to the caller's\n  workspace and the cron expression is valid, persist an ExportConfig, and\n  return 201 with the stored config.\n- Done when: a valid request returns 201 echoing the config; an unknown\n  dashboard or invalid cron returns 422; a dashboard from another workspace\n  returns 403.\n\n### S3 — Export API: GET /exports/{id}/jobs\n\n- Component: Export API\n- Implement `GET /exports/{id}/jobs`, with optional status filter, scoped\n  to the caller's workspace.\n- Done when: jobs for the caller's own config are returned newest first\n  (including the error field, even if always null for now); a config id\n  outside the caller's workspace returns 404 with no indication the config\n  exists.\n\n## Milestone 2 — End-to-end scheduled delivery\n\nDemonstrable on its own: a due ExportConfig results in a CSV landing in\nthe configured S3 bucket within 5 minutes, with correct headers and RFC\n4180 escaping, and the job's status reflects delivery.\n\n### S4 — Export Scheduler\n\n- Component: Export Scheduler\n- Implement the once-a-minute tick that finds due, active ExportConfigs\n  and enqueues one ExportJob per config onto the existing job queue. The\n  scheduler only enqueues — it does not generate or deliver.\n- Done when: a due config produces exactly one new ExportJob per tick, and\n  an inactive or not-yet-due config produces none.\n\n### S5 — CSV Generator\n\n- Component: CSV Generator\n- Implement the queue worker that takes one ExportJob, runs the\n  dashboard's query through the query layer's streaming cursor (tenant-\n  scoped), and streams out RFC 4180 rows with a header matching the\n  dashboard's field list.\n- Done when: running a job for a known dashboard produces a correctly\n  headered, correctly escaped CSV stream, and the query is provably scoped\n  to the job's workspace.\n\n### S6 — Delivery (happy path)\n\n- Component: Delivery\n- Take the CSV stream from the CSV Generator and upload it to the config's\n  S3 bucket/prefix as `<prefix>/<dashboard-slug>-<scheduled_for>.csv`, then\n  mark the ExportJob `delivered` with started_at/finished_at set.\n- Done when: a due schedule results in the object appearing in the bucket\n  within 5 minutes, and `GET /exports/{id}/jobs` shows it as `delivered`.\n\n## Milestone 3 — Reliable delivery & failure visibility\n\nDemonstrable on its own: a failing delivery retries three times with\nbackoff, and the final failure — with error detail — is visible through\nthe existing jobs endpoint without any further code changes there.\n\n### S7 — Delivery retries and failure reporting\n\n- Component: Delivery\n- On upload failure, retry up to 3 times with exponential backoff; on\n  final failure, set the ExportJob status to `failed`, increment\n  attempt_count per try, and store the S3 error on the job.\n- Done when: a simulated persistent S3 failure results in 3 attempts, a\n  final `failed` status, and the error detail is visible via\n  `GET /exports/{id}/jobs`."
+              },
+              {
+                "name": "blocked-by-names-real-items",
+                "passed": false,
+                "weight": 1,
+                "explanation": "judge votes: FAIL FAIL FAIL",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  false,
+                  false,
+                  false
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nSized for one engineer, one item per sitting. Items are ordered; each\ndepends only on earlier items. Component names match architecture.md\nexactly.\n\n## Milestone 1 — Export configuration API\n\nDemonstrable on its own: an admin can create a scheduled export via\n`POST /exports` and gets back the stored config; `GET /exports/{id}/jobs`\nreturns an empty job list for it; both are workspace-scoped.\n\n### S1 — Data model\n\n- Component: none (shared foundation for Export API)\n- Add the `ExportConfig` and `ExportJob` tables per architecture.md's data\n  model: ExportConfig (id, workspace_id, dashboard_id, schedule, s3_bucket,\n  s3_prefix, created_by, active) and ExportJob (id, config_id,\n  scheduled_for, started_at, finished_at, status, attempt_count, error),\n  with workspace_id denormalized on both.\n- Done when: migrations run cleanly and both tables exist with the\n  ExportConfig 1—N ExportJob relationship enforced at the DB level.\n\n### S2 — Export API: POST /exports\n\n- Component: Export API\n- Implement `POST /exports`: validate dashboard_id belongs to the caller's\n  workspace and the cron expression is valid, persist an ExportConfig, and\n  return 201 with the stored config.\n- Done when: a valid request returns 201 echoing the config; an unknown\n  dashboard or invalid cron returns 422; a dashboard from another workspace\n  returns 403.\n\n### S3 — Export API: GET /exports/{id}/jobs\n\n- Component: Export API\n- Implement `GET /exports/{id}/jobs`, with optional status filter, scoped\n  to the caller's workspace.\n- Done when: jobs for the caller's own config are returned newest first\n  (including the error field, even if always null for now); a config id\n  outside the caller's workspace returns 404 with no indication the config\n  exists.\n\n## Milestone 2 — End-to-end scheduled delivery\n\nDemonstrable on its own: a due ExportConfig results in a CSV landing in\nthe configured S3 bucket within 5 minutes, with correct headers and RFC\n4180 escaping, and the job's status reflects delivery.\n\n### S4 — Export Scheduler\n\n- Component: Export Scheduler\n- Implement the once-a-minute tick that finds due, active ExportConfigs\n  and enqueues one ExportJob per config onto the existing job queue. The\n  scheduler only enqueues — it does not generate or deliver.\n- Done when: a due config produces exactly one new ExportJob per tick, and\n  an inactive or not-yet-due config produces none.\n\n### S5 — CSV Generator\n\n- Component: CSV Generator\n- Implement the queue worker that takes one ExportJob, runs the\n  dashboard's query through the query layer's streaming cursor (tenant-\n  scoped), and streams out RFC 4180 rows with a header matching the\n  dashboard's field list.\n- Done when: running a job for a known dashboard produces a correctly\n  headered, correctly escaped CSV stream, and the query is provably scoped\n  to the job's workspace.\n\n### S6 — Delivery (happy path)\n\n- Component: Delivery\n- Take the CSV stream from the CSV Generator and upload it to the config's\n  S3 bucket/prefix as `<prefix>/<dashboard-slug>-<scheduled_for>.csv`, then\n  mark the ExportJob `delivered` with started_at/finished_at set.\n- Done when: a due schedule results in the object appearing in the bucket\n  within 5 minutes, and `GET /exports/{id}/jobs` shows it as `delivered`.\n\n## Milestone 3 — Reliable delivery & failure visibility\n\nDemonstrable on its own: a failing delivery retries three times with\nbackoff, and the final failure — with error detail — is visible through\nthe existing jobs endpoint without any further code changes there.\n\n### S7 — Delivery retries and failure reporting\n\n- Component: Delivery\n- On upload failure, retry up to 3 times with exponential backoff; on\n  final failure, set the ExportJob status to `failed`, increment\n  attempt_count per try, and store the S3 error on the job.\n- Done when: a simulated persistent S3 failure results in 3 attempts, a\n  final `failed` status, and the error detail is visible via\n  `GET /exports/{id}/jobs`."
+              },
+              {
+                "name": "breakdown-exists",
+                "passed": true,
+                "weight": 1,
+                "explanation": "docs/features/csv-export/breakdown.md exists as expected",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "covers-every-component",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nSized for one engineer, one item per sitting. Items are ordered; each\ndepends only on earlier items. Component names match architecture.md\nexactly.\n\n## Milestone 1 — Export configuration API\n\nDemonstrable on its own: an admin can create a scheduled export via\n`POST /exports` and gets back the stored config; `GET /exports/{id}/jobs`\nreturns an empty job list for it; both are workspace-scoped.\n\n### S1 — Data model\n\n- Component: none (shared foundation for Export API)\n- Add the `ExportConfig` and `ExportJob` tables per architecture.md's data\n  model: ExportConfig (id, workspace_id, dashboard_id, schedule, s3_bucket,\n  s3_prefix, created_by, active) and ExportJob (id, config_id,\n  scheduled_for, started_at, finished_at, status, attempt_count, error),\n  with workspace_id denormalized on both.\n- Done when: migrations run cleanly and both tables exist with the\n  ExportConfig 1—N ExportJob relationship enforced at the DB level.\n\n### S2 — Export API: POST /exports\n\n- Component: Export API\n- Implement `POST /exports`: validate dashboard_id belongs to the caller's\n  workspace and the cron expression is valid, persist an ExportConfig, and\n  return 201 with the stored config.\n- Done when: a valid request returns 201 echoing the config; an unknown\n  dashboard or invalid cron returns 422; a dashboard from another workspace\n  returns 403.\n\n### S3 — Export API: GET /exports/{id}/jobs\n\n- Component: Export API\n- Implement `GET /exports/{id}/jobs`, with optional status filter, scoped\n  to the caller's workspace.\n- Done when: jobs for the caller's own config are returned newest first\n  (including the error field, even if always null for now); a config id\n  outside the caller's workspace returns 404 with no indication the config\n  exists.\n\n## Milestone 2 — End-to-end scheduled delivery\n\nDemonstrable on its own: a due ExportConfig results in a CSV landing in\nthe configured S3 bucket within 5 minutes, with correct headers and RFC\n4180 escaping, and the job's status reflects delivery.\n\n### S4 — Export Scheduler\n\n- Component: Export Scheduler\n- Implement the once-a-minute tick that finds due, active ExportConfigs\n  and enqueues one ExportJob per config onto the existing job queue. The\n  scheduler only enqueues — it does not generate or deliver.\n- Done when: a due config produces exactly one new ExportJob per tick, and\n  an inactive or not-yet-due config produces none.\n\n### S5 — CSV Generator\n\n- Component: CSV Generator\n- Implement the queue worker that takes one ExportJob, runs the\n  dashboard's query through the query layer's streaming cursor (tenant-\n  scoped), and streams out RFC 4180 rows with a header matching the\n  dashboard's field list.\n- Done when: running a job for a known dashboard produces a correctly\n  headered, correctly escaped CSV stream, and the query is provably scoped\n  to the job's workspace.\n\n### S6 — Delivery (happy path)\n\n- Component: Delivery\n- Take the CSV stream from the CSV Generator and upload it to the config's\n  S3 bucket/prefix as `<prefix>/<dashboard-slug>-<scheduled_for>.csv`, then\n  mark the ExportJob `delivered` with started_at/finished_at set.\n- Done when: a due schedule results in the object appearing in the bucket\n  within 5 minutes, and `GET /exports/{id}/jobs` shows it as `delivered`.\n\n## Milestone 3 — Reliable delivery & failure visibility\n\nDemonstrable on its own: a failing delivery retries three times with\nbackoff, and the final failure — with error detail — is visible through\nthe existing jobs endpoint without any further code changes there.\n\n### S7 — Delivery retries and failure reporting\n\n- Component: Delivery\n- On upload failure, retry up to 3 times with exponential backoff; on\n  final failure, set the ExportJob status to `failed`, increment\n  attempt_count per try, and store the S3 error on the job.\n- Done when: a simulated persistent S3 failure results in 3 attempts, a\n  final `failed` status, and the error detail is visible via\n  `GET /exports/{id}/jobs`."
+              },
+              {
+                "name": "has-rows",
+                "passed": false,
+                "weight": 1,
+                "explanation": "pattern not found in file docs/features/csv-export/breakdown.md",
+                "withOnly": false,
+                "scored": true
+              },
+              {
+                "name": "items-are-one-sitting",
+                "passed": true,
+                "weight": 1,
+                "explanation": "judge votes: PASS PASS PASS",
+                "withOnly": false,
+                "scored": true,
+                "judgeVotes": [
+                  true,
+                  true,
+                  true
+                ],
+                "evidence": "Written to `docs/features/csv-export/breakdown.md`. Full breakdown:\n\n---\n\n# Work breakdown: Scheduled CSV export\n\nSized for one engineer, one item per sitting. Items are ordered; each\ndepends only on earlier items. Component names match architecture.md\nexactly.\n\n## Milestone 1 — Export configuration API\n\nDemonstrable on its own: an admin can create a scheduled export via\n`POST /exports` and gets back the stored config; `GET /exports/{id}/jobs`\nreturns an empty job list for it; both are workspace-scoped.\n\n### S1 — Data model\n\n- Component: none (shared foundation for Export API)\n- Add the `ExportConfig` and `ExportJob` tables per architecture.md's data\n  model: ExportConfig (id, workspace_id, dashboard_id, schedule, s3_bucket,\n  s3_prefix, created_by, active) and ExportJob (id, config_id,\n  scheduled_for, started_at, finished_at, status, attempt_count, error),\n  with workspace_id denormalized on both.\n- Done when: migrations run cleanly and both tables exist with the\n  ExportConfig 1—N ExportJob relationship enforced at the DB level.\n\n### S2 — Export API: POST /exports\n\n- Component: Export API\n- Implement `POST /exports`: validate dashboard_id belongs to the caller's\n  workspace and the cron expression is valid, persist an ExportConfig, and\n  return 201 with the stored config.\n- Done when: a valid request returns 201 echoing the config; an unknown\n  dashboard or invalid cron returns 422; a dashboard from another workspace\n  returns 403.\n\n### S3 — Export API: GET /exports/{id}/jobs\n\n- Component: Export API\n- Implement `GET /exports/{id}/jobs`, with optional status filter, scoped\n  to the caller's workspace.\n- Done when: jobs for the caller's own config are returned newest first\n  (including the error field, even if always null for now); a config id\n  outside the caller's workspace returns 404 with no indication the config\n  exists.\n\n## Milestone 2 — End-to-end scheduled delivery\n\nDemonstrable on its own: a due ExportConfig results in a CSV landing in\nthe configured S3 bucket within 5 minutes, with correct headers and RFC\n4180 escaping, and the job's status reflects delivery.\n\n### S4 — Export Scheduler\n\n- Component: Export Scheduler\n- Implement the once-a-minute tick that finds due, active ExportConfigs\n  and enqueues one ExportJob per config onto the existing job queue. The\n  scheduler only enqueues — it does not generate or deliver.\n- Done when: a due config produces exactly one new ExportJob per tick, and\n  an inactive or not-yet-due config produces none.\n\n### S5 — CSV Generator\n\n- Component: CSV Generator\n- Implement the queue worker that takes one ExportJob, runs the\n  dashboard's query through the query layer's streaming cursor (tenant-\n  scoped), and streams out RFC 4180 rows with a header matching the\n  dashboard's field list.\n- Done when: running a job for a known dashboard produces a correctly\n  headered, correctly escaped CSV stream, and the query is provably scoped\n  to the job's workspace.\n\n### S6 — Delivery (happy path)\n\n- Component: Delivery\n- Take the CSV stream from the CSV Generator and upload it to the config's\n  S3 bucket/prefix as `<prefix>/<dashboard-slug>-<scheduled_for>.csv`, then\n  mark the ExportJob `delivered` with started_at/finished_at set.\n- Done when: a due schedule results in the object appearing in the bucket\n  within 5 minutes, and `GET /exports/{id}/jobs` shows it as `delivered`.\n\n## Milestone 3 — Reliable delivery & failure visibility\n\nDemonstrable on its own: a failing delivery retries three times with\nbackoff, and the final failure — with error detail — is visible through\nthe existing jobs endpoint without any further code changes there.\n\n### S7 — Delivery retries and failure reporting\n\n- Component: Delivery\n- On upload failure, retry up to 3 times with exponential backoff; on\n  final failure, set the ExportJob status to `failed`, increment\n  attempt_count per try, and store the S3 error on the job.\n- Done when: a simulated persistent S3 failure results in 3 attempts, a\n  final `failed` status, and the error detail is visible via\n  `GET /exports/{id}/jobs`."
+              }
+            ]
+          }
+        ]
+      },
+      "aggregates": {
+        "score": 0.9444444444444445,
+        "passRate": 0.6666666666666666,
+        "scoreWithout": 0.6666666666666666,
+        "passRateWithout": 0,
+        "delta": 0.2777777777777779
+      }
+    }
+  ],
+  "aggregates": {
+    "casesTotal": 1,
+    "casesPassed": 0,
+    "overallScore": 0.9444444444444445,
+    "overallPassRate": 0.6666666666666666,
+    "meanDelta": 0.2777777777777779
+  }
+}
