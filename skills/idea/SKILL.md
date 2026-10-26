@@ -142,8 +142,6 @@ the user's head at this stage, so this skill interviews — it does not draft.
 ## Rules
 
 - Capture the user's words, sharpened — don't replace their idea with yours.
-  A phrase the user coined for the idea stays verbatim in the brief;
-  sharpen around it, never through it.
   The ladder offers a bigger version anchored on their words; it never swaps
   their idea for yours.
 - Outside evidence corroborates or challenges; it never re-authors. And a
