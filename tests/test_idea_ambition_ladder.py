@@ -216,8 +216,10 @@ class TestSeedInstruction(unittest.TestCase):
     def test_a_re_run_appends_no_rung_its_run_already_seeded(self):
         # #1064: re-running Idea on the same run appended duplicate seeds.
         text = skill_text()
-        self.assertIn("On a re-run of the same run, first read the lines"
-                      " already ending `(from: <run-ref>)`", text)
+        # A claimed seed ends in (claimed: ...), so "carrying", not
+        # "ending": the re-run must still see it.
+        self.assertIn("On a re-run of the same run, first read every line"
+                      " carrying `(from: <run-ref>)`, claimed or not", text)
         self.assertIn("append only a rung none of them already carries",
                       text)
 
