@@ -2,7 +2,8 @@
 stage: ship
 run: maintenance:idea-reseed-duplicates
 date: 2026-10-25
-outcome: prepared
+outcome: released
+released-at: 2026-10-25
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1119
 ---
 
@@ -62,6 +63,8 @@ gh pr create --base main --body-file <body>   # "No work order:" + "Closes #N"
    as #1118. That re-run tested a variant that does not ship, so its
    record is not committed. Total spend: $4.66.
 
+5. Write-back (2026-10-25): the Owner answered "Merge both + release" in session. `gh pr merge 1119 --squash` -> `dfa41f9`; `gh pr view 1119 --json state` -> `MERGED`; #1064 closed. The 0.23.3 release PR carries this write-back.
+
 ## Post-release checks
 
 - Nothing is released until the PR merges and a release PR bumps the
@@ -71,4 +74,4 @@ gh pr create --base main --body-file <body>   # "No work order:" + "Closes #N"
 
 ## Outcome
 
-Prepared and stopped, waiting on the pull request `pending-merge:` names.
+Released: #1119 merged as `dfa41f9`, version 0.23.3 via the release PR.
