@@ -3,7 +3,7 @@ stage: ship
 run: maintenance:idea-keeps-the-coined-phrase
 date: 2026-10-25
 outcome: prepared
-pending-merge: https://github.com/mattbutlerengineering/skills/pull/1123
+pending-merge: https://github.com/mattbutlerengineering/skills/pull/1124
 ---
 
 # Release: Idea briefs keep the user's own framing
