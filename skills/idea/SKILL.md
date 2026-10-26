@@ -116,7 +116,11 @@ the user's head at this stage, so this skill interviews — it does not draft.
    (add the missing newline first when the last line lacks one), never
    rewrite an existing one, and create the
    file with its header line when it is absent. Stage the append by path in
-   the same commit as idea.md. Write well-formed lines only: a seed that
+   the same commit as idea.md. On a re-run of the same run, first read
+   every line carrying `(from: <run-ref>)`, claimed or not, and append
+   only a rung none of them already carries, so a second pass seeds
+   nothing twice.
+   Write well-formed lines only: a seed that
    would fail the grammar is not written. If the file cannot be written, say
    so and put the seeds in the Not taken line of the brief instead.
 
