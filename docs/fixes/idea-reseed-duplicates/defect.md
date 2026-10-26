@@ -53,7 +53,7 @@ is lost. Since #1052 (2026-10-23).
 
 ## Work items
 
-- [ ] A test pins the re-run rule in `skills/idea/SKILL.md`, red on
+- [x] A test pins the re-run rule in `skills/idea/SKILL.md`, red on
       origin/main.
-- [ ] The skill tells a re-run to read the run's existing
+- [x] The skill tells a re-run to read the run's existing
       `(from: <run-ref>)` lines and append only a rung none carries.

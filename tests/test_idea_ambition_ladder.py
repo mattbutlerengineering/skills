@@ -213,6 +213,14 @@ class TestSeedInstruction(unittest.TestCase):
         self.assertIn("start each seed on a new line of its own",
                       skill_text())
 
+    def test_a_re_run_appends_no_rung_its_run_already_seeded(self):
+        # #1064: re-running Idea on the same run appended duplicate seeds.
+        text = skill_text()
+        self.assertIn("On a re-run of the same run, first read the lines"
+                      " already ending `(from: <run-ref>)`", text)
+        self.assertIn("append only a rung none of them already carries",
+                      text)
+
     def test_the_seed_text_rule_is_stated(self):
         text = skill_text()
         self.assertIn("one line with no parentheses and no typed ids", text)
