@@ -1,0 +1,6 @@
+idea to prod is a Claude Code plugin that takes a raw idea all the way to production.
+Each stage is a skill, and each skill writes one artifact: an idea brief, a P R D, a design, a breakdown, the code, the evidence, the release.
+The artifacts are the state. Run next, and the router reads what exists and hands you to the stage that comes next.
+Verify demonstrates instead of asserting. Every pass quotes its evidence, and anything not run is counted, never hidden.
+Underneath, a standard-library factory gates every pull request, and nothing merges without the owner's answer.
+idea to prod. Ship the idea, keep the evidence.
