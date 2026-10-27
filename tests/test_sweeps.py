@@ -836,6 +836,14 @@ class TestReconcileSweep(unittest.TestCase):
                 f" {sweeps.LIST_WINDOW}-entry window — older entries are"
                 " invisible; raise the window or narrow the query"])
 
+    def test_the_window_matches_its_sibling_gh_read_callers(self):
+        # dashboard, gate_digest, rejection_mining, assembler and
+        # label_sync all read "gh issue list"/"gh pr list" with
+        # LIST_WINDOW = 1000; sweeps alone sat at 500 and hit it for
+        # real once the repo passed 500 issues of all states — the
+        # scheduled reconcile sweep started failing on main.
+        self.assertEqual(sweeps.LIST_WINDOW, 1000)
+
     def test_a_failing_gh_is_a_problem_not_a_filed_signal(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)

@@ -118,8 +118,11 @@ KEY_LIMIT = 64
 # never to the incoming payload, or it would cap LIFETIME intake instead.
 MAX_INTAKE = 10
 # How far back the dedupe listing can see. gh windows the listing silently, so
-# a full window is reported rather than trusted (known_keys).
-LIST_WINDOW = 500
+# a full window is reported rather than trusted (known_keys). Matches the
+# LIST_WINDOW every other gh-reading module uses (dashboard, gate_digest,
+# rejection_mining, assembler, label_sync) — sweeps alone sat at 500 and hit
+# it for real once the repo passed 500 issues of all states.
+LIST_WINDOW = 1000
 
 MARKER = "intake-key:"
 
