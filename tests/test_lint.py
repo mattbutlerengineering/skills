@@ -80,15 +80,6 @@ def protocol_table(rows):
                       for stage, artifact in rows))
 
 
-# Every clean-tree skill reads the plugin root, the way the real stage
-# skills read the pipeline protocol, so none survives the skills CLI's
-# lone copy (ADR-0120) and the clean README's command names no skill.
-# Were it to name them all, it would be a second mention of every slug
-# and mask each README test that drops one. A test that needs a
-# standalone skill removes this line from that skill.
-ROOT_READ = "Read `../../docs/pipeline-protocol.md` first.\n"
-
-
 def make_clean_tree(root):
     """Seed the smallest tree on which every checker reports zero problems."""
     plugin_dir = root / ".claude-plugin"
@@ -117,8 +108,8 @@ def make_clean_tree(root):
         skill_dir = root / "skills" / slug
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
-            f"---\nname: {slug}\ndescription: d\n---\n\n{recital_body(slug)}"
-            + ROOT_READ, encoding="utf-8")
+            f"---\nname: {slug}\ndescription: d\n---\n\n{recital_body(slug)}",
+            encoding="utf-8")
     for slug in TEMPLATED_STAGES:
         (root / "skills" / slug / "TEMPLATE.md").write_text(
             "t\n", encoding="utf-8")
@@ -134,7 +125,7 @@ def make_clean_tree(root):
         " `release.md` frontmatter, the `users-observed:` field in"
         " `retro.md` frontmatter, and the Implement checkbox rule.\n\n"
         + "\n".join(f"   - {stage} → the `{stage}` skill"
-                    for stage in lint.routed_order()) + "\n" + ROOT_READ,
+                    for stage in lint.routed_order()) + "\n",
         encoding="utf-8")
 
     # check_readme_skills holds the README to naming every skill, so the
@@ -149,13 +140,8 @@ def make_clean_tree(root):
     # `<text>` element per line, so a test can drop one by string
     # replacement the way the README fixture's one-slug-per-line form
     # already allows.
-    # check_readme_skills_cli holds the README's skills CLI command to
-    # the skills that work once that CLI copies them out alone (ADR-0120).
-    # Every clean-tree skill carries ROOT_READ, so the command names none.
     (root / "README.md").write_text(
-        "# t\n\n![map](docs/assets/skill-map.svg)\n\n"
-        f"```\n{lint.SKILLS_CLI_COMMAND} \\\n  -a claude-code\n```\n\n"
-        "## Stages\n\n"
+        "# t\n\n![map](docs/assets/skill-map.svg)\n\n## Stages\n\n"
         + "".join(f"- `{slug}`\n" for slug in ALL_SKILLS),
         encoding="utf-8")
 
@@ -913,138 +899,6 @@ class TestSkillAssets(CheckerTreeTest):
             ["skills/idea/SKILL.md names '../prd/references/x.md', which is "
              "outside the skill directory (ADR-0008: skills are "
              "self-contained)"])
-
-
-class TestReadmeSkillsCli(CheckerTreeTest):
-    """The third-party skills CLI copies each skill folder out of a
-    throwaway clone (ADR-0120), so a skill that reads the plugin root
-    arrives broken. The README's command must list exactly the skills
-    that survive the copy."""
-
-    BLOCKED = (" which reads files outside its own folder that the skills"
-               " CLI does not copy")
-
-    def _readme(self):
-        return (self.root / "README.md").read_text(encoding="utf-8")
-
-    def _write_readme(self, text):
-        (self.root / "README.md").write_text(text, encoding="utf-8")
-
-    def _skill_md(self, slug):
-        return self.root / "skills" / slug / "SKILL.md"
-
-    def _append(self, slug, name, text):
-        path = self.root / "skills" / slug / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        existing = path.read_text(encoding="utf-8") if path.is_file() else ""
-        path.write_text(existing + text, encoding="utf-8")
-
-    def _standalone(self, *slugs):
-        """Drop ROOT_READ from each skill and add it to the command."""
-        for slug in slugs:
-            path = self._skill_md(slug)
-            path.write_text(path.read_text(encoding="utf-8")
-                            .replace(ROOT_READ, ""), encoding="utf-8")
-        self._write_readme(self._readme().replace(
-            "  -a claude-code",
-            "".join(f"  --skill {slug} \\\n" for slug in slugs)
-            + "  -a claude-code"))
-
-    def test_a_missing_command_is_one_problem(self):
-        self._write_readme(self._readme().replace(
-            lint.SKILLS_CLI_COMMAND, "npx something-else"))
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [
-            "README.md has no fenced 'npx skills add "
-            "mattbutlerengineering/skills' command (ADR-0120)"])
-
-    def test_a_command_outside_a_fence_does_not_count(self):
-        self._write_readme(self._readme().replace("```\n", ""))
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [
-            "README.md has no fenced 'npx skills add "
-            "mattbutlerengineering/skills' command (ADR-0120)"])
-
-    def test_a_standalone_skill_in_the_command_is_clean(self):
-        self._standalone("mermaid")
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [])
-
-    def test_a_skill_reading_two_levels_up_must_leave_the_command(self):
-        self._write_readme(self._readme().replace(
-            "  -a claude-code", "  --skill ship -a claude-code"))
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [
-            "README.md's skills CLI command installs 'ship'," + self.BLOCKED])
-
-    def test_a_reference_file_reaching_up_counts_too(self):
-        self._standalone("lean")
-        self._append("lean", "references/notes.md",
-                     "See `../../../CONTEXT.md`.\n")
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [
-            "README.md's skills CLI command installs 'lean'," + self.BLOCKED])
-
-    def test_two_levels_above_in_prose_counts(self):
-        self._standalone("doctor")
-        self._append("doctor", "SKILL.md",
-                     "Read plugin.json two levels above this skill.\n")
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [
-            "README.md's skills CLI command installs 'doctor',"
-            + self.BLOCKED])
-
-    def test_running_a_root_tool_counts(self):
-        self._standalone("factory-init")
-        (self.root / "factory_init.py").write_text("", encoding="utf-8")
-        self._append("factory-init", "SKILL.md",
-                     "    python3 factory_init.py stamp <repo>\n")
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [
-            "README.md's skills CLI command installs 'factory-init',"
-            + self.BLOCKED])
-
-    def test_running_a_tool_the_root_does_not_hold_does_not_count(self):
-        """A skill that tells the agent to run the consumer repo's own
-        script is not reading the plugin root."""
-        self._standalone("lean")
-        self._append("lean", "SKILL.md", "    python3 manage.py check\n")
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [])
-
-    def test_a_skill_naming_a_blocked_sibling_is_blocked_too(self):
-        """automate reads audit's references, and audit reads the plugin
-        root, so automate cannot work after a lone copy either."""
-        self._standalone("automate")
-        self._append("automate", "SKILL.md",
-                     "Apply `../audit/references/recon.md`.\n")
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [
-            "README.md's skills CLI command installs 'automate',"
-            + self.BLOCKED])
-
-    def test_a_skill_naming_a_standalone_sibling_stays_installable(self):
-        self._standalone("lean", "polish")
-        self._append("polish", "SKILL.md",
-                     "Apply `../lean/references/ladder.md`.\n")
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [])
-
-    def test_an_installable_skill_left_out_is_reported(self):
-        path = self._skill_md("mermaid")
-        path.write_text(path.read_text(encoding="utf-8")
-                        .replace(ROOT_READ, ""), encoding="utf-8")
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [
-            "README.md's skills CLI command leaves out 'mermaid', which"
-            " works after the skills CLI copies it alone"])
-
-    def test_an_unknown_slug_is_reported(self):
-        self._write_readme(self._readme().replace(
-            "  -a claude-code", "  --skill rogue -a claude-code"))
-        self.assertEqual(lint.check_readme_skills_cli(self.root), [
-            "README.md's skills CLI command installs 'rogue', which is not"
-            " a skill"])
-
-    def test_the_real_readme_and_skills_are_clean(self):
-        self.assertEqual(lint.check_readme_skills_cli(ROOT), [])
-
-    def test_the_real_installable_set_excludes_every_pipeline_stage(self):
-        """Every stage reads the pipeline protocol at the plugin root, so
-        none of them can be in the command."""
-        installable = set(lint.skills_cli_installable(ROOT))
-        self.assertEqual(installable & set(
-            protocol.STAGES + protocol.MAINTENANCE_STAGES + ["next"]),
-            set())
 
 
 class TestReadmeSkills(CheckerTreeTest):

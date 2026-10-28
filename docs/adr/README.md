@@ -140,4 +140,4 @@ the canonical vocabulary.
 | [0117](0117-a-hit-run-seen-before-its-clean-partner-still-pairs.md) | A hit run seen before its clean partner still pairs when the partner arrives | provisional |
 | [0118](0118-protocol-owns-where-frontmatter-ends.md) | protocol.py owns where frontmatter ends, and a fence line may carry trailing whitespace | provisional |
 | [0119](0119-a-reply-voice-ships-as-a-utility-skill-with-an-opt-in-output-style.md) | A reply voice ships as a utility skill with an opt-in output style, never forced | provisional |
-| [0120](0120-skills-cli-installs-the-standalone-skills.md) | The skills CLI installs the standalone skills only, and lint derives the list | provisional |
+| [0120](0120-skills-cli-installs-from-a-generated-branch.md) | The skills CLI installs every skill from a generated npx branch | provisional |

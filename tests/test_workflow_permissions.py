@@ -78,6 +78,11 @@ EXPECTED = {
                    "commits the appended gate-latency ledger rows, and"
                    " creates/edits/pins the digest issue"),
     },
+    "npx-branch.yml": {
+        "publish": ({"contents": "write"},
+                    "force-pushes the generated npx branch (ADR-0120); it"
+                    " touches no issue, PR or other branch"),
+    },
     "sweeps.yml": {
         "label-drift": ({"contents": "read", "issues": "write"},
                         "files one intake issue on drift"),

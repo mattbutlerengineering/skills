@@ -51,27 +51,24 @@ Fallbacks: omp inherits `.claude` skills on first run, or copy `skills/*` into
 `~/.pi/agent/skills/`.
 
 **Other agents (`npx skills`):** the third-party
-[skills CLI](https://github.com/vercel-labs/skills) installs a subset into
-Claude Code, Codex, Cursor and the other agents it supports. It copies each
-skill's own folder and nothing else, so only the skills that never read the
-plugin root work this way ([ADR-0120](docs/adr/0120-skills-cli-installs-the-standalone-skills.md)).
-This command installs exactly those:
+[skills CLI](https://github.com/vercel-labs/skills) installs every skill
+into Claude Code, Codex, Cursor and the other agents it supports, from this
+repo's generated `npx` branch:
 
 ```
-npx skills add mattbutlerengineering/skills \
-  --skill address-pr-review --skill animated-diagram \
-  --skill architecture-diagram --skill deepen --skill house-voice \
-  --skill lean --skill mermaid --skill polish \
-  --skill prisma-migrations --skill ux-patterns --skill ux-writing
+npx skills add mattbutlerengineering/skills#npx
 ```
 
-Add `-a claude-code` (or another agent) to skip the agent prompt, and `-g`
-to install for every project. The pipeline stages, `next` and the other
-utility skills read the pipeline protocol or a root tool, which that copy
-leaves behind, so install them through a plugin harness above.
-`house-voice` works for the session it is invoked in; its every-session
-output style ships only with the plugin. `python3 lint.py` keeps this list
-equal to the skills that survive the copy.
+Add `--all` to skip the prompts, `-a claude-code` (or another agent) to
+pick the agent, and `-g` to install for every project. The CLI copies each
+skill's folder alone, so the branch adds one support skill,
+`idea-to-prod-runtime`, holding the pipeline protocol, the factory payload
+and the root tools, and points every other skill at it. Keep it installed
+beside them. Two plugin features are absent from this install: the
+`/idea-to-prod:<skill>` names (use `/<skill>`) and the house-voice output
+style. The branch is rebuilt by `npx_bundle.py` on every release and never
+edited by hand
+([ADR-0120](docs/adr/0120-skills-cli-installs-from-a-generated-branch.md)).
 
 Every skill works on a bare install of any of these harnesses — no
 third-party tools, MCP servers, or other plugins required.

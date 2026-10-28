@@ -3726,6 +3726,15 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # is back under the cap
             'if [ -n "${GH_TOKEN}" ]; then',
         ),
+        "npx-branch.yml": (
+            # this-repo-only, never mirrored, like sweeps: the build tool
+            # ships in no stamped repo, so it has no make target
+            'python3 npx_bundle.py build "$RUNNER_TEMP/npx"',
+            # git mutation glue (ADR-0120): commits and force-pushes the
+            # tree the build step just wrote (the tool computes, the YAML
+            # mutates)
+            "git init -q -b npx",
+        ),
         "gate-digest.yml": (
             # git mutation glue: commits the ledger rows `make gate-digest`
             # just wrote (the make target computes, the YAML mutates)
