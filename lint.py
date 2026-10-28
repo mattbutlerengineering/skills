@@ -778,6 +778,94 @@ def check_readme_no_orphans(root):
             for slug in sorted(mentions - known)]
 
 
+# The third-party skills CLI (ADR-0120) installs a skill by copying its
+# own folder out of a clone it then deletes. A skill folder can name a
+# file outside itself three ways, and each one is gone after that copy:
+# a path climbing past the skills/ directory, the prose "two levels
+# above" this skill, or a `python3 <tool>.py` run of a tool at the plugin
+# root. A sibling skill's file (SIBLING_ASSET) survives only when that
+# sibling installs too.
+SKILLS_CLI_COMMAND = "npx skills add mattbutlerengineering/skills"
+PLUGIN_ROOT_REFERENCE = re.compile(r"\.\./\.\./|two levels above")
+ROOT_TOOL_RUN = re.compile(r"python3 ([A-Za-z0-9_]+\.py)")
+SKILLS_CLI_SLUG = re.compile(r"--skill ([a-z0-9-]+)")
+FENCED_BLOCK = re.compile(r"^```[^\n]*\n(.*?)^```", re.M | re.S)
+
+
+def _skill_texts(skill_dir):
+    """Every markdown file under one skill folder, read once."""
+    return [path.read_text(encoding="utf-8")
+            for path in sorted(skill_dir.rglob("*.md"))]
+
+
+def _reaches_plugin_root(root, texts):
+    """Whether any of a skill's markdown names a file at the plugin root.
+    A `python3 x.py` run counts only when the root holds x.py, so telling
+    the agent to run the consumer repo's own script is not a reach."""
+    return any(PLUGIN_ROOT_REFERENCE.search(text)
+               or any((root / tool).is_file()
+                      for tool in ROOT_TOOL_RUN.findall(text))
+               for text in texts)
+
+
+def skills_cli_installable(root):
+    """The skills that still work after the skills CLI copies each one
+    out alone (ADR-0120), sorted. A skill is out when its folder reaches
+    the plugin root, or when it names a sibling skill that is out, and
+    the second rule is applied until nothing more drops."""
+    texts = {slug: _skill_texts(root / "skills" / slug)
+             for slug in sorted(set(ALL_SKILLS + extra_skills(root)))
+             if (root / "skills" / slug / "SKILL.md").is_file()}
+    siblings = {slug: {match.group(1) for text in body
+                       for match in SIBLING_ASSET.finditer(text)} - {slug}
+                for slug, body in texts.items()}
+    blocked = frozenset(slug for slug, body in texts.items()
+                        if _reaches_plugin_root(root, body))
+    while True:
+        grown = blocked | {slug for slug in texts
+                           if siblings[slug] & blocked}
+        if grown == blocked:
+            return sorted(set(texts) - blocked)
+        blocked = grown
+
+
+def readme_skills_cli_slugs(text):
+    """The `--skill` slugs of the first fenced block in TEXT that runs
+    SKILLS_CLI_COMMAND, in order, or None when no fenced block does."""
+    for block in FENCED_BLOCK.findall(text):
+        if SKILLS_CLI_COMMAND in block:
+            return SKILLS_CLI_SLUG.findall(block)
+    return None
+
+
+def check_readme_skills_cli(root):
+    """README.md's skills CLI command installs exactly the skills that
+    work after that CLI copies them out alone (ADR-0120). The list is a
+    hand-kept copy of a fact the skill folders hold, so it is derived
+    here both ways: a skill that starts reading the plugin root must
+    leave the command, and a new standalone skill must join it. A
+    missing README.md is check_readme_skills' finding."""
+    path = root / "README.md"
+    if not path.is_file():
+        return []
+    named = readme_skills_cli_slugs(path.read_text(encoding="utf-8"))
+    if named is None:
+        return [f"README.md has no fenced {SKILLS_CLI_COMMAND!r} command"
+                " (ADR-0120)"]
+    known = set(ALL_SKILLS + extra_skills(root))
+    installable = skills_cli_installable(root)
+    prefix = "README.md's skills CLI command"
+    return (
+        [f"{prefix} installs {slug!r}, which is not a skill"
+         for slug in named if slug not in known]
+        + [f"{prefix} installs {slug!r}, which reads files outside its"
+           " own folder that the skills CLI does not copy"
+           for slug in named if slug in known and slug not in installable]
+        + [f"{prefix} leaves out {slug!r}, which works after the skills"
+           " CLI copies it alone"
+           for slug in installable if slug not in named])
+
+
 def check_readme_figure(root):
     """Every skill in the taxonomy is named in README.md's first figure,
     and README.md still embeds that figure. The figure is a committed
@@ -1087,7 +1175,8 @@ CHECKERS = (check_manifest, check_plugin_skills,
             check_skill_recitals, check_skill_assets, check_templates,
             check_router, check_router_conditionals,
             check_readme_skills, check_readme_no_orphans,
-            check_readme_figure, check_protocol,
+            check_readme_figure, check_readme_skills_cli,
+            check_protocol,
             check_protocol_tables, check_backlog, check_evals,
             check_output_evals, check_ledger, check_ledger_no_orphans,
             check_ledger_links)
