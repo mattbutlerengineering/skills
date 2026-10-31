@@ -1,0 +1,109 @@
+---
+name: review
+description: Use when verified work needs a quality pass before shipping — examining the change for defects, design decay, and security issues — or when the user asks for a code review of the run's changes or says to give the change a quality check. Produces review.md. It is not for acting on reviewer comments left on an open PR — addressing that feedback, resolving threads, and readying a PR for merge is address-pr-review.
+---
+
+# Review
+
+Examine the change as a skeptical reviewer before it ships: defects, design
+decay, security. Draft-first: read the code, draft the findings, let the user
+arbitrate severity.
+
+## Process
+
+1. Read `../idea-to-prod-runtime/docs/pipeline-protocol.md` for run discovery, gating, and
+   frontmatter conventions.
+
+2. **Soft gate.** Predecessor artifact: `verification.md`. If missing, apply
+   soft gating — but note that reviewing unverified work inverts the usual
+   order, and say so in the artifact.
+
+3. **Scope the diff.** The review covers what this run changed — the diff
+   since the run began, not the whole repo.
+
+4. **Review in five passes:**
+   - **Correctness** — logic errors, unhandled failure modes, edge cases the
+     tests missed. For each suspected bug, state the concrete failure
+     scenario (inputs → wrong behavior); a bug you can't scenario-ize is a
+     hunch, not a finding.
+   - **Design** — does the code match `architecture.md`'s contracts and the
+     codebase's existing patterns? Undocumented deviations are findings.
+     So is a decision in the diff or the run's artifacts that passes the
+     protocol's "When to write an ADR" test with no ADR, and an edit to an
+     existing ADR's Decision section where a superseding ADR was owed.
+   - **Security** — inputs validated at boundaries, no secrets in code,
+     injection surfaces parameterized, errors don't leak internals.
+   - **Complexity** — apply `lean`'s cut-list in
+     `../lean/references/cut-list.md` to the run's diff. Each confirmed cut
+     is a finding: its cut-list line and the evidence its tag owes stand in
+     for the failure scenario. A cut whose references you could not
+     enumerate is a suspicion, not a finding. Every `lean:` marker the diff
+     adds must name its ceiling and its trigger; one that names no trigger
+     is a finding. A concern about a module's shape rather than its size is
+     handed to `deepen` in one line — never refactored here.
+   - **ADR compliance** — check the diff against every live ADR in the
+     target repo, per `references/adr-compliance.md`. Which ADRs are live
+     comes from the shipped `adr_status.py` tool, never from your own
+     reading of status lines. Each violation is a finding naming its
+     ADR id.
+
+5. **Run the domain passes the diff selects.** Match the changed paths
+   against the table in `references/domain-reviewers.md`, and run each
+   selected pass from its reference: `references/payments.md`,
+   `references/migrations.md`, `references/dependencies.md`. Their
+   findings join the others in the same ranking. With no match, record
+   that no domain pass was selected.
+
+6. **Load applicable standards.** Read `../idea-to-prod-runtime/docs/standards.json` if
+   present (an unbootstrapped repo has none yet — proceed). Filter to
+   statements whose `domain` matches what the diff touches: `factory` for
+   root-tool/`factory/**` changes, `pipeline` or `docs` for skill-body/
+   `docs/**` changes, `eval` for eval-set/harness changes. A finding that
+   matches a filtered statement cites its `slug`.
+
+7. **Rank and verify.** Order findings by severity (critical / major /
+   minor). Re-read the code for each before writing it down — a false
+   finding costs more trust than it's worth.
+
+8. **Write the artifact.** Fill `TEMPLATE.md` (in this skill's directory)
+   into the run directory as `review.md` with protocol frontmatter. Record
+   what was examined, findings, and the fix/defer decision per finding.
+
+9. **Fix loop.** Critical findings — and any unresolved finding that cites
+   an `enforced` standards-index statement, whatever severity it was ranked
+   at — are fixed before Ship (route to Implement for anything non-trivial,
+   then re-verify); the enforced-statement trigger sits alongside the
+   critical-finding one, it doesn't redefine what "critical" means. Majors
+   are fixed or explicitly deferred by the user. Minors, and findings
+   against `advisory` statements, may be deferred freely.
+
+10. **Hand off.** Next stage is Ship. Commit the artifact on the run's
+    branch — the protocol's "Commit at the stage boundary" section owns
+    the rule and the commit subject.
+
+## Rules
+
+- Findings target external behavior and maintainability — not style
+  preferences the codebase itself doesn't hold.
+- Every finding needs a failure scenario or a named decayed contract; "I'd
+  have written it differently" is not a finding.
+- Deferred findings get a reason logged — deferral is a decision, not a
+  shrug.
+- **Maintenance runs**: scale per the protocol's Run scale section — a
+  patch bump gets a lighter pass than a refactor. The regression test
+  from Verify is the floor; don't re-verify what Verify already
+  covered. A green regression test is not the fix: it proves the
+  reproduction is gone, not the brittleness. Inspect the producing
+  boundary and its consumers, and say what related cleanup remains
+  and why.
+
+## Installed by the skills CLI
+
+This copy came from this repo's `npx` branch. The plugin root these
+steps name is the sibling folder `../idea-to-prod-runtime/`, which holds the
+pipeline protocol, `CONTEXT.md`, `factory/` and every root tool. Where a
+step runs a tool from the plugin root or the factory repo checkout, run
+`python3 <this skill's directory>/../idea-to-prod-runtime/<tool>.py`. A stamped
+repo's `tools/factory/` copy still wins wherever a step says so. Two
+plugin features are absent: the `/idea-to-prod:<skill>` names (use
+`/<skill>`) and the house-voice output style.

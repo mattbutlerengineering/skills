@@ -1,0 +1,30 @@
+---
+stage: review
+run: product | feature:<slug>
+date: YYYY-MM-DD
+---
+
+# Review: <title>
+
+## Scope
+
+<What diff was examined — commits/files in this run.>
+
+## Findings
+
+### <Severity>: <one-line defect statement>
+
+- Scenario: <concrete inputs/state → wrong behavior, or the decayed contract>
+- Standard: <matching docs/standards.json slug this finding cites, or "none">
+- Decision: fixed | deferred — <reason if deferred>
+
+## Passes with no findings
+
+<Which of correctness / design / security / complexity / ADR compliance
+came back clean, and which domain passes ran clean or were not selected.>
+
+## Verdict
+
+<Ready to ship, or what blocks it. Count or name every pass that was not
+run or is unknown, and never read as an unqualified pass over them (the
+fail-closed roll-up; claim kinds in the plugin's CONTEXT.md).>

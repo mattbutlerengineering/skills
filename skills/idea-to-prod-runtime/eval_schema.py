@@ -1,0 +1,340 @@
+"""The evals' schema knowledge, in one place.
+
+evals/routing.json holds routing cases ({id, kind, expected, query});
+this module owns the kind vocabulary, the case shape, the coverage
+policy, and load-plus-validate (ADR-0022). evals/output/<slug>.json
+holds output-eval records; this module owns their required field set
+(issue #25). evals/results/ is append-only; this module owns its naming
+grammar — dated stems with -N collision suffixes — for every results
+kind (issue #26, ADR-0024), including the factory's charter-regression
+replays. The structural lint, the trigger-eval runner, and the charter
+replay are thin callers. Deliberately separate from protocol.py: this
+is eval knowledge, not pipeline-protocol knowledge.
+"""
+import json
+import re
+
+from cli import read_file
+
+KINDS = ("direct", "situational", "near-miss", "distractor", "router")
+
+# Harnesses a trigger run can drive (ADR-0027, ADR-0031). claude is the
+# primary harness and stays unmarked in results stems — every snapshot
+# recorded before harness identity existed is a claude run — so only the
+# second harness carries its token in the grammar below.
+HARNESSES = ("claude", "omp")
+_MARKED_HARNESSES = tuple(h for h in HARNESSES if h != "claude")
+
+# The append-only results naming grammar as it appears in LEDGER evidence
+# links: trigger[-<harness>]-<date>[-N].json files,
+# output/<slug>-<date>[-N]/grading.json, N counting up from 2
+# (results_path below is the generator).
+_SUFFIX = r"(?:-(?:[2-9]|[1-9]\d+))?"
+_HARNESS = rf"(?:-(?:{'|'.join(_MARKED_HARNESSES)}))?"
+_RESULTS_LINK = re.compile(
+    r"^evals/results/(?:"
+    rf"trigger{_HARNESS}-\d{{4}}-\d{{2}}-\d{{2}}{_SUFFIX}\.json"
+    rf"|output/[a-z0-9-]+-\d{{4}}-\d{{2}}-\d{{2}}{_SUFFIX}/grading\.json)$")
+
+
+# The inverse of results_path (ADR-0115), built from the same _HARNESS and
+# _SUFFIX pieces so the harness token list and the -N rule exist once. An
+# output slug may not open with another kind's name, or "trigger-bogus-<date>"
+# would parse as an output directory.
+_STEM = re.compile(
+    rf"^(?:(?P<head>trigger{_HARNESS}|charter|decompose-signals)"
+    rf"|(?!(?:trigger|charter|decompose-signals)-)(?P<slug>[a-z0-9][a-z0-9-]*))"
+    rf"-(?P<date>\d{{4}}-\d{{2}}-\d{{2}})(?P<suffix>{_SUFFIX})$")
+
+
+def parse_results_stem(stem):
+    """(kind, harness, date, suffix, slug) for a results file stem or an
+    output directory name, or None when it fits no grammar.
+
+    The inverse of results_path: harness is the marked token or None (the
+    primary claude harness is unmarked), suffix the -N as an int or None,
+    slug set only for an output directory (kind "output")."""
+    match = _STEM.match(stem)
+    if not match:
+        return None
+    head = match["head"]
+    kind = "trigger" if head and head.startswith("trigger") \
+        else head or "output"
+    harness = head[len("trigger-"):] if head != kind and kind == "trigger" \
+        else None
+    suffix = match["suffix"]
+    return (kind, harness, match["date"],
+            int(suffix[1:]) if suffix else None, match["slug"])
+
+
+def valid_results_link(target):
+    """True when a LEDGER evidence link target follows the results grammar."""
+    return bool(_RESULTS_LINK.match(target))
+
+
+# Every field an output-eval record must carry (docs/output-evals.md
+# names this module as the shape's owner).
+OUTPUT_FIELDS = ("id", "prompt", "run_fixture", "run_scale",
+                 "expected_output", "expectations")
+
+
+def results_path(results_dir, kind, date, slug=None, harness=None):
+    """Next free results path per the append-only naming grammar (#26).
+
+    trigger -> <results_dir>/trigger[-<harness>]-<date>[-N].json (the
+               recorded file; the primary claude harness stays unmarked,
+               a second harness carries its token — ADR-0031)
+    output  -> <results_dir>/output/<slug>-<date>[-N] (the grading dir)
+    charter -> <results_dir>/charter-<date>[-N].json (a charter-regression
+               replay, charter_replay.py; factory evidence, not skill
+               maturity, so it is not LEDGER-linkable evidence below)
+    decompose-signals -> <results_dir>/decompose-signals-<date>[-N].json
+               (decompose_signals.py --record; factory evidence like
+               charter, never LEDGER-linkable)
+
+    -N starts at 2 and counts past existing same-day results. The path is
+    returned, never created — recording stays with the caller.
+    """
+    if kind == "trigger":
+        if harness is not None and harness not in HARNESSES:
+            raise ValueError(f"unknown trigger harness {harness!r}")
+        head = ("trigger" if harness in (None, "claude")
+                else f"trigger-{harness}")
+        base, stem, ext = results_dir, f"{head}-{date}", ".json"
+    elif kind in ("charter", "decompose-signals"):
+        base, stem, ext = results_dir, f"{kind}-{date}", ".json"
+    elif kind == "output":
+        if not slug:
+            raise ValueError("output results need a slug")
+        base, stem, ext = results_dir / "output", f"{slug}-{date}", ""
+    else:
+        raise ValueError(f"unknown results kind {kind!r}")
+    path = base / f"{stem}{ext}"
+    suffix = 2
+    while path.exists():
+        path = base / f"{stem}-{suffix}{ext}"
+        suffix += 1
+    return path
+
+
+def object_problems(data, label):
+    """[] when data is a JSON object, else the one problem naming its shape.
+
+    Every validator opens with this. A file's top level is legally an
+    array, string, number, boolean or null, and json.loads hands any of
+    them through untouched, so dict-ness is the one thing a validator
+    cannot assume. It is reported alone, never alongside derived
+    complaints: on a str, `"version" not in data` degrades into a
+    substring test, and the coverage arithmetic downstream then describes
+    the bug instead of the file.
+    """
+    if isinstance(data, dict):
+        return []
+    return [f"{label} is not a JSON object"]
+
+
+
+# The results kinds that are a single file. "output" names a grading
+# DIRECTORY instead, so it has no snapshot to write.
+SNAPSHOT_KINDS = ("trigger", "charter", "decompose-signals")
+
+
+def write_snapshot(output, results_dir, kind, harness=None):
+    """Write one dated results snapshot and return its path.
+
+    ADR-0024 moved the naming grammar here because the runner's record
+    step held the only copy of it. This is the rest of that step: the
+    two eval runners had each grown an identical copy of the same four
+    decisions — create the directory, take the name from results_path,
+    serialise as indented JSON with a trailing newline, hand back the
+    path. `evals/results/` is append-only and never reconciled, so a
+    serialisation change reaching one writer and not the other would
+    leave two formats in the tree with no way back.
+
+    A directory-shaped kind is refused rather than written: laying a
+    file across the grading directory's path corrupts the tree quietly,
+    and results_path is happy to name it.
+    """
+    if kind not in SNAPSHOT_KINDS:
+        raise ValueError(f"{kind!r} results are not a single snapshot file")
+    results_dir.mkdir(parents=True, exist_ok=True)
+    path = results_path(results_dir, kind, output["date"], harness=harness)
+    path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def entries(data, key, label):
+    """(list-of-dict entries, shape problems) for the collection data[key].
+
+    An absent key is legitimate: empty list, no problem (the coverage
+    checks in validate() own emptiness). A present non-list — including
+    null — is malformed and yields one problem; non-dict entries are
+    dropped with a problem each, so no downstream .get() ever hits a
+    non-dict. Validators return problem strings; they never raise.
+    Public: every case-set validator (routing, output, and the charter
+    replay's) opens its collection through this one envelope.
+    """
+    if key not in data:
+        return [], []
+    raw = data[key]
+    if not isinstance(raw, list):
+        return [], [f"{label} {key} is not a list"]
+    problems = [f"{label} {key} entry #{n} is not an object"
+                for n, e in enumerate(raw) if not isinstance(e, dict)]
+    return [e for e in raw if isinstance(e, dict)], problems
+
+
+def valid_id(value):
+    """True when value is an eval id: a non-empty string or an int.
+
+    The one rule every eval collection shares (#887) — routing cases,
+    output evals, charter cases and their expectations. 0 is a value;
+    a bool, a float, '' or anything unhashable is not an id.
+    """
+    if isinstance(value, bool):
+        return False
+    return isinstance(value, int) or (isinstance(value, str) and value != "")
+
+
+def id_problems(items, label, noun="case"):
+    """Problem strings for the ids of a list of entry dicts.
+
+    One "{label} {noun} <id> has no id" per entry whose id fails
+    valid_id, then one "{label} has duplicate {noun} id <id>" per
+    repeated valid id. Duplicates are judged among valid ids only, so
+    nothing unhashable is ever hashed: validators return problem
+    strings, they never raise. Duplicates sort strings before ints, each
+    by string form, so the order is deterministic.
+    """
+    ids = [e.get("id") for e in items]
+    valid = [i for i in ids if valid_id(i)]
+    return (
+        [f"{label} {noun} {i!r} has no id" for i in ids if not valid_id(i)]
+        + [f"{label} has duplicate {noun} id {i!r}"
+           for i in sorted({i for i in valid if valid.count(i) > 1},
+                           key=lambda i: (isinstance(i, int), str(i)))]
+    )
+
+
+def load_case_set(path, label, validate):
+    """Read a JSON case set, validate, return (cases, problems).
+
+    validate is a callable data -> problem list. Any problem means the
+    set is unusable: cases is [] so callers cannot half-run an invalid
+    set, and problems carries the diagnostics. The routing loader below
+    and the charter replay's are thin callers.
+
+    The object guard runs *before* validate, so a validator may assume it
+    was handed a dict — the guarantee has to live here because this
+    function is also the one that ends by reaching for data["cases"]. A
+    validator that checks shape itself is then merely redundant, while
+    one that does not (charter_replay's returns no problems at all for a
+    bare-string file) would otherwise leave the crash to land here.
+    """
+    data, problem = read_file(path, label, dict)
+    if problem:
+        return [], [problem]
+    if data is None:
+        return [], [f"missing {label}"]
+    problems = validate(data)
+    return ([], problems) if problems else (data.get("cases", []), [])
+
+
+def _output_field_missing(record, field):
+    # expectations must be non-empty (an eval with none checks nothing);
+    # any other field is missing only when absent or null — falsy values
+    # are values, mirroring validate()'s is-None handling
+    if field == "expectations":
+        return not record.get(field)
+    return record.get(field) is None
+
+
+def fixture_refs(data):
+    """(eval id, run_fixture) per record that names a fixture.
+
+    The accessor callers use instead of reaching into records by string
+    key — the lint checks each ref's existence, a filesystem fact that
+    stays with it. Records without a fixture are skipped (validate_output
+    owns that complaint), and malformed shapes yield nothing rather than
+    raising, mirroring entries.
+    """
+    if not isinstance(data, dict):
+        return []
+    evals = data.get("evals")
+    if not isinstance(evals, list):
+        return []
+    return [(e.get("id"), e["run_fixture"]) for e in evals
+            if isinstance(e, dict) and e.get("run_fixture")]
+
+
+def validate_output(data, slug, label):
+    """Return problem strings for a parsed output-eval set; [] means valid.
+
+    Shape only — filesystem facts (the file's stem, fixture existence)
+    stay with the caller. label prefixes every problem, mirroring
+    validate().
+    """
+    not_object = object_problems(data, label)
+    if not_object:
+        return not_object
+    evals, shape = entries(data, "evals", label)
+    return (
+        shape
+        + ([f"{label} skill_name is {data.get('skill_name')!r}, "
+            f"expected {slug!r}"]
+           if data.get("skill_name") != slug else [])
+        + id_problems(evals, label, "eval")
+        # id_problems owns the id; the loop checks every other field
+        + [f"{label} eval {e.get('id')!r} missing field: {field}"
+           for e in evals for field in OUTPUT_FIELDS
+           if field != "id" and _output_field_missing(e, field)]
+    )
+
+
+# one-owner: trigger_eval.score_case (ADR-0022) — the schema owner and its
+# consumer read the same case keys by design
+def validate(data, skills, label):
+    """Return problem strings for a parsed eval-set dict; [] means valid.
+
+    label prefixes every problem (the lint passes the repo-relative path,
+    the runner whatever --eval-set was given), so both callers print the
+    same diagnostics for the same defect.
+    """
+    shape = object_problems(data, label)
+    if shape:
+        return shape
+    if "version" not in data:
+        return [f"{label} missing 'version' field"]
+    cases, shape = entries(data, "cases", label)
+
+    problems = (
+        shape
+        # every runner report subscripts case["id"], so an id-less case
+        # must be refused here, not become a KeyError mid-run
+        + id_problems(cases, label)
+        + [f"{label} case {c.get('id')!r} has invalid "
+           f"expected {c.get('expected')!r}"
+           for c in cases
+           if c.get("expected") is not None
+           and c.get("expected") not in skills]
+        + [f"{label} case {c.get('id')!r} has invalid "
+           f"kind {c.get('kind')!r}"
+           for c in cases if c.get("kind") not in KINDS]
+        + [f"{label} case {c.get('id')!r} has no query"
+           for c in cases if not c.get("query")]
+    )
+
+    coverage = [c.get("expected") for c in cases]
+    problems += [f"{label} covers skill {slug!r} in only "
+                 f"{coverage.count(slug)} case(s), need >= 3"
+                 for slug in skills if coverage.count(slug) < 3]
+    if coverage.count(None) < 3:
+        problems += [f"{label} has only {coverage.count(None)} "
+                     "distractor case(s) (expected: null), need >= 3"]
+    return problems
+
+
+def load(path, skills, label):
+    """Read and validate the routing eval set; return (cases, problems)."""
+    return load_case_set(path, label,
+                         lambda data: validate(data, skills, label))
