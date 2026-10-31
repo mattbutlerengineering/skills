@@ -58,6 +58,7 @@ VERBS = {
     "launch-demo": ("launch_demo", "argv"),
     "lint": ("lint", "bare"),
     "md-claims": ("md_claims", "argv"),
+    "npx-bundle": ("npx_bundle", "argv"),
     "one-owner": ("one_owner", "argv"),
     "pr-body-preflight": ("pr_body_preflight", "argv"),
     "rejection-mining": ("rejection_mining", "argv"),

@@ -50,6 +50,26 @@ omp --skill ./skills/skills/next   # or add the cloned dir as a Pi package
 Fallbacks: omp inherits `.claude` skills on first run, or copy `skills/*` into
 `~/.pi/agent/skills/`.
 
+**Other agents (`npx skills`):** the third-party
+[skills CLI](https://github.com/vercel-labs/skills) installs every skill
+into Claude Code, Codex, Cursor and the other agents it supports, from this
+repo's generated `npx` branch:
+
+```
+npx skills add mattbutlerengineering/skills#npx
+```
+
+Add `--all` to skip the prompts, `-a claude-code` (or another agent) to
+pick the agent, and `-g` to install for every project. The CLI copies each
+skill's folder alone, so the branch adds one support skill,
+`idea-to-prod-runtime`, holding the pipeline protocol, the factory payload
+and the root tools, and points every other skill at it. Keep it installed
+beside them. Two plugin features are absent from this install: the
+`/idea-to-prod:<skill>` names (use `/<skill>`) and the house-voice output
+style. The branch is rebuilt by `npx_bundle.py` on every release and never
+edited by hand
+([ADR-0120](docs/adr/0120-skills-cli-installs-from-a-generated-branch.md)).
+
 Every skill works on a bare install of any of these harnesses — no
 third-party tools, MCP servers, or other plugins required.
 

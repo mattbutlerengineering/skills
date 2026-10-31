@@ -1,0 +1,44 @@
+# Publishes the `npx` branch the skills CLI installs from (ADR-0120).
+# `npx skills add` copies each skill folder alone, so npx_bundle.py builds
+# a tree whose idea-to-prod-runtime skill holds the plugin root and whose
+# skills name it. main never holds that copy. The branch is rebuilt from
+# scratch and force-pushed on every release (a plugin.json version bump,
+# ADR-0095) and on demand; its history is not kept. A push made with
+# GITHUB_TOKEN starts no other workflow, so the branch never runs CI.
+name: npx-branch
+
+on:
+  push:
+    branches: [main]
+    paths: [".claude-plugin/plugin.json"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: npx-branch
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the branch tree
+        run: python3 npx_bundle.py build "$RUNNER_TEMP/npx"
+      - name: Force-push it to the npx branch
+        working-directory: ${{ runner.temp }}/npx
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          git init -q -b npx
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "chore: npx branch from ${SOURCE_SHA}"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git push -q --force origin npx
