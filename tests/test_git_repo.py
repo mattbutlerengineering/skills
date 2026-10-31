@@ -79,6 +79,10 @@ class TestHousekeepingIsOff(EagerGcCase):
         # The defect's writer: plain `git init` leaves auto-gc on.
         repo = self.tmp / "raw"
         subprocess.run(["git", "init", "-q", str(repo)], check=True)
+        # Auto-gc detaches by default and can outlive the commit; run it
+        # in the foreground so the pack exists when we look (#1132).
+        subprocess.run(["git", "-C", str(repo), "config", "gc.autoDetach",
+                        "false"], check=True)
         commit_gc_bait(repo)
         self.assertTrue(packs(repo))
 
