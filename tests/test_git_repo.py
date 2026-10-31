@@ -27,9 +27,13 @@ import git_repo  # noqa: E402
 TESTS = Path(__file__).resolve().parent
 
 # Synchronous gc on every commit: what a CI runner's git may do in the
-# background, done in the foreground so the test is deterministic.
+# background, done in the foreground so the test is deterministic. The
+# strategy is pinned to gc because git 2.56 made "geometric" the default
+# auto-maintenance strategy, and geometric repacking never packs a few
+# loose objects on commit, so the raw-repo test failed on runners with
+# the newer git (#1132).
 EAGER_GC = ("[gc]\n\tauto = 1\n\tautoDetach = false\n"
-            "[maintenance]\n\tautoDetach = false\n"
+            "[maintenance]\n\tautoDetach = false\n\tstrategy = gc\n"
             "[user]\n\tname = t\n\temail = t@t\n")
 
 
