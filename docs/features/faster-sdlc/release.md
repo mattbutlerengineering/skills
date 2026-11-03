@@ -2,7 +2,8 @@
 stage: ship
 run: feature:faster-sdlc
 date: 2026-11-03
-outcome: prepared
+outcome: released
+released-at: 2026-11-03
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1144
 assumptions:
   - "Release authorization is NONE (autorun brief): prepare and stop. Ship pushed the branch and opened one PR. It did not merge, enable auto-merge, tag, bump the version, edit `.claude-plugin/plugin.json` or create an issue."
@@ -98,3 +99,11 @@ Per the brief's `operate:` block: minimum signal is the merge-wait read (median,
 ## Outcome
 
 Prepared and stopped, waiting on the pull request `pending-merge:` names. The offline checks are green on HEAD `21ed673`; the Critical and Major review findings are fixed; the run stays at Ship until PR 1144 is merged and written back.
+
+## Write-back: released 2026-11-03
+
+`gh pr view 1144 --json state,mergedAt,mergeCommit` ->
+`{"mergeCommit":{"oid":"b04fb8cae3cf70c3f8ce5b3f82e8418b5d1dfbc4"},"mergedAt":"2026-11-03T16:30:25Z","state":"MERGED"}`.
+PR 1144 squash-merged as `b04fb8c` at 2026-11-03T16:30:25Z. The Owner answered the merge in session ("Merge #1144 now", 2026-11-03) and the orchestrator performed it. `pending-merge:` is kept as the record of what was waited on. The sections above describe the state at preparation time.
+
+Outstanding, an Owner step (ADR-0095): the separate `chore(release)` PR that bumps `.claude-plugin/plugin.json`'s `version`. Not done here. PR 1144 changed no `skills/` file, so it needs one only if the wave's other changes do.
