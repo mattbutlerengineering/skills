@@ -14,8 +14,13 @@ its destination) and prints one line:
   ref did not resolve. The queue profile's hook reads this as ADR-0088's
   fail-closed case: review the PR, dispatch every specialist.
 
-The gate paths are ADR-0087's defaults plus the three ADR-0096 adds for
-this repo. Root-only (ADR-0060's rule), stdlib only; the git port is
+The gate paths are ADR-0087's defaults, the three ADR-0096 adds for
+this repo, and the instruction docs ADR-0121 adds (the protocol, the
+standards index and the routine protocols under docs/factory/: files
+agents are told to obey, so a docs-only PR cannot rewrite them
+unreviewed). The queue profile's `gate_paths` is the same list in glob
+spelling; gate_globs() renders it and a test pins the two equal.
+Root-only (ADR-0060's rule), stdlib only; the git port is
 cli.runner("git"), injected for tests.
 """
 import subprocess
@@ -23,13 +28,14 @@ import sys
 
 import cli
 
-# ADR-0087's default gate paths (as directory prefixes and basenames) and
-# the three ADR-0096 adds: release PRs, workflows and the stamped payload
-# keep a human merge.
+# ADR-0087's default gate paths (as directory prefixes and basenames),
+# the three ADR-0096 adds (release PRs, workflows and the stamped
+# payload keep a human merge) and ADR-0121's instruction docs.
 GATE_PREFIXES = ("docs/adr/", "docs/design/", "factory/templates/",
-                 ".github/")
+                 ".github/", "docs/factory/")
 GATE_NAMES = ("prd.md", "architecture.md")
-GATE_FILES = (".claude-plugin/plugin.json",)
+GATE_FILES = (".claude-plugin/plugin.json", "docs/pipeline-protocol.md",
+              "docs/standards.json")
 LOW_RISK_PREFIX = "docs/"
 USAGE = ("usage: python3 fast_path.py <base> <head>\n"
          "  classifies `git diff --name-only --no-renames"
@@ -40,6 +46,13 @@ def is_gate_path(path):
     return (path in GATE_FILES
             or path.startswith(GATE_PREFIXES)
             or path.rsplit("/", 1)[-1] in GATE_NAMES)
+
+
+def gate_globs():
+    """The gate list in the queue profile's `gate_paths` spelling."""
+    return ([f"{prefix}**" for prefix in GATE_PREFIXES]
+            + [f"**/{name}" for name in GATE_NAMES]
+            + list(GATE_FILES))
 
 
 def classify(paths):

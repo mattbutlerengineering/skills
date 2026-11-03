@@ -36,7 +36,7 @@ def run(paths, **kwargs):
 class TestClassification(unittest.TestCase):
     def test_docs_only_outside_the_gate_paths_is_low_risk(self):
         code, out, git = run(["docs/kb/main-unprotected.md",
-                              "docs/factory/merge-train-routine.md",
+                              "docs/setup.md",
                               "docs/research/notes.md"])
         self.assertEqual((code, out), (0, "fast-path: low-risk\n"))
         self.assertEqual(git.calls, [list(DIFF)])
@@ -64,6 +64,24 @@ class TestClassification(unittest.TestCase):
                 self.assertEqual((code, out),
                                  (1, f"fast-path: review ({path})\n"))
 
+    def test_the_instruction_docs_agents_obey_are_review(self):
+        """Review finding: docs/ holds files agents are told to follow,
+        so a docs-only PR changing them is not low-risk."""
+        for path in ("docs/pipeline-protocol.md", "docs/standards.json",
+                     "docs/factory/merge-train-routine.md",
+                     "docs/factory/routine-markers.md",
+                     "docs/factory/costs.jsonl"):
+            with self.subTest(path=path):
+                code, out, _ = run(["docs/kb/a.md", path])
+                self.assertEqual((code, out),
+                                 (1, f"fast-path: review ({path})\n"))
+
+    def test_a_neighbour_of_an_instruction_doc_stays_low_risk(self):
+        code, out, _ = run(["docs/pipeline-protocol-notes.md",
+                            "docs/standards.json.md",
+                            "docs/factory-notes.md"])
+        self.assertEqual((code, out), (0, "fast-path: low-risk\n"))
+
     def test_a_docs_prefix_is_a_directory_not_a_substring(self):
         code, out, _ = run(["docs-site/index.md"])
         self.assertEqual((code, out),
@@ -72,6 +90,23 @@ class TestClassification(unittest.TestCase):
     def test_an_empty_diff_is_review(self):
         code, out, _ = run([])
         self.assertEqual((code, out), (1, "fast-path: review (empty diff)\n"))
+
+
+class TestProfilePin(unittest.TestCase):
+    def test_the_profile_gate_paths_equal_the_classifiers_list(self):
+        """Two copies of one policy (review minor): the queue profile's
+        `gate_paths` and the classifier's list may not drift."""
+        profile = (Path(__file__).resolve().parent.parent
+                   / ".claude" / "implement-queue.md")
+        lines = profile.read_text(encoding="utf-8").splitlines()
+        start = lines.index("gate_paths:") + 1
+        globs = []
+        for line in lines[start:]:
+            if not line.startswith("  - "):
+                break
+            globs.append(line[4:].strip().strip('"'))
+        self.assertTrue(globs)
+        self.assertEqual(sorted(globs), sorted(fast_path.gate_globs()))
 
 
 class TestFailClosed(unittest.TestCase):
