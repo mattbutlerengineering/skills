@@ -219,3 +219,9 @@ four-digit work-order or PRD-style id that does not exist.
   wall-clock test each time, a different one each run
   (`test_voice_grade` 200 KB linear-time, `test_gates` zero-count
   line); those modules pass when run alone.
+- 2026-11-03: Full gate, suite re-run by the orchestrator at `a5d776e` once
+  the load had dropped (load average 10.5): `python3 run_tests.py -j 4` →
+  `tests: 3978 tests across 126 modules in 511.7s on 4 workers, 0
+  problem(s)`. That is the clean run the Full gate box's Accept line
+  needs. The three earlier failures were wall-clock bars missed under
+  load, not regressions.
