@@ -150,7 +150,7 @@ Shape per the brief: every `autorun-brief.md` at any depth is a gate path;
 a basename match in the classifier, `"**/autorun-brief.md"` in the profile
 rendered by `gate_globs()`. Implement picks the exact matcher and logs it.
 
-- [ ] **Failing tests first** — in `tests/test_fast_path.py`, through the
+- [x] **Failing tests first** — in `tests/test_fast_path.py`, through the
   public interface with exact output lines, written and run red before
   the fix.
   - Accept: a diff of only `docs/features/x/autorun-brief.md` and one of
@@ -161,27 +161,27 @@ rendered by `gate_globs()`. Implement picks the exact matcher and logs it.
     rename of a brief into and out of the run directory (real git,
     `TestRealGit` style) prints `review`; the pin test
     `TestProfilePin` expects the new glob.
-- [ ] **Classifier entry** — add the basename kind next to
+- [x] **Classifier entry** — add the basename kind next to
   `GATE_PREFIXES`/`GATE_FILES` in `fast_path.py`, matched by
   `is_gate_path`, and rendered by `gate_globs()` as `**/autorun-brief.md`;
   update the module docstring and USAGE where they enumerate gate paths.
   - Accept: the new tests pass; `gate_globs()` contains
     `**/autorun-brief.md`; no other artifact basename is gated.
-- [ ] **Profile entry** — add `"**/autorun-brief.md"` to `gate_paths` in
+- [x] **Profile entry** — add `"**/autorun-brief.md"` to `gate_paths` in
   `.claude/implement-queue.md` and extend its prose list of gate paths.
   - Accept: `TestProfilePin` passes (profile `gate_paths` equals
     `fast_path.gate_globs()`).
-- [ ] **Amend ADR-0121** — a new provisional ADR (the next free number)
+- [x] **Amend ADR-0121** — a new provisional ADR (the next free number)
   recording that the brief is an instruction source and amending
   ADR-0121's survey; add its row to `docs/adr/README.md`; add the
   amendment to ADR-0121's status line, as ADR-0096's records ADR-0121's.
   - Accept: `python3 gates.py` and `python3 lint.py` pass; the README row
     and the status line point at each other.
-- [ ] **Claim the seed** — append
+- [x] **Claim the seed** — append
   `(claimed: maintenance:a-brief-the-fast-path-waves-through)` to
   `docs/backlog.md` line 143.
   - Accept: line 143 ends with the claim marker; no other line changes.
-- [ ] **Full gate** — run the suite and gates.
+- [x] **Full gate** — run the suite and gates.
   - Accept: `python3 run_tests.py`, `python3 lint.py`,
     `python3 kb.py drift`, and `python3 gates.py && python3 gates.py
     --selftest` all pass; if a mirrored file changed, `python3
@@ -200,3 +200,22 @@ four-digit work-order or PRD-style id that does not exist.
   carries a `No work order:` line (brief). Release is prepare and stop;
   the PR touches `fast_path.py` and `docs/adr/**`, so the train holds it
   for a human merge.
+
+- 2026-11-03: Implement. Red first: `python3 -m unittest tests.test_fast_path`
+  on the old classifier printed `FAILED (failures=8)` (brief edit
+  alone: `(0, 'fast-path: low-risk\n') != (1, 'fast-path: review
+  (docs/fixes/y/autorun-brief.md)\n')`; also the pin-glob test and the
+  two real-git renames). After: `Ran 24 tests ... OK`. Matcher: the
+  basename `autorun-brief.md` added to `GATE_NAMES` (exact basename, so
+  `my-autorun-brief.md` and `autorun-brief-notes.md` stay low-risk);
+  `gate_globs()` renders `**/autorun-brief.md`. Profile `gate_paths`
+  and prose updated. ADR-0122 (provisional) amends ADR-0121; README row
+  and ADR-0121's status line point at it. Backlog line 143 claimed.
+  `fast_path.py` and `implement-queue.md` are not in `factory_init.MIRRORS`
+  (`grep -c` of both names in `factory_init.py` is 0), so no
+  `update-manifest`. Gate: `lint: 0 problem(s) across 35 skills`,
+  `drift: 0 problem(s)`, `gates: 0 problem(s)`, `selftest: ok`.
+  `run_tests.py` over three runs under machine load failed only one
+  wall-clock test each time, a different one each run
+  (`test_voice_grade` 200 KB linear-time, `test_gates` zero-count
+  line); those modules pass when run alone.
