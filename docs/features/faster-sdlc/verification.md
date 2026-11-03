@@ -7,13 +7,17 @@ assumptions:
   - "Recommended default taken (checked-on-decision rows): the CI before/after record and the Merge-wait record are checked in breakdown.md on explicit Owner decisions over a missed numeric bar. They are judged here against their Accept lines as written, and reported as FAIL on the original bar with the Owner's decision named. They are never reported as passes of the original bar."
   - "Recommended default taken (Owner steps): an Accept line's Owner step that is not repo state (memory note, session permission, trigger) is recorded as an Owner step with the evidence the Notes give, labelled NOT RUN here, and never as a pass."
   - "Recommended default taken (timing bars): two timing bars (under 8s for tests/test_conductor_merge.py; under 25s for `make check`) cannot be measured on this machine today (load average 191 to 207 during the run). They are labelled NOT RUN, not judged from a loaded number in either direction."
+  - "Re-verify scope (2026-11-02, after the rename-bypass fix, commit 9670deb, HEAD 53273e7): the new 12th row is verified in full, with an independent repro in a fresh temp git repo. Rows 1 to 11 are not re-run row by row; their earlier results stand, and only the repo-wide commands are re-run on the new HEAD. The earlier FAIL and NOT RUN labels are unchanged. Row 8's CLI evidence was captured before the fix; its test count is refreshed (14, was 11) and the rename behaviour it did not cover is row 12."
 ---
 
 # Verification: a faster verify loop, no version-bump treadmill, no merge-queue wait
 
 ## Summary
 
-**11 criteria (the 11 breakdown rows): 4 PASS, 2 FAIL on the original bar,
+Re-verify on 2026-11-02, after the rename-bypass fix (`9670deb`, HEAD
+`53273e7`) that `review.md`'s Critical finding called for.
+
+**12 criteria (the 12 breakdown rows): 5 PASS, 2 FAIL on the original bar,
 5 PASS on repo state with a NOT RUN part.** Nothing is an unqualified
 pass over the unknowns below.
 
@@ -32,13 +36,21 @@ pass over the unknowns below.
   are not repo state: the memory note, the session permission, and the
   `factory-merge-train` trigger (outside the repo, so its existence is
   unknown to this run).
+- **New row 12 (Fast-path rename blind spot): PASS.** The rename of a
+  gate path into `docs/` is now `review`, reproduced independently; the
+  docs-internal rename stays `low-risk`. Not run: the unproven suspicion
+  that implement-queue's own `gate_paths` check shares the blind spot
+  (Notes 2026-11-02 say it is unconfirmed, and this run did not test it).
 
-Real commands run on this branch (HEAD `d4d5c5b`, origin/main `36bbab1`):
-`run_tests.py` 3965 tests, 0 problems; `lint.py`, `kb.py drift`,
-`gates.py`, `gates.py --selftest` all clean; the runner's count equals
-`unittest discover`'s (3965 = 3965). The branch's own diff against
-origin/main is `breakdown.md` alone, so the implementation under
-verification is what main already carries (PRs #913, #914 and later).
+Real commands run on this branch (HEAD `53273e7`):
+`run_tests.py` 3968 tests, 0 problems; `tests.test_fast_path` 14 tests OK;
+`lint.py`, `kb.py drift`, `gates.py`, `gates.py --selftest` all clean.
+The count rose from 3965 to 3968 with the three new fast-path tests (11
+to 14). `python3 -m unittest discover tests` was not re-run in this
+re-verify, so the runner-equals-discover equality (3965 = 3965) is
+earlier evidence on the previous HEAD. The branch's diff against
+origin/main now also carries `fast_path.py` and `tests/test_fast_path.py`
+(the fix), besides the run artifacts.
 
 ## Criteria & evidence
 
@@ -256,12 +268,13 @@ verification is what main already carries (PRs #913, #914 and later).
   Ran 11 tests in 0.001s
   OK
   ```
-  The Notes count 14 cases; this tree runs 11 in `tests.test_fast_path`.
-  I did not reconcile the difference (the row asks for the exact strings,
-  and the quoted CLI output shows each). The `docs/adr/x.md` and
+  The Notes counted 14 cases; the tree ran 11 before the fix and runs 14
+  now (re-verify, row 12). The row asks for the exact strings and the
+  quoted CLI output shows each. The `docs/adr/x.md` and
   `docs/features/a/prd.md` review cases are covered by
   `test_every_gate_path_under_docs_is_review` by name; I did not read
-  that test's body to confirm those two paths.
+  that test's body to confirm those two paths. Re-verify: the first-pass
+  quotes above predate the fix; row 12 covers the rename behaviour.
 - Result: PASS
 
 ### 9. Queue profile for this repo (#910)
@@ -328,24 +341,67 @@ verification is what main already carries (PRs #913, #914 and later).
   (p90 13.5h to 7.5h). The long waits behind the tail (#1131, #1070,
   #1040, #1072) are unattributed. Flagged for human review.
 
-## Repo-wide commands (run from the worktree)
+### 12. Fast-path rename blind spot (review.md Critical, no issue)
+
+- Check: independent repro in a fresh temp git repo (not the repo's own
+  test): three branches off `base`, one rename each, then the CLI from the
+  worktree; the real-git test class; the module docstring and USAGE.
+- Evidence:
+  ```
+  (fresh `git init` in mktemp -d; base has .github/workflows/validator.yml, lint.py, docs/a.md)
+  gate:    git mv .github/workflows/validator.yml docs/validator.yml.txt
+  outside: git mv lint.py docs/lint.txt
+  inner:   git mv docs/a.md docs/b.md
+  $ python3 fast_path.py base gate
+  fast-path: review (.github/workflows/validator.yml)
+  exit=1
+  $ python3 fast_path.py base outside
+  fast-path: review (lint.py)
+  exit=1
+  $ python3 fast_path.py base inner
+  fast-path: low-risk
+  exit=0
+  $ git diff --name-status base gate
+  R100	.github/workflows/validator.yml	docs/validator.yml.txt
+  $ git diff --name-only --no-renames base...gate
+  .github/workflows/validator.yml
+  docs/validator.yml.txt
+  $ python3 -m unittest tests.test_fast_path
+  Ran 14 tests in 1.497s
+  OK
+  ```
+  Git sees the gate move as one rename (`R100`); `--no-renames` lists the
+  source as well as the destination, which is what the classifier now
+  reads, so the first non-matching path is the source.
+- Result: PASS on the Accept line's behaviour (rename of a gate path or
+  a non-`docs/` file into `docs/` is `review (<source>)` exit 1; a
+  docs-internal rename stays `low-risk` exit 0). Not re-run: the claim
+  that the new `TestRealGit` tests fail on the old code (Notes 2026-11-02
+  quote 2 failures of 14); I did not check out the old code. The module
+  docstring and USAGE wording were not re-read in this run.
+
+## Repo-wide commands (run from the worktree, re-verify on HEAD 53273e7)
 
 ```
 $ python3 run_tests.py
-tests: 3965 tests across 126 modules in 73.8s on 8 workers, 0 problem(s)
+tests: 3968 tests across 126 modules in 92.4s on 8 workers, 0 problem(s)
 exit=0
+$ python3 -m unittest tests.test_fast_path
+Ran 14 tests in 1.497s
+OK
 $ python3 lint.py
 lint: 0 problem(s) across 35 skills
 $ python3 kb.py drift
 drift: 0 problem(s)
-$ python3 gates.py
+$ python3 gates.py && python3 gates.py --selftest
 gates: 0 problem(s)
-$ python3 gates.py --selftest
 selftest: ok
-$ python3 -m unittest discover tests
-Ran 3965 tests in 212.246s
-OK
+exit=0
 ```
+
+Earlier first-pass evidence, kept as recorded (HEAD `d4d5c5b`, before the
+fix): `python3 -m unittest discover tests` ran 3965 tests in 212.246s, OK;
+`run_tests.py` ran 3965 tests in 73.8s.
 
 ## Failures
 
@@ -354,7 +410,9 @@ OK
   route back to Implement is proposed: the Owner chose to accept the
   evidence. The routing question for a reviewer is whether those two
   checks should stay checked.
-- No failing command, test or gate.
+- No failing command, test or gate in the re-verify (row 12 passes).
+- Row 4's and row 11's FAILs and the five NOT RUN items are unchanged by
+  the re-verify.
 
 ## Not verified
 
@@ -372,6 +430,12 @@ OK
 - The planted-failure and `-j` behaviours of `run_tests.py` are pinned by
   unit tests with a fake port and were not exercised against the real
   tree.
+- Re-verify additions: the claim that the new `TestRealGit` tests fail on
+  the pre-fix code was not reproduced (old code not checked out); the
+  module docstring and USAGE wording were not re-read; whether
+  implement-queue's `gate_paths` check shares the rename blind spot is
+  unproven (Notes 2026-11-02) and untested here; rows 1 to 11 were not
+  re-run individually after the fix.
 - Lesson for the next PRD: the milestones' goals (faster CI, lower merge
   wait) each rest on one measurement window, with no control for load or
   PR volume, and the two bars written against the whole run missed while
