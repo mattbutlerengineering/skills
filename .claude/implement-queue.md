@@ -10,6 +10,9 @@ gate_paths:
   - "factory/templates/**"
   - ".github/**"
   - ".claude-plugin/plugin.json"
+  - "docs/factory/**"
+  - "docs/pipeline-protocol.md"
+  - "docs/standards.json"
 ---
 
 # Queue profile: this repo
@@ -30,7 +33,11 @@ file changes only by a PR: its commit is the consent record.
   runs `make check`. A rollup with no `check` run is not green.
 - `gate_paths` — ADR-0087's defaults plus `factory/templates/**`,
   `.github/**` and `.claude-plugin/plugin.json`: release PRs (ADR-0095),
-  workflow changes and the stamped payload keep a human merge.
+  workflow changes and the stamped payload keep a human merge. ADR-0121
+  adds the instruction docs agents obey (`docs/factory/**`,
+  `docs/pipeline-protocol.md`, `docs/standards.json`): a docs-only PR
+  cannot rewrite them unreviewed. `tests/test_fast_path.py` pins this
+  list equal to the classifier's.
 
 ## fast-path
 

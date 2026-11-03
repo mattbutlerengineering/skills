@@ -1,6 +1,6 @@
 # This repo opts in to implement-queue auto-merge, with a docs fast path
 
-- Status: accepted (Owner, 2026-10-15)
+- Status: amended by ADR-0121 (the gate paths and fast-path rule; accepted by the Owner 2026-10-15)
 - Date: 2026-10-14
 
 The Owner accepted this on 2026-10-15, in session, with ADR-0095.

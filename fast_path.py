@@ -2,7 +2,8 @@
 every gate path? (faster-sdlc #909)
 
 `python3 fast_path.py <base> <head>` reads `git diff --name-only
-<base>...<head>` and prints one line:
+--no-renames <base>...<head>` (a rename counts as both its source and
+its destination) and prints one line:
 
 - `fast-path: low-risk`, exit 0 — every changed path is under `docs/`
   and none is a gate path. Under `merge: auto` that classification is
@@ -13,8 +14,13 @@ every gate path? (faster-sdlc #909)
   ref did not resolve. The queue profile's hook reads this as ADR-0088's
   fail-closed case: review the PR, dispatch every specialist.
 
-The gate paths are ADR-0087's defaults plus the three ADR-0096 adds for
-this repo. Root-only (ADR-0060's rule), stdlib only; the git port is
+The gate paths are ADR-0087's defaults, the three ADR-0096 adds for
+this repo, and the instruction docs ADR-0121 adds (the protocol, the
+standards index and the routine protocols under docs/factory/: files
+agents are told to obey, so a docs-only PR cannot rewrite them
+unreviewed). The queue profile's `gate_paths` is the same list in glob
+spelling; gate_globs() renders it and a test pins the two equal.
+Root-only (ADR-0060's rule), stdlib only; the git port is
 cli.runner("git"), injected for tests.
 """
 import subprocess
@@ -22,23 +28,31 @@ import sys
 
 import cli
 
-# ADR-0087's default gate paths (as directory prefixes and basenames) and
-# the three ADR-0096 adds: release PRs, workflows and the stamped payload
-# keep a human merge.
+# ADR-0087's default gate paths (as directory prefixes and basenames),
+# the three ADR-0096 adds (release PRs, workflows and the stamped
+# payload keep a human merge) and ADR-0121's instruction docs.
 GATE_PREFIXES = ("docs/adr/", "docs/design/", "factory/templates/",
-                 ".github/")
+                 ".github/", "docs/factory/")
 GATE_NAMES = ("prd.md", "architecture.md")
-GATE_FILES = (".claude-plugin/plugin.json",)
+GATE_FILES = (".claude-plugin/plugin.json", "docs/pipeline-protocol.md",
+              "docs/standards.json")
 LOW_RISK_PREFIX = "docs/"
 USAGE = ("usage: python3 fast_path.py <base> <head>\n"
-         "  classifies `git diff --name-only <base>...<head>`: exit 0"
-         " low-risk, 1 review, 2 git failed")
+         "  classifies `git diff --name-only --no-renames"
+         " <base>...<head>`: exit 0 low-risk, 1 review, 2 git failed")
 
 
 def is_gate_path(path):
     return (path in GATE_FILES
             or path.startswith(GATE_PREFIXES)
             or path.rsplit("/", 1)[-1] in GATE_NAMES)
+
+
+def gate_globs():
+    """The gate list in the queue profile's `gate_paths` spelling."""
+    return ([f"{prefix}**" for prefix in GATE_PREFIXES]
+            + [f"**/{name}" for name in GATE_NAMES]
+            + list(GATE_FILES))
 
 
 def classify(paths):
@@ -55,8 +69,11 @@ def classify(paths):
 
 def changed_paths(git, base, head):
     """(paths, None) from the three-dot diff, or (None, problem) when git
-    failed — a problem string, never a traceback (ADR-0021)."""
-    args = ["diff", "--name-only", f"{base}...{head}"]
+    failed — a problem string, never a traceback (ADR-0021). Rename
+    detection is off: with it on, git lists only a rename's destination,
+    so a gate path moved into docs/ would vanish from the list; off, the
+    source shows as a deletion and the destination as an addition."""
+    args = ["diff", "--name-only", "--no-renames", f"{base}...{head}"]
     try:
         out = git(args).stdout
     except cli.CLI_FAILURES as err:

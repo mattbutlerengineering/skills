@@ -116,7 +116,7 @@ the canonical vocabulary.
 | [0093](0093-every-plugin-eval-case-carries-its-skill-tag.md) | Every plugin-eval case carries its skill directory as a tag | accepted (Owner, 2026-10-14) |
 | [0094](0094-parse-run-reads-every-artifact-through-the-guarded-read.md) | parse_run reads every run artifact and the ADR index through the guarded read | accepted (Owner, 2026-10-14) |
 | [0095](0095-the-plugin-version-moves-only-in-a-release-pr-or-at-a-conductor-merge.md) | The plugin version moves only in a release PR or at a Conductor merge | accepted (Owner, 2026-10-15) |
-| [0096](0096-this-repo-opts-in-to-implement-queue-auto-merge-with-a-docs-fast-path.md) | This repo opts in to implement-queue auto-merge, with a docs fast path | accepted (Owner, 2026-10-15) |
+| [0096](0096-this-repo-opts-in-to-implement-queue-auto-merge-with-a-docs-fast-path.md) | This repo opts in to implement-queue auto-merge, with a docs fast path | amended by ADR-0121 (the gate paths and fast-path rule; accepted by the Owner 2026-10-15) |
 | [0097](0097-fast-path-joins-the-root-only-importers-of-cli.md) | fast_path joins the root-only importers of cli.py | provisional |
 | [0098](0098-the-reviewer-credential-never-meets-pr-code.md) | The reviewer's credential never meets the pull request's code | provisional |
 | [0099](0099-a-stamp-may-be-tools-only-and-its-manifest-says-so.md) | A stamp may be tools-only, and its manifest says so | provisional |
@@ -141,3 +141,4 @@ the canonical vocabulary.
 | [0118](0118-protocol-owns-where-frontmatter-ends.md) | protocol.py owns where frontmatter ends, and a fence line may carry trailing whitespace | provisional |
 | [0119](0119-a-reply-voice-ships-as-a-utility-skill-with-an-opt-in-output-style.md) | A reply voice ships as a utility skill with an opt-in output style, never forced | provisional |
 | [0120](0120-skills-cli-installs-from-a-generated-branch.md) | The skills CLI installs every skill from a generated npx branch | provisional |
+| [0121](0121-the-fast-path-gates-the-docs-agents-obey.md) | The fast path gates the docs agents obey | provisional |
