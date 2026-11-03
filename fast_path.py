@@ -2,7 +2,8 @@
 every gate path? (faster-sdlc #909)
 
 `python3 fast_path.py <base> <head>` reads `git diff --name-only
-<base>...<head>` and prints one line:
+--no-renames <base>...<head>` (a rename counts as both its source and
+its destination) and prints one line:
 
 - `fast-path: low-risk`, exit 0 — every changed path is under `docs/`
   and none is a gate path. Under `merge: auto` that classification is
@@ -31,8 +32,8 @@ GATE_NAMES = ("prd.md", "architecture.md")
 GATE_FILES = (".claude-plugin/plugin.json",)
 LOW_RISK_PREFIX = "docs/"
 USAGE = ("usage: python3 fast_path.py <base> <head>\n"
-         "  classifies `git diff --name-only <base>...<head>`: exit 0"
-         " low-risk, 1 review, 2 git failed")
+         "  classifies `git diff --name-only --no-renames"
+         " <base>...<head>`: exit 0 low-risk, 1 review, 2 git failed")
 
 
 def is_gate_path(path):
@@ -55,8 +56,11 @@ def classify(paths):
 
 def changed_paths(git, base, head):
     """(paths, None) from the three-dot diff, or (None, problem) when git
-    failed — a problem string, never a traceback (ADR-0021)."""
-    args = ["diff", "--name-only", f"{base}...{head}"]
+    failed — a problem string, never a traceback (ADR-0021). Rename
+    detection is off: with it on, git lists only a rename's destination,
+    so a gate path moved into docs/ would vanish from the list; off, the
+    source shows as a deletion and the destination as an addition."""
+    args = ["diff", "--name-only", "--no-renames", f"{base}...{head}"]
     try:
         out = git(args).stdout
     except cli.CLI_FAILURES as err:

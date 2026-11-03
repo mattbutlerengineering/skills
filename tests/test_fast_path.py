@@ -6,19 +6,23 @@ asserting the exact strings the queue profile's `fast-path` hook reads:
 and a `fast-path:` problem string with exit 2 when git itself fails,
 which is ADR-0088's fail-closed case.
 """
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
+import cli
 import fast_path
 
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling helper import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
+import git_repo  # noqa: E402
 from fake_git import FakeGit  # noqa: E402
 
-DIFF = ("diff", "--name-only", "origin/main...HEAD")
+DIFF = ("diff", "--name-only", "--no-renames", "origin/main...HEAD")
 
 
 def run(paths, **kwargs):
@@ -74,7 +78,7 @@ class TestFailClosed(unittest.TestCase):
     def test_a_failed_git_exits_2_with_a_problem_string(self):
         code, out, _ = run(["docs/kb/a.md"], failing=["diff"])
         self.assertEqual(code, 2)
-        self.assertEqual(out, "fast-path: git diff --name-only"
+        self.assertEqual(out, "fast-path: git diff --name-only --no-renames"
                               " origin/main...HEAD failed: fatal: rejected\n")
 
     def test_a_ref_that_does_not_resolve_is_the_same_case(self):
@@ -85,7 +89,7 @@ class TestFailClosed(unittest.TestCase):
         code, out = cli_contract.capture(fast_path.main,
                                          ["origin/main", "nope"], git=git)
         self.assertEqual(code, 2)
-        self.assertEqual(out, "fast-path: git diff --name-only"
+        self.assertEqual(out, "fast-path: git diff --name-only --no-renames"
                               " origin/main...nope failed: fatal: bad"
                               " revision 'origin/main...nope'\n")
 
@@ -95,7 +99,66 @@ class TestFailClosed(unittest.TestCase):
                                          ["origin/main", "HEAD"], git=git)
         self.assertEqual(code, 2)
         self.assertTrue(out.startswith("fast-path: git diff --name-only"
+                                       " --no-renames"
                                        " origin/main...HEAD failed: "), out)
+
+
+class TestRealGit(unittest.TestCase):
+    """A rename lists only its destination under git's default rename
+    detection, so a gate path moved into docs/ read as docs-only. These
+    build a real repo: the fake port cannot show what git itself lists."""
+
+    def repo(self, files):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        git_repo.init(root)
+        self.git("-C", root, "config", "user.email", "t@example.com")
+        self.git("-C", root, "config", "user.name", "t")
+        for name, text in files.items():
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            (root / name).write_text(text)
+        self.git("-C", root, "add", "-A")
+        self.git("-C", root, "commit", "-q", "-m", "base")
+        self.git("-C", root, "branch", "base")
+        return root
+
+    @staticmethod
+    def git(*args):
+        subprocess.run(["git", *map(str, args)], check=True,
+                       capture_output=True)
+
+    def move(self, root, src, dst):
+        (root / dst).parent.mkdir(parents=True, exist_ok=True)
+        self.git("-C", root, "mv", src, dst)
+        self.git("-C", root, "commit", "-q", "-m", "move")
+
+    def classify(self, root):
+        run = cli.runner("git")
+        return cli_contract.capture(
+            fast_path.main, ["base", "HEAD"],
+            git=lambda args: run(args, cwd=root))
+
+    def test_a_gate_path_renamed_into_docs_is_review(self):
+        root = self.repo({".github/workflows/validator.yml": "name: v\n" * 9,
+                          "docs/kb/a.md": "a\n"})
+        self.move(root, ".github/workflows/validator.yml",
+                  "docs/validator.yml.txt")
+        self.assertEqual(self.classify(root),
+                         (1, "fast-path: review"
+                             " (.github/workflows/validator.yml)\n"))
+
+    def test_a_file_renamed_from_outside_docs_into_docs_is_review(self):
+        root = self.repo({"lint.py": "print('x')\n" * 9})
+        self.move(root, "lint.py", "docs/lint.txt")
+        self.assertEqual(self.classify(root),
+                         (1, "fast-path: review (lint.py)\n"))
+
+    def test_a_rename_inside_docs_clear_of_gates_is_low_risk(self):
+        root = self.repo({"docs/kb/a.md": "a\n" * 9})
+        self.move(root, "docs/kb/a.md", "docs/kb/b.md")
+        self.assertEqual(self.classify(root),
+                         (0, "fast-path: low-risk\n"))
 
 
 class TestMain(cli_contract.CliContract, unittest.TestCase):
