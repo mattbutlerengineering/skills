@@ -7,6 +7,7 @@ gate_paths:
   - "docs/design/**"
   - "**/prd.md"
   - "**/architecture.md"
+  - "**/autorun-brief.md"
   - "factory/templates/**"
   - ".github/**"
   - ".claude-plugin/plugin.json"
@@ -36,7 +37,9 @@ file changes only by a PR: its commit is the consent record.
   workflow changes and the stamped payload keep a human merge. ADR-0121
   adds the instruction docs agents obey (`docs/factory/**`,
   `docs/pipeline-protocol.md`, `docs/standards.json`): a docs-only PR
-  cannot rewrite them unreviewed. `tests/test_fast_path.py` pins this
+  cannot rewrite them unreviewed. ADR-0122 adds `**/autorun-brief.md`:
+  a resume obeys the brief's release authorization, so a brief edit
+  keeps a human merge. `tests/test_fast_path.py` pins this
   list equal to the classifier's.
 
 ## fast-path

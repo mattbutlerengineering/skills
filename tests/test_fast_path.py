@@ -82,6 +82,32 @@ class TestClassification(unittest.TestCase):
                             "docs/factory-notes.md"])
         self.assertEqual((code, out), (0, "fast-path: low-risk\n"))
 
+    def test_an_autorun_brief_at_any_depth_is_review(self):
+        """Issue #1146: a resume obeys the brief (release authorization,
+        `operate:`, `stop-after:`), so editing one is not low-risk."""
+        for path in ("docs/features/x/autorun-brief.md",
+                     "docs/fixes/y/autorun-brief.md",
+                     "autorun-brief.md"):
+            with self.subTest(path=path):
+                code, out, _ = run(["docs/kb/a.md", path])
+                self.assertEqual((code, out),
+                                 (1, f"fast-path: review ({path})\n"))
+
+    def test_a_brief_alone_names_itself(self):
+        for path in ("docs/features/x/autorun-brief.md",
+                     "docs/fixes/y/autorun-brief.md"):
+            with self.subTest(path=path):
+                code, out, _ = run([path])
+                self.assertEqual((code, out),
+                                 (1, f"fast-path: review ({path})\n"))
+
+    def test_a_neighbour_of_a_brief_stays_low_risk(self):
+        code, out, _ = run(["docs/features/x/breakdown.md",
+                            "docs/fixes/y/defect.md",
+                            "docs/features/x/autorun-brief-notes.md",
+                            "docs/features/x/my-autorun-brief.md"])
+        self.assertEqual((code, out), (0, "fast-path: low-risk\n"))
+
     def test_a_docs_prefix_is_a_directory_not_a_substring(self):
         code, out, _ = run(["docs-site/index.md"])
         self.assertEqual((code, out),
@@ -107,6 +133,9 @@ class TestProfilePin(unittest.TestCase):
             globs.append(line[4:].strip().strip('"'))
         self.assertTrue(globs)
         self.assertEqual(sorted(globs), sorted(fast_path.gate_globs()))
+
+    def test_the_brief_glob_is_in_the_classifiers_list(self):
+        self.assertIn("**/autorun-brief.md", fast_path.gate_globs())
 
 
 class TestFailClosed(unittest.TestCase):
@@ -194,6 +223,31 @@ class TestRealGit(unittest.TestCase):
         self.move(root, "docs/kb/a.md", "docs/kb/b.md")
         self.assertEqual(self.classify(root),
                          (0, "fast-path: low-risk\n"))
+
+    def test_a_brief_renamed_out_of_its_run_directory_is_review(self):
+        root = self.repo({"docs/features/x/autorun-brief.md": "b\n" * 9})
+        self.move(root, "docs/features/x/autorun-brief.md",
+                  "docs/kb/old-brief.md")
+        self.assertEqual(self.classify(root),
+                         (1, "fast-path: review"
+                             " (docs/features/x/autorun-brief.md)\n"))
+
+    def test_a_brief_renamed_into_a_run_directory_is_review(self):
+        root = self.repo({"docs/kb/old-brief.md": "b\n" * 9})
+        self.move(root, "docs/kb/old-brief.md",
+                  "docs/fixes/y/autorun-brief.md")
+        self.assertEqual(self.classify(root),
+                         (1, "fast-path: review"
+                             " (docs/fixes/y/autorun-brief.md)\n"))
+
+    def test_a_brief_edit_in_real_git_is_review(self):
+        root = self.repo({"docs/fixes/y/autorun-brief.md": "stop-after: x\n",
+                          "docs/fixes/y/defect.md": "d\n"})
+        (root / "docs/fixes/y/autorun-brief.md").write_text("release: yes\n")
+        self.git("-C", root, "commit", "-q", "-am", "edit")
+        self.assertEqual(self.classify(root),
+                         (1, "fast-path: review"
+                             " (docs/fixes/y/autorun-brief.md)\n"))
 
 
 class TestMain(cli_contract.CliContract, unittest.TestCase):
