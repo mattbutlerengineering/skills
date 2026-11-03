@@ -8,16 +8,19 @@ assumptions:
   - "Recommended default taken (Owner steps): an Accept line's Owner step that is not repo state (memory note, session permission, trigger) is recorded as an Owner step with the evidence the Notes give, labelled NOT RUN here, and never as a pass."
   - "Recommended default taken (timing bars): two timing bars (under 8s for tests/test_conductor_merge.py; under 25s for `make check`) cannot be measured on this machine today (load average 191 to 207 during the run). They are labelled NOT RUN, not judged from a loaded number in either direction."
   - "Re-verify scope (2026-11-02, after the rename-bypass fix, commit 9670deb, HEAD 53273e7): the new 12th row is verified in full, with an independent repro in a fresh temp git repo. Rows 1 to 11 are not re-run row by row; their earlier results stand, and only the repo-wide commands are re-run on the new HEAD. The earlier FAIL and NOT RUN labels are unchanged. Row 8's CLI evidence was captured before the fix; its test count is refreshed (14, was 11) and the rename behaviour it did not cover is row 12."
+  - "Re-verify scope (2026-11-02, second pass, after the instruction-docs gate, commit 63e7732, HEAD 9de3057): the new 13th row is verified in full, with an independent repro in a fresh temp git repo and a temporary divergence edit that was reverted. Rows 1 to 12 are not re-run row by row; their earlier results stand, and only the repo-wide commands are re-run. The earlier FAIL and NOT RUN labels are unchanged. Row 12's and row 8's quoted test counts (14, 11) predate this fix; the module now has 17 tests."
 ---
 
 # Verification: a faster verify loop, no version-bump treadmill, no merge-queue wait
 
 ## Summary
 
-Re-verify on 2026-11-02, after the rename-bypass fix (`9670deb`, HEAD
-`53273e7`) that `review.md`'s Critical finding called for.
+Second re-verify on 2026-11-02, after the instruction-docs gate
+(`63e7732`, HEAD `9de3057`) that `review.md`'s Major finding called for
+(Owner: "Fix now"). The first re-verify (rename-bypass fix, `9670deb`)
+stands below.
 
-**12 criteria (the 12 breakdown rows): 5 PASS, 2 FAIL on the original bar,
+**13 criteria (the 13 breakdown rows): 6 PASS, 2 FAIL on the original bar,
 5 PASS on repo state with a NOT RUN part.** Nothing is an unqualified
 pass over the unknowns below.
 
@@ -36,21 +39,23 @@ pass over the unknowns below.
   are not repo state: the memory note, the session permission, and the
   `factory-merge-train` trigger (outside the repo, so its existence is
   unknown to this run).
-- **New row 12 (Fast-path rename blind spot): PASS.** The rename of a
-  gate path into `docs/` is now `review`, reproduced independently; the
-  docs-internal rename stays `low-risk`. Not run: the unproven suspicion
-  that implement-queue's own `gate_paths` check shares the blind spot
-  (Notes 2026-11-02 say it is unconfirmed, and this run did not test it).
+- **Row 12 (Fast-path rename blind spot): PASS** (first re-verify).
+- **New row 13 (Fast-path gates the instruction docs): PASS.** Diffs
+  touching `docs/pipeline-protocol.md`, `docs/standards.json` and a
+  `docs/factory/` file are `review` exit 1, reproduced independently;
+  `docs/setup.md` stays `low-risk`; the profile carries the same ten
+  entries and the pin test fails when one diverges (shown by a reverted
+  edit); ADR-0121 is `provisional`, indexed, and ADR-0096 records the
+  amendment. Unknown: whether implement-queue's own `gate_paths` matcher
+  shares the rename blind spot (unproven, untested here), and the ADR's
+  `provisional` status is an Owner step, not a verdict of this run.
 
-Real commands run on this branch (HEAD `53273e7`):
-`run_tests.py` 3968 tests, 0 problems; `tests.test_fast_path` 14 tests OK;
-`lint.py`, `kb.py drift`, `gates.py`, `gates.py --selftest` all clean.
-The count rose from 3965 to 3968 with the three new fast-path tests (11
-to 14). `python3 -m unittest discover tests` was not re-run in this
-re-verify, so the runner-equals-discover equality (3965 = 3965) is
-earlier evidence on the previous HEAD. The branch's diff against
-origin/main now also carries `fast_path.py` and `tests/test_fast_path.py`
-(the fix), besides the run artifacts.
+Real commands run on this branch (HEAD `9de3057`, load average 253):
+`run_tests.py` 3971 tests, 0 problems; `python3 -m unittest discover
+tests` 3971 tests OK (equal to the runner's count); `tests.test_fast_path`
+17 tests OK; `lint.py`, `kb.py drift`, `gates.py`, `gates.py --selftest`
+all clean. The count rose from 3968 to 3971 with the three new fast-path
+tests (14 to 17).
 
 ## Criteria & evidence
 
@@ -380,14 +385,84 @@ origin/main now also carries `fast_path.py` and `tests/test_fast_path.py`
   quote 2 failures of 14); I did not check out the old code. The module
   docstring and USAGE wording were not re-read in this run.
 
-## Repo-wide commands (run from the worktree, re-verify on HEAD 53273e7)
+### 13. Fast-path gates the instruction docs (review.md Major, no issue)
+
+- Check: independent repro in a fresh temp git repo (not the repo's own
+  tests): one branch off `base` per touched path, then the CLI from the
+  worktree; the profile and the pin test read; a temporary one-line edit
+  to the profile to prove the pin fails, reverted; ADR-0121, the ADR
+  index and ADR-0096's status line read.
+- Evidence:
+  ```
+  (fresh `git init` in mktemp -d; base has docs/pipeline-protocol.md, docs/standards.json,
+   docs/factory/x.md, docs/setup.md, docs/a.md, lint.py, .github/workflows/v.yml; one edit per branch)
+  $ python3 fast_path.py base proto      # edits docs/pipeline-protocol.md
+  fast-path: review (docs/pipeline-protocol.md)
+  exit=1
+  $ python3 fast_path.py base std        # edits docs/standards.json
+  fast-path: review (docs/standards.json)
+  exit=1
+  $ python3 fast_path.py base fac        # edits docs/factory/x.md
+  fast-path: review (docs/factory/x.md)
+  exit=1
+  $ python3 fast_path.py base setup      # edits docs/setup.md (neighbour)
+  fast-path: low-risk
+  exit=0
+  $ python3 fast_path.py base gate       # git mv .github/workflows/v.yml docs/v.txt
+  fast-path: review (.github/workflows/v.yml)
+  exit=1
+  $ python3 fast_path.py base inner      # git mv docs/a.md docs/b.md
+  fast-path: low-risk
+  exit=0
+  $ sed -n 1,16p .claude/implement-queue.md   (gate_paths, the added three)
+    - "docs/factory/**"
+    - "docs/pipeline-protocol.md"
+    - "docs/standards.json"
+  (the other seven: docs/adr/**, docs/design/**, **/prd.md, **/architecture.md,
+   factory/templates/**, .github/**, .claude-plugin/plugin.json)
+  $ grep -n "class TestProfilePin" -A15 tests/test_fast_path.py
+  ... self.assertEqual(sorted(globs), sorted(fast_path.gate_globs()))
+  # temporary edit: "docs/standards.json" -> "docs/standards.jsonX" in the profile
+  $ python3 -m unittest tests.test_fast_path
+  +  'docs/standards.json',
+     'factory/templates/**']
+  Ran 17 tests in 1.500s
+  FAILED (failures=1)
+  $ git checkout .claude/implement-queue.md      # reverted
+  $ python3 -m unittest tests.test_fast_path
+  Ran 17 tests in 1.466s
+  OK
+  $ head -3 docs/adr/0121-*.md
+  # The fast path gates the docs agents obey
+  - Status: provisional
+  $ grep -n 0121 docs/adr/README.md
+  119: | 0096 | ... | amended by ADR-0121 (the gate paths and fast-path rule; accepted by the Owner 2026-10-15) |
+  144: | 0121 (index link elided) | The fast path gates the docs agents obey | provisional |
+  $ grep -n "Status" docs/adr/0096-*.md
+  3:- Status: amended by ADR-0121 (the gate paths and fast-path rule; accepted by the Owner 2026-10-15)
+  ```
+  The pin test reads the profile's `gate_paths` list and asserts it
+  equals `fast_path.gate_globs()`, which `fast_path.py` renders from its
+  own constants (ten globs); the reverted edit showed it fails on a
+  one-entry divergence. The three instruction-doc paths and the two
+  earlier rename cases route as the Accept line says.
+- Result: PASS. Not checked: that ADR-0121's body text says everything
+  the Accept line's "records the amendment" could mean beyond its status,
+  the index row and ADR-0096's status line (only its head was read here).
+
+## Repo-wide commands (run from the worktree, second re-verify on HEAD 9de3057)
 
 ```
+$ uptime
+load average: 253.04, 226.82, 188.82
 $ python3 run_tests.py
-tests: 3968 tests across 126 modules in 92.4s on 8 workers, 0 problem(s)
+tests: 3971 tests across 126 modules in 68.0s on 8 workers, 0 problem(s)
 exit=0
+$ python3 -m unittest discover tests
+Ran 3971 tests in 230.432s
+OK
 $ python3 -m unittest tests.test_fast_path
-Ran 14 tests in 1.497s
+Ran 17 tests in 1.466s
 OK
 $ python3 lint.py
 lint: 0 problem(s) across 35 skills
@@ -399,9 +474,10 @@ selftest: ok
 exit=0
 ```
 
-Earlier first-pass evidence, kept as recorded (HEAD `d4d5c5b`, before the
-fix): `python3 -m unittest discover tests` ran 3965 tests in 212.246s, OK;
-`run_tests.py` ran 3965 tests in 73.8s.
+The runner's count (3971) equals the serial discover's (3971). Earlier
+evidence, kept as recorded: first re-verify (HEAD `53273e7`) ran 3968
+tests; first pass (HEAD `d4d5c5b`) ran 3965 in both the runner and
+discover.
 
 ## Failures
 
@@ -410,9 +486,10 @@ fix): `python3 -m unittest discover tests` ran 3965 tests in 212.246s, OK;
   route back to Implement is proposed: the Owner chose to accept the
   evidence. The routing question for a reviewer is whether those two
   checks should stay checked.
-- No failing command, test or gate in the re-verify (row 12 passes).
+- No failing command, test or gate in the second re-verify (row 13
+  passes); the divergence failure above was a deliberate, reverted edit.
 - Row 4's and row 11's FAILs and the five NOT RUN items are unchanged by
-  the re-verify.
+  the re-verifies.
 
 ## Not verified
 
@@ -436,6 +513,11 @@ fix): `python3 -m unittest discover tests` ran 3965 tests in 212.246s, OK;
   implement-queue's `gate_paths` check shares the rename blind spot is
   unproven (Notes 2026-11-02) and untested here; rows 1 to 11 were not
   re-run individually after the fix.
+- Second re-verify additions: whether implement-queue's own matcher
+  honours `gate_paths` identically to the classifier (including the
+  rename case) is still unproven and untested here; rows 1 to 12 were not
+  re-run individually after this fix; ADR-0121's body beyond its head was
+  not re-read.
 - Lesson for the next PRD: the milestones' goals (faster CI, lower merge
   wait) each rest on one measurement window, with no control for load or
   PR volume, and the two bars written against the whole run missed while
