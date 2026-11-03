@@ -6,7 +6,7 @@ assumptions:
   - "Scope: the run has no prd.md or architecture.md and no 'diff since the run began' on this branch (it adds only run artifacts), so the reviewed change set is the code the run's tracker rows shipped to main, identified from breakdown.md's Notes and `git log`, plus the rename-fix commit `9670deb` on this branch in the re-review. The Design pass checks against the accepted ADRs the run wrote (0095, 0096, 0097) and the cited ADR-0087/0088, since there is no architecture.md."
   - "Recommended default taken (draft-first): severities below are the reviewer's draft; the Owner arbitrates. The rename finding was ranked Critical because it let a gate-path change classify low-risk under an auto-merge rule; the skill's fix loop blocked Ship until it was fixed. It is now fixed (re-review, 2026-11-02)."
   - "Recommended default taken (no code edits): this stage edits no code. The Critical was routed to Implement (`9670deb`) and re-verified, and this re-review checks that fix."
-  - "Major kept open, not deferred on the user's behalf (review skill step 9: majors are fixed or explicitly deferred by the user). The first review's wording 'deferred to the Owner' on the docs-as-instructions Major is corrected to 'open, awaiting the Owner's fix-or-defer decision'."
+  - "The Major was kept open until the Owner decided; they chose 'Fix now' (breakdown.md Notes 2026-11-02) and it is now fixed by 63e7732 (ADR-0121, provisional) and re-reviewed (second re-review, 2026-11-02). Severities of the two new Minors are the reviewer's draft; the Owner arbitrates, and a Major ranking would block Ship until they fix or defer it."
 ---
 
 # Review: a faster verify loop, no version-bump treadmill, no merge-queue wait
@@ -52,6 +52,24 @@ Re-review commands (after the fix, `9670deb`; HEAD `21ae6be`):
 - `python3 fast_path.py origin/main nosuchref` (exit 2, new string) and
   bare `python3 fast_path.py` (exit 2, new USAGE).
 - A copy-detection repro in `/tmp/cp` (finding 1, "Copy detection").
+
+Second re-review commands (after the instruction-docs fix, `63e7732`;
+HEAD `15812bc`):
+
+- `git show 63e7732` (6 files), `git diff c826be9..HEAD --stat` (8 files;
+  the code is `fast_path.py`, `tests/test_fast_path.py`,
+  `.claude/implement-queue.md`).
+- A probe of `fast_path.is_gate_path`/`classify` over 13 paths
+  (directory without slash, `.bak` suffixes, nested same-name, case,
+  `./`-prefix) and `fast_path.gate_globs()`.
+- `python3 -m unittest tests.test_fast_path` -> `Ran 17 tests ... OK`;
+  two mutations of `.claude/implement-queue.md` in a `git archive` copy
+  at `/tmp/pin`, each failing `TestProfilePin`.
+- `python3 adr_status.py .` for ADR-0096 (`active`, "amended by") and
+  ADR-0121.
+- Reads of `assembler.yml`, `gate-digest.yml`, `conductor.py`,
+  `conductor_close.py`, `cost_ledger.py` and `skills/autorun/SKILL.md`
+  for the survey's exclusions and the `costs.jsonl` claim.
 
 Not reviewed: the GitHub-side behavior of the `check` job and of
 `gh pr view --json files` (no network read here); the memory note and the
@@ -143,49 +161,110 @@ Not reviewed: the GitHub-side behavior of the `check` job and of
   on `skills/implement-queue/SKILL.md` (`gate_paths`) was investigated by
   the Implement stage and is unproven, see Not examined in the Verdict.
 
-### Major: ADR-0096 fast-path rule `docs/` + not-gate lets a docs-only PR rewrite the instructions agents run, including the merge train's own protocol
+### Major (FIXED in `63e7732`, ADR-0121, re-reviewed): ADR-0096 fast-path rule `docs/` + not-gate let a docs-only PR rewrite the instructions agents run, including the merge train's own protocol
 
-- Scenario: the rule is "every changed path is under `docs/` and none is
-  a gate path" (`fast_path.py:34-38`). `docs/` holds `docs/pipeline-protocol.md`
+- Scenario (original): the rule was "every changed path is under `docs/`
+  and none is a gate path". `docs/` holds `docs/pipeline-protocol.md`
   (the protocol every skill is told to read), `docs/standards.json` (the
   review skill's standards index) and `docs/factory/*-routine.md`,
   including `docs/factory/merge-train-routine.md`, which the scheduled
-  Sonnet routine reads each 4 hours. A PR that edits `merge-train-routine.md`
-  to drop the one-at-a-time or `update-branch` step, or edits the
-  protocol to loosen a gate, is `fast-path: low-risk` and, with a green
-  `check`, auto-merges with no review and no human. ADR-0096's
-  Consequences discuss that `.claude/` and root Python are not gate paths
-  but never mention that `docs/` carries executable-by-agent
-  instructions. This is a deviation from the Owner's intent in
-  `docs/features/faster-sdlc/breakdown.md` (gate paths so release PRs
-  keep a human merge), not a coding error.
+  Sonnet routine reads each 4 hours. A PR that edited
+  `merge-train-routine.md` to drop the one-at-a-time or `update-branch`
+  step, or edited the protocol to loosen a gate, was `fast-path:
+  low-risk` and, with a green `check`, auto-merged with no review and no
+  human. ADR-0096's Consequences never mentioned that `docs/` carries
+  executable-by-agent instructions.
+- Fix evidence (`git show 63e7732`, `git diff c826be9..HEAD`; the code
+  diff is `fast_path.py`, `tests/test_fast_path.py`,
+  `.claude/implement-queue.md`, ADR-0096's status line, ADR-0121 and the
+  index row):
+  - *Entries and matching, run:* `GATE_PREFIXES` gains `docs/factory/`
+    (prefix, with the slash), `GATE_FILES` gains
+    `docs/pipeline-protocol.md` and `docs/standards.json` (exact
+    match). `is_gate_path` over probes: `docs/factory/x`,
+    `docs/factory/sub/costs.jsonl`, `docs/pipeline-protocol.md`,
+    `docs/standards.json` -> gate, `classify` -> `('review', path)`.
+    `docs/factory` (no slash; git lists files, and a file of that name
+    cannot sit beside the directory), `docs/pipeline-protocol.md.bak`,
+    `docs/standards.json.bak`, `docs/factory-notes.md`,
+    `docs/sub/pipeline-protocol.md` and `docs/Pipeline-protocol.md` ->
+    not gate, `low-risk`. That is the intended split: the files are
+    exact, the directory is a prefix, and a neighbour or a nested
+    same-name file does not trip the gate, as the profile's anchored
+    globs read. Deleting or renaming the protocol away lists it under
+    `--no-renames`, so it gates (`9670deb`). A path git quotes
+    (non-ASCII, `"docs/..."`) fails the `docs/` prefix test and routes
+    to review, the safe direction.
+  - *`gate_globs()` rendering:* returns `['docs/adr/**', 'docs/design/**',
+    'factory/templates/**', '.github/**', 'docs/factory/**',
+    '**/prd.md', '**/architecture.md', '.claude-plugin/plugin.json',
+    'docs/pipeline-protocol.md', 'docs/standards.json']`, ten globs, the
+    same ten as the profile's `gate_paths` (the pin test passes).
+    `{prefix}**` is correct because every prefix ends in `/`; `**/{name}`
+    matches the classifier's any-depth basename rule.
+  - *Pin test:* see the resolved Minor below; the two mutations fail it.
+  - *Tests:* `test_the_instruction_docs_agents_obey_are_review` (five
+    paths incl. `costs.jsonl`), the neighbour-stays-low-risk test, and
+    `TestProfilePin`; the old low-risk case moved from
+    `docs/factory/merge-train-routine.md` to `docs/setup.md`. Module:
+    `python3 -m unittest tests.test_fast_path` -> `Ran 17 tests ... OK`
+    (Notes say 17, was 14: true). `python3 fast_path.py origin/main HEAD`
+    -> `fast-path: review (.claude/implement-queue.md)`, exit 1, correct
+    under the rule (a `.claude/` file is not a docs path).
+  - *ADR-0121 read in full:* provisional (written unattended; correct per
+    the protocol), dated 2026-11-02, amends ADR-0096 decisions 2 and 3,
+    cites the Owner's "Fix now" (matches `breakdown.md` Notes
+    2026-11-02), with decision, rejected alternatives and an "If
+    rejected" section. "ADR-0096's seven" is right (ADR-0087's four plus
+    three). "18 references under `skills/`" is right (`grep -rn` count
+    18, in 17 files). The routine list matches `AGENTS.md:177-189`. It
+    passes the protocol's ADR test as an amendment of an accepted ADR.
+    Number: 0121 is free on the local `origin/main` (highest 0120), not
+    fetched.
+  - *Amend, not rewrite:* ADR-0096's diff is its status line only
+    (`accepted (Owner, 2026-10-15)` -> `amended by ADR-0121 (the gate
+    paths and fast-path rule; accepted by the Owner 2026-10-15)`); its
+    Decision is untouched, as the protocol's "Never rewrite" requires.
+    `adr_status.py .` reads it as `standing: active`, and the compliance
+    reference treats "amended by" as live, so the amendment is read
+    with the ADR. The index row carries the same status. The Decision
+    section still says seven gate paths while ten are live; that is the
+    accepted cost of the rule and the status line points the reader on.
+  - *Regression check:* none found. Side effect: a `docs/factory/` row
+    append is now review-routed; the claim that no automated flow
+    loses the fast path is checked for `costs.jsonl`, incomplete for the
+    rest of the directory (new Minor below).
 - Standard: none
-- Decision: **open, awaiting the Owner's fix-or-defer decision** (not
-  deferred; the user has not deferred it, and step 9 requires that for a
-  Major). An ADR amendment is owed, not a code fix: either add
-  `docs/factory/**`, `docs/pipeline-protocol.md` and
-  `docs/standards.json` to the three-plus-four gate paths (profile and
-  `GATE_PREFIXES`), or the Owner defers it and records the risk as
-  accepted. The choice trades merge speed against a human merge on docs
-  the agents obey, which is the Owner's call. Unchanged by the rename fix
-  (re-checked: the classifier still treats any non-gate `docs/` path as
-  low-risk).
+- Decision: **fixed** (breakdown Milestone 3 row "Fast-path gates the
+  instruction docs", tracker none, no issue created); re-verified in
+  `verification.md` (`15812bc`) and re-reviewed here. Fixed, not
+  deferred: the Owner chose "Fix now", so the earlier "open, awaiting
+  the Owner" status is closed. Residual instruction-source exclusions
+  are the new Minors below.
 
-### Minor: the classifier's gate list and the queue profile's `gate_paths` are two copies with no test pinning them equal
+### Minor (RESOLVED in `63e7732`): the classifier's gate list and the queue profile's `gate_paths` were two copies with no test pinning them equal
 
-- Scenario: `fast_path.py:28-31` hardcodes `GATE_PREFIXES`, `GATE_NAMES`
-  and `GATE_FILES`; `.claude/implement-queue.md:4-11` lists `gate_paths`
-  as globs. `git grep -n "GATE_PREFIXES\|implement-queue.md" -- tests
-  '*.py'` finds no test relating them. An Owner who adds a path to the
-  profile (as ADR-0096's Consequences invite: "the Owner may add them to
-  `gate_paths` later") leaves the classifier still saying low-risk for
-  that path whenever it sits under `docs/`. The Notes 2026-10-15 even say
-  the profile is the policy. The two sources of truth drift silently.
+- Scenario (original): `fast_path.py` hardcoded `GATE_PREFIXES`,
+  `GATE_NAMES` and `GATE_FILES`; `.claude/implement-queue.md` listed
+  `gate_paths` as globs; no test related them, so an Owner adding a path
+  to the profile left the classifier saying low-risk for it.
+- Fix evidence: `TestProfilePin` (`tests/test_fast_path.py`) parses the
+  profile's `gate_paths` block and asserts `sorted(globs) ==
+  sorted(fast_path.gate_globs())`. I mutated a temp copy of the tree
+  (`git archive HEAD` into `/tmp/pin`): deleting the profile's
+  `"docs/standards.json"` line, and separately changing
+  `"docs/factory/**"` to `"docs/factory/"`, each made
+  `python3 -m unittest tests.test_fast_path.TestProfilePin` fail
+  (`FAILED (failures=1)`, 1 test); the unmutated tree passes (module:
+  `Ran 17 tests ... OK`). Limits: `gate_globs()` is derived from the same
+  constants the classifier uses, so the test pins the profile's spelling
+  to the classifier's constants, not the skill's glob matcher to
+  `is_gate_path`; and the parser reads the block line by line, so a
+  reformat of the profile (flow list, single quotes, comment) fails the
+  test loudly rather than passing, the safe direction.
 - Standard: none
-- Decision: deferred — a pin test (parse the profile's `gate_paths`,
-  assert each is classified review) is cheap, but nothing is broken today:
-  the two lists agree on this tree. Revisit with the Major above, which
-  already changes both lists.
+- Decision: **resolved** by `63e7732`; no residual drift risk found beyond
+  the matcher limit above, listed under Not examined.
 
 ### Minor: the exit-2 reason shows git's usage line, not its error
 
@@ -248,6 +327,69 @@ Not reviewed: the GitHub-side behavior of the `check` job and of
 - Standard: none
 - Decision: deferred — one `-c commit.gpgsign=false` away if it ever bites;
   nothing has reported it.
+
+### Minor (new, re-review 2): the survey calls the run-artifact trees "not instructions", but `docs/features/<slug>/autorun-brief.md` is the standing instruction an autorun resume obeys
+
+- Scenario: the Notes' survey (`breakdown.md` 2026-11-02) and ADR-0121's
+  Rejected alternatives exclude `docs/features`, `docs/fixes`,
+  `docs/research`, `docs/launches` as "outputs of stages, not
+  instructions". Most are. `docs/features/<slug>/autorun-brief.md` is
+  not: `skills/autorun/SKILL.md:20` ("holds `autorun-brief.md`, this is a
+  resume") and `:115` make it the instruction source a resumed autorun
+  answers from, and this run's own stage assignments say to answer from
+  the brief and keep its bounds (no push, no merge, no version bump).
+  A docs-only PR that edits a brief on main (for example, adding "you
+  may merge") is not a gate path, so it classifies `fast-path:
+  low-risk` and, under `merge: auto`, merges unreviewed; the next resume
+  of that run obeys the edited brief. Exposure is lower than the closed
+  Major's: it touches one run's brief, and only a run resumed from main;
+  the protocol and the routine protocols touch every run and a 4-hourly
+  job. The brief is also Owner-authored, so an edit is visible in the
+  PR, which no human is obliged to read on the fast path.
+- Standard: none
+- Decision: deferred — reason: narrower exposure, an Owner-authored file,
+  and the ADR already tells the Owner they may add paths to `gate_paths`
+  later; the fix is a `**/autorun-brief.md` entry in the profile and
+  `GATE_NAMES`, which the pin test then keeps in step. The survey's
+  wording "outputs of stages, not instructions" is wrong for this one
+  file, and ADR-0121's rejected-alternatives list should say so at the
+  next amendment. Flagged for the Owner: if they rank it Major, Ship
+  waits on their fix-or-defer. The survey's other exclusions hold on the
+  evidence: `docs/kb/**` is indexed by `AGENTS.md:208-221` for
+  consultation; `docs/output-evals.md` is human-started
+  (`evals/README.md:15`, per the Notes); `docs/launch-demo.json` is read
+  by `launch_demo.py`. `docs/backlog.md` is read by the hourly routine as
+  input (`hourly-improvement-routine.md:86,137`) and can steer which
+  seed it picks up, but it is the advisory seed inbox (ADR-0029) and the
+  routine's own output goes through review: a steering surface, not an
+  instruction source. Recorded, not a finding.
+
+### Minor (new, re-review 2): the "no automated flow loses the fast path" claim covers `costs.jsonl` only, not the other files under `docs/factory/`
+
+- Scenario: ADR-0121 Consequences and the Notes survey say the assembler
+  and gate-digest workflows push their `costs.jsonl` rows to main
+  directly. Checked and true: `assembler.yml:311-318` (`tail -n 1 ...
+  >> costs.jsonl`, then `git push origin HEAD:main`) and
+  `gate-digest.yml:57-60` (`git add docs/factory/costs.jsonl`, `git
+  commit`, `git push`); `cost-report.yml:51` only reads it. But the
+  prefix `docs/factory/**` also covers three other writers' output:
+  `docs/factory/batches/<batch>/ledger.jsonl` (`conductor.py:135`),
+  `docs/factory/costs/runs/` per-run spend files (`cost_ledger.py:34`,
+  `conductor_close.py` `carry_blocked_spend`) and
+  `docs/factory/scorecards.jsonl` (`conductor_close.py:53`), which land
+  on a batch branch and reach main by PR. None is tracked on main today
+  (`git ls-files docs/factory` lists only the routines,
+  `routine-markers.md` and `costs.jsonl`), and the conductor's closing
+  merge goes through its own Owner ask (ADR-0085), not the queue's
+  fast-path hook (`fast_path` appears only in the profile, the
+  merge-train and hourly routines, `factory.py` and tests), so I found no
+  flow that loses a fast path it had. The claim was audited for one file
+  of four and states more than was checked.
+- Standard: none
+- Decision: deferred — reason: no observed behavior is wrong; a
+  conductor batch PR is code plus ledger, so it is review-routed
+  already. Correct the sentence at the next Notes/ADR touch to say what
+  was audited, or confirm the conductor's PR never enters the queue.
 
 ## Honesty of the Owner-checked rows and the verification
 
@@ -319,25 +461,28 @@ Judged against the artifacts, not the code:
 
 ## Verdict
 
-**Not ready to ship, for one reason: the Major (docs-as-instructions
-fast-path scope) has no fix-or-defer decision from the Owner.** The skill's
-step 9 says majors are fixed or explicitly deferred by the user, and the
-Owner has done neither, so Ship is blocked on that decision, not on code.
-The earlier "deferred" wording on the Major was the reviewer's proposal,
-not a deferral; it is open, awaiting the Owner.
+**Ready for Ship on this review's findings. No Critical is unfixed, no
+Major is open, and nothing new above Minor was found.** Two bars, stated
+separately so neither reads as a pass over the other:
 
-- **Critical: fixed.** No Critical is unfixed. The rename bypass is closed
-  by `9670deb`, confirmed by the tests (which fail on the old code) and by
-  re-running the repro (see finding 1). The re-verify (`21ae6be`) agrees.
-- **New findings in this pass:** none above Minor. One Minor was added
-  (finding 7, the new real-git tests lean on the host's git config); the
-  rest are the earlier Minors, status unchanged.
-- **Majors:** 1 open, awaiting the Owner (fix by ADR amendment plus gate
-  list, or defer with a logged reason).
-- **Minors:** 4 deferred with reasons, 1 new and not blocking.
-
-Ready for Ship once the Owner decides the Major (either answer clears it)
-and nothing else changes in the tree.
+- **Critical: fixed** (`9670deb`, re-reviewed in the first re-review,
+  unchanged by `63e7732`: `--no-renames` is still at `fast_path.py:63`
+  and `TestRealGit` still passes in the 17-test module).
+- **Major: fixed** (`63e7732`, ADR-0121, on the Owner's "Fix now" in the
+  autorun resume session, `breakdown.md` Notes 2026-11-02). Re-reviewed
+  here with the prefix/exact-match behavior run, the pin test mutated to
+  fail, and the ADR read in full (see the Major's Fix evidence). It was
+  fixed, not deferred, so no Owner deferral is owed.
+- **New findings in this pass:** two Minors (the `autorun-brief.md`
+  exclusion, the incomplete `docs/factory/` side-effect survey), both
+  deferred with reasons; neither blocks. Both are flagged for the
+  Owner's review because the first one is the same kind of hole as the
+  closed Major, at lower exposure, and the Owner arbitrates severity
+  (draft-first). If the Owner ranks it Major, Ship waits on a
+  fix-or-defer from them.
+- **Minors:** the pin-test Minor is resolved by `63e7732`; the rest are
+  deferred with reasons (exit-2 string, empty-discovery exit 0, Notes
+  counts, gpgsign assumption, and the two new ones).
 
 Fail-closed roll-up, nothing here reads as a pass over these unknowns:
 
@@ -345,20 +490,33 @@ Fail-closed roll-up, nothing here reads as a pass over these unknowns:
   renames. The re-verify found the skill never states how it gets the
   changed-file list, so no rename handling exists to be wrong; whether
   `gh pr view --json files` reports a rename's old path was not tested
-  (no network here). Still a suspicion, now unproven rather than
-  unchecked. Also not examined: `check` job behavior on a PR that moves a
-  workflow; the memory note and the `factory-merge-train` trigger (Owner
-  steps outside the repo, NOT RUN in verification too).
+  (no network here). Still a suspicion, unproven rather than unchecked.
+  Also not examined: `check` job behavior on a PR that moves a workflow;
+  the memory note and the `factory-merge-train` trigger (Owner steps
+  outside the repo, NOT RUN in verification too); whether the
+  merge-train routine or the profile's GitHub-side check applies
+  `docs/factory/**` with the same anchoring as `fast_path.py` (the pin
+  test proves the spelling is equal, not that the skill's matcher agrees;
+  no code in this repo implements that matcher, the skill's prose does).
+- **Not examined**: ADR-0121's number against a fetched `origin/main`.
+  The local `origin/main` ref's highest ADR is 0120 and no 0121 exists
+  there; I did not fetch, so a collision with a branch merged since is
+  unchecked (the protocol's merge-time renumber rule covers it).
 - **Inherited NOT RUN from verification, not re-run here**: the two
   timing bars (under-8s `test_conductor_merge`, under-25s `make check`;
   load average was 178 to 191) and the rows-4/11 `gh` numbers, which
   were taken from Notes.
 - **Not run**: the five review passes were run by reading the code and
   the commands cited; no mutation or property test of `fast_path` beyond
-  the rename reproductions. Multi-commit rename chains (A to B to C inside
-  one PR) were not built; three-dot diff compares the merge base to the
-  head tree, so they reduce to the same source-and-destination lists, but
-  that is reasoning, not a run. `tests/test_fast_path.py` was run on this
-  host only, with its git 2.50.1 and no `diff.*` config.
-- The branch's own change is run artifacts plus the fix; it is safe to
-  commit, and this verdict is about the shipped code it documents.
+  the rename reproductions and the pin-test mutations above. Multi-commit
+  rename chains (A to B to C inside one PR) were not built; three-dot
+  diff compares the merge base to the head tree, so they reduce to the
+  same source-and-destination lists, but that is reasoning, not a run.
+  `tests/test_fast_path.py` was run on this host only, with its git
+  2.50.1 and no `diff.*` config.
+- **Not decided here**: the two Owner-checked rows whose Accept lines
+  missed (CI before/after, Merge-wait) stay the Owner's call, as in the
+  honesty section; this verdict does not re-open them.
+- The branch's own change is run artifacts plus the two code fixes; it
+  is safe to commit, and this verdict is about the shipped code it
+  documents.
