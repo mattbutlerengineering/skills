@@ -5,7 +5,7 @@ date: 2026-11-03
 re-entry: implement
 intake: #1149
 origin: docs/backlog.md line 144 seed (from: feature:faster-sdlc)
-assumptions: ["re-entry: implement, taken from the brief's reading (the orchestrator's, not an Owner answer) under the skill's rule that a scoped fix with no design decisions re-enters at Implement. The brief reserves architect for a fix whose source choice needs a design decision across tools; Capture found the choice sits inside one contract (the skill's Phase 3 text, with fast_path.py as an existing owner of the rename-safe diff), so it stays at implement", "Capture: the in-flight check ran. gh pr list --state open returned [], so the review surface was reachable and the result is a clean 'nothing matched', not a check that could not run", "Capture outcome: 'undefined source', the brief's second outcome. The brief names it as a defect in the skill's contract and tells Capture to take it with implement as the probable re-entry, so no skill default was needed"]
+assumptions: ["re-entry: implement, taken from the brief's reading (the orchestrator's, not an Owner answer) under the skill's rule that a scoped fix with no design decisions re-enters at Implement. The brief reserves architect for a fix whose source choice needs a design decision across tools; Capture found the choice sits inside one contract (the skill's Phase 3 text, with fast_path.py as an existing owner of the rename-safe diff), so it stays at implement", "Capture: the in-flight check ran. gh pr list --state open returned [], so the review surface was reachable and the result is a clean 'nothing matched', not a check that could not run", "Capture outcome: 'undefined source', the brief's second outcome. The brief names it as a defect in the skill's contract and tells Capture to take it with implement as the probable re-entry, so no skill default was needed", "Implement: an empty changed-file list fails closed (`gate-paths: human (empty diff)`), matching the classifier's `review (empty diff)`; an empty list cannot be told from a failed read", "Implement: the GitHub MCP file-list tool is not named as a source in the profile, because no run has recorded that it reports previous_filename (untested, per Capture)"]
 ---
 
 # Defect: the merge train's changed-file source is unspecified and two of its three candidates drop a rename's old path
@@ -254,7 +254,7 @@ is complete; `gh pr view --json files` is out (destination only, capped at
 already does. If the answer is "reuse `fast_path.changed_paths`", it
 must be called, not copied (AGENTS.md "Seam modules").
 
-- [ ] **Failing tests first** — through a public interface with exact
+- [x] **Failing tests first** — through a public interface with exact
   output strings, written and run red before the fix.
   - Accept: a PR that renames `.github/workflows/validator.yml` (or
     another current `gate_paths` match) to an ungated path such as
@@ -262,30 +262,30 @@ must be called, not copied (AGENTS.md "Seam modules").
     string naming the old path; the same case fails on the pre-fix
     behaviour (red run quoted); a plain edit to an ungated file is still
     accepted. A real-git case (`TestRealGit` style) covers the rename.
-- [ ] **Name the source and require rename sources** — in
+- [x] **Name the source and require rename sources** — in
   `skills/implement-queue/SKILL.md` (Phase 3 rule and the `gate_paths`
   row), say how the changed-file list is obtained, that a rename counts as
   both its old and new path, and that a truncated or partial list fails
   closed (the journal's "read in part" case).
   - Accept: the skill names the source; no sentence leaves it to the
     agent; `python3 lint.py` passes.
-- [ ] **Profile and routine lines** — add the matching line to
+- [x] **Profile and routine lines** — add the matching line to
   `.claude/implement-queue.md` and to `docs/factory/merge-train-routine.md`
   §2/§3 where "changed paths against `main`" is stated.
   - Accept: the two files name the same source as the skill; where this
     file and the profile disagree the profile wins (routine's rule), so the
     profile's wording is the one tested.
-- [ ] **ADR only if the test holds** — apply the protocol's "When to write
+- [x] **ADR only if the test holds** — apply the protocol's "When to write
   an ADR" test; if it holds, write one as `provisional` and add its README
   row and the status-line pointer on the ADR it amends (ADR-0087 or
   ADR-0096).
   - Accept: either an ADR with matching README row, or a line in Notes
     saying why the test does not hold.
-- [ ] **Claim the seed** — append
+- [x] **Claim the seed** — append
   `(claimed: maintenance:a-rename-the-merge-train-may-not-see)` to
   `docs/backlog.md` line 144.
   - Accept: line 144 ends with the claim marker; no other line changes.
-- [ ] **Full gate** — run the suite and gates.
+- [x] **Full gate** — run the suite and gates.
   - Accept: `python3 run_tests.py`, `python3 lint.py`,
     `python3 kb.py drift`, and `python3 gates.py && python3 gates.py
     --selftest` all pass; if a mirrored file changed, `python3
@@ -310,3 +310,40 @@ literal four-digit work-order or PRD-style id that does not exist.
 - 2026-11-03: Not tested: the GitHub MCP file-list tool the journal's
   cloud runs use. Whoever picks the source should treat its rename
   behaviour as unknown until a run records it.
+- 2026-11-03: Implement, source choice. The train's gate check reads the
+  profile's new `changed-files` hook: with a checkout, `python3
+  fast_path.py gate origin/main HEAD` (a new `gate` mode on the existing
+  owner; it calls `changed_paths`, so `--no-renames` lists a rename's old
+  and new path; no new module, no copy, seam rule kept); with no
+  checkout, REST `pulls/{n}/files --paginate` taking `filename` and
+  `previous_filename` (the only candidate in the table that is both
+  rename-aware and complete). `gh pr diff --name-only` and `gh pr view
+  --json files` are named as excluded. Reversible, inside the brief.
+  The skill stays harness-neutral: it says what the list must hold and
+  that a partial one fails closed; commands live in the profile. The
+  skill's `changed-files` default is "none", so a repo with no hook gets
+  a human merge for every PR under `merge: auto`.
+- 2026-11-03: Red run, before the fix (`python3 -m unittest
+  tests.test_fast_path`): `Ran 31 tests ... FAILED (failures=7)`, all in
+  `TestGateMode`, e.g. `test_a_rename_out_of_a_gate_path_in_real_git_is_human`
+  and `test_a_plain_edit_to_an_ungated_file_is_clear`; the gate mode did
+  not exist, so main printed the usage text and exit 2. Green after the
+  fix: `Ran 32 tests ... OK` (the 32nd pins skill, profile and routine
+  to one source). The real-git rename case prints exactly
+  `gate-paths: human (.github/workflows/validator.yml)`, exit 1; a plain
+  edit to `lint.py` prints `gate-paths: clear`, exit 0; a failed git
+  prints the `fast-path: git diff ... failed:` string, exit 2.
+- 2026-11-03: No ADR. The protocol's test needs all three legs; this
+  fails them: a hook name plus a `fast_path.py` mode is easy to reverse,
+  is the obvious reading of ADR-0087's existing rule, and trades off
+  nothing real. The rule is unchanged; only its input is named.
+- 2026-11-03: Backlog line 144 now ends with
+  `(claimed: maintenance:a-rename-the-merge-train-may-not-see)`.
+- 2026-11-03: Full gate, clean (load average 6.63 at the end of the run,
+  `uptime`): `python3 run_tests.py` printed `tests: 3986 tests across 126
+  modules in 27.1s on 8 workers, 0 problem(s)`; `python3 lint.py`:
+  `lint: 0 problem(s) across 35 skills`; `python3 kb.py drift`:
+  `drift: 0 problem(s)`; `python3 gates.py`: `gates: 0 problem(s)`;
+  `python3 gates.py --selftest`: `selftest: ok`. No mirrored file changed
+  (`fast_path.py`, the skill, the profile and the routine are root-only),
+  so `update-manifest` was not needed.
