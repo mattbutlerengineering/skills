@@ -294,6 +294,24 @@ must be called, not copied (AGENTS.md "Seam modules").
     never reported as a pass: re-run it when load drops and record
     `uptime`.
 
+- [x] **Unquoted paths** — Owner decision 2026-11-04 on review's Major 1:
+  "Fix now". `changed_paths` listed a non-ASCII path as git's quoted
+  string, which matches no gate prefix.
+  - Accept: a real-git test with a non-ASCII gate-path file shows
+    `fast_path.py gate` printing `gate-paths: human (<path>)`, exit 1, and
+    the classifier printing `fast-path: review (<path>)` with the real
+    path; the test was written first and run red.
+- [x] **REST default for `changed-files`** — Owner decision 2026-11-04 on
+  review's Major 2: "Ship REST default".
+  - Accept: the skill's hook-default table names `gh api
+    repos/{owner}/{repo}/pulls/<N>/files --paginate` (every `filename`
+    plus every `previous_filename`); a list whose length differs from the
+    PR's `changed_files` (`gh api repos/{owner}/{repo}/pulls/<N> --jq
+    .changed_files`) fails closed, covering the 3000-file cap; the skill
+    prose that called `none` the default is changed; the profile keeps
+    its `fast_path.py gate` hook and its REST fallback, consistent with
+    the skill; the doc-pin test pins the `previous_filename` line.
+
 Out: the other backlog seeds (145 onward), glob dialect and
 case-sensitivity, any change to `fast_path.py`'s classification rule.
 Constraints: stdlib only; problem-string contracts with exact string
@@ -347,3 +365,45 @@ literal four-digit work-order or PRD-style id that does not exist.
   `python3 gates.py --selftest`: `selftest: ok`. No mirrored file changed
   (`fast_path.py`, the skill, the profile and the routine are root-only),
   so `update-manifest` was not needed.
+- 2026-11-04: Owner decisions on review.md's two majors, answered in
+  session: Major 1 (non-ASCII gate path reads clear) "Fix now"; Major 2
+  (the `changed-files` default turns consumers' `merge: auto` into a human
+  merge) "Ship REST default". Both routed to Implement.
+- 2026-11-04: Implement, unquoted paths. Chose `-z` over `-c
+  core.quotepath=false`: `quotepath=false` still quotes a name holding a
+  quote, backslash or control character, which would read clear the same
+  way; `-z` lists every name raw, NUL-separated. `changed_paths` now runs
+  `git diff --name-only -z --no-renames <base>...<head>` and splits on
+  NUL; the tests' `DIFF` constant and fake output changed with it.
+  Red run, before the fix (`python3 -m unittest tests.test_fast_path`),
+  `Ran 35 tests ... FAILED (failures=3)`:
+  `(0, 'gate-paths: clear\n') != (1, 'gate-paths: human
+  (.github/workflows/é.yml)\n')`; `(1, 'fast-path: review
+  ("docs/adr/0999-caf\\303\\251.md")\n') != (1, 'fast-path: review
+  (docs/adr/0999-café.md)\n')`; and the same for a name with a `"`.
+  Green after: `Ran 35 tests ... OK`.
+- 2026-11-04: Implement, REST default. The skill's `changed-files` row
+  now names the REST `pulls/<N>/files --paginate` command with the
+  `changed_files` count check; the prose paragraph says the default
+  applies with no hook and that a length mismatch fails closed. The
+  profile's REST fallback gained the count command and drops "returns
+  part of the list". Closes review's REST-cap minor. The doc-pin test
+  dropped the line-break assertion and now pins `**both**`, `fail
+  closed`, `pulls/<N>/files --paginate`, `filename`, `previous_filename`
+  and `changed_files` in both skill and profile (closes review's
+  doc-pin minor). `grep -c implement-queue factory/manifest.json`
+  printed `0`: the skill is not in the payload manifest, so
+  `update-manifest` was not needed. The routine defers to the profile's
+  hook and needed no edit.
+- 2026-11-04: No ADR for the consumer-default change. The protocol's test
+  needs all three legs; the first fails: the default is a table row and
+  a paragraph in a skill file, reversible by one edit with no data or
+  interface migration. It is also the fail-closed reading ADR-0087's "If
+  rejected" section already states, and the Owner's answer picked it
+  from two named options. A one-line record here is the whole record.
+- 2026-11-04: Full gate, clean (`uptime` load average 2.80): `python3
+  run_tests.py` printed `tests: 3989 tests across 126 modules in 26.9s on
+  8 workers, 0 problem(s)`; `python3 lint.py`: `lint: 0 problem(s)
+  across 35 skills`; `python3 kb.py drift`: `drift: 0 problem(s)`;
+  `python3 gates.py`: `gates: 0 problem(s)`; `python3 gates.py
+  --selftest`: `selftest: ok`.
