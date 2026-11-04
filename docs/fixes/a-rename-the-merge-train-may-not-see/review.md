@@ -9,7 +9,8 @@ assumptions: []
 
 ## Scope
 
-`git diff origin/main...HEAD` (base `397a987`, which is also the merge
+Re-review in the fix loop (second pass) is at the end of this section. First
+pass: `git diff origin/main...HEAD` (base `397a987`, which is also the merge
 base and the current `origin/main`): code commit `d0ccebe` (`fast_path.py`
 `gate` mode, `tests/test_fast_path.py`, `skills/implement-queue/SKILL.md`,
 `.claude/implement-queue.md`, `docs/factory/merge-train-routine.md`,
@@ -21,130 +22,175 @@ re-run; I probed the producing boundary (`changed_paths` / `gate`) and
 its consumers (the profile's two sources, the skill default) with real
 git repos.
 
+**Second pass (fix loop).** `git show 4024915` and `git diff
+aa6d314..HEAD` (`fast_path.py` +6/-3, `skills/implement-queue/SKILL.md`,
+`.claude/implement-queue.md`, `tests/test_fast_path.py`, `defect.md`,
+`verification.md` re-verified in `c7233a3`: 16 PASS, 1 FINDING, 3
+unknown). The Owner answered the two majors "Fix now" and "Ship REST
+default" (`defect.md` Notes, 2026-11-04). I probed `changed_paths`/`gate`
+in a fresh git repo and read the skill, profile and test text against
+PR #247. `python3 -m unittest tests.test_fast_path` ran here:
+`Ran 35 tests in 1.765s` / `OK`; the full suite was not re-run (Verify's
+`0 problem(s)` stands).
+
 ## Findings
 
-### Major: `gate` mode reports `clear` for a gate-path file whose name has a non-ASCII character
+### Major (FIXED in `4024915`): `gate` mode reported `clear` for a gate-path file with a non-ASCII name
 
-- Scenario: `git diff --name-only` quotes such a path (`core.quotepath`
-  default) and `changed_paths` does not undo that. Probe, a branch adding
-  `docs/adr/0999-café.md`:
+- Scenario (first pass): `git diff --name-only` quoted `docs/adr/0999-café.md`
+  as `"docs/adr/0999-caf\303\251.md"`; no gate prefix matched it, so `gate`
+  printed `clear` (exit 0) under `merge: auto`.
+- Fix: `changed_paths` now runs `git diff --name-only -z --no-renames
+  <base>...<head>` and splits on NUL (`fast_path.py`); the tests' `DIFF`
+  and fake output follow.
+- Second-pass probes (temp repo, `main` holding `notes.txt`,
+  `docs/adr/0001-x.md`, `.github/workflows/v.yml`; the worktree's
+  `fast_path.py`):
 
-      $ git diff --name-only --no-renames main...pr
-      "docs/adr/0999-caf\303\251.md"
-      $ python3 fast_path.py gate main pr
-      gate-paths: clear          (exit 0)
-      $ python3 fast_path.py main pr
-      fast-path: review ("docs/adr/0999-caf\303\251.md")   (exit 1)
+      $ git diff --name-only -z --no-renames main...mixed | od -c
+      0000000   d o c s / a d r / 0 0 0 1 - x . m d \0 d o c s / 303 251 . m d \0
+      (trailing NUL; split on "\0" with the `if path` filter drops the empty tail)
+      newline in a name (docs/adr/0002-a\nb.md):
+        gate-paths: human (docs/adr/0002-a
+        b.md)                                   exit 1
+        fast-path: review (docs/adr/0002-a
+        b.md)                                   exit 1
+      rename .github/workflows/v.yml -> docs/v.yml (with --no-renames):
+        gate-paths: human (.github/workflows/v.yml)   exit 1
+      empty diff:  gate-paths: human (empty diff) exit 1;  fast-path: review (empty diff) exit 1
+      plain edit of notes.txt:  gate-paths: clear exit 0;  fast-path: review (notes.txt) exit 1
+      docs/adr/0001-x.md plus docs/é.md:  fast-path: review (docs/adr/0001-x.md) exit 1;
+                                          gate-paths: human (docs/adr/0001-x.md) exit 1
 
-  The listed string starts with `"`, so `is_gate_path` matches none of
-  its prefixes, basenames or files. The classifier is safe only by
-  accident (its extra `not path.startswith("docs/")` test sends the
-  quoted string to review). `gate_verdict` has no such backstop, so the
-  new consent source passes the same path as `clear`. The same holds for
-  `.github/workflows/é.yml`, `docs/factory/é.md`, `docs/design/é/x.md`.
-  Effect under `merge: auto`: the `gate_paths` condition of ADR-0087 is
-  silently skipped for that PR; the other conditions (`check`, review or
-  fast-path, hold label) still apply. The quoting predates this run in
-  `changed_paths`, but this run makes `gate` the one source the skill
-  names and its exit 0 the consent, and the fix is owed at the same
-  boundary. The REST source is unaffected (JSON carries raw names).
+  A trailing NUL, an empty output, a newline in a path and `-z` with
+  `--no-renames` all behave. `changed_paths` has exactly two callers
+  (`fast_path.py` lines 116 and 134: the classifier and `gate`; `grep`
+  found no other); both take the list, so the only change visible to them
+  is that non-ASCII and quote-bearing names are now the real path. For
+  ASCII paths the output is unchanged (plain edit, rename, empty diff
+  above match the first pass). The new real-git tests (non-ASCII ADR,
+  `"` in a name, non-ASCII workflow through `gate`) pass; Verify showed
+  them red on the pre-fix file. A path containing a backslash or other
+  control character was not run; `-z` lists those raw by construction.
 - Standard: none
-- Decision: open — needs a fix before Ship (route to Implement): make
-  `changed_paths` read unquoted paths (`-c core.quotepath=false`, or
-  `-z`), with a real-git test on a non-ASCII gate path (`gate` exit 1
-  naming the path). The tests assert the exact diff args (`DIFF`), so
-  that constant changes with it. Not deferred: a major is the user's to
-  defer, and no user decision is on record.
+- Decision: fixed, evidence above. Closed.
 
-### Major: the skill's new `changed-files` default turns every consumer's `merge: auto` into a human merge, with no ADR, changelog line or consumer-usable hook
+### Major (FIXED in `4024915`, by the Owner's choice): the skill's `changed-files` default turned every consumer's `merge: auto` into a human merge
 
-- Scenario: `skills/implement-queue/SKILL.md` is the plugin payload, read
-  by every consumer repo; it is not mirrored into stamped repos
-  (`grep -c implement-queue factory/manifest.json` printed `0`;
-  `.claude-plugin/plugin.json` and `factory/templates/tools/factory/protocol.py`
-  are the only other hits, neither a mirror of the skill). The new table
-  row says `changed-files`: "none: no `gate_paths` check can pass, so
-  under `merge: auto` every PR needs a human merge". A consumer whose
-  profile says `merge: auto` and names no `changed-files` hook (none can
-  have, the hook did not exist) gets every PR held after this release
-  that it merged before. ADR-0087's own "If rejected" section calls that
-  outcome fail-closed and non-silent ("sees every PR reported as awaiting
-  a human merge"), so the direction is consistent with the ADR and
-  ADR-0096. What is not: the ADR's Decision and Consequences still read
-  as though `merge: auto` plus the four conditions enables merging, and
-  nothing tells a consumer the key now needs a second one. Their
-  remedy is also out of reach: the profile's local hook is
-  `python3 fast_path.py gate`, a root-only tool (not in `MIRRORS`,
-  ADR-0060), so a consumer must write its own hook from the REST prose,
-  which lives only in this repo's profile, not in the skill. Brief and
-  Implement's Notes call the default "inside the brief"; the Owner's
-  answers do not mention a behavior change for other repos. Not a
-  safety bug; a silent behavior change for consumers, which the review
-  contract names a finding.
+- Scenario (first pass): the skill's default row was `none`, so a
+  consumer with `merge: auto` and no `changed-files` hook got every PR
+  held, with no usable source and nothing in the skill to say how to
+  write one.
+- Fix (the user's option (b), "Ship REST default"): the table row now
+  names `gh api repos/{owner}/{repo}/pulls/<N>/files --paginate`, every
+  `filename` plus every `previous_filename`, checked against `changed_files`;
+  the Phase 3 paragraph says a hook-less repo uses that default; the
+  profile keeps its `gate` hook and the same REST fallback. A consumer
+  now gets a working source with no hook. Verify ran the command against
+  PR #247: 129 entries, `changed_files` 129, 19 `previous_filename`s all
+  absent from the `filename` set.
+- ADR judgement (agree). The protocol's test needs all three legs. The
+  change is a default row in a skill file, reversible by one edit with no
+  migration; it makes a source available where there was none and keeps
+  ADR-0087's fail-closed "If rejected" reading (read: lines 62-66 of
+  ADR-0087: a consumer "sees every PR reported as awaiting a human merge,
+  never a silent merge"). Option (b) removes the behavior change that
+  made the first pass lean toward an ADR, so the test fails on the
+  first leg. No `docs/adr/` file was touched (`git show --stat 4024915`).
 - Standard: none
-- Decision: open — the user decides: (a) accept it as intended and add a
-  one-line consequence to ADR-0087 (status-line pointer, no Decision
-  rewrite) or a short ADR, plus a release-note line, or (b) change the
-  default so the skill ships a usable source (the REST `pulls/<N>/files
-  --paginate` command, both `filename` and `previous_filename`) and only
-  a failing hook fails closed. Not deferred.
+- Decision: fixed, evidence above. Closed. The residual wording question
+  is the new Minor below.
 
-### Minor: a truncated REST list is not detectable by the rule the profile gives
+### Minor (NEW, open): the table row's count check is ambiguous between file entries and unique paths
 
-- Scenario: the profile says "if the call ... returns part of the list,
-  fail closed". The skill adds "a list the source capped or paged short".
-  GitHub's `pulls/{n}/files` caps at 3000 files even with `--paginate`
-  (GitHub's REST docs; not re-queried here), and the response carries no
-  truncation flag. A 3000-file PR's gate path past the cap is invisible,
-  and "returns part of the list" gives the agent nothing to test. No
-  instruction compares the count to the PR's `changed_files` (from
-  `pulls/{n}`) or treats a list of 3000 as failing closed. `defect.md`'s
-  129-file PR (Verify: 129 returned, 19 renames) shows pagination works
-  under the cap; the cap itself was not exercised. A PR that size is
-  not a realistic scenario in this repo.
+- Scenario: the check is meant to compare the number of entries the REST
+  list returns (PR #247: 129) with `changed_files` (129). The row reads
+  "every `filename` plus every `previous_filename`; its length must
+  equal `... .changed_files`". "its" can mean the collected path set,
+  which for #247 is 129 + 19 = 148 paths (Verify: 19 `previous_filename`s,
+  none in the `filename` set). An agent that compares 148 with 129 sees a
+  mismatch on every PR with a rename and fails closed. The paragraph says
+  "the REST file list, whose length is checked" and the profile says "The
+  list's length must equal the PR's `changed_files`", which read as
+  entries, so the three places do not say the same thing about which
+  count is meant, and nothing states that a rename is one entry with two
+  paths. Direction of the error: spurious human merge, never a pass of a
+  short list; the only way the wrong count passes a truncated list is the
+  coincidence that the union of a capped list happens to equal a larger
+  `changed_files`. Fail closed, so not a safety defect; but a PR that
+  renames files, the very case this run is about, is held for a human
+  by a misread rule.
 - Standard: none
-- Decision: deferred — reason: the cap case is a very large PR that
-  other gates (human review of the diff size) also catch; recommend
-  adding "a list of 3000 entries, or one whose length differs from the
-  PR's `changed_files`, fails closed" to the profile in the next touch of
-  that file. Defer is the reviewer's recommendation; the user may
-  overrule.
+- Decision: open, not deferred by the user. A minor may be deferred
+  freely; recommend a one-clause fix at the next touch of the row and the
+  profile: "the number of entries the call returns (a rename is one
+  entry holding two paths) must equal `changed_files`". No code change.
 
-### Minor: the new doc-pin test asserts wrapped prose and cannot tell a consumer-visible bug from a rewording
+### Minor (deferred, partly closed): a truncated REST list
 
-- Scenario: `test_the_skill_profile_and_routine_name_one_changed_files_source`
-  asserts substrings including a line break:
-  `"**both** its old path and\nits new one"` and `"fail closed: the PR
-  needs a human merge"`. Re-wrapping the skill paragraph, or rewording
-  the sentence while keeping the rule, turns it red; deleting the REST
-  fallback (the second source, `previous_filename`) leaves it green,
-  since no assertion touches it. Repo convention does allow pinning prose
-  to code: `tests/README.md` lists `test_open_pr_preflight.py` and
-  `test_protocol_conformance.py` as suites that "pin what the prose
-  promises, against the real files", and AGENTS.md's rule is exact
-  strings through public interfaces (the `TestGateMode` cases do that).
-  So the test is within convention, but it is the weak kind: its
-  breakage mode is rewording, and the gap it leaves is the REST source.
+- First-pass scenario: no instruction compared the list to the 3000-file
+  cap. Now closed in text: both the skill and the profile compare the
+  list's length to `changed_files` and say a difference fails closed.
+- Still unknown, not a pass: (1) whether `pulls/<N>`'s `changed_files` is
+  itself capped. GitHub's REST docs list it as a required integer in the
+  response schema (docs.github.com, pulls) and cap only the files list
+  ("Responses include a maximum of 3000 files"); the docs do not say
+  `changed_files` is capped, and no PR over 3000 files was queried, so
+  that it keeps counting past 3000 is an [INFERENCE]. If it were capped at
+  3000 a truncated list of 3000 would match and pass. (2) The 3000-file
+  case itself, not exercised (Verify: largest PR 129).
 - Standard: none
-- Decision: deferred — reason: convention-permitted; the behavior that
-  matters (`gate`) has exact-string, real-git tests. Suggest dropping the
-  `\n`-dependent assertion and adding the REST `previous_filename` line
-  to what is pinned, when the profile is next edited.
+- Decision: deferred — reason: the count check closes the cap case on
+  the documented behavior; a 3000-file PR is not realistic here and
+  human review catches its size. Recommend, at the next touch of the
+  profile, adding "a list of 3000 entries fails closed" to remove the
+  one coincidence the `changed_files` assumption leaves.
 
-### Minor: Verify's harness-neutrality finding stands as a pre-existing condition, not a regression
+### Minor (deferred, improved): the doc-pin test
 
-- Scenario: Verify found concrete `gh`/`git` commands in the skill file.
-  I checked the added lines of `d0ccebe` (`git show d0ccebe --
-  skills/implement-queue/SKILL.md`): the new paragraph and row name the
-  hook, not a command, so the fix added none; the commands sit in the
-  pre-existing hook-default table. Agreed: no routing to Implement. One
-  inconsistency remains and is the Major above: the skill ships commands
-  for its other defaults but none for this one.
+- Before: asserted a wrapped line break and left the REST source
+  unpinned. Now: `test_the_skill_profile_and_routine_name_one_changed_files_source`
+  asserts `**both**` and `fail closed` in the skill and, for the skill
+  and the profile each, `pulls/<N>/files --paginate`, `` `filename` ``,
+  `` `previous_filename` `` and `changed_files`. The line-break
+  assertion is gone, and deleting the REST command, the
+  `previous_filename` instruction or the count check from either file now
+  turns it red. Weaknesses left: the tokens are checked independently, so
+  they could all appear in unrelated sentences, and none distinguishes
+  entries from unique paths (the new Minor above). `Ran 35 tests ... OK`
+  here.
 - Standard: none
-- Decision: deferred — reason: pre-existing, not introduced here; resolved
-  or not by the user's choice on the second Major.
+- Decision: deferred — reason: within the repo's convention of pinning
+  prose to files (`tests/README.md`); the behavior that matters (`gate`)
+  has exact-string real-git tests. The test would not catch the
+  ambiguity above; fix the wording, not the test.
+
+### Minor (deferred; Verify's FINDING resolved as no violation): harness neutrality
+
+- Verify marked a FINDING because `4024915` adds a concrete `gh api`
+  command to the skill's default table. I checked the rule: the
+  protocol's "Harness neutrality" section (`docs/pipeline-protocol.md`
+  line 468) bars content specific to one *harness* (Claude Code
+  invocation mechanics, plugin paths); it does not name `gh` or `git`.
+  The `Hooks` table at `skills/implement-queue/SKILL.md` lines 43-57
+  already holds `gh run list`, `gh issue edit`, `gh pr checks`,
+  `gh pr merge`, `gh pr update-branch`, and the "Cloud sessions"
+  paragraph (line 59) says "each `gh` command in this file states an
+  intent" that the environment may carry out through MCP or REST. The new
+  row is a `gh api` REST command in the same column and register as
+  those rows, and the other defaults' REST twins are written the same
+  way. So it is consistent with the table's existing defaults and is not
+  a new violation, nor a regression to route to Implement. Whether a
+  repo-wide rule against provider CLIs in skills is wanted is a seed for
+  later, not a finding here.
+- Standard: none
+- Decision: deferred — reason: not a violation of the protocol rule;
+  consistent with the table's convention.
 
 ## Passes with no findings
+
+First-pass text, kept; where it refers to the two majors, both are now fixed
+(see Findings).
 
 - **Correctness (the gate list).** `gate` calls the existing
   `changed_paths` and `is_gate_path` (one `changed_paths` call; the test
@@ -186,14 +232,14 @@ git repos.
   three legs. The hook name and the `gate` mode are easy to reverse and
   the obvious reading of ADR-0087's existing rule, so the hook itself
   fails the test; I agree. The decision that does lean toward the test is
-  the consumer-facing default, filed as the second Major rather than as a
+  the consumer-facing default, filed as the second Major (now fixed) rather than as a
   separate "ADR owed" finding. No existing ADR's Decision section was
   edited (`git diff` shows none under `docs/adr/`).
 - **Security.** No shell string built from input: `gate` passes argv to
   `cli.runner("git")`; no secrets; refs are argv elements, not
   interpolated into a shell. The skill forbids filling a gap from the PR
   body, which closes the journal's "rests on the PR body's stated paths"
-  case. The only boundary gap is the quoting Major.
+  case. The only boundary gap was the quoting Major (now fixed by `-z`).
 - **Complexity.** Cut-list applied to the diff: no hits; no `lean:`
   markers added; `gate_verdict` mirrors `classify` in shape rather than
   duplicating logic (two small functions of 6 lines, distinct verdict
@@ -204,7 +250,7 @@ git repos.
   ADR-0087's gate-path condition, ADR-0096's profile and
   ADR-0121/0122's list unchanged (profile `gate_paths` untouched), and
   does not touch `plugin.json` (ADR-0095). The consent-default question
-  is the second Major.
+  was the second Major (now fixed).
 - **Domain passes.** None selected (no payments, migration or dependency
   paths in the diff).
 - **Standards.** `docs/standards.json` read; no `enforced` statement in the
@@ -212,20 +258,26 @@ git repos.
 
 ## Verdict
 
-**Not ready to ship: Ship may not proceed yet.** No critical findings;
-**two open majors**, neither deferred by the user:
+**Ready for Ship.** Ship may proceed. No critical finding. **No major is
+open:** both first-pass majors are fixed with evidence above (non-ASCII
+gate path now reads `human` with the real path; the REST default ships
+with a count check, by the Owner's "Ship REST default"). No new major.
 
-1. Non-ASCII gate path reads `clear` (fix in `changed_paths`, route to
-   Implement, then re-verify).
-2. The `changed-files` default's silent change for consumers (the user
-   decides: accept with an ADR-0087 note and release line, or ship a
-   default source).
+Open or deferred minors (none blocks): (1) the count check's wording is
+ambiguous between entries and unique paths, a spurious fail-closed on
+renaming PRs; new, open, recommend a one-clause fix at the next touch of
+the skill row and profile; (2) the 3000-file/`changed_files` coincidence,
+deferred with a reason; (3) the doc-pin test's weaknesses, deferred;
+(4) harness neutrality, resolved as no violation.
 
-Minors: three, deferred with reasons above (REST 3000-file cap, doc-pin
-test brittleness, harness-neutrality carried from Verify). Fail-closed
-roll-up: not run or unknown, and not read as passes: the GitHub MCP
-file-list tool's rename behavior (Verify's NOT RUN), the 3000-file cap
-(not exercised), a live train run that follows the profile's hook (prose
-contract only), the GitHub-side glob matcher for `**/` patterns (backlog
-line 154, out of scope), and the full suite (not re-run here; Verify's
-`run_tests.py` 0 problem(s) stands). Ship waits on the two majors.
+Fail-closed roll-up. Not run or unknown, and not read as passes: whether
+`changed_files` on `pulls/<N>` is capped (docs silent; no PR over 3000
+files queried); the 3000-file case itself; the GitHub MCP file-list
+tool's rename behavior (Verify's NOT RUN); a live train run that follows
+the profile's hook or the skill default (prose contract only); a path
+with a backslash or control character through `gate` (`-z` passes them
+raw by construction, not run); the GitHub-side glob matcher for `**/`
+patterns (backlog line 154, out of scope); the full suite (not re-run
+here; Verify's `run_tests.py` `0 problem(s)` at `4024915` stands). None of
+these is a known failure, and none changes the verdict: the open items are
+a wording minor and unknowns that fail closed in the written rule.
