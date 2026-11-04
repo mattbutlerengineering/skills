@@ -54,6 +54,30 @@ specialist matches (ADR-0088). Exit 1 prints `fast-path: review
 (git failed, a ref did not resolve): fail closed, review the PR and
 dispatch every specialist.
 
+## changed-files
+
+    python3 fast_path.py gate origin/main HEAD
+
+The source of the `gate_paths` check, run in the PR's checkout after
+`git fetch origin`. It reads `git diff --name-only --no-renames
+origin/main...HEAD`, so a rename lists its old path and its new one
+(the same list as `fast-path`, one `changed_paths` call). Exit 0 prints
+`gate-paths: clear`: no changed path is a gate path. Exit 1 prints
+`gate-paths: human (<path>)`: a human merge, and `<path>` may be the old
+path of a rename. Exit 2 prints a `fast-path:` problem string (git
+failed, a ref did not resolve): fail closed, a human merge.
+
+With no checkout, the source is the REST file list, never
+`gh pr diff --name-only` or `gh pr view --json files`, which drop a
+rename's old path (the second also stops at 100 files):
+
+    gh api repos/{owner}/{repo}/pulls/<N>/files --paginate
+
+Take every `filename` **and** every `previous_filename` and match each
+against `gate_paths`. Without `--paginate`, or if the call fails or
+returns part of the list, fail closed. A GitHub MCP file-list tool is
+not a source until a run records that it reports `previous_filename`.
+
 ## merge-command
 
     gh pr merge <N> --auto --squash --delete-branch

@@ -22,6 +22,15 @@ unreviewed) and, by ADR-0122, every autorun-brief.md at any depth (a
 resume obeys the brief's release authorization, `operate:` and
 `stop-after:`). The queue profile's `gate_paths` is the same list in glob
 spelling; gate_globs() renders it and a test pins the two equal.
+
+`python3 fast_path.py gate <base> <head>` is the merge train's
+`gate_paths` check (ADR-0087's consent rule) on the same list, so a
+gate-path file renamed out of the gate shows by its old path:
+`gate-paths: clear` (exit 0), `gate-paths: human (<first gate path>)`
+(exit 1; an empty list is `human (empty diff)`, since it cannot be told
+from a failed read) or the same `fast-path:` problem string (exit 2),
+which the train reads as a human gate.
+
 Root-only (ADR-0060's rule), stdlib only; the git port is
 cli.runner("git"), injected for tests.
 """
@@ -42,7 +51,10 @@ GATE_FILES = (".claude-plugin/plugin.json", "docs/pipeline-protocol.md",
 LOW_RISK_PREFIX = "docs/"
 USAGE = ("usage: python3 fast_path.py <base> <head>\n"
          "  classifies `git diff --name-only --no-renames"
-         " <base>...<head>`: exit 0 low-risk, 1 review, 2 git failed")
+         " <base>...<head>`: exit 0 low-risk, 1 review, 2 git failed\n"
+         "       python3 fast_path.py gate <base> <head>\n"
+         "  the merge train's gate_paths check on the same list: exit 0"
+         " clear, 1 human, 2 git failed")
 
 
 def is_gate_path(path):
@@ -85,7 +97,34 @@ def changed_paths(git, base, head):
     return [line for line in out.splitlines() if line], None
 
 
+def gate_verdict(paths):
+    """"clear" or ("human", reason): the first changed path that is a gate
+    path, or "empty diff" when there is no list to judge (an empty list
+    cannot be told from a failed read, so it fails closed)."""
+    if not paths:
+        return "human", "empty diff"
+    for path in paths:
+        if is_gate_path(path):
+            return "human", path
+    return "clear"
+
+
+def gate_main(argv, git):
+    paths, problem = changed_paths(git, *argv)
+    if problem:
+        print(problem)
+        return 2
+    verdict = gate_verdict(paths)
+    if verdict == "clear":
+        print("gate-paths: clear")
+        return 0
+    print(f"gate-paths: human ({verdict[1]})")
+    return 1
+
+
 def main(argv, git=cli.runner("git")):
+    if argv[:1] == ["gate"] and len(argv) == 3:
+        return gate_main(argv[1:], git)
     if len(argv) != 2:
         print(USAGE)
         return 2

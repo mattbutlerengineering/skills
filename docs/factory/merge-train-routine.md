@@ -52,14 +52,16 @@ Check in order; the first hit sets the run mode.
 ## 2 Orient (read-only)
 
 1. The queue profile, in full: `merge`, `required_check`,
-   `hold_labels`, `gate_paths`, and the `fast-path`, `merge-command`
-   and `update-branch` hooks.
+   `hold_labels`, `gate_paths`, and the `fast-path`, `changed-files`,
+   `merge-command` and `update-branch` hooks.
 2. This routine's journal (§6): its latest comment's
    `<!-- merge-train-state last-run=... -->` marker. First run → no
    prior state.
 3. Every open PR (`gh pr list --state open`), with its checks rollup,
-   labels, changed paths against `main`, review state, and whether its
-   branch is behind `main`.
+   labels, changed paths against `main` (the profile's `changed-files`
+   hook, never another source: a rename's old path counts, a partial
+   list fails closed), review state, and whether its branch is behind
+   `main`.
 4. `docs/kb/cross-pr-merge-hazards.md`, so the train's one-at-a-time
    rule is read as the hazard it answers, not as caution.
 
@@ -78,8 +80,10 @@ open PR, with its number, title, and exactly one verdict:
   The reviewer dispatch is implement-queue's Phase 2 gate, which this
   routine runs for such a PR; a `flag` or `block` ends in
   `needs-review` and no merge, per the reviewer contract.
-- **human gate** — changes a `gate_paths` file, or carries a hold
-  label. Reported with the path or label; never merged here.
+- **human gate** — changes a `gate_paths` file (a rename counts by its
+  old path as well as its new one; a changed-file list that is partial,
+  or a `changed-files` hook that fails, is a human gate too), or carries
+  a hold label. Reported with the path or label; never merged here.
 - **wait** — checks pending, or a draft. Reported with what it waits
   on.
 - **failed** — the required check failed. Reported with the failing

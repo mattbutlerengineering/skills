@@ -34,7 +34,7 @@ Frontmatter keys (all optional):
 | `required_check` | none                                                           | The check name that must be present and green (e.g. a CI gate job).                    |
 | `hold_labels`    | `[needs-review]`                                               | A PR or issue carrying one is never merged by this skill.                              |
 | `priority`       | `[security, ci-fix, feature, audit]`                           | Label order for claiming; oldest first within a tier.                                  |
-| `gate_paths`     | `[docs/adr/**, docs/design/**, **/prd.md, **/architecture.md]` | A PR changing a match always needs a human merge (ADR-0036).                           |
+| `gate_paths`     | `[docs/adr/**, docs/design/**, **/prd.md, **/architecture.md]` | A PR changing a match, old path of a rename included, always needs a human merge (ADR-0036). |
 
 Hooks (each a `## <name>` section with the exact command or rule):
 
@@ -51,6 +51,7 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | `reviewers`      | one universal reviewer using [the reviewer contract](references/reviewer-contract.md); no specialists |
 | `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch`                                                     |
 | `update-branch`  | `gh pr update-branch <N>`                                                                             |
+| `changed-files`  | none: no `gate_paths` check can pass, so under `merge: auto` every PR needs a human merge             |
 | `lock`           | none: one session at a time is the only lock                                                          |
 | `reap`           | none: report worker worktrees left behind                                                             |
 | `telemetry`      | none                                                                                                  |
@@ -195,7 +196,18 @@ consent, and a PR that passes every gate step is enqueued with the
   classification is the Owner's written review for it (ADR-0088);
 - lacks the `required_check` present and green;
 - carries a `hold_labels` label.
-- changes a file `gate_paths` matches.
+- changes a file `gate_paths` matches, judged on the `changed-files`
+  hook's list (below).
+
+**The changed-file list.** The `gate_paths` check reads one source, the
+`changed-files` hook, and only that source. Its list holds every file
+the PR changes, and a rename or move counts as **both** its old path and
+its new one: a gate-path file moved to an ungated path is a change to a
+gate path. A list that reports only a rename's destination, a list the
+source capped or paged short, a list read in part, an empty list for a
+PR that changes files, and a source that failed or is unavailable all
+fail closed: the PR needs a human merge. Never fill a gap in the list
+from the PR body, its title, or the author's account of what changed.
 
 A merge the session's runtime denies is not retried by any route for
 the rest of the session. Comment the verdict on the PR and report it as
