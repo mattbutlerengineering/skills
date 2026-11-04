@@ -99,6 +99,10 @@ removes the ADR file and README row in the same commit.
    (`launch.md`, `storyboard.json`, `demo.tape`, `launch.mp4`, 300 KB).
    The commit landed after the PR was opened, so it is part of PR #1147
    by the push below.
+7. Launch brief dropped on the Owner's decision (2026-11-03, "Revert
+   video, then merge"): `1013dc4` reverted on the branch as `8808499`,
+   removing `docs/launches/a-brief-the-fast-path-waves-through/`. The
+   fix has no user-facing surface, so no launch brief ships with it.
 
 ## Post-release checks
 
@@ -137,11 +141,9 @@ None yet; nothing is released. After the merge, confirm on main that
 - The suite's wall-clock tests failed once each in three loaded runs
   during Implement (`defect.md` Notes); clean at load 12.6 in Verify and
   at 5.8 here.
-- The launch brief (`docs/launches/a-brief-the-fast-path-waves-through/`,
-  commit `1013dc4`, includes a 300 KB `launch.mp4`) was added because the
-  repo's config says SHIP, though this fix has no user-facing surface;
-  it was added after the PR opened and the PR body does not list it. To
-  drop it, revert `1013dc4` before merge.
+- The launch brief (`1013dc4`, with a 300 KB `launch.mp4`) was added
+  because the repo's config says SHIP. The Owner dropped it before merge,
+  and it was reverted as `8808499` (Release log entry 7).
 
 ## Outcome
 
