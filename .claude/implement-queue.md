@@ -59,9 +59,10 @@ dispatch every specialist.
     python3 fast_path.py gate origin/main HEAD
 
 The source of the `gate_paths` check, run in the PR's checkout after
-`git fetch origin`. It reads `git diff --name-only --no-renames
+`git fetch origin`. It reads `git diff --name-only -z --no-renames
 origin/main...HEAD`, so a rename lists its old path and its new one
-(the same list as `fast-path`, one `changed_paths` call). Exit 0 prints
+(the same list as `fast-path`, one `changed_paths` call), and `-z`
+lists a non-ASCII or quote-bearing name as written, not quoted. Exit 0 prints
 `gate-paths: clear`: no changed path is a gate path. Exit 1 prints
 `gate-paths: human (<path>)`: a human merge, and `<path>` may be the old
 path of a rename. Exit 2 prints a `fast-path:` problem string (git
@@ -74,8 +75,13 @@ rename's old path (the second also stops at 100 files):
     gh api repos/{owner}/{repo}/pulls/<N>/files --paginate
 
 Take every `filename` **and** every `previous_filename` and match each
-against `gate_paths`. Without `--paginate`, or if the call fails or
-returns part of the list, fail closed. A GitHub MCP file-list tool is
+against `gate_paths`. Without `--paginate`, or if the call fails, fail
+closed. The list's length must equal the PR's `changed_files`:
+
+    gh api repos/{owner}/{repo}/pulls/<N> --jq .changed_files
+
+A different length (the endpoint stops at 3000 files and flags no
+truncation) fails closed. A GitHub MCP file-list tool is
 not a source until a run records that it reports `previous_filename`.
 
 ## merge-command

@@ -22,12 +22,12 @@ import cli_contract  # noqa: E402
 import git_repo  # noqa: E402
 from fake_git import FakeGit  # noqa: E402
 
-DIFF = ("diff", "--name-only", "--no-renames", "origin/main...HEAD")
+DIFF = ("diff", "--name-only", "-z", "--no-renames", "origin/main...HEAD")
 
 
 def run(paths, **kwargs):
     """(exit code, stdout, the fake) for a diff naming `paths`."""
-    git = FakeGit({DIFF: "".join(f"{p}\n" for p in paths)}, **kwargs)
+    git = FakeGit({DIFF: "".join(f"{p}\0" for p in paths)}, **kwargs)
     code, out = cli_contract.capture(fast_path.main,
                                      ["origin/main", "HEAD"], git=git)
     return code, out, git
@@ -148,8 +148,12 @@ class TestProfilePin(unittest.TestCase):
         routine = (root / "docs" / "factory" / "merge-train-routine.md"
                    ).read_text(encoding="utf-8")
         self.assertIn("| `changed-files`", skill)
-        self.assertIn("**both** its old path and\nits new one", skill)
-        self.assertIn("fail closed: the PR needs a human merge", skill)
+        self.assertIn("**both**", skill)
+        self.assertIn("fail closed", skill)
+        for text in (skill, profile):
+            for token in ("pulls/<N>/files --paginate", "`filename`",
+                          "`previous_filename`", "changed_files"):
+                self.assertIn(token, text)
         self.assertIn("\n## changed-files\n\n"
                       "    python3 fast_path.py gate origin/main HEAD\n",
                       profile)
@@ -160,7 +164,7 @@ class TestFailClosed(unittest.TestCase):
     def test_a_failed_git_exits_2_with_a_problem_string(self):
         code, out, _ = run(["docs/kb/a.md"], failing=["diff"])
         self.assertEqual(code, 2)
-        self.assertEqual(out, "fast-path: git diff --name-only --no-renames"
+        self.assertEqual(out, "fast-path: git diff --name-only -z --no-renames"
                               " origin/main...HEAD failed: fatal: rejected\n")
 
     def test_a_ref_that_does_not_resolve_is_the_same_case(self):
@@ -171,7 +175,7 @@ class TestFailClosed(unittest.TestCase):
         code, out = cli_contract.capture(fast_path.main,
                                          ["origin/main", "nope"], git=git)
         self.assertEqual(code, 2)
-        self.assertEqual(out, "fast-path: git diff --name-only --no-renames"
+        self.assertEqual(out, "fast-path: git diff --name-only -z --no-renames"
                               " origin/main...nope failed: fatal: bad"
                               " revision 'origin/main...nope'\n")
 
@@ -181,7 +185,7 @@ class TestFailClosed(unittest.TestCase):
                                          ["origin/main", "HEAD"], git=git)
         self.assertEqual(code, 2)
         self.assertTrue(out.startswith("fast-path: git diff --name-only"
-                                       " --no-renames"
+                                       " -z --no-renames"
                                        " origin/main...HEAD failed: "), out)
 
 
@@ -268,13 +272,30 @@ class TestRealGit(unittest.TestCase):
                              " (docs/fixes/y/autorun-brief.md)\n"))
 
 
+    def test_a_non_ascii_gate_path_is_review_with_the_real_path(self):
+        """git quotes `caf\\303\\251` unless told not to; the quoted string
+        matched no gate prefix, so the path read as clear."""
+        root = self.repo({"docs/adr/0999-café.md": "a\n"})
+        (root / "docs/adr/0999-café.md").write_text("b\n")
+        self.git("-C", root, "commit", "-q", "-am", "edit")
+        self.assertEqual(self.classify(root),
+                         (1, "fast-path: review (docs/adr/0999-café.md)\n"))
+
+    def test_a_quote_in_a_gate_path_is_review_with_the_real_path(self):
+        root = self.repo({'docs/adr/0998-a"b.md': "a\n"})
+        (root / 'docs/adr/0998-a"b.md').write_text("b\n")
+        self.git("-C", root, "commit", "-q", "-am", "edit")
+        self.assertEqual(self.classify(root),
+                         (1, 'fast-path: review (docs/adr/0998-a"b.md)\n'))
+
+
 class TestGateMode(unittest.TestCase):
     """`fast_path.py gate <base> <head>` is the merge train's `gate_paths`
     check: the same rename-safe list, any gate path refuses (exit 1),
     and a list that cannot be proven complete fails closed."""
 
     def gate(self, paths, **kwargs):
-        git = FakeGit({DIFF: "".join(f"{p}\n" for p in paths)}, **kwargs)
+        git = FakeGit({DIFF: "".join(f"{p}\0" for p in paths)}, **kwargs)
         return cli_contract.capture(
             fast_path.main, ["gate", "origin/main", "HEAD"], git=git)
 
@@ -287,7 +308,7 @@ class TestGateMode(unittest.TestCase):
                          (1, "gate-paths: human (docs/adr/0001-x.md)\n"))
 
     def test_the_same_diff_args_as_the_classifier_are_used(self):
-        git = FakeGit({DIFF: "lint.py\n"})
+        git = FakeGit({DIFF: "lint.py\0"})
         cli_contract.capture(fast_path.main,
                              ["gate", "origin/main", "HEAD"], git=git)
         self.assertEqual([tuple(c) for c in git.calls], [DIFF])
@@ -299,7 +320,7 @@ class TestGateMode(unittest.TestCase):
     def test_a_failed_git_exits_2_with_a_problem_string(self):
         self.assertEqual(
             self.gate(["lint.py"], failing=["diff"]),
-            (2, "fast-path: git diff --name-only --no-renames"
+            (2, "fast-path: git diff --name-only -z --no-renames"
                 " origin/main...HEAD failed: fatal: rejected\n"))
 
     def test_a_rename_out_of_a_gate_path_in_real_git_is_human(self):
@@ -325,6 +346,18 @@ class TestGateMode(unittest.TestCase):
             cli_contract.capture(fast_path.main, ["gate", "base", "HEAD"],
                                  git=lambda args: run(args, cwd=root)),
             (0, "gate-paths: clear\n"))
+
+    def test_a_non_ascii_gate_path_in_real_git_is_human(self):
+        real = TestRealGit()
+        real.addCleanup = lambda fn: self.addCleanup(fn)
+        root = real.repo({".github/workflows/é.yml": "name: v\n"})
+        (root / ".github/workflows/é.yml").write_text("name: w\n")
+        real.git("-C", root, "commit", "-q", "-am", "edit")
+        run = cli.runner("git")
+        self.assertEqual(
+            cli_contract.capture(fast_path.main, ["gate", "base", "HEAD"],
+                                 git=lambda args: run(args, cwd=root)),
+            (1, "gate-paths: human (.github/workflows/é.yml)\n"))
 
 
 class TestMain(cli_contract.CliContract, unittest.TestCase):

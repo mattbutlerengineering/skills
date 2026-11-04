@@ -87,14 +87,17 @@ def changed_paths(git, base, head):
     failed — a problem string, never a traceback (ADR-0021). Rename
     detection is off: with it on, git lists only a rename's destination,
     so a gate path moved into docs/ would vanish from the list; off, the
-    source shows as a deletion and the destination as an addition."""
-    args = ["diff", "--name-only", "--no-renames", f"{base}...{head}"]
+    source shows as a deletion and the destination as an addition. `-z`
+    ends each path with NUL and quotes none: without it git writes a
+    non-ASCII or quote-bearing name as a quoted, escaped string that
+    matches no gate prefix, so a gate path would read as clear."""
+    args = ["diff", "--name-only", "-z", "--no-renames", f"{base}...{head}"]
     try:
         out = git(args).stdout
     except cli.CLI_FAILURES as err:
         return None, (f"fast-path: git {' '.join(args)} failed:"
                       f" {cli.detail(err)}")
-    return [line for line in out.splitlines() if line], None
+    return [path for path in out.split("\0") if path], None
 
 
 def gate_verdict(paths):
