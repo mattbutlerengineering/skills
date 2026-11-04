@@ -149,3 +149,7 @@ Seed inbox — advisory only, never orientation state; grammar and read moments 
 - Record the `check` job duration as its own CI metric, so goals are judged on what the repo controls, not whole-run time with queue wait (from: feature:faster-sdlc)
 - Batch the faster-sdlc review's deferred Minors: exit-2 reason text, empty-discovery exit code, the gpgsign assumption, Notes counts, the `docs/factory/` survey beyond `costs.jsonl` (from: feature:faster-sdlc)
 - Count the humans who act on the merge train's journal verdicts per week, so the next Operate for the train has a real population (from: feature:faster-sdlc)
+- Make `launch_demo.py config`, or Ship step 4, consult the run's "User-facing surface: None" or `ux: not-applicable` before answering `SHIP`, so a fix with no surface does not render a launch video the Owner then reverts (from: maintenance:a-brief-the-fast-path-waves-through)
+- A gates detector: a checked work item whose Accept line names `python3 run_tests.py` needs a recorded `tests: ... 0 problem(s)` line in the same artifact (from: maintenance:a-brief-the-fast-path-waves-through)
+- Decide the glob dialect for `**/` entries in `gate_paths` against a root-level path, and pin the case-sensitivity of the gate basenames (`autorun-brief.md`, `prd.md`, `architecture.md`) in one test (from: maintenance:a-brief-the-fast-path-waves-through)
+- After the next resume that edits a brief, check that its PR was routed `review` and not auto-merged, so the gate has a first real observation (from: maintenance:a-brief-the-fast-path-waves-through)
