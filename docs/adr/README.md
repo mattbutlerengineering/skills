@@ -141,4 +141,5 @@ the canonical vocabulary.
 | [0118](0118-protocol-owns-where-frontmatter-ends.md) | protocol.py owns where frontmatter ends, and a fence line may carry trailing whitespace | provisional |
 | [0119](0119-a-reply-voice-ships-as-a-utility-skill-with-an-opt-in-output-style.md) | A reply voice ships as a utility skill with an opt-in output style, never forced | provisional |
 | [0120](0120-skills-cli-installs-from-a-generated-branch.md) | The skills CLI installs every skill from a generated npx branch | provisional |
-| [0121](0121-the-fast-path-gates-the-docs-agents-obey.md) | The fast path gates the docs agents obey | provisional |
+| [0121](0121-the-fast-path-gates-the-docs-agents-obey.md) | The fast path gates the docs agents obey | amended by ADR-0122 (the run directories' survey: the autorun brief is a gate path; provisional) |
+| [0122](0122-the-fast-path-gates-the-autorun-brief.md) | The fast path gates the autorun brief | provisional |

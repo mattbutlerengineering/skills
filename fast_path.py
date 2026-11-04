@@ -15,10 +15,12 @@ its destination) and prints one line:
   fail-closed case: review the PR, dispatch every specialist.
 
 The gate paths are ADR-0087's defaults, the three ADR-0096 adds for
-this repo, and the instruction docs ADR-0121 adds (the protocol, the
+this repo, the instruction docs ADR-0121 adds (the protocol, the
 standards index and the routine protocols under docs/factory/: files
 agents are told to obey, so a docs-only PR cannot rewrite them
-unreviewed). The queue profile's `gate_paths` is the same list in glob
+unreviewed) and, by ADR-0122, every autorun-brief.md at any depth (a
+resume obeys the brief's release authorization, `operate:` and
+`stop-after:`). The queue profile's `gate_paths` is the same list in glob
 spelling; gate_globs() renders it and a test pins the two equal.
 Root-only (ADR-0060's rule), stdlib only; the git port is
 cli.runner("git"), injected for tests.
@@ -30,10 +32,11 @@ import cli
 
 # ADR-0087's default gate paths (as directory prefixes and basenames),
 # the three ADR-0096 adds (release PRs, workflows and the stamped
-# payload keep a human merge) and ADR-0121's instruction docs.
+# payload keep a human merge), ADR-0121's instruction docs and
+# ADR-0122's autorun brief. Basenames match at any depth.
 GATE_PREFIXES = ("docs/adr/", "docs/design/", "factory/templates/",
                  ".github/", "docs/factory/")
-GATE_NAMES = ("prd.md", "architecture.md")
+GATE_NAMES = ("prd.md", "architecture.md", "autorun-brief.md")
 GATE_FILES = (".claude-plugin/plugin.json", "docs/pipeline-protocol.md",
               "docs/standards.json")
 LOW_RISK_PREFIX = "docs/"

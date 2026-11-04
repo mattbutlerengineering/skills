@@ -1,6 +1,6 @@
 # The fast path gates the docs agents obey
 
-- Status: provisional
+- Status: amended by ADR-0122 (the run directories' survey: the autorun brief is a gate path; provisional)
 - Date: 2026-11-02
 
 Recorded by the `faster-sdlc` feature run
