@@ -2,10 +2,11 @@
 stage: ship
 run: maintenance:a-rename-the-merge-train-may-not-see
 date: 2026-11-03
-outcome: prepared
+outcome: released
+released-at: 2026-11-04
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1150
 assumptions:
-  - "Release authorization is prepare-and-stop (autorun-brief.md). The branch is pushed and PR #1150 is open; nothing is merged, tagged or version-bumped."
+  - "Release authorization was prepare-and-stop (autorun-brief.md). The branch was pushed and PR #1150 opened; the Owner then answered 'Merge now' in session (2026-11-04) and the PR was squash-merged. Nothing is tagged or version-bumped."
   - "No launch brief, by Owner decision (autorun-brief.md, 'User-facing surface'), whatever `launch_demo.py config` prints. The command was not run and launch-demo was not loaded."
   - "Ship for a scoped maintenance fix is a single branch merge per the protocol's Run scale section, not a tagged release. `.claude-plugin/plugin.json` is untouched (ADR-0095); the wave's chore(release) bump carries this skill change to consumers."
   - "No ADR was added, so the ADR-number pre-flight item does not apply (review.md, ADR judgement: the protocol's three-leg test fails on the first leg)."
@@ -15,11 +16,29 @@ assumptions:
 
 ## What shipped, and how far
 
-Prepared, not released. Branch `fix/a-rename-the-merge-train-may-not-see`
-pushed; **PR #1150** is open against `main` with `Closes #1149`, a
-`No work order:` line and a `## Merge danger` section. Base is
+Released 2026-11-04. Branch `fix/a-rename-the-merge-train-may-not-see`
+was pushed and **PR #1150** opened against `main` with `Closes #1149`, a
+`No work order:` line and a `## Merge danger` section. Base was
 `origin/main` `397a987`; HEAD at the time of the PR was `068e243`. The
-merge is the Owner's.
+PR was squash-merged as `038dc0f` (see Write-back).
+
+## Write-back, 2026-11-04
+
+```
+$ gh pr view 1150 --json state,mergedAt,mergeCommit
+{"mergeCommit":{"oid":"038dc0f81ffc6dbb7928d2b96afb9f0e218e9c61"},"mergedAt":"2026-11-04T19:54:21Z","state":"MERGED"}
+$ gh issue view 1149 --json state,closedAt
+{"closedAt":"2026-11-04T19:54:23Z","state":"CLOSED"}
+```
+
+- Squash commit `038dc0f81ffc6dbb7928d2b96afb9f0e218e9c61`, merged
+  2026-11-04T19:54:21Z.
+- The merge was made by the orchestrator on the Owner's explicit
+  in-session answer ("Merge now", 2026-11-04). The PR touches a gate path,
+  so it needed that human decision.
+- #1149 closed at 2026-11-04T19:54:23Z.
+- Outstanding: the `chore(release)` version bump (ADR-0095), now covering
+  three merged fixes. Not done by this run.
 
 ## Pre-flight
 
@@ -94,15 +113,11 @@ issue edits (#1149 closes only when the PR merges).
 
 ## Owner's release steps
 
-1. Review and merge PR #1150. It touches a gate path
-   (`docs/factory/merge-train-routine.md`), so it is a human merge by the
-   train's own rule.
-2. The wave's `chore(release)` bump, per ADR-0095, which this skill
-   change is payload for. This run does not touch `plugin.json`.
-3. Write-back: the next pass at Ship reads the PR
-   (`gh pr view 1150 --json state,mergedAt`), rewrites `outcome: released`,
-   adds `released-at:`, keeps `pending-merge:`, and commits. Operate's
-   minimum signal is "Ship written back as released".
+1. ~~Review and merge PR #1150.~~ Done 2026-11-04, see Write-back.
+2. The `chore(release)` bump, per ADR-0095, is outstanding. It now covers
+   three merged fixes, this one among them. This run does not touch
+   `plugin.json`.
+3. ~~Write-back.~~ Done 2026-11-04, see Write-back.
 
 ## Release log
 
@@ -112,7 +127,9 @@ issue edits (#1149 closes only when the PR merges).
 
 ## Post-release checks
 
-Not applicable yet: nothing is deployed and the change is not merged.
+Nothing is deployed by this merge itself: the change reaches consumers
+only with the outstanding `chore(release)` bump. The checks below were
+written before the merge and still describe what to watch.
 
 - Fix run, producing boundary and consumers: the producing boundary
   `changed_paths` (`fast_path.py`) has two callers, the classifier and
@@ -141,5 +158,6 @@ Not applicable yet: nothing is deployed and the change is not merged.
 
 ## Outcome
 
-Prepared and stopped, waiting on PR #1150 (`pending-merge:`). No hiccups:
-the suite ran green first time under load average 11.
+Released. PR #1150 merged 2026-11-04T19:54:21Z; #1149 closed. The
+`chore(release)` bump (ADR-0095) is outstanding. The pre-merge run had no
+hiccups: the suite ran green first time under load average 11.
