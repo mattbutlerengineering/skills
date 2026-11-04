@@ -2,15 +2,16 @@
 stage: ship
 run: maintenance:a-brief-the-fast-path-waves-through
 date: 2026-11-03
-outcome: prepared
+outcome: released
+released-at: 2026-11-04
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1147
 assumptions: ["the brief's Release authorization is prepare and stop (Owner decision 3), so Ship pushes, opens the pull request and stops; no merge, tag or version bump", "launch brief: the brief is silent and `launch_demo.py config` printed SHIP, so the ship skill's default applied: the launch-demo skill ran for this run and its output is committed on the branch, even though the run has no user-facing surface"]
 ---
 
 # Release: the fast path gates every autorun brief
 
-**Prepared, not merged.** PR #1147 is open against main and waits for a
-human merge. Nothing merged, tagged, published or version-bumped.
+**Released 2026-11-04** (written back below). Prepared 2026-11-03 as PR
+#1147, which waited for a human merge; see "Write-back: merged".
 
 ## Readiness
 
@@ -145,6 +146,26 @@ None yet; nothing is released. After the merge, confirm on main that
   because the repo's config says SHIP. The Owner dropped it before merge,
   and it was reverted as `8808499` (Release log entry 7).
 
+## Write-back: merged (2026-11-04)
+
+```
+$ gh pr view 1147 --json state,mergedAt,mergeCommit
+{"mergeCommit":{"oid":"11a2bc928a4148dbeab5d01c4faff6555ff27866"},"mergedAt":"2026-11-04T04:09:43Z","state":"MERGED"}
+$ gh issue view 1146 --json state,closedAt
+{"closedAt":"2026-11-04T04:09:44Z","state":"CLOSED"}
+```
+
+PR #1147 squash-merged as `11a2bc9` at 2026-11-04T04:09:43Z (UTC). The
+orchestrator made the merge on the Owner's explicit in-session answer
+("Revert video, then merge", 2026-11-03/04), not the merge train. #1146
+closed one second later, via the PR's `Closes #1146`.
+
+Outstanding for the Owner: the `chore(release)` version bump per
+ADR-0095. It is not on main from this run, and this run did not touch
+`.claude-plugin/plugin.json`. The post-release check above (a brief-only
+diff prints `fast-path: review (<path>)` on main) is still unrun.
+
 ## Outcome
 
-Prepared and stopped — waiting on PR #1147 (`pending-merge:`).
+Released 2026-11-04 (`released-at:`); PR #1147 merged as `11a2bc9`
+(`pending-merge:` kept as the record).
