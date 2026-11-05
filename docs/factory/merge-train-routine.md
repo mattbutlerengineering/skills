@@ -78,8 +78,9 @@ open PR, with its number, title, and exactly one verdict:
 - **review first** — green, no gate path, no hold label, but no review
   pass yet and the fast path says `review (<path>)` or fails closed.
   The reviewer dispatch is implement-queue's Phase 2 gate, which this
-  routine runs for such a PR; a `flag` or `block` ends in
-  `needs-review` and no merge, per the reviewer contract.
+  routine runs for such a PR; a derived `flag` (the orchestrator's `verdict` hook on the reviewer's
+  score; the gate comment's first line carries the score) or a `block`
+  ends in `needs-review` and no merge, per the reviewer contract.
 - **human gate** — changes a `gate_paths` file (a rename counts by its
   old path as well as its new one; a changed-file list that is partial,
   or a `changed-files` hook that fails, is a human gate too), or carries

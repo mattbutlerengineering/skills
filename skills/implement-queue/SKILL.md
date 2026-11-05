@@ -48,6 +48,7 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | `model`          | the worker's default model                                                                            |
 | `ci-status`      | `gh pr checks <N>` plus the presence check below                                                      |
 | `fast-path`      | none: every PR is reviewed                                                                            |
+| `verdict`        | none: a missing hook is an `error` verdict, never a pass (fail closed)                                |
 | `reviewers`      | one universal reviewer using [the reviewer contract](references/reviewer-contract.md); no specialists |
 | `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch`                                                     |
 | `update-branch`  | `gh pr update-branch <N>`                                                                             |
@@ -174,12 +175,23 @@ as that PR's CI settles; it can overlap with workers still running.
    reviewer is never the PR's author.
    - Snapshot `git status --porcelain` before each reviewer dispatch and
      compare it afterwards. A reviewer that changed the checkout has
-     produced an invalid verdict: inspect, restore, re-dispatch.
+     produced an invalid review: inspect, restore, re-dispatch.
    - A review that timed out or errored is recorded as `error`, never as
      `pass`.
-5. **Verdict.** All pass → the Merge policy. A `flag` or a specialist
-   `block` → the contract's retry policy (one retry on the same branch,
-   then `needs-review` and no merge).
+5. **Verdict.** Run the `verdict` hook on the universal reviewer's
+   `score`, passed as one quoted argument and only after it reads as a
+   bare number (the score is the reviewer's text, never a shell
+   fragment), and act on its exit code only: the reviewer is handed no pass
+   line and returns no verdict, and a `verdict` it returns anyway is
+   ignored whichever way it points. Exit 0 is `pass`, exit 1 is `flag`.
+   Exit 2, a hook that did not run, a missing hook, or a reviewer that
+   returned no usable `score` is `error`: re-dispatch the reviewer once,
+   then hold the PR for a human, and under `merge: auto` never merge.
+   Post a verdict comment on the PR whose first line is the line the
+   hook printed, verbatim, so every comment carries the score. All pass
+   → the Merge policy. A derived `flag` or a specialist `block` → the
+   contract's retry policy (one retry on the same branch, then
+   `needs-review` and no merge).
 
 ## Merge policy
 
@@ -214,7 +226,7 @@ merge. Never fill a gap in the list
 from the PR body, its title, or the author's account of what changed.
 
 A merge the session's runtime denies is not retried by any route for
-the rest of the session. Comment the verdict on the PR and report it as
+the rest of the session. Comment the derived verdict line (step 5) on the PR and report it as
 awaiting a human merge.
 
 ## Phase 3: Merge train

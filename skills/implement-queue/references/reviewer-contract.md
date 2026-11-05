@@ -27,10 +27,13 @@ worker's worktree instead of guessing.
 
 | Field        | Content                                                                                                                                                                                                       |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `verdict`    | `pass` or `flag`                                                                                                                                                                                              |
-| `score`      | 0 to 10; 7 or more passes, 6 or less flags                                                                                                                                                                    |
+| `score`      | 0 to 10                                                                                                                                                                                                       |
 | `issues`     | Each with `category` (`hallucination`, `regression`, `test_failure`, `lint_violation`, `type_error`, `security`, `incomplete`, `quality`), `description`, and optional `filePath`, `lineNumber`, `suggestion` |
 | `assessment` | A short free-text judgement                                                                                                                                                                                   |
+
+The reviewer is handed no pass line and returns no `verdict`: the
+orchestrator derives it from `score` (ADR-0123). A `verdict` the
+reviewer returns anyway is ignored.
 
 A specialist reviewer returns `pass` or `block` with its reasons.
 
@@ -56,7 +59,7 @@ Start at 10 and deduct.
 - **Read-only.** The reviewer never edits files, branches, labels or
   issues. To run code it uses the worker's worktree, never the main
   checkout. The orchestrator verifies this with a `git status
---porcelain` snapshot before and after; a change voids the verdict.
+--porcelain` snapshot before and after; a change voids the review.
 - **Distinct.** The reviewer is never the PR's author.
 - **Errors are not passes.** A timeout or an error is recorded as
   `error`. Under `merge: auto` an `error` does not merge: re-dispatch

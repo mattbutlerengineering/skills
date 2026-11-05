@@ -109,6 +109,18 @@ is not a tell.
   visible focus, keyboard reachability, labelled controls, a
   reduced-motion path, and targets big enough to hit survive every move
   — including the ones that make things bolder or quieter.
+- **Named blockers are high severity on sight.** The six floor items
+  above and the eight below outrank every other finding, whatever the
+  surface's job. The list sets severity and adds no rule or step; it
+  is what makes "ranked by who is locked out" checkable:
+  - Loss of content or function at 320px wide or at 200% zoom.
+  - Meaning carried by colour alone.
+  - A destructive action with no confirm or undo.
+  - Truncation with no way back to the full text.
+  - Content hidden past a scroll edge with no cue that more is there.
+  - An error that names no recovery.
+  - A semantic colour used against its meaning, such as red for success.
+  - A state change carried by motion alone.
 
 ### 6. Look at it — twice, then stop
 
