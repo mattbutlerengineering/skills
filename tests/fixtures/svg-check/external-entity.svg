@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<!DOCTYPE svg [
+  <!ENTITY leak SYSTEM "SENTINEL_PATH">
+]>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+<text x="8" y="24" font-size="12">&leak;</text>
+</svg>

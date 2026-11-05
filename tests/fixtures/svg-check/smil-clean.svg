@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+<path id="p" d="M0 0H100"/>
+<circle id="first" r="4">
+  <animateMotion dur="2s" begin="-1.6s" repeatCount="indefinite"><mpath href="#p"/></animateMotion>
+</circle>
+<circle id="dot2" r="4">
+  <animateMotion dur="2s" begin="first.end; 1.6s; indefinite" repeatCount="indefinite"><mpath href="#p"/></animateMotion>
+</circle>
+<use href="#dot2" x="30"/>
+</svg>
