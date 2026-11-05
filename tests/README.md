@@ -75,6 +75,8 @@
   maintenance rows, against tests/fixtures/maintenance-orientation/
 - `test_protocol_orientation.py` — protocol.next_stage, product rows,
   against tests/fixtures/orientation/
+- `test_reviewer_verdict.py` — reviewer_verdict.py, ADR-0123's score-to-verdict
+  derivation, the queue profile's `verdict` hook
 - `test_run_tests.py` — run_tests.py, the parallel per-module runner,
   through a fake spawn port
 - `test_sweeps.py` — sweeps.py, the intake sweeps

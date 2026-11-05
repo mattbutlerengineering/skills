@@ -218,8 +218,11 @@ Implement-queue's gate, run for this one PR under the profile:
    [the reviewer contract](../../skills/implement-queue/references/reviewer-contract.md)
    defines. The reviewer is never the author; snapshot
    `git status --porcelain` before and after, and a changed checkout
-   voids the verdict. An error or timeout is `error`, re-dispatched
-   once and then held. A `flag` gets one fix on the same branch by a
+   voids the review. The verdict is derived, not the reviewer's: the
+   profile's `verdict` hook runs on its score, as the orchestrator's
+   gate step 5 states, and the PR comment's first line is the line the
+   hook printed, score included. An error or timeout is `error`,
+   re-dispatched once and then held. A derived `flag` gets one fix on the same branch by a
    new worker and one more gate; a second `flag` labels the issue
    `needs-review`, the profile's hold label, comments the reviewer's
    output on the PR, and ends the run with no merge; the hold parks
@@ -268,7 +271,7 @@ that merged or closed the earlier PR; `red-main` for a run whose rung
 **YYYY-MM-DD HH:MM — <merged | pr-open | finished-prior | red-main | report-only | stopped>**: <one line>
 - Pick: <what and why, with the evidence — or which rung ended the search>
 - Health: <verify suite, main CI, open PRs with age>
-- Gate: <check result, fast path or reviewer verdict, merge result or denial>
+- Gate: <check result, fast path or derived reviewer verdict with its score, merge result or denial>
 - Proposals: <excluded candidates, splits, playbook diffs, escalations>
 - Spend: <estimate for this run>
 ```
