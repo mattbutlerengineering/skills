@@ -143,3 +143,4 @@ the canonical vocabulary.
 | [0120](0120-skills-cli-installs-from-a-generated-branch.md) | The skills CLI installs every skill from a generated npx branch | provisional |
 | [0121](0121-the-fast-path-gates-the-docs-agents-obey.md) | The fast path gates the docs agents obey | amended by ADR-0122 (the run directories' survey: the autorun brief is a gate path; provisional) |
 | [0122](0122-the-fast-path-gates-the-autorun-brief.md) | The fast path gates the autorun brief | provisional |
+| [0123](0123-the-orchestrator-derives-the-reviewer-verdict-from-the-score.md) | The orchestrator derives the reviewer verdict from the score | provisional |

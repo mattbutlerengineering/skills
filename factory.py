@@ -62,6 +62,7 @@ VERBS = {
     "one-owner": ("one_owner", "argv"),
     "pr-body-preflight": ("pr_body_preflight", "argv"),
     "rejection-mining": ("rejection_mining", "argv"),
+    "reviewer-verdict": ("reviewer_verdict", "argv"),
     "run-tests": ("run_tests", "argv"),
     "size-band-calibration": ("size_band_calibration", "argv"),
     "standards-index": ("standards_index", "argv"),
