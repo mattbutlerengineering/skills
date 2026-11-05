@@ -16,6 +16,8 @@ assumptions:
 
 ## Problem statement
 
+<!-- coverage-waiver: context for the requirements below, not a deliverable; the run has no tracker mirror (brief, Tracker), so no breakdown row carries a WO id for the gate to count -->
+
 When a pipeline run changes interface code, nothing in `review` looks at
 it. No domain pass covers UI paths and the skill never mentions
 accessibility. A deleted `aria-label` or focus style is invisible in the
@@ -28,6 +30,8 @@ unmeasured on real diffs because no adopter UI diff was available.
 
 ## Solution
 
+<!-- coverage-waiver: narrates the deliverables the Success criteria list; the run has no tracker mirror (brief, Tracker), so no breakdown row carries a WO id for the gate to count -->
+
 `review` gains an Interface domain pass. When a changed path is a UI path,
 the reviewer runs it: it reads the removed side of every hunk for deleted
 accessibility and rendering signals, clears a signal whose equivalent
@@ -38,12 +42,16 @@ skill and in the README credits paragraph.
 
 ## Actors
 
+<!-- coverage-waiver: names who is involved; no actor is itself something to build -->
+
 - **Reviewer** — the agent (or person) running `review` on a change.
 - **Author** — whoever wrote the diff under review and reads its findings.
 - **Adopter maintainer** — owns a repo with a UI that uses the pipeline.
 - **Skill maintainer** — maintains this repo's skills, docs and checks.
 
 ## User stories
+
+<!-- coverage-waiver: the stories motivate the Success criteria, which the breakdown's Accept lines check; the run has no tracker mirror (brief, Tracker), so no breakdown row carries a WO id for the gate to count -->
 
 1. As a Reviewer, I want a domain pass that is selected when a diff changes UI paths, so that interface changes get looked at.
 2. As a Reviewer, I want the pass to read the removed side of each hunk, so that a deleted `aria-label` is found though the changed file reads fine.
@@ -53,6 +61,8 @@ skill and in the README credits paragraph.
 6. As a Skill maintainer, I want the new table row and the reference pinned by an offline check and credited to the source, so that the domain table cannot drift and the method's origin is on record.
 
 ## Success criteria
+
+<!-- coverage-waiver: every breakdown item's Accept line checks these criteria, but the run has no tracker mirror (brief, Tracker), so no row carries a WO id and the gate cannot count the citation -->
 
 - [ ] `skills/review/references/domain-reviewers.md` has an Interface row, selected by UI paths (`*.tsx`, `*.jsx`, `*.vue`, `*.svelte`, `*.css`, `*.scss`, templates), that links a new reference under `skills/review/references/`. How "templates" is bounded is decided in Architect. A person reading the table finds the row and the link resolves.
 - [ ] The new reference tells the reviewer to read the removed side of every hunk for each of these signals: `aria-label`, `alt=`, `:focus-visible`/`outline`, `tabindex`, `prefers-reduced-motion`, logical properties, `lang=`/`dir=`, a token swapped for a literal.
@@ -68,6 +78,8 @@ skill and in the README credits paragraph.
 
 ## Out of scope
 
+<!-- coverage-waiver: lists what is not built, so no breakdown row can cover it -->
+
 - Rendered or browser checks (the Moonshot rung: comparing the accessibility tree and focus order before and after).
 - Any change to `polish`; another run owns it.
 - A change to any skill's frontmatter `description`.
@@ -77,6 +89,8 @@ skill and in the README credits paragraph.
 - Tracker seeding or work-order issues.
 
 ## Open questions
+
+<!-- coverage-waiver: questions Architect answered in architecture.md; nothing to build -->
 
 - How broad the selection globs should be: "templates" is vague, and the payments row is broad on purpose, so the row needs the same care — Architect.
 - What counts as an equivalent replacement, beyond the same-selector `outline` to `box-shadow` case — Architect, tested by hand on fixtures.
