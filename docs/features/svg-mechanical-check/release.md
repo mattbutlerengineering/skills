@@ -2,7 +2,8 @@
 stage: ship
 run: feature:svg-mechanical-check
 date: 2026-11-04
-outcome: prepared
+outcome: released
+released-at: 2026-11-05
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1161
 assumptions:
   - "Release authorization is none (brief): prepared and stopped. No merge, tag, version bump or branch deletion."
