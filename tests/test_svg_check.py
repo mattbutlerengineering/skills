@@ -71,6 +71,16 @@ class TestRefusal(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         self.assertIn(": not well-formed: ", lines[0])
 
+    def test_unknown_encoding_declaration_is_not_well_formed(self):
+        # expat raises LookupError, not ExpatError, for an encoding it has
+        # no codec for; the contract is that content never raises
+        data = (b'<?xml version="1.0" encoding="bogus"?>'
+                b'<svg xmlns="http://www.w3.org/2000/svg" width="1" '
+                b'height="1"/>')
+        r = svg_check.check(data)
+        self.assertTrue(r.refusal.startswith("not well-formed: "), r.refusal)
+        self.assertEqual(r.problems, [])
+
     def test_missing_path_cannot_read(self):
         missing = str(FIX / "no-such-file.svg")
         code, lines = run_main(missing)
