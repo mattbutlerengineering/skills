@@ -20,9 +20,9 @@ Each is something a diff can delete with no test noticing:
 3. `:focus-visible` or `outline`: the visible focus indicator.
 4. `tabindex`: the keyboard order and reachability.
 5. `prefers-reduced-motion`: the opt-out from animation.
-6. Logical properties (`margin-inline`, `padding-block`, `inset-inline-start`
-   and kin) replaced by physical ones (`margin-left`, `right`), which
-   breaks right-to-left layouts.
+6. Replacing logical properties (`margin-inline`, `padding-block`,
+   `inset-inline-start` and kin) with physical ones (`margin-left`,
+   `right`), which breaks right-to-left layouts.
 7. `lang=` or `dir=`: the language and direction of the document or a span.
 8. A design token (`var(--space-4)`, a theme key) swapped for a literal
    (`16px`, `#1a1a1a`).
