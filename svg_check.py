@@ -11,7 +11,9 @@ failure. The file is read whole; the refusal below is the untrusted-input
 defence, not a size cap.
 """
 import math
+import re
 import sys
+from collections import Counter
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from xml.parsers import expat
@@ -33,6 +35,12 @@ class Report:
     unread: int = 0
     skipped_rules: int = 0
     note: "str | None" = None  # why smallest_px is unset: "no text" or a reason
+
+
+SVG_NS = "http://www.w3.org/2000/svg"
+URL_RE = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)""")
+CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
+PX_RE = re.compile(r"\s*(\d+(?:\.\d+)?|\.\d+)\s*(?:px)?\s*$")
 
 
 class _Refused(Exception):
@@ -72,10 +80,73 @@ def check(data, embed_width=DEFAULT_EMBED):
     if report.refusal:
         return report
     try:
-        ET.fromstring(data)
+        root = ET.fromstring(data)
     except ET.ParseError as e:
         report.refusal = f"not well-formed: {e}"
+        return report
+    _defects(root, report.problems)
     return report
+
+
+def _local(name):
+    """The name without its `{namespace}` prefix."""
+    return name.rpartition("}")[2]
+
+
+def _px(value):
+    """A positive px or unitless length as a float, else None."""
+    m = PX_RE.match(value or "")
+    return float(m.group(1)) if m and float(m.group(1)) > 0 else None
+
+
+def _urls(text):
+    """Every url() target in a CSS or attribute value."""
+    return [next(g for g in m.groups() if g is not None).strip()
+            for m in URL_RE.finditer(text)]
+
+
+def _defects(root, problems):
+    """Append one problem string per defect found in the parsed tree."""
+    if root.tag != f"{{{SVG_NS}}}svg":
+        problems.append(f"root element is {root.tag}, not svg")
+        return
+    for dim in ("width", "height"):
+        value = root.get(dim)
+        if value is None:
+            problems.append(f"root {dim} missing")
+        elif _px(value) is None:
+            problems.append(f'root {dim} "{value}" is not a px length')
+    elements = list(root.iter())
+    counts = Counter(e.get("id") for e in elements if e.get("id") is not None)
+    ids = set(counts)
+    for name, n in counts.items():
+        if n > 1:
+            problems.append(f'duplicate id "{name}" on {n} elements')
+    for e in elements:
+        tag = _local(e.tag)
+        for attr, value in e.attrib.items():
+            attr = _local(attr)
+            if attr == "href":
+                _href(problems, ids, tag, value.strip())
+            _css_urls(problems, ids, value, f"{tag} {attr}")
+        if tag == "style":
+            css = CSS_COMMENT_RE.sub("", "".join(e.itertext()))
+            _css_urls(problems, ids, css, "<style>")
+
+
+def _href(problems, ids, tag, value):
+    if not value.startswith("#"):
+        problems.append(f'external href "{value}" on {tag}')
+    elif value[1:] not in ids:
+        problems.append(f'dangling href "{value}" on {tag}')
+
+
+def _css_urls(problems, ids, text, where):
+    for target in _urls(text):
+        if not target.startswith("#"):
+            problems.append(f"external url({target}) in {where}")
+        elif target[1:] not in ids:
+            problems.append(f"dangling url({target}) in {where}")
 
 
 def _usage(argv):

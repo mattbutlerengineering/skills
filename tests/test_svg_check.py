@@ -94,5 +94,101 @@ class TestRefusal(unittest.TestCase):
                 svg_check.check(b"<svg/>", bad)
 
 
+def problems(data):
+    return svg_check.check(data).problems
+
+
+def wrap(body, root='width="400" height="200" viewBox="0 0 400 200"'):
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" {root}>{body}</svg>'
+            ).encode()
+
+
+class TestDefects(unittest.TestCase):
+    SINGLE = {
+        "no-size.svg": "root width missing",
+        "dup-id.svg": 'duplicate id "a" on 2 elements',
+        "dangling-url.svg": "dangling url(#nope) in rect fill",
+        "external-href.svg":
+            'external href "https://example.com/x.png" on image',
+    }
+
+    def test_each_single_defect_fixture_prints_exactly_its_defect(self):
+        for name, line in self.SINGLE.items():
+            path = str(FIX / name)
+            code, lines = run_main(path)
+            self.assertEqual(code, 1, name)
+            defects = [ln for ln in lines if "smallest text" not in ln
+                       and "no text" not in ln]
+            self.assertEqual(defects, [f"svg-check: {path}: {line}"], name)
+
+    def test_all_four_names_every_defect(self):
+        path = str(FIX / "all-four.svg")
+        code, lines = run_main(path)
+        self.assertEqual(code, 1)
+        defects = {ln for ln in lines if "smallest text" not in ln
+                   and "no text" not in ln}
+        self.assertEqual(defects, {
+            f"svg-check: {path}: root width missing",
+            f'svg-check: {path}: duplicate id "a" on 2 elements',
+            f"svg-check: {path}: dangling url(#nope) in rect fill",
+            f'svg-check: {path}: external href '
+            f'"https://example.com/x.png" on image',
+        })
+        self.assertEqual(len(defects), 4)
+
+    def test_same_document_hrefs_pass(self):
+        self.assertEqual(problems(fixture("same-doc-href.svg")), [])
+        self.assertEqual(run_main(str(FIX / "same-doc-href.svg"))[0], 0)
+
+    def test_clean_fixture_exits_0(self):
+        self.assertEqual(problems(fixture("clean.svg")), [])
+        self.assertEqual(run_main(str(FIX / "clean.svg"))[0], 0)
+
+    def test_root_size_must_be_a_px_length(self):
+        for value in ("100%", "10em", "0", "-5", "abc"):
+            p = problems(wrap("", f'width="{value}" height="200"'))
+            self.assertEqual(p, [f'root width "{value}" is not a px length'],
+                             value)
+        p = problems(wrap("", 'width="400" height="50%"'))
+        self.assertEqual(p, ['root height "50%" is not a px length'])
+        self.assertEqual(problems(wrap("", 'width="400px" height="2.5"')), [])
+        self.assertEqual(problems(wrap("", 'viewBox="0 0 1 1"')),
+                         ["root width missing", "root height missing"])
+
+    def test_root_must_be_svg(self):
+        r = svg_check.check(b"<html><body/></html>")
+        self.assertEqual(r.problems, ["root element is html, not svg"])
+        wrong_ns = b'<svg xmlns="http://example.com/x" width="1" height="1"/>'
+        (only,) = problems(wrong_ns)
+        self.assertTrue(only.startswith("root element is "), only)
+        self.assertTrue(only.endswith(", not svg"), only)
+
+    def test_xlink_href_and_other_reference_places(self):
+        xl = 'xmlns:xlink="http://www.w3.org/1999/xlink"'
+        self.assertEqual(problems(wrap(
+            f'<use {xl} xlink:href="#gone"/>')),
+            ['dangling href "#gone" on use'])
+        self.assertEqual(problems(wrap(
+            '<a href="https://example.com"><text>x</text></a>')),
+            ['external href "https://example.com" on a'])
+        self.assertEqual(problems(wrap(
+            '<image href="data:image/png;base64,AAAA"/>')),
+            ['external href "data:image/png;base64,AAAA" on image'])
+        self.assertEqual(problems(wrap(
+            '<rect style="fill:url(#gone)"/>')),
+            ["dangling url(#gone) in rect style"])
+        self.assertEqual(problems(wrap(
+            '<rect fill="url(https://example.com/p.svg#x)"/>')),
+            ["external url(https://example.com/p.svg#x) in rect fill"])
+        self.assertEqual(problems(wrap(
+            '<style>@import url(https://example.com/a.css);</style>')),
+            ["external url(https://example.com/a.css) in <style>"])
+        self.assertEqual(problems(wrap(
+            '<style>/* url(#gone) */ .a { fill: url(#gone); }</style>')),
+            ["dangling url(#gone) in <style>"])
+        self.assertEqual(problems(wrap(
+            '<rect id="p"/><rect fill="url( &quot;#p&quot; )"/>')), [])
+
+
 if __name__ == "__main__":
     unittest.main()
