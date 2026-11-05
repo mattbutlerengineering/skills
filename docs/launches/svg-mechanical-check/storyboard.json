@@ -1,0 +1,10 @@
+{"title": "A mechanical check for diagrams",
+ "tagline": "Broken pictures named in a second",
+ "intro": "This is a small checker for the picture files that the two diagram skills produce.",
+ "steps": [
+  {"say": "It names every broken link, repeated name and missing size it finds in the picture.",
+   "do": ["python3 -I svg_check.py tests/fixtures/svg-check/all-four.svg"]},
+  {"say": "When the picture is clean, it says so and reports the smallest text size at the width the picture will have on a page.",
+   "do": ["python3 -I svg_check.py tests/fixtures/svg-check/clean.svg"]}
+ ],
+ "outro": "Mistakes that used to be found later by someone squinting at a rendered page are now caught in a second, before the diagram is handed over."}
