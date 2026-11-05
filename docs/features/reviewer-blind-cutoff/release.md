@@ -2,7 +2,8 @@
 stage: ship
 run: feature:reviewer-blind-cutoff
 date: 2026-11-04
-outcome: prepared
+outcome: released
+released-at: 2026-11-05
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1159
 assumptions:
   - "Interview answers came from autorun-brief.md; its Release authorization is None, so Ship prepared and stopped: pushed the branch, opened the pull request, no merge, tag, version bump or branch deletion."

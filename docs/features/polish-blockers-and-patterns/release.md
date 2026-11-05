@@ -2,7 +2,8 @@
 stage: ship
 run: feature:polish-blockers-and-patterns
 date: 2026-11-04
-outcome: prepared
+outcome: released
+released-at: 2026-11-05
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1157
 assumptions:
   - "Release authorization is NONE (brief): prepare and stop. No merge, tag, version bump or branch deletion."
