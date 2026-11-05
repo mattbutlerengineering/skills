@@ -252,5 +252,170 @@ class TestAnimatedReferences(unittest.TestCase):
         self.assertEqual(problems(wrap(css)), [])
 
 
+def reading(body, root='width="400" height="200" viewBox="0 0 400 200"',
+            embed=830.0):
+    return svg_check.check(wrap(body, root), embed)
+
+
+def main_over(data, *flags):
+    """(exit code, lines, path) for main over a temp file holding data."""
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "x.svg"
+        path.write_bytes(data)
+        code, lines = run_main(str(path), *flags)
+    return code, lines, str(path)
+
+
+class TestSmallestText(unittest.TestCase):
+    # clean.svg: root 1000x500, viewBox 500x250, so at 830px the scale is
+    # 830/500 = 1.66 on both axes; its smallest text is the 5px under
+    # <g font-size="5"> (the 12px title is larger): 5 x 1.66 = 8.3.
+    def test_clean_fixture_prints_the_hand_worked_figure(self):
+        path = str(FIX / "clean.svg")
+        code, lines = run_main(path)
+        self.assertEqual(code, 0)
+        self.assertEqual(lines, [
+            f"svg-check: {path}: pass — smallest text 8.3px at 830px "
+            "embed width"])
+
+    def test_embed_width_option_scales_in_proportion(self):
+        # 440 / 500 = 0.88; 5 x 0.88 = 4.4
+        path = str(FIX / "clean.svg")
+        for flags in (["--embed-width", "440"], ["--embed-width=440"]):
+            code, lines = run_main(path, *flags)
+            self.assertEqual(code, 0)
+            self.assertEqual(lines, [
+                f"svg-check: {path}: pass — smallest text 4.4px at 440px "
+                "embed width"])
+
+    def test_a_root_narrower_than_the_embed_is_not_scaled_up(self):
+        # root 1000 < embed 2000: rendered 1000, scale 1000/500 = 2, 5 x 2
+        r = svg_check.check(fixture("clean.svg"), 2000)
+        self.assertAlmostEqual(r.smallest_px, 10.0)
+
+    def test_scale_is_the_smaller_axis_when_aspect_ratios_differ(self):
+        # root 400x100 over viewBox 400x200: x scale 1, y scale
+        # 400 x (100/400) / 200 = 0.5; the smaller wins: 10 x 0.5 = 5
+        r = reading('<text font-size="10">a</text>',
+                    'width="400" height="100" viewBox="0 0 400 200"')
+        self.assertAlmostEqual(r.smallest_px, 5.0)
+
+    def test_no_viewbox_means_user_units_are_px(self):
+        r = reading('<text font-size="10">a</text>',
+                    'width="400" height="200"', embed=200)
+        self.assertAlmostEqual(r.smallest_px, 5.0)
+
+    def test_unusable_scale_leaves_the_number_unset_with_a_reason(self):
+        r = reading('<text font-size="10">a</text>',
+                    'viewBox="0 0 400 200"')
+        self.assertIsNone(r.smallest_px)
+        self.assertEqual(r.problems,
+                         ["root width missing", "root height missing"])
+        self.assertTrue(r.note.startswith("root width and height"))
+        r = reading('<text font-size="10">a</text>',
+                    'width="400" height="200" viewBox="0 0 0 200"')
+        self.assertIsNone(r.smallest_px)
+        self.assertTrue(r.note.startswith("viewBox"))
+        code, lines, path = main_over(wrap(
+            '<text font-size="10">a</text>', 'viewBox="0 0 4 2"'))
+        self.assertEqual(code, 1)
+        self.assertEqual(len(lines), 3)
+        self.assertIn("smallest text not read: root width and height",
+                      lines[-1])
+        self.assertNotIn("px at", lines[-1])
+
+    def test_defects_and_a_readable_size_print_both(self):
+        code, lines, path = main_over(wrap(
+            '<rect fill="url(#gone)"/><text font-size="10">a</text>'))
+        self.assertEqual(code, 1)
+        self.assertEqual(lines, [
+            f"svg-check: {path}: dangling url(#gone) in rect fill",
+            f"svg-check: {path}: smallest text 10px at 830px embed width"])
+
+    def test_no_text(self):
+        code, lines, path = main_over(wrap('<rect width="1" height="1"/>'))
+        self.assertEqual(code, 0)
+        self.assertEqual(lines, [f"svg-check: {path}: pass — no text"])
+
+    def test_unresolved_sizes_are_counted_never_guessed(self):
+        for size in ("1.2em", "120%", "var(--s)", "1rem"):
+            r = reading(f'<text font-size="{size}">a</text>')
+            self.assertIsNone(r.smallest_px, size)
+            self.assertEqual(r.unread, 1, size)
+        r = reading('<text>no declaration</text>')
+        self.assertEqual(r.unread, 1)
+        code, lines, path = main_over(wrap('<text font-size="1.2em">a</text>'))
+        self.assertEqual(code, 0)
+        self.assertEqual(lines, [
+            f"svg-check: {path}: pass — smallest text not read: no text size"
+            " resolved (1 text elements unread)"])
+
+    def test_resolved_and_unread_text_report_both(self):
+        code, lines, path = main_over(wrap(
+            '<text font-size="10">a</text><text font-size="1.2em">b</text>'))
+        self.assertEqual(lines, [
+            f"svg-check: {path}: pass — smallest text 10px at 830px embed "
+            "width (1 text elements unread)"])
+
+    def test_complex_selector_rules_are_counted_as_skipped(self):
+        code, lines, path = main_over(wrap(
+            '<style>g > text { font-size: 7px }</style>'
+            '<g><text font-size="10">a</text></g>'))
+        self.assertEqual(code, 0)
+        self.assertEqual(lines, [
+            f"svg-check: {path}: pass — smallest text 10px at 830px embed "
+            "width (1 style rules skipped)"])
+        r = reading('<style>@media (min-width: 1px) { text '
+                    '{ font-size: 3px } }</style><text font-size="10">a'
+                    '</text>')
+        self.assertEqual(r.skipped_rules, 1)
+        self.assertAlmostEqual(r.smallest_px, 10.0)
+
+    def test_counts_are_absent_when_zero(self):
+        _, lines, _ = main_over(wrap('<text font-size="10">a</text>'))
+        self.assertNotIn("(", lines[0])
+
+    def test_precedence_inline_then_rule_then_attribute(self):
+        def px(body, style=""):
+            s = f"<style>{style}</style>" if style else ""
+            return reading(s + body).smallest_px
+        # a class rule beats a tag rule whichever is written later
+        self.assertAlmostEqual(px(
+            '<text class="c">a</text>',
+            ".c{font-size:9px} text{font-size:8px}"), 9)
+        # the later of two equal rules wins
+        self.assertAlmostEqual(px(
+            '<text class="c">a</text>',
+            ".c{font-size:9px} .c{font-size:11px}"), 11)
+        # tag.class and comma lists
+        self.assertAlmostEqual(px(
+            '<text class="b">a</text>', "text.b, .zz{font-size:6px}"), 6)
+        # unitless CSS value
+        self.assertAlmostEqual(px('<text>a</text>',
+                                  "text{font-size:9}"), 9)
+        # inline style beats a rule, a rule beats the attribute
+        self.assertAlmostEqual(px(
+            '<text style="font-size:7px;fill:red" font-size="6">a</text>',
+            "text{font-size:12px}"), 7)
+        self.assertAlmostEqual(px('<text font-size="6">a</text>',
+                                  "text{font-size:12px}"), 12)
+        self.assertAlmostEqual(px('<text font-size="6">a</text>'), 6)
+
+    def test_ancestors_are_walked_nearest_first(self):
+        r = reading('<g font-size="20"><g style="font-size:15px">'
+                    '<text>a</text></g></g>')
+        self.assertAlmostEqual(r.smallest_px, 15)
+        r = reading('<g font-size="20"><g font-size="1.5em">'
+                    '<text>a</text></g></g>')
+        self.assertIsNone(r.smallest_px)
+        self.assertEqual(r.unread, 1)
+
+    def test_tspan_text_is_read_and_a_blank_text_is_not(self):
+        r = reading('<text font-size="9"><tspan font-size="4">a</tspan>'
+                    '</text><text font-size="1em">   </text>')
+        self.assertAlmostEqual(r.smallest_px, 4)
+        self.assertEqual(r.unread, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

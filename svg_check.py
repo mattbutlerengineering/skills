@@ -46,6 +46,8 @@ CLOCK = r"(?:\d+:\d\d(?::\d\d)?(?:\.\d+)?|\d+(?:\.\d+)?(?:h|min|s|ms)?)"
 # so it never matches and is never read as an id.
 TIMING_REF_RE = re.compile(
     r"(\S+?)\.([A-Za-z]\w*(?:\([^)]*\))?)(?:\s*[+-]\s*" + CLOCK + r")?$")
+FONT_SIZE_RE = re.compile(r"(?:^|[;{\s])font-size\s*:\s*([^;}]+)")
+SELECTOR_RE = re.compile(r"([A-Za-z][\w-]*)?(?:\.([\w-]+))?$")
 PX_RE = re.compile(r"\s*(\d+(?:\.\d+)?|\.\d+)\s*(?:px)?\s*$")
 
 
@@ -91,6 +93,10 @@ def check(data, embed_width=DEFAULT_EMBED):
         report.refusal = f"not well-formed: {e}"
         return report
     _defects(root, report.problems)
+    if root.tag == f"{{{SVG_NS}}}svg":
+        _reading(root, report)
+    else:
+        report.note = "the root is not svg"
     return report
 
 
@@ -148,6 +154,136 @@ def _timing(problems, ids, tag, attr, value):
         if m and m.group(1) not in ids:
             problems.append(f'dangling timing reference "{m.group(1)}" '
                             f"in {tag} {attr}")
+
+
+def _scale(root, embed):
+    """(content scale, None), or (None, why it cannot be computed). An
+    <img> is scaled down to the column and never up, so the rendered width
+    is min(root width, embed); the smaller axis scale is the `meet` fit."""
+    w, h = _px(root.get("width")), _px(root.get("height"))
+    if w is None or h is None:
+        return None, "root width and height are needed to scale text"
+    box = root.get("viewBox")
+    if box is None:
+        vb_w, vb_h = w, h  # no viewBox: user units are px
+    else:
+        try:
+            nums = [float(n) for n in re.split(r"[\s,]+", box.strip())]
+        except ValueError:
+            nums = []
+        if (len(nums) != 4 or not all(map(math.isfinite, nums))
+                or nums[2] <= 0 or nums[3] <= 0):
+            return None, ("viewBox is not four numbers with a positive"
+                          " width and height")
+        vb_w, vb_h = nums[2], nums[3]
+    rendered = min(w, embed)
+    return min(rendered / vb_w, rendered * (h / w) / vb_h), None
+
+
+def _font_rules(root):
+    """(rules, skipped). A rule is (specificity, order, tag, class, value)
+    for a `tag`, `.class`, `tag.class` or comma-list selector. A <style>
+    rule carrying font-size under any other selector, or inside an at-rule,
+    is counted in skipped, never silently ignored."""
+    css = CSS_COMMENT_RE.sub("", "\n".join(
+        "".join(e.itertext()) for e in root.iter()
+        if _local(e.tag) == "style"))
+    rules, skipped, i = [], 0, 0
+    while True:
+        brace = css.find("{", i)
+        if brace < 0:
+            return rules, skipped
+        prelude, depth, j = css[i:brace].strip(), 1, brace + 1
+        while j < len(css) and depth:
+            depth += (css[j] == "{") - (css[j] == "}")
+            j += 1
+        body, i = css[brace + 1:j - 1], j
+        while prelude.startswith("@") and ";" in prelude:
+            prelude = prelude.partition(";")[2].strip()  # @import and kin
+        if "font-size" not in body:
+            continue
+        decls = FONT_SIZE_RE.findall(body)
+        if prelude.startswith("@") or not decls:
+            skipped += 1
+            continue
+        value = decls[-1].replace("!important", "").strip()
+        readable = True
+        for sel in prelude.split(","):
+            m = SELECTOR_RE.match(sel.strip())
+            if not m or not sel.strip():
+                readable = False
+                continue
+            tag, cls = m.groups()
+            rules.append(((cls is not None) * 10 + (tag is not None),
+                          len(rules), tag, cls, value))
+        skipped += not readable
+
+
+def _declared(node, rules):
+    """The font-size declaration that applies to this element itself, in
+    precedence inline style, <style> rule, attribute; None if it has none."""
+    found = FONT_SIZE_RE.findall(node.get("style", ""))
+    if found:
+        return found[-1].replace("!important", "").strip()
+    classes = (node.get("class") or "").split()
+    tag = _local(node.tag)
+    hits = [r for r in rules if r[2] in (None, tag)
+            and r[3] in (None, *classes)]
+    if hits:
+        return max(hits)[4]
+    value = node.get("font-size")
+    return value.strip() if value is not None else None
+
+
+def _font_size(node, parents, rules):
+    """The px size from the nearest declaration walking up the ancestors,
+    or None when that declaration is not px or unitless (em, %, var())
+    or there is none."""
+    while node is not None:
+        value = _declared(node, rules)
+        if value is not None:
+            return _px(value)
+        node = parents.get(node)
+    return None
+
+
+def _has_text(e):
+    return bool((e.text or "").strip()
+                or any((c.tail or "").strip() for c in e))
+
+
+def _reading(root, report):
+    """Fill the text fields of report: the smallest text size at the embed
+    width, or the reason it was not read."""
+    rules, report.skipped_rules = _font_rules(root)
+    parents = {c: p for p in root.iter() for c in p}
+    texts = [e for e in root.iter()
+             if _local(e.tag) in ("text", "tspan") and _has_text(e)]
+    sizes = [_font_size(e, parents, rules) for e in texts]
+    report.unread = sizes.count(None)
+    scale, why = _scale(root, report.embed_px)
+    if not texts:
+        report.note = "no text"
+    elif why:
+        report.note = why
+    elif len(sizes) == report.unread:
+        report.note = "no text size resolved"
+    else:
+        report.smallest_px = min(s for s in sizes if s is not None) * scale
+
+
+def _text_line(report):
+    if report.smallest_px is not None:
+        line = (f"smallest text {round(report.smallest_px, 1):g}px at "
+                f"{report.embed_px:g}px embed width")
+    elif report.note == "no text":
+        line = "no text"
+    else:
+        line = f"smallest text not read: {report.note}"
+    counts = [f"{n} {what}" for n, what in (
+        (report.unread, "text elements unread"),
+        (report.skipped_rules, "style rules skipped")) if n]
+    return f"{line} ({', '.join(counts)})" if counts else line
 
 
 def _href(problems, ids, tag, value):
@@ -208,6 +344,9 @@ def main(argv):
         return 2
     for problem in report.problems:
         print(f"{LABEL}: {path}: {problem}")
+    line = _text_line(report)
+    print(f"{LABEL}: {path}: {line}" if report.problems
+          else f"{LABEL}: {path}: pass — {line}")
     return 1 if report.problems else 0
 
 
