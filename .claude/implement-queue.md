@@ -58,7 +58,9 @@ dispatch every specialist.
 
     python3 reviewer_verdict.py <score>
 
-Run on the universal reviewer's `score` (ADR-0123); the reviewer is
+Run on the universal reviewer's `score` (ADR-0123), passed as one
+quoted argument and only once it reads as a bare number: the score is
+the reviewer's text, never a shell fragment. The reviewer is
 told no pass line and the threshold lives only in this tool. Exit 0
 prints `reviewer-verdict: pass (score N/10)`, exit 1 prints
 `reviewer-verdict: flag (score N/10)`, exit 2 prints

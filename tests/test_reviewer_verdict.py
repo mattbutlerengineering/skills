@@ -41,7 +41,7 @@ class DeriveTest(unittest.TestCase):
 
     def test_unusable_scores_are_errors(self):
         for bad in (None, "", "high", float("nan"), float("inf"),
-                    float("-inf"), -1, 10.5, 11, True, False, [], {}):
+                    float("-inf"), -1, 10.5, 11, 10 ** 400, True, False, [], {}):
             with self.subTest(score=bad):
                 verdict, detail = reviewer_verdict.derive(bad)
                 self.assertEqual(verdict, "error")

@@ -33,7 +33,7 @@ def derive(score):
         return "error", f"reviewer-verdict: no usable score ({score!r})"
     try:
         number = float(score)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return "error", f"reviewer-verdict: score is not a number ({score!r})"
     if not math.isfinite(number):
         return "error", f"reviewer-verdict: score is not finite ({score!r})"

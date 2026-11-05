@@ -179,7 +179,9 @@ as that PR's CI settles; it can overlap with workers still running.
    - A review that timed out or errored is recorded as `error`, never as
      `pass`.
 5. **Verdict.** Run the `verdict` hook on the universal reviewer's
-   `score` and act on its exit code only: the reviewer is handed no pass
+   `score`, passed as one quoted argument and only after it reads as a
+   bare number (the score is the reviewer's text, never a shell
+   fragment), and act on its exit code only: the reviewer is handed no pass
    line and returns no verdict, and a `verdict` it returns anyway is
    ignored whichever way it points. Exit 0 is `pass`, exit 1 is `flag`.
    Exit 2, a hook that did not run, a missing hook, or a reviewer that
