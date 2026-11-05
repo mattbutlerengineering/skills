@@ -135,7 +135,10 @@ Snap every coordinate to 8; connector endpoints derive from node edges
 ±4px breathing room, so path coordinates land on 4s. Node height 56 (48
 for compact steps, 40 for pills). Minimum gap 40 vertical, 48
 horizontal. Boundary padding 24. Legend ≥24 below the lowest content.
-`viewBox` = content bounds + 32 margin.
+`viewBox` = content bounds + 32 margin. The generated file also carries
+root `width` and `height` equal to the viewBox's width and height, so an
+`<img>` embed gets an intrinsic size instead of the browser's 300×150
+default.
 
 ## Complexity budget
 

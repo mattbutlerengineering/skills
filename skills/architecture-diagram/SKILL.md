@@ -110,6 +110,21 @@ the legend lists exactly what the figure uses.
 
 ## 7. Verify both themes
 
+First run the mechanical check over the file you wrote:
+
+    python3 -I <this skill's directory>/../../svg_check.py <file.svg>
+
+Exit 0 means no defect: a root `width` and `height`, no duplicate id, no
+`url(#…)` or `href` pointing at a missing id, no external link. Report the
+smallest-text line it prints (the smallest text size at the README embed
+width, 830px unless you pass `--embed-width`); it reports a size, it
+does not judge it. Exit 1 names each defect, one per line: fix every one
+in the file and rerun until exit 0. Exit 2 means the file was not
+checked: remove the `<!DOCTYPE>` or entity it names, or repair the XML,
+and rerun. If Python 3 is not available, say that the check did not run;
+never skip it silently. It does not see themes, contrast or layout, so
+the by-eye checks below still apply.
+
 Open the file in a browser. Confirm: it is one self-contained `.svg`
 (no scripts, no external requests), light mode reads as a designed
 document figure, and emulating `prefers-color-scheme: dark` (DevTools →
@@ -123,5 +138,6 @@ OS/browser preference, not GitHub's own theme setting; when exact
 control matters, emit forced `-light`/`-dark` copies per the design
 system's theme mechanics.
 
-Done when: both themes render clean standalone and embedded, and the
-remove test deleted nothing — or what it deleted is gone.
+Done when: the check exits 0, both themes render clean standalone and
+embedded, and the remove test deleted nothing — or what it deleted is
+gone.

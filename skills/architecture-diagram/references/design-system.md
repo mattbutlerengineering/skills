@@ -161,7 +161,10 @@ room, so path coordinates land on 4s. Text baselines are free.
 
 Node height 56 (48 compact). Minimum gap 48 horizontal, 40 vertical.
 Zone padding 24. Legend hairline ≥24 below the lowest content.
-`viewBox` = content bounds + 32 margin.
+`viewBox` = content bounds + 32 margin. The generated file also carries
+root `width` and `height` equal to the viewBox's width and height, so an
+`<img>` embed gets an intrinsic size instead of the browser's 300×150
+default.
 
 ## Complexity budget
 
