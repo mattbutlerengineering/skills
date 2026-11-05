@@ -50,9 +50,15 @@ arbitrate severity.
 5. **Run the domain passes the diff selects.** Match the changed paths
    against the table in `references/domain-reviewers.md`, and run each
    selected pass from its reference: `references/payments.md`,
-   `references/migrations.md`, `references/dependencies.md`. Their
+   `references/migrations.md`, `references/dependencies.md`,
+   `references/interface.md`. Their
    findings join the others in the same ranking. With no match, record
    that no domain pass was selected.
+
+   The Interface pass's habit of reading the removed side of a diff for
+   deleted accessibility signals is restated from jakubkrehel/skills'
+   `interface-review` ([jakubkrehel/skills](https://github.com/jakubkrehel/skills),
+   MIT); nothing is copied.
 
 6. **Load applicable standards.** Read `../../docs/standards.json` if
    present (an unbootstrapped repo has none yet — proceed). Filter to
