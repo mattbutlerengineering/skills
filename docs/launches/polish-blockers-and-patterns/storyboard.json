@@ -1,0 +1,20 @@
+{
+ "title": "Polish names what locks people out",
+ "tagline": "Named blockers and code patterns, pinned by a test",
+ "intro": "The polish skill now keeps a named list of the flaws that lock people out of an interface.",
+ "steps": [
+  {
+   "say": "The pattern table lists a dozen things to look for in code, each in plain terms that fit any framework.",
+   "do": [
+    "grep -c '^| [`A]' skills/polish/references/moves.md"
+   ]
+  },
+  {
+   "say": "Each accessibility row names the web accessibility criterion it breaks.",
+   "do": [
+    "python3 -m unittest tests.test_polish_shape 2>&1 | tail -3"
+   ]
+  }
+ ],
+ "outro": "A small test keeps the list and the table from quietly shrinking."
+}
