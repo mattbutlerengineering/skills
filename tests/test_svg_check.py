@@ -190,5 +190,67 @@ class TestDefects(unittest.TestCase):
             '<rect id="p"/><rect fill="url( &quot;#p&quot; )"/>')), [])
 
 
+class TestAnimatedReferences(unittest.TestCase):
+    def test_animated_clean_fixtures_pass(self):
+        for name in ("smil-clean.svg", "css-clean.svg"):
+            self.assertEqual(problems(fixture(name)), [], name)
+            self.assertEqual(run_main(str(FIX / name))[0], 0, name)
+
+    def test_dangling_variants_name_their_defect(self):
+        path = str(FIX / "smil-dangling.svg")
+        code, lines = run_main(path)
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            [ln for ln in lines if "smallest" not in ln and "no text" not in ln],
+            [f'svg-check: {path}: dangling timing reference "first" in '
+             "animateMotion begin"])
+        self.assertEqual(problems(fixture("css-dangling.svg")),
+                         ["dangling url(#g) in <style>"])
+
+    def test_timing_items_that_are_not_ids_are_not_read_as_ids(self):
+        for begin in ("1.6s; 0s; indefinite", "-1.6s", "0.5s", "2",
+                      "00:01.5", "click", "indefinite", "+3s",
+                      "accessKey(a)", "10ms", "1.5min"):
+            body = f'<circle r="1"><animate begin="{begin}"/></circle>'
+            self.assertEqual(problems(wrap(body)), [], begin)
+
+    def test_timing_items_that_are_ids_are_checked(self):
+        cases = {
+            "gone.end": "gone",
+            "gone.begin+1s": "gone",
+            "gone.end - 0.5s": "gone",
+            "gone.repeat(2)": "gone",
+            "gone.click": "gone",
+            "1.6s; gone.end": "gone",
+            "my-id.end": "my-id",
+        }
+        for begin, name in cases.items():
+            body = f'<circle r="1"><animate end="{begin}"/></circle>'
+            self.assertEqual(
+                problems(wrap(body)),
+                [f'dangling timing reference "{name}" in animate end'],
+                begin)
+        ok = ('<circle id="d.o-t" r="1"/><circle r="1">'
+              '<animate begin="d.o-t.end+1s; x_y"/></circle>')
+        self.assertEqual(problems(wrap(ok)), [])
+        body = ('<circle id="a" r="1"><animate begin="a.end"/>'
+                '<animate begin="a.repeat(3)"/></circle>')
+        self.assertEqual(problems(wrap(body)), [])
+
+    def test_mpath_and_use_hrefs_are_checked(self):
+        self.assertEqual(problems(wrap(
+            '<circle r="1"><animateMotion><mpath href="#gone"/>'
+            '</animateMotion></circle>')),
+            ['dangling href "#gone" on mpath'])
+        self.assertEqual(problems(wrap('<use href="#gone"/>')),
+                         ['dangling href "#gone" on use'])
+
+    def test_css_animation_and_keyframe_names_are_not_ids(self):
+        css = ('<style>@keyframes spin { from { opacity: 0 } to '
+               '{ opacity: 1 } } .a { animation: spin 2s infinite; }'
+               '</style><circle class="a" r="1"/>')
+        self.assertEqual(problems(wrap(css)), [])
+
+
 if __name__ == "__main__":
     unittest.main()

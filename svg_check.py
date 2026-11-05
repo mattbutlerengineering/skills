@@ -40,6 +40,12 @@ class Report:
 SVG_NS = "http://www.w3.org/2000/svg"
 URL_RE = re.compile(r"""url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s]*))\s*\)""")
 CSS_COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
+CLOCK = r"(?:\d+:\d\d(?::\d\d)?(?:\.\d+)?|\d+(?:\.\d+)?(?:h|min|s|ms)?)"
+# One SMIL begin/end item naming an element: `<id>.<event>` and an optional
+# offset. A bare clock value such as `1.6s` or `-1.6s` has no event name,
+# so it never matches and is never read as an id.
+TIMING_REF_RE = re.compile(
+    r"(\S+?)\.([A-Za-z]\w*(?:\([^)]*\))?)(?:\s*[+-]\s*" + CLOCK + r")?$")
 PX_RE = re.compile(r"\s*(\d+(?:\.\d+)?|\.\d+)\s*(?:px)?\s*$")
 
 
@@ -128,10 +134,20 @@ def _defects(root, problems):
             attr = _local(attr)
             if attr == "href":
                 _href(problems, ids, tag, value.strip())
+            elif attr in ("begin", "end"):
+                _timing(problems, ids, tag, attr, value)
             _css_urls(problems, ids, value, f"{tag} {attr}")
         if tag == "style":
             css = CSS_COMMENT_RE.sub("", "".join(e.itertext()))
             _css_urls(problems, ids, css, "<style>")
+
+
+def _timing(problems, ids, tag, attr, value):
+    for item in value.split(";"):
+        m = TIMING_REF_RE.match(item.strip())
+        if m and m.group(1) not in ids:
+            problems.append(f'dangling timing reference "{m.group(1)}" '
+                            f"in {tag} {attr}")
 
 
 def _href(problems, ids, tag, value):
