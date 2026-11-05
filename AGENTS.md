@@ -116,7 +116,8 @@ pre-pass, deliberately **not** a gate:
   (default 830px). Exit 0 clean, 1 with defects, 2 when the file was not
   checked. Free and offline, outside every gate and outside `make check`,
   like the four above. The size is a report, never a failure. Both
-  diagram skills' step 7 run it.
+  diagram skills' step 7 run it. `python3 factory.py svg-check` is the same
+  tool.
 
 ## Hard conventions
 

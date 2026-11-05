@@ -65,6 +65,7 @@ VERBS = {
     "run-tests": ("run_tests", "argv"),
     "size-band-calibration": ("size_band_calibration", "argv"),
     "standards-index": ("standards_index", "argv"),
+    "svg-check": ("svg_check", "argv"),
     "sweeps": ("sweeps", "argv"),
     "trace": ("trace", "argv"),
     "trigger-eval": ("trigger_eval", "bare"),
