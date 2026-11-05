@@ -13,6 +13,13 @@ this pipeline's terms, not a copy of its text. For the full tool —
 deterministic detector rules, live iteration in the browser, platform
 references — use Impeccable itself.
 
+The named-blocker list in `SKILL.md` step 5 and the code-pattern table
+under `inspect` borrow an idea from jakubkrehel/skills
+([jakubkrehel/skills](https://github.com/jakubkrehel/skills), MIT): a
+short list of what is high severity on sight, and a table of shapes to
+search code for. The blockers and the rows are restated in this
+pipeline's terms and checked against the WCAG 2.2 text, not copied.
+
 Two moves judge and seven change. When you are unsure which changing
 move a surface needs, run a judging move first.
 
@@ -104,8 +111,31 @@ dark mode, speed.
   larger than their box, fonts that flash or block, animation of
   properties that force layout.
 
+**Code patterns.** When nothing renders, `SKILL.md` step 6 makes the
+report a reading of the code. This is what that reading looks for: each
+row is a shape to search the markup and stylesheets for, in plain HTML,
+CSS or ARIA terms, whatever the framework. A hit is a lead, not proof;
+confirm it on the surface when one can be rendered. The WCAG column
+gives the WCAG 2.2 success criterion the shape most often breaks.
+
+| Pattern | Where it shows | WCAG 2.2 | What it costs the person |
+|---|---|---|---|
+| `outline: none` or `outline: 0` with no `:focus-visible` rule for the same element | CSS | 2.4.7 | A keyboard user cannot see where they are |
+| A click handler (`onclick`, or a click listener) on a `div` or `span` with no `role`, `tabindex` and key handler | HTML, script | 2.1.1; 4.1.2 | The control cannot be reached or operated from the keyboard, and a screen reader does not announce it as one |
+| `tabindex` greater than 0 | HTML | 2.4.3 | Focus jumps out of the visual order |
+| `maximum-scale=1` or `user-scalable=no` in the viewport meta | HTML head | 1.4.4 | A low-vision user cannot zoom the text |
+| `aria-live="assertive"` or `role="alert"` on a success or progress message | HTML, ARIA | 4.1.3 | A screen reader is cut off mid-sentence for news that was not urgent |
+| A submit button `disabled` until the form is valid, with no message saying what is missing | HTML, script | 3.3.1 | The person sees a dead button and is not told what to fix |
+| An `img` with no `alt` attribute | HTML | 1.1.1 | A screen reader reads out the file name, or nothing |
+| An `input` with only a `placeholder`: no `label`, `aria-label` or `aria-labelledby` | HTML | 1.3.1; 3.3.2; 4.1.2 | The hint vanishes on typing and the field has no name for assistive technology |
+| A pointer target with `width` or `height` under 24px | CSS | 2.5.8 | A tap or click misses, most for people with tremor or large fingers |
+| `:hover` that reveals content or a control, with no `:focus` or `:focus-visible` twin | CSS | 1.4.13; 2.1.1 | Keyboard and touch users never see what the hover shows |
+| A fixed `height` with `overflow: hidden` on a box that holds text | CSS | 1.4.4; 1.4.10 | The text is clipped when it is enlarged or reflowed |
+| A colour literal written in a component instead of a theme token | CSS, markup | — | One panel keeps its light colours in dark mode |
+
 **Hand back.** Findings with the measured value beside the threshold it
-missed, ranked by who is locked out.
+missed. The named blockers of `SKILL.md` step 5 come first, whatever
+their measure; the rest follow, ranked by who is locked out.
 
 **Done when.** Every claim has a number or an observed behaviour behind
 it. Nothing was edited unless that was asked for.

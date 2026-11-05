@@ -155,6 +155,7 @@ table's Moment column.
 in this pipeline's terms, ideas from open-source work —
 [Ponytail](https://github.com/DietrichGebert/ponytail),
 [Impeccable](https://github.com/pbakaus/impeccable),
+[jakubkrehel/skills](https://github.com/jakubkrehel/skills),
 [ux-writing-skill](https://github.com/content-designer/ux-writing-skill),
 [web-interface-guidelines](https://github.com/vercel-labs/web-interface-guidelines),
 [caveman](https://github.com/JuliusBrussee/caveman) and
