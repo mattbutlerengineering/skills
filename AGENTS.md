@@ -109,6 +109,15 @@ pre-pass, deliberately **not** a gate:
   check`, like the three above. The count is a proxy, not Claude's
   tokenizer: it is valid only for comparing two replies to the same
   prompt. `python3 factory.py voice-grade` is the same tool.
+- `python3 svg_check.py <file.svg> [--embed-width PX]` — refuses a DTD or
+  entity without expanding it, names every duplicate id, dangling
+  `url(#…)` or `href`, external link and missing root `width`/`height` in
+  a diagram SVG, and reports its smallest text size at the embed width
+  (default 830px). Exit 0 clean, 1 with defects, 2 when the file was not
+  checked. Free and offline, outside every gate and outside `make check`,
+  like the four above. The size is a report, never a failure. Both
+  diagram skills' step 7 run it. `python3 factory.py svg-check` is the same
+  tool.
 
 ## Hard conventions
 

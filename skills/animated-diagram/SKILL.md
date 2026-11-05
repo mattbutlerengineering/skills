@@ -146,6 +146,26 @@ nothing.
 
 ## 7. Verify the render
 
+For the `.svg` target, first run the mechanical check over the file you
+wrote:
+
+    python3 -I <this skill's directory>/../../svg_check.py <file.svg>
+
+Exit 0 means no defect: a root `width` and `height`, no duplicate id, no
+`url(#…)` or `href` pointing at a missing id, no external link. It reads
+the animated reference forms as references: `begin="<id>.end"` timing
+and `<mpath href="#…">` must name an id that exists, while clock values
+such as `-1.6s` and CSS `animation` names are not read as ids. Report
+the smallest-text line it prints (the smallest text size at the README
+embed width, 830px unless you pass `--embed-width`); it reports a size,
+it does not judge it. Exit 1 names each defect, one per line: fix every
+one in the file and rerun until exit 0. Exit 2 means the file was not
+checked: remove the `<!DOCTYPE>` or entity it names, or repair the XML,
+and rerun. If Python 3 is not available, say that the check did not run;
+never skip it silently. The `.html` target is not checked: it carries
+inline SVG, not a standalone file, and the check reads only a standalone
+`.svg`. The by-eye checks below apply to both targets.
+
 Open the file in a browser. Confirm: it is one self-contained file (no
 external requests, no scripts in the `.svg` target), the motion loops
 seamlessly, and — html — the pause button freezes and resumes it with no
@@ -162,6 +182,6 @@ animations. For programmatic screenshots use headless Chrome directly
 (`chrome --headless=new --screenshot=out.png <file-url>`), or call
 `document.getElementById('diagram').pauseAnimations()` first.
 
-Done when: it renders standalone (and embedded, for svg), loops clean,
-pauses (html), respects reduced motion, and (for mermaid input) the
-fidelity walkthrough passes.
+Done when: for the `.svg` target the check exits 0; it renders standalone
+(and embedded, for svg), loops clean, pauses (html), respects reduced
+motion, and (for mermaid input) the fidelity walkthrough passes.
