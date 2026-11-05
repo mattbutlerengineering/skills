@@ -1,0 +1,10 @@
+{"title": "Interface review",
+ "tagline": "Catch what a change quietly took away",
+ "intro": "Code review now has an extra look for changes to screens and styles.",
+ "steps": [
+  {"say": "When a change removes a spoken label, a focus outline or a motion preference, the review reports it.",
+   "do": ["grep -c Interface skills/review/references/domain-reviewers.md"]},
+  {"say": "When the same change puts an equivalent back in the same place, the review stays quiet.",
+   "do": ["python3 -m unittest tests.test_review_domain_table 2>&1 | tail -3"]}
+ ],
+ "outro": "Now it is caught while the change is still a draft."}

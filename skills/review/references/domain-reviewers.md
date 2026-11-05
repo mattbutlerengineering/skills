@@ -18,12 +18,19 @@ words, or when the path matches one of its patterns.
 | Payments | `payment`, `stripe`, `checkout`, `billing`, `invoice`, `charge`, `refund`, `deposit`, `payout`, `subscription`, `webhook`; or any changed file that imports a payment provider's SDK | [payments.md](payments.md) |
 | Migrations | a `migrations/`, `migrate/` or `alembic/versions/` directory; `*.sql`; an ORM schema file (`schema.prisma`, a Drizzle or SQLAlchemy model module, `db/schema.rb`, `structure.sql`); a Liquibase changelog | [migrations.md](migrations.md) |
 | Dependencies | a package manifest or lockfile: `package.json` and its lockfiles, `requirements*.txt`, `pyproject.toml`, `poetry.lock`, `uv.lock`, `Pipfile*`, `go.mod`/`go.sum`, `Cargo.*`, `Gemfile*`, `pom.xml`, `build.gradle*`, `libs.versions.toml`, `composer.*`, `*.csproj`, `packages.lock.json`; or a dependency-override block in one of them | [dependencies.md](dependencies.md) |
+| Interface | a UI file, by extension only: `*.tsx`, `*.jsx`, `*.vue`, `*.svelte`, `*.astro`, `*.css`, `*.scss`, `*.sass`, `*.less`, `*.html`, `*.htm`, `*.erb`, `*.hbs`, `*.ejs`, `*.njk`, `*.twig`, `*.liquid`, `*.jinja`, `*.jinja2`, `*.pug`, `*.cshtml`, `*.razor` | [interface.md](interface.md) |
 
 The word matching is broad on purpose. A false selection costs one
 quick read that comes back clean. A missed selection costs a payment
 bug in production. When a word matches a file that has nothing to do
 with the domain (a `chargeback-faq.md` page), say so in one line and
 move on.
+
+The Interface row is the exception: it matches on extension only, never on
+a directory or a word, because a word like `template` would select
+markdown template folders that hold no UI. Generated output
+(`*.min.css`, built bundles) matches an extension and is skipped with a
+one-line note.
 
 No match means no domain pass. Say so in "Passes with no findings":
 "domain passes: none selected".
