@@ -417,5 +417,30 @@ class TestSmallestText(unittest.TestCase):
         self.assertEqual(r.unread, 0)
 
 
+class TestScaffolds(unittest.TestCase):
+    """Both diagram skills' scaffolds, read in place, must pass their own
+    step-7 check. A scaffold that drifts fails here."""
+    SCAFFOLDS = {
+        "skills/architecture-diagram/assets/boilerplate.svg": (880, 448),
+        "skills/animated-diagram/assets/boilerplate.svg": (880, 392),
+    }
+
+    def test_each_scaffold_passes_and_reads_a_smallest_text(self):
+        for rel, (w, h) in self.SCAFFOLDS.items():
+            r = svg_check.check((ROOT / rel).read_bytes())
+            self.assertIsNone(r.refusal, rel)
+            self.assertEqual(r.problems, [], rel)
+            self.assertIsNotNone(r.smallest_px, f"{rel}: {r.note}")
+            self.assertEqual(run_main(str(ROOT / rel))[0], 0, rel)
+
+    def test_root_size_equals_the_viewbox(self):
+        import xml.etree.ElementTree as ET
+        for rel, (w, h) in self.SCAFFOLDS.items():
+            root = ET.parse(ROOT / rel).getroot()
+            self.assertEqual(root.get("viewBox"), f"0 0 {w} {h}", rel)
+            self.assertEqual((root.get("width"), root.get("height")),
+                             (str(w), str(h)), rel)
+
+
 if __name__ == "__main__":
     unittest.main()
