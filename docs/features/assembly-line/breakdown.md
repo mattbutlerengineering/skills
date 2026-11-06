@@ -41,15 +41,15 @@ When this milestone is done, the page draws the isometric factory of
 `ux.md` for today: every station animated, every crate in place, hover and
 pin working.
 
-- [ ] **WO-0205** Vendored three.js — `vendor/three/`, NOTICE, bundle and inlining — size:S, blocked by: WO-0203 (PRD-0021 §Success criteria, §Solution)
+- [x] **WO-0205** Vendored three.js — `vendor/three/`, NOTICE, bundle and inlining — size:S, blocked by: WO-0203 (PRD-0021 §Success criteria, §Solution)
   - Accept: `vendor/three/` holds three.js v0.187.0's `three.module.min.js` and `three.core.min.js`, byte-identical to the published release, and its licence; `NOTICE` names it under ADR-0124; `npx_bundle.py` carries `assembly_line.html` and `vendor/three/` and `tests/test_npx_bundle.py` passes with the bundled tool writing a page; the written page inlines both files and loads them with no network request.
-- [ ] **WO-0206** Isometric floor — tiles, serpentine belt, warehouse and bin — size:M, blocked by: WO-0205 (PRD-0021 §Solution, §Success criteria)
+- [x] **WO-0206** Isometric floor — tiles, serpentine belt, warehouse and bin — size:M, blocked by: WO-0205 (PRD-0021 §Solution, §Success criteria)
   - Accept: `assembly_line.html` draws an orthographic isometric view with one floor-plate tile per station in rows of four, its stage name painted on the plate, one continuous belt in pipeline order, the Capture side belt feeding the main belt, the Completed warehouse tile and the Needs-attention bin; flat per-face colours in the reference palette (green, grey, purple on a pale ground) with dark edge lines; a screenshot is attached to the PR.
-- [ ] **WO-0207** Station machines — the twelve machines of ux.md, each animated — size:L, blocked by: WO-0206 (PRD-0021 §Success criteria)
+- [x] **WO-0207** Station machines — the twelve machines of ux.md, each animated — size:L, blocked by: WO-0206 (PRD-0021 §Success criteria)
   - Accept: each station shows the machine `ux.md` names for it (repair bench, intake dock, label printer, design bench, gantry crane, opening arm, twin assembly arms, tunnel scanner, inspector, packing and forklift, outbound dock, shelving), and each moves continuously with no crates present; under `prefers-reduced-motion: reduce` the floor opens still. A short screen recording is attached to the PR.
-- [ ] **WO-0208** Crates, piles and parts — crates at stations, pallet stacks, count tags, parts trays — size:M, blocked by: WO-0207 (PRD-0021 §Problem statement, §Success criteria)
+- [x] **WO-0208** Crates, piles and parts — crates at stations, pallet stacks, count tags, parts trays — size:M, blocked by: WO-0207 (PRD-0021 §Problem statement, §Success criteria)
   - Accept: on this repo's page every run is one crate at its station; a station with more than 6 runs queues 6 on the belt and stacks the rest on pallets with a count tag equal to its run count; Completed holds every completed run on its shelves; each Implement crate carries a parts tray whose fill is done over total; the busiest station is the tallest stack.
-- [ ] **WO-0209** Hover card and pinned panel — the two detail surfaces of ux.md — size:M, blocked by: WO-0208 (PRD-0021 §User stories, §Success criteria)
+- [x] **WO-0209** Hover card and pinned panel — the two detail surfaces of ux.md — size:M, blocked by: WO-0208 (PRD-0021 §User stories, §Success criteria)
   - Accept: hovering any station shows its name, its one-line description, its count and its 5 oldest runs; hovering any crate shows ref, kind, station, skipped stages, "already has" stages and work orders done/total at Implement, and an attention crate shows its reason; clicking a station or crate opens the pinned panel listing every run there (expandable to work orders), clicking a run lifts and outlines its crate, and Esc, ✕ or empty floor closes it. Walkthroughs 1, 3 and 8 of ux.md each complete on this repo's or mattbutlerengineering's page.
 
 ## Milestone 3: the replay
@@ -57,9 +57,9 @@ pin working.
 When this milestone is done, Play replays the repo's history down the
 line and settles on today, honestly timed.
 
-- [ ] **WO-0210** Transport bar — play, pause, day-snapping scrubber, speed, honesty line — size:M, blocked by: WO-0209 (PRD-0021 §User stories, §Success criteria)
+- [x] **WO-0210** Transport bar — play, pause, day-snapping scrubber, speed, honesty line — size:M, blocked by: WO-0209 (PRD-0021 §User stories, §Success criteria)
   - Accept: the bar shows play/pause, a scrubber from `first_day` to today snapping to days, the date readout, a 30 s / 60 s toggle and the honesty line from ux.md; scrubbing to a day puts every crate where its `history` places it at that day's end, and the header, hover card and panel read "as of" that day with work-order rows marked "progress as of today"; the bar is disabled when there are no runs; walkthroughs 4 and 5 complete.
-- [ ] **WO-0211** Replay motion — crates ride the belt through each day's arrivals — size:M, blocked by: WO-0210 (PRD-0021 §Success criteria)
+- [x] **WO-0211** Replay motion — crates ride the belt through each day's arrivals — size:M, blocked by: WO-0210 (PRD-0021 §Success criteria)
   - Accept: during play, a run's arrivals within one day are spread evenly over that day in stage order, so a run whose artifacts share one date visibly visits each station; an `inferred` arrival shows the dashed shadow until the day closes; a crate rides straight through a skipped station; Implement trays show a neutral fill during play; the replay's last frame equals the page's opening snapshot (crate-by-crate comparison in the PR); walkthroughs 2 and 7 complete.
 - [ ] **WO-0212** Frame-rate check — 60 fps with this repo's runs — size:S, blocked by: WO-0211 (PRD-0021 §Success criteria)
   - Accept: a replay of this repo's page at 30 s, measured with the browser's performance tools on a 2021-or-later laptop, holds about 60 frames per second throughout; the measurement and machine are recorded in the PR.
@@ -121,3 +121,39 @@ none.
   `board.py`'s 33; 20 completed), including the phantom product run
   `docs` at Idea; four `docs/fixes/` directories hold no run artifact
   (`design.md` or `finding.md` only) and are not runs, as board agrees.
+- 2026-11-05, WO-0205: `npx_bundle.ROOT_FILES` gained `assembly_line.html`
+  and `TREES` gained `vendor/`; `tests/test_npx_bundle.py` pins both and
+  runs the bundled `assembly_line.py`. The page decodes the two inlined
+  files into blob URLs and imports the module with its `./three.core.js`
+  specifier pointed at the core's blob, so nothing is fetched.
+- 2026-11-05, WO-0206 to WO-0209, layout choices made while checking
+  the render in headless Chromium against the references: tiles are
+  12.5 units with thick two-tone plates and wide gaps (back-of-tile
+  objects otherwise read as part of the tile behind); one pallet per
+  station in the tile's front-right quadrant (a back pile hid the label
+  of the tile behind it); floor labels are painted flat on the
+  front-left quadrant, turned to read level and drawn over everything,
+  because the back row of the tile in front otherwise covers them.
+  Ship's props keep world axes since its belt turns a corner there.
+- 2026-11-05, WO-0207: idle motion measured on the page — 209 meshes
+  change between two samples 700 ms apart; under emulated
+  `prefers-reduced-motion: reduce`, 0 change.
+- 2026-11-05, WO-0209: on this repo's page, hovering a crate at Operate
+  showed its ref, kind, station, directory and "skipped: UX Design";
+  clicking pinned "Operate · as of 2026-11-05" with 75 rows; Esc closed
+  it. Hovering `feature:assembly-line` at Implement showed "7/17 WOs";
+  clicking opened its row with 17 work orders, lifted the crate and laid
+  out 17 parts above it (walkthrough 8). On mattbutlerengineering's
+  page the phantom product crate reads "product · at Idea | docs |
+  already has: Architect" (walkthrough 3). Empty stations read "0 runs".
+- 2026-11-05, WO-0210 and WO-0211: scrubbing to 2026-09-01 put every
+  crate where its history places it (0 of 107 mismatched; header "49
+  active · 8 completed · as of 2026-09-01"); a full 30 s play settled on
+  today with 0 of 107 crates differing from the opening snapshot in
+  position, visibility or station. A run whose nine arrivals fall on two
+  days visited idea, prd, architect, decompose and implement in turn on
+  its first day, moving between them, with the dashed shadow shown
+  throughout that day. A `re-entry: implement` maintenance crate left
+  Capture on the side belt and joined the main belt at Architect. An
+  empty repo's page shows the floor sign "No runs yet — start one with
+  /idea" with play, scrubber, speed and Export disabled (walkthrough 4).

@@ -33,10 +33,11 @@ NOTE_HEADING = "## Installed by the skills CLI"
 # What the runtime holds: every root Python tool, the root files a skill
 # or tool reads, and the payload trees. Paths keep their root-relative
 # shape, because the tools find their payload beside themselves.
-ROOT_FILES = frozenset({"CONTEXT.md", "LICENSE", "NOTICE", "dashboard.html"})
+ROOT_FILES = frozenset({"CONTEXT.md", "LICENSE", "NOTICE", "assembly_line.html",
+                        "dashboard.html"})
 NESTED_FILES = frozenset({".claude-plugin/plugin.json",
                           "docs/pipeline-protocol.md", "docs/standards.json"})
-TREES = ("factory/", "licenses/", "output-styles/")
+TREES = ("factory/", "licenses/", "output-styles/", "vendor/")
 # The CLI's copy skips any file by this name (src/installer.ts).
 CLI_DROPPED = "metadata.json"
 
