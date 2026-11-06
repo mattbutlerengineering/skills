@@ -127,6 +127,7 @@ export a looping clip of the replay for a README or post.
          are in it.
 
 ## Out of scope
+<!-- coverage-waiver: exclusions build nothing; no work order implements an absence -->
 
 - Live or real-time updates: each invocation is a snapshot plus replay.
 - Several repos in one view (the backlog's live-floor seed).
@@ -137,6 +138,7 @@ export a looping clip of the replay for a README or post.
   this ships.
 
 ## Open questions
+<!-- coverage-waiver: every question here was answered in architecture.md or ux.md (renderer by ADR-0124, page home by --publish, placement by board.gather, metaphor and piles in ux.md, phantom run shown as placed and seeded); none is open work -->
 
 - Renderer: the idea brief's hunch is three.js with an orthographic
   isometric camera and flat outlined faces, bundled into the output file.
