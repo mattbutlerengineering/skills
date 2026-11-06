@@ -61,20 +61,23 @@ class TestRewrite(unittest.TestCase):
 class TestBundled(unittest.TestCase):
     def test_the_runtime_takes_the_root_tools_and_payload_only(self):
         tracked = ["board.py", "CONTEXT.md", "LICENSE", "NOTICE",
-                   "dashboard.html", ".claude-plugin/plugin.json",
+                   "dashboard.html", "assembly_line.html",
+                   ".claude-plugin/plugin.json",
                    ".claude-plugin/marketplace.json",
                    "factory/templates/Makefile", "factory/agents/a.md",
                    "licenses/x.txt", "output-styles/house-voice.md",
+                   "vendor/three/three.core.js",
                    "docs/pipeline-protocol.md", "docs/standards.json",
                    "docs/adr/0001-x.md", "skills/lean/SKILL.md",
                    "tests/test_lint.py", "evals/routing.json",
                    ".github/workflows/validator.yml", "README.md"]
         self.assertEqual(npx_bundle.bundled(tracked), [
             ".claude-plugin/plugin.json", "CONTEXT.md", "LICENSE", "NOTICE",
-            "board.py", "dashboard.html", "docs/pipeline-protocol.md",
-            "docs/standards.json", "factory/agents/a.md",
-            "factory/templates/Makefile", "licenses/x.txt",
-            "output-styles/house-voice.md"])
+            "assembly_line.html", "board.py", "dashboard.html",
+            "docs/pipeline-protocol.md", "docs/standards.json",
+            "factory/agents/a.md", "factory/templates/Makefile",
+            "licenses/x.txt", "output-styles/house-voice.md",
+            "vendor/three/three.core.js"])
 
 
 def write(path, text):
@@ -246,6 +249,17 @@ class TestRealRepo(unittest.TestCase):
             [sys.executable, str(runtime / "conductor.py"), "--version"],
             capture_output=True, text=True, cwd=runtime)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+
+    def test_the_bundled_assembly_line_writes_a_page(self):
+        runtime = self.out / "skills" / RUNTIME
+        with tempfile.TemporaryDirectory() as temp:
+            (Path(temp) / "docs").mkdir()
+            page = Path(temp) / "page.html"
+            run = subprocess.run(
+                [sys.executable, str(runtime / "assembly_line.py"), temp,
+                 "--out", str(page)], capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+            self.assertNotIn("__THREE_", page.read_text(encoding="utf-8"))
 
 
 class TestMain(unittest.TestCase):

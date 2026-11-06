@@ -2,7 +2,7 @@ idea-to-prod
 Copyright (c) 2026 Matt Butler
 
 This repository is licensed under the MIT License (see LICENSE), with the
-following exception:
+following exceptions:
 
 trigger_eval.py contains code derived from the skill-creator plugin
 (scripts/run_eval.py and scripts/utils.py), Copyright Anthropic, PBC,
@@ -14,3 +14,9 @@ changed): multi-skill routing detection (all skill descriptions installed
 simultaneously, detecting which one fired), per-run isolated temporary
 project directories, settings-source isolation, and a routing-case eval
 schema with confusion-matrix reporting.
+
+vendor/three/ holds three.js v0.187.0 (build/three.module.js and
+build/three.core.js, unmodified from the npm release), Copyright 2010-2026
+three.js authors, licensed under the MIT License; its license is included
+at vendor/three/LICENSE. assembly_line.py inlines these files into the
+pages it writes (ADR-0124).

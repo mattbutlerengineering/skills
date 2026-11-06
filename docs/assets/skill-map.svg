@@ -230,14 +230,15 @@ the utility skills by the moment a person reaches for them.</desc>
   <text class="row mono" x="60" y="434">launch-demo</text>
 </g>
 <g>
-  <rect class="mask" x="48" y="496" width="256" height="112" rx="6"/>
-  <rect class="node-ext" x="48" y="496" width="256" height="112" rx="6"/>
+  <rect class="mask" x="48" y="496" width="256" height="128" rx="6"/>
+  <rect class="node-ext" x="48" y="496" width="256" height="128" rx="6"/>
   <text class="name" x="60" y="516">Drawing pictures</text>
   <text class="row mono" x="60" y="534">mermaid</text>
   <text class="row mono" x="60" y="550">architecture-diagram</text>
   <text class="row mono" x="60" y="566">animated-diagram</text>
   <text class="row mono" x="60" y="582">interactive-architecture-diagram</text>
   <text class="row mono" x="60" y="598">pipeline-board</text>
+  <text class="row mono" x="60" y="614">assembly-line</text>
 </g>
 <g>
   <rect class="mask" x="424" y="496" width="176" height="64" rx="6"/>

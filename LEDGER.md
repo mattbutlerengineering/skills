@@ -31,6 +31,7 @@ Trigger-eval results inform description quality but never graduate maturity
 | interactive-architecture-diagram | draft | — | — |
 | animated-diagram | draft | — | — |
 | pipeline-board | draft | — | — |
+| assembly-line | draft | — | — |
 | architecture-diagram | draft | — | — |
 | work-queue | draft | — | — |
 | conduct | draft | — | — |

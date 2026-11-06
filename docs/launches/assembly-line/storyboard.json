@@ -1,0 +1,6 @@
+{"title": "The assembly line",
+ "tagline": "Your repo's work, as a factory floor",
+ "intro": "The assembly line turns all of your repo's work into one animated factory floor you can open in a browser.",
+ "steps": [{"say": "It writes a single page that shows each piece of work moving along the line, with the finished ones stacked on shelves.",
+            "do": ["python3 assembly_line.py --out /tmp/assembly-line.html", "ls -la /tmp/assembly-line.html"]}],
+ "outro": "You see at a glance where work is piling up and what has been finished."}

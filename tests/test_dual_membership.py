@@ -25,11 +25,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # added decompose_grade to the cli.py and knowledge_plane.py rows; ADR-0115
 # added eval_trends to the cli.py row; ADR-0118 added launch_demo to the
 # protocol.py row; ADR-0119 added voice_grade to the cli.py row; ADR-0120
-# added npx_bundle to the cli.py row). The
+# added npx_bundle to the cli.py row; ADR-0124 added assembly_line to the
+# cli.py, knowledge_plane.py and protocol.py rows). The
 # pairs land one per item as the module grows its imports.
 ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
     {(tool, "cli") for tool in (
-        "adr_status", "board", "charter_recorded", "charter_replay",
+        "adr_status", "assembly_line", "board", "charter_recorded", "charter_replay",
         "dashboard", "decompose_grade", "decompose_lessons",
         "decompose_signals", "eval_schema", "eval_trends",
         "factory_init", "fast_path", "kb", "kb_drift", "kb_harvest",
@@ -38,12 +39,12 @@ ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
         "size_band_calibration", "sweeps", "trigger_eval", "voice_grade",
     )}
     | {(tool, "knowledge_plane") for tool in (
-        "adr_status", "board", "dashboard", "decompose_grade",
+        "adr_status", "assembly_line", "board", "dashboard", "decompose_grade",
         "decompose_signals", "kb", "kb_drift", "lint", "md_claims",
         "one_owner", "plane_drift", "size_band_calibration", "sweeps",
     )}
     | {(tool, "protocol") for tool in (
-        "board", "dashboard", "decompose_signals", "kb", "kb_drift",
+        "assembly_line", "board", "dashboard", "decompose_signals", "kb", "kb_drift",
         "launch_demo", "lint", "trigger_eval",
     )}
     | {
