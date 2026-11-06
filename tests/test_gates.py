@@ -3735,6 +3735,12 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # mutates)
             "git init -q -b npx",
         ),
+        "pages.yml": (
+            # this-repo-only, never mirrored, like npx-branch: it publishes
+            # this repo's own page, a build rather than a check, so it has
+            # no make target
+            "python3 assembly_line.py . --publish _site",
+        ),
         "gate-digest.yml": (
             # git mutation glue: commits the ledger rows `make gate-digest`
             # just wrote (the make target computes, the YAML mutates)

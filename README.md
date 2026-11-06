@@ -152,6 +152,11 @@ table's Moment column.
 | `prisma-migrations` | Looking things up | Reference for getting a Prisma schema change to every database safely: `migrate dev` versus `migrate deploy` versus `db push`, deploy ordering, baselining a database built without migrations, CI/CD wiring and failed-migration recovery, with copyable workflow and script templates. |
 | `house-voice` | Around every reply | Sets a voice for the agent's own replies: the answer first, no ceremony or tells of generated prose, every fact and payload kept, and full length where safety needs it; an opt-in output style carries it into every session, and it never rewrites persisted artifacts. |
 
+This repo's own assembly line is live at
+[mattbutlerengineering.github.io/skills](https://mattbutlerengineering.github.io/skills/),
+rebuilt from main on every push by
+[`.github/workflows/pages.yml`](.github/workflows/pages.yml).
+
 `lean`, `polish`, `review`, `ux-writing`, `ux-patterns` and `house-voice` restate,
 in this pipeline's terms, ideas from open-source work —
 [Ponytail](https://github.com/DietrichGebert/ponytail),
