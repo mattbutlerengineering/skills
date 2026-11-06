@@ -61,7 +61,7 @@ line and settles on today, honestly timed.
   - Accept: the bar shows play/pause, a scrubber from `first_day` to today snapping to days, the date readout, a 30 s / 60 s toggle and the honesty line from ux.md; scrubbing to a day puts every crate where its `history` places it at that day's end, and the header, hover card and panel read "as of" that day with work-order rows marked "progress as of today"; the bar is disabled when there are no runs; walkthroughs 4 and 5 complete.
 - [x] **WO-0211** Replay motion — crates ride the belt through each day's arrivals — size:M, blocked by: WO-0210 (PRD-0021 §Success criteria)
   - Accept: during play, a run's arrivals within one day are spread evenly over that day in stage order, so a run whose artifacts share one date visibly visits each station; an `inferred` arrival shows the dashed shadow until the day closes; a crate rides straight through a skipped station; Implement trays show a neutral fill during play; the replay's last frame equals the page's opening snapshot (crate-by-crate comparison in the PR); walkthroughs 2 and 7 complete.
-- [ ] **WO-0212** Frame-rate check — 60 fps with this repo's runs — size:S, blocked by: WO-0211 (PRD-0021 §Success criteria)
+- [x] **WO-0212** Frame-rate check — 60 fps with this repo's runs — size:S, blocked by: WO-0211 (PRD-0021 §Success criteria)
   - Accept: a replay of this repo's page at 30 s, measured with the browser's performance tools on a 2021-or-later laptop, holds about 60 frames per second throughout; the measurement and machine are recorded in the PR.
 
 ## Milestone 4: shipped as a skill, with the adopter clip
@@ -69,7 +69,7 @@ line and settles on today, honestly timed.
 When this milestone is done, any repo owner can invoke the skill, and the
 Owner can put a clip on a README that links to the page.
 
-- [ ] **WO-0213** GIF export — the Export button and the in-page encoder — size:M, blocked by: WO-0211 (PRD-0021 §User stories, §Success criteria)
+- [x] **WO-0213** GIF export — the Export button and the in-page encoder — size:M, blocked by: WO-0211 (PRD-0021 §User stories, §Success criteria)
   - Accept: in `assembly_line.html`, pressing Export plays the replay at the fixed export size and frame rate and downloads an animated GIF built by the page's own encoder (no added library); the GIF committed to a pushed scratch branch and referenced from a README as an image autoplays and loops when that README is viewed on GitHub; an encode failure shows an on-page message and downloads nothing.
 - [ ] **WO-0214** The assembly-line skill — `skills/assembly-line/SKILL.md` and its registrations — size:S, blocked by: WO-0213, WO-0204 (PRD-0021 §Actors, §User stories, §Success criteria)
   - Accept: the skill runs the tool two directories above itself, opens the page, stops with the tool's problem output on a nonzero exit, and walks Export plus `--publish` for the README (walkthrough 6 completes); it is in `protocol.UTILITY_SKILLS`, README.md, LEDGER.md and the plugin description; `python3 lint.py`, `python3 gates.py` and `python3 run_tests.py` pass, and `python3 factory_init.py update-manifest` is run if any mirrored file changed.
@@ -157,3 +157,25 @@ none.
   Capture on the side belt and joined the main belt at Architect. An
   empty repo's page shows the floor sign "No runs yet — start one with
   /idea" with play, scrubber, speed and Export disabled (walkthrough 4).
+- 2026-11-05, WO-0212: measured on a MacBook Pro 18,3 (2021, Apple M1
+  Pro, 16 GB) in a visible Chromium on ANGLE Metal, 1440×900 viewport,
+  page's own requestAnimationFrame counter sampled each second through a
+  full 30 s replay of this repo's 107 runs while a screen recording ran:
+  35 samples, min 58.9, mean 59.9 frames per second. The recording is
+  the WO-0207 motion evidence for the PR.
+- 2026-11-05, WO-0213: the first export did not decode — the image
+  descriptor repeated the LZW minimum code size and the code-width step
+  ran one entry late; the loop now follows the reference encoder shape.
+  A fixed colour cube also turned the pastel ground white, so the
+  palette is the 256 most frequent 5-bit colours of today's frame with
+  a nearest-colour lookup. Each frame is stamped with the repo and the
+  replay's date, since a README has no transport bar. Export of this
+  repo: 141 frames at 720×450, 4.8 MB, every frame decoded by Chromium's
+  ImageDecoder, repetition count infinite. On the Owner's go-ahead the
+  GIF was pushed with a one-line README to the orphan branch
+  `scratch/assembly-line-gif-check`; github.com rendered it as
+  `<img data-animated-image>` and two captures 3 s apart showed
+  different replay dates (2026-10-09, then 2026-09-25 after looping);
+  the branch was deleted. With `getImageData` forced to throw, the page
+  showed "Export failed: simulated encoder failure. Nothing was
+  downloaded.", no download fired, and the controls were restored.
