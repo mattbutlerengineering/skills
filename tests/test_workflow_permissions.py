@@ -83,6 +83,14 @@ EXPECTED = {
                     "force-pushes the generated npx branch (ADR-0120); it"
                     " touches no issue, PR or other branch"),
     },
+    "pages.yml": {
+        "build": ({"contents": "read"},
+                  "writes the assembly-line page from the checkout and"
+                  " uploads it as the Pages artifact"),
+        "deploy": ({"pages": "write", "id-token": "write"},
+                   "deploys that artifact to GitHub Pages; it reads no"
+                   " code and touches no issue, PR or branch"),
+    },
     "sweeps.yml": {
         "label-drift": ({"contents": "read", "issues": "write"},
                         "files one intake issue on drift"),
