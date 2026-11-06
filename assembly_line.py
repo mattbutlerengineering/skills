@@ -12,6 +12,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import tempfile
 from datetime import date
@@ -197,13 +198,15 @@ def _read(path, binary=False):
 def render(model, template, vendor):
     """The page: template with the model inlined as JSON — `</` escaped
     so no string in it can close the script block — and each vendored
-    file (name -> bytes) inlined as base64 at its __NAME__ slot."""
-    page = template.replace(
-        "__MODEL__", json.dumps(model).replace("</", "<\\/"))
+    file (name -> bytes) inlined as base64 at its __NAME__ slot. One
+    pass over the template, so no text a slot receives is itself read
+    as a slot."""
+    fills = {"__MODEL__": json.dumps(model).replace("</", "<\\/")}
     for name, content in vendor.items():
         slot = "__" + name.upper().replace("-", "_") + "__"
-        page = page.replace(slot, base64.b64encode(content).decode("ascii"))
-    return page
+        fills[slot] = base64.b64encode(content).decode("ascii")
+    pattern = re.compile("|".join(re.escape(slot) for slot in fills))
+    return pattern.sub(lambda hit: fills[hit.group(0)], template)
 
 
 def _target(args):
@@ -239,8 +242,12 @@ def main(argv):
             break
     if problem:
         return cli.report("assembly_line", [problem])
-    target = _target(args)
-    target.write_text(render(model, template, vendor), encoding="utf-8")
+    try:
+        target = _target(args)
+        target.write_text(render(model, template, vendor), encoding="utf-8")
+    except OSError as err:
+        return cli.report("assembly_line",
+                          [f"assembly_line: cannot write the page: {err}"])
     print(target.resolve())
     return 0
 

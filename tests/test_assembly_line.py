@@ -400,6 +400,24 @@ class TestPageWriter(unittest.TestCase):
         written.pop("generated"), expected.pop("generated")
         self.assertEqual(written, expected)
 
+    def test_an_unwritable_target_exits_1_with_a_problem_not_a_traceback(self):
+        blocker = Path(self.tmp.name) / "file"
+        blocker.write_text("x", encoding="utf-8")
+        for flag in ("--out", "--publish"):
+            with self.subTest(flag=flag):
+                target = blocker / "below" / "page.html"
+                code, out = self.run_main(self.root, flag, target)
+                self.assertEqual(code, 1)
+                self.assertTrue(out.splitlines()[0].startswith(
+                    "assembly_line: cannot write the page: "), out)
+
+    def test_slot_names_inside_the_model_are_data_not_slots(self):
+        model = {"slug": "__THREE_CORE__ and __MODEL__"}
+        page = assembly_line.render(
+            model, "<m>__MODEL__</m><c>__THREE_CORE__</c>",
+            {"three-core": b"AAAA"})
+        self.assertEqual(page, '<m>' + json.dumps(model) + '</m><c>QUFBQQ==</c>')
+
     def test_the_vendored_files_are_inlined_as_base64(self):
         target = Path(self.tmp.name) / "page.out.html"
         self.run_main(self.root, "--out", target)
