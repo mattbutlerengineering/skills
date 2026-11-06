@@ -82,17 +82,21 @@ export a looping clip of the replay for a README or post.
       each Implement run shows exactly as many parts as its breakdown has
       rows, open and finished distinguished.
 - [ ] **Completed is its own bucket.** Runs the protocol counts complete
-      (retro with its population line) appear only in the Completed area;
-      shipped runs without one stay at Operate, labelled as shipped and
-      awaiting a retro on hover, not relabelled as complete.
+      (a retro with its population line, or a retro predating that line
+      that carries neither field) appear only in the Completed area;
+      shipped runs with no complete retro stay at Operate, labelled as
+      shipped and awaiting a retro on hover, not relabelled as complete.
 - [ ] **Hover explains.** Hovering each station shows the stage's name,
       a one-line description of what it does, and the runs currently in
       it; hovering a crate shows the run's name, kind, current stage and,
       in Implement, work orders done out of total.
 - [ ] **Replay.** Play, pause and scrub work; the replay's clock shows the
       date; each crate enters on its first artifact's date and reaches
-      each station on that stage artifact's date; the last frame equals
-      the snapshot.
+      each later station on the date of the artifact that completed the
+      stage before it (Implement, which has no artifact, starts on the
+      breakdown's date, or `defect.md`'s when the breakdown is inline,
+      and ends on the verification's date); the last frame equals the
+      snapshot.
 - [ ] **Replay honesty.** The page states that dates come from artifact
       frontmatter to the day and that order within a day is inferred from
       stage order.
@@ -110,8 +114,9 @@ export a looping clip of the replay for a README or post.
 - [ ] **The Owner would show it.** The Owner chooses it over the old
       board for a real presentation, and the occasion is recorded.
 - [ ] **Adopter clip.** The skill exports a looping clip of the replay
-      that plays inline on a GitHub README and links to the interactive
-      factory.
+      that autoplays inline when committed to a repo and referenced from
+      its README as an image (so an animated image format, not a video
+      file), and the README links it to the interactive factory.
 - [ ] **The demo runs as written.**
       1. Open the factory for this repo; it shows every run at its
          station, work piled up where it actually waits.
@@ -146,3 +151,8 @@ export a looping clip of the replay for a README or post.
   shows inferred timing. — UX Design.
 - How a 75-crate pile at one station reads as a pile rather than clutter.
   — UX Design.
+- A repo whose `docs/` root holds ordinary project docs gets a phantom
+  product run: in mattbutlerengineering, a plain `docs/architecture.md`
+  makes the placement tool report a product run at Idea. Whether the
+  factory shows it as-is or the placement tool learns to tell the two
+  apart. — Architect (the placement tool owns it, not this view).
