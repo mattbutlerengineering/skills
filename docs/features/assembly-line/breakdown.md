@@ -24,9 +24,9 @@ yet, but the facts are complete and pinned.
   - Accept: the cases build trees holding a feature run at Implement with a breakdown, a feature run whose PRD skipped UX, a maintenance run with `re-entry: implement` (inline breakdown) and one with `re-entry: architect`, a completed run (retro with population line) and a pre-ADR-0102 retro with neither field, a run whose artifacts cannot be read, a gapped ladder (a done stage after current), and a `docs/` root holding only `architecture.md`. They assert: every run directory holding a run artifact appears exactly once in `runs`; active runs' `station` and `ladder` equal `board.gather`'s for the same tree; completed runs have `station: completed`; the unreadable run is `status: attention` with `board.gather`'s reason and no `history`; `work_orders` lists each breakdown row's title and done state for runs at or past Implement, and its length equals `protocol.checkbox_progress`'s total for that breakdown. Before `gather` exists they fail on the missing module.
 - [x] **WO-0199** Snapshot model — `assembly_line.gather(root)` returning `(model, problems)` — size:M, blocked by: WO-0198 (PRD-0021 §Success criteria, §User stories)
   - Accept: the WO-0198 cases pass. `gather` takes placement and attention from `board.gather` verbatim and completed runs from `protocol.run_dirs` plus `protocol.next_stage`; a search of `assembly_line.py` finds no stage-order or artifact-table literal of its own. A root with no `docs/` returns `board.gather`'s problem string and no model.
-- [ ] **WO-0200** History tests — cases for `history` and `timeline` — size:S, blocked by: WO-0199 (PRD-0021 §Success criteria)
+- [x] **WO-0200** History tests — cases for `history` and `timeline` — size:S, blocked by: WO-0199 (PRD-0021 §Success criteria)
   - Accept: cases assert, per architecture.md's Data model: a run enters its first station on its first artifact's date; each later arrival is on the date of the artifact that completed the stage before it; Implement starts on the breakdown's date (`defect.md`'s when inline) and ends on `verification.md`'s; skipped stages produce no arrival; every arrival sharing a day with another arrival of the same run is `inferred: true`; an undated artifact takes the nearest earlier dated artifact's date, marked inferred; a run with no dates enters on `last_day`; the last arrival's station equals `station` for every active and completed run; `timeline.first_day` and `last_day` bound every arrival. Before the fields exist the cases fail.
-- [ ] **WO-0201** History and timeline — `history` per run and `timeline` in the model — size:M, blocked by: WO-0200 (PRD-0021 §Success criteria, §User stories)
+- [x] **WO-0201** History and timeline — `history` per run and `timeline` in the model — size:M, blocked by: WO-0200 (PRD-0021 §Success criteria, §User stories)
   - Accept: the WO-0200 cases pass, and dates are read only through `protocol.read_frontmatter`. On this repo, every active and completed run's last arrival equals its `station` (a throwaway check over the real tree, output recorded in the PR).
 - [ ] **WO-0202** Page writer tests — cases for `render` and `main` — size:S, blocked by: WO-0199 (PRD-0021 §Success criteria)
   - Accept: cases assert: `main` with no flags writes a new file under the system temp directory and prints its absolute path, exit 0; `--out PATH` writes exactly PATH; `--publish DIR` writes `DIR/index.html`; a root with no `docs/` exits 1 with the problem string and writes nothing; an unreadable template or vendor file exits 1 with `assembly_line: cannot read <path>: <reason>`; a run slug containing `</script>` cannot close the model block (the written page parses the model back equal to `gather`'s). Before `render` exists they fail.
@@ -88,3 +88,15 @@ none.
 - Rows carry work-order ids WO-0198 to WO-0214 (the highest on main and
   every unmerged branch was WO-0197); no tracker issue is created for
   them in this stage (ADR-0032: rows first, mirror optional).
+- 2026-11-05, WO-0199: completed runs are found by elimination, not a
+  second `next_stage` walk: every `knowledge_plane.run_dirs` directory
+  holding a run artifact that `board.gather` neither places nor flags is
+  complete by orientation's own rule. `board._run_entry` and
+  `board._reason` became public (`run_entry`, `reason`) and
+  `board.run_identity` was extracted so the attention entry's ref, kind
+  and slug have one owner; board's output is unchanged.
+- 2026-11-05, WO-0201: history throwaway check over the real trees —
+  this repo 107 runs (91 active, 16 completed), mattbutlerengineering 53
+  (33 active, 20 completed), zero runs whose last arrival differs from
+  their station; timelines 2026-07-05 → 2026-11-05 and 2026-08-15 →
+  2026-11-05.

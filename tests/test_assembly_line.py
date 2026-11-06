@@ -207,5 +207,91 @@ class TestSnapshot(unittest.TestCase):
             self.assertTrue(model["generated"])
 
 
+def arrivals(run):
+    return [(hop["station"], hop["day"], hop["inferred"])
+            for hop in run["history"]]
+
+
+class TestHistory(unittest.TestCase):
+    """Station arrivals, per architecture.md's Data model: a run enters
+    its first station on its first artifact's date and reaches each
+    later station on the date of the artifact that completed the stage
+    before it."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = build_snapshot_tree(self.tmp.name)
+        self.model, _ = assembly_line.gather(self.root)
+        self.runs = {run["dir"]: run for run in self.model["runs"]}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_feature_run_arrives_on_each_predecessor_artifacts_date(self):
+        self.assertEqual(arrivals(self.runs["docs/features/building"]), [
+            ("idea", "2026-10-01", True), ("prd", "2026-10-01", True),
+            ("ux-design", "2026-10-02", False),
+            ("architect", "2026-10-03", False),
+            ("decompose", "2026-10-04", False),
+            ("implement", "2026-10-05", False)])
+
+    def test_skipped_ux_produces_no_arrival(self):
+        self.assertEqual(arrivals(self.runs["docs/features/lean"]), [
+            ("idea", "2026-10-01", True), ("prd", "2026-10-01", True),
+            ("architect", "2026-10-01", True)])
+
+    def test_inline_maintenance_starts_implement_on_defects_date(self):
+        self.assertEqual(arrivals(self.runs["docs/fixes/inline"]), [
+            ("capture", "2026-10-06", True),
+            ("implement", "2026-10-06", True)])
+
+    def test_completed_run_leaves_implement_on_verifications_date(self):
+        self.assertEqual(arrivals(self.runs["docs/features/done"]), [
+            ("idea", "2026-09-01", True), ("prd", "2026-09-01", True),
+            ("architect", "2026-09-01", True),
+            ("decompose", "2026-09-02", False),
+            ("implement", "2026-09-03", False),
+            ("verify", "2026-09-04", True), ("review", "2026-09-04", True),
+            ("ship", "2026-09-04", True), ("operate", "2026-09-05", False),
+            ("completed", "2026-09-06", False)])
+
+    def test_gapped_run_stops_at_its_current_station(self):
+        self.assertEqual(arrivals(self.runs["docs/features/gap"]), [
+            ("idea", "2026-10-09", True), ("prd", "2026-10-09", True)])
+
+    def test_undated_artifact_takes_the_nearest_earlier_date(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "docs" / "features" / "patchy"
+            write(run / "idea.md", artifact("idea", "2026-10-01"))
+            write(run / "prd.md", frontmatter(stage="prd", ux="required"))
+            write(run / "ux.md", artifact("ux-design", "2026-10-05"))
+            model, _ = assembly_line.gather(tmp)
+            self.assertEqual(arrivals(model["runs"][0]), [
+                ("idea", "2026-10-01", True), ("prd", "2026-10-01", True),
+                ("ux-design", "2026-10-01", True),
+                ("architect", "2026-10-05", False)])
+
+    def test_run_with_no_dates_enters_on_the_last_day(self):
+        last = self.model["timeline"]["last_day"]
+        self.assertEqual(arrivals(self.runs["docs"]),
+                         [("idea", last, True)])
+
+    def test_last_arrival_is_the_station_for_every_placed_run(self):
+        for run in self.model["runs"]:
+            if run["status"] == "attention":
+                continue
+            self.assertEqual(run["history"][-1]["station"], run["station"],
+                             run["dir"])
+
+    def test_timeline_bounds_every_arrival(self):
+        timeline = self.model["timeline"]
+        days = [hop["day"] for run in self.model["runs"]
+                for hop in run["history"]]
+        self.assertEqual(timeline["first_day"], min(days))
+        self.assertGreaterEqual(timeline["last_day"], max(days))
+        self.assertGreaterEqual(timeline["last_day"],
+                                self.model["generated"][:10])
+
+
 if __name__ == "__main__":
     unittest.main()
