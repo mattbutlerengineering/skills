@@ -19,7 +19,7 @@ from knowledge_plane import active_runs
 from protocol import breakdown_path, checkbox_progress, run_ref, stage_states
 
 
-def _reason(err):
+def reason(err):
     """A per-run failure as one bounded line for the attention strip."""
     text = " ".join(str(err).split()) or type(err).__name__
     return text[:300]
@@ -35,13 +35,23 @@ def _position(ladder):
     return 1.0
 
 
-def _run_entry(root, run_dir):
-    """One active run as the model's contract fields. Raises whatever
-    orientation raises — gather turns that into an attention entry."""
+def run_identity(root, run_dir):
+    """(ref, kind, slug) for a run directory, from the path alone, so it
+    never raises on a run orientation cannot read. The product run's ref
+    is bare "product"; its slug is the repo directory's name."""
     ref = run_ref(root, run_dir)
     kind, _, slug = ref.partition(":")
-    if not slug:  # the product run: ref is bare "product"
-        kind, slug = "product", root.resolve().name
+    if not slug:
+        kind, slug = "product", Path(root).resolve().name
+    return ref, kind, slug
+
+
+def run_entry(root, run_dir):
+    """One run as the model's contract fields — active here, and any
+    run for assembly_line, which places completed runs too. Raises
+    whatever orientation raises — gather turns that into an attention
+    entry."""
+    ref, kind, slug = run_identity(root, run_dir)
     ladder = [{"stage": stage, "state": state}
               for stage, state in stage_states(run_dir)]
     current = next((row["stage"] for row in ladder
@@ -69,7 +79,7 @@ def gather(root, clock=None):
         try:
             if error is not None:
                 raise error
-            entry = _run_entry(root, run_dir)
+            entry = run_entry(root, run_dir)
             if all(row["state"] == "done" for row in entry["ladder"]):
                 continue  # complete without retro.md: not active
             runs.append(entry)
@@ -77,7 +87,7 @@ def gather(root, clock=None):
             # a run this tool cannot orient is reported with its
             # reason, never guessed onto a stage and never fatal.
             attention.append({"dir": str(run_dir.relative_to(root)),
-                              "reason": _reason(err)})
+                              "reason": reason(err)})
     runs.sort(key=lambda entry: (-_position(entry["ladder"]),
                                  entry["slug"]))
     model = {"generated": clock().isoformat(timespec="seconds"),
