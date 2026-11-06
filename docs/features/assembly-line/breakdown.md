@@ -71,7 +71,7 @@ Owner can put a clip on a README that links to the page.
 
 - [x] **WO-0213** GIF export — the Export button and the in-page encoder — size:M, blocked by: WO-0211 (PRD-0021 §User stories, §Success criteria)
   - Accept: in `assembly_line.html`, pressing Export plays the replay at the fixed export size and frame rate and downloads an animated GIF built by the page's own encoder (no added library); the GIF committed to a pushed scratch branch and referenced from a README as an image autoplays and loops when that README is viewed on GitHub; an encode failure shows an on-page message and downloads nothing.
-- [ ] **WO-0214** The assembly-line skill — `skills/assembly-line/SKILL.md` and its registrations — size:S, blocked by: WO-0213, WO-0204 (PRD-0021 §Actors, §User stories, §Success criteria)
+- [x] **WO-0214** The assembly-line skill — `skills/assembly-line/SKILL.md` and its registrations — size:S, blocked by: WO-0213, WO-0204 (PRD-0021 §Actors, §User stories, §Success criteria)
   - Accept: the skill runs the tool two directories above itself, opens the page, stops with the tool's problem output on a nonzero exit, and walks Export plus `--publish` for the README (walkthrough 6 completes); it is in `protocol.UTILITY_SKILLS`, README.md, LEDGER.md and the plugin description; `python3 lint.py`, `python3 gates.py` and `python3 run_tests.py` pass, and `python3 factory_init.py update-manifest` is run if any mirrored file changed.
 
 ## Design gaps found
@@ -102,12 +102,13 @@ none.
   2026-11-05.
 - 2026-11-05, WO-0203: three.js v0.187.0's npm package ships no
   `.min.js` builds (its `build/` holds `three.module.js` and
-  `three.core.js`); the 814 KB figure in ADR-0124's Consequences and in
-  architecture.md was jsDelivr's on-the-fly minification, not the
+  `three.core.js`); the 814 KB figure in idea.md's hunch and in
+  ADR-0124's first draft was jsDelivr's on-the-fly minification, not the
   release. `vendor/three/` holds the release files byte-identical from
   the npm tarball (2,133,699 bytes, 417 KB gzipped) with its LICENSE,
-  and a written page is about 3 MB. The decision is unchanged, so no new
-  ADR; WO-0205's Accept is read with these two file names. The vendor
+  and a written page is about 3 MB. The decision is unchanged; ADR-0124,
+  unmerged and written by this run, now states the real size (WO-0214),
+  and WO-0205's Accept is read with these two file names. The vendor
   files landed with WO-0203 because `main` reads them; WO-0205 still
   owns NOTICE, the npx bundle and the in-page loading.
 - 2026-11-05, WO-0203: checked in headless Chromium with WebGL stubbed
@@ -179,3 +180,16 @@ none.
   the branch was deleted. With `getImageData` forced to throw, the page
   showed "Export failed: simulated encoder failure. Nothing was
   downloaded.", no download fired, and the controls were restored.
+- 2026-11-05, WO-0214: the skill runs `<skill dir>/../../assembly_line.py`;
+  from mattbutlerengineering's root that wrote a page and printed its
+  temp path (exit 0), and against a tree with no `docs/` it printed
+  board's problem and `assembly_line: 1 problem(s)` (exit 1). Registered
+  in `protocol.UTILITY_SKILLS` (and its payload mirror through
+  `factory_init.py update-manifest`), README.md's table, LEDGER.md, the
+  skill map, the plugin description (version untouched, ADR-0095) and
+  four routing cases (`al-1` to `al-3`, `al-vs-pb-1`), as lint requires
+  three. Two more pins the suite named: the `assembly-line` verb in
+  `factory.py`, and assembly_line's three rows in
+  `tests/test_dual_membership.py`, recorded in ADR-0124. lint, gates,
+  gates selftest and kb drift report 0 problems; `run_tests.py` ran
+  4078 tests across 131 modules with 0 problems.
