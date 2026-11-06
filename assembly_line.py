@@ -8,7 +8,12 @@ Facts only, per ADR-0062: placement and attention come from board.gather
 verbatim, stage rules from protocol, breakdown rows from
 knowledge_plane. The page derives nothing; it draws this model.
 """
+import argparse
+import base64
+import json
+import os
 import sys
+import tempfile
 from datetime import date
 from pathlib import Path
 
@@ -28,6 +33,13 @@ IMPLEMENT = "implement"
 # Implement writes no artifact of its own; the run leaves it when
 # Verify's artifact lands (PRD-0021 §Success criteria, Replay).
 LEAVES_IMPLEMENT = dict(STAGE_ARTIFACTS)["verify"]
+# The page template and the vendored library (ADR-0124), beside the
+# tool as dashboard.html is beside dashboard.py; each vendored file is
+# inlined at the template's __<NAME>__ slot.
+HERE = Path(__file__).resolve().parent
+TEMPLATE = HERE / "assembly_line.html"
+VENDOR = {"three-core": HERE / "vendor" / "three" / "three.core.js",
+          "three-module": HERE / "vendor" / "three" / "three.module.js"}
 
 
 def _artifact_day(path):
@@ -171,10 +183,67 @@ def gather(root, clock=None):
     return model, []
 
 
+def _read(path, binary=False):
+    """(content, problem) for one shipped page file — hand-written
+    rather than cli.read_file (ADR-0075), as dashboard.py reads its
+    page: an absent file is a problem here, not a fact."""
+    try:
+        return (path.read_bytes() if binary
+                else path.read_text(encoding="utf-8")), None
+    except (OSError, UnicodeDecodeError) as err:
+        return None, f"assembly_line: cannot read {path}: {err}"
+
+
+def render(model, template, vendor):
+    """The page: template with the model inlined as JSON — `</` escaped
+    so no string in it can close the script block — and each vendored
+    file (name -> bytes) inlined as base64 at its __NAME__ slot."""
+    page = template.replace(
+        "__MODEL__", json.dumps(model).replace("</", "<\\/"))
+    for name, content in vendor.items():
+        slot = "__" + name.upper().replace("-", "_") + "__"
+        page = page.replace(slot, base64.b64encode(content).decode("ascii"))
+    return page
+
+
+def _target(args):
+    if args.publish:
+        directory = Path(args.publish)
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory / "index.html"
+    if args.out:
+        return Path(args.out)
+    handle, name = tempfile.mkstemp(prefix="assembly-line-", suffix=".html")
+    os.close(handle)
+    return Path(name)
+
+
 def main(argv):
-    """`python3 assembly_line.py [root]`."""
-    root = argv[0] if argv else "."
-    model, problems = gather(root)
+    """`python3 assembly_line.py [root] [--out PATH | --publish DIR]` —
+    writes the page (default: a new file in the system temp directory,
+    outside the repo's tracked tree) and prints its absolute path."""
+    parser = argparse.ArgumentParser(prog="assembly_line.py")
+    parser.add_argument("root", nargs="?", default=".")
+    where = parser.add_mutually_exclusive_group()
+    where.add_argument("--out")
+    where.add_argument("--publish")
+    args = parser.parse_args(argv)
+    model, problems = gather(args.root)
     if problems:
         return cli.report("assembly_line", problems)
+    template, problem = _read(TEMPLATE)
+    vendor = {}
+    for name, path in ([] if problem else VENDOR.items()):
+        vendor[name], problem = _read(path, binary=True)
+        if problem:
+            break
+    if problem:
+        return cli.report("assembly_line", [problem])
+    target = _target(args)
+    target.write_text(render(model, template, vendor), encoding="utf-8")
+    print(target.resolve())
     return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

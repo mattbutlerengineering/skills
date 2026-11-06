@@ -6,10 +6,15 @@ self-contained page that draws them.
 Pinned against tempfile fixture trees, the board.py seam discipline:
 functions take root and read real files under it.
 """
+import base64
+import contextlib
+import io
+import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -291,6 +296,117 @@ class TestHistory(unittest.TestCase):
         self.assertGreaterEqual(timeline["last_day"], max(days))
         self.assertGreaterEqual(timeline["last_day"],
                                 self.model["generated"][:10])
+
+
+TEMPLATE = ("<html><script id=\"model\" type=\"application/json\">"
+            "__MODEL__</script><script id=\"three-core\" type=\"text/plain\">"
+            "__THREE_CORE__</script><script id=\"three-module\" "
+            "type=\"text/plain\">__THREE_MODULE__</script></html>")
+
+
+def model_from_page(text):
+    start = text.index('type="application/json">') + len(
+        'type="application/json">')
+    return json.loads(text[start:text.index("</script>", start)])
+
+
+class TestPageWriter(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        base = Path(self.tmp.name)
+        self.root = build_snapshot_tree(base / "repo")
+        self.template = base / "page.html"
+        self.template.write_text(TEMPLATE, encoding="utf-8")
+        self.core = base / "three.core.min.js"
+        self.module = base / "three.module.min.js"
+        self.core.write_text("export const core = 1;", encoding="utf-8")
+        self.module.write_text('import "./three.core.min.js";',
+                               encoding="utf-8")
+        self.patches = [
+            mock.patch.object(assembly_line, "TEMPLATE", self.template),
+            mock.patch.object(assembly_line, "VENDOR",
+                              {"three-core": self.core,
+                               "three-module": self.module})]
+        for patch in self.patches:
+            patch.start()
+
+    def tearDown(self):
+        for patch in self.patches:
+            patch.stop()
+        self.tmp.cleanup()
+
+    def run_main(self, *argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = assembly_line.main([str(arg) for arg in argv])
+        return code, out.getvalue()
+
+    def test_default_writes_a_new_temp_file_and_prints_its_path(self):
+        code, out = self.run_main(self.root)
+        page = Path(out.strip())
+        self.assertEqual(code, 0)
+        self.assertTrue(page.is_absolute())
+        self.assertTrue(page.is_file())
+        self.assertTrue(page.resolve().is_relative_to(
+            Path(tempfile.gettempdir()).resolve()))
+        self.assertFalse(page.resolve().is_relative_to(self.root.resolve()))
+        page.unlink()
+
+    def test_out_writes_exactly_that_path(self):
+        target = Path(self.tmp.name) / "chosen.html"
+        code, out = self.run_main(self.root, "--out", target)
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), str(target.resolve()))
+        self.assertTrue(target.is_file())
+
+    def test_publish_writes_index_html_in_the_directory(self):
+        target = Path(self.tmp.name) / "site"
+        code, out = self.run_main(self.root, "--publish", target)
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), str((target / "index.html").resolve()))
+        self.assertTrue((target / "index.html").is_file())
+
+    def test_no_docs_tree_exits_1_with_boards_problem_and_writes_nothing(self):
+        empty = Path(self.tmp.name) / "empty"
+        empty.mkdir()
+        target = Path(self.tmp.name) / "never.html"
+        code, out = self.run_main(empty, "--out", target)
+        _, problems = board.gather(empty)
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines()[0], problems[0])
+        self.assertFalse(target.exists())
+
+    def test_unreadable_template_or_vendor_file_exits_1_naming_it(self):
+        for missing in (self.template, self.core):
+            with self.subTest(missing=missing.name):
+                text = missing.read_bytes()
+                missing.unlink()
+                target = Path(self.tmp.name) / "never.html"
+                code, out = self.run_main(self.root, "--out", target)
+                self.assertEqual(code, 1)
+                self.assertTrue(out.splitlines()[0].startswith(
+                    f"assembly_line: cannot read {missing}: "), out)
+                self.assertFalse(target.exists())
+                missing.write_bytes(text)
+
+    def test_a_slug_holding_a_closing_script_tag_cannot_close_the_model(self):
+        evil = self.root / "docs" / "features" / "a</script><b>"
+        write(evil / "idea.md", artifact("idea", "2026-10-01"))
+        target = Path(self.tmp.name) / "page.out.html"
+        code, _ = self.run_main(self.root, "--out", target)
+        self.assertEqual(code, 0)
+        written = model_from_page(target.read_text(encoding="utf-8"))
+        expected, _ = assembly_line.gather(self.root)
+        written.pop("generated"), expected.pop("generated")
+        self.assertEqual(written, expected)
+
+    def test_the_vendored_files_are_inlined_as_base64(self):
+        target = Path(self.tmp.name) / "page.out.html"
+        self.run_main(self.root, "--out", target)
+        text = target.read_text(encoding="utf-8")
+        for path in (self.core, self.module):
+            self.assertIn(base64.b64encode(path.read_bytes()).decode(), text)
+        self.assertNotIn("__THREE_", text)
 
 
 if __name__ == "__main__":

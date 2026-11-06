@@ -28,11 +28,11 @@ yet, but the facts are complete and pinned.
   - Accept: cases assert, per architecture.md's Data model: a run enters its first station on its first artifact's date; each later arrival is on the date of the artifact that completed the stage before it; Implement starts on the breakdown's date (`defect.md`'s when inline) and ends on `verification.md`'s; skipped stages produce no arrival; every arrival sharing a day with another arrival of the same run is `inferred: true`; an undated artifact takes the nearest earlier dated artifact's date, marked inferred; a run with no dates enters on `last_day`; the last arrival's station equals `station` for every active and completed run; `timeline.first_day` and `last_day` bound every arrival. Before the fields exist the cases fail.
 - [x] **WO-0201** History and timeline — `history` per run and `timeline` in the model — size:M, blocked by: WO-0200 (PRD-0021 §Success criteria, §User stories)
   - Accept: the WO-0200 cases pass, and dates are read only through `protocol.read_frontmatter`. On this repo, every active and completed run's last arrival equals its `station` (a throwaway check over the real tree, output recorded in the PR).
-- [ ] **WO-0202** Page writer tests — cases for `render` and `main` — size:S, blocked by: WO-0199 (PRD-0021 §Success criteria)
+- [x] **WO-0202** Page writer tests — cases for `render` and `main` — size:S, blocked by: WO-0199 (PRD-0021 §Success criteria)
   - Accept: cases assert: `main` with no flags writes a new file under the system temp directory and prints its absolute path, exit 0; `--out PATH` writes exactly PATH; `--publish DIR` writes `DIR/index.html`; a root with no `docs/` exits 1 with the problem string and writes nothing; an unreadable template or vendor file exits 1 with `assembly_line: cannot read <path>: <reason>`; a run slug containing `</script>` cannot close the model block (the written page parses the model back equal to `gather`'s). Before `render` exists they fail.
-- [ ] **WO-0203** Page writer and fallback list — `render`, `main`, and `assembly_line.html` with the fallback list — size:M, blocked by: WO-0201, WO-0202 (PRD-0021 §Success criteria)
+- [x] **WO-0203** Page writer and fallback list — `render`, `main`, and `assembly_line.html` with the fallback list — size:M, blocked by: WO-0201, WO-0202 (PRD-0021 §Success criteria)
   - Accept: the WO-0202 cases pass. `assembly_line.html`, opened in a browser with WebGL disabled, the page shows its one-line notice and one list per station (all twelve, Capture through Completed) holding every run in the model, plus the Needs-attention list; a model missing a required key shows the same list with a notice naming the key. The page makes no network request (browser network log empty beyond the file itself).
-- [ ] **WO-0204** Two-repo parity check — run the tool on this repo and on mattbutlerengineering — size:S, blocked by: WO-0203 (PRD-0021 §Success criteria, §Problem statement)
+- [x] **WO-0204** Two-repo parity check — run the tool on this repo and on mattbutlerengineering — size:S, blocked by: WO-0203 (PRD-0021 §Success criteria, §Problem statement)
   - Accept: for both repos, with nothing installed or configured first, the page's lists hold every run directory exactly once and the active counts equal `python3 board.py`'s `runs` length; the counts and the phantom product run in mattbutlerengineering are recorded in the PR.
 
 ## Milestone 2: the factory floor
@@ -100,3 +100,24 @@ none.
   (33 active, 20 completed), zero runs whose last arrival differs from
   their station; timelines 2026-07-05 → 2026-11-05 and 2026-08-15 →
   2026-11-05.
+- 2026-11-05, WO-0203: three.js v0.187.0's npm package ships no
+  `.min.js` builds (its `build/` holds `three.module.js` and
+  `three.core.js`); the 814 KB figure in ADR-0124's Consequences and in
+  architecture.md was jsDelivr's on-the-fly minification, not the
+  release. `vendor/three/` holds the release files byte-identical from
+  the npm tarball (2,133,699 bytes, 417 KB gzipped) with its LICENSE,
+  and a written page is about 3 MB. The decision is unchanged, so no new
+  ADR; WO-0205's Accept is read with these two file names. The vendor
+  files landed with WO-0203 because `main` reads them; WO-0205 still
+  owns NOTICE, the npx bundle and the in-page loading.
+- 2026-11-05, WO-0203: checked in headless Chromium with WebGL stubbed
+  off — notice shown, twelve station lists plus Needs attention, 107
+  list items for 107 runs, a page with `timeline` removed names it in
+  the notice; the network log holds only the page (and the browser's
+  own favicon probe).
+- 2026-11-05, WO-0204: this repo — 107 runs listed once each (91 active,
+  equal to `board.py`'s 91 `runs`; 16 completed; 0 attention).
+  mattbutlerengineering — 53 runs listed once each (33 active, equal to
+  `board.py`'s 33; 20 completed), including the phantom product run
+  `docs` at Idea; four `docs/fixes/` directories hold no run artifact
+  (`design.md` or `finding.md` only) and are not runs, as board agrees.

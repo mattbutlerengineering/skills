@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assembly line</title>
+<style>
+  :root {
+    --ground: #eef7f0; --ink: #2b2b33; --muted: #6b6b78;
+    --belt: #a6e07a; --steel: #8a8f98; --steel-dark: #5d626b;
+    --accent: #9b7be0; --warn: #d9822b; --panel: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--ground);
+    color: var(--ink); font: 14px/1.4 system-ui, -apple-system, "Segoe UI",
+    sans-serif; }
+  header { display: flex; gap: 1rem; align-items: baseline;
+    padding: .6rem 1rem; }
+  header h1 { font-size: 1.05rem; margin: 0; }
+  header .meta { color: var(--muted); }
+  #notice { margin: 0 1rem .5rem; padding: .5rem .75rem; border-radius: 6px;
+    background: #fff4e5; color: #6b3d00; }
+  #fallback { display: grid; gap: .75rem; padding: 0 1rem 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  #fallback section { background: var(--panel); border-radius: 8px;
+    padding: .6rem .75rem; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
+  #fallback h2 { font-size: .95rem; margin: 0 0 .35rem;
+    display: flex; justify-content: space-between; }
+  #fallback h2 .count { color: var(--muted); font-weight: normal; }
+  #fallback ul { margin: 0; padding-left: 1.1rem; }
+  #fallback li { overflow-wrap: anywhere; }
+  #fallback .empty { color: var(--muted); margin: 0; }
+  #fallback section.attention h2 { color: var(--warn); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Assembly line</h1>
+  <span class="meta" id="meta"></span>
+</header>
+<p id="notice" hidden></p>
+<main id="fallback" hidden></main>
+
+<script id="model" type="application/json">__MODEL__</script>
+<script id="three-core" type="text/plain">__THREE_CORE__</script>
+<script id="three-module" type="text/plain">__THREE_MODULE__</script>
+<script>
+"use strict";
+// The page derives no pipeline fact: placement, history and work orders
+// are the model's (assembly_line.py). Everything here is drawing.
+const STATION_NAMES = {
+  "capture": "Capture", "idea": "Idea", "prd": "PRD",
+  "ux-design": "UX Design", "architect": "Architect",
+  "decompose": "Decompose", "implement": "Implement", "verify": "Verify",
+  "review": "Review", "ship": "Ship", "operate": "Operate",
+  "completed": "Completed"
+};
+const REQUIRED = ["generated", "repo", "stations", "runs", "timeline"];
+
+function readModel() {
+  try {
+    return JSON.parse(document.getElementById("model").textContent);
+  } catch (err) {
+    return null;
+  }
+}
+
+function missingKey(model) {
+  if (!model || typeof model !== "object") return "model";
+  return REQUIRED.find((key) => !(key in model)) || null;
+}
+
+function stationName(station) {
+  return STATION_NAMES[station] || station;
+}
+
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([key, value]) => {
+    if (key === "class") node.className = value;
+    else node.setAttribute(key, value);
+  });
+  children.forEach((child) => node.append(child));
+  return node;
+}
+
+function runLabel(run) {
+  const done = run.work_orders.filter((wo) => wo.done).length;
+  const parts = run.work_orders.length && run.station === "implement"
+    ? ` · ${done}/${run.work_orders.length}` : "";
+  return `${run.ref}${parts}`;
+}
+
+function listSection(title, runs, extraClass, describe) {
+  const section = el("section", {class: extraClass || ""},
+    el("h2", {}, title, el("span", {class: "count"}, String(runs.length))));
+  if (!runs.length) {
+    section.append(el("p", {class: "empty"}, "No runs here"));
+    return section;
+  }
+  const list = el("ul", {});
+  runs.forEach((run) => list.append(el("li", {}, describe(run))));
+  section.append(list);
+  return section;
+}
+
+// The no-WebGL view: the same facts as the floor, one list per station,
+// so every run stays visible whatever the browser can draw.
+function showFallback(model, notice) {
+  const box = document.getElementById("notice");
+  box.textContent = notice;
+  box.hidden = false;
+  const main = document.getElementById("fallback");
+  main.replaceChildren();
+  const runs = Array.isArray(model && model.runs) ? model.runs : [];
+  const stations = Array.isArray(model && model.stations) && model.stations.length
+    ? model.stations : Object.keys(STATION_NAMES);
+  stations.forEach((station) => {
+    const here = runs.filter((run) => run.station === station);
+    main.append(listSection(stationName(station), here, "", runLabel));
+  });
+  const attention = runs.filter((run) => run.status === "attention");
+  main.append(listSection("Needs attention", attention, "attention",
+    (run) => `${run.dir} — ${run.reason}`));
+  main.hidden = false;
+}
+
+function header(model) {
+  const runs = Array.isArray(model && model.runs) ? model.runs : [];
+  const active = runs.filter((run) => run.status === "active").length;
+  const completed = runs.filter((run) => run.status === "completed").length;
+  document.getElementById("title").textContent =
+    (model && model.repo) || "Assembly line";
+  const today = model && model.generated ? model.generated.slice(0, 10) : "";
+  document.getElementById("meta").textContent =
+    `${active} active · ${completed} completed${today ? ` · as of ${today}` : ""}`;
+}
+
+function webglAvailable() {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(canvas.getContext("webgl2") || canvas.getContext("webgl"));
+  } catch (err) {
+    return false;
+  }
+}
+
+const MODEL = readModel();
+header(MODEL);
+const MISSING = missingKey(MODEL);
+if (MISSING) {
+  showFallback(MODEL, `This page's data is missing "${MISSING}", so it shows a plain list.`);
+} else if (!webglAvailable()) {
+  showFallback(MODEL, "This browser cannot draw the factory (no WebGL), so it shows a plain list of every run by station.");
+} else {
+  showFallback(MODEL, "The factory floor is not drawn yet; every run is listed by station.");
+}
+</script>
+</body>
+</html>
