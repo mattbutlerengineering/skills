@@ -108,7 +108,7 @@ form.
 
 A hunch, not a design: a vended utility skill, like pipeline-board,
 that reads the same run facts (`board.py` already owns placement) plus
-each artifact's date, and renders one self-contained, theme-aware file.
+each artifact's date, and renders one self-contained file.
 
 - Stations: Idea → PRD → UX Design → Architect → Decompose → Implement →
   Verify → Review → Ship → Operate → Completed. Maintenance runs enter at
@@ -121,6 +121,41 @@ each artifact's date, and renders one self-contained, theme-aware file.
   own bucket.
 - Replay: play and scrub over the dated history; the snapshot is the last
   frame.
+
+**Look (Owner, 2026-11-05):** "i want the visualization to look something
+like this but animated. award winning. incredible. impressive. exciting.
+easy to understand." The Owner supplied three stock illustrations as the
+target; they are watermarked or licensed images, so they are described
+here and not committed:
+
+- Flat isometric vector line art: a true isometric (orthographic) view,
+  thin dark outlines, flat fills with three tones per box (light top,
+  mid and dark sides), no gradients or textures.
+- A small palette on a pale pastel ground: lime-green belt surfaces and
+  shelf tops, cool greys for machines and frames, purple for workers and
+  accents.
+- Vocabulary: roller conveyors with legs and visible rollers, belts that
+  turn corners, tunnel scanners, gantry and articulated robot arms,
+  workbenches, workers in hard hats, cardboard crates, pallets, shelving,
+  forklifts and small delivery carts.
+- Modular: one reference is a grid of nine self-contained isometric
+  tiles, each a different station on its own floor plate. That maps
+  directly onto one tile per pipeline stage, joined by belts.
+
+Hunch at the metaphor (for PRD and UX to test, not settled): a crate per
+run; Decompose as an arm that opens a crate into small parts, one per
+work order; Implement as robot arms working those parts; Verify as the
+tunnel scanner; Review as a worker inspecting with a tablet; Ship as
+carts carrying finished crates out; Completed as the shelving and
+pallets, filling up as runs finish.
+
+Hunch at the renderer: three.js with an orthographic isometric camera
+gives that exact projection, with flat per-face colours and edge lines
+for the outlined look and hover via picking. The machines are built
+from code, not imported models. The scene is a fixed template the skill
+fills with data, never redrawn by the model each run, so every repo gets
+the same factory. three.js v0.187.0 is MIT and about 814 KB minified,
+bundled into the file so it needs no network.
 
 ## Success in one sentence
 
@@ -135,9 +170,16 @@ up within 30 seconds of watching the replay.
 - **Replay honesty.** Intra-day order is inferred from stage order; a
   replay that looks precise but isn't misleads viewers. The view must say
   what is observed (the day) and what is inferred (order within it).
-- **Hover versus a README embed.** An SVG shown as a README `<img>`
-  animates but gets no hover and no script, so the adopter's view and the
-  presenter's view may need different forms. Which forms ship is open.
+- **README embed.** A README cannot run scripts or WebGL, so a three.js
+  line never plays there; adopters would see a recorded clip of the
+  replay. Whether that is enough, or a plain animated SVG is also needed,
+  is open.
+- **First bundled third-party code.** Shipping three.js in the plugin is
+  a new precedent beside ADR-0008 (self-contained skills) and the
+  diagram skills' no-external-requests check; it needs its own ADR.
+- **The bar is taste.** "Award winning, incredible, impressive" is not
+  checkable as written; PRD has to turn it into tests a render can pass
+  or fail, beside the 30-second cold-viewer test.
 - **Scale.** A repo with hundreds of runs, or 71 parts parked at one
   station, could turn the line into clutter; the pile has to read as a
   pile, not a smear.
