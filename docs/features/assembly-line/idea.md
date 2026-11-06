@@ -20,9 +20,10 @@ The pipeline is a factory, but no view of it looks like one or lets you
 point at a step. Three things are missing at once:
 
 - **Where work piles up.** A static swimlane does not read as a queue, so
-  bottlenecks and parked work are invisible. On 2026-11-05, `board.py` in
-  this repo listed 87 active runs: 71 parked at Operate (shipped, no
-  retro), 15 at Implement, 1 at Idea. Nothing makes that pile show.
+  bottlenecks and parked work are invisible. On 2026-11-05, `board.py` on
+  `origin/main` (4d63b6d) listed 90 active runs besides this one: 75
+  parked at Operate (shipped, no retro), 15 at Implement. Nothing makes
+  that pile show.
 - **What a step is doing.** The board says a run sits at a stage, not what
   happens there: which work orders are in flight inside Implement, what
   the stage produces.
@@ -53,8 +54,8 @@ seen the factory has to get it from the picture.
 - **Anecdote (the Owner, 2026-11-05):** "I don't use it because it's not
   good enough." The pipeline-board skill shipped and its own author does
   not reach for it. This is the strongest evidence and it is one person.
-- **Measured (this repo, 2026-11-05):** 100 run directories under
-  `docs/features/` and `docs/fixes/`; `board.py` reports 87 active, 71 of
+- **Measured (`origin/main` 4d63b6d, 2026-11-05):** 106 run directories
+  under `docs/features/` and `docs/fixes/`; `board.py` reports 90 active, 75 of
   them at Operate. A list of that length is a scroll, not a glance.
 - **Repo signal, not viewer evidence:** the repo already invested in
   visuals aimed at this audience (readme-skill-map, pipeline-board,
@@ -67,12 +68,12 @@ Chosen: Showstopper, in the user's words: "I want it to look like an animated as
 Not taken: Solid: an animated snapshot of the line as it stands now, with hover and a Completed bucket and no replay; Moonshot: a live floor across every repo you own, parts moving in real time as agents work, hosted and viewable on a phone — seeded to docs/backlog.md
 Demo: pass — press play and about 100 runs flow machine to machine over months of history in about 30 seconds while the Completed bucket fills
 Removes a step: pass — the presenter no longer narrates the stages, and a consumer repo needs no setup: the line is read from artifacts already there
-Only this product: pass — every run artifact carries a dated frontmatter line (523 of 523 in this repo), so the stage history is already recorded by the pipeline itself
+Only this product: pass — every run artifact carries a dated frontmatter line (565 of 565 on origin/main), so the stage history is already recorded by the pipeline itself
 Achievable: pass — riskiest piece is a truthful replay timeline under squash merges plus smooth motion for about 100 parts in one self-contained file; two-day spike below
 
 ## The demo
 
-Before: a static swimlane of 87 rows that its author does not use, and a
+Before: a static swimlane of 90 rows that its author does not use, and a
 presenter explaining what each column means. After: one machine per stage
 on a belt; press play and the repo's runs enter, move station to station
 as each stage's artifact lands, pile up where work actually waited, and
@@ -81,14 +82,14 @@ does and which items are in it.
 
 ## Riskiest piece + spike
 
-**Timeline truth.** Git cannot time the stages: on `origin/main`, 82 of
-99 runs landed every artifact in one squash commit, so a commit-time
+**Timeline truth.** Git cannot time the stages: on `origin/main`, 86 of
+106 runs landed every artifact in one squash commit, so a commit-time
 replay would jump most runs from Idea to the end. Frontmatter `date:`
-fields time every artifact, but only to the day, and only 21 runs span
+fields time every artifact, but only to the day, and only 24 runs span
 more than one day; order within a day has to come from stage order, which
 is inferred, not observed.
 
-Spike (about two days): build the replay timeline for this repo's 100
+Spike (about two days): build the replay timeline for this repo's 106
 runs from frontmatter dates (git only as a fallback), render it with
 about 100 moving parts in one self-contained file, and check two things:
 that motion stays smooth at that part count, and that day-resolution
@@ -180,11 +181,11 @@ up within 30 seconds of watching the replay.
 - **The bar is taste.** "Award winning, incredible, impressive" is not
   checkable as written; PRD has to turn it into tests a render can pass
   or fail, beside the 30-second cold-viewer test.
-- **Scale.** A repo with hundreds of runs, or 71 parts parked at one
+- **Scale.** A repo with hundreds of runs, or 75 parts parked at one
   station, could turn the line into clutter; the pile has to read as a
   pile, not a smear.
 - **What counts as Completed.** The protocol's complete run (retro with
-  population line) leaves 71 shipped runs here at Operate. Showing them
+  population line) leaves 75 shipped runs here at Operate. Showing them
   truthfully may make the factory look stuck to a viewer, which could
   hurt the demo; relabelling them would be untrue.
 - **It becomes a toy.** Animation that delights once and tells the Owner
