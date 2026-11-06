@@ -2,7 +2,8 @@
 stage: ship
 run: feature:assembly-line
 date: 2026-11-06
-outcome: prepared
+outcome: released
+released-at: 2026-11-06
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1168
 assumptions:
   - "The Owner's brief authorizes push, PR and squash-merge once CI is green, and forbids any plugin.json version bump or chore(release) PR (ADR-0095); the diff changes plugin.json's description only, version stays 0.26.0."
@@ -63,8 +64,9 @@ python3 run_tests.py && python3 lint.py && python3 kb.py drift && python3 gates.
 
 ## Post-release checks
 
-- Pending the merge; written back in the follow-up commit.
+- `gh pr view 1168 --json state,mergedAt,mergeCommit` → `MERGED` at 2026-11-06T17:08:06Z as `9804284`. PR CI: `check` pass (both runs), `review` pass. Issue #1167 closes with the merge.
+- Still open: the four NOT RUN human criteria above, and the `chore(release)` version bump (ADR-0095), the Owner's next step.
 
 ## Outcome
 
-Prepared and stopped — waiting on the pull request `pending-merge:` names.
+Shipped cleanly. The squash-merge of #1168 (authorized, CI green) reached main; this write-back follows the protocol's Ship outcome rule. No version bump was made (ADR-0095).
