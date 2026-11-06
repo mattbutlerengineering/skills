@@ -855,6 +855,31 @@
       "query": "Show me all the active runs in this repo placed on their current pipeline stages, at a glance, without me running commands"
     },
     {
+      "id": "al-1",
+      "kind": "direct",
+      "expected": "assembly-line",
+      "query": "Generate the animated assembly line of this repo's runs"
+    },
+    {
+      "id": "al-2",
+      "kind": "situational",
+      "expected": "assembly-line",
+      "query": "I want to show people our factory: every piece of work moving through the steps like an animated assembly line, with the finished stuff in its own bucket"
+    },
+    {
+      "id": "al-3",
+      "kind": "situational",
+      "expected": "assembly-line",
+      "query": "Make me an animated clip of our pipeline's history I can drop into the README"
+    },
+    {
+      "id": "al-vs-pb-1",
+      "kind": "near-miss",
+      "expected": "assembly-line",
+      "query": "Replay how all our runs moved through the pipeline over the last few months",
+      "notes": "adjacency: assembly-line vs pipeline-board — history replay is assembly-line's alone"
+    },
+    {
       "id": "ld-1",
       "kind": "direct",
       "expected": "launch-demo",

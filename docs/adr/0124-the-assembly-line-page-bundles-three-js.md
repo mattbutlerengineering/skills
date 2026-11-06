@@ -34,9 +34,11 @@ lines, the raycaster and one renderer, all inside the page template.
 - The plugin now ships third-party code. Updating it is a deliberate
   version bump of the vendored files, never a floating fetch, and a
   security fix upstream is ours to notice.
-- Each page carries about 814 KB of library text before compression;
-  fine for a local or Pages-hosted file, too heavy for anything that
-  inlines pages repeatedly.
+- Each page carries the release's unminified `build/three.module.js`
+  and `build/three.core.js` (2.1 MB, inlined as base64, so a written
+  page is about 3 MB; the npm release ships no minified build). Fine for
+  a local or Pages-hosted file, too heavy for anything that inlines
+  pages repeatedly.
 - The page needs WebGL. Where it is missing the page falls back to a
   plain per-station list (docs/features/assembly-line/ux.md), so the
   work stays visible, but the factory does not.
@@ -45,3 +47,7 @@ lines, the raycaster and one renderer, all inside the page template.
 - This is not a general licence for third-party code in skills: the
   next library needs its own record that it buys something no
   first-party file can.
+- `assembly_line.py` is root-only and imports the mirrored `cli`,
+  `knowledge_plane` and `protocol` modules, so it joins those three rows
+  of ADR-0091's table (pinned in `tests/test_dual_membership.py`), and
+  it gets the `assembly-line` verb in `factory.py`.

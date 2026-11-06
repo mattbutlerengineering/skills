@@ -37,6 +37,7 @@ import sys
 # "argv", or calling it bare leaves it reading THIS process's sys.argv.
 VERBS = {
     "adr-status": ("adr_status", "argv"),
+    "assembly-line": ("assembly_line", "argv"),
     "assembler": ("assembler", "argv"),
     "board": ("board", "argv"),
     "budget-guard": ("budget_guard", "argv"),
