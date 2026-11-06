@@ -3,7 +3,7 @@ stage: ship
 run: feature:assembly-line
 date: 2026-11-06
 outcome: prepared
-pending-merge: PENDING
+pending-merge: https://github.com/mattbutlerengineering/skills/pull/1168
 assumptions:
   - "The Owner's brief authorizes push, PR and squash-merge once CI is green, and forbids any plugin.json version bump or chore(release) PR (ADR-0095); the diff changes plugin.json's description only, version stays 0.26.0."
   - "The PR needs a Closes line (the waiver does not excuse it) and the breakdown created no mirror issues, so Ship opened issue #1167 as the closing target; flagged for the Owner."
@@ -59,7 +59,7 @@ python3 run_tests.py && python3 lint.py && python3 kb.py drift && python3 gates.
 2. Pre-flight checks above → all green.
 3. Launch brief: `python3 launch_demo.py config` → verdict `SHIP`, `launch-demo: 0 problem(s)`. Ran the launch-demo skill: `probe` → `READY`; `render assembly-line` → `PRODUCED`, 0 problem(s), launch.mp4 21.3 s (h264 + aac). Wrote `docs/launches/assembly-line/` (launch.md, storyboard.json, demo.tape, launch.mp4), committed on the branch.
 4. `gh issue create` → https://github.com/mattbutlerengineering/skills/issues/1167 (the closing target).
-5. Push `feat/assembly-line`, open the PR → recorded in `pending-merge:` once it exists.
+5. Push `feat/assembly-line`, open the PR → https://github.com/mattbutlerengineering/skills/pull/1168 (squash-merge authorized once CI is green).
 
 ## Post-release checks
 
