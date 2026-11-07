@@ -1462,8 +1462,10 @@ function factory(THREE, model) {
     find.blur();
     requestRender();
   });
+  let panelDay = null;
   function renderPanel() {
     if (!state.pinned) return;
+    panelDay = currentDay();
     const {key, run} = state.pinned;
     const here = runsAt(key);
     $("panel-title").textContent = `${key === "bin" ? "Needs attention" : nameOf(key)} · as of ${asOf()}`;
@@ -1618,6 +1620,9 @@ function factory(THREE, model) {
       state.t += dt * (LAST + 1 - FIRST) / state.seconds;
       if (state.t >= LAST + 1) { state.t = LAST + 1; state.playing = false; renderPanel(); }
       layout(); syncTransport(); needsRender = true;
+      // A pinned panel follows the replay: rebuilt at each day boundary,
+      // so it never claims today's list against last summer's floor.
+      if (state.pinned && currentDay() !== panelDay) renderPanel();
     }
     if (intro !== null) {
       intro = Math.min(1, intro + dt / 1.1);
