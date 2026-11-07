@@ -184,7 +184,8 @@
   .speed { display: flex; gap: .25rem; }
   [hidden] { display: none !important; }
   /* In a dark room the shell dims and the lit factory floor floats
-     like a diorama; the scene's own colours never change. */
+     like a diorama; the floor's colours never change (only the city
+     behind it keeps night: dusk stone, lit windows — setCityNight). */
   @media (prefers-color-scheme: dark) {
     :root { --ink: #e7ebe6; --muted: #98a39a; --panel: #1c221e;
       --line: #4a524b; }
@@ -1195,10 +1196,17 @@ function factory(THREE, model) {
   const buildingOf = new Map();
   // At night the city lights up: in the dark colour scheme the window
   // strips swap to a self-lit warm material (the scene's lights never
-  // change — the glow has to be the material). The GIF always paints a
-  // light backdrop, so captures force the windows back to day.
+  // change — the glow has to be the material), and the stone dims to
+  // dusk, because a lit strip on pale sand reads as a paler stripe, not
+  // as light. The GIF always paints a light backdrop, so captures force
+  // the city back to day.
   const cityWindows = [];
+  const cityWalls = []; // [mesh, day colour]
   const winNightMat = new THREE.MeshBasicMaterial({color: 0xf6e7ae});
+  const duskCache = {};
+  const duskMat = (color) => duskCache[color] || (duskCache[color] =
+    new THREE.MeshLambertMaterial({color: new THREE.Color(color).multiplyScalar(0.42),
+      flatShading: true}));
   // A real skyline is never uniformly lit: one strip in seven stays dark.
   const litAtNight = (i) => i % 7 !== 3;
   let cityNight = false;
@@ -1207,7 +1215,13 @@ function factory(THREE, model) {
     cityWindows.forEach((win, i) => {
       win.material = on && litAtNight(i) ? winNightMat : mat(CITY_COLORS.window);
     });
+    cityWalls.forEach(([mesh, color]) => { mesh.material = on ? duskMat(color) : mat(color); });
     requestRender();
+  }
+  function cityWall(mesh, color) {
+    cityWalls.push([mesh, color]);
+    if (cityNight) mesh.material = duskMat(color);
+    return mesh;
   }
   function nameHash(text) {
     let h = 0;
@@ -1271,7 +1285,7 @@ function factory(THREE, model) {
     const height = 2.3 + Math.min(run.work_orders.length, 12) * 0.32 + (hash % 4) * 0.5;
     const trim = TAPE[run.kind] || COLORS.tape;
     const wall = CITY_WALLS[hash % CITY_WALLS.length];
-    box(1.9, height, 1.9, wall, 0, 0, 0, building);
+    cityWall(box(1.9, height, 1.9, wall, 0, 0, 0, building), wall);
     // Window strips on the two facades the camera sees: -x and -z.
     for (const off of [-0.5, 0.2]) {
       const winX = box(0.06, height * 0.7, 0.5, CITY_COLORS.window, -0.95, height * 0.12, off, building);
@@ -1289,7 +1303,7 @@ function factory(THREE, model) {
     // step depends only on the building's height (work orders + name).
     const tall = height >= 4.6;
     if (tall) {
-      box(1.26, 1.1, 1.26, wall, 0, height + 0.16, 0, building);
+      cityWall(box(1.26, 1.1, 1.26, wall, 0, height + 0.16, 0, building), wall);
       box(1.34, 0.14, 1.34, trim, 0, height + 1.26, 0, building);
     }
     const capTop = tall ? height + 1.4 : height + 0.16;
@@ -1304,7 +1318,8 @@ function factory(THREE, model) {
     // Some short roofs carry a water tank (never a tall tower's: its
     // setback owns the roof centre). Opposite corner from the beacon.
     if (!tall && hash % 5 === 1) {
-      cyl(0.26, 0.5, CITY_COLORS.wallAlt, 0.6, height + 0.16, 0.5, building, 10);
+      cityWall(cyl(0.26, 0.5, CITY_COLORS.wallAlt, 0.6, height + 0.16, 0.5, building, 10),
+        CITY_COLORS.wallAlt);
     }
     // The name, readable from both camera-facing facades, up under the
     // roof where towers rarely occlude each other.
