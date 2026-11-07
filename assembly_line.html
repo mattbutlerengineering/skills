@@ -2135,6 +2135,7 @@ function factory(THREE, model) {
   function restoreAfterExport() {
     if (!saved) return;
     exporting = false;
+    glideK = 1; // the session's floor places exactly again
     document.body.style.pointerEvents = "";
     setCityNight(matchMedia("(prefers-color-scheme: dark)").matches);
     state.t = saved.t; state.playing = false;
@@ -2201,6 +2202,12 @@ function factory(THREE, model) {
     const total = FPS * PLAY_SECONDS;
     for (let i = 0; i <= total + HOLD_FRAMES; i++) {
       state.t = Math.min(LAST + 1, FIRST + (LAST + 1 - FIRST) * Math.min(1, i / total));
+      // The clip is a replay too, and a faster one (10.5 days/s): without
+      // the glide a crate crossed the floor in a median of 2 frames, so
+      // the artifact people share showed teleports, not belts. Each frame
+      // advances the glide by exactly one frame's worth of clip time, and
+      // the hold frames run with it off so the last image is exact.
+      glideK = (i > total || reducedMotion) ? 1 : 1 - Math.exp(-(1 / FPS) / GLIDE_TAU);
       layout();
       // Ambient motion (arms, rollers, chevrons) stays frozen for the
       // clip: the story is crates moving through history, and a still
