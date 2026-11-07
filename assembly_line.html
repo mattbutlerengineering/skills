@@ -1683,10 +1683,16 @@ function factory(THREE, model) {
   // ------------------------------------------------------------- trace
   // "Show me THIS run's journey": hide every other crate and replay
   // from the run's first recorded day. Esc or the banner stops it.
+  let traceEnd = Infinity;
   function startTrace(run) {
     closePanel(); setLegend(false); endTour(); card.hidden = true;
     state.highlighted = null;
     state.trace = run;
+    // A trace is one run's story, so it ends where the story does: the
+    // day after its last recorded hop (a beat to see the arrival), not
+    // months later at today with a motionless crate.
+    traceEnd = Math.min(LAST + 1,
+      dayIndex(run.history[run.history.length - 1].day) + 1);
     $("trace-name").textContent = run.slug || run.ref;
     $("trace-banner").hidden = false;
     resetView();
@@ -1989,7 +1995,8 @@ function factory(THREE, model) {
     last = now;
     if (state.playing) {
       state.t += dt * (LAST + 1 - FIRST) / state.seconds;
-      if (state.t >= LAST + 1) { state.t = LAST + 1; state.playing = false; renderPanel(); }
+      const stop = state.trace ? traceEnd : LAST + 1;
+      if (state.t >= stop) { state.t = stop; state.playing = false; renderPanel(); }
       layout(); syncTransport(); needsRender = true;
       // A pinned panel follows the replay: rebuilt at each day boundary,
       // so it never claims today's list against last summer's floor.
