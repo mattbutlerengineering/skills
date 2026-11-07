@@ -1244,6 +1244,7 @@ function factory(THREE, model) {
   const resetView = () => { view.zoom = BASE_ZOOM; view.panX = 0; view.panY = 0; applyView(); requestRender(); };
   // Centre a world point and zoom to it (the chips fly the camera).
   function focusOn(point, zoom) {
+    if (exporting) return; // nothing moves the camera inside a capture
     const v = point.clone().applyMatrix4(camera.matrixWorldInverse);
     view.zoom = zoom;
     view.panX = v.x - frameBox.cx;
@@ -1430,6 +1431,7 @@ function factory(THREE, model) {
     return details;
   }
   function openPanel(hit) {
+    if (exporting) return;
     const key = hit.kind === "station" ? hit.station : (crateOf.get(hit.run).where || {}).station;
     if (!key) return;
     setLegend(false);
@@ -1583,6 +1585,7 @@ function factory(THREE, model) {
     syncTransport(); requestRender();
   });
   function goToDay(t) {
+    if (exporting) return; // the capture owns the timeline
     state.playing = false;
     state.t = t >= LAST + 1 ? LAST + 1 : t + 1 - 1e-6;
     card.hidden = true; // a hover card from another moment is a stale claim
@@ -1598,7 +1601,8 @@ function factory(THREE, model) {
   // Home and End jump to the first day and back to today. Keys inside
   // the transport's own controls keep their native behaviour.
   addEventListener("keydown", (event) => {
-    if (!enabled || event.target.closest("input, button, details, summary")) return;
+    if (!enabled || exporting
+      || event.target.closest("input, button, details, summary")) return;
     const day = Math.min(LAST + 1, Math.floor(state.t));
     if (event.key === " ") { event.preventDefault(); play.click(); }
     else if (event.key === "ArrowLeft") { event.preventDefault(); goToDay(Math.max(FIRST, day - 1)); }
@@ -1665,7 +1669,9 @@ function factory(THREE, model) {
   function restoreAfterExport() {
     if (!saved) return;
     exporting = false;
+    document.body.style.pointerEvents = "";
     state.t = saved.t; state.playing = false;
+    state.highlighted = saved.highlighted;
     view.zoom = saved.zoom; view.panX = saved.panX; view.panY = saved.panY;
     renderer.setPixelRatio(saved.ratio);
     stage.style.width = ""; stage.style.height = ""; stage.style.flex = "";
@@ -1679,9 +1685,17 @@ function factory(THREE, model) {
     status.hidden = false;
     status.textContent = "Exporting clip…";
     saved = {t: state.t, ratio: renderer.getPixelRatio(),
-      zoom: view.zoom, panX: view.panX, panY: view.panY};
+      zoom: view.zoom, panX: view.panX, panY: view.panY,
+      highlighted: state.highlighted};
     state.playing = false;
     exporting = true;
+    // Capture purity: the clip records the repo, not this session — the
+    // lifted crate and its parts tray are personal selection, so they
+    // stay out; and no input (keys above, pointers here) may move the
+    // camera or the timeline between captured frames.
+    state.highlighted = null;
+    card.hidden = true;
+    document.body.style.pointerEvents = "none";
     view.zoom = 1; view.panX = 0; view.panY = 0;
     $("export").disabled = true; play.disabled = true;
     stage.style.flex = "none"; stage.style.width = `${W}px`; stage.style.height = `${H}px`;
