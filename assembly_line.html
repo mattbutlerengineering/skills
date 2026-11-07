@@ -285,6 +285,10 @@
         linear-gradient(90deg,#7cc44e 33%,#e0903a 33% 66%,#8f6fd8 66%)"></span>
         <span><b>Tape colour</b> is the run's kind: green feature, amber
           fix, purple product.</span></li>
+      <li id="legend-bin" hidden><span class="swatch"
+        style="background:#e0903a"></span>
+        <span>The <b>bin</b> holds runs the placement tool could not
+          read; hover one for the reason.</span></li>
     </ul>
     <p class="foot">Hover anything for detail; click to pin a list. Press
       Play to replay the repo's whole history.</p>
@@ -405,6 +409,14 @@ function setHeader(model, day) {
   const meta = $("meta");
   meta.replaceChildren(el("b", {}, String(active)), " in flight · ",
     el("b", {}, String(completed)), " done", at ? ` · as of ${at}` : "");
+  // Runs the placement tool could not read are in neither number above,
+  // and they are the ones a maintainer most needs to hear about: say so
+  // in the summary, not only on the floor's amber bin.
+  const unreadable = runs.filter((run) => run.status === "attention").length;
+  if (unreadable) {
+    meta.append(" · ", el("b", {}, String(unreadable)),
+      unreadable === 1 ? " needs attention" : " need attention");
+  }
   const counts = {};
   placed.forEach((s) => { if (s && s !== "completed") counts[s] = (counts[s] || 0) + 1; });
   const busiest = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
@@ -2004,6 +2016,8 @@ function factory(THREE, model) {
   // An empty repo has nothing to tour and nothing to find; the empty
   // sign already says what to do instead.
   if (!enabled) { $("tour-open").hidden = true; find.hidden = true; }
+  // The bin's line is only true of a repo that has one.
+  $("legend-bin").hidden = !runs.some((run) => run.status === "attention");
   play.addEventListener("click", () => {
     if (state.playing) { state.playing = false; }
     else { if (isToday()) state.t = FIRST; state.playing = true; }
