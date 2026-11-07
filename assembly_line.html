@@ -2013,17 +2013,62 @@ function factory(THREE, model) {
       lastHot ? {text: `The amber sign is the pile-up: ${nameOf(lastHot)} holds the most work right now. Piles mean waiting.`, station: lastHot}
         : {text: "An amber sign would mark the busiest station — right now no queue stands out.", reset: true},
       {text: "And the end of the line is the city: every finished run raises a building named after it. The skyline is what the factory has shipped.", station: "completed"},
-      {text: "And this is the whole story: press Next to replay the repo's history and watch every crate flow.", reset: true, thenPlay: true}
+      {text: "And this is the whole story: press Play to replay the repo's history and watch every crate flow.", reset: true, thenPlay: true}
     ];
     return beats;
   }
   let tourBeats = [];
+  // What is actually drawn, in camera space: every station, crate,
+  // standing building and sign. fit() frames generous margins (sign
+  // headroom, a tile of slack); a tight reframe needs the real extent.
+  function floorExtent() {
+    const inv = camera.matrixWorldInverse, box = new THREE.Box3(), v = new THREE.Vector3();
+    const ext = {minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity};
+    const add = (x, y) => {
+      ext.minX = Math.min(ext.minX, x); ext.maxX = Math.max(ext.maxX, x);
+      ext.minY = Math.min(ext.minY, y); ext.maxY = Math.max(ext.maxY, y);
+    };
+    const addObject = (obj) => {
+      box.setFromObject(obj);
+      if (box.isEmpty()) return;
+      for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y])
+        for (const z of [box.min.z, box.max.z]) { v.set(x, y, z).applyMatrix4(inv); add(v.x, v.y); }
+    };
+    Object.values(stationGroups).forEach(addObject);
+    crateOf.forEach((c) => { if (c.mesh.visible) addObject(c.mesh); });
+    buildingOf.forEach((b) => { if (b.visible) addObject(b); });
+    Object.values(signs).forEach(({sprite}) => {
+      if (!sprite.visible) return;
+      sprite.getWorldPosition(v).applyMatrix4(inv);
+      add(v.x - sprite.scale.x / 2, v.y - sprite.scale.y / 2);
+      add(v.x + sprite.scale.x / 2, v.y + sprite.scale.y / 2);
+    });
+    return ext;
+  }
+  // The card covers the bottom of the stage, and seen from the
+  // pipeline's start that is where Capture and Idea stand. An overview
+  // beat fits the whole floor into the band above the card instead.
+  function frameAboveTour() {
+    if (exporting) return; // the capture owns the camera
+    const W = stage.clientWidth, H = stage.clientHeight;
+    const band = $("tour").getBoundingClientRect().top - stage.getBoundingClientRect().top;
+    const e = floorExtent();
+    if (band <= 0 || band >= H || !isFinite(e.minX)) { resetView(); return; }
+    // World units per pixel at zoom z is 2·halfH / (z·H); 6% breathing room.
+    const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
+    view.zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * band / (H * spanY),
+      2 * frameBox.halfH * W / (H * spanX));
+    const h = frameBox.halfH / view.zoom;
+    view.panX = (e.minX + e.maxX) / 2 - frameBox.cx;
+    view.panY = (e.minY + e.maxY) / 2 - frameBox.cy - h * (1 - band / H);
+    applyView(); requestRender();
+  }
   function showTourStep() {
     const beat = tourBeats[tourStep];
     $("tour-text").textContent = beat.text;
     $("tour-dots").textContent = tourBeats.map((b, i) => i === tourStep ? "●" : "○").join(" ");
     $("tour-next").textContent = tourStep === tourBeats.length - 1 ? "Play ▶" : "Next →";
-    if (beat.reset) resetView();
+    if (beat.reset) frameAboveTour();
     if (beat.station) { focusOn(focusTargetOf(beat.station), 1.9); }
     requestRender();
   }
