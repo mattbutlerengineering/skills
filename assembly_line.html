@@ -1499,7 +1499,7 @@ function factory(THREE, model) {
       if (intro >= 1) intro = null;
       needsRender = true;
     }
-    if (!reducedMotion) {
+    if (!reducedMotion && !exporting) {
       clock += dt;
       animators.forEach((animate) => animate(clock));
       rollers.forEach((roller) => { roller.rotation.y += dt * 4; });
@@ -1523,9 +1523,10 @@ function factory(THREE, model) {
     status.textContent = `Export failed: ${err.message}. Nothing was downloaded.`;
     restoreAfterExport();
   }));
-  let saved = null;
+  let saved = null, exporting = false;
   function restoreAfterExport() {
     if (!saved) return;
+    exporting = false;
     state.t = saved.t; state.playing = false;
     view.zoom = saved.zoom; view.panX = saved.panX; view.panY = saved.panY;
     renderer.setPixelRatio(saved.ratio);
@@ -1542,6 +1543,7 @@ function factory(THREE, model) {
     saved = {t: state.t, ratio: renderer.getPixelRatio(),
       zoom: view.zoom, panX: view.panX, panY: view.panY};
     state.playing = false;
+    exporting = true;
     view.zoom = 1; view.panX = 0; view.panY = 0;
     $("export").disabled = true; play.disabled = true;
     stage.style.flex = "none"; stage.style.width = `${W}px`; stage.style.height = `${H}px`;
@@ -1575,8 +1577,11 @@ function factory(THREE, model) {
     for (let i = 0; i <= total + HOLD_FRAMES; i++) {
       state.t = Math.min(LAST + 1, FIRST + (LAST + 1 - FIRST) * Math.min(1, i / total));
       layout();
-      const tclock = i / FPS;
-      if (!reducedMotion) animators.forEach((animate) => animate(tclock));
+      // Ambient motion (arms, rollers, chevrons) stays frozen for the
+      // clip: the story is crates moving through history, and a still
+      // factory keeps each frame's changed rectangle — and the file —
+      // small. `exporting` also stops the rAF loop animating the shared
+      // scene between these renders.
       renderer.render(scene, camera);
       paint();
       stamp(`${model.repo} · ${isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay()}`);
@@ -1641,14 +1646,53 @@ class GifWriter {
         0x03, 0x01, 0x00, 0x00, 0x00]));
   }
   frame(rgba, delayCs) {
-    const n = this.width * this.height;
+    const W = this.width, H = this.height, n = W * H;
     const indices = new Uint8Array(n);
-    for (let p = 0, q = 0; p < n; p++, q += 4)
+    const pal = this.palette, prev = this.prev;
+    for (let p = 0, q = 0; p < n; p++, q += 4) {
       indices[p] = this.lookup[((rgba[q] >> 3) << 10) | ((rgba[q + 1] >> 3) << 5) | (rgba[q + 2] >> 3)];
+      // Antialiased edges and soft shadows shimmer between neighbouring
+      // palette bins frame to frame; a pixel keeps its previous index
+      // while that index still matches its colour closely, so the
+      // shimmer never widens the delta rectangle below.
+      if (prev && indices[p] !== prev[p]) {
+        const k = prev[p] * 3;
+        const dr = rgba[q] - pal[k], dg = rgba[q + 1] - pal[k + 1], db = rgba[q + 2] - pal[k + 2];
+        if (dr * dr + dg * dg + db * db <= 900) indices[p] = prev[p];
+      }
+    }
     const delay = Math.max(2, Math.round(delayCs));
-    this.chunks.push(new Uint8Array([0x21, 0xf9, 0x04, 0x00, delay & 255, delay >> 8, 0, 0,
-      0x2c, 0, 0, 0, 0, this.width & 255, this.width >> 8, this.height & 255, this.height >> 8, 0]));
-    this.chunks.push(lzw(indices, 8));
+    // Delta frames: most of every frame is still background, so after
+    // the first frame only the changed rectangle is encoded (disposal
+    // "do not dispose", 0x04, keeps the rest on screen). An unchanged
+    // frame still emits its one-pixel rectangle to carry the delay.
+    let x0 = 0, y0 = 0, x1 = W - 1, y1 = H - 1;
+    let rect = indices;
+    if (this.prev) {
+      x0 = W; y0 = H; x1 = -1; y1 = -1;
+      for (let y = 0; y < H; y++) {
+        const row = y * W;
+        for (let x = 0; x < W; x++) {
+          if (indices[row + x] !== this.prev[row + x]) {
+            if (x < x0) x0 = x;
+            if (x > x1) x1 = x;
+            if (y < y0) y0 = y;
+            y1 = y;
+          }
+        }
+      }
+      if (x1 < 0) { x0 = y0 = 0; x1 = y1 = 0; }
+      const w = x1 - x0 + 1, h = y1 - y0 + 1;
+      rect = new Uint8Array(w * h);
+      for (let y = 0; y < h; y++)
+        rect.set(indices.subarray((y0 + y) * W + x0, (y0 + y) * W + x0 + w), y * w);
+    }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    this.chunks.push(new Uint8Array([0x21, 0xf9, 0x04, 0x04, delay & 255, delay >> 8, 0, 0,
+      0x2c, x0 & 255, x0 >> 8, y0 & 255, y0 >> 8,
+      w & 255, w >> 8, h & 255, h >> 8, 0]));
+    this.chunks.push(lzw(rect, 8));
+    this.prev = indices;
   }
   finish() {
     this.chunks.push(new Uint8Array([0x3b]));
