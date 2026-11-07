@@ -203,7 +203,7 @@
   /* A phone gets the factory, not the furniture: the story and hint go,
      the chips become one scrollable row, and the legend is a bottom
      sheet (it no longer opens on load there — see setLegend). */
-  @media (max-width: 720px) {
+  @media (max-width: 720px), (max-height: 480px) {
     #story, #hint, #honesty { display: none; }
     header { padding: .5rem .7rem 0; }
     header h1 { font-size: 1.05rem; }
@@ -1826,7 +1826,7 @@ function factory(THREE, model) {
     $("legend").hidden = !openIt;
     $("legend-open").setAttribute("aria-expanded", String(openIt));
   }
-  setLegend(matchMedia("(min-width: 721px)").matches);
+  setLegend(matchMedia("(min-width: 721px) and (min-height: 481px)").matches);
   $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
   $("legend-close").addEventListener("click", () => setLegend(false));
 
