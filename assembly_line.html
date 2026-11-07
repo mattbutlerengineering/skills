@@ -1502,12 +1502,16 @@ function factory(THREE, model) {
     $("trace-banner").hidden = false;
     resetView();
     goToDay(dayIndex(run.history[0].day));
+    // After goToDay, which writes #day: the trace is the shareable fact.
+    history.replaceState(null, "", `#trace=${encodeURIComponent(run.slug || run.ref)}`);
     if (!state.playing) play.click();
   }
   function endTrace() {
     if (!state.trace) return;
     state.trace = null;
     $("trace-banner").hidden = true;
+    if (location.hash.startsWith("#trace="))
+      history.replaceState(null, "", location.pathname + location.search);
     layout(); requestRender();
   }
   $("trace-stop").addEventListener("click", endTrace);
@@ -1581,6 +1585,8 @@ function factory(THREE, model) {
   $("panel-close").addEventListener("click", closePanel);
   addEventListener("keydown", (event) => {
     if (exporting) return; // no input unwinds state mid-capture
+    // Esc inside the finder just clears the finder.
+    if (event.target.closest("input")) return;
     if (event.key === "Escape") { closePanel(); setLegend(false); endTour(); endTrace(); }
   });
 
@@ -1666,6 +1672,9 @@ function factory(THREE, model) {
     requestRender();
   }
   function startTour() {
+    // One mode at a time: a tour over a solo-trace floor would narrate
+    // stations whose crates are hidden.
+    endTrace();
     closePanel(); setLegend(false); card.hidden = true;
     $("tour-open").blur();
     if (!isToday()) goToDay(LAST + 1);
@@ -1926,8 +1935,15 @@ function factory(THREE, model) {
       focusOn(at(station), 2.1);
       intro = null;
     }
-    // #tour: a link that walks its recipient through the floor.
+    // #tour walks its recipient through the floor; #trace=<slug> replays
+    // one run's journey, solo — the links the tour and trace write.
     if (hash.has("tour")) { startTour(); intro = null; }
+    const trace = hash.get("trace");
+    if (trace) {
+      const wanted = trace.toLowerCase();
+      const run = runs.find((r) => (r.slug || r.ref).toLowerCase() === wanted);
+      if (run && run.history.length) { startTrace(run); intro = null; }
+    }
   })();
   requestAnimationFrame(frame);
 }
