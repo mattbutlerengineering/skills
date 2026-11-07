@@ -1321,6 +1321,13 @@ function factory(THREE, model) {
   // glide is only the transit between two consecutive truths. Captures
   // and reduced motion snap, as before.
   const GLIDE_TAU = 0.18;
+  // The clip pays for smoothness in bytes — every frame a crate moves on
+  // is a frame the writer cannot leave as a small delta — so the capture
+  // has its own constant, measured rather than assumed. Median frames a
+  // crate spends in transit, against the file it produces:
+  //   off 2 frames 1.28 MB · 0.06 → 5 / 1.78 · 0.10 → 8 / 1.93 · 0.18 → 12 / 2.22
+  // 0.10 keeps two thirds of the travel for two thirds of the cost.
+  const EXPORT_GLIDE_TAU = 0.10;
   let glideK = 1;
   const tmpPos = new THREE.Vector3();
   function placeCrate(entry, pos) {
@@ -2207,7 +2214,7 @@ function factory(THREE, model) {
       // the artifact people share showed teleports, not belts. Each frame
       // advances the glide by exactly one frame's worth of clip time, and
       // the hold frames run with it off so the last image is exact.
-      glideK = (i > total || reducedMotion) ? 1 : 1 - Math.exp(-(1 / FPS) / GLIDE_TAU);
+      glideK = (i > total || reducedMotion) ? 1 : 1 - Math.exp(-(1 / FPS) / EXPORT_GLIDE_TAU);
       layout();
       // Ambient motion (arms, rollers, chevrons) stays frozen for the
       // clip: the story is crates moving through history, and a still
