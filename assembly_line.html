@@ -1564,6 +1564,40 @@ function factory(THREE, model) {
     });
     showParts();
     $("empty-sign").hidden = runs.length > 0;
+    yieldSigns();
+  }
+  // A label never hides the building the viewer pinned: signs draw over
+  // everything (depthTest off), and Operate's, Ship's and Done's stand
+  // in front of the city, so one whose quad overlaps the pinned
+  // building fades to a ghost while the pin lasts. Crates are left
+  // alone — they lift clear of their pile, and a station's own sign
+  // (Operate's amber one above all) must not fade over its queue.
+  const yieldBox = new THREE.Box3(), yieldV = new THREE.Vector3();
+  function yieldSigns() {
+    const run = state.highlighted;
+    const building = run && buildingOf.get(run);
+    const pinned = building && building.visible ? building : null;
+    const inv = camera.matrixWorldInverse;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    if (pinned) {
+      yieldBox.setFromObject(pinned);
+      for (const x of [yieldBox.min.x, yieldBox.max.x]) for (const y of [yieldBox.min.y, yieldBox.max.y])
+        for (const z of [yieldBox.min.z, yieldBox.max.z]) {
+          yieldV.set(x, y, z).applyMatrix4(inv);
+          minX = Math.min(minX, yieldV.x); maxX = Math.max(maxX, yieldV.x);
+          minY = Math.min(minY, yieldV.y); maxY = Math.max(maxY, yieldV.y);
+        }
+    }
+    Object.values(signs).forEach(({sprite}) => {
+      let over = false;
+      if (pinned) {
+        sprite.getWorldPosition(yieldV).applyMatrix4(inv);
+        const hx = sprite.scale.x / 2, hy = sprite.scale.y / 2;
+        over = yieldV.x + hx > minX && yieldV.x - hx < maxX
+          && yieldV.y + hy > minY && yieldV.y - hy < maxY;
+      }
+      sprite.material.opacity = over ? 0.22 : 1;
+    });
   }
   // A highlighted Implement crate opens its tray: one part per work
   // order, finished parts green, open parts grey, laid out above it.
@@ -1605,6 +1639,7 @@ function factory(THREE, model) {
       const hb = h * (sign.boost || 1);
       if (sign.aspect) sign.sprite.scale.set(hb * sign.aspect, hb, 1);
     });
+    yieldSigns();
   }
   function fit() {
     const width = stage.clientWidth, height = stage.clientHeight;
