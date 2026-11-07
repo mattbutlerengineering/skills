@@ -1942,6 +1942,7 @@ function factory(THREE, model) {
     if (tourStep >= 0) {
       if (event.target.closest("input")) return;
       if (event.key === "ArrowRight" || event.key === "Enter") { event.preventDefault(); nextTour(); }
+      else if (event.key === "/") { event.preventDefault(); endTour(); find.focus(); }
       return;
     }
     if (event.target.closest("input, button, details, summary")) return;
@@ -1993,7 +1994,8 @@ function factory(THREE, model) {
       {
         const lap = mainPath.total + 26; // a breather between runs
         const s = (clock * 16) % lap;
-        const on = s <= mainPath.total;
+        // The route demo yields while a trace tells one crate's story.
+        const on = !state.trace && s <= mainPath.total;
         pulse.visible = on;
         pulseTrail.visible = on && s > 2.2;
         if (on) {
