@@ -251,7 +251,7 @@
   <span id="hint">space play · ← → step a day · scroll zoom · drag pan ·
     double-click reset</span>
   <div id="trace-banner" hidden>
-    <span>tracing <b id="trace-name"></b> — other crates hidden</span>
+    <span>tracing <b id="trace-name"></b> — <span id="trace-detail"></span></span>
     <button id="trace-stop">✕ stop</button>
   </div>
   <span id="replay-date" hidden></span>
@@ -285,6 +285,10 @@
         linear-gradient(90deg,#7cc44e 33%,#e0903a 33% 66%,#8f6fd8 66%)"></span>
         <span><b>Tape colour</b> is the run's kind: green feature, amber
           fix, purple product.</span></li>
+      <li id="legend-bin" hidden><span class="swatch"
+        style="background:#e0903a"></span>
+        <span>The <b>bin</b> holds runs the placement tool could not
+          read; hover one for the reason.</span></li>
     </ul>
     <p class="foot">Hover anything for detail; click to pin a list. Press
       Play to replay the repo's whole history.</p>
@@ -405,6 +409,14 @@ function setHeader(model, day) {
   const meta = $("meta");
   meta.replaceChildren(el("b", {}, String(active)), " in flight · ",
     el("b", {}, String(completed)), " done", at ? ` · as of ${at}` : "");
+  // Runs the placement tool could not read are in neither number above,
+  // and they are the ones a maintainer most needs to hear about: say so
+  // in the summary, not only on the floor's amber bin.
+  const unreadable = runs.filter((run) => run.status === "attention").length;
+  if (unreadable) {
+    meta.append(" · ", el("b", {}, String(unreadable)),
+      unreadable === 1 ? " needs attention" : " need attention");
+  }
   const counts = {};
   placed.forEach((s) => { if (s && s !== "completed") counts[s] = (counts[s] || 0) + 1; });
   const busiest = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
@@ -841,6 +853,17 @@ function factory(THREE, model) {
   // Rooftop beacons across the city pulse together; buildings add
   // their tips here and the completed station's animator drives them.
   const cityBeacons = [];
+  // The city's grid, declared before the station builders because the
+  // completed district's slab is cut from it (one owner, below too).
+  const CITY_SX = 2.6, CITY_SZ = 2.6;
+  // model.runs, not runs: the station builders run before that alias.
+  const CITY_TOTAL = model.runs.filter((r) => r.station === "completed").length;
+  // The district stays roughly square, so a prolific repo gets a city
+  // instead of a ribbon: fixed at 4 columns, 184 shipped runs made a
+  // 46-row strip to the horizon and shrank the factory — the page's
+  // subject — to a thumbnail. Capped at 12 columns, the widest that
+  // stays inside the floor's own width.
+  const CITY_COLS = Math.min(12, Math.max(4, Math.ceil(Math.sqrt(CITY_TOTAL))));
   const MACHINES = {
     "capture"(g) {
       box(4.5, 1.6, 2.4, COLORS.steel, -1, PLATE_H, -3.2, g);
@@ -1027,12 +1050,14 @@ function factory(THREE, model) {
       // gate, and every completed run raises a named building on the
       // grid (ensureBuilding below). Ground, road and gate are the only
       // built-ins — the skyline itself is pure data.
-      const total = model.runs.filter((r) => r.station === "completed").length;
-      const rows = Math.max(1, Math.ceil(total / 4));
-      const beyond = 2.0 + (rows - 1) * 2.6 + 2.4 - 5.15;
+      // One owner for the grid: CITY_COLS/CITY_SX/CITY_SZ below size
+      // the buildings, and this slab is cut to carry exactly them.
+      const rows = Math.max(1, Math.ceil(CITY_TOTAL / CITY_COLS));
+      const beyond = 2.0 + (rows - 1) * CITY_SZ + 2.4 - 5.15;
+      const wide = Math.max(10.3, CITY_COLS * CITY_SX + 1.2);
       if (beyond > 0) {
         const side = mat(COLORS.plateSide), top = mat(COLORS.plate);
-        const slab = outlined(new THREE.Mesh(boxGeo(10.3, PLATE_H, beyond),
+        const slab = outlined(new THREE.Mesh(boxGeo(wide, PLATE_H, beyond),
           [side, side, top, side, side, side]));
         slab.position.set(0, PLATE_H / 2, 5.15 + beyond / 2);
         slab.receiveShadow = true;
@@ -1117,8 +1142,11 @@ function factory(THREE, model) {
     group.visible = false;
     scene.add(group);
     tag(group, {kind: "station", station: key});
-    return (pallets[key] = {group});
+    return (pallets[key] = {group, board: pallet});
   }
+  // One owner for the heap's footprint: slotPosition places crates on
+  // it and layout() sizes the pallet board under them.
+  const pileSide = (total) => (total - 6 > 27 ? 4 : 3);
   ["capture", ...MAIN].forEach(palletFor);
 
   // --------------------------------------------------------------- city
@@ -1127,9 +1155,9 @@ function factory(THREE, model) {
   // per-name accent, roof trim in its kind colour, every third roof a
   // pulsing beacon. The skyline is the factory's shipped output — one
   // building per run, nothing decorative.
-  const CITY_COLS = 4, CITY_SX = 2.6, CITY_SZ = 2.6;
+  // (CITY_SX/CITY_SZ/CITY_TOTAL/CITY_COLS are declared with the city's
+  // grid above, where the district's slab is cut.)
   const CITY_BASE = at("completed");
-  const CITY_TOTAL = runs.filter((r) => r.station === "completed").length;
   const CITY_FARZ = CITY_BASE.z + 2.0
     + (Math.max(1, Math.ceil(CITY_TOTAL / CITY_COLS)) - 1) * CITY_SZ + 2.4;
   // Flying "to Done" means flying to the district, not the old tile
@@ -1174,14 +1202,42 @@ function factory(THREE, model) {
     ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#2f3238"; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.roundRect(2, 2, 284, 60, 10); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#2f3238"; ctx.textBaseline = "middle";
+    // The city's point is that each building is *named*, so the plate
+    // wraps before it truncates: one line while it reads at 18px or
+    // more, otherwise two lines split at the hyphen nearest the middle
+    // (every run slug is hyphenated). Today's longest real name lost
+    // its last word — "…-is-silently-dr…" — at the old single line.
+    const MAX = 264;
+    const fits = (s, px) => {
+      ctx.font = `700 ${px}px system-ui, sans-serif`;
+      return ctx.measureText(s).width <= MAX;
+    };
+    const clip = (s) => {
+      let out = s;
+      while (ctx.measureText(out).width > MAX) out = out.slice(0, -2) + "…";
+      return out;
+    };
+    const draw = (s, y) => ctx.fillText(s, (288 - ctx.measureText(s).width) / 2, y);
     let size = 26;
-    ctx.font = `700 ${size}px system-ui, sans-serif`;
-    while (size > 13 && ctx.measureText(text).width > 264) {
-      size -= 1; ctx.font = `700 ${size}px system-ui, sans-serif`;
+    while (size > 18 && !fits(text, size)) size -= 1;
+    if (fits(text, size)) {
+      draw(text, 34);
+    } else {
+      const parts = text.split("-");
+      let best = 1, bestGap = Infinity;
+      for (let i = 1; i < parts.length; i++) {
+        const gap = Math.abs(parts.slice(0, i).join("-").length
+          - parts.slice(i).join("-").length);
+        if (gap < bestGap) { bestGap = gap; best = i; }
+      }
+      const top = parts.slice(0, best).join("-") + "-";
+      const bottom = parts.slice(best).join("-");
+      size = 22;
+      while (size > 11 && !(fits(top, size) && fits(bottom, size))) size -= 1;
+      ctx.font = `700 ${size}px system-ui, sans-serif`;
+      draw(clip(top), 22);
+      draw(clip(bottom), 44);
     }
-    let shown = text;
-    while (ctx.measureText(shown).width > 264) shown = shown.slice(0, -2) + "…";
-    ctx.fillText(shown, (288 - ctx.measureText(shown).width) / 2, 34);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 4;
@@ -1242,8 +1298,16 @@ function factory(THREE, model) {
       return base.add(dir.clone().multiplyScalar(-2.1 - index * 1.45)).setY(BELT_Y + 0.08 + CRATE * 0.4);
     }
     const n = index - 6;
-    const layer = Math.floor(n / 9), cell = n % 9;
-    const local = new THREE.Vector3(-1.3 + (cell % 3) * 1.3, 0, -1.3 + Math.floor(cell / 3) * 1.3);
+    // The heap widens before it climbs: a 3×3 footprint towers past the
+    // city's roofline once a station holds dozens (69 at Operate stacked
+    // 8 crates high and read as a building), so past 27 the grid goes
+    // 4×4 — the widest that still sits on the station plate.
+    const side = pileSide(total);
+    const perLayer = side * side;
+    const layer = Math.floor(n / perLayer), cell = n % perLayer;
+    const span = (side - 1) / 2;
+    const local = new THREE.Vector3((-span + (cell % side)) * 1.3, 0,
+      (-span + Math.floor(cell / side)) * 1.3);
     return base.add(palletAt(key)).add(local).setY(PLATE_H + 0.35 + CRATE * 0.4 + layer * CRATE * 0.8);
   }
 
@@ -1288,6 +1352,29 @@ function factory(THREE, model) {
     return pointOn(mainPath, a + (b - a) * f);
   }
 
+  // Replay motion has a wall-clock floor. Belt rides and tower rises are
+  // measured in days, and a day is worth milliseconds once a history is
+  // long: at this repo's pace a same-day hop lasts 16 ms (one frame),
+  // and over three years every hop and rise does. So during a replay a
+  // crate glides toward its placement instead of being snapped onto it,
+  // with a ~0.18 s time constant — the placement stays the truth, the
+  // glide is only the transit between two consecutive truths. Captures
+  // and reduced motion snap, as before.
+  const GLIDE_TAU = 0.18;
+  // The clip pays for smoothness in bytes — every frame a crate moves on
+  // is a frame the writer cannot leave as a small delta — so the capture
+  // has its own constant, measured rather than assumed. Median frames a
+  // crate spends in transit, against the file it produces:
+  //   off 2 frames 1.28 MB · 0.06 → 5 / 1.78 · 0.10 → 8 / 1.93 · 0.18 → 12 / 2.22
+  // 0.10 keeps two thirds of the travel for two thirds of the cost.
+  const EXPORT_GLIDE_TAU = 0.10;
+  let glideK = 1;
+  const tmpPos = new THREE.Vector3();
+  function placeCrate(entry, pos) {
+    if (glideK >= 1) entry.mesh.position.copy(pos);
+    else entry.mesh.position.lerp(pos, glideK);
+  }
+  const glide = (from, to) => (glideK >= 1 ? to : from + (to - from) * glideK);
   function layout() {
     const t = state.t;
     const groups = {};
@@ -1326,16 +1413,23 @@ function factory(THREE, model) {
             const k = Math.min(1, Math.max(0.04, (t - entry.where.since) / 1.1));
             rise = k * k * (3 - 2 * k);
           }
-          building.scale.y = rise;
+          // Toward the target, not onto it: at this repo's pace the
+          // 1.1-day window is 0.26 s, and on a three-year history 0.03 s.
+          building.scale.y = glide(building.scale.y, rise);
         });
       } else {
         list.forEach((run, i) => {
           const pos = slotPosition(key, i, list.length);
-          crateOf.get(run).mesh.position.copy(pos);
+          placeCrate(crateOf.get(run), pos);
           crateOf.get(run).mesh.rotation.set(0, 0, 0);
         });
       }
-      if (pallets[key]) pallets[key].group.visible = list.length > 6 && key !== "completed";
+      if (pallets[key]) {
+        pallets[key].group.visible = list.length > 6 && key !== "completed";
+        // The board stays under the crates it carries.
+        const grow = pileSide(list.length) === 4 ? 5.4 / 3.9 : 1;
+        pallets[key].board.scale.set(grow, 1, grow);
+      }
     });
     // The bottleneck: the fullest working station (Done and the bin are
     // not queues). Its sign and chip go amber together.
@@ -1352,7 +1446,7 @@ function factory(THREE, model) {
       if (!where) return;
       if (where.moving) {
         const p = travelPoint(where.from, where.station, where.f);
-        entry.mesh.position.set(p.x, BELT_Y + 0.08 + CRATE * 0.4, p.z);
+        placeCrate(entry, tmpPos.set(p.x, BELT_Y + 0.08 + CRATE * 0.4, p.z));
       }
       entry.shadow.visible = !!where.inferred;
       const implementing = where.station === "implement" && run.work_orders.length;
@@ -1420,7 +1514,10 @@ function factory(THREE, model) {
     renderer.setSize(width, height, false);
     const bounds = new THREE.Box3();
     Object.values(stationGroups).forEach((g) => bounds.expandByPoint(g.position));
-    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x, 0, CITY_FARZ));
+    // Both far corners of the district: a wide city must stay in frame.
+    const cityHalfX = (CITY_COLS - 1) / 2 * CITY_SX;
+    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x - cityHalfX, 0, CITY_FARZ));
+    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x + cityHalfX, 0, CITY_FARZ));
     bounds.expandByScalar(HALF + 1);
     bounds.getCenter(target);
     camera.position.copy(target).add(new THREE.Vector3(60, 60, 60));
@@ -1683,11 +1780,26 @@ function factory(THREE, model) {
   // ------------------------------------------------------------- trace
   // "Show me THIS run's journey": hide every other crate and replay
   // from the run's first recorded day. Esc or the banner stops it.
+  let traceEnd = Infinity;
   function startTrace(run) {
     closePanel(); setLegend(false); endTour(); card.hidden = true;
     state.highlighted = null;
     state.trace = run;
+    // A trace is one run's story, so it ends where the story does: the
+    // day after its last recorded hop (a beat to see the arrival), not
+    // months later at today with a motionless crate.
+    traceEnd = Math.min(LAST + 1,
+      dayIndex(run.history[run.history.length - 1].day) + 1);
     $("trace-name").textContent = run.slug || run.ref;
+    // Most journeys here happen inside one day: without this line the
+    // trace is a motionless frame and the viewer learns nothing. The
+    // banner states the span, the stops and where it ended up.
+    const firstDay = run.history[0].day;
+    const lastDay = run.history[run.history.length - 1].day;
+    const stops = new Set(run.history.map((hop) => hop.station)).size;
+    const span = firstDay === lastDay ? `all on ${firstDay}` : `${firstDay} → ${lastDay}`;
+    $("trace-detail").textContent =
+      `${stops} station${stops === 1 ? "" : "s"}, ${span}, now at ${nameOf(run.station)}`;
     $("trace-banner").hidden = false;
     resetView();
     goToDay(dayIndex(run.history[0].day));
@@ -1701,6 +1813,8 @@ function factory(THREE, model) {
     $("trace-banner").hidden = true;
     if (location.hash.startsWith("#trace="))
       history.replaceState(null, "", location.pathname + location.search);
+    // The trace ended zoomed on its crate; leaving it gives the floor back.
+    resetView();
     layout(); requestRender();
   }
   $("trace-stop").addEventListener("click", endTrace);
@@ -1930,6 +2044,8 @@ function factory(THREE, model) {
   // An empty repo has nothing to tour and nothing to find; the empty
   // sign already says what to do instead.
   if (!enabled) { $("tour-open").hidden = true; find.hidden = true; }
+  // The bin's line is only true of a repo that has one.
+  $("legend-bin").hidden = !runs.some((run) => run.status === "attention");
   play.addEventListener("click", () => {
     if (state.playing) { state.playing = false; }
     else { if (isToday()) state.t = FIRST; state.playing = true; }
@@ -1988,9 +2104,21 @@ function factory(THREE, model) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     if (state.playing) {
+      // The glide is live-replay only: a capture places crates exactly,
+      // and reduced motion asks for none of this.
+      glideK = (exporting || reducedMotion) ? 1 : 1 - Math.exp(-dt / GLIDE_TAU);
       state.t += dt * (LAST + 1 - FIRST) / state.seconds;
-      if (state.t >= LAST + 1) { state.t = LAST + 1; state.playing = false; renderPanel(); }
+      const stop = state.trace ? traceEnd : LAST + 1;
+      if (state.t >= stop) {
+        // The last frame lands on the placement, never near it.
+        glideK = 1;
+        state.t = stop; state.playing = false; renderPanel();
+        // A solo crate on a wide floor is hard to find: when a trace
+        // reaches its end, the camera goes to where the run ended up.
+        if (state.trace) { layout(); focusOn(runFocus(state.trace), 2.4); }
+      }
       layout(); syncTransport(); needsRender = true;
+      glideK = 1; // every layout outside the replay places exactly
       // A pinned panel follows the replay: rebuilt at each day boundary,
       // so it never claims today's list against last summer's floor.
       if (state.pinned && currentDay() !== panelDay) renderPanel();
@@ -2056,6 +2184,7 @@ function factory(THREE, model) {
   function restoreAfterExport() {
     if (!saved) return;
     exporting = false;
+    glideK = 1; // the session's floor places exactly again
     document.body.style.pointerEvents = "";
     setCityNight(matchMedia("(prefers-color-scheme: dark)").matches);
     state.t = saved.t; state.playing = false;
@@ -2122,6 +2251,12 @@ function factory(THREE, model) {
     const total = FPS * PLAY_SECONDS;
     for (let i = 0; i <= total + HOLD_FRAMES; i++) {
       state.t = Math.min(LAST + 1, FIRST + (LAST + 1 - FIRST) * Math.min(1, i / total));
+      // The clip is a replay too, and a faster one (10.5 days/s): without
+      // the glide a crate crossed the floor in a median of 2 frames, so
+      // the artifact people share showed teleports, not belts. Each frame
+      // advances the glide by exactly one frame's worth of clip time, and
+      // the hold frames run with it off so the last image is exact.
+      glideK = (i > total || reducedMotion) ? 1 : 1 - Math.exp(-(1 / FPS) / EXPORT_GLIDE_TAU);
       layout();
       // Ambient motion (arms, rollers, chevrons) stays frozen for the
       // clip: the story is crates moving through history, and a still
