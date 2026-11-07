@@ -1,14 +1,14 @@
 ---
 name: assembly-line
-description: Generate the assembly line — one self-contained animated HTML page that draws every run in the current repo as a crate on an isometric factory floor, one machine per pipeline stage, finished runs on Completed shelves, hover and click detail on every station and crate, a play-and-scrub replay of the repo's history, and a GIF export for a README. Use when the user wants to see all the work moving through the pipeline as a factory or assembly line, watch the repo's history replay, show the factory to someone, or put an animated clip of it on a README. Facts come from the shipped assembly_line.py tool, never re-derived. Not the pipeline-board (a static swimlane SVG of active runs only) and not a stage skill — directly invoked, owns no run artifact, changes nothing in the repo unless asked to publish.
+description: Generate the assembly line — one self-contained animated HTML page that draws every run in the current repo as a crate on an isometric factory floor, one machine per pipeline stage, finished runs raising a named building each in the city at the end of the line, hover and click detail on every station and crate, a play-and-scrub replay of the repo's history, and a GIF export for a README. Use when the user wants to see all the work moving through the pipeline as a factory or assembly line, watch the repo's history replay, show the factory to someone, or put an animated clip of it on a README. Facts come from the shipped assembly_line.py tool, never re-derived. Not the pipeline-board (a static swimlane SVG of active runs only) and not a stage skill — directly invoked, owns no run artifact, changes nothing in the repo unless asked to publish.
 ---
 
 # Assembly Line
 
 Produce one `.html` page: the repo's pipeline as an animated factory.
 Every run is a crate at the station its next stage names, a run's work
-orders are parts inside Implement, and finished runs fill the Completed
-shelves. The facts are stated by `assembly_line.py` and inlined
+orders are parts inside Implement, and finished runs raise the
+city at the end of the line: one named building per shipped run. The facts are stated by `assembly_line.py` and inlined
 verbatim; the drawing is the page template's. Nothing is drawn or
 placed by hand.
 
@@ -45,7 +45,7 @@ date) — not from your own count. Point at the five things to do on it:
   busiest station, and the "How to read this" key opens on load.
   Clicking a chip flies the camera to its station and pins its list.
   For a cold room, the Tour button walks the floor in five beats —
-  entry, build, the pile-up, the shelves — and ends in the replay.
+  entry, build, the pile-up, the city — and ends in the replay.
 - Find one run: the header's "find a run…" box (every slug offered)
   flies to its crate and pins its row; ◉ trace on any pinned row
   replays that run's journey solo, every other crate hidden until
