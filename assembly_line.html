@@ -1951,6 +1951,7 @@ function factory(THREE, model) {
     else if (event.key === "ArrowRight") { event.preventDefault(); goToDay(Math.min(LAST + 1, day + 1)); }
     else if (event.key === "Home") { event.preventDefault(); goToDay(FIRST); }
     else if (event.key === "End") { event.preventDefault(); goToDay(LAST + 1); }
+    else if (event.key === "/") { event.preventDefault(); find.focus(); }
   });
   ["30", "60"].forEach((s) => $(`speed-${s}`).addEventListener("click", () => {
     state.seconds = Number(s);
@@ -2142,13 +2143,15 @@ function factory(THREE, model) {
   });
   // Deep links: #day=YYYY-MM-DD scrubs there, #run=<slug> finds the
   // crate, #station=<key> pins the station — the links the hash writers
-  // above produce. A bad value is ignored.
-  (() => {
-    const hash = new URLSearchParams(location.hash.slice(1));
+  // above produce. A bad value is ignored. Links are LIVE: pasting one
+  // into an open page's bar applies it too (hashchange below; our own
+  // replaceState writes never fire it).
+  function applyHash(raw) {
+    const hash = new URLSearchParams(raw.slice(1));
     const day = hash.get("day");
     if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
       const index = dayIndex(day);
-      if (index >= FIRST && index <= LAST) { goToDay(index); intro = null; view.zoom = BASE_ZOOM; }
+      if (index >= FIRST && index <= LAST) { goToDay(index); intro = null; view.zoom = BASE_ZOOM; applyView(); }
     }
     const run = hash.get("run");
     if (run) { find.value = run; find.dispatchEvent(new Event("change")); intro = null; }
@@ -2164,14 +2167,14 @@ function factory(THREE, model) {
     const trace = hash.get("trace");
     if (trace) {
       const wanted = trace.toLowerCase();
-      const run = runs.find((r) => (r.slug || r.ref).toLowerCase() === wanted);
-      if (run && run.history.length) { startTrace(run); intro = null; }
+      const traced = runs.find((r) => (r.slug || r.ref).toLowerCase() === wanted);
+      if (traced && traced.history.length) { startTrace(traced); intro = null; }
     }
     // #view=zoom,panX,panY restores a hand-framed shot (lowest
     // precedence: any semantic link above already owns the camera).
     const viewParam = hash.get("view");
-    if (viewParam && !location.hash.includes("run=") && !hash.get("day")
-      && !hash.get("station") && !hash.has("tour") && !trace) {
+    if (viewParam && !run && !hash.get("day")
+      && !station && !hash.has("tour") && !trace) {
       const [z, px, py] = viewParam.split(",").map(Number);
       if ([z, px, py].every(Number.isFinite)) {
         view.zoom = Math.min(8, Math.max(0.7, z));
@@ -2180,7 +2183,17 @@ function factory(THREE, model) {
         intro = null;
       }
     }
-  })();
+  }
+  applyHash(location.hash);
+  addEventListener("hashchange", () => {
+    if (exporting) return;
+    // The pasted link owns the view: leave every mode, then apply. An
+    // emptied bar means the default view — today, resting camera.
+    const target = location.hash;
+    endTour(); endTrace(); closePanel();
+    if (target === "" || target === "#") { goToDay(LAST + 1); resetView(); return; }
+    applyHash(target);
+  });
   requestAnimationFrame(frame);
 }
 
