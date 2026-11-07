@@ -81,6 +81,23 @@
     background: rgba(255,255,255,.92); border: 2px solid var(--line);
     border-radius: 999px; padding: .15rem 1.1rem; pointer-events: none;
     z-index: 2; }
+  #trace-banner { position: absolute; left: .8rem; top: .6rem; z-index: 5;
+    display: flex; gap: .6rem; align-items: center;
+    background: var(--panel); border: 2px solid var(--accent);
+    border-radius: 999px; padding: .25rem .5rem .25rem .9rem; }
+  #trace-banner b { overflow-wrap: anywhere; }
+  #trace-banner button { font: inherit; border: 1.5px solid var(--line);
+    background: var(--panel); color: var(--ink); border-radius: 999px;
+    padding: .1rem .6rem; cursor: pointer; }
+  .trace-btn { font: inherit; font-size: .75rem; border: 1.5px solid
+    rgba(47,50,56,.3); background: none; color: var(--accent);
+    border-radius: 999px; padding: 0 .5rem; cursor: pointer;
+    margin-left: .4rem; flex: none; }
+  .trace-btn:hover { border-color: var(--accent); }
+  /* While a trace banner occupies the top-left, the date badge yields
+     the centre and docks right. */
+  #trace-banner:not([hidden]) ~ #replay-date { left: auto; right: .8rem;
+    transform: none; }
   #empty-sign { position: absolute; left: 50%; top: 45%;
     transform: translate(-50%, -50%); background: var(--panel);
     border: 2px solid var(--line); border-radius: 8px; padding: .8rem 1.2rem;
@@ -224,6 +241,10 @@
   <div class="card" id="card" hidden></div>
   <span id="hint">space play · ← → step a day · scroll zoom · drag pan ·
     double-click reset</span>
+  <div id="trace-banner" hidden>
+    <span>tracing <b id="trace-name"></b> — other crates hidden</span>
+    <button id="trace-stop">✕ stop</button>
+  </div>
   <span id="replay-date" hidden></span>
   <aside id="tour" hidden aria-label="Guided tour">
     <p id="tour-text"></p>
@@ -1176,6 +1197,10 @@ function factory(THREE, model) {
         entry.trayFill.visible = isToday();
       }
       if (state.highlighted === run) entry.mesh.position.y += 1.2;
+      // Trace mode: one run's journey, solo — every other crate hides.
+      // Counts and signs stay whole-floor truth; the banner says why
+      // the floor looks empty.
+      if (state.trace && run !== state.trace) entry.mesh.visible = false;
     });
     showParts();
     $("empty-sign").hidden = runs.length > 0;
@@ -1442,6 +1467,15 @@ function factory(THREE, model) {
   function runRow(run, open) {
     const summary = el("summary", {});
     summary.append(el("span", {}, run.ref));
+    if (run.status !== "attention") {
+      const traceBtn = el("button", {class: "trace-btn",
+        title: "Replay this run's journey, solo"}, "◉ trace");
+      traceBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        startTrace(run);
+      });
+      summary.append(traceBtn);
+    }
     if (run.work_orders.length) summary.append(el("span", {class: "prog"},
       `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}`));
     const details = el("details", {}, summary);
@@ -1457,6 +1491,26 @@ function factory(THREE, model) {
     summary.addEventListener("click", () => { state.highlighted = run; layout(); requestRender(); });
     return details;
   }
+  // ------------------------------------------------------------- trace
+  // "Show me THIS run's journey": hide every other crate and replay
+  // from the run's first recorded day. Esc or the banner stops it.
+  function startTrace(run) {
+    closePanel(); setLegend(false); endTour(); card.hidden = true;
+    state.highlighted = null;
+    state.trace = run;
+    $("trace-name").textContent = run.slug || run.ref;
+    $("trace-banner").hidden = false;
+    resetView();
+    goToDay(dayIndex(run.history[0].day));
+    if (!state.playing) play.click();
+  }
+  function endTrace() {
+    if (!state.trace) return;
+    state.trace = null;
+    $("trace-banner").hidden = true;
+    layout(); requestRender();
+  }
+  $("trace-stop").addEventListener("click", endTrace);
   function openPanel(hit) {
     if (exporting) return;
     const key = hit.kind === "station" ? hit.station : (crateOf.get(hit.run).where || {}).station;
@@ -1527,7 +1581,7 @@ function factory(THREE, model) {
   $("panel-close").addEventListener("click", closePanel);
   addEventListener("keydown", (event) => {
     if (exporting) return; // no input unwinds state mid-capture
-    if (event.key === "Escape") { closePanel(); setLegend(false); endTour(); }
+    if (event.key === "Escape") { closePanel(); setLegend(false); endTour(); endTrace(); }
   });
 
   // ------------------------------------------------------------- chips
@@ -1762,6 +1816,8 @@ function factory(THREE, model) {
     document.body.style.pointerEvents = "";
     state.t = saved.t; state.playing = false;
     state.highlighted = saved.highlighted;
+    state.trace = saved.trace || null;
+    $("trace-banner").hidden = !state.trace;
     view.zoom = saved.zoom; view.panX = saved.panX; view.panY = saved.panY;
     renderer.setPixelRatio(saved.ratio);
     stage.style.width = ""; stage.style.height = ""; stage.style.flex = "";
@@ -1776,7 +1832,7 @@ function factory(THREE, model) {
     status.textContent = "Exporting clip…";
     saved = {t: state.t, ratio: renderer.getPixelRatio(),
       zoom: view.zoom, panX: view.panX, panY: view.panY,
-      highlighted: state.highlighted};
+      highlighted: state.highlighted, trace: state.trace};
     state.playing = false;
     exporting = true;
     // Capture purity: the clip records the repo, not this session — the
@@ -1784,6 +1840,8 @@ function factory(THREE, model) {
     // stay out; and no input (keys above, pointers here) may move the
     // camera or the timeline between captured frames.
     state.highlighted = null;
+    state.trace = null;
+    $("trace-banner").hidden = true;
     card.hidden = true;
     document.body.style.pointerEvents = "none";
     view.zoom = 1; view.panX = 0; view.panY = 0;
