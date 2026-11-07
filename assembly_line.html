@@ -106,7 +106,8 @@
   .card p { margin: .1rem 0; }
   .card .muted, #panel .muted { color: var(--muted); }
   #panel { position: absolute; top: .5rem; right: .5rem; bottom: .5rem;
-    width: 340px; background: var(--panel); border: 2px solid var(--line);
+    width: min(340px, calc(100vw - 1rem)); background: var(--panel);
+    border: 2px solid var(--line);
     border-radius: 10px; display: flex; flex-direction: column; z-index: 4;
     box-shadow: 0 14px 40px rgba(31,42,35,.22); }
   #panel header { justify-content: space-between; padding: .6rem .8rem;
@@ -139,6 +140,24 @@
   #export-status { grid-column: 1 / -1; font-size: .8rem; }
   .speed { display: flex; gap: .25rem; }
   [hidden] { display: none !important; }
+  /* A phone gets the factory, not the furniture: the story and hint go,
+     the chips become one scrollable row, and the legend is a bottom
+     sheet (it no longer opens on load there — see setLegend). */
+  @media (max-width: 720px) {
+    #story, #hint, #honesty { display: none; }
+    header { padding: .5rem .7rem 0; }
+    header h1 { font-size: 1.05rem; }
+    header h1 .soft { display: none; }
+    #pipeline { flex-wrap: nowrap; overflow-x: auto; padding: .3rem .7rem .45rem;
+      -webkit-overflow-scrolling: touch; }
+    .chip { flex: none; }
+    #legend { left: .5rem; right: .5rem; top: auto; bottom: .5rem;
+      width: auto; max-height: 55%; overflow: auto; }
+    #transport { display: flex; flex-wrap: wrap; gap: .3rem .5rem;
+      padding: .4rem .6rem .5rem; align-items: center; }
+    #scrub { flex: 1 1 100%; order: -1; }
+    #day { min-width: 0; margin-left: auto; }
+  }
 </style>
 </head>
 <body>
@@ -1211,12 +1230,48 @@ function factory(THREE, model) {
     applyView(); requestRender();
   }, {passive: false});
   let drag = null, dragged = false;
+  // Touch: one finger pans (the pointer handlers below), two fingers
+  // pinch around their midpoint — the wheel-zoom anchor math reused.
+  const touches = new Map();
+  let pinchDist = 0;
+  function zoomAt(clientX, clientY, factor) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const ny = -(((clientY - rect.top) / rect.height) * 2 - 1);
+    const old = view.zoom;
+    view.zoom = Math.min(8, Math.max(0.7, old * factor));
+    view.panX += nx * frameBox.aspect * frameBox.halfH * (1 / old - 1 / view.zoom);
+    view.panY += ny * frameBox.halfH * (1 / old - 1 / view.zoom);
+    applyView(); requestRender();
+  }
   renderer.domElement.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "touch") {
+      touches.set(event.pointerId, {x: event.clientX, y: event.clientY});
+      if (touches.size === 2) {
+        const [a, b] = [...touches.values()];
+        pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        drag = null;
+        return;
+      }
+    }
     if (event.button !== 0) return;
     drag = {x: event.clientX, y: event.clientY};
     dragged = false;
   });
   addEventListener("pointermove", (event) => {
+    if (event.pointerType === "touch" && touches.has(event.pointerId)) {
+      touches.set(event.pointerId, {x: event.clientX, y: event.clientY});
+      if (touches.size === 2) {
+        const [a, b] = [...touches.values()];
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchDist > 0 && dist > 0) {
+          dragged = true;
+          zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, dist / pinchDist);
+        }
+        pinchDist = dist;
+        return;
+      }
+    }
     if (!drag) return;
     const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
     if (!dragged && Math.hypot(dx, dy) < 5) return;
@@ -1227,7 +1282,8 @@ function factory(THREE, model) {
     drag = {x: event.clientX, y: event.clientY};
     applyView(); requestRender();
   });
-  addEventListener("pointerup", () => { drag = null; });
+  addEventListener("pointerup", (event) => { touches.delete(event.pointerId); pinchDist = 0; drag = null; });
+  addEventListener("pointercancel", (event) => { touches.delete(event.pointerId); pinchDist = 0; drag = null; });
   renderer.domElement.addEventListener("dblclick", resetView);
 
   // --------------------------------------------------------- hover, pin
@@ -1420,11 +1476,14 @@ function factory(THREE, model) {
 
   // ------------------------------------------------------------ legend
   // Open on load: the first thing a cold viewer sees is the key to the
-  // picture, and closing it is one click (pinning closes it too).
+  // picture, and closing it is one click (pinning closes it too). On a
+  // phone it would cover the whole factory, so there it starts closed
+  // and the "? How to read this" button opens it as a bottom sheet.
   function setLegend(openIt) {
     $("legend").hidden = !openIt;
     $("legend-open").setAttribute("aria-expanded", String(openIt));
   }
+  setLegend(matchMedia("(min-width: 721px)").matches);
   $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
   $("legend-close").addEventListener("click", () => setLegend(false));
 
