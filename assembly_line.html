@@ -1508,7 +1508,11 @@ function factory(THREE, model) {
         });
       } else {
         list.forEach((run, i) => {
-          const pos = slotPosition(key, i, list.length);
+          // A trace shows one crate, so it takes the station's first slot,
+          // not its place in a queue whose other crates are hidden: 69th
+          // at Operate it hung four layers up over an empty pallet.
+          const pos = state.trace === run ? slotPosition(key, 0, 1)
+            : slotPosition(key, i, list.length);
           placeCrate(crateOf.get(run), pos);
           crateOf.get(run).mesh.rotation.set(0, 0, 0);
         });
@@ -1892,11 +1896,14 @@ function factory(THREE, model) {
     closePanel(); setLegend(false); endTour(); card.hidden = true;
     state.highlighted = null;
     state.trace = run;
-    // A trace is one run's story, so it ends where the story does: the
-    // day after its last recorded hop (a beat to see the arrival), not
-    // months later at today with a motionless crate.
-    traceEnd = Math.min(LAST + 1,
-      dayIndex(run.history[run.history.length - 1].day) + 1);
+    // A trace is one run's story, so it ends where the story does: on
+    // the first day boundary after its last hop has finished arriving
+    // (the ride takes TRAVEL of a day, plus a beat to see it land), not
+    // months later at today with a motionless crate. A hop late in its
+    // day lands the next day: ending at that day's start left the crate
+    // frozen mid-belt under a banner saying "now at" its station.
+    const hops = times.get(run);
+    traceEnd = Math.min(LAST + 1, Math.ceil(hops[hops.length - 1].t + TRAVEL + 0.25));
     $("trace-name").textContent = run.slug || run.ref;
     // Most journeys here happen inside one day: without this line the
     // trace is a motionless frame and the viewer learns nothing. The
