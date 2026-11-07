@@ -56,6 +56,12 @@
   #hint { position: absolute; left: .8rem; bottom: .6rem; color: var(--muted);
     font-size: .75rem; background: rgba(255,255,255,.7); padding: .15rem .6rem;
     border-radius: 999px; pointer-events: none; }
+  #replay-date { position: absolute; left: 50%; top: .6rem;
+    transform: translateX(-50%); font-size: 1.5rem; font-weight: 700;
+    font-variant-numeric: tabular-nums; color: var(--ink);
+    background: rgba(255,255,255,.92); border: 2px solid var(--line);
+    border-radius: 999px; padding: .15rem 1.1rem; pointer-events: none;
+    z-index: 2; }
   #empty-sign { position: absolute; left: 50%; top: 45%;
     transform: translate(-50%, -50%); background: var(--panel);
     border: 2px solid var(--line); border-radius: 8px; padding: .8rem 1.2rem;
@@ -147,6 +153,7 @@
   <div id="empty-sign" hidden>No runs yet — start one with /idea</div>
   <div class="card" id="card" hidden></div>
   <span id="hint">scroll to zoom · drag to pan · double-click to reset</span>
+  <span id="replay-date" hidden></span>
   <aside id="legend" aria-label="How to read this">
     <h2>How to read this
       <button id="legend-close" aria-label="Close legend">✕</button></h2>
@@ -1319,7 +1326,15 @@ function factory(THREE, model) {
     const body = $("panel-body");
     body.replaceChildren(el("p", {class: "muted"}, here.length
       ? `${here.length} run${here.length === 1 ? "" : "s"}, oldest first` : `No runs here as of ${asOf()}`));
-    here.forEach((r) => body.append(runRow(r, r === run)));
+    let opened = null;
+    here.forEach((r) => {
+      const row = runRow(r, r === run);
+      body.append(row);
+      if (r === run) opened = row;
+    });
+    // The clicked crate's row opens below the fold in a long list:
+    // bring it into view once the panel is laid out.
+    if (opened) requestAnimationFrame(() => opened.scrollIntoView({block: "nearest"}));
     $("panel").hidden = false;
     if (run) { state.highlighted = run; layout(); }
   }
@@ -1392,6 +1407,12 @@ function factory(THREE, model) {
   function syncTransport() {
     if (!state.playing) scrub.value = String(Math.round(state.t));
     $("day").textContent = dayLabel();
+    // The big date over the canvas: during a replay (or scrubbed into
+    // the past) the canvas is where everyone looks, and the transport
+    // bar's date is too small to carry "you are watching time pass".
+    const off = state.playing || !isToday();
+    $("replay-date").hidden = !off;
+    if (off) $("replay-date").textContent = dayLabel();
     play.textContent = state.playing ? "❚❚ Pause" : "▶ Play";
     play.setAttribute("aria-label", state.playing ? "Pause the replay" : "Play the replay");
     setHeader(model, isToday() ? null : currentDay());
