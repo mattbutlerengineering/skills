@@ -46,8 +46,8 @@
     background: var(--panel); color: var(--ink); border-radius: 8px;
     padding: .25rem .8rem; cursor: pointer; }
   #tour .primary { background: var(--belt); color: #1c2518; font-weight: 600; }
-  #story { margin: 0; padding: 0 1.1rem .45rem; color: var(--muted);
-    flex: none; }
+  #story { margin: 0; padding: .1rem 0 .15rem; color: var(--muted);
+    flex: 1 1 100%; }
   #story b { color: var(--ink); font-weight: 600; }
   #pipeline { flex: none; display: flex; align-items: center; gap: .3rem;
     padding: 0 1rem .55rem; flex-wrap: wrap; }
@@ -63,8 +63,10 @@
   .chip.zero .n { background: #e8eae8; }
   .chip.hot { border-color: var(--hot); background: #fff3e2;
     box-shadow: 0 0 0 3px rgba(224,144,58,.18); }
-  .chip.hot .n { background: var(--hot); color: #fff; }
-  .chip.done .n { background: var(--accent); color: #fff; }
+  /* Dark ink on the hot and done pills: white fails WCAG AA on both
+     the amber and the purple (axe: 2.55:1). */
+  .chip.hot .n { background: var(--hot); color: #3a2206; }
+  .chip.done .n { background: var(--accent); color: #120b26; }
   .chip .tag { font-size: .68rem; font-weight: 700; color: var(--hot);
     text-transform: uppercase; letter-spacing: .05em; }
   #notice { margin: 0 1rem .5rem; padding: .5rem .75rem; border-radius: 6px;
@@ -230,13 +232,13 @@
   <button id="tour-open" hidden>▶ Tour</button>
   <button id="legend-open" aria-expanded="false"
     aria-controls="legend">? How to read this</button>
+  <p id="story"><b>Each crate is one run</b> — a feature or fix — riding the
+    belt from <b>Idea</b> to <b>Ship</b>. Crates pile up where work waits;
+    finished runs fill the <b>Done</b> shelves.</p>
 </header>
-<p id="story"><b>Each crate is one run</b> — a feature or fix — riding the
-  belt from <b>Idea</b> to <b>Ship</b>. Crates pile up where work waits;
-  finished runs fill the <b>Done</b> shelves.</p>
 <nav id="pipeline" aria-label="Stations" hidden></nav>
 <p id="notice" hidden></p>
-<div id="stage" hidden>
+<div id="stage" role="main" aria-label="The factory floor" hidden>
   <div id="empty-sign" hidden>No runs yet — start one with /idea</div>
   <div class="card" id="card" hidden></div>
   <span id="hint">space play · ← → step a day · scroll zoom · drag pan ·
