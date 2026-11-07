@@ -1111,6 +1111,17 @@ function factory(THREE, model) {
   const CITY_TOTAL = runs.filter((r) => r.station === "completed").length;
   const CITY_FARZ = CITY_BASE.z + 2.0
     + (Math.max(1, Math.ceil(CITY_TOTAL / CITY_COLS)) - 1) * CITY_SZ + 2.4;
+  // Flying "to Done" means flying to the district, not the old tile
+  // centre — the city extends well past it. And a completed run's
+  // camera target is its building: its crate is never placed.
+  const CITY_CENTER = new THREE.Vector3(CITY_BASE.x, 0,
+    (CITY_BASE.z + 2.6 + CITY_FARZ - 2.4) / 2);
+  const focusTargetOf = (key) => key === "completed" ? CITY_CENTER : at(key);
+  function runFocus(run) {
+    const building = buildingOf.get(run);
+    return building && building.visible ? building.position
+      : crateOf.get(run).mesh.position;
+  }
   function citySlot(index) {
     return new THREE.Vector3(
       CITY_BASE.x - ((CITY_COLS - 1) / 2) * CITY_SX + (index % CITY_COLS) * CITY_SX,
@@ -1660,7 +1671,7 @@ function factory(THREE, model) {
     // position and no panel could open), so the view snaps to today.
     if (!isToday()) goToDay(LAST + 1);
     openPanel({kind: "crate", run});
-    focusOn(crateOf.get(run).mesh.position, 2.4);
+    focusOn(runFocus(run), 2.4);
     history.replaceState(null, "", `#run=${encodeURIComponent(run.slug || run.ref)}`);
     find.blur();
     requestRender();
@@ -1719,7 +1730,7 @@ function factory(THREE, model) {
       n, name);
     chip.addEventListener("click", () => {
       openPanel({kind: "station", station: key});
-      focusOn(at(key), 2.1);
+      focusOn(focusTargetOf(key), 2.1);
       history.replaceState(null, "", `#station=${key}`);
       requestRender();
     });
@@ -1780,7 +1791,7 @@ function factory(THREE, model) {
     $("tour-dots").textContent = tourBeats.map((b, i) => i === tourStep ? "●" : "○").join(" ");
     $("tour-next").textContent = tourStep === tourBeats.length - 1 ? "Play ▶" : "Next →";
     if (beat.reset) resetView();
-    if (beat.station) { focusOn(at(beat.station), 1.9); }
+    if (beat.station) { focusOn(focusTargetOf(beat.station), 1.9); }
     requestRender();
   }
   function startTour() {
@@ -2044,7 +2055,7 @@ function factory(THREE, model) {
     const station = hash.get("station");
     if (station && GRID[station]) {
       openPanel({kind: "station", station});
-      focusOn(at(station), 2.1);
+      focusOn(focusTargetOf(station), 2.1);
       intro = null;
     }
     // #tour walks its recipient through the floor; #trace=<slug> replays
