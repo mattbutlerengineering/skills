@@ -59,9 +59,10 @@ date) — not from your own count. Point at the five things to do on it:
   the day from artifact frontmatter, and order within a day is
   inferred, as the page says under the bar.
 - Press Export clip for a looping GIF of the replay, and share any
-  view as a link: the page writes #day=, #run=, #station= and #trace=
-  into the address bar as you drive, and #tour opens with the guided
-  walk running.
+  view as a link: the page writes #day=, #run=, #station=, #trace=,
+  #tour and #view= into the address bar as you drive, and the links
+  work live — pasting one into an open page's bar applies it, and
+  clearing the bar resets to today. Press / to jump to the finder.
 
 The page follows the system's light or dark scheme, and it is one file
 with no network access: nothing leaves the machine it is opened on.
