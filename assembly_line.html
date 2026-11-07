@@ -658,6 +658,18 @@ function factory(THREE, model) {
     scene.add(group);
   }
   const rollers = [];
+  // The route pulse: a bright charge that runs the whole line from
+  // Idea to the city gate every few seconds. The serpentine is the one
+  // thing a static frame can't teach; the pulse traces it endlessly.
+  // Ambient, so reduced motion never sees it and exports freeze it out.
+  const pulse = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.26, BELT_W * 0.78),
+    new THREE.MeshBasicMaterial({color: 0xffffff}));
+  pulse.visible = false;
+  scene.add(pulse);
+  const pulseTrail = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.2, BELT_W * 0.6),
+    new THREE.MeshBasicMaterial({color: 0xd9ff9e, transparent: true, opacity: 0.55}));
+  pulseTrail.visible = false;
+  scene.add(pulseTrail);
   const plates = {};
   Object.keys(GRID).forEach((key) => {
     plates[key] = plate(key);
@@ -1950,6 +1962,23 @@ function factory(THREE, model) {
       animators.forEach((animate) => animate(clock));
       rollers.forEach((roller) => { roller.rotation.y += dt * 4; });
       beltFlows.forEach((flow) => { flow.offset.x = -(clock * 0.45) % 1; });
+      {
+        const lap = mainPath.total + 26; // a breather between runs
+        const s = (clock * 16) % lap;
+        const on = s <= mainPath.total;
+        pulse.visible = on;
+        pulseTrail.visible = on && s > 2.2;
+        if (on) {
+          const p = pointOn(mainPath, s);
+          pulse.position.set(p.x, BELT_Y + 0.17, p.z);
+          const q = pointOn(mainPath, Math.max(0, s - 1.9));
+          pulseTrail.position.set(q.x, BELT_Y + 0.15, q.z);
+          const d = pointOn(mainPath, Math.min(mainPath.total, s + 0.5)).sub(p);
+          const angle = -Math.atan2(d.z, d.x);
+          pulse.rotation.y = angle;
+          pulseTrail.rotation.y = angle;
+        }
+      }
       needsRender = true;
     }
     if (needsRender) { renderer.render(scene, camera); needsRender = false; }
@@ -2004,6 +2033,7 @@ function factory(THREE, model) {
     state.trace = null;
     $("trace-banner").hidden = true;
     setCityNight(false); // the clip's backdrop is daylight
+    pulse.visible = false; pulseTrail.visible = false;
     card.hidden = true;
     document.body.style.pointerEvents = "none";
     view.zoom = 1; view.panX = 0; view.panY = 0;
