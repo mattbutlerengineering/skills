@@ -24,7 +24,12 @@
   header h1 .soft { color: var(--muted); font-weight: 500; }
   header .meta { color: var(--muted); }
   header .meta b { color: var(--ink); }
-  #legend-open { margin-left: auto; font: inherit; font-size: .85rem;
+  #find { margin-left: auto; font: inherit; font-size: .85rem;
+    border: 1.5px solid rgba(47,50,56,.3); background: rgba(255,255,255,.8);
+    border-radius: 999px; padding: .2rem .8rem; width: 15em; }
+  #find:focus { border-color: var(--line); background: #fff; outline: none; }
+  #find.miss { border-color: var(--hot); box-shadow: 0 0 0 3px rgba(224,144,58,.25); }
+  #legend-open { font: inherit; font-size: .85rem;
     border: 1.5px solid rgba(47,50,56,.3); background: rgba(255,255,255,.8);
     border-radius: 999px; padding: .2rem .8rem; cursor: pointer; }
   #legend-open:hover { border-color: var(--line); background: #fff; }
@@ -148,6 +153,7 @@
     header { padding: .5rem .7rem 0; }
     header h1 { font-size: 1.05rem; }
     header h1 .soft { display: none; }
+    #find { width: 9em; }
     #pipeline { flex-wrap: nowrap; overflow-x: auto; padding: .3rem .7rem .45rem;
       -webkit-overflow-scrolling: touch; }
     .chip { flex: none; }
@@ -165,6 +171,9 @@
   <h1><span id="title">Assembly line</span>
     <span class="soft">· the software factory</span></h1>
   <span class="meta" id="meta"></span>
+  <input id="find" type="search" list="find-list" placeholder="find a run…"
+    aria-label="Find a run by name" hidden>
+  <datalist id="find-list"></datalist>
   <button id="legend-open" aria-expanded="false"
     aria-controls="legend">? How to read this</button>
 </header>
@@ -1402,6 +1411,31 @@ function factory(THREE, model) {
     state.pinned = {key, run: hit.kind === "crate" ? hit.run : null};
     renderPanel();
   }
+  // ------------------------------------------------------------- find
+  // "Where is run X?" is the first question a room asks. Typing a slug
+  // (the datalist offers them all) flies the camera to the crate and
+  // pins its row; a name that matches nothing flashes the box amber.
+  const find = $("find");
+  find.hidden = false;
+  runs.slice().sort((a, b) => (a.slug || a.ref).localeCompare(b.slug || b.ref))
+    .forEach((run) => $("find-list").append(el("option", {value: run.slug || run.ref})));
+  find.addEventListener("change", () => {
+    const wanted = find.value.trim().toLowerCase();
+    if (!wanted) return;
+    const run = runs.find((r) => (r.slug || "").toLowerCase() === wanted)
+      || runs.find((r) => r.ref.toLowerCase() === wanted)
+      || runs.find((r) => (r.slug || r.ref).toLowerCase().includes(wanted));
+    if (!run) {
+      find.classList.add("miss");
+      setTimeout(() => find.classList.remove("miss"), 900);
+      return;
+    }
+    find.classList.remove("miss");
+    openPanel({kind: "crate", run});
+    focusOn(crateOf.get(run).mesh.position, 2.4);
+    find.blur();
+    requestRender();
+  });
   function renderPanel() {
     if (!state.pinned) return;
     const {key, run} = state.pinned;
