@@ -841,6 +841,17 @@ function factory(THREE, model) {
   // Rooftop beacons across the city pulse together; buildings add
   // their tips here and the completed station's animator drives them.
   const cityBeacons = [];
+  // The city's grid, declared before the station builders because the
+  // completed district's slab is cut from it (one owner, below too).
+  const CITY_SX = 2.6, CITY_SZ = 2.6;
+  // model.runs, not runs: the station builders run before that alias.
+  const CITY_TOTAL = model.runs.filter((r) => r.station === "completed").length;
+  // The district stays roughly square, so a prolific repo gets a city
+  // instead of a ribbon: fixed at 4 columns, 184 shipped runs made a
+  // 46-row strip to the horizon and shrank the factory — the page's
+  // subject — to a thumbnail. Capped at 12 columns, the widest that
+  // stays inside the floor's own width.
+  const CITY_COLS = Math.min(12, Math.max(4, Math.ceil(Math.sqrt(CITY_TOTAL))));
   const MACHINES = {
     "capture"(g) {
       box(4.5, 1.6, 2.4, COLORS.steel, -1, PLATE_H, -3.2, g);
@@ -1027,12 +1038,14 @@ function factory(THREE, model) {
       // gate, and every completed run raises a named building on the
       // grid (ensureBuilding below). Ground, road and gate are the only
       // built-ins — the skyline itself is pure data.
-      const total = model.runs.filter((r) => r.station === "completed").length;
-      const rows = Math.max(1, Math.ceil(total / 4));
-      const beyond = 2.0 + (rows - 1) * 2.6 + 2.4 - 5.15;
+      // One owner for the grid: CITY_COLS/CITY_SX/CITY_SZ below size
+      // the buildings, and this slab is cut to carry exactly them.
+      const rows = Math.max(1, Math.ceil(CITY_TOTAL / CITY_COLS));
+      const beyond = 2.0 + (rows - 1) * CITY_SZ + 2.4 - 5.15;
+      const wide = Math.max(10.3, CITY_COLS * CITY_SX + 1.2);
       if (beyond > 0) {
         const side = mat(COLORS.plateSide), top = mat(COLORS.plate);
-        const slab = outlined(new THREE.Mesh(boxGeo(10.3, PLATE_H, beyond),
+        const slab = outlined(new THREE.Mesh(boxGeo(wide, PLATE_H, beyond),
           [side, side, top, side, side, side]));
         slab.position.set(0, PLATE_H / 2, 5.15 + beyond / 2);
         slab.receiveShadow = true;
@@ -1130,9 +1143,9 @@ function factory(THREE, model) {
   // per-name accent, roof trim in its kind colour, every third roof a
   // pulsing beacon. The skyline is the factory's shipped output — one
   // building per run, nothing decorative.
-  const CITY_COLS = 4, CITY_SX = 2.6, CITY_SZ = 2.6;
+  // (CITY_SX/CITY_SZ/CITY_TOTAL/CITY_COLS are declared with the city's
+  // grid above, where the district's slab is cut.)
   const CITY_BASE = at("completed");
-  const CITY_TOTAL = runs.filter((r) => r.station === "completed").length;
   const CITY_FARZ = CITY_BASE.z + 2.0
     + (Math.max(1, Math.ceil(CITY_TOTAL / CITY_COLS)) - 1) * CITY_SZ + 2.4;
   // Flying "to Done" means flying to the district, not the old tile
@@ -1436,7 +1449,10 @@ function factory(THREE, model) {
     renderer.setSize(width, height, false);
     const bounds = new THREE.Box3();
     Object.values(stationGroups).forEach((g) => bounds.expandByPoint(g.position));
-    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x, 0, CITY_FARZ));
+    // Both far corners of the district: a wide city must stay in frame.
+    const cityHalfX = (CITY_COLS - 1) / 2 * CITY_SX;
+    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x - cityHalfX, 0, CITY_FARZ));
+    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x + cityHalfX, 0, CITY_FARZ));
     bounds.expandByScalar(HALF + 1);
     bounds.getCenter(target);
     camera.position.copy(target).add(new THREE.Vector3(60, 60, 60));
