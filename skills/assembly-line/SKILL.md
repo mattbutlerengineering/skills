@@ -47,9 +47,10 @@ date) — not from your own count. Point at the four things to do on it:
 - Hover any machine or crate to see what that step does and what is in
   it; click to pin the full list, Esc to close. Scroll to zoom, drag to
   pan, double-click to reset.
-- Press Play to replay the repo's history; drag the scrubber to stop on
-  a day. Dates are to the day from artifact frontmatter, and order
-  within a day is inferred, as the page says under the bar.
+- Press Play (or Space) to replay the repo's history; drag the scrubber
+  or step a day at a time with ← and →. Dates are to the day from
+  artifact frontmatter, and order within a day is inferred, as the page
+  says under the bar.
 - Press Export clip for an animated GIF of the replay.
 
 If the browser cannot draw the factory, the page says so and lists every
