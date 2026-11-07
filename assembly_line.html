@@ -1254,7 +1254,9 @@ function factory(THREE, model) {
   const state = {t: LAST + 1, playing: false, seconds: 30, highlighted: null, pinned: null};
   let lastHot = null;
   const isToday = () => state.t >= LAST + 1 - 1e-9;
-  const currentDay = () => isoOf(Math.min(LAST, Math.floor(state.t - 1e-9)));
+  // Plain floor: t ∈ [d, d+1) is day d. (A subtractive epsilon here
+  // misread the export's exact-integer frames as the previous day.)
+  const currentDay = () => isoOf(Math.min(LAST, Math.floor(state.t)));
   // Where a run is at time t: its station and, mid-move, its belt position.
   const TRAVEL = 0.6;
   function placement(run, t) {
