@@ -100,6 +100,12 @@
      the centre and docks right. */
   #trace-banner:not([hidden]) ~ #replay-date { left: auto; right: .8rem;
     transform: none; }
+  /* Visible from the first progressive paint on a slow link (the page
+     is one multi-MB file); the .5s appear delay keeps fast loads from
+     flashing it. Both boot paths hide it. */
+  #loading { margin: 3rem auto; text-align: center; color: var(--muted);
+    font-style: italic; opacity: 0; animation: al-appear .4s ease .5s forwards; }
+  @keyframes al-appear { to { opacity: 1; } }
   #empty-sign { position: absolute; left: 50%; top: 45%;
     transform: translate(-50%, -50%); background: var(--panel);
     border: 2px solid var(--line); border-radius: 8px; padding: .8rem 1.2rem;
@@ -238,6 +244,7 @@
 </header>
 <nav id="pipeline" aria-label="Stations" hidden></nav>
 <p id="notice" hidden></p>
+<p id="loading">assembling the factory floor…</p>
 <div id="stage" role="main" aria-label="The factory floor" hidden>
   <div id="empty-sign" hidden>No runs yet — start one with /idea</div>
   <div class="card" id="card" hidden></div>
@@ -356,6 +363,7 @@ const doneCount = (run) => run.work_orders.filter((wo) => wo.done).length;
 
 // ---------------------------------------------------------------- fallback
 function showFallback(model, notice) {
+  $("loading").hidden = true;
   $("notice").textContent = notice;
   $("notice").hidden = false;
   $("stage").hidden = true;
@@ -477,6 +485,7 @@ function factory(THREE, model) {
   const TILE = 12.5, HALF = 6.25, PLATE_H = 0.9, BELT_Y = 1.8, BELT_W = 2.4;
   const CRATE = 1.3;
   const stage = $("stage");
+  $("loading").hidden = true;
   stage.hidden = false;
   $("fallback").hidden = true;
   $("transport").hidden = false;
