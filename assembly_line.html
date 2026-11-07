@@ -1517,6 +1517,10 @@ function factory(THREE, model) {
   $("trace-stop").addEventListener("click", endTrace);
   function openPanel(hit) {
     if (exporting) return;
+    // Explicit navigation — a canvas click, a chip, the finder, a deep
+    // link — exits the guided and solo modes: the tour would fight the
+    // camera, and a trace would hide the very crate being opened.
+    endTour(); endTrace();
     const key = hit.kind === "station" ? hit.station : (crateOf.get(hit.run).where || {}).station;
     if (!key) return;
     setLegend(false);
