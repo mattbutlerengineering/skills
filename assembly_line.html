@@ -240,6 +240,12 @@
     #scrub { flex: 1 1 100%; order: -1; }
     #day { min-width: 0; margin-left: auto; }
   }
+  /* A portrait phone gets the pinned panel as a bottom sheet, like the
+     legend: full height, it covered the whole stage and the camera
+     flew to a building nobody could see. focusOn centres above it. */
+  @media (max-width: 720px) and (min-height: 481px) {
+    #panel { top: auto; left: .5rem; right: .5rem; width: auto; max-height: 48%; }
+  }
 </style>
 </head>
 <body>
@@ -1714,13 +1720,23 @@ function factory(THREE, model) {
     if (location.hash.startsWith("#view="))
       history.replaceState(null, "", location.pathname + location.search);
   };
-  // Centre a world point and zoom to it (the chips fly the camera).
+  // Centre a world point and zoom to it (the chips fly the camera) — in
+  // the part of the stage an open panel leaves free: left of the side
+  // panel, above a phone's bottom sheet. Centred on the whole stage, a
+  // phone's sheet covered the very building the finder flew to.
   function focusOn(point, zoom) {
     if (exporting) return; // nothing moves the camera inside a capture
     const v = point.clone().applyMatrix4(camera.matrixWorldInverse);
     view.zoom = zoom;
     view.panX = v.x - frameBox.cx;
     view.panY = v.y + 2 / zoom - frameBox.cy;
+    const panel = $("panel");
+    if (!panel.hidden) {
+      const s = stage.getBoundingClientRect(), p = panel.getBoundingClientRect();
+      const perPx = 2 * frameBox.halfH / (zoom * Math.max(1, s.height));
+      if (p.top > s.top + s.height / 3) view.panY -= (s.bottom - p.top) / 2 * perPx;
+      else if (p.left > s.left + s.width / 2) view.panX += (s.right - p.left) / 2 * perPx;
+    }
     applyView(); requestRender();
   }
   stage.addEventListener("wheel", (event) => {
