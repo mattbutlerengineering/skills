@@ -49,12 +49,15 @@
   #story { margin: 0; padding: .1rem 0 .15rem; color: var(--muted);
     flex: 1 1 100%; }
   #story b { color: var(--ink); font-weight: 600; }
-  #pipeline { flex: none; display: flex; align-items: center; gap: .3rem;
+  /* Spacing sized so the twelve chips and their arrows hold one row
+     down to ~1180px; looser, a 1200px window wrapped Done alone onto a
+     second row and the stage lost a row's height. */
+  #pipeline { flex: none; display: flex; align-items: center; gap: .2rem;
     padding: 0 1rem .55rem; flex-wrap: wrap; }
   #pipeline .flow { color: #9aa49c; font-weight: 700; }
-  .chip { font: inherit; font-size: .8rem; display: inline-flex; gap: .4rem;
+  .chip { font: inherit; font-size: .8rem; display: inline-flex; gap: .3rem;
     align-items: center; border: 1.5px solid rgba(47,50,56,.22);
-    border-radius: 999px; padding: .18rem .65rem .18rem .3rem;
+    border-radius: 999px; padding: .18rem .45rem .18rem .3rem;
     background: rgba(255,255,255,.78); cursor: pointer; color: var(--ink); }
   .chip:hover { border-color: var(--line); background: #fff; }
   .chip .n { min-width: 1.7em; text-align: center; font-weight: 700;
