@@ -1312,6 +1312,22 @@ function factory(THREE, model) {
     return pointOn(mainPath, a + (b - a) * f);
   }
 
+  // Replay motion has a wall-clock floor. Belt rides and tower rises are
+  // measured in days, and a day is worth milliseconds once a history is
+  // long: at this repo's pace a same-day hop lasts 16 ms (one frame),
+  // and over three years every hop and rise does. So during a replay a
+  // crate glides toward its placement instead of being snapped onto it,
+  // with a ~0.18 s time constant — the placement stays the truth, the
+  // glide is only the transit between two consecutive truths. Captures
+  // and reduced motion snap, as before.
+  const GLIDE_TAU = 0.18;
+  let glideK = 1;
+  const tmpPos = new THREE.Vector3();
+  function placeCrate(entry, pos) {
+    if (glideK >= 1) entry.mesh.position.copy(pos);
+    else entry.mesh.position.lerp(pos, glideK);
+  }
+  const glide = (from, to) => (glideK >= 1 ? to : from + (to - from) * glideK);
   function layout() {
     const t = state.t;
     const groups = {};
@@ -1350,12 +1366,14 @@ function factory(THREE, model) {
             const k = Math.min(1, Math.max(0.04, (t - entry.where.since) / 1.1));
             rise = k * k * (3 - 2 * k);
           }
-          building.scale.y = rise;
+          // Toward the target, not onto it: at this repo's pace the
+          // 1.1-day window is 0.26 s, and on a three-year history 0.03 s.
+          building.scale.y = glide(building.scale.y, rise);
         });
       } else {
         list.forEach((run, i) => {
           const pos = slotPosition(key, i, list.length);
-          crateOf.get(run).mesh.position.copy(pos);
+          placeCrate(crateOf.get(run), pos);
           crateOf.get(run).mesh.rotation.set(0, 0, 0);
         });
       }
@@ -1381,7 +1399,7 @@ function factory(THREE, model) {
       if (!where) return;
       if (where.moving) {
         const p = travelPoint(where.from, where.station, where.f);
-        entry.mesh.position.set(p.x, BELT_Y + 0.08 + CRATE * 0.4, p.z);
+        placeCrate(entry, tmpPos.set(p.x, BELT_Y + 0.08 + CRATE * 0.4, p.z));
       }
       entry.shadow.visible = !!where.inferred;
       const implementing = where.station === "implement" && run.work_orders.length;
@@ -2037,15 +2055,21 @@ function factory(THREE, model) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     if (state.playing) {
+      // The glide is live-replay only: a capture places crates exactly,
+      // and reduced motion asks for none of this.
+      glideK = (exporting || reducedMotion) ? 1 : 1 - Math.exp(-dt / GLIDE_TAU);
       state.t += dt * (LAST + 1 - FIRST) / state.seconds;
       const stop = state.trace ? traceEnd : LAST + 1;
       if (state.t >= stop) {
+        // The last frame lands on the placement, never near it.
+        glideK = 1;
         state.t = stop; state.playing = false; renderPanel();
         // A solo crate on a wide floor is hard to find: when a trace
         // reaches its end, the camera goes to where the run ended up.
         if (state.trace) { layout(); focusOn(runFocus(state.trace), 2.4); }
       }
       layout(); syncTransport(); needsRender = true;
+      glideK = 1; // every layout outside the replay places exactly
       // A pinned panel follows the replay: rebuilt at each day boundary,
       // so it never claims today's list against last summer's floor.
       if (state.pinned && currentDay() !== panelDay) renderPanel();
