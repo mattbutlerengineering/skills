@@ -157,7 +157,8 @@
 <div id="stage" hidden>
   <div id="empty-sign" hidden>No runs yet — start one with /idea</div>
   <div class="card" id="card" hidden></div>
-  <span id="hint">scroll to zoom · drag to pan · double-click to reset</span>
+  <span id="hint">space play · ← → step a day · scroll zoom · drag pan ·
+    double-click reset</span>
   <span id="replay-date" hidden></span>
   <aside id="legend" aria-label="How to read this">
     <h2>How to read this
@@ -1451,10 +1452,24 @@ function factory(THREE, model) {
     else { if (isToday()) state.t = FIRST; state.playing = true; }
     syncTransport(); requestRender();
   });
-  scrub.addEventListener("input", () => {
+  function goToDay(t) {
     state.playing = false;
-    state.t = Number(scrub.value) >= LAST + 1 ? LAST + 1 : Number(scrub.value) + 1 - 1e-6;
+    state.t = t >= LAST + 1 ? LAST + 1 : t + 1 - 1e-6;
     layout(); syncTransport(); renderPanel(); requestRender();
+  }
+  scrub.addEventListener("input", () => { goToDay(Number(scrub.value)); });
+  // Presenter keys: Space plays and pauses, the arrows step one day at
+  // a time (a 180-day history is too fine for the scrubber's thumb),
+  // Home and End jump to the first day and back to today. Keys inside
+  // the transport's own controls keep their native behaviour.
+  addEventListener("keydown", (event) => {
+    if (!enabled || event.target.closest("input, button, details, summary")) return;
+    const day = Math.min(LAST + 1, Math.floor(state.t));
+    if (event.key === " ") { event.preventDefault(); play.click(); }
+    else if (event.key === "ArrowLeft") { event.preventDefault(); goToDay(Math.max(FIRST, day - 1)); }
+    else if (event.key === "ArrowRight") { event.preventDefault(); goToDay(Math.min(LAST + 1, day + 1)); }
+    else if (event.key === "Home") { event.preventDefault(); goToDay(FIRST); }
+    else if (event.key === "End") { event.preventDefault(); goToDay(LAST + 1); }
   });
   ["30", "60"].forEach((s) => $(`speed-${s}`).addEventListener("click", () => {
     state.seconds = Number(s);
