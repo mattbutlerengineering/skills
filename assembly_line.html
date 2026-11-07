@@ -1456,6 +1456,10 @@ function factory(THREE, model) {
       return;
     }
     find.classList.remove("miss");
+    // Finding means "where is it NOW": from the past the crate may not
+    // exist yet (the camera would fly to an invisible crate's stale
+    // position and no panel could open), so the view snaps to today.
+    if (!isToday()) goToDay(LAST + 1);
     openPanel({kind: "crate", run});
     focusOn(crateOf.get(run).mesh.position, 2.4);
     history.replaceState(null, "", `#run=${encodeURIComponent(run.slug || run.ref)}`);
@@ -1581,6 +1585,7 @@ function factory(THREE, model) {
   function goToDay(t) {
     state.playing = false;
     state.t = t >= LAST + 1 ? LAST + 1 : t + 1 - 1e-6;
+    card.hidden = true; // a hover card from another moment is a stale claim
     layout(); syncTransport(); renderPanel(); requestRender();
     // The hash mirrors the day, so the current view is a copyable link;
     // back at today the hash clears rather than naming it.
