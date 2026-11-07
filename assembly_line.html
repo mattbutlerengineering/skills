@@ -2451,6 +2451,21 @@ function factory(THREE, model) {
     // The palette comes from today's frame: every crate and machine on it.
     state.t = LAST + 1;
     layout();
+    // Frame the clip on what is drawn — today's floor and its whole
+    // skyline, the most the replay ever builds — in the band below the
+    // date stamp, rather than fit()'s generous margins (sign headroom, a
+    // tile of slack), which left the floor in 57% of the frame's width.
+    // One framing for every frame: the clip's camera never moves.
+    {
+      const e = floorExtent();
+      const TOP = 46, PAD = 10, bandH = H - TOP - PAD, bandW = W - 2 * PAD;
+      view.zoom = Math.min(2 * frameBox.halfH * bandH / (H * (e.maxY - e.minY)),
+        2 * frameBox.halfH * bandW / (H * (e.maxX - e.minX)));
+      const perPx = 2 * frameBox.halfH / (view.zoom * H);
+      view.panX = (e.minX + e.maxX) / 2 - frameBox.cx;
+      view.panY = (e.minY + e.maxY) / 2 - frameBox.cy + (TOP + bandH / 2 - H / 2) * perPx;
+      applyView();
+    }
     renderer.render(scene, camera);
     paint();
     const gif = new GifWriter(W, H, ctx.getImageData(0, 0, W, H).data);
