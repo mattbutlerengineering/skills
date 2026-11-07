@@ -1636,7 +1636,11 @@ function factory(THREE, model) {
   });
   renderer.domElement.addEventListener("pointerleave", () => { card.hidden = true; boostSign(null); });
   function closePanel() {
-    $("panel").hidden = true; state.pinned = null; state.highlighted = null; layout(); requestRender();
+    $("panel").hidden = true; state.pinned = null; state.highlighted = null;
+    // The bar says what the view shows: a closed panel's link goes too.
+    if (/^#(run|station)=/.test(location.hash))
+      history.replaceState(null, "", location.pathname + location.search);
+    layout(); requestRender();
   }
   function runRow(run, open) {
     const summary = el("summary", {});
@@ -1863,6 +1867,7 @@ function factory(THREE, model) {
     tourBeats = tourScript();
     tourStep = 0;
     $("tour").hidden = false;
+    history.replaceState(null, "", "#tour");
     showTourStep();
   }
   function nextTour() {
@@ -1876,6 +1881,8 @@ function factory(THREE, model) {
     if (tourStep < 0) return;
     tourStep = -1;
     $("tour").hidden = true;
+    if (location.hash === "#tour")
+      history.replaceState(null, "", location.pathname + location.search);
     resetView();
   }
   $("tour-open").hidden = false;
