@@ -1913,6 +1913,9 @@ function factory(THREE, model) {
   $("today").addEventListener("click", () => goToDay(LAST + 1));
   const enabled = runs.length > 0;
   [play, scrub, $("speed-30"), $("speed-60"), $("export")].forEach((b) => { b.disabled = !enabled; });
+  // An empty repo has nothing to tour and nothing to find; the empty
+  // sign already says what to do instead.
+  if (!enabled) { $("tour-open").hidden = true; find.hidden = true; }
   play.addEventListener("click", () => {
     if (state.playing) { state.playing = false; }
     else { if (isToday()) state.t = FIRST; state.playing = true; }
