@@ -251,7 +251,7 @@
   <span id="hint">space play · ← → step a day · scroll zoom · drag pan ·
     double-click reset</span>
   <div id="trace-banner" hidden>
-    <span>tracing <b id="trace-name"></b> — other crates hidden</span>
+    <span>tracing <b id="trace-name"></b> — <span id="trace-detail"></span></span>
     <button id="trace-stop">✕ stop</button>
   </div>
   <span id="replay-date" hidden></span>
@@ -1694,6 +1694,15 @@ function factory(THREE, model) {
     traceEnd = Math.min(LAST + 1,
       dayIndex(run.history[run.history.length - 1].day) + 1);
     $("trace-name").textContent = run.slug || run.ref;
+    // Most journeys here happen inside one day: without this line the
+    // trace is a motionless frame and the viewer learns nothing. The
+    // banner states the span, the stops and where it ended up.
+    const firstDay = run.history[0].day;
+    const lastDay = run.history[run.history.length - 1].day;
+    const stops = new Set(run.history.map((hop) => hop.station)).size;
+    const span = firstDay === lastDay ? `all on ${firstDay}` : `${firstDay} → ${lastDay}`;
+    $("trace-detail").textContent =
+      `${stops} station${stops === 1 ? "" : "s"}, ${span}, now at ${nameOf(run.station)}`;
     $("trace-banner").hidden = false;
     resetView();
     goToDay(dayIndex(run.history[0].day));
@@ -1707,6 +1716,8 @@ function factory(THREE, model) {
     $("trace-banner").hidden = true;
     if (location.hash.startsWith("#trace="))
       history.replaceState(null, "", location.pathname + location.search);
+    // The trace ended zoomed on its crate; leaving it gives the floor back.
+    resetView();
     layout(); requestRender();
   }
   $("trace-stop").addEventListener("click", endTrace);
@@ -1996,7 +2007,12 @@ function factory(THREE, model) {
     if (state.playing) {
       state.t += dt * (LAST + 1 - FIRST) / state.seconds;
       const stop = state.trace ? traceEnd : LAST + 1;
-      if (state.t >= stop) { state.t = stop; state.playing = false; renderPanel(); }
+      if (state.t >= stop) {
+        state.t = stop; state.playing = false; renderPanel();
+        // A solo crate on a wide floor is hard to find: when a trace
+        // reaches its end, the camera goes to where the run ended up.
+        if (state.trace) { layout(); focusOn(runFocus(state.trace), 2.4); }
+      }
       layout(); syncTransport(); needsRender = true;
       // A pinned panel follows the replay: rebuilt at each day boundary,
       // so it never claims today's list against last summer's floor.
