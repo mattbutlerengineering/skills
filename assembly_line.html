@@ -91,10 +91,13 @@
   #trace-banner button { font: inherit; border: 1.5px solid var(--line);
     background: var(--panel); color: var(--ink); border-radius: 999px;
     padding: .1rem .6rem; cursor: pointer; }
+  /* Top-aligned and pushed right: on a run name that wraps, a
+     stretched pill swelled into a two-line lozenge, and space-between
+     left every button at a different x. */
   .trace-btn { font: inherit; font-size: .75rem; border: 1.5px solid
     rgba(47,50,56,.3); background: none; color: var(--accent);
     border-radius: 999px; padding: 0 .5rem; cursor: pointer;
-    margin-left: .4rem; flex: none; }
+    margin-left: auto; flex: none; align-self: flex-start; white-space: nowrap; }
   .trace-btn:hover { border-color: var(--accent); }
   /* While a trace banner occupies the top-left, the date badge yields
      the centre and docks right. */
@@ -162,7 +165,9 @@
   #panel details { border-bottom: 1px solid #eee; padding: .25rem 0; }
   #panel summary { cursor: pointer; display: flex; gap: .5rem;
     justify-content: space-between; overflow-wrap: anywhere; }
-  #panel summary .prog { color: var(--muted); white-space: nowrap; }
+  #panel summary .prog { color: var(--muted); white-space: nowrap;
+    min-width: 3.4em; text-align: right; font-variant-numeric: tabular-nums; }
+  #panel summary .prog.past { min-width: 7.6em; }
   #panel ul { margin: .2rem 0 .2rem 1rem; padding: 0; list-style: none; }
   #panel li.done::before { content: "☑ "; }
   #panel li.open::before { content: "☐ "; }
@@ -209,6 +214,7 @@
     #notice { background: #3a2b16; color: #f3c892; }
     #panel header { border-bottom-color: #2e352f; }
     #panel details { border-bottom-color: #2e352f; }
+    .trace-btn { border-color: #4a524b; }
     #transport { background: rgba(18,23,19,.8);
       border-top-color: rgba(255,255,255,.08); }
   }
@@ -1861,8 +1867,10 @@ function factory(THREE, model) {
       });
       summary.append(traceBtn);
     }
-    if (run.work_orders.length) summary.append(el("span", {class: "prog"},
-      `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}`));
+    // The progress column is always there (empty without work orders),
+    // so every row's trace button lands at the same x.
+    summary.append(el("span", {class: isToday() ? "prog" : "prog past"}, run.work_orders.length
+      ? `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}` : ""));
     const details = el("details", {}, summary);
     if (open) details.open = true;
     if (run.status === "attention") details.append(el("p", {class: "muted"}, run.reason));
