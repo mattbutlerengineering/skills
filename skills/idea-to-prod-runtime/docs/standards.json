@@ -1,0 +1,34 @@
+[
+  {
+    "slug": "adr0004-typed-ids-in-frontmatter",
+    "statement": "A run artifact's typed identifier MUST live in that artifact's own frontmatter, never in a separate manifest or parallel tracking tree.",
+    "level": "MUST",
+    "source": "adr/0004#adr0004-typed-ids-in-frontmatter",
+    "status": "advisory",
+    "domain": "pipeline"
+  },
+  {
+    "slug": "adr0032-one-way-mirror",
+    "statement": "A work-order issue MUST be created only after its breakdown row exists.",
+    "level": "MUST",
+    "source": "adr/0032#adr0032-one-way-mirror",
+    "status": "advisory",
+    "domain": "factory"
+  },
+  {
+    "slug": "eval-honesty",
+    "statement": "Run or eval evidence MUST NOT be fabricated; LEDGER maturity graduates only via a real run.",
+    "level": "MUST",
+    "source": "CLAUDE.md#eval-honesty",
+    "status": "advisory",
+    "domain": "eval"
+  },
+  {
+    "slug": "stdlib-only",
+    "statement": "Every root Python script MUST be standalone Python 3 standard library, with no third-party dependencies.",
+    "level": "MUST",
+    "source": "CLAUDE.md#stdlib-only",
+    "status": "advisory",
+    "domain": "factory"
+  }
+]

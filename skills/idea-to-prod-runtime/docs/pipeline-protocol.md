@@ -1,0 +1,494 @@
+# Pipeline protocol
+
+Shared rules every stage skill follows. Stage skills read this file before
+acting; it is the single source of truth for run discovery, orientation,
+gating, and artifact conventions.
+
+## Stage order
+
+Idea → PRD → UX Design (conditional) → Architect → Decompose → Implement →
+Verify → Review → Ship → Operate
+
+## Runs and run directories
+
+- **Product run** — a greenfield product moving through the full pipeline.
+  Artifacts live at the target repo's `docs/` root.
+- **Feature run** — a scaled-down pass for one feature, re-entering at Idea
+  or PRD. Artifacts live under `docs/features/<slug>/` (kebab-case slug).
+- **Maintenance run** — a scaled-down pass for a defect, regression,
+  refactor, or dependency upgrade, entering at a capture step. Artifacts
+  live under `docs/fixes/<slug>/` (kebab-case slug).
+
+**Run discovery:** candidate run directories are `docs/` plus every
+`docs/features/*/` and every `docs/fixes/*/`. A run is *complete* when
+`retro.md` exists and carries its population line (The Operate
+population, below); *active* when it has at least one artifact and is
+not complete. If the user named a feature or fix, use (or create) its directory.
+If exactly one run is active, use it. Otherwise, list the candidates and ask
+which one.
+
+### Work already in flight
+
+Run discovery sees the working tree. Work that another agent has already
+finished does not live in the working tree — it lives on a branch, either
+waiting for a human as a pull request, merge request, or patch in review,
+or never submitted at all: an unmerged branch or worktree whose verify
+failed carries a complete run and no review item. No enumeration of run
+directories can see either.
+
+So the moment a run **starts** is where that is checked: `capture` claiming
+a seed or seeding from tracker intake, `idea` claiming a seed. Before
+writing the first artifact, look over the work already in flight — what
+is waiting for review, and the unmerged branches and worktrees that carry
+run artifacts — and ask whether one of them already does this. Three
+outcomes, and each must be visible:
+
+- **Nothing matches** — proceed, and say the check ran.
+- **The check could not run** — no review surface, no credentials, no
+  network. Proceed, and say *that* instead. A check whose failure looks
+  the same as a clean result is worse than no check, because it is a clean
+  result nobody can doubt.
+- **Something already does this work** — stop and surface it. The pipeline
+  does not decide which of two agents' attempts wins; it declines to build
+  the second one unattended.
+
+This is a **guard, not a door**. It can only ever stop a run from starting,
+so the one-way bound above is untouched: nothing here polls, nothing here
+seeds a run, and orientation inside an active run still reads run artifacts
+alone. The concrete command that lists work awaiting review is packaging's,
+like the tracker CLI; the git recipe for unmerged branches and worktrees
+is in the skills that start a run — the shape of the check is what lives
+here.
+
+A related rule, deliberately not the same one, is the next section's: open
+pull requests are drained before new work starts, to keep branches from
+stacking conflicts. That one is about order and this one is about
+duplication; they agree about what to look at and not about why.
+
+### Open pull requests first
+
+Open PRs come before new work. An unfinished pull request is closer to
+value than a fresh one, and merging it first is what keeps new branches
+from stacking conflicts. Unmerged pull requests left to pile up get merged
+one at a time later, and a pair that each passed CI alone breaks together.
+
+So every skill that starts new work runs this pre-flight first: `next`
+before it hands off to a stage, `autorun` before its first stage, `conduct`
+before it asks the Owner to approve a batch's spend, and the two queue
+skills, `work-queue` and `implement-queue`, in their own preflight, which
+adds their mechanics (labels, checks) to it.
+
+1. **List** the repo's open pull requests, oldest first. The concrete
+   command is packaging's, like the tracker CLI's (`gh pr list --state
+   open` on GitHub).
+2. **Green and approved** — present it for merge. Every merge still needs
+   the Owner's explicit answer, or the standing consent they wrote down in
+   advance where a skill's own policy defines one. The pre-flight never
+   merges on its own, and a recommendation is not an answer.
+3. **Red or conflicting** — fix it (update it from the base branch,
+   resolve, re-run the repo's checks), or name why it is blocked.
+4. **Stale, with no one driving it** — surface it to close.
+5. **Optional, when two or more are mergeable** — simulate merging them
+   together before the first one lands: chain-merge them in a detached
+   worktree, then run the repo's checks on the result. Per-PR CI cannot
+   see a pair that merges clean and goes red; this plugin's repo records
+   the cases in `docs/kb/cross-pr-merge-hazards.md`.
+
+New work starts only when nothing is left that is mergeable or fixable. A
+pull request waiting on the Owner's decision does not block new work; it
+gets reported. As with the in-flight guard, the outcome is always visible:
+no open pull requests, the list that was worked, or that the check could
+not run (no review surface, no credentials, no network) — never silence
+that reads as a clean result.
+
+## Artifacts are the state
+
+There is no manifest or state file. Orientation is derived entirely from
+which artifacts exist in the run directory:
+
+| Stage | Artifact | Complete when |
+|-------|----------|---------------|
+| Idea | `idea.md` | file exists |
+| PRD | `prd.md` | file exists |
+| UX Design | `ux.md` | file exists, **or** stage skipped (see below) |
+| Architect | `architecture.md` | file exists |
+| Decompose | `breakdown.md` | file exists |
+| Implement | code | every checkbox in `breakdown.md` is checked (a breakdown with no checkboxes is not yet implemented) |
+| Verify | `verification.md` | file exists |
+| Review | `review.md` | file exists |
+| Ship | `release.md` | file exists and its `outcome:` is one the stage reached — `prepared` leaves Ship pending (see The Ship outcome below) |
+| Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; see The Operate population below) |
+
+**Next stage = the first stage in order that is not complete.**
+
+### Commit at the stage boundary
+
+A stage ends by committing its own artifact — the file its table row
+names; for Implement, the breakdown it checked off — on the run's
+branch, as a commit of its own with the subject
+`docs(<slug>): <stage> — <one line>` (`<slug>` is the run's slug, or
+`product`; `<stage>` is the stage's name). Nothing else commits between
+stages, so an artifact left uncommitted is state that one checkout
+alone holds: a `git clean`, a worktree reap or a second session on the
+same path erases the run. One consumer run kept eight of nine
+artifacts untracked for nine days before Ship found them by accident
+(ADR-0100).
+
+The commit is a boundary step, not the completion predicate. The
+tables here still read the working tree, so `next` sees a stage the
+user has finished and not yet committed. An unattended run has nobody
+watching that tree: `autorun` advances past a stage only once the
+stage's artifact is committed — `git status --porcelain -- <artifact>`
+prints nothing, which means tracked and unchanged since its commit —
+and otherwise stops, naming the artifact.
+
+### The UX Design conditional
+
+Whether UX Design applies is decided at PRD time and recorded in `prd.md`
+frontmatter as `ux: required` or `ux: not-applicable` (it depends on the
+feature, not the project). If `not-applicable`, the PRD also records a
+one-line rationale as `ux-reason:`, orientation skips straight to Architect,
+and the Architect skill echoes that recorded reason in `architecture.md`
+frontmatter (e.g. `ux: skipped — no UI surface`) so absence is never
+ambiguous downstream.
+
+### The Ship outcome
+
+Ship records the outcome it actually reached in `release.md`
+frontmatter, as `outcome: released | rolled-back | prepared`
+(ADR-0101). `released` means the change reached users; `rolled-back`
+means the release failed or came back and the rollback plan ran — the
+`ship` skill's failed ship, still a complete artifact; `prepared` means
+the release was prepared and stopped, as every unattended run does
+without release authorization, and is waiting on a pull request the
+artifact names as `pending-merge: <PR url>`. Only a reached outcome
+completes the stage: `prepared` leaves Ship pending, as does any value
+outside that vocabulary, while a `release.md` with no `outcome:` field
+predates the field and still counts as complete.
+
+Nothing in orientation reads the forge — the tables read files
+(ADR-0100). So a prepared release is written back by whoever next
+touches the run: `next` announces "confirm the pull request merged,
+then record it" and routes to `ship`, whose Release step becomes the
+write-back; `operate` resolves it at its soft gate before anything
+else, or stops, and never writes a retro over it. The write-back reads
+the pull request through the forge CLI —
+`gh pr view <n> --json state,mergedAt`, or in a cloud session (Claude
+Code Remote), where GraphQL-backed `gh pr view` returns HTTP 403 while
+`gh api` REST calls succeed,
+`gh api repos/{owner}/{repo}/pulls/<n> --jq '{merged,merged_at}'` —
+and, when it merged, rewrites `outcome: released` and adds
+`released-at:` (the merge date), keeps `pending-merge:` as the record
+of what was waited on, and commits the artifact as the stage-boundary
+rule says. A pull request closed unmerged is not a release: the
+outcome stays `prepared` and the run stays at Ship, for a person to
+re-ship or abandon.
+
+### Maintenance-run orientation
+
+A maintenance run does not start at Idea. It enters at a **capture step**
+whose seed artifact is `defect.md` — a defect brief (what is broken,
+reproduction evidence, root-cause hypothesis, blast radius). For refactor or
+dependency-upgrade work the same file is a *condition brief* (what is
+degraded, evidence, target state); the filename stays `defect.md`.
+
+Re-entry depth is decided at capture time and recorded in `defect.md`
+frontmatter as `re-entry: implement` (scoped fix) or `re-entry: architect`
+(design-touching), mirroring how `ux:` is decided at PRD time. Orientation
+for a maintenance run is:
+
+| Stage | Artifact | Complete when |
+|-------|----------|---------------|
+| Capture | `defect.md` | file exists |
+| Architect | `architecture.md` | file exists — only when `re-entry: architect`, else skipped |
+| Decompose | `breakdown.md` | file exists — only when `re-entry: architect`, else skipped |
+| Implement | code | every checkbox in the run's breakdown is checked |
+| Verify | `verification.md` | file exists — **never skippable**; the regression test is the point |
+| Review | `review.md` | file exists |
+| Ship | `release.md` | file exists and its `outcome:` is one the stage reached — `prepared` leaves Ship pending (The Ship outcome, above) |
+| Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; see The Operate population below) |
+
+**Where the breakdown lives:** with `re-entry: implement`, the breakdown is
+inline in `defect.md` as checkboxes — no separate `breakdown.md`. With
+`re-entry: architect`, the run uses the normal `architecture.md` +
+`breakdown.md` chain, and checkboxes live in `breakdown.md`. There is no
+third option.
+
+### The Operate population
+
+A retro counts the people it observed. `retro.md` frontmatter carries
+the population line — `users-observed:`, a count, and
+`signal-source:`, where the count came from — and Operate completes
+on it (ADR-0102): a count of zero or more with a named source
+completes the stage; a placeholder, a bad count, or either field
+without the other leaves Operate pending, and `next` routes back to
+`operate` to count. A `retro.md` with neither field predates the line
+and still counts as complete, as every retro written before ADR-0102
+does.
+
+`0` is a valid count, and the honest one for most runs on the day they
+close. It changes the retro's verdict vocabulary, not its validity:
+nothing is landing, adopted or used with no one there, so every
+outcome's signal is `unobserved` and "what happened" records state,
+not use. The seeds then carry what to measure, and the run stays
+closed.
+
+The run's own debt is never counted as feedback. An issue is the run's
+own when it was created before the run's merge (the pull request
+`release.md` names, or the release log's date), or its body says it
+was deferred from the Review stage, or it cites the run's `review.md`
+or `verification.md` — a Review deferral, a Verify carry-forward.
+`operate` lists those under Open debt, where they stay visible, and
+counts them toward nothing. Under `autorun` the brief's `operate:`
+section — wait, minimum signal, or skip — decides whether the stage
+runs at all, never Ship's authorization; the brief never supplies the
+count.
+
+### Tracker mirror (optional)
+
+A run MAY mirror its work items to the project's issue tracker
+(ADR-0026). The tracker is a mirror, never the state: orientation never
+reads tracker state, and on a run without a tracker nothing changes.
+Sync happens only at stage boundaries — import at run seeding or
+Decompose drafting (existing tracker issues become work items recording
+their originating issue references), export at Decompose (work items may
+be published as tracker issues, mapping recorded in the breakdown), close
+at Implement item boundaries (completing a work item closes its mirrored
+issue).
+
+The mirror is one-way **out**: nothing in the tracker starts a run. An
+issue filed there — including one a sweep filed unattended, carrying
+`source:sentry` / `type:defect` — is intake, and intake is never a work
+order: a work order exists only once its breakdown row does, and the
+dispatch plane never runs ahead of the knowledge plane (ADR-0032). A bug
+therefore reaches a work order only after a person starts a run for it,
+through `capture`.
+
+**Tracker intake (ADR-0030).** A marked tracker issue may seed that
+capture step — the one inbound door in the bound above, and it opens
+only inside capture: seeding is not orientation, and nothing polls; an
+unclaimed intake issue just waits. An issue carrying the project's
+designated **intake marker** (the concrete marker — a tracker label —
+and the tracker CLI live in packaging) is offered two user-initiated
+ways: the user names the issue directly, or asks capture to list
+intake-marked issues and picks one. Seeding copies into `defect.md` the
+issue title as the working title, the filed date, and the body's
+observed-behavior and reproduction content as interview raw material —
+intake seeds the interview; it does not replace it. The issue itself is
+recorded in frontmatter as `intake: #123` (the tracker's own notation;
+duplicates of the same defect join an `intake-duplicates:` list and
+close together) and is never re-read after seeding — from that moment
+the tracker copy is a mirror again, updates flowing one way, out. The
+intake issue closes at Ship, when `release.md` exists, with a closing
+comment referencing the run directory; a run abandoned before then
+un-marks the issue, never silently closes it. An intake-marked feature
+request seeds nothing: a missing capability is a feature, and capture
+routes it to `idea`, leaving the issue open.
+
+A work item mirroring a tracker issue records the reference at the end of
+its checkbox line, in exactly this form:
+
+```markdown
+- [ ] **<Item>** — <one line> (tracker: #123)
+```
+
+`#123` is the issue reference in the tracker's own notation. Items with
+no mirrored issue carry no reference.
+
+### Seed backlog (optional)
+
+A target repo MAY keep a seed inbox at `docs/backlog.md` (ADR-0029).
+The backlog is advisory, never the state: orientation never reads
+backlog state, and on a repo without one nothing changes. It is not a
+run artifact — it carries no frontmatter, never appears in the
+orientation tables, and deleting it changes no orientation outcome.
+Ordering is the prioritization: top of file = propose first. One line
+per seed, in exactly these forms:
+
+```markdown
+- <seed text> (from: <run-ref>)
+- <seed text> (from: <run-ref>) (claimed: <run-ref>)
+```
+
+`<run-ref>` is `product`, `feature:<slug>`, `maintenance:<slug>`, or
+`session:<YYYY-MM-DD>` — the `session:` form covers a seed captured
+mid-session with no run closing.
+
+**Producers:** Operate appends its retro's idea seeds at run close
+(creating the file if absent), and Capture may append a consciously
+deferred defect. Idea appends the rungs it did not take. Producers append well-formed entries only and never
+rewrite existing lines.
+
+**Consumers:** `next` reads the backlog in exactly two moments — when
+asked what's next with no active run, and at its completed-run step —
+and never during active-run orientation. `idea` (or `capture`), when
+starting a run from a seed, claims it in place by appending
+`(claimed: <run-ref>)` to the seed's line — the origin marker is never
+rewritten — and records the seed as the new run's origin. No other
+skill reads the backlog.
+
+## Soft gating
+
+When your predecessor artifact is missing, never refuse and never silently
+proceed. Name the gap, then offer:
+
+1. **Backfill** — a short interview producing a minimal version of the
+   missing artifact, then continue; or
+2. **Proceed with assumptions** — continue now, logging every assumption in
+   your own artifact's frontmatter under `assumptions:`.
+
+`assumptions:` records any decision made without live user input — proceeding
+past a missing predecessor (above), or taking a skill-recommended default for
+a question the user never answered (e.g. an autorun brief gap). It is the
+only place assumptions live.
+
+## Run scale
+
+Feature runs scale artifact depth to feature size — a feature PRD is a page,
+not a book; a feature architecture note may be a paragraph. Product runs are
+comprehensive. Maintenance runs scale further down: Review and Ship scale to
+the blast radius recorded in the brief, but Verify never scales away. When
+in doubt, ask the user how big this really is.
+
+## Artifact frontmatter
+
+Every artifact starts with YAML frontmatter:
+
+```yaml
+---
+stage: prd
+run: feature:dark-mode   # or: product, or maintenance:<slug>
+date: 2026-07-01
+# stage-specific fields, e.g. ux: required | not-applicable
+#                          or re-entry: implement | architect (defect.md, at capture time)
+# ux-reason: <one line>   when ux is not-applicable
+# intake: #123            tracker issue that seeded defect.md (ADR-0030);
+#                         duplicates of the same defect join intake-duplicates: [...]
+# outcome: released | rolled-back | prepared   (release.md, at ship time — ADR-0101)
+# pending-merge: <PR url> while prepared; released-at: YYYY-MM-DD once written back
+# users-observed: <N>     retro.md's population line (ADR-0102) — 0 is a valid count;
+# signal-source: <where>  the two fields complete Operate together
+# assumptions: [...]      any decision made without live user input
+---
+```
+
+## Fail-closed roll-up
+
+Unknown, unsupported, truncated and skipped never aggregate to pass. A
+`verification.md` Summary and a `review.md` Verdict count or name every
+criterion that was not run, skipped, deferred or otherwise not examined,
+and never read as an unqualified pass over them. The claim kinds this
+rule rests on are defined in [CONTEXT.md](../CONTEXT.md) (Claims).
+
+Detector H enforces the verification half (ADR-0107): a `## Summary` must
+name the unknown kind when another section discloses NOT RUN under a
+labelled verdict. It judges artifacts whose frontmatter `date:` is on or
+after `ROLLUP_ADOPTED` in `gates.py`, and ones whose `date:` is missing,
+empty or not an ISO date; earlier artifacts are grandfathered. Nothing gates `review.md`; its template carries the
+rule.
+
+## When to write an ADR
+
+The pipeline writes ADRs as it goes (ADR-0082) — not on request. One test
+decides, and every leg must hold: the decision is **hard to reverse**,
+**surprising without context**, and **the result of a real trade-off**. A
+decision that fails any leg gets the one-line record in the run's own
+artifact (`architecture.md`'s decisions section, or the breakdown's Notes)
+and no ADR.
+
+- Write one: choosing event sourcing over CRUD tables for orders; a public
+  API versioned in the URL rather than a header; keeping the app on one
+  database when the PRD hinted at a split; dropping a supported runtime.
+- Don't: picking the codebase's existing test framework; naming a module;
+  a library swap behind an interface you own; anything the code makes
+  obvious on first read.
+
+Architect writes one for each design decision that passes; Implement writes
+one when a deviation from `architecture.md` passes; Review flags a passing
+decision with no ADR; Ship confirms the numbers before release.
+
+**Where.** The target repo's `docs/adr/`, as `NNNN-slug.md` with an index
+row in `docs/adr/README.md`. The shape is the repo's `docs/adr/TEMPLATE.md`
+(the factory stamp seeds it), else this plugin's
+`factory/templates/docs/adr/TEMPLATE.md`; with no `docs/adr/` yet, the first
+ADR creates the directory and its index. An ADR written without live user
+confirmation (an autorun stage, an assumption-logged default) carries
+status `provisional`.
+
+**Never rewrite.** A changed decision gets a new ADR that supersedes or
+amends the old one, and the old one's status line says so; the old
+Decision section stays as written.
+
+**Numbering.** A draft takes the next free number on its branch, which is
+provisional: parallel branches pick the same one. At merge time the number
+is confirmed against the base branch, and on a collision the later ADR
+renumbers — file name, index row, and every in-repo citation together.
+
+## Pull request body
+
+A pull request body tells the reviewer at the merge gate (ADR-0033 gate 3)
+what the merge risks, not only what the branch did. Traceability comes
+first and is unchanged: the `Closes #N` line for the issue the change
+closes, and either the work-order id the change implements or a
+`No work order:` line giving the reason. Detector B checks those lines
+alone; this section changes the body, not the check.
+
+Below them, three parts:
+
+1. **The smallest visual that shows the change** — pseudocode for a
+   rule, a call tree for control flow, a file tree for layout, a diagram
+   for interaction between parts, or a diff when the surrounding shape
+   already exists and the point is what moved. One view that carries the
+   point beats several that share it.
+2. **Before-and-after evidence** — the failing output or test before and
+   the passing one after, as it actually ran rather than as described. A
+   screenshot when the change is visible; command output otherwise.
+3. **The merge-danger call**, under this one fixed heading so the
+   reviewer finds it without reading everything above it:
+
+   ```markdown
+   ## Merge danger
+
+   Door: <one-way or two-way> — <why>
+   Blast radius: <what breaks if the call is wrong>
+   ```
+
+   A two-way door is undone by a revert; a one-way door is not (a
+   migration that drops data, a published version, a renamed public
+   interface). The blast radius names who or what notices if the call is
+   wrong — one consumer, every stamped repo, nobody until the next
+   release.
+
+The heading is the only fixed string; the visual and the evidence vary
+with the change. Ship's rollback plan in `release.md` records the same
+door and blast radius, so the two documents agree. Structure restated,
+no text copied, from mattpocock/skills' `pr` skill (MIT, copyright Matt
+Pocock) and the visuals menu of Dex Horthy's `show-me` (Humanlayer).
+
+## Harness neutrality
+
+Skill content must stay harness-neutral: plain process, file conventions, and
+questions. Anything specific to one harness (Claude Code invocation
+mechanics, plugin paths) belongs in packaging (README, manifests), not in
+stage skill instructions.
+
+This is not hypothetical: the skills run on three harnesses — Claude Code
+(primary), oh-my-pi/omp (ADR-0027), and Grok (ADR-0076) — from a single
+neutral body. Claude Code and Grok share the `.claude-plugin/` manifests;
+omp discovers the skills through the root `package.json` `pi.skills` entry.
+The stage instructions know about none of these.
+
+Operative hand-offs name the mechanism, never one harness's tool. The
+router's step 5 tells the agent to load the stage skill through the
+harness's skill-loading mechanism (a skill tool where one exists, otherwise
+a read of the skill file), because naming a skill in prose does not load
+it. The literal borrowing, "call the Skill tool with X" (mattpocock/skills),
+was checked against omp on 2026-10-06 and adopted with neutral wording
+instead: omp's `docs/skills.md` exposes skills to the model as on-demand
+content read via its `read` tool against `skill://` paths, and its "Skills
+vs custom tools" section separates skill content from model-callable tool
+APIs, so omp has no skill tool and the literal wording fails there. The lesson (name the mechanism, not just the skill) survives as
+the neutral sentence. This applies ADR-0027 rather than amending it; no new
+ADR. The same sentence covers Grok: its skill guide (read 2026-10-08) loads
+a skill when the description matches or the user runs the slash command, and
+a prose mention of the name does not load it (ADR-0076).

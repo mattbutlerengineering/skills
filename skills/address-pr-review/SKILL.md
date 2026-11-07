@@ -1,0 +1,72 @@
+---
+name: address-pr-review
+description: Use the moment reviewer feedback exists on an open pull request — review comments to address, threads to resolve, requested changes, or merge conflicts with the base branch. "Address the comments on my PR", "reviewers left feedback", "resolve the threads", "get my PR ready to merge" all belong here, not to the review skill — review is a quality pass on our own changes, while this skill acts on feedback others left on an existing PR. It fixes what the comments ask, pushes, replies to and resolves every thread, and merges the base branch (usually main) into the PR branch when behind or conflicting. It never just watches a PR's checks without acting.
+---
+
+# Address PR Review
+
+Work the feedback on a pull request you authored: gather its full state,
+address each actionable comment in code, push, close the loop on every
+thread, and get the branch mergeable again. Active by design — this skill
+fixes and replies; it never just watches.
+
+## Process
+
+1. **Identify the PR.** The open PR for the current branch, or the one the
+   user names. Use whatever PR tooling the harness provides (for GitHub,
+   the `gh` CLI). If no PR exists, say so and stop — authoring one is not
+   this skill's job.
+
+2. **Gather the PR's full state** before changing anything:
+   - every review thread and comment, noting which are unresolved;
+   - CI status per check;
+   - mergeability against the base branch (behind? conflicting?).
+
+3. **Triage each unresolved thread** into one of:
+   - **actionable** — the code should change; note what and where;
+   - **decline with rationale** — the ask conflicts with the change's
+     intent, the repo's conventions, or a recorded decision (cite it);
+   - **question** — answer it; no code change.
+
+4. **Address the actionable comments in code.** Group related asks into
+   coherent commits. Run the repo's own verification commands (tests,
+   lint — discover them from the repo, don't assume a stack) before
+   pushing, and push only when they pass. If verification is red, fix it
+   or surface the failure — never push a red build onto a PR under review.
+   Push to the PR branch; never force-push over history a reviewer has
+   already read.
+
+5. **Reply to every unresolved thread, then resolve it.** Each reply states
+   what changed (with the commit that changed it) or why no change was
+   needed. Resolve the thread only after replying — a resolved thread with
+   no answer reads as a dismissal. Leave threads you genuinely cannot act
+   on unresolved, with a reply saying what's blocking.
+
+6. **Reconcile with the base branch** if the PR is behind or conflicting:
+   merge the base branch into the PR branch, resolve conflicts preserving
+   both the PR's intent and what landed on the base, re-run verification,
+   and push.
+
+7. **Report.** Summarize per thread: fixed (commit), declined (reason), or
+   blocked. Note CI status after the final push. Merging the PR stays with
+   the user unless they've said otherwise.
+
+## Rules
+
+- Never force-push to rewrite commits reviewers have seen.
+- Never resolve a thread without a reply on the record.
+- Declining a comment is legitimate; ignoring one is not — every thread
+  gets an answer.
+- Verification runs before every push, not just the last one — and a red
+  result blocks the push; fix or surface first.
+
+## Installed by the skills CLI
+
+This copy came from this repo's `npx` branch. The plugin root these
+steps name is the sibling folder `../idea-to-prod-runtime/`, which holds the
+pipeline protocol, `CONTEXT.md`, `factory/` and every root tool. Where a
+step runs a tool from the plugin root or the factory repo checkout, run
+`python3 <this skill's directory>/../idea-to-prod-runtime/<tool>.py`. A stamped
+repo's `tools/factory/` copy still wins wherever a step says so. Two
+plugin features are absent: the `/idea-to-prod:<skill>` names (use
+`/<skill>`) and the house-voice output style.

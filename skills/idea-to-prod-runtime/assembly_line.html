@@ -1,0 +1,1614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assembly line</title>
+<style>
+  :root {
+    --ground: #e9f6ee; --ink: #23262c; --muted: #68717d;
+    --belt: #a6e07a; --accent: #8f6fd8; --hot: #e0903a; --panel: #ffffff;
+    --line: #2f3238; --ok: #5cb85c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%;
+    background: radial-gradient(1100px 700px at 50% 10%, #f7fcf8 0%,
+      var(--ground) 55%, #d5ebdd 100%);
+    color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI",
+    sans-serif; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  header { display: flex; flex-wrap: wrap; gap: .2rem 1rem;
+    align-items: baseline; padding: .75rem 1.1rem .1rem; flex: none; }
+  header h1 { font-size: 1.3rem; margin: 0; letter-spacing: -.01em; }
+  header h1 .soft { color: var(--muted); font-weight: 500; }
+  header .meta { color: var(--muted); }
+  header .meta b { color: var(--ink); }
+  #legend-open { margin-left: auto; font: inherit; font-size: .85rem;
+    border: 1.5px solid rgba(47,50,56,.3); background: rgba(255,255,255,.8);
+    border-radius: 999px; padding: .2rem .8rem; cursor: pointer; }
+  #legend-open:hover { border-color: var(--line); background: #fff; }
+  #story { margin: 0; padding: 0 1.1rem .45rem; color: var(--muted);
+    flex: none; }
+  #story b { color: var(--ink); font-weight: 600; }
+  #pipeline { flex: none; display: flex; align-items: center; gap: .3rem;
+    padding: 0 1rem .55rem; flex-wrap: wrap; }
+  #pipeline .flow { color: #9aa49c; font-weight: 700; }
+  .chip { font: inherit; font-size: .8rem; display: inline-flex; gap: .4rem;
+    align-items: center; border: 1.5px solid rgba(47,50,56,.22);
+    border-radius: 999px; padding: .18rem .65rem .18rem .3rem;
+    background: rgba(255,255,255,.78); cursor: pointer; color: var(--ink); }
+  .chip:hover { border-color: var(--line); background: #fff; }
+  .chip .n { min-width: 1.7em; text-align: center; font-weight: 700;
+    background: var(--belt); border-radius: 999px; padding: .02rem .4rem; }
+  .chip.zero { opacity: .55; }
+  .chip.zero .n { background: #e8eae8; }
+  .chip.hot { border-color: var(--hot); background: #fff3e2;
+    box-shadow: 0 0 0 3px rgba(224,144,58,.18); }
+  .chip.hot .n { background: var(--hot); color: #fff; }
+  .chip.done .n { background: var(--accent); color: #fff; }
+  .chip .tag { font-size: .68rem; font-weight: 700; color: var(--hot);
+    text-transform: uppercase; letter-spacing: .05em; }
+  #notice { margin: 0 1rem .5rem; padding: .5rem .75rem; border-radius: 6px;
+    background: #fff4e5; color: #6b3d00; flex: none; }
+  #stage { position: relative; flex: 1; min-height: 0; }
+  #stage canvas { display: block; width: 100%; height: 100%;
+    touch-action: none; }
+  #hint { position: absolute; left: .8rem; bottom: .6rem; color: var(--muted);
+    font-size: .75rem; background: rgba(255,255,255,.7); padding: .15rem .6rem;
+    border-radius: 999px; pointer-events: none; }
+  #empty-sign { position: absolute; left: 50%; top: 45%;
+    transform: translate(-50%, -50%); background: var(--panel);
+    border: 2px solid var(--line); border-radius: 8px; padding: .8rem 1.2rem;
+    font-weight: 600; pointer-events: none; }
+  #legend { position: absolute; right: .8rem; top: .6rem; z-index: 6;
+    width: 320px; background: var(--panel); border: 2px solid var(--line);
+    border-radius: 12px; padding: .8rem 1rem;
+    box-shadow: 0 14px 40px rgba(31,42,35,.22); }
+  #legend h2 { margin: 0 0 .4rem; font-size: .95rem; display: flex;
+    justify-content: space-between; align-items: center; }
+  #legend button { border: 0; background: none; font-size: 1.05rem;
+    cursor: pointer; }
+  #legend ul { margin: 0; padding: 0; list-style: none; display: grid;
+    gap: .45rem; }
+  #legend li { display: flex; gap: .6rem; align-items: baseline; }
+  #legend .swatch { flex: none; width: .85em; height: .85em;
+    border: 1.5px solid var(--line); border-radius: 3px;
+    align-self: center; }
+  #legend .foot { margin: .6rem 0 0; color: var(--muted); font-size: .8rem; }
+  #fallback { display: grid; gap: .75rem; padding: 0 1rem 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    overflow: auto; flex: 1; }
+  #fallback section { background: var(--panel); border-radius: 8px;
+    padding: .6rem .75rem; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
+  #fallback h2 { font-size: .95rem; margin: 0 0 .35rem;
+    display: flex; justify-content: space-between; }
+  #fallback h2 .count { color: var(--muted); font-weight: normal; }
+  #fallback ul { margin: 0; padding-left: 1.1rem; }
+  #fallback li { overflow-wrap: anywhere; }
+  #fallback .empty { color: var(--muted); margin: 0; }
+  #fallback section.attention h2 { color: var(--hot); }
+  .card { position: absolute; pointer-events: none; background: var(--panel);
+    border: 2px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
+    max-width: 320px; box-shadow: 0 6px 18px rgba(31,42,35,.18); z-index: 3; }
+  .card h3 { margin: 0 0 .15rem; font-size: .8rem; letter-spacing: .06em;
+    text-transform: uppercase; }
+  .card p { margin: .1rem 0; }
+  .card .muted, #panel .muted { color: var(--muted); }
+  #panel { position: absolute; top: .5rem; right: .5rem; bottom: .5rem;
+    width: 340px; background: var(--panel); border: 2px solid var(--line);
+    border-radius: 10px; display: flex; flex-direction: column; z-index: 4;
+    box-shadow: 0 14px 40px rgba(31,42,35,.22); }
+  #panel header { justify-content: space-between; padding: .6rem .8rem;
+    border-bottom: 1px solid #ddd; }
+  #panel header h2 { margin: 0; font-size: .95rem; }
+  #panel header button { border: 0; background: none; font-size: 1.1rem;
+    cursor: pointer; }
+  #panel .body { overflow: auto; padding: .4rem .8rem .8rem; }
+  #panel details { border-bottom: 1px solid #eee; padding: .25rem 0; }
+  #panel summary { cursor: pointer; display: flex; gap: .5rem;
+    justify-content: space-between; overflow-wrap: anywhere; }
+  #panel summary .prog { color: var(--muted); white-space: nowrap; }
+  #panel ul { margin: .2rem 0 .2rem 1rem; padding: 0; list-style: none; }
+  #panel li.done::before { content: "☑ "; }
+  #panel li.open::before { content: "☐ "; }
+  #transport { flex: none; display: grid; gap: .2rem .8rem;
+    grid-template-columns: auto 1fr auto auto auto; align-items: center;
+    padding: .5rem 1rem .6rem; background: rgba(255,255,255,.72);
+    backdrop-filter: blur(6px); border-top: 1px solid rgba(0,0,0,.08); }
+  #transport button { font: inherit; padding: .3rem .7rem; border-radius: 8px;
+    border: 1.5px solid rgba(47,50,56,.35); background: var(--panel);
+    cursor: pointer; }
+  #transport button:hover { border-color: var(--line); }
+  #transport button[aria-pressed="true"] { background: var(--belt); }
+  #transport button:disabled, #transport input:disabled { opacity: .45;
+    cursor: default; }
+  #scrub { width: 100%; accent-color: var(--accent); }
+  #day { font-variant-numeric: tabular-nums; min-width: 6.5rem; }
+  #honesty { grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
+  #export-status { grid-column: 1 / -1; font-size: .8rem; }
+  .speed { display: flex; gap: .25rem; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span id="title">Assembly line</span>
+    <span class="soft">· the software factory</span></h1>
+  <span class="meta" id="meta"></span>
+  <button id="legend-open" aria-expanded="false"
+    aria-controls="legend">? How to read this</button>
+</header>
+<p id="story"><b>Each crate is one run</b> — a feature or fix — riding the
+  belt from <b>Idea</b> to <b>Ship</b>. Crates pile up where work waits;
+  finished runs fill the <b>Done</b> shelves.</p>
+<nav id="pipeline" aria-label="Stations" hidden></nav>
+<p id="notice" hidden></p>
+<div id="stage" hidden>
+  <div id="empty-sign" hidden>No runs yet — start one with /idea</div>
+  <div class="card" id="card" hidden></div>
+  <span id="hint">scroll to zoom · drag to pan · double-click to reset</span>
+  <aside id="legend" aria-label="How to read this">
+    <h2>How to read this
+      <button id="legend-close" aria-label="Close legend">✕</button></h2>
+    <ul>
+      <li><span class="swatch" style="background:#d3d6db"></span>
+        <span>A <b>crate</b> is one run: a feature or fix in flight.</span></li>
+      <li><span class="swatch" style="background:#a6e07a"></span>
+        <span><b>Belts</b> carry crates through the stages, in the arrows'
+          direction.</span></li>
+      <li><span class="swatch" style="background:#e0903a"></span>
+        <span>The <b>amber sign</b> marks the busiest station — the
+          pile-up.</span></li>
+      <li><span class="swatch" style="background:#8f6fd8"></span>
+        <span><b>Implement</b> crates carry their work orders as parts;
+          click one to see them.</span></li>
+      <li><span class="swatch" style="background:#ffffff"></span>
+        <span><b>Done shelves</b> hold finished runs: shipped, retro
+          written.</span></li>
+      <li><span class="swatch" style="background:
+        linear-gradient(90deg,#7cc44e 33%,#e0903a 33% 66%,#8f6fd8 66%)"></span>
+        <span><b>Tape colour</b> is the run's kind: green feature, amber
+          fix, purple product.</span></li>
+    </ul>
+    <p class="foot">Hover anything for detail; click to pin a list. Press
+      Play to replay the repo's whole history.</p>
+  </aside>
+  <aside id="panel" hidden aria-label="Pinned detail">
+    <header><h2 id="panel-title"></h2>
+      <button id="panel-close" aria-label="Close panel">✕</button></header>
+    <div class="body" id="panel-body"></div>
+  </aside>
+</div>
+<main id="fallback" hidden></main>
+<footer id="transport" hidden>
+  <button id="play" aria-label="Play the replay" disabled>▶ Play</button>
+  <input id="scrub" type="range" min="0" max="0" step="1" value="0"
+         aria-label="Replay date" disabled>
+  <span id="day"></span>
+  <span class="speed" role="group" aria-label="Replay length">
+    <button id="speed-30" aria-pressed="true" disabled>30s</button>
+    <button id="speed-60" aria-pressed="false" disabled>60s</button>
+  </span>
+  <button id="export" disabled>Export clip</button>
+  <span id="honesty">Dates to the day from artifact frontmatter; order
+    within a day is inferred; work-order progress is today's.</span>
+  <span id="export-status" role="status" hidden></span>
+</footer>
+
+<script id="model" type="application/json">__MODEL__</script>
+<script id="three-core" type="text/plain">__THREE_CORE__</script>
+<script id="three-module" type="text/plain">__THREE_MODULE__</script>
+<script type="module">
+// The page derives no pipeline fact: placement, history and work orders
+// are the model's (assembly_line.py). Everything here is drawing.
+const STATION_INFO = {
+  "capture": ["Capture", "Opens a returned crate: a defect or condition brief is written."],
+  "idea": ["Idea", "Builds a new crate: the idea brief is written."],
+  "prd": ["PRD", "Stamps the spec sheet: requirements and success criteria."],
+  "ux-design": ["UX Design", "Sketches what the user sees: flows and screens."],
+  "architect": ["Architect", "Lowers the blueprint: the technical design."],
+  "decompose": ["Decompose", "Opens the crate into parts: one per work order."],
+  "implement": ["Implement", "Assembles the parts: the code, work order by work order."],
+  "verify": ["Verify", "Scans the build against the PRD's criteria."],
+  "review": ["Review", "Inspects the change and stamps approval."],
+  "ship": ["Ship", "Packs and loads the release."],
+  "operate": ["Operate", "Shipped, waiting on a retro."],
+  "completed": ["Completed", "Finished runs: retro written, on the shelves."]
+};
+// Step numbers for the signs and chips: the pipeline reads 1..10 at a
+// glance; Capture is the side door returns come in through.
+const STEP = {
+  "idea": "1", "prd": "2", "ux-design": "3", "architect": "4",
+  "decompose": "5", "implement": "6", "verify": "7", "review": "8",
+  "ship": "9", "operate": "10", "completed": "✓", "capture": "↩"
+};
+const REQUIRED = ["generated", "repo", "stations", "runs", "timeline"];
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (id) => document.getElementById(id);
+
+function readModel() {
+  try { return JSON.parse($("model").textContent); } catch (err) { return null; }
+}
+function missingKey(model) {
+  if (!model || typeof model !== "object") return "model";
+  return REQUIRED.find((key) => !(key in model)) || null;
+}
+const nameOf = (station) => (STATION_INFO[station] || [station])[0];
+function el(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([key, value]) => {
+    if (key === "class") node.className = value; else node.setAttribute(key, value);
+  });
+  children.forEach((child) => node.append(child));
+  return node;
+}
+const doneCount = (run) => run.work_orders.filter((wo) => wo.done).length;
+
+// ---------------------------------------------------------------- fallback
+function showFallback(model, notice) {
+  $("notice").textContent = notice;
+  $("notice").hidden = false;
+  $("stage").hidden = true;
+  $("transport").hidden = true;
+  $("story").hidden = true;
+  $("pipeline").hidden = true;
+  const main = $("fallback");
+  main.replaceChildren();
+  const runs = Array.isArray(model && model.runs) ? model.runs : [];
+  const stations = Array.isArray(model && model.stations) && model.stations.length
+    ? model.stations : Object.keys(STATION_INFO);
+  const section = (title, list, cls, describe) => {
+    const box = el("section", {class: cls || ""},
+      el("h2", {}, title, el("span", {class: "count"}, String(list.length))));
+    if (!list.length) box.append(el("p", {class: "empty"}, "No runs here"));
+    else {
+      const ul = el("ul", {});
+      list.forEach((run) => ul.append(el("li", {}, describe(run))));
+      box.append(ul);
+    }
+    return box;
+  };
+  const label = (run) => run.station === "implement" && run.work_orders.length
+    ? `${run.ref} · ${doneCount(run)}/${run.work_orders.length}` : run.ref;
+  stations.forEach((station) => main.append(
+    section(nameOf(station), runs.filter((run) => run.station === station), "", label)));
+  main.append(section("Needs attention", runs.filter((run) => run.status === "attention"),
+    "attention", (run) => `${run.dir} — ${run.reason}`));
+  main.hidden = false;
+}
+
+function setHeader(model, day) {
+  const runs = Array.isArray(model && model.runs) ? model.runs : [];
+  const at = day || (model && model.generated ? model.generated.slice(0, 10) : "");
+  const placed = day ? runs.map((run) => stationAt(run, day)) : runs.map((run) => run.station);
+  const active = placed.filter((s) => s && s !== "completed").length;
+  const completed = placed.filter((s) => s === "completed").length;
+  $("title").textContent = (model && model.repo) || "Assembly line";
+  const meta = $("meta");
+  meta.replaceChildren(el("b", {}, String(active)), " in flight · ",
+    el("b", {}, String(completed)), " done", at ? ` · as of ${at}` : "");
+  const counts = {};
+  placed.forEach((s) => { if (s && s !== "completed") counts[s] = (counts[s] || 0) + 1; });
+  const busiest = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  if (busiest && counts[busiest] > 1) {
+    meta.append(" · piling up at ", el("b", {}, nameOf(busiest)),
+      ` (${counts[busiest]})`);
+  }
+  return busiest;
+}
+
+function webglAvailable() {
+  try {
+    const canvas = document.createElement("canvas");
+    return !!(canvas.getContext("webgl2") || canvas.getContext("webgl"));
+  } catch (err) { return false; }
+}
+
+// ------------------------------------------------------------- the timeline
+const DAY_MS = 86400000;
+const dayIndex = (iso) => Math.round(Date.parse(iso + "T00:00:00Z") / DAY_MS);
+const isoOf = (index) => new Date(index * DAY_MS).toISOString().slice(0, 10);
+function stationAt(run, day) {
+  if (run.status === "attention") return null;
+  let station = null;
+  for (const hop of run.history) { if (hop.day <= day) station = hop.station; }
+  return station;
+}
+// Within a played day a run's arrivals are spread evenly in stage order.
+function hopTimes(run) {
+  const byDay = {};
+  run.history.forEach((hop) => { (byDay[hop.day] = byDay[hop.day] || []).push(hop); });
+  return run.history.map((hop) => {
+    const same = byDay[hop.day];
+    return {hop, t: dayIndex(hop.day) + same.indexOf(hop) / same.length};
+  });
+}
+
+// --------------------------------------------------------------- three.js
+async function loadThree() {
+  const decode = (id) => atob($(id).textContent.trim());
+  const bytes = (text) => Uint8Array.from(text, (c) => c.charCodeAt(0));
+  const coreUrl = URL.createObjectURL(new Blob([bytes(decode("three-core"))],
+    {type: "text/javascript"}));
+  const moduleText = new TextDecoder().decode(bytes(decode("three-module")))
+    .split("'./three.core.js'").join(JSON.stringify(coreUrl));
+  const moduleUrl = URL.createObjectURL(new Blob([moduleText], {type: "text/javascript"}));
+  return import(moduleUrl);
+}
+
+const MODEL = readModel();
+setHeader(MODEL);
+const MISSING = missingKey(MODEL);
+if (MISSING) {
+  showFallback(MODEL, `This page's data is missing "${MISSING}", so it shows a plain list.`);
+} else if (!webglAvailable()) {
+  showFallback(MODEL, "This browser cannot draw the factory (no WebGL), so it shows a plain list of every run by station.");
+} else {
+  loadThree().then((THREE) => factory(THREE, MODEL)).catch((err) => {
+    showFallback(MODEL, `The factory could not be drawn (${err.message}), so it shows a plain list.`);
+  });
+}
+
+// ================================================================ factory
+function factory(THREE, model) {
+  const COLORS = {
+    ground: 0xe8f5ec, plate: 0xf7f8f7, plateSide: 0xd9ddd9, belt: 0xa6e07a,
+    frame: 0x6b7078, steel: 0xc9cdd3, dark: 0x5a5f68, accent: 0x8f6fd8,
+    crate: 0xd3d6db, tape: 0x9aa0a8, line: 0x2f3238, warn: 0xe0903a,
+    glass: 0x8f6fd8, ok: 0x6fd36f, wood: 0xb9bdc4
+  };
+  const TILE = 12.5, HALF = 6.25, PLATE_H = 0.9, BELT_Y = 1.8, BELT_W = 2.4;
+  const CRATE = 1.3;
+  const stage = $("stage");
+  stage.hidden = false;
+  $("fallback").hidden = true;
+  $("transport").hidden = false;
+  $("pipeline").hidden = false;
+
+  // ----------------------------------------------------- renderer, camera
+  // Transparent canvas: the page's radial gradient is the backdrop, so
+  // the floor floats in a lit room instead of a flat colour field.
+  const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true,
+    preserveDrawingBuffer: false});
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setClearColor(0x000000, 0);
+  renderer.shadowMap.enabled = true;
+  stage.prepend(renderer.domElement);
+  const scene = new THREE.Scene();
+  // This three build divides light intensity by π (physical units), so
+  // these read ~×3 what a top face receives: lit ≈ 1.0, shadowed ≈ 0.6.
+  // Hotter and the near-white plates clamp to pure white, which erases
+  // every shadow (the washed look the first release had).
+  scene.add(new THREE.AmbientLight(0xffffff, 1.5));
+  const fill = new THREE.DirectionalLight(0xdfe8ff, 0.6);
+  fill.position.set(-0.6, 1, -0.4);
+  scene.add(fill);
+  const sun = new THREE.DirectionalLight(0xfff6e8, 2.4);
+  sun.position.set(14, 42, 26);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.bias = -0.0006;
+  sun.shadow.normalBias = 0.02;
+  scene.add(sun, sun.target);
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -500, 500);
+  const target = new THREE.Vector3();
+
+  // --------------------------------------------------------- materials
+  const matCache = {};
+  const mat = (color) => matCache[color] || (matCache[color] =
+    new THREE.MeshLambertMaterial({color, flatShading: true}));
+  const lineMat = new THREE.LineBasicMaterial({color: COLORS.line});
+  const edgeCache = new WeakMap();
+  function outlined(mesh) {
+    let edges = edgeCache.get(mesh.geometry);
+    if (!edges) { edges = new THREE.EdgesGeometry(mesh.geometry, 25); edgeCache.set(mesh.geometry, edges); }
+    mesh.add(new THREE.LineSegments(edges, lineMat));
+    return mesh;
+  }
+  const geoCache = {};
+  function boxGeo(w, h, d) {
+    const key = `b${w},${h},${d}`;
+    return geoCache[key] || (geoCache[key] = new THREE.BoxGeometry(w, h, d));
+  }
+  function box(w, h, d, color, x = 0, y = 0, z = 0, parent) {
+    const mesh = outlined(new THREE.Mesh(boxGeo(w, h, d), mat(color)));
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.position.set(x, y + h / 2, z);
+    if (parent) parent.add(mesh);
+    return mesh;
+  }
+  function cyl(r, h, color, x = 0, y = 0, z = 0, parent, seg = 14) {
+    const key = `c${r},${h},${seg}`;
+    const geo = geoCache[key] || (geoCache[key] = new THREE.CylinderGeometry(r, r, h, seg));
+    const mesh = outlined(new THREE.Mesh(geo, mat(color)));
+    mesh.castShadow = true;
+    mesh.position.set(x, y + h / 2, z);
+    if (parent) parent.add(mesh);
+    return mesh;
+  }
+
+  // ------------------------------------------------------------- layout
+  // Rows of four; one belt snakes through them in pipeline order. Capture
+  // sits behind Idea and feeds the main belt at Architect.
+  const GRID = {
+    "capture": [0, -1], "idea": [0, 0], "prd": [1, 0], "ux-design": [2, 0],
+    "architect": [3, 0], "decompose": [3, 1], "implement": [2, 1],
+    "verify": [1, 1], "review": [0, 1], "ship": [0, 2], "operate": [1, 2],
+    "completed": [2, 2], "bin": [3, 2]
+  };
+  const at = (key) => new THREE.Vector3(GRID[key][0] * TILE, 0, GRID[key][1] * TILE);
+  const MAIN = ["idea", "prd", "ux-design", "architect", "decompose", "implement",
+    "verify", "review", "ship", "operate", "completed"];
+  const mainPoints = MAIN.map(at);
+  const sidePoints = [at("capture"), new THREE.Vector3(3 * TILE, 0, -TILE), at("architect")];
+  function polyline(points) {
+    const lengths = [0];
+    for (let i = 1; i < points.length; i++) lengths.push(lengths[i - 1] + points[i].distanceTo(points[i - 1]));
+    return {points, lengths, total: lengths[lengths.length - 1]};
+  }
+  const mainPath = polyline(mainPoints), sidePath = polyline(sidePoints);
+  function pointOn(path, s) {
+    s = Math.max(0, Math.min(path.total, s));
+    let i = 1;
+    while (i < path.lengths.length - 1 && path.lengths[i] < s) i++;
+    const a = path.points[i - 1], b = path.points[i];
+    const f = (s - path.lengths[i - 1]) / (path.lengths[i] - path.lengths[i - 1] || 1);
+    return a.clone().lerp(b, f);
+  }
+  const mainParam = Object.fromEntries(MAIN.map((key, i) => [key, mainPath.lengths[i]]));
+  // Direction a crate travels when it reaches each station.
+  const inDir = {};
+  MAIN.forEach((key, i) => {
+    const from = i ? mainPoints[i - 1] : mainPoints[0].clone().add(new THREE.Vector3(-1, 0, 0));
+    inDir[key] = mainPoints[i].clone().sub(from).normalize();
+  });
+  inDir.capture = new THREE.Vector3(1, 0, 0);
+
+  // -------------------------------------------------------------- floor
+  const pickable = [];
+  const stationGroups = {};
+  function tag(object, data) {
+    object.traverse((child) => { if (child.isMesh) { child.userData.pick = data; pickable.push(child); } });
+  }
+  // A shadow-catcher under everything: the plates' and stacks' shadows
+  // land on the page itself, which grounds the floor in the room.
+  const catcher = new THREE.Mesh(new THREE.PlaneGeometry(400, 400),
+    new THREE.ShadowMaterial({opacity: 0.17}));
+  catcher.rotation.x = -Math.PI / 2;
+  catcher.position.set(1.5 * TILE, -0.02, 0.5 * TILE);
+  catcher.receiveShadow = true;
+  scene.add(catcher);
+  function plate(key) {
+    const group = new THREE.Group();
+    group.position.copy(at(key));
+    scene.add(group);
+    // A thick, two-tone plate with a wide gap to the next: in an
+    // isometric view the plate edges are what tell one station from the
+    // one behind it. Station names live on the billboard signs.
+    const side = mat(COLORS.plateSide), top = mat(COLORS.plate);
+    const base = outlined(new THREE.Mesh(boxGeo(TILE - 2.2, PLATE_H, TILE - 2.2),
+      [side, side, top, side, side, side]));
+    base.position.y = PLATE_H / 2;
+    base.receiveShadow = true;
+    group.add(base);
+    return group;
+  }
+  // One chevron, tiled along each belt and scrolled in the travel
+  // direction: the cold viewer reads which way work flows without a key.
+  const chevronTex = (() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64; canvas.height = 64;
+    const ctx = canvas.getContext("2d");
+    ctx.strokeStyle = "rgba(31,54,27,0.7)"; ctx.lineWidth = 9;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath(); ctx.moveTo(22, 14); ctx.lineTo(40, 32); ctx.lineTo(22, 50);
+    ctx.stroke();
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.RepeatWrapping;
+    return texture;
+  })();
+  const beltFlows = [];
+  // The belt: green top on a dark frame, rollers on the sides, legs below.
+  function beltSegment(a, b, rollerSpin) {
+    const length = a.distanceTo(b);
+    if (length < 0.01) return;
+    const group = new THREE.Group();
+    group.position.copy(a.clone().lerp(b, 0.5));
+    group.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+    box(length + BELT_W, 0.5, BELT_W + 0.3, COLORS.frame, 0, BELT_Y - 0.5, 0, group);
+    box(length + BELT_W - 0.1, 0.12, BELT_W, COLORS.belt, 0, BELT_Y, 0, group);
+    const flow = chevronTex.clone();
+    flow.repeat.set(Math.max(1, Math.round(length / 2.4)), 1);
+    const arrows = new THREE.Mesh(
+      new THREE.PlaneGeometry(length + BELT_W - 0.1, BELT_W * 0.78),
+      new THREE.MeshBasicMaterial({map: flow, transparent: true, depthWrite: false}));
+    arrows.rotation.x = -Math.PI / 2;
+    arrows.position.y = BELT_Y + 0.14;
+    group.add(arrows);
+    beltFlows.push(flow);
+    for (let x = -length / 2; x <= length / 2; x += 3) {
+      box(0.25, BELT_Y - 0.5, 0.25, COLORS.frame, x, 0, BELT_W / 2 - 0.1, group);
+      box(0.25, BELT_Y - 0.5, 0.25, COLORS.frame, x, 0, -BELT_W / 2 + 0.1, group);
+    }
+    for (let x = -length / 2; x <= length / 2; x += 0.9) {
+      const roller = cyl(0.18, 0.1, COLORS.dark, x, 0, BELT_W / 2 + 0.18, group, 8);
+      roller.rotation.x = Math.PI / 2;
+      roller.position.y = BELT_Y - 0.25;
+      rollerSpin.push(roller);
+    }
+    scene.add(group);
+  }
+  const rollers = [];
+  const plates = {};
+  Object.keys(GRID).forEach((key) => {
+    plates[key] = plate(key);
+    stationGroups[key] = plates[key];
+  });
+  for (let i = 1; i < mainPoints.length; i++) beltSegment(mainPoints[i - 1], mainPoints[i], rollers);
+  for (let i = 1; i < sidePoints.length; i++) beltSegment(sidePoints[i - 1], sidePoints[i], rollers);
+
+  // ------------------------------------------------------ station signs
+  // One billboard per station: step number, name and a live count, big
+  // enough to read in a screenshot. The busiest station's sign goes
+  // amber — the bottleneck is the first thing the factory should say.
+  function signTexture(key, count, hot) {
+    const step = STEP[key] || "";
+    const name = (key === "bin" ? "Needs attention" : key === "completed"
+      ? "Done" : nameOf(key)).toUpperCase();
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const H = 148, PAD = 26, GAP = 18;
+    ctx.font = "700 62px system-ui, sans-serif";
+    const nameWidth = ctx.measureText(name).width;
+    ctx.font = "800 56px system-ui, sans-serif";
+    const stepWidth = step ? ctx.measureText(step).width + 16 : 0;
+    ctx.font = "700 54px system-ui, sans-serif";
+    const countText = String(count);
+    const countWidth = count === null ? 0 :
+      Math.max(62, ctx.measureText(countText).width + 34);
+    const width = Math.ceil(PAD + stepWidth + nameWidth +
+      (countWidth ? GAP + countWidth : 0) + PAD);
+    canvas.width = width; canvas.height = H;
+    ctx.fillStyle = hot ? "#ffe9cf" : "rgba(255,255,255,0.96)";
+    ctx.strokeStyle = hot ? "#c06514" : "#2f3238";
+    ctx.lineWidth = hot ? 9 : 6;
+    ctx.beginPath(); ctx.roundRect(5, 5, width - 10, H - 10, 26);
+    ctx.fill(); ctx.stroke();
+    let x = PAD;
+    if (step) {
+      ctx.fillStyle = hot ? "#c06514" : "#8f6fd8";
+      ctx.font = "800 56px system-ui, sans-serif";
+      ctx.textBaseline = "middle";
+      ctx.fillText(step, x, H / 2 + 2);
+      x += stepWidth;
+    }
+    ctx.fillStyle = "#2f3238";
+    ctx.font = "700 62px system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillText(name, x, H / 2 + 2);
+    x += nameWidth + GAP;
+    if (count !== null) {
+      ctx.fillStyle = hot ? "#e0903a" : (count ? "#a6e07a" : "#e8eae8");
+      ctx.beginPath();
+      ctx.roundRect(x, H / 2 - 34, countWidth, 68, 34);
+      ctx.fill();
+      ctx.fillStyle = hot ? "#ffffff" : "#2f3238";
+      ctx.font = "700 54px system-ui, sans-serif";
+      ctx.fillText(countText, x + (countWidth - ctx.measureText(countText).width) / 2,
+        H / 2 + 2);
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return {texture, aspect: width / H};
+  }
+  const signs = {};
+  const SIGN_H = 2.5;
+  Object.keys(GRID).forEach((key) => {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true,
+      depthTest: false}));
+    sprite.renderOrder = 8;
+    const base = at(key);
+    const tall = key === "architect" || key === "completed" ? 9.6 : 8.4;
+    sprite.position.set(base.x, tall, base.z);
+    scene.add(sprite);
+    signs[key] = {sprite, last: ""};
+  });
+  function updateSign(key, count, hot) {
+    const sign = signs[key];
+    const want = `${count}|${hot}`;
+    if (sign.last !== want) {
+      const {texture, aspect} = signTexture(key, count, hot);
+      if (sign.sprite.material.map) sign.sprite.material.map.dispose();
+      sign.sprite.material.map = texture;
+      sign.sprite.material.needsUpdate = true;
+      sign.aspect = aspect;
+      const h = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom));
+      sign.sprite.scale.set(h * aspect, h, 1);
+      sign.last = want;
+    }
+    sign.sprite.visible = key !== "bin" || count > 0;
+    if (key === "bin") stationGroups.bin.visible = count > 0;
+  }
+
+  // ----------------------------------------------------------- machines
+  const animators = [];
+  // Machines line up with their belt, their back (local -z) always away
+  // from the camera, so workers and arms never hide the tile's label.
+  const alongZ = (key) => Math.abs((inDir[key] || new THREE.Vector3(1, 0, 0)).z) > 0.5;
+  const align = (group, key) => { group.rotation.y = alongZ(key) ? Math.PI / 2 : 0; };
+  function worker(parent, x, z, facing = 0) {
+    const person = new THREE.Group();
+    person.position.set(x, PLATE_H, z);
+    person.rotation.y = facing;
+    const legs = box(0.8, 1.4, 0.5, COLORS.accent, 0, 0, 0, person);
+    const body = box(1.0, 1.4, 0.6, COLORS.accent, 0, 1.4, 0, person);
+    const headGeo = geoCache.head || (geoCache.head = new THREE.SphereGeometry(0.42, 12, 10));
+    const head = outlined(new THREE.Mesh(headGeo, mat(0xf2d6c4)));
+    head.position.set(0, 3.25, 0);
+    person.add(head);
+    const hatGeo = geoCache.hat || (geoCache.hat = new THREE.SphereGeometry(0.47, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2));
+    const hat = outlined(new THREE.Mesh(hatGeo, mat(COLORS.accent)));
+    hat.position.set(0, 3.35, 0);
+    person.add(hat);
+    const arm = new THREE.Group();
+    arm.position.set(0.25, 2.6, 0.35);
+    box(0.3, 0.3, 1.2, COLORS.accent, 0, -0.15, 0.55, arm);
+    person.add(arm);
+    parent.add(person);
+    return {person, arm, body, legs};
+  }
+  // Tape colour says what kind of run the crate is: green = feature,
+  // purple = product, amber = maintenance (a fix). The legend repeats it.
+  const TAPE = {feature: 0x7cc44e, product: 0x8f6fd8, maintenance: 0xe0903a};
+  function crateMesh(color = COLORS.crate, kind) {
+    const mesh = outlined(new THREE.Mesh(boxGeo(CRATE, CRATE * 0.8, CRATE), mat(color)));
+    mesh.castShadow = true;
+    const strip = new THREE.Mesh(boxGeo(CRATE + 0.02, 0.1, 0.3),
+      mat(TAPE[kind] || COLORS.tape));
+    strip.position.y = CRATE * 0.4;
+    mesh.add(strip);
+    return mesh;
+  }
+  function robotArm(parent, x, z, color = COLORS.belt) {
+    const base = new THREE.Group();
+    base.position.set(x, PLATE_H, z);
+    cyl(0.9, 0.5, COLORS.dark, 0, 0, 0, base);
+    const turret = new THREE.Group();
+    turret.position.y = 0.5;
+    cyl(0.5, 2.2, color, 0, 0, 0, turret);
+    const shoulder = new THREE.Group();
+    shoulder.position.y = 2.2;
+    box(0.45, 0.45, 2.8, COLORS.steel, 0, -0.2, 1.4, shoulder);
+    const elbow = new THREE.Group();
+    elbow.position.set(0, 0, 2.8);
+    box(0.4, 0.4, 2.2, color, 0, -0.2, 1.1, elbow);
+    const wrist = new THREE.Group();
+    wrist.position.set(0, -0.2, 2.2);
+    box(0.25, 0.9, 0.25, COLORS.dark, -0.25, -0.9, 0, wrist);
+    box(0.25, 0.9, 0.25, COLORS.dark, 0.25, -0.9, 0, wrist);
+    elbow.add(wrist);
+    shoulder.add(elbow);
+    turret.add(shoulder);
+    base.add(turret);
+    parent.add(base);
+    return {base, turret, shoulder, elbow, wrist};
+  }
+  const MACHINES = {
+    "capture"(g) {
+      box(4.5, 1.6, 2.4, COLORS.steel, -1, PLATE_H, -3.2, g);
+      box(4.7, 0.2, 2.6, COLORS.belt, -1, PLATE_H + 1.6, -3.2, g);
+      const opened = crateMesh(); opened.position.set(-1.6, PLATE_H + 1.8 + CRATE * 0.4, -3.2); g.add(opened);
+      const lid = box(CRATE, 0.12, CRATE, COLORS.crate, 0, 0, 0); lid.position.set(-1.6, PLATE_H + 2.6, -3.2); g.add(lid);
+      const w = worker(g, 0.4, -5.2, Math.PI);
+      return (t) => { lid.rotation.z = 0.3 + 0.45 * Math.sin(t * 2); w.arm.rotation.x = -0.6 + 0.4 * Math.sin(t * 2); };
+    },
+    "idea"(g) {
+      box(4, 1.6, 2.4, COLORS.steel, 0, PLATE_H, -3.4, g);
+      box(4.2, 0.2, 2.6, COLORS.belt, 0, PLATE_H + 1.6, -3.4, g);
+      const flats = box(1.4, 0.3, 1.4, COLORS.crate, 1.2, PLATE_H + 1.8, -3.4, g);
+      const built = crateMesh(); built.position.set(-0.9, PLATE_H + 1.8 + CRATE * 0.4, -3.4); g.add(built);
+      const w = worker(g, 0, -5.4, Math.PI);
+      return (t) => {
+        const k = (t * 0.5) % 1;
+        built.scale.y = 0.2 + 0.8 * Math.min(1, k * 1.6);
+        built.position.y = PLATE_H + 1.8 + CRATE * 0.4 * built.scale.y;
+        flats.position.y = PLATE_H + 1.8 + 0.15 * Math.sin(t * 3) ** 2;
+        w.arm.rotation.x = -0.5 + 0.35 * Math.sin(t * 3);
+      };
+    },
+    "prd"(g) {
+      const printer = new THREE.Group(); g.add(printer);
+      box(1.2, 4.2, 1.4, COLORS.steel, 0, PLATE_H, -2.4, printer);
+      box(1.2, 4.2, 1.4, COLORS.steel, 0, PLATE_H, 2.4, printer);
+      box(1.6, 1.2, 6.2, COLORS.dark, 0, PLATE_H + 4.2, 0, printer);
+      const head = box(1.0, 1.0, 1.4, COLORS.accent, 0, PLATE_H + 3.0, 0, printer);
+      const sheet = box(1.0, 0.05, 1.3, 0xffffff, 0, 0, 0, printer);
+      return (t) => {
+        const k = (t * 0.7) % 1;
+        head.position.y = PLATE_H + 3.0 - (k < 0.3 ? Math.sin(k / 0.3 * Math.PI) * 1.0 : 0);
+        sheet.position.set(0, BELT_Y + 0.15, (k - 0.5) * 3);
+      };
+    },
+    "ux-design"(g) {
+      box(4, 1.6, 2.6, COLORS.steel, 0, PLATE_H, -3.6, g);
+      box(4.2, 0.2, 2.8, COLORS.belt, 0, PLATE_H + 1.6, -3.6, g);
+      const board = box(2.2, 0.08, 1.5, 0xffffff, 0, PLATE_H + 1.8, -3.6, g);
+      const w = worker(g, 0, -5.6, Math.PI);
+      const tablet = box(0.9, 0.08, 0.6, COLORS.dark, 0, 0, 1.0, w.arm);
+      const screen = new THREE.MeshBasicMaterial({color: COLORS.belt});
+      tablet.children[0].visible = true;
+      tablet.material = screen;
+      return (t) => {
+        screen.color.setHSL((0.25 + 0.08 * Math.sin(t)) % 1, 0.6, 0.65);
+        board.rotation.y = 0.15 * Math.sin(t * 0.8);
+        w.arm.rotation.x = -0.9 + 0.15 * Math.sin(t * 2.4);
+      };
+    },
+    "architect"(g) {
+      box(0.7, 6, 0.7, COLORS.dark, -2.4, PLATE_H, -3, g);
+      box(0.7, 6, 0.7, COLORS.dark, -2.4, PLATE_H, 3, g);
+      box(0.7, 6, 0.7, COLORS.dark, 2.4, PLATE_H, -3, g);
+      box(0.7, 6, 0.7, COLORS.dark, 2.4, PLATE_H, 3, g);
+      box(5.5, 0.6, 0.7, COLORS.steel, 0, PLATE_H + 6, -3, g);
+      box(5.5, 0.6, 0.7, COLORS.steel, 0, PLATE_H + 6, 3, g);
+      const bridge = box(0.8, 0.6, 6.8, COLORS.belt, 0, PLATE_H + 6.4, 0, g);
+      const cable = box(0.08, 1, 0.08, COLORS.line, 0, 0, 0, g);
+      const frame = new THREE.Group(); g.add(frame);
+      box(1.8, 0.15, 1.8, 0x7aa7e8, 0, 0, 0, frame);
+      box(1.6, 0.04, 1.6, 0xffffff, 0, 0.15, 0, frame);
+      return (t) => {
+        const x = 1.8 * Math.sin(t * 0.6);
+        bridge.position.x = x;
+        const drop = 2.4 + 1.6 * Math.max(0, Math.sin(t * 1.2));
+        frame.position.set(x, PLATE_H + 6.4 - drop, 0);
+        cable.position.set(x, PLATE_H + 6.4 - drop + 0.2, 0);
+        cable.scale.y = drop - 0.2;
+      };
+    },
+    "decompose"(g) {
+      const a = robotArm(g, 0, -3.4, COLORS.belt);
+      const parts = [];
+      for (let i = 0; i < 3; i++) {
+        const p = cyl(0.25, 0.6, COLORS.accent, 0, 0, 0, g, 8);
+        p.position.set(-0.6 + i * 0.6, BELT_Y + 0.1, 0);
+        parts.push(p);
+      }
+      return (t) => {
+        a.turret.rotation.y = 0.6 * Math.sin(t * 0.9);
+        a.shoulder.rotation.x = 0.35 + 0.25 * Math.sin(t * 1.8);
+        a.elbow.rotation.x = 0.6 + 0.3 * Math.sin(t * 1.8 + 1);
+        parts.forEach((p, i) => { p.position.y = BELT_Y + 0.1 + 0.25 * Math.max(0, Math.sin(t * 3 + i)); });
+      };
+    },
+    "implement"(g) {
+      const a = robotArm(g, -2.2, -3.4, COLORS.belt);
+      const b = robotArm(g, 2.2, -3.4, COLORS.accent);
+      return (t) => {
+        a.turret.rotation.y = 0.5 * Math.sin(t * 1.1);
+        a.shoulder.rotation.x = 0.4 + 0.3 * Math.sin(t * 2.2);
+        a.elbow.rotation.x = 0.7 + 0.3 * Math.sin(t * 2.2 + 1);
+        b.turret.rotation.y = 0.5 * Math.sin(t * 1.1 + Math.PI);
+        b.shoulder.rotation.x = 0.4 + 0.3 * Math.sin(t * 2.2 + Math.PI);
+        b.elbow.rotation.x = 0.7 + 0.3 * Math.sin(t * 2.2 + Math.PI + 1);
+      };
+    },
+    "verify"(g) {
+      box(1.2, 4.6, 1.0, COLORS.steel, 0, PLATE_H, -2.2, g);
+      box(1.2, 4.6, 1.0, COLORS.steel, 0, PLATE_H, 2.2, g);
+      box(2.6, 1.6, 5.4, COLORS.steel, 0, PLATE_H + 4.6, 0, g);
+      box(0.1, 0.6, 0.6, COLORS.dark, 0.65, PLATE_H + 5.1, -1.6, g);
+      const light = new THREE.MeshBasicMaterial({color: COLORS.accent});
+      const strip = new THREE.Mesh(boxGeo(2.7, 0.3, 5.5), light);
+      strip.position.set(0, PLATE_H + 4.5, 0);
+      g.add(strip);
+      const beam = new THREE.Mesh(boxGeo(0.1, 2.6, 3.2),
+        new THREE.MeshBasicMaterial({color: COLORS.ok, transparent: true, opacity: 0.35}));
+      beam.position.set(0, BELT_Y + 1.4, 0);
+      g.add(beam);
+      return (t) => {
+        const k = (t * 0.5) % 1;
+        beam.position.x = -1 + 2 * k;
+        light.color.setHex(k > 0.75 ? COLORS.ok : COLORS.accent);
+      };
+    },
+    "review"(g) {
+      box(2.6, 1.4, 1.8, COLORS.steel, 0, PLATE_H, -3.2, g);
+      const w = worker(g, 0, -4.8, Math.PI);
+      box(0.9, 0.08, 0.6, COLORS.dark, 0, 0, 1.0, w.arm);
+      const stamp = new THREE.Group(); g.add(stamp);
+      stamp.position.set(0, 0, -2.0);
+      box(0.3, 3.6, 0.3, COLORS.dark, 0, PLATE_H, 0, stamp);
+      const headGroup = new THREE.Group(); stamp.add(headGroup);
+      box(0.3, 0.3, 2.2, COLORS.steel, 0, 0, 1.0, headGroup);
+      const pad = box(0.8, 0.5, 0.8, COLORS.belt, 0, -0.5, 2.0, headGroup);
+      headGroup.position.y = PLATE_H + 3.6;
+      return (t) => {
+        const k = (t * 0.6) % 1;
+        headGroup.position.y = PLATE_H + 3.6 - (k > 0.7 ? Math.sin((k - 0.7) / 0.3 * Math.PI) * 1.2 : 0);
+        w.arm.rotation.x = -0.9 + 0.1 * Math.sin(t * 2);
+        pad.rotation.y = 0;
+      };
+    },
+    "ship"(g) {
+      // Ship's belt turns a corner here, so its props keep world axes:
+      // the loaded pallet in the back-left quadrant, the forklift in the
+      // back-right one loading onto the belt.
+      g.rotation.y = 0;
+      box(3, 1.2, 3, COLORS.wood, -3.6, PLATE_H, -3.6, g);
+      for (let i = 0; i < 4; i++) {
+        const c = crateMesh(); c.position.set(-4.2 + (i % 2) * 1.3, PLATE_H + 1.2 + CRATE * 0.4, -4.2 + Math.floor(i / 2) * 1.3); g.add(c);
+      }
+      const lift = new THREE.Group(); g.add(lift);
+      box(2.0, 1.2, 3.0, COLORS.accent, 0, PLATE_H + 0.3, 0, lift);
+      box(1.6, 1.2, 1.4, COLORS.steel, 0, PLATE_H + 1.5, 0.4, lift);
+      box(0.2, 3.4, 0.2, COLORS.dark, -0.6, PLATE_H, -1.6, lift);
+      box(0.2, 3.4, 0.2, COLORS.dark, 0.6, PLATE_H, -1.6, lift);
+      const forks = box(1.4, 0.15, 1.4, COLORS.dark, 0, 0, -2.4, lift);
+      const load = crateMesh(); lift.add(load);
+      [[-0.8, -1], [0.8, -1], [-0.8, 1], [0.8, 1]].forEach(([x, z]) => {
+        const wheel = cyl(0.35, 0.3, COLORS.line, x * 1.1, PLATE_H + 0.0, z * 1.1, lift, 10);
+        wheel.rotation.z = Math.PI / 2; wheel.position.y = PLATE_H + 0.35;
+      });
+      lift.position.set(3.2, 0, -3.6);
+      lift.rotation.y = Math.PI / 2;
+      return (t) => {
+        const k = (Math.sin(t * 0.7) + 1) / 2;
+        lift.position.x = 2.4 + 1.6 * k;
+        const up = 0.6 + 1.6 * (1 - k);
+        forks.position.y = PLATE_H + up;
+        load.position.set(0, PLATE_H + up + 0.15 + CRATE * 0.4, -2.4);
+      };
+    },
+    "operate"(g) {
+      box(TILE - 4, 1.2, 2.6, COLORS.steel, 0, PLATE_H, -4.2, g);
+      const carts = [];
+      for (let i = 0; i < 3; i++) {
+        const cart = new THREE.Group(); g.add(cart);
+        box(2.2, 0.9, 1.6, COLORS.accent, 0, PLATE_H + 0.3, 0, cart);
+        const c = crateMesh(); c.position.set(0, PLATE_H + 1.2 + CRATE * 0.4, 0); cart.add(c);
+        cart.position.set(-2.8 + i * 2.8, 0, -2.2);
+        carts.push(cart);
+      }
+      return (t) => {
+        carts[1].position.z = -2 + 1.2 * Math.sin(t * 0.9);
+        carts[2].position.x = 2.8 + 0.5 * Math.sin(t * 1.3);
+      };
+    },
+    "completed"(g) {
+      const glow = [];
+      for (const z of [-2.4, -4.5]) {
+        for (let level = 0; level < 4; level++) {
+          box(9, 0.18, 2.2, COLORS.belt, 0, PLATE_H + 0.6 + level * 1.5, z, g);
+        }
+        [-4.4, -1.5, 1.5, 4.4].forEach((x) => box(0.2, 6.2, 0.2, COLORS.dark, x, PLATE_H, z + (z < 0 ? -1 : 1), g));
+        [-4.4, -1.5, 1.5, 4.4].forEach((x) => box(0.2, 6.2, 0.2, COLORS.dark, x, PLATE_H, z + (z < 0 ? 1 : -1), g));
+      }
+      const scanner = box(0.6, 0.6, 0.6, COLORS.accent, 0, PLATE_H + 6.3, 0, g);
+      glow.push(scanner);
+      return (t) => { scanner.position.x = 3.6 * Math.sin(t * 0.5); };
+    },
+    "bin"(g) {
+      box(6, 0.3, 4.4, COLORS.warn, 0, PLATE_H, 0, g);
+      box(6, 2.2, 0.3, COLORS.warn, 0, PLATE_H, -2.2, g);
+      box(6, 2.2, 0.3, COLORS.warn, 0, PLATE_H, 2.2, g);
+      box(0.3, 2.2, 4.4, COLORS.warn, -3, PLATE_H, 0, g);
+      box(0.3, 2.2, 4.4, COLORS.warn, 3, PLATE_H, 0, g);
+      const lamp = new THREE.MeshBasicMaterial({color: COLORS.warn});
+      const beacon = new THREE.Mesh(boxGeo(0.5, 0.5, 0.5), lamp);
+      beacon.position.set(3, PLATE_H + 2.6, -2.2);
+      g.add(beacon);
+      return (t) => { lamp.color.setHex(Math.sin(t * 4) > 0 ? COLORS.warn : 0xfff0d0); };
+    }
+  };
+  Object.entries(MACHINES).forEach(([key, build]) => {
+    const g = new THREE.Group();
+    stationGroups[key].add(g);
+    if (MAIN.includes(key) || key === "capture") align(g, key);
+    animators.push(build(g));
+  });
+  Object.keys(GRID).forEach((key) => tag(stationGroups[key], {kind: "station", station: key}));
+
+  // ------------------------------------------------------------ crates
+  const runs = model.runs;
+  const crateOf = new Map();
+  const shadowGeo = new THREE.RingGeometry(0.95, 1.05, 24);
+  const shadowMat = new THREE.LineDashedMaterial({color: COLORS.line, dashSize: 0.25, gapSize: 0.2});
+  runs.forEach((run) => {
+    const mesh = crateMesh(run.status === "attention" ? COLORS.warn : COLORS.crate,
+      run.status === "attention" ? null : run.kind);
+    mesh.userData.pick = {kind: "crate", run};
+    pickable.push(mesh);
+    const tray = new THREE.Group();
+    tray.position.y = CRATE * 0.4 + 0.08;
+    const trayBack = new THREE.Mesh(boxGeo(CRATE * 0.9, 0.08, 0.4), mat(COLORS.dark));
+    const trayFill = new THREE.Mesh(boxGeo(1, 0.1, 0.42), mat(COLORS.ok));
+    tray.add(trayBack, trayFill);
+    tray.visible = false;
+    mesh.add(tray);
+    const ringPoints = new THREE.EdgesGeometry(shadowGeo);
+    const shadow = new THREE.LineSegments(ringPoints, shadowMat);
+    shadow.computeLineDistances();
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = -CRATE * 0.4 + 0.02;
+    shadow.visible = false;
+    mesh.add(shadow);
+    scene.add(mesh);
+    crateOf.set(run, {mesh, tray, trayFill, shadow});
+  });
+
+  // Slots: up to 6 queue on the belt in front of the machine; the rest
+  // stack on one pallet in the tile's front-right quadrant, so a tall
+  // pile only ever covers its own tile. Completed crates go on shelves.
+  const PALLET_AT = new THREE.Vector3(3.4, 0, 3.4);
+  const pallets = {};
+  function palletFor(key) {
+    if (pallets[key]) return pallets[key];
+    const group = new THREE.Group();
+    group.position.copy(at(key));
+    const pallet = box(3.9, 0.35, 3.9, COLORS.wood, 0, 0, 0);
+    pallet.position.copy(PALLET_AT).setY(PLATE_H);
+    group.add(pallet);
+    group.visible = false;
+    scene.add(group);
+    tag(group, {kind: "station", station: key});
+    return (pallets[key] = {group});
+  }
+  ["capture", ...MAIN].forEach(palletFor);
+  function slotPosition(key, index, total) {
+    const base = at(key);
+    if (key === "completed") {
+      const perShelf = 6, shelves = 4;
+      const capacity = perShelf * shelves * 2;
+      if (index < capacity) {
+        const rack = Math.floor(index / (perShelf * shelves));
+        const inRack = index % (perShelf * shelves);
+        const level = Math.floor(inRack / perShelf), col = inRack % perShelf;
+        return base.add(new THREE.Vector3(-3.5 + col * 1.4, PLATE_H + 0.7 + level * 1.5 + CRATE * 0.4,
+          rack ? -4.5 : -2.4));
+      }
+      index -= capacity;
+      const pile = new THREE.Vector3(2.1 + (index % 3) * 1.3, 0, 2.1 + (Math.floor(index / 3) % 3) * 1.3);
+      return base.add(pile).setY(PLATE_H + CRATE * 0.4 + Math.floor(index / 9) * CRATE * 0.8);
+    }
+    if (key === "bin") {
+      const col = index % 4, row = Math.floor(index / 4) % 3, layer = Math.floor(index / 12);
+      return base.add(new THREE.Vector3(-2.1 + col * 1.4, PLATE_H + 0.3 + CRATE * 0.4 + layer * CRATE * 0.8,
+        -1.4 + row * 1.4));
+    }
+    const dir = inDir[key];
+    if (index < 6) {
+      return base.add(dir.clone().multiplyScalar(-2.1 - index * 1.45)).setY(BELT_Y + 0.08 + CRATE * 0.4);
+    }
+    const n = index - 6;
+    const layer = Math.floor(n / 9), cell = n % 9;
+    const local = new THREE.Vector3(-1.3 + (cell % 3) * 1.3, 0, -1.3 + Math.floor(cell / 3) * 1.3);
+    return base.add(PALLET_AT).add(local).setY(PLATE_H + 0.35 + CRATE * 0.4 + layer * CRATE * 0.8);
+  }
+
+  // ---------------------------------------------------- state per moment
+  const FIRST = dayIndex(model.timeline.first_day);
+  const LAST = dayIndex(model.timeline.last_day);
+  const times = new Map(runs.map((run) => [run, hopTimes(run)]));
+  const state = {t: LAST + 1, playing: false, seconds: 30, highlighted: null, pinned: null};
+  const isToday = () => state.t >= LAST + 1 - 1e-9;
+  const currentDay = () => isoOf(Math.min(LAST, Math.floor(state.t - 1e-9)));
+  // Where a run is at time t: its station and, mid-move, its belt position.
+  const TRAVEL = 0.6;
+  function placement(run, t) {
+    if (run.status === "attention") return {station: "bin", since: 0};
+    const list = times.get(run);
+    let k = -1;
+    for (let i = 0; i < list.length; i++) if (list[i].t <= t) k = i;
+    if (k < 0) return null;
+    const cur = list[k];
+    const slice = k + 1 < list.length ? Math.min(1, list[k + 1].t - cur.t) : 1;
+    const progress = (t - cur.t) / (slice * TRAVEL || 1);
+    const inferredOpen = cur.hop.inferred && t < dayIndex(cur.hop.day) + 1;
+    if (k > 0 && progress < 1 && !isToday()) {
+      return {station: cur.hop.station, since: cur.t, moving: true,
+        from: list[k - 1].hop.station, f: progress, inferred: inferredOpen};
+    }
+    return {station: cur.hop.station, since: cur.t, inferred: inferredOpen && !isToday()};
+  }
+  function travelPoint(from, to, f) {
+    const onSide = (key) => key === "capture";
+    if (onSide(from)) {
+      const toMain = MAIN.includes(to) ? mainParam[to] - mainParam.architect : 0;
+      const total = sidePath.total + toMain;
+      const s = total * f;
+      return s <= sidePath.total ? pointOn(sidePath, s) : pointOn(mainPath, mainParam.architect + s - sidePath.total);
+    }
+    const a = mainParam[from], b = mainParam[to];
+    if (a === undefined || b === undefined) return at(to);
+    return pointOn(mainPath, a + (b - a) * f);
+  }
+
+  function layout() {
+    const t = state.t;
+    const groups = {};
+    runs.forEach((run) => {
+      const where = placement(run, t);
+      const entry = crateOf.get(run);
+      entry.where = where;
+      if (!where) { entry.mesh.visible = false; return; }
+      entry.mesh.visible = true;
+      if (where.moving) return;
+      (groups[where.station] = groups[where.station] || []).push(run);
+    });
+    const counts = {};
+    Object.keys(GRID).forEach((key) => {
+      const list = (groups[key] || []).sort((a, b) =>
+        crateOf.get(a).where.since - crateOf.get(b).where.since);
+      counts[key] = list.length;
+      list.forEach((run, i) => {
+        const pos = slotPosition(key, i, list.length);
+        crateOf.get(run).mesh.position.copy(pos);
+        crateOf.get(run).mesh.rotation.set(0, 0, 0);
+      });
+      if (pallets[key]) pallets[key].group.visible = list.length > 6 && key !== "completed";
+    });
+    // The bottleneck: the fullest working station (Done and the bin are
+    // not queues). Its sign and chip go amber together.
+    const working = Object.keys(counts).filter((k) => k !== "completed" && k !== "bin");
+    const most = Math.max(...working.map((k) => counts[k]), 0);
+    const hotKey = most > 1 ? working.find((k) => counts[k] === most) : null;
+    Object.keys(GRID).forEach((key) =>
+      updateSign(key, counts[key] || 0, key === hotKey));
+    updateChips(counts, hotKey);
+    runs.forEach((run) => {
+      const entry = crateOf.get(run);
+      const where = entry.where;
+      if (!where) return;
+      if (where.moving) {
+        const p = travelPoint(where.from, where.station, where.f);
+        entry.mesh.position.set(p.x, BELT_Y + 0.08 + CRATE * 0.4, p.z);
+      }
+      entry.shadow.visible = !!where.inferred;
+      const implementing = where.station === "implement" && run.work_orders.length;
+      entry.tray.visible = !!implementing;
+      if (implementing) {
+        const fraction = isToday() ? doneCount(run) / run.work_orders.length : 0;
+        const width = CRATE * 0.9;
+        entry.trayFill.scale.x = Math.max(0.001, fraction * width);
+        entry.trayFill.position.x = -width / 2 + (fraction * width) / 2;
+        entry.trayFill.material = isToday() ? mat(COLORS.ok) : mat(COLORS.steel);
+        entry.trayFill.visible = isToday();
+      }
+      if (state.highlighted === run) entry.mesh.position.y += 1.2;
+    });
+    showParts();
+    $("empty-sign").hidden = runs.length > 0;
+  }
+  // A highlighted Implement crate opens its tray: one part per work
+  // order, finished parts green, open parts grey, laid out above it.
+  const partsGroup = new THREE.Group();
+  scene.add(partsGroup);
+  const partGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.5, 10);
+  function showParts() {
+    partsGroup.clear();
+    const run = state.highlighted;
+    const entry = run && crateOf.get(run);
+    if (!entry || !entry.where || entry.where.station !== "implement" || !run.work_orders.length) return;
+    const per = Math.ceil(Math.sqrt(run.work_orders.length));
+    run.work_orders.forEach((wo, i) => {
+      const part = outlined(new THREE.Mesh(partGeo,
+        mat(wo.done && isToday() ? COLORS.ok : COLORS.steel)));
+      part.position.set(entry.mesh.position.x + ((i % per) - (per - 1) / 2) * 0.6,
+        entry.mesh.position.y + 1.2,
+        entry.mesh.position.z + (Math.floor(i / per) - (per - 1) / 2) * 0.6);
+      partsGroup.add(part);
+    });
+  }
+
+  // --------------------------------------------------------- the camera
+  // fit() frames the floor; view.zoom/pan sit on top of that framing
+  // (scroll to zoom, drag to pan, double-click to reset).
+  const view = {zoom: 1, panX: 0, panY: 0};
+  const frameBox = {cx: 0, cy: 0, halfH: 1, aspect: 1};
+  function applyView() {
+    const halfH = frameBox.halfH / view.zoom;
+    const halfW = halfH * frameBox.aspect;
+    const cx = frameBox.cx + view.panX, cy = frameBox.cy + view.panY;
+    camera.left = cx - halfW; camera.right = cx + halfW;
+    camera.top = cy + halfH; camera.bottom = cy - halfH;
+    camera.updateProjectionMatrix();
+    // Signs shrink as the viewer zooms in: at 1× they are map labels,
+    // close up they get out of the way of the machines.
+    const h = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom));
+    Object.values(signs).forEach((sign) => {
+      if (sign.aspect) sign.sprite.scale.set(h * sign.aspect, h, 1);
+    });
+  }
+  function fit() {
+    const width = stage.clientWidth, height = stage.clientHeight;
+    renderer.setSize(width, height, false);
+    const bounds = new THREE.Box3();
+    Object.values(stationGroups).forEach((g) => bounds.expandByPoint(g.position));
+    bounds.expandByScalar(HALF + 1);
+    bounds.getCenter(target);
+    camera.position.copy(target).add(new THREE.Vector3(60, 60, 60));
+    camera.lookAt(target);
+    camera.updateMatrixWorld();
+    // Project the bounds' corners to find the view extent; the 12 keeps
+    // the billboard signs inside the frame.
+    const corners = [];
+    for (const x of [bounds.min.x, bounds.max.x]) for (const y of [0, 11])
+      for (const z of [bounds.min.z, bounds.max.z]) corners.push(new THREE.Vector3(x, y, z));
+    const inv = camera.matrixWorldInverse;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    corners.forEach((c) => {
+      const v = c.clone().applyMatrix4(inv);
+      minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x);
+      minY = Math.min(minY, v.y); maxY = Math.max(maxY, v.y);
+    });
+    const spanX = maxX - minX, spanY = maxY - minY;
+    frameBox.aspect = width / Math.max(1, height);
+    frameBox.halfH = Math.max(spanY, spanX / frameBox.aspect) / 2 * 1.02;
+    frameBox.cx = (minX + maxX) / 2; frameBox.cy = (minY + maxY) / 2;
+    applyView();
+    // The sun's shadow frustum covers the whole floor once. A lowish
+    // sun from the back-right throws readable shadows to the front-left.
+    sun.target.position.copy(target);
+    const reach = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z);
+    sun.position.copy(target).add(new THREE.Vector3(0.85, 0.75, -0.55)
+      .multiplyScalar(reach));
+    const cam = sun.shadow.camera;
+    cam.left = cam.bottom = -reach * 0.8;
+    cam.right = cam.top = reach * 0.8;
+    cam.far = reach * 3;
+    cam.updateProjectionMatrix();
+  }
+  addEventListener("resize", () => { fit(); requestRender(); });
+  const resetView = () => { view.zoom = 1; view.panX = 0; view.panY = 0; applyView(); requestRender(); };
+  stage.addEventListener("wheel", (event) => {
+    if (event.target !== renderer.domElement) return;
+    event.preventDefault();
+    const rect = renderer.domElement.getBoundingClientRect();
+    const nx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const ny = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
+    const old = view.zoom;
+    view.zoom = Math.min(8, Math.max(0.7, old * Math.exp(-event.deltaY * 0.0016)));
+    // Keep the world point under the cursor still while zooming.
+    view.panX += nx * frameBox.aspect * frameBox.halfH * (1 / old - 1 / view.zoom);
+    view.panY += ny * frameBox.halfH * (1 / old - 1 / view.zoom);
+    applyView(); requestRender();
+  }, {passive: false});
+  let drag = null, dragged = false;
+  renderer.domElement.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    drag = {x: event.clientX, y: event.clientY};
+    dragged = false;
+  });
+  addEventListener("pointermove", (event) => {
+    if (!drag) return;
+    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+    if (!dragged && Math.hypot(dx, dy) < 5) return;
+    dragged = true;
+    const rect = renderer.domElement.getBoundingClientRect();
+    view.panX -= dx / rect.width * 2 * frameBox.aspect * frameBox.halfH / view.zoom;
+    view.panY += dy / rect.height * 2 * frameBox.halfH / view.zoom;
+    drag = {x: event.clientX, y: event.clientY};
+    applyView(); requestRender();
+  });
+  addEventListener("pointerup", () => { drag = null; });
+  renderer.domElement.addEventListener("dblclick", resetView);
+
+  // --------------------------------------------------------- hover, pin
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const card = $("card");
+  function runsAt(key) {
+    return runs.filter((run) => {
+      const where = crateOf.get(run).where;
+      return where && !where.moving && where.station === key;
+    }).sort((a, b) => crateOf.get(a).where.since - crateOf.get(b).where.since);
+  }
+  const asOf = () => isToday() ? model.generated.slice(0, 10) : currentDay();
+  function skippedOf(run) {
+    return run.ladder.filter((row) => row.state === "skipped").map((row) => nameOf(row.stage));
+  }
+  function aheadOf(run) {
+    const i = run.ladder.findIndex((row) => row.state === "current");
+    if (i < 0) return [];
+    return run.ladder.slice(i + 1).filter((row) => row.state === "done").map((row) => nameOf(row.stage));
+  }
+  function stationCard(key) {
+    const here = runsAt(key);
+    const [name, line] = key === "bin" ? ["Needs attention", "Runs the placement tool could not read."]
+      : STATION_INFO[key];
+    const oldest = here.slice(0, 5).map((run) => run.slug).join(", ");
+    card.replaceChildren(el("h3", {}, name), el("p", {}, line),
+      el("p", {class: "muted"}, `${here.length} run${here.length === 1 ? "" : "s"} · as of ${asOf()}`),
+      el("p", {}, here.length ? `oldest: ${oldest}${here.length > 5 ? ", …" : ""}` : "0 runs"));
+  }
+  function crateCard(run) {
+    const where = crateOf.get(run).where;
+    const rows = [el("h3", {}, `crate: ${run.ref}`)];
+    if (run.status === "attention") {
+      rows.push(el("p", {}, run.dir), el("p", {}, run.reason));
+    } else {
+      const station = where ? nameOf(where.station) : "";
+      let line = `${run.kind} · at ${station}`;
+      if (where && where.station === "implement" && run.work_orders.length)
+        line += ` · ${doneCount(run)}/${run.work_orders.length} WOs${isToday() ? "" : " (today)"}`;
+      rows.push(el("p", {}, line), el("p", {class: "muted"}, run.dir));
+      const skipped = skippedOf(run), ahead = aheadOf(run);
+      if (skipped.length) rows.push(el("p", {}, `skipped: ${skipped.join(", ")}`));
+      if (ahead.length) rows.push(el("p", {}, `already has: ${ahead.join(", ")}`));
+    }
+    card.replaceChildren(...rows);
+  }
+  function pick(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(pickable, false).filter((hit) => {
+      let o = hit.object; while (o) { if (!o.visible) return false; o = o.parent; } return true;
+    });
+    const crate = hits.find((hit) => hit.object.userData.pick.kind === "crate");
+    return (crate || hits[0] || {}).object ? (crate || hits[0]).object.userData.pick : null;
+  }
+  renderer.domElement.addEventListener("pointermove", (event) => {
+    const hit = pick(event);
+    if (!hit) { card.hidden = true; renderer.domElement.style.cursor = ""; return; }
+    if (hit.kind === "station") stationCard(hit.station); else crateCard(hit.run);
+    const rect = stage.getBoundingClientRect();
+    card.hidden = false;
+    const x = Math.min(event.clientX - rect.left + 16, rect.width - card.offsetWidth - 8);
+    const y = Math.min(event.clientY - rect.top + 16, rect.height - card.offsetHeight - 8);
+    card.style.left = `${x}px`; card.style.top = `${y}px`;
+    renderer.domElement.style.cursor = "pointer";
+  });
+  renderer.domElement.addEventListener("pointerleave", () => { card.hidden = true; });
+  function closePanel() {
+    $("panel").hidden = true; state.pinned = null; state.highlighted = null; layout(); requestRender();
+  }
+  function runRow(run, open) {
+    const summary = el("summary", {});
+    summary.append(el("span", {}, run.ref));
+    if (run.work_orders.length) summary.append(el("span", {class: "prog"},
+      `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}`));
+    const details = el("details", {}, summary);
+    if (open) details.open = true;
+    if (run.status === "attention") details.append(el("p", {class: "muted"}, run.reason));
+    else details.append(el("p", {class: "muted"}, run.dir));
+    if (run.work_orders.length) {
+      if (!isToday()) details.append(el("p", {class: "muted"}, "progress as of today"));
+      const ul = el("ul", {});
+      run.work_orders.forEach((wo) => ul.append(el("li", {class: wo.done ? "done" : "open"}, wo.title)));
+      details.append(ul);
+    }
+    summary.addEventListener("click", () => { state.highlighted = run; layout(); requestRender(); });
+    return details;
+  }
+  function openPanel(hit) {
+    const key = hit.kind === "station" ? hit.station : (crateOf.get(hit.run).where || {}).station;
+    if (!key) return;
+    setLegend(false);
+    state.pinned = {key, run: hit.kind === "crate" ? hit.run : null};
+    renderPanel();
+  }
+  function renderPanel() {
+    if (!state.pinned) return;
+    const {key, run} = state.pinned;
+    const here = runsAt(key);
+    $("panel-title").textContent = `${key === "bin" ? "Needs attention" : nameOf(key)} · as of ${asOf()}`;
+    const body = $("panel-body");
+    body.replaceChildren(el("p", {class: "muted"}, here.length
+      ? `${here.length} run${here.length === 1 ? "" : "s"}, oldest first` : `No runs here as of ${asOf()}`));
+    here.forEach((r) => body.append(runRow(r, r === run)));
+    $("panel").hidden = false;
+    if (run) { state.highlighted = run; layout(); }
+  }
+  renderer.domElement.addEventListener("click", (event) => {
+    if (dragged) { dragged = false; return; }
+    const hit = pick(event);
+    if (!hit) { closePanel(); return; }
+    openPanel(hit);
+    requestRender();
+  });
+  $("panel-close").addEventListener("click", closePanel);
+  addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { closePanel(); setLegend(false); }
+  });
+
+  // ------------------------------------------------------------- chips
+  // The pipeline strip above the floor: one chip per station in stage
+  // order, its count live, the bottleneck amber. A chip pins its
+  // station's list, so the strip is also the index of the factory.
+  const CHIP_ORDER = ["capture", ...MAIN, "bin"];
+  const chips = {};
+  const pipeline = $("pipeline");
+  CHIP_ORDER.forEach((key, i) => {
+    if (i && key !== "bin") pipeline.append(el("span", {class: "flow"}, "→"));
+    const name = key === "bin" ? "Attention" :
+      key === "completed" ? "Done" : nameOf(key);
+    const n = el("span", {class: "n"}, "0");
+    const chip = el("button", {class: "chip", title:
+      (STATION_INFO[key] || ["", "Runs the placement tool could not read."])[1]},
+      n, name);
+    chip.addEventListener("click", () => { openPanel({kind: "station", station: key}); requestRender(); });
+    pipeline.append(chip);
+    chips[key] = {chip, n, name, lastText: "", lastHot: null};
+  });
+  function updateChips(counts, hotKey) {
+    CHIP_ORDER.forEach((key) => {
+      const entry = chips[key];
+      const count = counts[key] || 0;
+      const hot = key === hotKey;
+      const text = String(count);
+      if (entry.lastText !== text) { entry.n.textContent = text; entry.lastText = text; }
+      if (entry.lastHot !== hot) {
+        entry.chip.classList.toggle("hot", hot);
+        entry.chip.classList.toggle("done", key === "completed");
+        entry.lastHot = hot;
+      }
+      entry.chip.classList.toggle("zero", count === 0);
+      entry.chip.hidden = key === "bin" && count === 0;
+    });
+  }
+
+  // ------------------------------------------------------------ legend
+  // Open on load: the first thing a cold viewer sees is the key to the
+  // picture, and closing it is one click (pinning closes it too).
+  function setLegend(openIt) {
+    $("legend").hidden = !openIt;
+    $("legend-open").setAttribute("aria-expanded", String(openIt));
+  }
+  $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
+  $("legend-close").addEventListener("click", () => setLegend(false));
+
+  // ---------------------------------------------------------- transport
+  const play = $("play"), scrub = $("scrub");
+  scrub.min = String(FIRST); scrub.max = String(LAST + 1); scrub.value = String(LAST + 1);
+  function dayLabel() { return isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay(); }
+  function syncTransport() {
+    if (!state.playing) scrub.value = String(Math.round(state.t));
+    $("day").textContent = dayLabel();
+    play.textContent = state.playing ? "❚❚ Pause" : "▶ Play";
+    play.setAttribute("aria-label", state.playing ? "Pause the replay" : "Play the replay");
+    setHeader(model, isToday() ? null : currentDay());
+  }
+  const enabled = runs.length > 0;
+  [play, scrub, $("speed-30"), $("speed-60"), $("export")].forEach((b) => { b.disabled = !enabled; });
+  play.addEventListener("click", () => {
+    if (state.playing) { state.playing = false; }
+    else { if (isToday()) state.t = FIRST; state.playing = true; }
+    syncTransport(); requestRender();
+  });
+  scrub.addEventListener("input", () => {
+    state.playing = false;
+    state.t = Number(scrub.value) >= LAST + 1 ? LAST + 1 : Number(scrub.value) + 1 - 1e-6;
+    layout(); syncTransport(); renderPanel(); requestRender();
+  });
+  ["30", "60"].forEach((s) => $(`speed-${s}`).addEventListener("click", () => {
+    state.seconds = Number(s);
+    $("speed-30").setAttribute("aria-pressed", String(s === "30"));
+    $("speed-60").setAttribute("aria-pressed", String(s === "60"));
+  }));
+
+  // -------------------------------------------------------------- loop
+  let needsRender = true, last = performance.now(), clock = 0;
+  const fps = {frames: 0, since: performance.now(), value: 0, samples: []};
+  window.__assemblyLine = {fps, state, runs, crateOf, layout, LAST, FIRST,
+    renderer, camera, scene, view, applyView, requestRender};
+  function requestRender() { needsRender = true; }
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    if (state.playing) {
+      state.t += dt * (LAST + 1 - FIRST) / state.seconds;
+      if (state.t >= LAST + 1) { state.t = LAST + 1; state.playing = false; renderPanel(); }
+      layout(); syncTransport(); needsRender = true;
+    }
+    if (intro !== null) {
+      intro = Math.min(1, intro + dt / 1.1);
+      const ease = 1 - Math.pow(1 - intro, 3);
+      view.zoom = 1.3 - 0.3 * ease;
+      applyView();
+      if (intro >= 1) intro = null;
+      needsRender = true;
+    }
+    if (!reducedMotion) {
+      clock += dt;
+      animators.forEach((animate) => animate(clock));
+      rollers.forEach((roller) => { roller.rotation.y += dt * 4; });
+      beltFlows.forEach((flow) => { flow.offset.x = -(clock * 0.45) % 1; });
+      needsRender = true;
+    }
+    if (needsRender) { renderer.render(scene, camera); needsRender = false; }
+    fps.frames++;
+    if (now - fps.since >= 1000) {
+      fps.value = fps.frames * 1000 / (now - fps.since);
+      fps.samples.push(fps.value);
+      fps.frames = 0; fps.since = now;
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------------------------------------------------------- GIF export
+  $("export").addEventListener("click", () => exportGif().catch((err) => {
+    const status = $("export-status");
+    status.hidden = false;
+    status.textContent = `Export failed: ${err.message}. Nothing was downloaded.`;
+    restoreAfterExport();
+  }));
+  let saved = null;
+  function restoreAfterExport() {
+    if (!saved) return;
+    state.t = saved.t; state.playing = false;
+    view.zoom = saved.zoom; view.panX = saved.panX; view.panY = saved.panY;
+    renderer.setPixelRatio(saved.ratio);
+    stage.style.width = ""; stage.style.height = ""; stage.style.flex = "";
+    fit(); layout(); syncTransport(); requestRender();
+    $("export").disabled = !enabled; play.disabled = !enabled;
+    saved = null;
+  }
+  async function exportGif() {
+    const W = 720, H = 450, FPS = 10, PLAY_SECONDS = 12, HOLD_FRAMES = 20;
+    const status = $("export-status");
+    status.hidden = false;
+    status.textContent = "Exporting clip…";
+    saved = {t: state.t, ratio: renderer.getPixelRatio(),
+      zoom: view.zoom, panX: view.panX, panY: view.panY};
+    state.playing = false;
+    view.zoom = 1; view.panX = 0; view.panY = 0;
+    $("export").disabled = true; play.disabled = true;
+    stage.style.flex = "none"; stage.style.width = `${W}px`; stage.style.height = `${H}px`;
+    renderer.setPixelRatio(1);
+    fit();
+    const grab = document.createElement("canvas");
+    grab.width = W; grab.height = H;
+    const ctx = grab.getContext("2d", {willReadFrequently: true});
+    // The canvas is transparent (the page gradient is the backdrop), so
+    // every GIF frame paints the ground colour first.
+    const paint = () => {
+      ctx.fillStyle = "#e9f6ee"; ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(renderer.domElement, 0, 0, W, H);
+    };
+    // The palette comes from today's frame: every crate and machine on it.
+    state.t = LAST + 1;
+    layout();
+    renderer.render(scene, camera);
+    paint();
+    const gif = new GifWriter(W, H, ctx.getImageData(0, 0, W, H).data);
+    // Each clip frame carries the repo and the replay's date, top left:
+    // a README viewer has no transport bar to read it from.
+    const stamp = (text) => {
+      ctx.font = "600 15px system-ui, sans-serif";
+      const width = ctx.measureText(text).width + 20;
+      ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#2f3238"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(10, 10, width, 28, 6); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#2f3238"; ctx.textBaseline = "middle"; ctx.fillText(text, 20, 25);
+    };
+    const total = FPS * PLAY_SECONDS;
+    for (let i = 0; i <= total + HOLD_FRAMES; i++) {
+      state.t = Math.min(LAST + 1, FIRST + (LAST + 1 - FIRST) * Math.min(1, i / total));
+      layout();
+      const tclock = i / FPS;
+      if (!reducedMotion) animators.forEach((animate) => animate(tclock));
+      renderer.render(scene, camera);
+      paint();
+      stamp(`${model.repo} · ${isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay()}`);
+      gif.frame(ctx.getImageData(0, 0, W, H).data, i === total + HOLD_FRAMES ? 300 : 100 / FPS);
+      if (i % 10 === 0) {
+        status.textContent = `Exporting clip… ${Math.round(100 * i / (total + HOLD_FRAMES))}%`;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+    const blob = new Blob([gif.finish()], {type: "image/gif"});
+    const link = el("a", {href: URL.createObjectURL(blob), download: `${model.repo}-assembly-line.gif`});
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.__assemblyLine.lastGif = blob;
+    status.textContent = `Clip exported (${(blob.size / 1048576).toFixed(1)} MB). Commit it and reference it from your README as an image.`;
+    restoreAfterExport();
+  }
+
+  // ------------------------------------------------------------- start
+  // A one-breath settle: the floor eases in from a slightly wider frame.
+  let intro = reducedMotion ? null : 0;
+  if (intro !== null) view.zoom = 1.3;
+  fit();
+  layout();
+  syncTransport();
+  requestAnimationFrame(frame);
+}
+
+// ================================================================ GIF89a
+// A first-party encoder. The global palette is the 256 most frequent
+// 5-bit colours of a sample frame — the floor's flat shading uses few
+// colours, so they all fit — with a nearest-colour lookup for the rest;
+// LZW per frame, looping forever.
+class GifWriter {
+  constructor(width, height, sample) {
+    this.width = width; this.height = height;
+    this.chunks = [];
+    const counts = new Uint32Array(32768);
+    for (let q = 0; q < sample.length; q += 4)
+      counts[((sample[q] >> 3) << 10) | ((sample[q + 1] >> 3) << 5) | (sample[q + 2] >> 3)]++;
+    const bins = Array.from(counts.keys()).filter((bin) => counts[bin])
+      .sort((a, b) => counts[b] - counts[a]).slice(0, 256);
+    this.palette = new Uint8Array(256 * 3);
+    const rgb = (bin) => [((bin >> 10) << 3) | 4, (((bin >> 5) & 31) << 3) | 4, ((bin & 31) << 3) | 4];
+    bins.forEach((bin, i) => this.palette.set(rgb(bin), i * 3));
+    this.lookup = new Uint8Array(32768);
+    for (let bin = 0; bin < 32768; bin++) {
+      const [r, g, b] = rgb(bin);
+      let best = 0, bestDistance = Infinity;
+      for (let i = 0; i < bins.length; i++) {
+        const dr = r - this.palette[i * 3], dg = g - this.palette[i * 3 + 1], db = b - this.palette[i * 3 + 2];
+        const distance = dr * dr + dg * dg + db * db;
+        if (distance < bestDistance) { bestDistance = distance; best = i; }
+      }
+      this.lookup[bin] = best;
+    }
+    const head = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
+      width & 255, width >> 8, height & 255, height >> 8, 0xf7, 0, 0];
+    this.chunks.push(new Uint8Array(head), this.palette,
+      new Uint8Array([0x21, 0xff, 0x0b, ...Array.from("NETSCAPE2.0", (c) => c.charCodeAt(0)),
+        0x03, 0x01, 0x00, 0x00, 0x00]));
+  }
+  frame(rgba, delayCs) {
+    const n = this.width * this.height;
+    const indices = new Uint8Array(n);
+    for (let p = 0, q = 0; p < n; p++, q += 4)
+      indices[p] = this.lookup[((rgba[q] >> 3) << 10) | ((rgba[q + 1] >> 3) << 5) | (rgba[q + 2] >> 3)];
+    const delay = Math.max(2, Math.round(delayCs));
+    this.chunks.push(new Uint8Array([0x21, 0xf9, 0x04, 0x00, delay & 255, delay >> 8, 0, 0,
+      0x2c, 0, 0, 0, 0, this.width & 255, this.width >> 8, this.height & 255, this.height >> 8, 0]));
+    this.chunks.push(lzw(indices, 8));
+  }
+  finish() {
+    this.chunks.push(new Uint8Array([0x3b]));
+    return new Blob(this.chunks);
+  }
+}
+// GIF LZW: variable-width codes, a clear code when the table fills, and
+// the width step taken before the code that needs it (the decoder's
+// table lags the encoder's by one entry). Sub-blocks of 255 bytes.
+function lzw(indices, minCodeSize) {
+  const clear = 1 << minCodeSize, end = clear + 1;
+  const out = [minCodeSize];
+  let block = [], cur = 0, bits = 0, size = minCodeSize + 1;
+  const emitByte = (byte) => {
+    block.push(byte);
+    if (block.length === 255) { out.push(255); for (const b of block) out.push(b); block = []; }
+  };
+  const write = (code) => {
+    cur |= code << bits; bits += size;
+    while (bits >= 8) { emitByte(cur & 255); cur >>>= 8; bits -= 8; }
+  };
+  let table = new Map(), next = end + 1;
+  write(clear);
+  let prefix = indices[0];
+  for (let i = 1; i < indices.length; i++) {
+    const k = indices[i];
+    const key = (prefix << 8) | k;
+    const found = table.get(key);
+    if (found !== undefined) { prefix = found; continue; }
+    write(prefix);
+    if (next === 4096) {
+      write(clear);
+      table = new Map(); next = end + 1; size = minCodeSize + 1;
+    } else {
+      if (next >= (1 << size)) size++;
+      table.set(key, next++);
+    }
+    prefix = k;
+  }
+  write(prefix);
+  write(end);
+  if (bits > 0) emitByte(cur & 255);
+  if (block.length) { out.push(block.length); for (const b of block) out.push(b); }
+  out.push(0);
+  return Uint8Array.from(out);
+}
+</script>
+</body>
+</html>

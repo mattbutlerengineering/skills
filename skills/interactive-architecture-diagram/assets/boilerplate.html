@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Order Pipeline — how it works</title>
+<style>
+  /* Chrome variables. SVG paint lives in the classes below as literals so it
+     renders identically live and when rasterized to PNG (var() does not
+     resolve in SVG presentation attributes). Mirror references/design-system.md. */
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --edge-strong: #8b949e;
+    --text: #e6edf3;
+    --text-2: #8b949e;
+    --accent: #4493f8;
+    --warn: #d29922;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  }
+  .toolbar {
+    position: sticky; top: 0; width: 100%;
+    display: flex; gap: 8px; justify-content: center; padding: 12px;
+    background: rgba(13, 17, 23, 0.85); backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--border); z-index: 10;
+  }
+  .toolbar button {
+    font: 500 12px var(--sans); color: var(--text);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer;
+  }
+  .toolbar button:hover { border-color: var(--edge-strong); }
+  .toolbar .flash { align-self: center; font: 400 12px var(--sans); color: var(--text-2); min-width: 90px; }
+
+  .heading { text-align: center; padding: 24px 16px 0; }
+  .heading h1 { margin: 0; font: 600 22px var(--sans); }
+  .heading p { margin: 6px 0 0; font: 400 14px var(--sans); color: var(--text-2); }
+
+  .stage { padding: 16px 32px 8px; width: 100%; display: flex; justify-content: center; }
+  svg { max-width: 100%; height: auto; }
+
+  /* Text tiers */
+  .title { font: 600 13px var(--sans); fill: #e6edf3; }
+  .sub   { font: 400 11px var(--sans); fill: #8b949e; }
+  .anno  { font: 500 9px var(--sans); fill: #6e7681; letter-spacing: 0.04em; text-transform: uppercase; }
+  .anno.warn { fill: #d29922; }
+  .edge-label { font: 400 10px var(--mono); fill: #8b949e; }
+
+  /* Shape roles */
+  .mask { fill: #161b22; }
+  .node { stroke-width: 1.5; filter: url(#soft-shadow); }
+  .swatch { stroke-width: 1.5; }
+  .boundary { fill: rgba(255,255,255,0.015); stroke: #30363d; stroke-width: 1.25; stroke-dasharray: 6 4; }
+  .edge { stroke: #6e7681; stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+  .edge.async { stroke-dasharray: 5 4; }
+  .edge.auth  { stroke: #e5606a; }
+
+  /* Node types — color is the type. Fill is a hint; stroke carries meaning.
+     Keep only the types the diagram uses; full set in design-system.md. */
+  .n-service  { fill: rgba(68,147,248,0.12);  stroke: #4493f8; }
+  .n-data     { fill: rgba(163,113,247,0.12); stroke: #a371f7; }
+  .n-storage  { fill: rgba(57,197,207,0.10);  stroke: #39c5cf; }
+  .n-gateway  { fill: rgba(63,185,80,0.12);   stroke: #3fb950; }
+  .n-queue    { fill: rgba(210,153,34,0.12);  stroke: #d29922; }
+  .n-external { fill: rgba(139,148,158,0.10); stroke: #8b949e; }
+  .n-security { fill: rgba(229,96,106,0.12);  stroke: #e5606a; }
+
+  /* Assumed detail — dashed border + amber tag; confirm before presenting as fact */
+  .assumed { stroke-dasharray: 4 3; }
+
+  /* Step-through state */
+  .nodeg, .edgeg, .boundaryg { transition: opacity 0.35s ease; cursor: default; }
+  .nodeg { cursor: pointer; }
+  svg.focused .nodeg:not(.on)   { opacity: 0.22; }
+  svg.focused .edgeg:not(.live) { opacity: 0.14; }
+  svg.focused .boundaryg        { opacity: 0.5; }
+  .edgeg.live .edge { stroke: #8b949e; stroke-width: 2; }
+  .pulse { opacity: 0; fill: #4493f8; }
+  .edgeg.live .pulse { opacity: 1; }
+
+  /* Presenter deck — bottom caption bar */
+  .deck {
+    position: sticky; bottom: 0; width: 100%;
+    background: rgba(13, 17, 23, 0.92); backdrop-filter: blur(6px);
+    border-top: 1px solid var(--border); z-index: 10;
+    display: flex; justify-content: center; padding: 14px 16px;
+  }
+  .deck-inner { display: flex; align-items: center; gap: 20px; max-width: 920px; width: 100%; }
+  .deck button {
+    font: 600 14px var(--sans); color: var(--text);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 16px; cursor: pointer; white-space: nowrap;
+  }
+  .deck button:hover:not(:disabled) { border-color: var(--accent); }
+  .deck button:disabled { opacity: 0.35; cursor: default; }
+  .deck-text { flex: 1; min-width: 0; text-align: center; }
+  .deck-text .step-title { font: 600 15px var(--sans); }
+  .deck-text .step-caption { font: 400 14px var(--sans); color: var(--text-2); margin-top: 4px; }
+  .dots { display: flex; gap: 6px; justify-content: center; margin-top: 8px; }
+  .dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .dots span.here { background: var(--accent); }
+
+  /* Click-to-inspect panel */
+  .panel {
+    position: fixed; right: 16px; top: 64px; width: 300px; z-index: 20;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .panel.open { display: block; }
+  .panel h2 { margin: 0 0 2px; font: 600 15px var(--sans); }
+  .panel .ptype { font: 500 10px var(--sans); color: #6e7681; text-transform: uppercase; letter-spacing: 0.04em; }
+  .panel p { font: 400 13px/1.5 var(--sans); color: var(--text-2); margin: 10px 0 0; }
+  .panel .passumed { border-top: 1px solid var(--border); margin-top: 12px; padding-top: 10px; }
+  .panel .passumed b { font: 600 11px var(--sans); color: var(--warn); text-transform: uppercase; letter-spacing: 0.04em; }
+  .panel .passumed p { margin-top: 4px; }
+  .panel .close {
+    position: absolute; top: 8px; right: 10px; font: 600 14px var(--sans);
+    color: var(--text-2); background: none; border: none; cursor: pointer;
+  }
+
+  @media print { .toolbar, .deck, .panel { display: none !important; } body { background: #fff; } }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button onclick="copyPng()">Copy PNG</button>
+    <button onclick="downloadPng()">Download PNG</button>
+    <button onclick="downloadSvg()">Download SVG</button>
+    <span class="flash" id="flash"></span>
+  </div>
+
+  <div class="heading">
+    <h1>Order Pipeline</h1>
+    <p>How an order flows from client to captured payment — click any box for details</p>
+  </div>
+
+  <div class="stage">
+    <!-- viewBox = content bounds + 32px margin. Snap all coords to 8. -->
+    <svg id="diagram" viewBox="0 88 928 440" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="1" fill="#1c2128"/>
+        </pattern>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#8b949e"/>
+        </marker>
+        <!-- soft shadow: lift, not glow -->
+        <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.45"/>
+        </filter>
+      </defs>
+
+      <!-- background -->
+      <rect x="0" y="88" width="928" height="440" fill="#0d1117"/>
+      <rect x="0" y="88" width="928" height="440" fill="url(#dots)"/>
+
+      <!-- ============================================================
+           SAMPLE CONTENT — replace with the real system.
+           Every node: mask rect first, styled rect over it, data-id on <g>.
+           Every edge: a <path> with an id inside a <g data-edge> (pulses
+           ride paths via mpath — <line> will not work).
+           ============================================================ -->
+
+      <!-- BOUNDARY -->
+      <g class="boundaryg">
+        <rect class="boundary" x="280" y="120" width="408" height="320" rx="12"/>
+        <text class="anno" x="296" y="144">Production VPC</text>
+      </g>
+
+      <!-- EDGES -->
+      <g class="edgeg" data-edge="e1">
+        <path id="e1" class="edge" d="M216,228 H312"/>
+        <text class="edge-label" x="264" y="216" text-anchor="middle">HTTPS</text>
+        <circle class="pulse" r="4"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#e1"/></animateMotion></circle>
+        <circle class="pulse" r="4"><animateMotion dur="1.4s" begin="-0.7s" repeatCount="indefinite"><mpath href="#e1"/></animateMotion></circle>
+      </g>
+
+      <g class="edgeg" data-edge="e2">
+        <path id="e2" class="edge" d="M456,228 H504"/>
+        <circle class="pulse" r="4"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#e2"/></animateMotion></circle>
+        <circle class="pulse" r="4"><animateMotion dur="1.4s" begin="-0.7s" repeatCount="indefinite"><mpath href="#e2"/></animateMotion></circle>
+      </g>
+
+      <g class="edgeg" data-edge="e3">
+        <path id="e3" class="edge" d="M580,256 V336"/>
+        <text class="edge-label" x="592" y="300">insert</text>
+        <circle class="pulse" r="4"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#e3"/></animateMotion></circle>
+        <circle class="pulse" r="4"><animateMotion dur="1.4s" begin="-0.7s" repeatCount="indefinite"><mpath href="#e3"/></animateMotion></circle>
+      </g>
+
+      <g class="edgeg" data-edge="e4">
+        <path id="e4" class="edge async" d="M656,240 C704,240 704,356 752,356"/>
+        <text class="edge-label" x="720" y="288" text-anchor="middle" fill="#d29922">assumed: on capture</text>
+        <circle class="pulse" r="4"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#e4"/></animateMotion></circle>
+      </g>
+
+      <!-- NODE: client (external) -->
+      <g class="nodeg" data-id="client">
+        <rect class="mask" x="64" y="200" width="152" height="56" rx="8"/>
+        <rect class="node n-external" x="64" y="200" width="152" height="56" rx="8"/>
+        <text class="title" x="80" y="226">Client</text>
+        <text class="sub" x="80" y="243">web · mobile</text>
+      </g>
+
+      <!-- NODE: gateway -->
+      <g class="nodeg" data-id="gw">
+        <rect class="mask" x="312" y="200" width="144" height="56" rx="8"/>
+        <rect class="node n-gateway" x="312" y="200" width="144" height="56" rx="8"/>
+        <text class="title" x="328" y="226">API Gateway</text>
+        <text class="sub" x="328" y="243">edge · TLS</text>
+      </g>
+
+      <!-- NODE: service -->
+      <g class="nodeg" data-id="svc">
+        <rect class="mask" x="504" y="200" width="152" height="56" rx="8"/>
+        <rect class="node n-service" x="504" y="200" width="152" height="56" rx="8"/>
+        <text class="title" x="520" y="226">Orders Service</text>
+        <text class="sub" x="520" y="243">Node · ECS</text>
+      </g>
+
+      <!-- NODE: data -->
+      <g class="nodeg" data-id="db">
+        <rect class="mask" x="504" y="336" width="152" height="56" rx="8"/>
+        <rect class="node n-data" x="504" y="336" width="152" height="56" rx="8"/>
+        <text class="title" x="520" y="362">Postgres</text>
+        <text class="sub" x="520" y="379">RDS · multi-AZ</text>
+      </g>
+
+      <!-- NODE: external, marked assumed (dashed border + amber tag) -->
+      <g class="nodeg" data-id="stripe">
+        <rect class="mask" x="752" y="328" width="144" height="56" rx="8"/>
+        <rect class="node n-external assumed" x="752" y="328" width="144" height="56" rx="8"/>
+        <text class="anno warn" x="880" y="342" text-anchor="end">assumed</text>
+        <text class="title" x="768" y="354">Stripe</text>
+        <text class="sub" x="768" y="371">payments API</text>
+      </g>
+
+      <!-- LEGEND: outside every boundary, ≥24 below the lowest; one row per type used. -->
+      <g transform="translate(64, 480)">
+        <rect class="swatch n-external" width="12" height="12" rx="3"/>
+        <text class="sub" x="20" y="10">external</text>
+        <rect class="swatch n-gateway" x="104" width="12" height="12" rx="3"/>
+        <text class="sub" x="124" y="10">gateway</text>
+        <rect class="swatch n-service" x="208" width="12" height="12" rx="3"/>
+        <text class="sub" x="228" y="10">service</text>
+        <rect class="swatch n-data" x="304" width="12" height="12" rx="3"/>
+        <text class="sub" x="324" y="10">data</text>
+        <rect class="swatch n-external assumed" x="392" width="12" height="12" rx="3"/>
+        <text class="sub" x="412" y="10">dashed = assumed, confirm before presenting</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="deck">
+    <div class="deck-inner">
+      <button id="prev" onclick="step(-1)">◀ Prev</button>
+      <div class="deck-text">
+        <div class="step-title" id="stepTitle"></div>
+        <div class="step-caption" id="stepCaption"></div>
+        <div class="dots" id="dots"></div>
+      </div>
+      <button id="next" onclick="step(1)">Next ▶</button>
+    </div>
+  </div>
+
+  <div class="panel" id="panel">
+    <button class="close" onclick="closePanel()">✕</button>
+    <h2 id="pName"></h2>
+    <div class="ptype" id="pType"></div>
+    <p id="pBody"></p>
+    <div class="passumed" id="pAssumedWrap"><b>Assumed — confirm</b><p id="pAssumed"></p></div>
+  </div>
+
+<script>
+  // ---- Step-through presentation -------------------------------------------
+  // One entry per narrated stage. Stage 0 = overview (nothing dimmed).
+  // nodes/edges list the data-id / data-edge values active at that stage.
+  var STAGES = [
+    { title: 'Order Pipeline',
+      caption: 'How an order flows from client to captured payment. Step with → / ← or the buttons.',
+      nodes: [], edges: [] },
+    { title: '1 · Request arrives',
+      caption: 'The client sends an order request; TLS terminates at the API gateway.',
+      nodes: ['client', 'gw'], edges: ['e1'] },
+    { title: '2 · Routed to the service',
+      caption: 'The gateway authenticates the caller and routes the request to the orders service.',
+      nodes: ['gw', 'svc'], edges: ['e2'] },
+    { title: '3 · Order persisted',
+      caption: 'The service validates the order and writes it to Postgres.',
+      nodes: ['svc', 'db'], edges: ['e3'] },
+    { title: '4 · Payment webhook',
+      caption: '(Assumed) Stripe is notified asynchronously and confirms payment capture.',
+      nodes: ['svc', 'stripe'], edges: ['e4'] }
+  ];
+
+  var current = 0;
+
+  function setStage(i) {
+    current = Math.max(0, Math.min(STAGES.length - 1, i));
+    var s = STAGES[current];
+    var svg = document.getElementById('diagram');
+    svg.classList.toggle('focused', current > 0);
+    document.querySelectorAll('.nodeg').forEach(function (g) {
+      g.classList.toggle('on', s.nodes.indexOf(g.dataset.id) !== -1);
+    });
+    document.querySelectorAll('.edgeg').forEach(function (g) {
+      g.classList.toggle('live', s.edges.indexOf(g.dataset.edge) !== -1);
+    });
+    document.getElementById('stepTitle').textContent = s.title;
+    document.getElementById('stepCaption').textContent = s.caption;
+    document.getElementById('prev').disabled = current === 0;
+    document.getElementById('next').disabled = current === STAGES.length - 1;
+    var dots = document.getElementById('dots');
+    dots.innerHTML = '';
+    STAGES.forEach(function (_, j) {
+      var d = document.createElement('span');
+      if (j === current) d.className = 'here';
+      dots.appendChild(d);
+    });
+  }
+
+  function step(delta) { setStage(current + delta); }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); step(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    else if (e.key === 'Home') { e.preventDefault(); setStage(0); }
+    else if (e.key === 'End') { e.preventDefault(); setStage(STAGES.length - 1); }
+    else if (e.key === 'Escape') { closePanel(); }
+  });
+
+  // ---- Click-to-inspect -----------------------------------------------------
+  // One entry per node data-id. `assumed` (string or null) renders the amber
+  // "confirm" block in the panel.
+  var NODE_INFO = {
+    client: { name: 'Client', type: 'external · caller',
+      body: 'Web and mobile clients that place orders against the public API.',
+      assumed: null },
+    gw: { name: 'API Gateway', type: 'gateway · edge',
+      body: 'Terminates TLS, authenticates callers, rate-limits, and routes requests to internal services.',
+      assumed: null },
+    svc: { name: 'Orders Service', type: 'service · compute',
+      body: 'Validates and processes orders; the system of action for the order lifecycle.',
+      assumed: null },
+    db: { name: 'Postgres', type: 'data · store of record',
+      body: 'Durable store of record for orders, running on RDS multi-AZ.',
+      assumed: null },
+    stripe: { name: 'Stripe', type: 'external · SaaS',
+      body: 'Third-party payment processor notified after an order is accepted.',
+      assumed: 'Whether the webhook fires on capture or on authorization.' }
+  };
+
+  document.querySelectorAll('.nodeg').forEach(function (g) {
+    g.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var info = NODE_INFO[g.dataset.id];
+      if (!info) return;
+      document.getElementById('pName').textContent = info.name;
+      document.getElementById('pType').textContent = info.type;
+      document.getElementById('pBody').textContent = info.body;
+      document.getElementById('pAssumedWrap').style.display = info.assumed ? '' : 'none';
+      document.getElementById('pAssumed').textContent = info.assumed || '';
+      document.getElementById('panel').classList.add('open');
+    });
+  });
+  document.body.addEventListener('click', function (e) {
+    if (!document.getElementById('panel').contains(e.target)) closePanel();
+  });
+  function closePanel() { document.getElementById('panel').classList.remove('open'); }
+
+  setStage(0);
+
+  // ---- Export ---------------------------------------------------------------
+  function svgEl() { return document.getElementById('diagram'); }
+
+  function serialize() {
+    var clone = svgEl().cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    // Carry the stylesheet into the detached SVG so classes resolve on export.
+    var styleTag = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+    styleTag.textContent = document.querySelector('style').textContent;
+    clone.insertBefore(styleTag, clone.firstChild);
+    return new XMLSerializer().serializeToString(clone);
+  }
+
+  function flash(msg) {
+    var el = document.getElementById('flash');
+    el.textContent = msg;
+    setTimeout(function () { el.textContent = ''; }, 1800);
+  }
+
+  function toPng(scale, cb) {
+    var vb = svgEl().viewBox.baseVal;
+    var url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(serialize());
+    var img = new Image();
+    img.onload = function () {
+      var canvas = document.createElement('canvas');
+      canvas.width = vb.width * scale;
+      canvas.height = vb.height * scale;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(cb, 'image/png');
+    };
+    img.onerror = function () { flash('Render failed'); };
+    img.src = url;
+  }
+
+  function downloadPng() {
+    toPng(2, function (blob) {
+      var a = document.createElement('a');
+      a.download = 'diagram.png';
+      a.href = URL.createObjectURL(blob);
+      a.click();
+      flash('Downloaded');
+    });
+  }
+
+  function copyPng() {
+    toPng(2, function (blob) {
+      if (!navigator.clipboard || !window.ClipboardItem) { flash('Copy unsupported'); return; }
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        .then(function () { flash('Copied'); })
+        .catch(function () { flash('Copy blocked — use Download'); });
+    });
+  }
+
+  function downloadSvg() {
+    var blob = new Blob([serialize()], { type: 'image/svg+xml' });
+    var a = document.createElement('a');
+    a.download = 'diagram.svg';
+    a.href = URL.createObjectURL(blob);
+    a.click();
+    flash('Downloaded');
+  }
+</script>
+</body>
+</html>

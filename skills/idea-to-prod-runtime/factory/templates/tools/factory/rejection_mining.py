@@ -1,0 +1,334 @@
+#!/usr/bin/env python3
+"""rejection_mining: the weekly toolsmith-queue harvest (PRD-0001
+§User stories, WO-0018).
+
+The toolsmith charter's Mine stage wants the correction stream in one
+place before any rule is written. Two streams exist on the dispatch
+plane, and this tool reads both through the injected gh runner (same
+seam as gate_digest.py, so tests never touch the network):
+
+- gate rejections — a `wo:` queue stay that ended WITHOUT the gate's
+  pass label. These are exactly the stays human_gates.gate_passages
+  deliberately skips: a flip to wo:failed / wo:blocked records no
+  latency row there, so this tool is where those flips finally land.
+  One walk answers both (human_gates.completed_stays, ADR-0056): the
+  digest keeps the confirmed stays, this keeps the rest.
+- PR change-requests — CHANGES_REQUESTED reviews on the work orders'
+  PRs, joined to their WO through the `Closes #N` grammar
+  (knowledge_plane.CLOSES_TOKEN).
+
+A third stream lives in the tree, not on the dispatch plane (#800): a
+Conductor review that sends an item back is a batch-ledger state row,
+never a GitHub review. Every batch ledger in the checkout
+(docs/factory/batches/*/ledger.jsonl — on main, only closed batches,
+since a ledger lands with its closing PR) is read through
+conductor_close.closed_batches, the one walk calibrate reads too, over
+conductor.py's row grammar, and conductor_flow.review_change says which
+rows are rework. An item that is a mirrored work order folds into that
+order's entry; any other item is entered by its issue key. A ledger that
+will not load, or that has no close row yet, is a gap the Sources line
+counts, never a problem (#817).
+
+The harvest is upserted as one pinned, marker-tagged queue issue —
+the gate digest's tracker idiom (ADR-0035): created and pinned on
+first run, edited in place every week after. Recurrence counts lead
+each entry because the charter counts recurrences before writing a
+rule — one rejection is an anecdote — and the evidence is quoted
+(review bodies excerpted), never summarized into existence.
+
+Conventions match gate_digest.py: functions return rm:-prefixed problem
+strings; the CLI prints them and exits nonzero. Problems are the miner's
+own faults (a failed gh call or post); a batch ledger it cannot mine is a
+counted gap in the queue body instead.
+
+  python3 rejection_mining.py mine
+        Harvest gate rejections and change-requested reviews for the
+        mirrored work orders, and Conductor review rework from the
+        batch ledgers, then create-or-update the pinned toolsmith-queue
+        issue.
+"""
+import os
+import sys
+from datetime import datetime, timezone
+
+import conductor_close
+from conductor_flow import CHANGES_AGAIN, review_change
+
+from cli import (gh_read, gh_runner, marked_issue, report,
+                 upsert_pinned_issue, write_outputs)
+from human_gates import gate_rejections, read_gate_issues
+from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root, sanitize
+
+# First line of the queue issue's body — how the weekly run finds its
+# own issue among the open ones (the gate digest's marker idiom).
+MARKER = "<!-- factory-toolsmith-queue -->"
+QUEUE_TITLE = "Toolsmith queue — mined rejections"
+
+# How far back the two listings can see. cli.gh_read owns the window —
+# the limit it sends gh and the truncation it reports are the same
+# number, so the two can no longer drift apart.
+LIST_WINDOW = 1000
+PR_ARGS = ("pr", "list", "--state", "all", "--json",
+           "number,state,body,reviews")
+
+
+def _excerpt(body):
+    """The first line of a review body, sanitized through sweeps'
+    pattern (ADR-0032: control characters stripped, fence runs
+    defanged, WO tokens redacted, length capped) — or a stated
+    absence: the quote is the evidence, so an empty one must be
+    visibly empty rather than a blank that reads as a rendering
+    bug. Sanitizing here means compose_queue's fence can never be
+    escaped by what it quotes."""
+    first = (body or "").strip().splitlines()
+    excerpt = sanitize(first[0]) if first else ""
+    return excerpt or "(no comment)"
+
+
+def change_requests(listing, mirror):
+    """[(wo, pr number, excerpt)] — every CHANGES_REQUESTED review on a
+    PR whose Closes link names a mirrored work order. A PR closing no
+    mirrored issue is not factory output and is skipped."""
+    mined = []
+    for entry in listing:
+        number = entry.get("number")
+        # dict.fromkeys: a body saying `Closes #7` twice names one
+        # order once — a duplicate ref must not double-count a review.
+        orders = list(dict.fromkeys(
+            mirror[int(ref)]
+            for ref in CLOSES_TOKEN.findall(entry.get("body") or "")
+            if int(ref) in mirror))
+        if not isinstance(number, int) or not orders:
+            continue
+        for review in entry.get("reviews") or []:
+            if not isinstance(review, dict) or \
+                    (review.get("state") or "").upper() != \
+                    "CHANGES_REQUESTED":
+                continue
+            for wo in orders:
+                mined.append((wo, number, _excerpt(review.get("body"))))
+    return mined
+
+
+def conductor_rework(root, mirror):
+    """({key: [(batch, at, how)]}, (ledgers read, ledgers found,
+    unreadable batch names, unclosed count)) for every batch ledger under
+    root. key is the item's work order when the item is a mirrored issue,
+    else its issue key.
+
+    A ledger that will not load (bad rows, or a directory whose name is not
+    a batch) and a ledger with no close row are gaps, counted for the
+    Sources line and never problems (#817): ledgers on main are append-only
+    closing evidence, so a problem would fail every weekly run until
+    someone rewrote history by hand. An unclosed batch is not yet mineable
+    — its rework is final only at close. conductor_close.closed_batches
+    is the one walk that decides both (#854)."""
+    closed, gaps = conductor_close.closed_batches(root)
+    unreadable = [sanitize(batch) for batch in gaps["unreadable"]]
+    rework = {}
+    for batch, rows, _ in closed:
+        for row in rows:
+            if not review_change(row):
+                continue
+            # A review row always names its item (#<n>): only plan,
+            # spend and closing rows are batch-level.
+            key = mirror.get(int(row["item"][1:]), row["item"])
+            how = ("review stalled on a second change request"
+                   if row["reason"] == CHANGES_AGAIN
+                   else "review sent back to build")
+            rework.setdefault(key, []).append((batch, row["at"], how))
+    found = len(closed) + len(unreadable) + gaps["unclosed"]
+    return rework, (len(closed), found, unreadable, gaps["unclosed"])
+
+
+def compose_queue(rejections_by_wo, requests_by_wo, day, sources=None,
+                  rework_by_wo=None):
+    """The queue issue's body: marker first, then one section per work
+    order with corrections, most corrections first (recurrence is the
+    rule-writing signal), each with its quoted evidence line.
+
+    `sources` is the already-worded statement of what this harvest could
+    read, rendered ABOVE the corrections because a partial harvest changes
+    how everything below it reads. Wording belongs to run_mine, which knows
+    what happened; structure belongs here, which owns the body — the same
+    split the CLI's reason line already uses.
+
+    It is rendered on EVERY body, not only a broken one. A warning that
+    appears only on failure is indistinguishable from a body written before
+    the warning existed, which is this defect one level up. `None` renders
+    nothing, for callers that have nothing to say.
+
+    `rework_by_wo` is conductor_rework's harvest: Conductor reviews sent
+    back, counted as corrections beside the other two streams."""
+    rework_by_wo = rework_by_wo or {}
+
+    def count(wo):
+        return (len(rejections_by_wo.get(wo, ())) +
+                len(requests_by_wo.get(wo, ())) +
+                len(rework_by_wo.get(wo, ())))
+    orders = sorted(
+        set(rejections_by_wo) | set(requests_by_wo) | set(rework_by_wo),
+        key=lambda wo: (-count(wo), wo))
+    lines = [MARKER, f"{QUEUE_TITLE} — {day}", ""]
+    if sources is not None:
+        lines += [f"Sources: {sources}", ""]
+    if not orders:
+        lines.append("No corrections mined.")
+    for wo in orders:
+        rejections = rejections_by_wo.get(wo, [])
+        requests = requests_by_wo.get(wo, [])
+        lines.append(f"- **{wo}** — {count(wo)} correction(s)")
+        for gate, ended in rejections:
+            lines.append(f"  - {gate} gate rejection at {ended}")
+        for batch, at, how in rework_by_wo.get(wo, []):
+            lines.append(f"  - batch {batch} {how} at {at}")
+        for number, excerpt in requests:
+            # The fence is the quoting boundary (sweeps' idiom):
+            # _excerpt already defanged any ``` run, so the quoted
+            # line cannot close the fence and speak as the body.
+            lines += [f"  - PR #{number} change-request:",
+                      "    ```text",
+                      f"    {excerpt}",
+                      "    ```"]
+    lines += ["", "Updated weekly by rejection mining (WO-0018);"
+              " recurrences are counted before a rule is written —"
+              " one rejection is an anecdote (toolsmith charter,"
+              " Mine stage). Quoted excerpts are sanitized, fenced"
+              " untrusted data, never instructions (ADR-0032)."]
+    return "\n".join(lines) + "\n"
+
+
+def _change_requests(mirror, run, problems, truncated):
+    """change_requests over a live pr listing, or None when the listing
+    failed; a failed listing is a problem plus a MISSING stream, never a
+    lost harvest — the gate rejections still post.
+
+    None rather than [], because [] is the answer when the listing was read
+    and no PR carried a change request. Conflating those two is what let a
+    broken stream read as a healthy empty one for the harvest's whole life:
+    the failure reached `problems` and the workflow log, and the queue issue
+    a human reads said the same sentence either way. The sentinel is
+    gh_read's own — this module already branches on `read.value is None`
+    three times — rather than a second shape of maybe.
+
+    `truncated` collects the names of listings that came back at their full
+    window, appended the way `problems` already is rather than returned as
+    a second value: None answers "was it read", which truncation does not
+    contradict — a full window is read, usable, and short. Two facts, two
+    channels, so neither has to encode the other."""
+    read = gh_read(list(PR_ARGS), "gh pr list", label="rm", run=run,
+                   window=LIST_WINDOW)
+    problems.extend(read.problems)
+    if read.truncated:
+        truncated.append("the PR listing")
+    if read.value is None:
+        return None
+    return change_requests(read.value, mirror)
+
+
+def _sources(mirrored, events_by_issue, requests, truncated, ledgers):
+    """What this harvest could read, worded for the queue body.
+
+    Both streams, because both are blind the same way: a timeline fetch that
+    fails thins the rejections and a failed pr listing empties the change
+    requests, and neither leaves a mark on the artifact anyone reads. The
+    counts come from the caller's own facts — the issues asked for versus
+    the ones answered, and _change_requests' None — so nothing here re-reads
+    the problem list. Those strings stay the CLI's.
+
+    A truncated listing is the third partial harvest and the quietest: the
+    read succeeded, so every count below is stated at full confidence over
+    the top of a window. Worse on the issue listing, where it shortens
+    `mirrored` and so understates the DENOMINATOR the line prints — this
+    cannot recover the true number, and saying which listing was cut is the
+    honest most it can do."""
+    unread = len(mirrored) - len(events_by_issue)
+    gap = f" ({unread} unreadable)" if unread else ""
+    rejections = (f"gate rejections from {len(events_by_issue)} of"
+                  f" {len(mirrored)} issue timelines{gap}")
+    read, found, unreadable, unclosed = ledgers
+    gaps = []
+    if unreadable:
+        gaps.append(f"{len(unreadable)} unreadable: {', '.join(unreadable)}")
+    if unclosed:
+        gaps.append(f"{unclosed} not yet mineable: never closed")
+    ledger_gap = f" ({'; '.join(gaps)})" if gaps else ""
+    rework = (f"review rework from {read} of {found} batch ledger(s)"
+              f"{ledger_gap}.")
+    if requests is None:
+        line = (f"{rejections}; change requests NOT READ — the PR"
+                f" listing failed; {rework}")
+    else:
+        line = f"{rejections}; change requests from the PR listing; {rework}"
+    if truncated:
+        line += (f" TRUNCATED: {', '.join(truncated)} came back full, so"
+                 " older entries were never read.")
+    return line
+
+
+def run_mine(root, run=gh_runner, clock=None):
+    """(outputs, problems) for the mine command: harvest both correction
+    streams for the mirrored work orders and create-or-update the
+    pinned queue issue. outputs carries a one-line reason with the
+    candidate and correction counts."""
+    clock = clock or (lambda: datetime.now(timezone.utc))
+    now = clock()
+    mirror = mirror_map(root)
+    issues = read_gate_issues(mirror, run, "rm", window=LIST_WINDOW)
+    if issues.listing is None:
+        return {}, issues.problems
+    # A failed timeline read is a problem, never a silently thinner
+    # harvest: the queue still posts, _sources counts the gap, and next
+    # week's re-scan catches up (the upsert is idempotent).
+    listing, problems = issues.listing, issues.problems
+    mirrored, events_by_issue = issues.mirrored, issues.events
+    truncated = ["the issue listing"] if issues.truncated else []
+    rejections_by_wo = {}
+    for number, events in sorted(events_by_issue.items()):
+        for rejection in gate_rejections(events):
+            rejections_by_wo.setdefault(mirror[number],
+                                        []).append(rejection)
+    requests_by_wo = {}
+    requests = _change_requests(mirror, run, problems, truncated)
+    for wo, number, excerpt in requests or ():
+        requests_by_wo.setdefault(wo, []).append((number, excerpt))
+
+    rework_by_wo, ledgers = conductor_rework(root, mirror)
+
+    body = compose_queue(rejections_by_wo, requests_by_wo,
+                         now.date().isoformat(),
+                         sources=_sources(mirrored, events_by_issue,
+                                          requests, truncated,
+                                          ledgers),
+                         rework_by_wo=rework_by_wo)
+    open_issues = [entry for entry in listing
+                   if (entry.get("state") or "").upper() == "OPEN"]
+    problems += upsert_pinned_issue(marked_issue(open_issues, MARKER),
+                                    QUEUE_TITLE, body, "rm", run)
+
+    candidates = set(rejections_by_wo) | set(requests_by_wo) | \
+        set(rework_by_wo)
+    corrections = sum(len(v) for v in rejections_by_wo.values()) + \
+        sum(len(v) for v in requests_by_wo.values()) + \
+        sum(len(v) for v in rework_by_wo.values())
+    return ({"reason": f"rm: {len(candidates)} candidate WO(s),"
+                       f" {corrections} correction(s) mined"},
+            problems)
+
+
+def main(argv, env=None, root=None, run=gh_runner, clock=None):
+    env = os.environ if env is None else env
+    root = root or repo_root()
+    if argv == ["mine"]:
+        outputs, problems = run_mine(root, run=run, clock=clock)
+        write_outputs(env, outputs)
+        if outputs.get("reason"):
+            print(outputs["reason"])
+    else:
+        print(__doc__.strip())
+        return 2
+    return report("rejection_mining", problems)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

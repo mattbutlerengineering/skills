@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 448" role="img"
+     aria-labelledby="pb-title pb-desc">
+<title id="pb-title">Pipeline board — sample</title>
+<desc id="pb-desc">Four active runs placed on their pipeline stages:
+one-labels-walk at operate, first-live-dispatch and marker-diagnostics
+at implement, pipeline-board at prd; one run needs attention.</desc>
+<style>
+  /* Tokens mirror ../references/board-grammar.md, which defers to
+     architecture-diagram/references/design-system.md — the family's
+     one owner of these values. Dark overrides ONLY the custom
+     properties; every painted element resolves a token. */
+  :root {
+    --paper: #f6f5f1;
+    --raised: #ffffff;
+    --ink: #262a33;
+    --muted: #5b6472;
+    --soft: #878e9c;
+    --rule: rgba(38,42,51,0.12);
+    --accent: #d9622b;
+    --accent-tint: rgba(217,98,43,0.08);
+    --assumed: #9a6700;
+    --ahead: rgba(38,42,51,0.25);
+    --skip: rgba(38,42,51,0.30);
+    --chip: rgba(38,42,51,0.03);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0d1117;
+      --raised: #161b22;
+      --ink: #e6edf3;
+      --muted: #8b949e;
+      --soft: #6e7681;
+      --rule: rgba(230,237,243,0.12);
+      --accent: #f0925e;
+      --accent-tint: rgba(240,146,94,0.10);
+      --assumed: #d29922;
+      --ahead: rgba(230,237,243,0.25);
+      --skip: rgba(230,237,243,0.30);
+      --chip: rgba(230,237,243,0.03);
+    }
+  }
+  .eyebrow { font: 500 8px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+             letter-spacing: 0.14em; text-transform: uppercase; fill: var(--soft); }
+  .title   { font: 400 20px Georgia, "Times New Roman", serif; fill: var(--ink); }
+  .subtitle{ font: 400 11px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--muted); }
+  .colhead { font: 400 9px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+             letter-spacing: 0.06em; text-transform: uppercase; fill: var(--soft); text-anchor: middle; }
+  .slug    { font: 600 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--ink); }
+  .kind    { font: 400 10px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; fill: var(--muted); }
+  .count   { font: 400 9px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+             fill: var(--accent); text-anchor: middle; }
+  .chiplbl { font: 500 8px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+             letter-spacing: 0.10em; text-transform: uppercase; fill: var(--muted); text-anchor: middle; }
+  .warnhead{ font: 500 8px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+             letter-spacing: 0.14em; text-transform: uppercase; fill: var(--assumed); }
+  .warnrow { font: 400 10px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; fill: var(--muted); }
+  .legend  { font: 500 9px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+             letter-spacing: 0.04em; text-transform: uppercase; fill: var(--soft); }
+  .rule    { stroke: var(--rule); stroke-width: 1; }
+  .done    { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .skipline{ stroke: var(--skip); stroke-width: 1.2; stroke-linecap: round; }
+</style>
+
+<!-- ground -->
+<rect x="0" y="0" width="880" height="448" fill="var(--paper)"/>
+
+<!-- header -->
+<text class="eyebrow" x="24" y="34">Pipeline board</text>
+<text class="title" x="24" y="58">skills</text>
+<text class="subtitle" x="24" y="76">4 active runs · snapshot 2026-08-25 11:30</text>
+
+<!-- column geometry: label column x=24..216, ten stage columns of 64
+     starting at x=216; column i center = 216 + 64*i + 32 -->
+<g class="colhead">
+  <text x="248" y="104">Idea</text>
+  <text x="312" y="104">PRD</text>
+  <text x="376" y="104">UX</text>
+  <text x="440" y="104">Arch</text>
+  <text x="504" y="104">Dcmp</text>
+  <text x="568" y="104">Impl</text>
+  <text x="632" y="104">Vrfy</text>
+  <text x="696" y="104">Rvw</text>
+  <text x="760" y="104">Ship</text>
+  <text x="824" y="104">Oper</text>
+</g>
+<line class="rule" x1="24" y1="112" x2="856" y2="112"/>
+
+<!-- lane 1: maintenance run at operate (furthest along, so first).
+     Row band: y=112..168, glyph center y=136, labels at y=140/154. -->
+<text class="slug" x="24" y="140">one-labels-walk</text>
+<text class="kind" x="24" y="154">maintenance</text>
+<!-- capture span chip across the Idea–UX columns (224..400) -->
+<rect x="224" y="126" width="176" height="20" rx="2" fill="var(--chip)" stroke="var(--rule)"/>
+<text class="chiplbl" x="312" y="139">Capture ✓</text>
+<!-- done checks at Arch, Dcmp, Impl, Vrfy, Rvw, Ship; current at Oper -->
+<path class="done" d="M435 136 l3.5 4 6.5 -8"/>
+<path class="done" d="M499 136 l3.5 4 6.5 -8"/>
+<path class="done" d="M563 136 l3.5 4 6.5 -8"/>
+<path class="done" d="M627 136 l3.5 4 6.5 -8"/>
+<path class="done" d="M691 136 l3.5 4 6.5 -8"/>
+<path class="done" d="M755 136 l3.5 4 6.5 -8"/>
+<circle cx="824" cy="134" r="5.5" fill="var(--accent)"/>
+<line class="rule" x1="24" y1="168" x2="856" y2="168"/>
+
+<!-- lane 2: feature run at implement with progress -->
+<text class="slug" x="24" y="196">first-live-dispatch</text>
+<text class="kind" x="24" y="210">feature</text>
+<path class="done" d="M243 192 l3.5 4 6.5 -8"/>
+<path class="done" d="M307 192 l3.5 4 6.5 -8"/>
+<path class="done" d="M371 192 l3.5 4 6.5 -8"/>
+<path class="done" d="M435 192 l3.5 4 6.5 -8"/>
+<path class="done" d="M499 192 l3.5 4 6.5 -8"/>
+<!-- in-progress: accent ring, half fill, count beneath -->
+<circle cx="568" cy="190" r="5.5" fill="none" stroke="var(--accent)" stroke-width="1.2"/>
+<path d="M568 184.5 a5.5 5.5 0 0 1 0 11 Z" fill="var(--accent)"/>
+<text class="count" x="568" y="206">1/9</text>
+<circle cx="632" cy="190" r="1.5" fill="var(--ahead)"/>
+<circle cx="696" cy="190" r="1.5" fill="var(--ahead)"/>
+<circle cx="760" cy="190" r="1.5" fill="var(--ahead)"/>
+<circle cx="824" cy="190" r="1.5" fill="var(--ahead)"/>
+<line class="rule" x1="24" y1="224" x2="856" y2="224"/>
+
+<!-- lane 3: maintenance run at implement (re-entry: implement, so
+     Arch and Dcmp are skipped — short dashes, not checks) -->
+<text class="slug" x="24" y="252">marker-diagnostics</text>
+<text class="kind" x="24" y="266">maintenance</text>
+<rect x="224" y="238" width="176" height="20" rx="2" fill="var(--chip)" stroke="var(--rule)"/>
+<text class="chiplbl" x="312" y="251">Capture ✓</text>
+<line class="skipline" x1="435" y1="246" x2="445" y2="246"/>
+<line class="skipline" x1="499" y1="246" x2="509" y2="246"/>
+<circle cx="568" cy="246" r="5.5" fill="none" stroke="var(--accent)" stroke-width="1.2"/>
+<path d="M568 240.5 a5.5 5.5 0 0 1 0 11 Z" fill="var(--accent)"/>
+<text class="count" x="568" y="262">2/5</text>
+<circle cx="632" cy="246" r="1.5" fill="var(--ahead)"/>
+<circle cx="696" cy="246" r="1.5" fill="var(--ahead)"/>
+<circle cx="760" cy="246" r="1.5" fill="var(--ahead)"/>
+<circle cx="824" cy="246" r="1.5" fill="var(--ahead)"/>
+<line class="rule" x1="24" y1="280" x2="856" y2="280"/>
+
+<!-- lane 4: feature run at prd -->
+<text class="slug" x="24" y="308">pipeline-board</text>
+<text class="kind" x="24" y="322">feature</text>
+<path class="done" d="M243 304 l3.5 4 6.5 -8"/>
+<circle cx="312" cy="302" r="5.5" fill="var(--accent)"/>
+<circle cx="376" cy="302" r="1.5" fill="var(--ahead)"/>
+<circle cx="440" cy="302" r="1.5" fill="var(--ahead)"/>
+<circle cx="504" cy="302" r="1.5" fill="var(--ahead)"/>
+<circle cx="568" cy="302" r="1.5" fill="var(--ahead)"/>
+<circle cx="632" cy="302" r="1.5" fill="var(--ahead)"/>
+<circle cx="696" cy="302" r="1.5" fill="var(--ahead)"/>
+<circle cx="760" cy="302" r="1.5" fill="var(--ahead)"/>
+<circle cx="824" cy="302" r="1.5" fill="var(--ahead)"/>
+<line class="rule" x1="24" y1="336" x2="856" y2="336"/>
+
+<!-- attention strip: present only when the model's attention list is
+     non-empty; delete this group for a clean board -->
+<text class="warnhead" x="24" y="360">Needs attention</text>
+<text class="warnrow" x="24" y="378">docs/fixes/bad — defect.md line 12 does not decode as UTF-8</text>
+<line class="rule" x1="24" y1="392" x2="856" y2="392"/>
+
+<!-- legend -->
+<g transform="translate(24,414)">
+  <path class="done" d="M0 0 l3.5 4 6.5 -8"/>
+  <text class="legend" x="16" y="3">done</text>
+  <circle cx="66" cy="0" r="5" fill="var(--accent)"/>
+  <text class="legend" x="78" y="3">current</text>
+  <circle cx="140" cy="0" r="5" fill="none" stroke="var(--accent)" stroke-width="1.2"/>
+  <path d="M140 -5 a5 5 0 0 1 0 10 Z" fill="var(--accent)"/>
+  <text class="legend" x="152" y="3">in progress n/m</text>
+  <circle cx="256" cy="0" r="1.5" fill="var(--ahead)"/>
+  <text class="legend" x="266" y="3">ahead</text>
+  <line class="skipline" x1="318" y1="0" x2="328" y2="0"/>
+  <text class="legend" x="336" y="3">skipped</text>
+  <text class="legend" x="700" y="3">sorted furthest-along first</text>
+</g>
+</svg>

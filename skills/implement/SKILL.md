@@ -1,0 +1,78 @@
+---
+name: implement
+description: Use when a breakdown exists and it's time to write code — working through work items test-first, checking them off as acceptance criteria are met — or when the user says to start building, start coding, or start working through the breakdown. The artifact is the code itself; progress lives in breakdown.md's checkboxes.
+---
+
+# Implement
+
+Work through `breakdown.md` item by item, test-first. This stage produces no
+document — the code is the artifact, and progress is the checkboxes.
+
+## Process
+
+1. Read `../idea-to-prod-runtime/docs/pipeline-protocol.md` for run discovery and gating.
+
+2. **Soft gate.** Predecessor artifact: `breakdown.md`. If missing, apply
+   soft gating (for a trivial change, the backfill can be a three-item
+   breakdown — but make the items and criteria real).
+
+3. **Pick the next item.** The first unchecked item whose blockers are all
+   checked. Confirm the pick with the user if several are eligible.
+
+4. **Per item, test-first:**
+   - Turn the item's acceptance criterion into a failing test at the highest
+     seam the codebase offers (prefer existing test seams over new ones).
+   - Watch it fail for the right reason.
+   - Before writing the implementation, climb `lean`'s ladder in
+     `../lean/references/ladder.md` and stop at the first rung that holds.
+     Lean's floor is never cut: validation where untrusted input enters,
+     error handling that prevents data loss, security controls,
+     accessibility basics, anything the user explicitly asked for. A
+     deliberate shortcut with a known ceiling carries a comment starting
+     `lean:` that names the ceiling and what would trigger the upgrade;
+     that marker is the record, so nothing about the ladder goes into
+     `breakdown.md`.
+   - Write the minimum implementation that passes, matching the
+     architecture's contracts and the codebase's existing style.
+   - Refactor with the tests green.
+   - Check the item off in `breakdown.md`.
+   - If the item carries a `(tracker: #NNN)` reference, close the mirrored
+     issue via the harness's issue tooling when you check it off. Items
+     with no tracker reference close nothing — a run without a tracker
+     mirror is unchanged.
+
+5. **Log deviations.** When reality disagrees with the breakdown — an item splits,
+   a contract needs adjusting — log it dated under `breakdown.md`'s Notes. A
+   design-level disagreement routes back to Architect, not around it. A
+   deviation from `architecture.md` that passes the protocol's "When to
+   write an ADR" test gets an ADR (superseding or amending one it
+   contradicts), cited from the Notes entry — never a silent divergence.
+
+6. **Hand off.** When every checkbox is checked, the stage is complete; next
+   stage is Verify. Commit the artifact on the run's branch — the
+   protocol's "Commit at the stage boundary" section owns the rule and the
+   commit subject.
+
+## Rules
+
+- Surgical scope: touch only what the current item requires. Adjacent smells
+  get logged, not fixed.
+- When an item moves code into a different module, re-read every moved
+  comment and the receiving module's docstring — especially any list of
+  what it owns — against the new home.
+- Never check an item whose acceptance criterion you didn't actually verify.
+- Commit at item boundaries with messages naming the item, so the history
+  reads like the breakdown.
+- Stuck twice on the same item? Stop and re-read the architecture — the bug
+  is often upstream of the code.
+
+## Installed by the skills CLI
+
+This copy came from this repo's `npx` branch. The plugin root these
+steps name is the sibling folder `../idea-to-prod-runtime/`, which holds the
+pipeline protocol, `CONTEXT.md`, `factory/` and every root tool. Where a
+step runs a tool from the plugin root or the factory repo checkout, run
+`python3 <this skill's directory>/../idea-to-prod-runtime/<tool>.py`. A stamped
+repo's `tools/factory/` copy still wins wherever a step says so. Two
+plugin features are absent: the `/idea-to-prod:<skill>` names (use
+`/<skill>`) and the house-voice output style.
