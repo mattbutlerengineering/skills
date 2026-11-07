@@ -435,6 +435,12 @@ function hopTimes(run) {
 }
 
 // --------------------------------------------------------------- three.js
+// Dynamic import() of blob: ES modules is the one engine-sensitive
+// construct on this page. Verified working — factory, finder, fly-to,
+// replay, zero console errors — in Chromium (CDP), WebKit and Firefox
+// (Playwright 1.57, 2026-11-07). A failure lands in the catch below and
+// shows the plain list, so a future engine regression degrades, never
+// blanks.
 async function loadThree() {
   const decode = (id) => atob($(id).textContent.trim());
   const bytes = (text) => Uint8Array.from(text, (c) => c.charCodeAt(0));
