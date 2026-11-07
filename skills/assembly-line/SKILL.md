@@ -38,7 +38,7 @@ work has stopped.
 Open the page, or hand its path to the user, whichever the session
 supports. Tell the user what it holds, in one or two sentences, from
 the page's own header line (repo, active and completed counts, as-of
-date) — not from your own count. Point at the four things to do on it:
+date) — not from your own count. Point at the five things to do on it:
 
 - Read it at a glance: the chip strip across the top is the pipeline in
   order with each station's live count, the amber chip and sign mark the
@@ -46,14 +46,25 @@ date) — not from your own count. Point at the four things to do on it:
   Clicking a chip flies the camera to its station and pins its list.
   For a cold room, the Tour button walks the floor in five beats —
   entry, build, the pile-up, the shelves — and ends in the replay.
+- Find one run: the header's "find a run…" box (every slug offered)
+  flies to its crate and pins its row; ◉ trace on any pinned row
+  replays that run's journey solo, every other crate hidden until
+  Esc or the banner's stop.
 - Hover any machine or crate to see what that step does and what is in
-  it; click to pin the full list, Esc to close. Scroll to zoom, drag to
-  pan, double-click to reset.
-- Press Play (or Space) to replay the repo's history; drag the scrubber
-  or step a day at a time with ← and →. Dates are to the day from
-  artifact frontmatter, and order within a day is inferred, as the page
-  says under the bar.
-- Press Export clip for an animated GIF of the replay.
+  it; click to pin the full list, Esc to close. Scroll or pinch to
+  zoom, drag to pan, double-click to reset.
+- Press Play (or Space) to replay the repo's history; drag the scrubber,
+  step a day with ← and →, or jump back with the "today" button. The
+  big date over the floor says where in time the view is. Dates are to
+  the day from artifact frontmatter, and order within a day is
+  inferred, as the page says under the bar.
+- Press Export clip for a looping GIF of the replay, and share any
+  view as a link: the page writes #day=, #run=, #station= and #trace=
+  into the address bar as you drive, and #tour opens with the guided
+  walk running.
+
+The page follows the system's light or dark scheme, and it is one file
+with no network access: nothing leaves the machine it is opened on.
 
 If the browser cannot draw the factory, the page says so and lists every
 run by station instead; the facts are the same.
