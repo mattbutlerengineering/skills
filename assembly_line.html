@@ -145,6 +145,29 @@
   #export-status { grid-column: 1 / -1; font-size: .8rem; }
   .speed { display: flex; gap: .25rem; }
   [hidden] { display: none !important; }
+  /* In a dark room the shell dims and the lit factory floor floats
+     like a diorama; the scene's own colours never change. */
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #e7ebe6; --muted: #98a39a; --panel: #1c221e;
+      --line: #4a524b; }
+    html, body { background: radial-gradient(1100px 700px at 50% 10%,
+      #232c25 0%, #161c18 55%, #0e130f 100%); }
+    #find, #legend-open, .chip, #transport button {
+      background: rgba(30,37,32,.85); color: var(--ink);
+      border-color: #4a524b; }
+    #find::placeholder { color: var(--muted); }
+    .chip .n, #transport button[aria-pressed="true"] { color: #1c2518; }
+    .chip.zero .n { background: #2c332d; color: var(--muted); }
+    .chip.hot { background: #3a2b16; }
+    #pipeline .flow { color: #5c665e; }
+    #hint, #replay-date { background: rgba(28,34,30,.85); color: var(--ink);
+      border-color: #4a524b; }
+    #notice { background: #3a2b16; color: #f3c892; }
+    #panel header { border-bottom-color: #2e352f; }
+    #panel details { border-bottom-color: #2e352f; }
+    #transport { background: rgba(18,23,19,.8);
+      border-top-color: rgba(255,255,255,.08); }
+  }
   /* A phone gets the factory, not the furniture: the story and hint go,
      the chips become one scrollable row, and the legend is a bottom
      sheet (it no longer opens on load there — see setLegend). */
@@ -1433,6 +1456,7 @@ function factory(THREE, model) {
     find.classList.remove("miss");
     openPanel({kind: "crate", run});
     focusOn(crateOf.get(run).mesh.position, 2.4);
+    history.replaceState(null, "", `#run=${encodeURIComponent(run.slug || run.ref)}`);
     find.blur();
     requestRender();
   });
@@ -1486,6 +1510,7 @@ function factory(THREE, model) {
     chip.addEventListener("click", () => {
       openPanel({kind: "station", station: key});
       focusOn(at(key), 2.1);
+      history.replaceState(null, "", `#station=${key}`);
       requestRender();
     });
     pipeline.append(chip);
@@ -1549,6 +1574,10 @@ function factory(THREE, model) {
     state.playing = false;
     state.t = t >= LAST + 1 ? LAST + 1 : t + 1 - 1e-6;
     layout(); syncTransport(); renderPanel(); requestRender();
+    // The hash mirrors the day, so the current view is a copyable link;
+    // back at today the hash clears rather than naming it.
+    history.replaceState(null, "", isToday()
+      ? location.pathname + location.search : `#day=${currentDay()}`);
   }
   scrub.addEventListener("input", () => { goToDay(Number(scrub.value)); });
   // Presenter keys: Space plays and pauses, the arrows step one day at
@@ -1701,6 +1730,25 @@ function factory(THREE, model) {
   fit();
   layout();
   syncTransport();
+  // Deep links: #day=YYYY-MM-DD scrubs there, #run=<slug> finds the
+  // crate, #station=<key> pins the station — the links the hash writers
+  // above produce. A bad value is ignored.
+  (() => {
+    const hash = new URLSearchParams(location.hash.slice(1));
+    const day = hash.get("day");
+    if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      const index = dayIndex(day);
+      if (index >= FIRST && index <= LAST) { goToDay(index); intro = null; view.zoom = BASE_ZOOM; }
+    }
+    const run = hash.get("run");
+    if (run) { find.value = run; find.dispatchEvent(new Event("change")); intro = null; }
+    const station = hash.get("station");
+    if (station && GRID[station]) {
+      openPanel({kind: "station", station});
+      focusOn(at(station), 2.1);
+      intro = null;
+    }
+  })();
   requestAnimationFrame(frame);
 }
 
