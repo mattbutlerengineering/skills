@@ -29,10 +29,23 @@
     border-radius: 999px; padding: .2rem .8rem; width: 15em; }
   #find:focus { border-color: var(--line); background: #fff; outline: none; }
   #find.miss { border-color: var(--hot); box-shadow: 0 0 0 3px rgba(224,144,58,.25); }
-  #legend-open { font: inherit; font-size: .85rem;
+  #legend-open, #tour-open { font: inherit; font-size: .85rem;
     border: 1.5px solid rgba(47,50,56,.3); background: rgba(255,255,255,.8);
     border-radius: 999px; padding: .2rem .8rem; cursor: pointer; }
-  #legend-open:hover { border-color: var(--line); background: #fff; }
+  #legend-open:hover, #tour-open:hover { border-color: var(--line);
+    background: #fff; }
+  #tour { position: absolute; left: 50%; bottom: 1rem;
+    transform: translateX(-50%); width: min(480px, calc(100vw - 1.5rem));
+    background: var(--panel); border: 2px solid var(--line);
+    border-radius: 12px; padding: .7rem .9rem; z-index: 6;
+    box-shadow: 0 14px 40px rgba(31,42,35,.22); }
+  #tour p { margin: 0 0 .5rem; }
+  #tour .row { display: flex; align-items: center; gap: .5rem; }
+  #tour .dots { color: var(--muted); letter-spacing: .2em; flex: 1; }
+  #tour button { font: inherit; border: 1.5px solid var(--line);
+    background: var(--panel); color: var(--ink); border-radius: 8px;
+    padding: .25rem .8rem; cursor: pointer; }
+  #tour .primary { background: var(--belt); color: #1c2518; font-weight: 600; }
   #story { margin: 0; padding: 0 1.1rem .45rem; color: var(--muted);
     flex: none; }
   #story b { color: var(--ink); font-weight: 600; }
@@ -197,6 +210,7 @@
   <input id="find" type="search" list="find-list" placeholder="find a run…"
     aria-label="Find a run by name" hidden>
   <datalist id="find-list"></datalist>
+  <button id="tour-open" hidden>▶ Tour</button>
   <button id="legend-open" aria-expanded="false"
     aria-controls="legend">? How to read this</button>
 </header>
@@ -211,6 +225,14 @@
   <span id="hint">space play · ← → step a day · scroll zoom · drag pan ·
     double-click reset</span>
   <span id="replay-date" hidden></span>
+  <aside id="tour" hidden aria-label="Guided tour">
+    <p id="tour-text"></p>
+    <div class="row">
+      <span class="dots" id="tour-dots"></span>
+      <button id="tour-skip">✕ End</button>
+      <button id="tour-next" class="primary">Next →</button>
+    </div>
+  </aside>
   <aside id="legend" aria-label="How to read this">
     <h2>How to read this
       <button id="legend-close" aria-label="Close legend">✕</button></h2>
@@ -1067,6 +1089,7 @@ function factory(THREE, model) {
   const LAST = dayIndex(model.timeline.last_day);
   const times = new Map(runs.map((run) => [run, hopTimes(run)]));
   const state = {t: LAST + 1, playing: false, seconds: 30, highlighted: null, pinned: null};
+  let lastHot = null;
   const isToday = () => state.t >= LAST + 1 - 1e-9;
   const currentDay = () => isoOf(Math.min(LAST, Math.floor(state.t - 1e-9)));
   // Where a run is at time t: its station and, mid-move, its belt position.
@@ -1129,6 +1152,7 @@ function factory(THREE, model) {
     const working = Object.keys(counts).filter((k) => k !== "completed" && k !== "bin");
     const most = Math.max(...working.map((k) => counts[k]), 0);
     const hotKey = most > 1 ? working.find((k) => counts[k] === most) : null;
+    lastHot = hotKey;
     Object.keys(GRID).forEach((key) =>
       updateSign(key, counts[key] || 0, key === hotKey));
     updateChips(counts, hotKey);
@@ -1499,7 +1523,7 @@ function factory(THREE, model) {
   });
   $("panel-close").addEventListener("click", closePanel);
   addEventListener("keydown", (event) => {
-    if (event.key === "Escape") { closePanel(); setLegend(false); }
+    if (event.key === "Escape") { closePanel(); setLegend(false); endTour(); }
   });
 
   // ------------------------------------------------------------- chips
@@ -1556,6 +1580,60 @@ function factory(THREE, model) {
   $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
   $("legend-close").addEventListener("click", () => setLegend(false));
 
+  // -------------------------------------------------------------- tour
+  // Thirty guided seconds for a cold room: five beats ending in the
+  // replay. The script is built at start time from the floor itself,
+  // so the bottleneck beat names the real pile-up.
+  let tourStep = -1;
+  function tourScript() {
+    const beats = [
+      {text: `This is ${model.repo}'s software factory. Every crate is one run — a feature or a fix — riding the belts from Idea to Ship.`, reset: true},
+      {text: "Work enters here: Idea builds the crate, and the numbered stations carry it through spec, design, build and checks.", station: "idea"},
+      {text: "Implement assembles the code. Click any crate here and its work orders lay out as parts — green done, grey open.", station: "implement"},
+      lastHot ? {text: `The amber sign is the pile-up: ${nameOf(lastHot)} holds the most work right now. Piles mean waiting.`, station: lastHot}
+        : {text: "An amber sign would mark the busiest station — right now no queue stands out.", reset: true},
+      {text: "Finished runs land on the Done shelves: shipped, retro written. The factory keeps what it produces.", station: "completed"},
+      {text: "And this is the whole story: press Next to replay the repo's history and watch every crate flow.", reset: true, thenPlay: true}
+    ];
+    return beats;
+  }
+  let tourBeats = [];
+  function showTourStep() {
+    const beat = tourBeats[tourStep];
+    $("tour-text").textContent = beat.text;
+    $("tour-dots").textContent = tourBeats.map((b, i) => i === tourStep ? "●" : "○").join(" ");
+    $("tour-next").textContent = tourStep === tourBeats.length - 1 ? "Play ▶" : "Next →";
+    if (beat.reset) resetView();
+    if (beat.station) { focusOn(at(beat.station), 1.9); }
+    requestRender();
+  }
+  function startTour() {
+    closePanel(); setLegend(false); card.hidden = true;
+    $("tour-open").blur();
+    if (!isToday()) goToDay(LAST + 1);
+    tourBeats = tourScript();
+    tourStep = 0;
+    $("tour").hidden = false;
+    showTourStep();
+  }
+  function nextTour() {
+    const beat = tourBeats[tourStep];
+    if (beat && beat.thenPlay) { endTour(); if (!state.playing) play.click(); return; }
+    tourStep++;
+    if (tourStep >= tourBeats.length) { endTour(); return; }
+    showTourStep();
+  }
+  function endTour() {
+    if (tourStep < 0) return;
+    tourStep = -1;
+    $("tour").hidden = true;
+    resetView();
+  }
+  $("tour-open").hidden = false;
+  $("tour-open").addEventListener("click", startTour);
+  $("tour-next").addEventListener("click", nextTour);
+  $("tour-skip").addEventListener("click", endTour);
+
   // ---------------------------------------------------------- transport
   const play = $("play"), scrub = $("scrub");
   scrub.min = String(FIRST); scrub.max = String(LAST + 1); scrub.value = String(LAST + 1);
@@ -1601,8 +1679,16 @@ function factory(THREE, model) {
   // Home and End jump to the first day and back to today. Keys inside
   // the transport's own controls keep their native behaviour.
   addEventListener("keydown", (event) => {
-    if (!enabled || exporting
-      || event.target.closest("input, button, details, summary")) return;
+    if (!enabled || exporting) return;
+    // Inside the tour the arrows page the script, not the calendar —
+    // and this runs before the focus guard, because starting the tour
+    // leaves focus on a button.
+    if (tourStep >= 0) {
+      if (event.target.closest("input")) return;
+      if (event.key === "ArrowRight" || event.key === "Enter") { event.preventDefault(); nextTour(); }
+      return;
+    }
+    if (event.target.closest("input, button, details, summary")) return;
     const day = Math.min(LAST + 1, Math.floor(state.t));
     if (event.key === " ") { event.preventDefault(); play.click(); }
     else if (event.key === "ArrowLeft") { event.preventDefault(); goToDay(Math.max(FIRST, day - 1)); }
