@@ -129,7 +129,7 @@
   #panel li.done::before { content: "☑ "; }
   #panel li.open::before { content: "☐ "; }
   #transport { flex: none; display: grid; gap: .2rem .8rem;
-    grid-template-columns: auto 1fr auto auto auto; align-items: center;
+    grid-template-columns: auto 1fr auto auto auto auto; align-items: center;
     padding: .5rem 1rem .6rem; background: rgba(255,255,255,.72);
     backdrop-filter: blur(6px); border-top: 1px solid rgba(0,0,0,.08); }
   #transport button { font: inherit; padding: .3rem .7rem; border-radius: 8px;
@@ -249,6 +249,7 @@
   <input id="scrub" type="range" min="0" max="0" step="1" value="0"
          aria-label="Replay date" disabled>
   <span id="day"></span>
+  <button id="today" hidden>⏭ today</button>
   <span class="speed" role="group" aria-label="Replay length">
     <button id="speed-30" aria-pressed="true" disabled>30s</button>
     <button id="speed-60" aria-pressed="false" disabled>60s</button>
@@ -1237,8 +1238,9 @@ function factory(THREE, model) {
   }
   addEventListener("resize", () => { fit(); requestRender(); });
   // The resting view sits a touch inside the fitted frame: the floor's
-  // corners are empty, so 1.12× buys a visibly larger factory.
-  const BASE_ZOOM = 1.12;
+  // corners are empty, so 1.1× buys a visibly larger factory while the
+  // top row's sign keeps clear of the header.
+  const BASE_ZOOM = 1.1;
   const resetView = () => { view.zoom = BASE_ZOOM; view.panX = 0; view.panY = 0; applyView(); requestRender(); };
   // Centre a world point and zoom to it (the chips fly the camera).
   function focusOn(point, zoom) {
@@ -1559,10 +1561,14 @@ function factory(THREE, model) {
     const off = state.playing || !isToday();
     $("replay-date").hidden = !off;
     if (off) $("replay-date").textContent = dayLabel();
+    // The way back for the mouse: End is keyboard-only and the scrubber
+    // asks for a precise drag, so off-today grows a "today" button.
+    $("today").hidden = !off || state.playing;
     play.textContent = state.playing ? "❚❚ Pause" : "▶ Play";
     play.setAttribute("aria-label", state.playing ? "Pause the replay" : "Play the replay");
     setHeader(model, isToday() ? null : currentDay());
   }
+  $("today").addEventListener("click", () => goToDay(LAST + 1));
   const enabled = runs.length > 0;
   [play, scrub, $("speed-30"), $("speed-60"), $("export")].forEach((b) => { b.disabled = !enabled; });
   play.addEventListener("click", () => {
