@@ -1747,7 +1747,10 @@ function factory(THREE, model) {
   const KIND_CSS = {feature: "#7cc44e", maintenance: "#e0903a", product: "#8f6fd8"};
   function crateCard(run) {
     const where = crateOf.get(run).where;
-    const rows = [el("h3", {}, "Crate · one run"),
+    // A finished run is a building in the city, not a crate on a belt:
+    // the card names what the viewer is pointing at and when it landed.
+    const built = where && where.station === "completed";
+    const rows = [el("h3", {}, built ? "Building · one finished run" : "Crate · one run"),
       el("p", {class: "ref"}, run.slug || run.ref)];
     if (run.status === "attention") {
       rows.push(el("p", {}, run.dir), el("p", {}, run.reason));
@@ -1756,6 +1759,12 @@ function factory(THREE, model) {
       const dot = el("span", {class: "kdot"});
       dot.style.background = KIND_CSS[run.kind] || "#9aa0a8";
       let line = `${run.kind} · at ${station}`;
+      if (built) {
+        const landed = run.history.findLast((hop) => hop.station === "completed");
+        const n = run.work_orders.length;
+        line = `${run.kind}${landed ? ` · finished ${landed.day}` : ""}`
+          + (n ? ` · ${n} work order${n === 1 ? "" : "s"}` : "");
+      }
       if (where && where.station === "implement" && run.work_orders.length)
         line += ` · ${doneCount(run)}/${run.work_orders.length} WOs${isToday() ? "" : " (today)"}`;
       rows.push(el("p", {}, dot, line), el("p", {class: "muted"}, run.dir));
