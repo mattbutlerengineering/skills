@@ -1895,7 +1895,10 @@ function factory(THREE, model) {
   scrub.min = String(FIRST); scrub.max = String(LAST + 1); scrub.value = String(LAST + 1);
   function dayLabel() { return isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay(); }
   function syncTransport() {
-    if (!state.playing) scrub.value = String(Math.round(state.t));
+    // The thumb tracks the playhead: smooth while the replay runs,
+    // snapped to the day when parked (a drag mid-flight pauses first,
+    // so this write never fights the user's hand).
+    scrub.value = state.playing ? String(state.t) : String(Math.round(state.t));
     $("day").textContent = dayLabel();
     // The big date over the canvas: during a replay (or scrubbed into
     // the past) the canvas is where everyone looks, and the transport
