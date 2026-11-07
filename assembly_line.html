@@ -1699,6 +1699,11 @@ function factory(THREE, model) {
     if (!key) return;
     setLegend(false);
     state.pinned = {key, run: hit.kind === "crate" ? hit.run : null};
+    // Every pin is a link — clicking a crate on the canvas shares the
+    // same as finding it. One writer here instead of one per caller.
+    history.replaceState(null, "", hit.kind === "crate"
+      ? `#run=${encodeURIComponent(hit.run.slug || hit.run.ref)}`
+      : `#station=${key}`);
     renderPanel();
   }
   // ------------------------------------------------------------- find
@@ -1727,7 +1732,7 @@ function factory(THREE, model) {
     if (!isToday()) goToDay(LAST + 1);
     openPanel({kind: "crate", run});
     focusOn(runFocus(run), 2.4);
-    history.replaceState(null, "", `#run=${encodeURIComponent(run.slug || run.ref)}`);
+    // (openPanel wrote the #run link)
     find.blur();
     requestRender();
   });
@@ -1786,7 +1791,6 @@ function factory(THREE, model) {
     chip.addEventListener("click", () => {
       openPanel({kind: "station", station: key});
       focusOn(focusTargetOf(key), 2.1);
-      history.replaceState(null, "", `#station=${key}`);
       requestRender();
     });
     pipeline.append(chip);
