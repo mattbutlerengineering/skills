@@ -190,9 +190,14 @@
       --line: #4a524b; }
     html, body { background: radial-gradient(1100px 700px at 50% 10%,
       #232c25 0%, #161c18 55%, #0e130f 100%); }
-    #find, #legend-open, .chip, #transport button {
+    #find, #legend-open, #tour-open, .chip, #transport button {
       background: rgba(30,37,32,.85); color: var(--ink);
       border-color: #4a524b; }
+    /* The light rules brighten to #fff on hover and focus; under light
+       ink that left the finder's typed text and a hovered chip white on
+       white. Before .chip.hot, so the pile-up keeps its amber. */
+    #find:focus, #legend-open:hover, #tour-open:hover, .chip:hover {
+      background: #27302a; border-color: #7d887f; }
     #find::placeholder { color: var(--muted); }
     .chip .n, #transport button[aria-pressed="true"] { color: #1c2518; }
     .chip.zero .n { background: #2c332d; color: var(--muted); }
