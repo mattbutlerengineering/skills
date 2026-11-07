@@ -259,9 +259,10 @@
   <button id="tour-open" hidden>▶ Tour</button>
   <button id="legend-open" aria-expanded="false"
     aria-controls="legend">? How to read this</button>
-  <p id="story"><b>Each crate is one run</b> — a feature or fix — riding the
-    belt from <b>Idea</b> to <b>Ship</b>. Crates pile up where work waits;
-    finished runs raise the <b>city</b> at the end of the line.</p>
+  <p id="story"><b>Each crate is one run</b> — a feature, maintenance or
+    product run — riding the belt from <b>Idea</b> to <b>Ship</b>. Crates
+    pile up where work waits; finished runs raise the <b>city</b> at the end
+    of the line.</p>
 </header>
 <nav id="pipeline" aria-label="Stations" hidden></nav>
 <p id="notice" hidden></p>
@@ -289,7 +290,8 @@
       <button id="legend-close" aria-label="Close legend">✕</button></h2>
     <ul>
       <li><span class="swatch" style="background:#d3d6db"></span>
-        <span>A <b>crate</b> is one run: a feature or fix in flight.</span></li>
+        <span>A <b>crate</b> is one run in flight: feature, maintenance or
+          product.</span></li>
       <li><span class="swatch" style="background:#a6e07a"></span>
         <span><b>Belts</b> carry crates through the stages, in the arrows'
           direction.</span></li>
@@ -305,7 +307,7 @@
       <li><span class="swatch" style="background:
         linear-gradient(90deg,#7cc44e 33%,#e0903a 33% 66%,#8f6fd8 66%)"></span>
         <span><b>Tape colour</b> is the run's kind: green feature, amber
-          fix, purple product.</span></li>
+          maintenance, purple product.</span></li>
       <li id="legend-bin" hidden><span class="swatch"
         style="background:#e0903a"></span>
         <span>The <b>bin</b> holds runs the placement tool could not
@@ -846,7 +848,8 @@ function factory(THREE, model) {
     return {person, arm, body, legs};
   }
   // Tape colour says what kind of run the crate is: green = feature,
-  // purple = product, amber = maintenance (a fix). The legend repeats it.
+  // purple = product, amber = maintenance. The legend repeats it, in the
+  // words the hover card and panel rows print (CONTEXT.md's run kinds).
   const TAPE = {feature: 0x7cc44e, product: 0x8f6fd8, maintenance: 0xe0903a};
   function crateMesh(color = COLORS.crate, kind) {
     const mesh = outlined(new THREE.Mesh(boxGeo(CRATE, CRATE * 0.8, CRATE), mat(color)));
@@ -2130,8 +2133,8 @@ function factory(THREE, model) {
   let tourStep = -1;
   function tourScript() {
     const beats = [
-      {text: `This is ${model.repo}'s software factory. Every crate is one run — a feature or a fix — riding the belts from Idea to Ship.`, reset: true},
-      {text: "Work enters here: Idea builds the crate, and the numbered stations carry it through spec, design, build and checks.", station: "idea"},
+      {text: `This is ${model.repo}'s software factory. Every crate is one run — feature, maintenance or product — riding the belts from Idea to Ship.`, reset: true},
+      {text: "Work enters at this end: features and products at Idea or PRD, maintenance at Capture beside them. The numbered stations carry each crate through spec, design, build and checks.", station: "idea"},
       {text: "Implement assembles the code. Click any crate here and its work orders lay out as parts — green done, grey open.", station: "implement"},
       lastHot ? {text: `The amber sign is the pile-up: ${nameOf(lastHot)} holds the most work right now. Piles mean waiting.`, station: lastHot}
         : {text: "An amber sign would mark the busiest station — right now no queue stands out.", reset: true},
