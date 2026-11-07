@@ -1117,8 +1117,11 @@ function factory(THREE, model) {
     group.visible = false;
     scene.add(group);
     tag(group, {kind: "station", station: key});
-    return (pallets[key] = {group});
+    return (pallets[key] = {group, board: pallet});
   }
+  // One owner for the heap's footprint: slotPosition places crates on
+  // it and layout() sizes the pallet board under them.
+  const pileSide = (total) => (total - 6 > 27 ? 4 : 3);
   ["capture", ...MAIN].forEach(palletFor);
 
   // --------------------------------------------------------------- city
@@ -1242,8 +1245,16 @@ function factory(THREE, model) {
       return base.add(dir.clone().multiplyScalar(-2.1 - index * 1.45)).setY(BELT_Y + 0.08 + CRATE * 0.4);
     }
     const n = index - 6;
-    const layer = Math.floor(n / 9), cell = n % 9;
-    const local = new THREE.Vector3(-1.3 + (cell % 3) * 1.3, 0, -1.3 + Math.floor(cell / 3) * 1.3);
+    // The heap widens before it climbs: a 3×3 footprint towers past the
+    // city's roofline once a station holds dozens (69 at Operate stacked
+    // 8 crates high and read as a building), so past 27 the grid goes
+    // 4×4 — the widest that still sits on the station plate.
+    const side = pileSide(total);
+    const perLayer = side * side;
+    const layer = Math.floor(n / perLayer), cell = n % perLayer;
+    const span = (side - 1) / 2;
+    const local = new THREE.Vector3((-span + (cell % side)) * 1.3, 0,
+      (-span + Math.floor(cell / side)) * 1.3);
     return base.add(palletAt(key)).add(local).setY(PLATE_H + 0.35 + CRATE * 0.4 + layer * CRATE * 0.8);
   }
 
@@ -1335,7 +1346,12 @@ function factory(THREE, model) {
           crateOf.get(run).mesh.rotation.set(0, 0, 0);
         });
       }
-      if (pallets[key]) pallets[key].group.visible = list.length > 6 && key !== "completed";
+      if (pallets[key]) {
+        pallets[key].group.visible = list.length > 6 && key !== "completed";
+        // The board stays under the crates it carries.
+        const grow = pileSide(list.length) === 4 ? 5.4 / 3.9 : 1;
+        pallets[key].board.scale.set(grow, 1, grow);
+      }
     });
     // The bottleneck: the fullest working station (Done and the bin are
     // not queues). Its sign and chip go amber together.
