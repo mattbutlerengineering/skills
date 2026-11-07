@@ -131,9 +131,12 @@
     border: 1.5px solid var(--line); border-radius: 3px;
     align-self: center; }
   #legend .foot { margin: .6rem 0 0; color: var(--muted); font-size: .8rem; }
+  /* align-items: start — a grid row otherwise stretches every card to
+     its tallest: beside Operate's 69 runs, five empty stations stood
+     2740px tall each. */
   #fallback { display: grid; gap: .75rem; padding: 0 1rem 1rem;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    overflow: auto; flex: 1; }
+    align-items: start; overflow: auto; flex: 1; }
   #fallback section { background: var(--panel); border-radius: 8px;
     padding: .6rem .75rem; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
   #fallback h2 { font-size: .95rem; margin: 0 0 .35rem;
@@ -397,6 +400,9 @@ function showFallback(model, notice) {
   $("transport").hidden = true;
   $("story").hidden = true;
   $("pipeline").hidden = true;
+  // The legend explains the 3D floor and lives inside the stage, which
+  // is hidden here: its button would toggle nothing visible.
+  $("legend-open").hidden = true;
   const main = $("fallback");
   main.replaceChildren();
   const runs = Array.isArray(model && model.runs) ? model.runs : [];
