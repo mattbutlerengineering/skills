@@ -1265,7 +1265,10 @@ function factory(THREE, model) {
   // corners are empty, so 1.1× buys a visibly larger factory while the
   // top row's sign keeps clear of the header.
   const BASE_ZOOM = 1.1;
-  const resetView = () => { view.zoom = BASE_ZOOM; view.panX = 0; view.panY = 0; applyView(); requestRender(); };
+  const resetView = () => {
+    if (exporting) return; // the capture owns the camera
+    view.zoom = BASE_ZOOM; view.panX = 0; view.panY = 0; applyView(); requestRender();
+  };
   // Centre a world point and zoom to it (the chips fly the camera).
   function focusOn(point, zoom) {
     if (exporting) return; // nothing moves the camera inside a capture
@@ -1523,6 +1526,7 @@ function factory(THREE, model) {
   });
   $("panel-close").addEventListener("click", closePanel);
   addEventListener("keydown", (event) => {
+    if (exporting) return; // no input unwinds state mid-capture
     if (event.key === "Escape") { closePanel(); setLegend(false); endTour(); }
   });
 
@@ -1864,6 +1868,8 @@ function factory(THREE, model) {
       focusOn(at(station), 2.1);
       intro = null;
     }
+    // #tour: a link that walks its recipient through the floor.
+    if (hash.has("tour")) { startTour(); intro = null; }
   })();
   requestAnimationFrame(frame);
 }
