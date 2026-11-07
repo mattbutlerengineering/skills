@@ -1284,12 +1284,26 @@ function factory(THREE, model) {
         crateOf.get(a).where.since - crateOf.get(b).where.since);
       counts[key] = list.length;
       if (key === "completed") {
-        // A completed run is a building in the city, not a crate.
+        // A completed run is a building in the city, not a crate — and
+        // in the replay it RISES over its arrival half-day instead of
+        // popping, so pressing Play visibly builds the skyline. At
+        // today's resting view (and under reduced motion) it stands
+        // full height.
         list.forEach((run, i) => {
-          crateOf.get(run).mesh.visible = false;
+          const entry = crateOf.get(run);
+          entry.mesh.visible = false;
           const building = ensureBuilding(run);
           building.position.copy(citySlot(i));
           building.visible = !(state.trace && run !== state.trace);
+          let rise = 1;
+          if (!isToday() && !reducedMotion) {
+            // The crate rides the belt until ~0.6 of the arrival day
+            // (TRAVEL), so the rise window spans the whole 1.1 days:
+            // the tower is born mid-rise the moment the ride ends.
+            const k = Math.min(1, Math.max(0.04, (t - entry.where.since) / 1.1));
+            rise = k * k * (3 - 2 * k);
+          }
+          building.scale.y = rise;
         });
       } else {
         list.forEach((run, i) => {
