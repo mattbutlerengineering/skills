@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assembly line</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='24' rx='5' fill='%23a6e07a' stroke='%232f3238' stroke-width='2.5'/%3E%3Crect x='4' y='13' width='24' height='6' fill='%238f6fd8' stroke='%232f3238' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
   :root {
     --ground: #e9f6ee; --ink: #23262c; --muted: #68717d;
@@ -96,8 +97,12 @@
   .card { position: absolute; pointer-events: none; background: var(--panel);
     border: 2px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
     max-width: 320px; box-shadow: 0 6px 18px rgba(31,42,35,.18); z-index: 3; }
-  .card h3 { margin: 0 0 .15rem; font-size: .8rem; letter-spacing: .06em;
-    text-transform: uppercase; }
+  .card h3 { margin: 0 0 .15rem; font-size: .7rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); }
+  .card .ref { font-weight: 700; overflow-wrap: anywhere; margin: 0 0 .15rem; }
+  .card .kdot { display: inline-block; width: .65em; height: .65em;
+    border-radius: 2px; border: 1.5px solid var(--line); margin-right: .35em;
+    vertical-align: baseline; }
   .card p { margin: .1rem 0; }
   .card .muted, #panel .muted { color: var(--muted); }
   #panel { position: absolute; top: .5rem; right: .5rem; bottom: .5rem;
@@ -344,6 +349,7 @@ async function loadThree() {
 }
 
 const MODEL = readModel();
+if (MODEL && MODEL.repo) document.title = `${MODEL.repo} · assembly line`;
 setHeader(MODEL);
 const MISSING = missingKey(MODEL);
 if (MISSING) {
@@ -636,7 +642,7 @@ function factory(THREE, model) {
       sign.sprite.material.map = texture;
       sign.sprite.material.needsUpdate = true;
       sign.aspect = aspect;
-      const h = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom));
+      const h = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom)) * (sign.boost || 1);
       sign.sprite.scale.set(h * aspect, h, 1);
       sign.last = want;
     }
@@ -1134,7 +1140,8 @@ function factory(THREE, model) {
     // close up they get out of the way of the machines.
     const h = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom));
     Object.values(signs).forEach((sign) => {
-      if (sign.aspect) sign.sprite.scale.set(h * sign.aspect, h, 1);
+      const hb = h * (sign.boost || 1);
+      if (sign.aspect) sign.sprite.scale.set(hb * sign.aspect, hb, 1);
     });
   }
   function fit() {
@@ -1250,17 +1257,22 @@ function factory(THREE, model) {
       el("p", {class: "muted"}, `${here.length} run${here.length === 1 ? "" : "s"} · as of ${asOf()}`),
       el("p", {}, here.length ? `oldest: ${oldest}${here.length > 5 ? ", …" : ""}` : "0 runs"));
   }
+  // Tape colours, as CSS, for the card's kind dot.
+  const KIND_CSS = {feature: "#7cc44e", maintenance: "#e0903a", product: "#8f6fd8"};
   function crateCard(run) {
     const where = crateOf.get(run).where;
-    const rows = [el("h3", {}, `crate: ${run.ref}`)];
+    const rows = [el("h3", {}, "Crate · one run"),
+      el("p", {class: "ref"}, run.slug || run.ref)];
     if (run.status === "attention") {
       rows.push(el("p", {}, run.dir), el("p", {}, run.reason));
     } else {
       const station = where ? nameOf(where.station) : "";
+      const dot = el("span", {class: "kdot"});
+      dot.style.background = KIND_CSS[run.kind] || "#9aa0a8";
       let line = `${run.kind} · at ${station}`;
       if (where && where.station === "implement" && run.work_orders.length)
         line += ` · ${doneCount(run)}/${run.work_orders.length} WOs${isToday() ? "" : " (today)"}`;
-      rows.push(el("p", {}, line), el("p", {class: "muted"}, run.dir));
+      rows.push(el("p", {}, dot, line), el("p", {class: "muted"}, run.dir));
       const skipped = skippedOf(run), ahead = aheadOf(run);
       if (skipped.length) rows.push(el("p", {}, `skipped: ${skipped.join(", ")}`));
       if (ahead.length) rows.push(el("p", {}, `already has: ${ahead.join(", ")}`));
@@ -1278,10 +1290,25 @@ function factory(THREE, model) {
     const crate = hits.find((hit) => hit.object.userData.pick.kind === "crate");
     return (crate || hits[0] || {}).object ? (crate || hits[0]).object.userData.pick : null;
   }
+  // Hovering acknowledges its station in-scene: the sign swells a touch
+  // while the card is up, so the card and the sign read as one thing.
+  let hoveredSign = null;
+  function boostSign(key) {
+    if (hoveredSign === key) return;
+    if (hoveredSign && signs[hoveredSign]) { signs[hoveredSign].boost = 1; }
+    hoveredSign = key;
+    if (key && signs[key]) signs[key].boost = 1.18;
+    applyView(); requestRender();
+  }
   renderer.domElement.addEventListener("pointermove", (event) => {
     const hit = pick(event);
-    if (!hit) { card.hidden = true; renderer.domElement.style.cursor = ""; return; }
-    if (hit.kind === "station") stationCard(hit.station); else crateCard(hit.run);
+    if (!hit) { card.hidden = true; renderer.domElement.style.cursor = ""; boostSign(null); return; }
+    if (hit.kind === "station") { stationCard(hit.station); boostSign(hit.station); }
+    else {
+      crateCard(hit.run);
+      const where = crateOf.get(hit.run).where;
+      boostSign(where ? where.station : null);
+    }
     const rect = stage.getBoundingClientRect();
     card.hidden = false;
     const x = Math.min(event.clientX - rect.left + 16, rect.width - card.offsetWidth - 8);
@@ -1289,7 +1316,7 @@ function factory(THREE, model) {
     card.style.left = `${x}px`; card.style.top = `${y}px`;
     renderer.domElement.style.cursor = "pointer";
   });
-  renderer.domElement.addEventListener("pointerleave", () => { card.hidden = true; });
+  renderer.domElement.addEventListener("pointerleave", () => { card.hidden = true; boostSign(null); });
   function closePanel() {
     $("panel").hidden = true; state.pinned = null; state.highlighted = null; layout(); requestRender();
   }
