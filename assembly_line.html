@@ -500,7 +500,7 @@ function factory(THREE, model) {
     const canvas = document.createElement("canvas");
     canvas.width = 64; canvas.height = 64;
     const ctx = canvas.getContext("2d");
-    ctx.strokeStyle = "rgba(31,54,27,0.7)"; ctx.lineWidth = 9;
+    ctx.strokeStyle = "rgba(31,54,27,0.75)"; ctx.lineWidth = 10;
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     ctx.beginPath(); ctx.moveTo(22, 14); ctx.lineTo(40, 32); ctx.lineTo(22, 50);
     ctx.stroke();
@@ -520,7 +520,7 @@ function factory(THREE, model) {
     box(length + BELT_W, 0.5, BELT_W + 0.3, COLORS.frame, 0, BELT_Y - 0.5, 0, group);
     box(length + BELT_W - 0.1, 0.12, BELT_W, COLORS.belt, 0, BELT_Y, 0, group);
     const flow = chevronTex.clone();
-    flow.repeat.set(Math.max(1, Math.round(length / 2.4)), 1);
+    flow.repeat.set(Math.max(1, Math.round(length / 3.2)), 1);
     const arrows = new THREE.Mesh(
       new THREE.PlaneGeometry(length + BELT_W - 0.1, BELT_W * 0.78),
       new THREE.MeshBasicMaterial({map: flow, transparent: true, depthWrite: false}));
@@ -611,7 +611,11 @@ function factory(THREE, model) {
       depthTest: false}));
     sprite.renderOrder = 8;
     const base = at(key);
-    const tall = key === "architect" || key === "completed" ? 9.6 : 8.4;
+    // Staggered by grid parity so neighbouring signs never collide at
+    // 1×; Architect's gantry and Done's racks push theirs higher.
+    const [gx, gz] = GRID[key];
+    const tall = key === "architect" || key === "completed" ? 9.8
+      : 8.2 + Math.abs((gx + gz) % 2) * 1.2;
     sprite.position.set(base.x, tall, base.z);
     scene.add(sprite);
     signs[key] = {sprite, last: ""};
@@ -940,16 +944,20 @@ function factory(THREE, model) {
   });
 
   // Slots: up to 6 queue on the belt in front of the machine; the rest
-  // stack on one pallet in the tile's front-right quadrant, so a tall
-  // pile only ever covers its own tile. Completed crates go on shelves.
+  // stack on one pallet in a front quadrant, so a tall pile only ever
+  // covers its own tile. Operate's pile goes front-LEFT, toward Ship:
+  // on the front-right it would stand in front of the Done shelves and
+  // hide the factory's output. Completed crates go on shelves.
   const PALLET_AT = new THREE.Vector3(3.4, 0, 3.4);
+  const PALLET_LOCAL = {operate: new THREE.Vector3(-3.4, 0, 3.4)};
+  const palletAt = (key) => PALLET_LOCAL[key] || PALLET_AT;
   const pallets = {};
   function palletFor(key) {
     if (pallets[key]) return pallets[key];
     const group = new THREE.Group();
     group.position.copy(at(key));
     const pallet = box(3.9, 0.35, 3.9, COLORS.wood, 0, 0, 0);
-    pallet.position.copy(PALLET_AT).setY(PLATE_H);
+    pallet.position.copy(palletAt(key)).setY(PLATE_H);
     group.add(pallet);
     group.visible = false;
     scene.add(group);
@@ -985,7 +993,7 @@ function factory(THREE, model) {
     const n = index - 6;
     const layer = Math.floor(n / 9), cell = n % 9;
     const local = new THREE.Vector3(-1.3 + (cell % 3) * 1.3, 0, -1.3 + Math.floor(cell / 3) * 1.3);
-    return base.add(PALLET_AT).add(local).setY(PLATE_H + 0.35 + CRATE * 0.4 + layer * CRATE * 0.8);
+    return base.add(palletAt(key)).add(local).setY(PLATE_H + 0.35 + CRATE * 0.4 + layer * CRATE * 0.8);
   }
 
   // ---------------------------------------------------- state per moment
@@ -1162,7 +1170,18 @@ function factory(THREE, model) {
     cam.updateProjectionMatrix();
   }
   addEventListener("resize", () => { fit(); requestRender(); });
-  const resetView = () => { view.zoom = 1; view.panX = 0; view.panY = 0; applyView(); requestRender(); };
+  // The resting view sits a touch inside the fitted frame: the floor's
+  // corners are empty, so 1.12× buys a visibly larger factory.
+  const BASE_ZOOM = 1.12;
+  const resetView = () => { view.zoom = BASE_ZOOM; view.panX = 0; view.panY = 0; applyView(); requestRender(); };
+  // Centre a world point and zoom to it (the chips fly the camera).
+  function focusOn(point, zoom) {
+    const v = point.clone().applyMatrix4(camera.matrixWorldInverse);
+    view.zoom = zoom;
+    view.panX = v.x - frameBox.cx;
+    view.panY = v.y + 2 / zoom - frameBox.cy;
+    applyView(); requestRender();
+  }
   stage.addEventListener("wheel", (event) => {
     if (event.target !== renderer.domElement) return;
     event.preventDefault();
@@ -1331,7 +1350,11 @@ function factory(THREE, model) {
     const chip = el("button", {class: "chip", title:
       (STATION_INFO[key] || ["", "Runs the placement tool could not read."])[1]},
       n, name);
-    chip.addEventListener("click", () => { openPanel({kind: "station", station: key}); requestRender(); });
+    chip.addEventListener("click", () => {
+      openPanel({kind: "station", station: key});
+      focusOn(at(key), 2.1);
+      requestRender();
+    });
     pipeline.append(chip);
     chips[key] = {chip, n, name, lastText: "", lastHot: null};
   });
@@ -1408,7 +1431,7 @@ function factory(THREE, model) {
     if (intro !== null) {
       intro = Math.min(1, intro + dt / 1.1);
       const ease = 1 - Math.pow(1 - intro, 3);
-      view.zoom = 1.3 - 0.3 * ease;
+      view.zoom = BASE_ZOOM + (1.45 - BASE_ZOOM) * (1 - ease);
       applyView();
       if (intro >= 1) intro = null;
       needsRender = true;
@@ -1513,7 +1536,7 @@ function factory(THREE, model) {
   // ------------------------------------------------------------- start
   // A one-breath settle: the floor eases in from a slightly wider frame.
   let intro = reducedMotion ? null : 0;
-  if (intro !== null) view.zoom = 1.3;
+  view.zoom = intro !== null ? 1.45 : BASE_ZOOM;
   fit();
   layout();
   syncTransport();
