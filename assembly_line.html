@@ -1933,11 +1933,12 @@ function factory(THREE, model) {
   }));
 
   // -------------------------------------------------------------- loop
-  let needsRender = true, last = performance.now(), clock = 0;
-  const fps = {frames: 0, since: performance.now(), value: 0, samples: []};
+  let needsRender = true, forceRender = true, lastDraw = 0;
+  let last = performance.now(), clock = 0;
+  const fps = {frames: 0, draws: 0, since: performance.now(), value: 0, samples: []};
   window.__assemblyLine = {fps, state, runs, crateOf, layout, LAST, FIRST,
     renderer, camera, scene, view, applyView, requestRender};
-  function requestRender() { needsRender = true; }
+  function requestRender() { needsRender = true; forceRender = true; }
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
@@ -1981,7 +1982,14 @@ function factory(THREE, model) {
       }
       needsRender = true;
     }
-    if (needsRender) { renderer.render(scene, camera); needsRender = false; }
+    // Ambient motion alone draws at ~30 fps: on an idle page nothing
+    // moves fast enough to need more, and a presenter's battery does.
+    // Interactions (requestRender) and the replay draw immediately.
+    if (needsRender && (forceRender || state.playing || now - lastDraw >= 32)) {
+      renderer.render(scene, camera);
+      needsRender = false; forceRender = false; lastDraw = now;
+      fps.draws++;
+    }
     fps.frames++;
     if (now - fps.since >= 1000) {
       fps.value = fps.frames * 1000 / (now - fps.since);
