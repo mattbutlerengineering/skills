@@ -38,10 +38,14 @@ work has stopped.
 Open the page, or hand its path to the user, whichever the session
 supports. Tell the user what it holds, in one or two sentences, from
 the page's own header line (repo, active and completed counts, as-of
-date) — not from your own count. Point at the three things to do on it:
+date) — not from your own count. Point at the four things to do on it:
 
+- Read it at a glance: the chip strip across the top is the pipeline in
+  order with each station's live count, the amber chip and sign mark the
+  busiest station, and the "How to read this" key opens on load.
 - Hover any machine or crate to see what that step does and what is in
-  it; click to pin the full list, Esc to close.
+  it; click to pin the full list, Esc to close. Scroll to zoom, drag to
+  pan, double-click to reset.
 - Press Play to replay the repo's history; drag the scrubber to stop on
   a day. Dates are to the day from artifact frontmatter, and order
   within a day is inferred, as the page says under the bar.
@@ -50,7 +54,7 @@ date) — not from your own count. Point at the three things to do on it:
 If the browser cannot draw the factory, the page says so and lists every
 run by station instead; the facts are the same.
 
-Done when: the user has the page and knows those three controls.
+Done when: the user has the page and knows those controls.
 
 ## 3. Put it on a README (only when asked)
 
