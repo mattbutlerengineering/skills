@@ -1129,6 +1129,18 @@ function factory(THREE, model) {
       CITY_BASE.z + 2.6 + Math.floor(index / CITY_COLS) * CITY_SZ);
   }
   const buildingOf = new Map();
+  // At night the city lights up: in the dark colour scheme the window
+  // strips swap to a self-lit warm material (the scene's lights never
+  // change — the glow has to be the material). The GIF always paints a
+  // light backdrop, so captures force the windows back to day.
+  const cityWindows = [];
+  const winNightMat = new THREE.MeshBasicMaterial({color: 0xf6e7ae});
+  let cityNight = false;
+  function setCityNight(on) {
+    cityNight = on;
+    cityWindows.forEach((win) => { win.material = on ? winNightMat : mat(0x3a4047); });
+    requestRender();
+  }
   function nameHash(text) {
     let h = 0;
     for (const c of text) h = (h * 31 + c.charCodeAt(0)) | 0;
@@ -1165,8 +1177,10 @@ function factory(THREE, model) {
     box(1.9, height, 1.9, COLORS.steel, 0, 0, 0, building);
     // window strips on the two camera-facing facades
     for (const off of [-0.5, 0.2]) {
-      box(0.06, height * 0.7, 0.5, 0x3a4047, 0.95, height * 0.12, off, building);
-      box(0.5, height * 0.7, 0.06, 0x3a4047, off, height * 0.12, 0.95, building);
+      const winX = box(0.06, height * 0.7, 0.5, 0x3a4047, 0.95, height * 0.12, off, building);
+      const winZ = box(0.5, height * 0.7, 0.06, 0x3a4047, off, height * 0.12, 0.95, building);
+      cityWindows.push(winX, winZ);
+      if (cityNight) { winX.material = winNightMat; winZ.material = winNightMat; }
     }
     box(1.98, 0.16, 1.98, trim, 0, height, 0, building);
     if (hash % 3 === 0) {
@@ -1946,6 +1960,7 @@ function factory(THREE, model) {
     if (!saved) return;
     exporting = false;
     document.body.style.pointerEvents = "";
+    setCityNight(matchMedia("(prefers-color-scheme: dark)").matches);
     state.t = saved.t; state.playing = false;
     state.highlighted = saved.highlighted;
     state.trace = saved.trace || null;
@@ -1974,6 +1989,7 @@ function factory(THREE, model) {
     state.highlighted = null;
     state.trace = null;
     $("trace-banner").hidden = true;
+    setCityNight(false); // the clip's backdrop is daylight
     card.hidden = true;
     document.body.style.pointerEvents = "none";
     view.zoom = 1; view.panX = 0; view.panY = 0;
@@ -2040,6 +2056,12 @@ function factory(THREE, model) {
   fit();
   layout();
   syncTransport();
+  // The city follows the room: lit windows after dark, live on change.
+  const darkScheme = matchMedia("(prefers-color-scheme: dark)");
+  setCityNight(darkScheme.matches);
+  darkScheme.addEventListener("change", (event) => {
+    if (!exporting) setCityNight(event.matches);
+  });
   // Deep links: #day=YYYY-MM-DD scrubs there, #run=<slug> finds the
   // crate, #station=<key> pins the station — the links the hash writers
   // above produce. A bad value is ignored.
