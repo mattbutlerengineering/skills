@@ -360,7 +360,9 @@ const STATION_INFO = {
   "review": ["Review", "Inspects the change and stamps approval."],
   "ship": ["Ship", "Packs and loads the release."],
   "operate": ["Operate", "Shipped, waiting on a retro."],
-  "completed": ["Completed", "Finished runs raise the city: one building per shipped run."]
+  // "Done", like the header's "23 done": the sign and chip said Done
+  // while every card, panel title and the fallback said Completed.
+  "completed": ["Done", "Finished runs raise the city: one building per shipped run."]
 };
 // Step numbers for the signs and chips: the pipeline reads 1..10 at a
 // glance; Capture is the side door returns come in through.
@@ -744,8 +746,7 @@ function factory(THREE, model) {
   // amber — the bottleneck is the first thing the factory should say.
   function signTexture(key, count, hot) {
     const step = STEP[key] || "";
-    const name = (key === "bin" ? "Needs attention" : key === "completed"
-      ? "Done" : nameOf(key)).toUpperCase();
+    const name = (key === "bin" ? "Needs attention" : nameOf(key)).toUpperCase();
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const H = 148, PAD = 26, GAP = 18;
@@ -1844,7 +1845,7 @@ function factory(THREE, model) {
     const oldest = here.slice(0, 5).map((run) => run.slug).join(", ");
     card.replaceChildren(el("h3", {}, name), el("p", {}, line),
       el("p", {class: "muted"}, `${here.length} run${here.length === 1 ? "" : "s"} · as of ${asOf()}`),
-      el("p", {}, here.length ? `oldest: ${oldest}${here.length > 5 ? ", …" : ""}` : "0 runs"));
+      ...(here.length ? [el("p", {}, `oldest: ${oldest}${here.length > 5 ? ", …" : ""}`)] : []));
   }
   // Tape colours, as CSS, for the card's kind dot.
   const KIND_CSS = {feature: "#7cc44e", maintenance: "#e0903a", product: "#8f6fd8"};
@@ -2088,8 +2089,7 @@ function factory(THREE, model) {
   const pipeline = $("pipeline");
   CHIP_ORDER.forEach((key, i) => {
     if (i && key !== "bin") pipeline.append(el("span", {class: "flow"}, "→"));
-    const name = key === "bin" ? "Attention" :
-      key === "completed" ? "Done" : nameOf(key);
+    const name = key === "bin" ? "Attention" : nameOf(key);
     const n = el("span", {class: "n"}, "0");
     const chip = el("button", {class: "chip", title:
       (STATION_INFO[key] || ["", "Runs the placement tool could not read."])[1]},
