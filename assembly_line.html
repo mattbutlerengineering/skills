@@ -2459,9 +2459,17 @@ function factory(THREE, model) {
   }, {passive: false});
   let drag = null, dragged = false;
   // Touch: one finger pans (the pointer handlers below), two fingers
-  // pinch around their midpoint — the wheel-zoom anchor math reused.
+  // pinch around their midpoint — the wheel-zoom anchor math reused —
+  // and pan with it, so the floor stays under both fingers. Lifting one
+  // finger hands the pan to the other.
   const touches = new Map();
-  let pinchDist = 0;
+  let pinchDist = 0, pinchMid = null;
+  function panBy(dx, dy) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    view.panX -= dx / rect.width * 2 * frameBox.aspect * frameBox.halfH / view.zoom;
+    view.panY += dy / rect.height * 2 * frameBox.halfH / view.zoom;
+    applyView(); requestRender(); scheduleViewHash();
+  }
   function zoomAt(clientX, clientY, factor) {
     const rect = renderer.domElement.getBoundingClientRect();
     const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -2478,6 +2486,7 @@ function factory(THREE, model) {
       if (touches.size === 2) {
         const [a, b] = [...touches.values()];
         pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+        pinchMid = {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2};
         drag = null;
         return;
       }
@@ -2492,11 +2501,13 @@ function factory(THREE, model) {
       if (touches.size === 2) {
         const [a, b] = [...touches.values()];
         const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        const mid = {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2};
         if (pinchDist > 0 && dist > 0) {
           dragged = true;
-          zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, dist / pinchDist);
+          zoomAt(mid.x, mid.y, dist / pinchDist);
+          if (pinchMid) panBy(mid.x - pinchMid.x, mid.y - pinchMid.y);
         }
-        pinchDist = dist;
+        pinchDist = dist; pinchMid = mid;
         return;
       }
     }
@@ -2504,14 +2515,19 @@ function factory(THREE, model) {
     const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
     if (!dragged && Math.hypot(dx, dy) < 5) return;
     dragged = true;
-    const rect = renderer.domElement.getBoundingClientRect();
-    view.panX -= dx / rect.width * 2 * frameBox.aspect * frameBox.halfH / view.zoom;
-    view.panY += dy / rect.height * 2 * frameBox.halfH / view.zoom;
+    panBy(dx, dy);
     drag = {x: event.clientX, y: event.clientY};
-    applyView(); requestRender(); scheduleViewHash();
   });
-  addEventListener("pointerup", (event) => { touches.delete(event.pointerId); pinchDist = 0; drag = null; });
-  addEventListener("pointercancel", (event) => { touches.delete(event.pointerId); pinchDist = 0; drag = null; });
+  function endPointer(event) {
+    touches.delete(event.pointerId);
+    // The finger left on the glass after a pinch keeps panning from where
+    // it is (dragged stays true, so its release is not a click).
+    const rest = pinchDist > 0 && touches.size === 1 ? [...touches.values()][0] : null;
+    drag = rest && {x: rest.x, y: rest.y};
+    pinchDist = 0; pinchMid = null;
+  }
+  addEventListener("pointerup", endPointer);
+  addEventListener("pointercancel", endPointer);
   renderer.domElement.addEventListener("dblclick", () => { traceFollow = false; resetView(); });
 
   // --------------------------------------------------------- hover, pin
