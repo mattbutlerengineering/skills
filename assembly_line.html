@@ -379,6 +379,15 @@
        keep them; repainted, every swatch was an empty box. */
     #legend .swatch, .card .kdot { forced-color-adjust: none; }
   }
+  /* A finger gets finger-sized targets: on a phone the panel's trace
+     buttons were 56×18 px, its rows 20 px tall and the ✕ buttons 24×20,
+     small enough to tap the neighbour instead. */
+  @media (pointer: coarse) {
+    .trace-btn { padding: .3rem .7rem; }
+    #panel header button, #legend button, #trace-banner button {
+      min-width: 2.75rem; min-height: 2.75rem; }
+    #panel summary { padding: .45rem 0; }
+  }
   /* Printed (or saved as PDF) the page is a report: the controls go —
      finder, Tour and legend buttons, the transport's buttons and slider,
      the key hint and every ✕ — and the colour that carries meaning
