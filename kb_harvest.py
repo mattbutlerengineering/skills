@@ -50,6 +50,7 @@ import time
 from pathlib import Path
 
 import cli
+import protocol
 
 LABEL = "harvest"
 SLUG_LIMIT = 200
@@ -401,12 +402,10 @@ def mine(paths):
 
 
 def _block(text):
-    """The lines of text's leading `---` frontmatter block, or None."""
+    """The lines of text's leading frontmatter block, or None: the block
+    protocol.frontmatter_end bounds (ADR-0118, ADR-0126)."""
     lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
-        return None
-    end = next((i for i, line in enumerate(lines[1:], 1)
-                if line.strip() == "---"), None)
+    end = protocol.frontmatter_end(lines)
     return None if end is None else lines[1:end]
 
 
