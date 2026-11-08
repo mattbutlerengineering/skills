@@ -2331,7 +2331,9 @@ function factory(THREE, model) {
     return (crate || hits[0] || {}).object ? (crate || hits[0]).object.userData.pick : null;
   }
   // Hovering acknowledges its station in-scene: the sign swells a touch
-  // while the card is up, so the card and the sign read as one thing.
+  // while the card is up, so the card and the sign read as one thing —
+  // and so does pointing at (or tabbing to) a chip, which shows where on
+  // the floor that station stands.
   let hoveredSign = null;
   function boostSign(key) {
     if (hoveredSign === key) return;
@@ -2677,6 +2679,10 @@ function factory(THREE, model) {
       focusOn(focusTargetOf(key), 2.1);
       requestRender();
     });
+    chip.addEventListener("pointerenter", () => boostSign(key));
+    chip.addEventListener("pointerleave", () => boostSign(null));
+    chip.addEventListener("focus", () => boostSign(key));
+    chip.addEventListener("blur", () => boostSign(null));
     pipeline.append(chip);
     chips[key] = {chip, n, name, lastText: "", lastHot: null};
   });
