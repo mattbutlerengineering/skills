@@ -3420,7 +3420,15 @@ function factory(THREE, model) {
     play.textContent = state.playing ? "❚❚ Pause" : "▶ Play";
     play.setAttribute("aria-label", state.playing ? "Pause the replay" : "Play the replay");
   }
-  $("today").addEventListener("click", () => goToDay(LAST + 1));
+  // Pressed from the keyboard, the button hides itself (it is never shown
+  // at today) and focus fell to <body>, saying nothing: it goes to Play
+  // beside it, and the jump is announced as End's is.
+  $("today").addEventListener("click", (event) => {
+    goToDay(LAST + 1);
+    if (event.detail !== 0) return;
+    play.focus();
+    announce(`${scrub.getAttribute("aria-valuetext")}: ${lastTally.active} in flight, ${lastTally.completed} done.`);
+  });
   const enabled = runs.length > 0;
   [play, scrub, $("speed-30"), $("speed-60"), $("export")].forEach((b) => { b.disabled = !enabled; });
   // An empty repo has nothing to tour, find or replay; the empty sign
