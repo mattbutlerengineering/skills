@@ -609,6 +609,14 @@ function setHeader(model, day, tally) {
   if (tally.busiest && tally.most > 1) {
     meta.append(" · piling up at ", el("b", {}, nameOf(tally.busiest)), ` (${tally.most})`);
   }
+  // The canvas says what it shows: an unnamed <canvas> read as "canvas"
+  // (or nothing) between the chips and the legend. Same summary as the
+  // meta line, rewritten only when it changes.
+  const canvas = document.querySelector("#stage canvas");
+  if (canvas) {
+    const label = `3D assembly line: ${meta.textContent}`;
+    if (canvas.getAttribute("aria-label") !== label) canvas.setAttribute("aria-label", label);
+  }
 }
 
 function webglAvailable() {
@@ -706,6 +714,7 @@ function factory(THREE, model) {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
+  renderer.domElement.setAttribute("role", "img");
   stage.prepend(renderer.domElement);
   renderer.domElement.addEventListener("webglcontextlost", () => stage.classList.add("lost"));
   renderer.domElement.addEventListener("webglcontextrestored", () => {
