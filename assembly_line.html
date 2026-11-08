@@ -372,15 +372,21 @@
      bottom it took 101 of the stage's 253 px and the floor shrank to
      zoom 0.65 above it. frameClearOfTour and focusOn read either side. */
   @media (max-height: 480px) and (min-width: 600px) {
+    /* 46vw, not 40: at 640×360 the 256 px card needed 206 px for the
+       second beat inside a 204 px limit and scrolled its buttons away. */
     #tour { left: auto; right: .5rem; top: .5rem; bottom: auto;
-      transform: none; width: min(300px, 40vw); max-height: calc(100% - 1rem);
+      transform: none; width: min(300px, 46vw); max-height: calc(100% - 1rem);
       overflow: auto; }
     #tour .row { flex-wrap: wrap; justify-content: flex-end; }
     #tour .dots { flex: 1 1 100%; }
-    /* And one transport row: the phone layout stacks the slider over the
-       buttons, 70 px of a 390-px-tall screen, while a landscape width
-       holds Play, slider, date and buttons side by side. (Still wrapping:
-       the export status takes its own line.) */
+  }
+  /* And one transport row: the phone layout stacks the slider over the
+     buttons, 70 px of a 390-px-tall screen, while a landscape width
+     holds Play, slider, date and buttons side by side. (Still wrapping:
+     the export status takes its own line.) From 560 px wide, below the
+     tour's 600: a 568×320 phone (SE-class, landscape) still fits the
+     row with a 137 px slider, but at 40vw its side tour card scrolled. */
+  @media (max-height: 480px) and (min-width: 560px) {
     #scrub-wrap { flex: 1 1 8rem; order: 0; }
     #day { margin-left: 0; white-space: nowrap; }
     #export-status { flex: 1 1 100%; }
