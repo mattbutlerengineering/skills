@@ -1090,7 +1090,11 @@ function factory(THREE, model) {
   function drawSign(key) {
     const sign = signs[key];
     if (sign.count === undefined) return; // layout() has not counted yet
-    const compact = signsCompact && sign.count === 0 && !sign.hot && !(sign.boost > 1);
+    // The pinned station spells out too: its panel may say "No runs
+    // here", and a phone showed that panel under a bare "7". (A traced
+    // crate's stop never needs this: the crate counts there.)
+    const pinned = state.pinned && state.pinned.key === key;
+    const compact = signsCompact && sign.count === 0 && !sign.hot && !(sign.boost > 1) && !pinned;
     const want = `${sign.count}|${sign.hot}|${compact}`;
     if (sign.last === want) return;
     const {texture, aspect} = signTexture(key, sign.count, sign.hot, compact);
