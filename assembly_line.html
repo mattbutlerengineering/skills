@@ -3416,6 +3416,15 @@ function factory(THREE, model) {
     else if (event.key === "End") { event.preventDefault(); goToDay(LAST + 1); }
     else if (event.key === "/") { event.preventDefault(); find.focus(); }
   });
+  // A mouse click leaves the header's and transport's buttons focused
+  // (Chrome on macOS), and a focused button keeps Space: after clicking
+  // 60s, Space pressed 60s again; after "How to read this", it toggled
+  // the legend — never the replay the hint promises. A pointer click on
+  // them lets focus go; keyboard activations (detail 0) keep it.
+  document.addEventListener("click", (event) => {
+    const button = event.detail > 0 && event.target.closest("header .tools button, #transport button");
+    if (button) button.blur();
+  });
   ["30", "60"].forEach((s) => $(`speed-${s}`).addEventListener("click", () => {
     state.seconds = Number(s);
     $("speed-30").setAttribute("aria-pressed", String(s === "30"));
