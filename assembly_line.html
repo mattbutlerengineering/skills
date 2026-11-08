@@ -243,15 +243,21 @@
   .card p { margin: .1rem 0; }
   .card .muted, #panel .muted { color: var(--muted); }
   #panel { position: absolute; top: .5rem; right: .5rem; bottom: .5rem;
-    width: min(340px, calc(100vw - 1rem)); background: var(--panel);
+    width: min(24.3rem, calc(100vw - 1rem)); background: var(--panel);
     border: 2px solid var(--line);
     border-radius: 10px; display: flex; flex-direction: column; z-index: 4;
     box-shadow: 0 14px 40px rgba(31,42,35,.22); }
+  /* The panel's <header> is not the page header, but it took that rule's
+     flex-wrap: once a larger default font made the title wider than the
+     340 px panel's room, the ✕ wrapped onto a line of its own under it
+     (88 px tall at a 24 px default). The title wraps instead; the panel
+     is sized in rem so it grows with the text (340 px at the default). */
   #panel header { justify-content: space-between; padding: .6rem .8rem;
+    flex-wrap: nowrap; align-items: center; gap: .5rem;
     border-bottom: 1px solid #ddd; }
-  #panel header h2 { margin: 0; font-size: .95rem; }
+  #panel header h2 { margin: 0; font-size: .95rem; min-width: 0; overflow-wrap: anywhere; }
   #panel header button { border: 0; background: none; font-size: 1.1rem;
-    cursor: pointer; color: inherit; }
+    cursor: pointer; color: inherit; flex: none; }
   #panel .body { overflow: auto; padding: .4rem .8rem .8rem; }
   #panel .run { position: relative; border-bottom: 1px solid #eee; }
   #panel details { padding: .25rem 0; }
