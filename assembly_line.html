@@ -3218,8 +3218,13 @@ function factory(THREE, model) {
       ctx.fillRect(x - 0.75, h - bar, 1.5, bar);
     });
   }
-  drawActivity();
-  addEventListener("resize", drawActivity);
+  // Redrawn whenever the strip itself changes width, not just on window
+  // resize: the slider narrows when "⏭ today" appears and widens while
+  // playing, and boot's own layout passes resize it too. Drawn once for
+  // the old width, the bitmap was stretched — 1012 px of ticks in a
+  // 970-px strip at 1440×900, 546 in 413 on a landscape phone — so the
+  // ticks drifted off the days the slider and its readout name.
+  new ResizeObserver(drawActivity).observe(activity);
   // The strip shows where the history is; a mouse over the slider says
   // which day a bar is and how many arrivals it holds, before a drag
   // (or a click, which jumps the thumb there) commits to it. Mouse only:
