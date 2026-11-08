@@ -3295,7 +3295,8 @@ function factory(THREE, model) {
       state.t = state.trace ? traceAdvance(state.t, dt)
         : tFromU(uFromT(state.t) + dt * TOTAL_U / state.seconds);
       const stop = state.trace ? traceEnd : LAST + 1;
-      if (state.t >= stop) {
+      const finished = state.t >= stop;
+      if (finished) {
         // The last frame lands on the placement, never near it.
         glideK = 1;
         state.t = stop; state.playing = false; renderPanel();
@@ -3304,6 +3305,14 @@ function factory(THREE, model) {
         if (state.trace) { layout(); focusOn(runFocus(state.trace), 2.4); }
       }
       layout(); syncTransport(); needsRender = true;
+      // The end is said aloud: the floor simply stopping (and the button
+      // reverting to Play) told a screen reader nothing.
+      if (finished) {
+        const where = state.trace && crateOf.get(state.trace).where;
+        announce(state.trace
+          ? `Trace finished: ${state.trace.slug || state.trace.ref} is at ${where ? nameOf(where.station) : "its last stop"}.`
+          : `Replay finished at today: ${lastTally.active} in flight, ${lastTally.completed} done.`);
+      }
       if (state.trace && traceFollow && state.playing) followTrace(dt);
       if (hoverAt && !exporting) hover(hoverAt);
       glideK = 1; // every layout outside the replay places exactly
