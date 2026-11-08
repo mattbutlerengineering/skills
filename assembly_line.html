@@ -2022,6 +2022,15 @@ function factory(THREE, model) {
       const dot = el("span", {class: "kdot"});
       dot.style.background = KIND_CSS[run.kind] || "#9aa0a8";
       let line = `${run.kind} · at ${station}`;
+      // How long it has stood here — what a pile means. The arrival day is
+      // the placement's hop; "now" is the replay's day, or today.
+      if (where && !built && !where.moving) {
+        const arrived = Math.floor(where.since);
+        const now = isToday() ? dayIndex(model.generated.slice(0, 10)) : Math.floor(state.t);
+        const waited = Math.max(0, now - arrived);
+        line += ` since ${isoOf(arrived)}`
+          + (waited ? ` (${waited} day${waited === 1 ? "" : "s"})` : "");
+      }
       if (built) {
         const landed = run.history.findLast((hop) => hop.station === "completed");
         const n = run.work_orders.length;
