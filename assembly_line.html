@@ -2609,10 +2609,16 @@ function factory(THREE, model) {
   function rowBox(run) { rowBoxed = !!run; boxRun(run); }
   function closePanel() {
     const hadFocus = $("panel").contains(document.activeElement);
+    const key = state.pinned && state.pinned.key;
     $("panel").hidden = true; state.pinned = null; state.highlighted = null;
     if (rowBoxed) rowBox(null); // a row's box would outlive its row
     syncTitle();
-    if (hadFocus && panelOpener && panelOpener.isConnected && !panelOpener.hidden) panelOpener.focus();
+    // Without an opener — a panel from a #run=/#station= link or a canvas
+    // click — focus goes to the station's chip, the panel's keyboard
+    // twin; it fell to <body> when the ✕ under it was hidden.
+    const back = panelOpener && panelOpener.isConnected && !panelOpener.hidden ? panelOpener
+      : key && chips[key] && !chips[key].chip.hidden ? chips[key].chip : null;
+    if (hadFocus && back) back.focus();
     panelOpener = null;
     // The bar says what the view shows: a closed panel's link goes too.
     if (/^#(run|station)=/.test(location.hash))
