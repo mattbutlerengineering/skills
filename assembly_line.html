@@ -999,7 +999,13 @@ function factory(THREE, model) {
   }
 
   // ----------------------------------------------------------- machines
+  // Each machine animates on its own clock, and only while its station
+  // holds work (layout's stationCounts): the floor's motion now says
+  // where the crates are. Every station used to move at once — the empty
+  // Verify arm swinging as busily as the 69-run Operate forklift. A
+  // station that fills again resumes from its own pose, never jumps.
   const animators = [];
+  let stationCounts = {};
   // Machines line up with their belt, their back (local -z) always away
   // from the camera, so workers and arms never hide the tile's label.
   const alongZ = (key) => Math.abs((inDir[key] || new THREE.Vector3(1, 0, 0)).z) > 0.5;
@@ -1303,7 +1309,7 @@ function factory(THREE, model) {
     const g = new THREE.Group();
     stationGroups[key].add(g);
     if (MAIN.includes(key) || key === "capture") align(g, key);
-    animators.push(build(g));
+    animators.push({key, animate: build(g), t: 0});
   });
   Object.keys(GRID).forEach((key) => tag(stationGroups[key], {kind: "station", station: key}));
 
@@ -1812,6 +1818,7 @@ function factory(THREE, model) {
       return where && where.station !== "completed" && where.station !== "bin";
     }).length;
     lastTally = {active, completed: counts.completed || 0, busiest: hotKey, most};
+    stationCounts = counts;
     setHeader(model, isToday() ? null : currentDay(), lastTally);
     runs.forEach((run) => {
       const entry = crateOf.get(run);
@@ -3048,7 +3055,11 @@ function factory(THREE, model) {
     }
     if (!reducedMotion && !exporting) {
       clock += dt;
-      animators.forEach((animate) => animate(clock));
+      animators.forEach((a) => {
+        if (!stationCounts[a.key]) return;
+        a.t += dt;
+        a.animate(a.t);
+      });
       spinRollers(dt);
       beltFlows.forEach((flow) => { flow.offset.x = -(clock * 0.45) % 1; });
       {
