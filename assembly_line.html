@@ -366,6 +366,10 @@
     .chip.hot .n { forced-color-adjust: none; background: Highlight; color: HighlightText; }
     #transport button[aria-pressed="true"] { forced-color-adjust: none;
       background: Highlight; color: HighlightText; border-color: Highlight; }
+    /* The legend's swatches and the card's kind dot name colours the
+       canvas still draws (forced colours never repaint WebGL), so they
+       keep them; repainted, every swatch was an empty box. */
+    #legend .swatch, .card .kdot { forced-color-adjust: none; }
   }
   /* Printed (or saved as PDF) the page is a report: the controls go —
      finder, Tour and legend buttons, the transport's buttons and slider,
