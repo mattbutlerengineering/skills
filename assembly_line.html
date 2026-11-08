@@ -119,8 +119,10 @@
     border-radius: 999px; pointer-events: none; }
   /* The slider's hover readout rises into the stage's bottom edge, where
      the hint sits: over the left third the two overlapped, the tip's top
-     4 px across the hint's text. The hint steps aside while it shows. */
-  body:has(#scrub-tip:not([hidden])) #hint { visibility: hidden; }
+     4 px across the hint's text. The hint steps aside while it shows —
+     and while the tour's card sits at the bottom, where it ran under the
+     card ("… double-click or 0 re" cut off at 1280×800). */
+  body:has(#scrub-tip:not([hidden])) #hint, body:has(#tour:not([hidden])) #hint { visibility: hidden; }
   /* A touch screen with no keyboard or mouse (a tablet: phones hide the
      hint) gets its own gestures — in the hint and the legend — not
      "space", "scroll", "hover" and "double-click". */
