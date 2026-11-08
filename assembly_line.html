@@ -229,8 +229,14 @@
   #fallback h2 .count { color: var(--muted); font-weight: normal; }
   #fallback ul { margin: 0; padding-left: 1.1rem; }
   #fallback li { overflow-wrap: anywhere; }
-  #fallback .empty { color: var(--muted); margin: 0; }
   #fallback section.attention h2 { color: var(--hot); }
+  /* An empty station is one muted line: with its "No runs here" box,
+     the six empty stations ahead of Implement filled a phone's whole
+     first screen. The pile-up is amber, as its sign is on the floor. */
+  #fallback section.none { padding: .35rem .75rem; }
+  #fallback section.none h2 { margin: 0; color: var(--muted); font-weight: 600; }
+  #fallback section.hot { box-shadow: inset 0 0 0 2px var(--hot); }
+  #fallback section.hot h2 { color: var(--hot); }
   .card { position: absolute; pointer-events: none; background: var(--panel);
     border: 2px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
     max-width: 320px; box-shadow: 0 6px 18px rgba(31,42,35,.18); z-index: 3; }
@@ -638,20 +644,22 @@ function showFallback(model, notice) {
   const stations = Array.isArray(model && model.stations) && model.stations.length
     ? model.stations : Object.keys(STATION_INFO);
   const section = (title, list, cls, describe) => {
-    const box = el("section", {class: cls || ""},
+    const box = el("section", {class: [cls, list.length ? "" : "none"].filter(Boolean).join(" ")},
       el("h2", {}, title, el("span", {class: "count"}, String(list.length))));
-    if (!list.length) box.append(el("p", {class: "empty"}, "No runs here"));
-    else {
-      const ul = el("ul", {});
-      list.forEach((run) => ul.append(el("li", {}, describe(run))));
-      box.append(ul);
-    }
+    if (!list.length) return box;
+    const ul = el("ul", {});
+    list.forEach((run) => ul.append(el("li", {}, describe(run))));
+    box.append(ul);
     return box;
   };
   const label = (run) => run.station === "implement" && run.work_orders.length
     ? `${run.ref} · ${doneCount(run)}/${run.work_orders.length}` : run.ref;
+  const at = (station) => runs.filter((run) => run.station === station);
+  // The pile-up, as the header names it: the fullest working station.
+  const hot = stations.filter((s) => s !== "completed")
+    .reduce((best, s) => (at(s).length > (best ? at(best).length : 0) ? s : best), null);
   stations.forEach((station) => main.append(
-    section(nameOf(station), runs.filter((run) => run.station === station), "", label)));
+    section(nameOf(station), at(station), station === hot ? "hot" : "", label)));
   main.append(section(nameOf("bin"), runs.filter((run) => run.status === "attention"),
     "attention", (run) => `${run.dir} — ${run.reason}`));
   main.hidden = false;
