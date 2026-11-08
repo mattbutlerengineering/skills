@@ -58,7 +58,7 @@
   #legend-open:hover, #tour-open:hover { border-color: var(--line);
     background: #fff; }
   #tour { position: absolute; left: 50%; bottom: 1rem;
-    transform: translateX(-50%); width: min(480px, calc(100vw - 1.5rem));
+    transform: translateX(-50%); width: min(34.3rem, calc(100vw - 1.5rem));
     background: var(--panel); border: 2px solid var(--line);
     border-radius: 12px; padding: .7rem .9rem; z-index: 6;
     box-shadow: 0 14px 40px rgba(31,42,35,.22); }
@@ -193,8 +193,11 @@
   /* Capped to the stage, scrolling inside: uncapped, a 495-px legend on
      a 434-px stage (a 1280×600 window) hung 70 px over the transport and
      hid the date, 30s, 60s and Export clip. */
+  /* Widths in rem (320 px at the default size) so the legend, the hover
+     card and the tour widen with a larger default font: fixed, a 24 px
+     default fit two or three words to a line in them. */
   #legend { position: absolute; right: .8rem; top: .6rem; z-index: 6;
-    width: 320px; background: var(--panel); border: 2px solid var(--line);
+    width: min(22.86rem, calc(100% - 1.6rem)); background: var(--panel); border: 2px solid var(--line);
     border-radius: 12px; padding: .8rem 1rem;
     max-height: calc(100% - 1.2rem); overflow: auto;
     box-shadow: 0 14px 40px rgba(31,42,35,.22); }
@@ -233,7 +236,7 @@
   #fallback section.attention h2 { color: var(--hot); }
   .card { position: absolute; pointer-events: none; background: var(--panel);
     border: 2px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
-    max-width: 320px; box-shadow: 0 6px 18px rgba(31,42,35,.18); z-index: 3; }
+    max-width: 22.86rem; box-shadow: 0 6px 18px rgba(31,42,35,.18); z-index: 3; }
   .card h3 { margin: 0 0 .15rem; font-size: .7rem; letter-spacing: .08em;
     text-transform: uppercase; color: var(--muted); }
   .card .ref { font-weight: 700; overflow-wrap: anywhere; margin: 0 0 .15rem; }
@@ -388,7 +391,7 @@
     /* 46vw, not 40: at 640×360 the 256 px card needed 206 px for the
        second beat inside a 204 px limit and scrolled its buttons away. */
     #tour { left: auto; right: .5rem; top: .5rem; bottom: auto;
-      transform: none; width: min(300px, 46vw); max-height: calc(100% - 1rem);
+      transform: none; width: min(21.43rem, 46vw); max-height: calc(100% - 1rem);
       display: flex; flex-direction: column; overflow: hidden; }
     /* Too tall for the card, only the words scroll: the whole card used
        to, and at 600×320 four of six beats pushed End and Next out of
