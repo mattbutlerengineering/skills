@@ -25,6 +25,8 @@ assumptions:
 
 ## Problem statement
 
+<!-- coverage-waiver: this run mirrors no tracker (autorun-brief.md, Tracker: reference #1274 only), so no breakdown row carries a work-order id for detector O to match; breakdown.md's items cite the PRD success criteria by number in its Criterion trace instead -->
+
 An agent in a repo with a knowledge base trusts a page whose claim has
 stopped being true outside the repo, because `kb.py lint` prints
 `kb: 0 problem(s)`. Lint calls a page stale only when a cited repo file
@@ -54,6 +56,8 @@ the agent sees when the gotcha bites, and a wrong/right pair. These are
 external practice, with no failure observed here.
 
 ## Solution
+
+<!-- coverage-waiver: this run mirrors no tracker (autorun-brief.md, Tracker: reference #1274 only), so no breakdown row carries a work-order id for detector O to match; breakdown.md's items cite the PRD success criteria by number in its Criterion trace instead -->
 
 When this ships, the knowledge base sees eight things it does not today.
 Each carries its evidence label, which the Owner's ruling keeps honest
@@ -99,6 +103,8 @@ without it lints exactly as today. Harvest stays read-only.
 
 ## Actors
 
+<!-- coverage-waiver: this run mirrors no tracker (autorun-brief.md, Tracker: reference #1274 only), so no breakdown row carries a work-order id for detector O to match; breakdown.md's items cite the PRD success criteria by number in its Criterion trace instead -->
+
 - **Reading agent**: any agent that reads `docs/kb/` before acting. This
   covers interactive sessions, the cloud routines (hourly improvement,
   merge-train) and fresh worktree agents, here and in any repo that
@@ -114,6 +120,8 @@ without it lints exactly as today. Harvest stays read-only.
   `docs/kb/` (the Owner, in this repo).
 
 ## User stories
+
+<!-- coverage-waiver: this run mirrors no tracker (autorun-brief.md, Tracker: reference #1274 only), so no breakdown row carries a work-order id for detector O to match; breakdown.md's items cite the PRD success criteria by number in its Criterion trace instead -->
 
 Item 1, external-fact age:
 
@@ -181,6 +189,8 @@ Item 8, verified-against line:
     environment (local shell or CI, this tool version).
 
 ## Success criteria
+
+<!-- coverage-waiver: this run mirrors no tracker (autorun-brief.md, Tracker: reference #1274 only), so no breakdown row carries a work-order id for detector O to match; breakdown.md's items cite the PRD success criteria by number in its Criterion trace instead -->
 
 All criteria are checkable offline (stdlib tests, fixture directories
 and fixture transcripts, an injected "today", never the real `~/.claude`)
@@ -365,6 +375,8 @@ tooling.
 - Any paid model run, and any LEDGER maturity change.
 
 ## Open questions
+
+<!-- coverage-waiver: this run mirrors no tracker (autorun-brief.md, Tracker: reference #1274 only), so no breakdown row carries a work-order id for detector O to match; breakdown.md's items cite the PRD success criteria by number in its Criterion trace instead -->
 
 - How a page declares its outside source, check date and maximum age
   (frontmatter fields or another form), and whether a page with an outside
