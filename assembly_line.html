@@ -463,7 +463,24 @@
     #transport { border-top: 0; padding-top: .3rem; }
     #legend .swatch, .chip, .chip .n, .kdot {
       print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    /* A pinned panel prints in full after the floor: as an overlay its
+       list stopped at the panel's height — 12 of Operate's 69 runs on an
+       A4 page. The page grows past one sheet; the stage keeps at most its
+       screen height (beforeprint writes it) and at most 70% of a sheet,
+       and the canvas is contained in it rather than stretched — its
+       drawing buffer is never refitted for print. */
+    html, body { height: auto; overflow: visible; }
+    #stage { flex: none; height: min(var(--print-h, 70vh), 70vh); }
+    #stage canvas { object-fit: contain; }
+    #panel { display: none !important; }
+    #print-panel:not(:empty) { display: block; break-before: page; }
+    #print-panel h2 { font-size: 1.1rem; margin: 0 0 .5rem; }
+    #print-panel .muted { color: var(--muted); }
+    #print-panel .run { border-bottom: 1px solid #ddd; break-inside: avoid; }
+    #print-panel summary { list-style: none; display: flex; gap: 1rem;
+      justify-content: space-between; padding: .2rem 0; }
   }
+  #print-panel { display: none; padding: 0 1.1rem; }
 </style>
 </head>
 <body>
@@ -573,6 +590,7 @@
     is today's.</span>
   <span id="export-status" role="status" hidden></span>
 </footer>
+<section id="print-panel" aria-hidden="true"></section>
 <!-- One polite live region, always present: a tour beat's text and a
      trace's start are announced here (text written into a box that was
      hidden a moment ago is not reliably read). -->
@@ -4093,6 +4111,20 @@ function factory(THREE, model) {
     }
   }
   applyHash(location.hash);
+  // Printing: the stage keeps its screen height (so the canvas prints
+  // as drawn), and a pinned panel's whole list follows on its own pages
+  // (the overlay panel is hidden in print; see the print styles).
+  addEventListener("beforeprint", () => {
+    stage.style.setProperty("--print-h", `${stage.clientHeight}px`);
+    const out = $("print-panel");
+    out.replaceChildren();
+    if ($("panel").hidden) return;
+    out.append(el("h2", {}, $("panel-title").textContent), $("panel-body").cloneNode(true));
+  });
+  addEventListener("afterprint", () => {
+    $("print-panel").replaceChildren();
+    stage.style.removeProperty("--print-h");
+  });
   addEventListener("hashchange", () => {
     if (exporting) return;
     // The pasted link owns the view: leave every mode, then apply. An
