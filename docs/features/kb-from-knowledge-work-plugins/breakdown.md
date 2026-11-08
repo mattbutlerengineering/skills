@@ -55,6 +55,7 @@ for its approvals, autonomous or subagent transcripts, with `arcs`,
 - [x] **K5 Human turns in kb_harvest.py** — add `human_turns`, the `CORRECTION` and `APPROVALS` patterns, and the always-present `human_turns` key to the Candidate miner — `kb_harvest.py` component, mined only from top-level transcripts — size:M
   - Accept: the K4 cases pass, and every case already in `tests/test_kb_harvest.py` passes unedited. `mine(paths)` calls `human_turns` once per path not named `agent-*`, computes `arcs` and `recurring_errors` exactly as before, and writes no file. `kb_harvest.py` gains no import beyond `cli` and the standard library (PRD 9, 10, 11, 12, 25).
   - Blocked by: K4 Human-turn tests
+  - Note: ADR-0126 supersedes this row's "no import beyond `cli`" clause: `kb_harvest.py` now also imports `protocol` for `frontmatter_end` (K12). The Accept text stands as written for what K5 itself shipped.
 
 ## Milestone 3: harvest reads auto-memory on request and pairs it with pages
 
@@ -69,6 +70,7 @@ memory index file.
 - [x] **K7 Memory source and the --memory flag** — add `memory_type`, `pair`, `memory_candidates` and the `memory`/`kb_dir` parameters to the Candidate miner — `kb_harvest.py`, and have the Page contract and lint — `kb.py` dispatch `kb_harvest.main(argv[1:], KB_DIR)` with `[--memory]` in its usage text — size:M
   - Accept: the K6 cases pass, and every earlier case in `tests/test_kb.py` and `tests/test_kb_harvest.py` still passes. `PAIR_MIN = 2` and the stopword list are architecture.md's. No new module is created and `tests/test_dual_membership.py` passes unedited. `kb_harvest.py`'s docstring carries a one-line credit to anthropics/knowledge-work-plugins (Apache-2.0) for the two new sources. `python3 kb.py harvest --help` or a bad flag prints usage containing `[--memory]` and exits 2 (PRD 5, 6, 7, 26).
   - Blocked by: K6 Memory tests; K2 Age check in kb.py
+  - Note: ADR-0126 supersedes this row's "`tests/test_dual_membership.py` passes unedited" clause, the same no-new-import rule as K5's: K12 added `kb_harvest` to the pin's protocol.py row. No new module was created, so that clause still holds.
 
 ## Milestone 4: the skill, rubric and ingest text teach items 1 to 8
 
@@ -94,7 +96,7 @@ Demonstrable: the four battery commands exit 0 from the worktree, nothing
 outside the brief's In list changed, and the Owner has the three NOT RUN
 procedures.
 
-- [ ] **K12 Battery, invariants and NOT RUN record** — run the battery and the run-wide invariant checks, and log the three NOT RUN criteria in Notes below for Verify — size:S
+- [x] **K12 Battery, invariants and NOT RUN record** — run the battery and the run-wide invariant checks, and log the three NOT RUN criteria in Notes below for Verify — size:S
   - Accept: `python3 run_tests.py`, `python3 lint.py`, `python3 kb.py drift` and `python3 gates.py && python3 gates.py --selftest` each exit 0, with their summary lines quoted in Notes; `python3 factory_init.py update-manifest`, run after deleting any stray `.orig`/`.rej`, leaves `git status --porcelain` with no manifest change (neither `kb.py` nor `kb_harvest.py` is mirrored); `git diff main -- LEDGER.md .claude-plugin/plugin.json` prints nothing; `grep -rn "Path.home\|~/.claude" tests/test_kb.py tests/test_kb_harvest.py tests/test_knowledge_base_shape.py` finds no new hit outside the neutrality test's own forbidden-string list; the six current `docs/kb/` pages other than `main-unprotected.md` show no diff. Notes records, each as NOT RUN for the Owner: PRD 13 (hand-label the new-kind candidates from `python3 kb.py harvest --days N` over this repo's interactive transcripts on the Owner's machine and record the counts), PRD 32 (the demo's four steps, the last needing a model session against the real memory directory), and the routing eval `python3 trigger_eval.py`, owed only if a later stage changes the skill's `description` (PRD 25, 27, 30, 31, 33).
   - Blocked by: K3 main-unprotected.md declares its check; K9 Page rubric text; K10 Ingest rules text; K11 Skill body text
 
@@ -321,6 +323,35 @@ Implement, 2026-11-08 (unattended, autorun).
   `tests/test_knowledge_base_shape.py:22`, the neutrality test's
   forbidden-string list; and `git diff --name-only main -- docs/kb/`
   lists only `docs/kb/main-unprotected.md`.
+- **K12, resumed after Architect (ADR-0126), green.** `kb_harvest.py`
+  imports `protocol`, and `_block` defines no fence of its own: it returns
+  `lines[1:end]` for `end = protocol.frontmatter_end(lines)`, else None,
+  so an indented opener now means no block and the entry is skipped and
+  counted (a `type: user` entry behind one is skipped, still never
+  printed). No K6 fixture used an indented opener, so no fixture or test
+  changed: `python3 -m unittest tests.test_kb_harvest tests.test_kb
+  tests.test_protocol_frontmatter` gave `Ran 119 tests`, `OK`.
+  `tests/test_protocol_frontmatter.py` is unedited (`git diff main` on it
+  is empty). `tests/test_dual_membership.py` gains `kb_harvest` in the
+  protocol.py row; the pinned set held 61 pairs before and 62 after, and
+  the comment, which said 57, now says 62 and names ADR-0126.
+  `factory_init.MIRRORS` names neither `kb.py` nor `kb_harvest.py`.
+  The battery, each command's own exit code, on b0e9402:
+  - `python3 run_tests.py`: `tests: 4141 tests across 132 modules in
+    26.6s on 8 workers, 0 problem(s)` (exit 0)
+  - `python3 lint.py`: `lint: 0 problem(s) across 36 skills` (exit 0)
+  - `python3 kb.py drift`: `drift: 0 problem(s)` (exit 0)
+  - `python3 kb.py lint`: `kb: 0 problem(s)` (exit 0)
+  - `python3 gates.py`: `gates: 0 problem(s)` (exit 0), then `python3
+    gates.py --selftest`: `selftest: ok` (exit 0)
+  Invariants, re-checked: no stray `.orig`/`.rej`; `python3
+  factory_init.py update-manifest` gave `factory-init: 0 problem(s)` and
+  `git status --porcelain` showed no manifest change; `git diff main --
+  LEDGER.md .claude-plugin/plugin.json` is empty; the `Path.home\|~/.claude`
+  grep's only hit is `tests/test_knowledge_base_shape.py:22`, the
+  neutrality test's `FORBIDDEN` list; `git diff --name-only main --
+  docs/kb/` lists only `docs/kb/main-unprotected.md`. The three NOT RUN
+  criteria are recorded below.
 - **NOT RUN for the Owner (recorded for Verify).**
   - PRD 13, precision of the human-turn kind: on the Owner's machine,
     run `python3 kb.py harvest --days N` over this repo's interactive
