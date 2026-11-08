@@ -112,6 +112,10 @@
   #hint { position: absolute; left: .8rem; bottom: .6rem; color: var(--muted);
     font-size: .75rem; background: rgba(255,255,255,.7); padding: .15rem .6rem;
     border-radius: 999px; pointer-events: none; }
+  /* The slider's hover readout rises into the stage's bottom edge, where
+     the hint sits: over the left third the two overlapped, the tip's top
+     4 px across the hint's text. The hint steps aside while it shows. */
+  body:has(#scrub-tip:not([hidden])) #hint { visibility: hidden; }
   /* A touch screen with no keyboard or mouse (a tablet: phones hide the
      hint) gets its own gestures — in the hint and the legend — not
      "space", "scroll", "hover" and "double-click". */
