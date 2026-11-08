@@ -2964,7 +2964,7 @@ function factory(THREE, model) {
   function closePanel(returnFocus = true) {
     const hadFocus = $("panel").contains(document.activeElement);
     const key = state.pinned && state.pinned.key;
-    $("panel").hidden = true; state.pinned = null; state.highlighted = null;
+    $("panel").hidden = true; state.pinned = null; state.highlighted = null; panelPin = null;
     if (rowBoxed) rowBox(null); // a row's box would outlive its row
     syncTitle();
     // Without an opener — a panel from a #run=/#station= link or a canvas
@@ -3223,7 +3223,7 @@ function factory(THREE, model) {
   // the panel open (WCAG 1.4.12) widened the button over the row's "2/2".
   const setTraceReserve = (btn) => $("panel").style.setProperty("--trace-w", `${btn.offsetWidth + 8}px`);
   const traceReserve = new ResizeObserver(([entry]) => setTraceReserve(entry.target));
-  let panelDay = null, panelRuns = [];
+  let panelDay = null, panelRuns = [], panelPin = null;
   const sameRuns = (a, b) => a.length === b.length && a.every((run, i) => run === b[i]);
   function renderPanel() {
     if (!state.pinned) return;
@@ -3242,7 +3242,14 @@ function factory(THREE, model) {
     const had = body.contains(document.activeElement) ? document.activeElement : null;
     const oldRow = had && had.closest(".run");
     const keep = oldRow && panelRuns[[...body.querySelectorAll(".run")].indexOf(oldRow)];
-    const keepOpen = oldRow && oldRow.querySelector("details").open;
+    // Rows opened by hand stay open across a rebuild of the same panel
+    // (a day step, a replay's day boundary): only the focused one did,
+    // so three opened rows came back as none. A new pin starts fresh.
+    const samePin = panelPin && panelPin.key === key && panelPin.run === run;
+    const openBefore = new Set(samePin ? [...body.querySelectorAll(".run")]
+      .map((r, i) => r.querySelector("details").open ? panelRuns[i] : null).filter(Boolean) : []);
+    if (oldRow && oldRow.querySelector("details").open) openBefore.add(keep);
+    panelPin = {key, run};
     const keepPart = had && had.classList.contains("trace-btn") ? ".trace-btn" : "summary";
     // The scrolled list keeps its place too: the run at the top of its
     // view stays at the same offset. By scrollTop alone a day step
@@ -3261,7 +3268,7 @@ function factory(THREE, model) {
       : `No runs here as of ${asOf()}`));
     let opened = null, kept = null;
     here.forEach((r) => {
-      const row = runRow(r, r === run || (r === keep && keepOpen));
+      const row = runRow(r, r === run || openBefore.has(r));
       body.append(row);
       if (r === run) opened = row;
       if (r === keep) kept = row;
