@@ -2528,9 +2528,14 @@ function factory(THREE, model) {
     panelOpener = opener;
     $("panel-title").focus();
   }
+  // The panel rows' use of the hover box, tracked so a rebuilt or closed
+  // panel clears only a box a row put there, never the canvas's own.
+  let rowBoxed = false;
+  function rowBox(run) { rowBoxed = !!run; boxRun(run); }
   function closePanel() {
     const hadFocus = $("panel").contains(document.activeElement);
     $("panel").hidden = true; state.pinned = null; state.highlighted = null;
+    if (rowBoxed) rowBox(null); // a row's box would outlive its row
     if (hadFocus && panelOpener && panelOpener.isConnected && !panelOpener.hidden) panelOpener.focus();
     panelOpener = null;
     // The bar says what the view shows: a closed panel's link goes too.
@@ -2547,6 +2552,13 @@ function factory(THREE, model) {
       ? `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}` : ""));
     const details = el("details", {}, summary);
     const row = el("div", {class: "run"}, details);
+    // Pointing at a row (or tabbing into it) boxes its crate or building
+    // on the floor, the hover box the canvas uses: a station's list of 69
+    // names otherwise never said which crate in the heap was which.
+    row.addEventListener("pointerenter", () => rowBox(run));
+    row.addEventListener("pointerleave", () => rowBox(null));
+    row.addEventListener("focusin", () => rowBox(run));
+    row.addEventListener("focusout", () => rowBox(null));
     if (run.status !== "attention") {
       const traceBtn = el("button", {class: "trace-btn",
         title: "Replay this run's journey, solo"}, "◉ trace");
@@ -2776,6 +2788,7 @@ function factory(THREE, model) {
   function renderPanel() {
     if (!state.pinned) return;
     panelDay = currentDay();
+    if (rowBoxed) rowBox(null); // the rows being replaced never fire pointerleave
     const {key, run} = state.pinned;
     const here = runsAt(key);
     panelRuns = here;
