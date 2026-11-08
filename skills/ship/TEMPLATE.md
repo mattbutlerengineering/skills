@@ -14,9 +14,11 @@ released-at: <YYYY-MM-DD, once the pull request merges>
 - [ ] Verification green (no unresolved failures)
 - [ ] No secrets in diff; target config present
 - [ ] Migrations/data changes have a tested forward path
-- [ ] Rollback plan concrete (commands/steps below)
+- [ ] Rollback plan concrete (commands/steps and trigger below)
 
 ## Rollback plan
+
+Trigger: <the observation, named before release, that makes us run the steps>
 
 Door: <one-way or two-way> — <why>
 
