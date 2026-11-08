@@ -186,6 +186,16 @@
   #loading { margin: 3rem auto; text-align: center; color: var(--muted);
     font-style: italic; opacity: 0; animation: al-appear .4s ease .5s forwards; }
   @keyframes al-appear { to { opacity: 1; } }
+  /* A short belt runs under it while the file streams in: on a 60 KB/s
+     link the line sat unchanged for 14 s and read as a hung page. Still
+     (a striped bar) under reduced motion. */
+  #loading::after { content: ""; display: block; width: 9rem; height: 6px;
+    margin: .7rem auto 0; border-radius: 3px;
+    background: repeating-linear-gradient(-45deg, var(--belt) 0 6px, transparent 6px 12px);
+    background-size: 16.97px 100%; box-shadow: inset 0 0 0 1px rgba(47,50,56,.18);
+    animation: al-belt .9s linear infinite; }
+  @keyframes al-belt { to { background-position: 16.97px 0; } }
+  @media (prefers-reduced-motion: reduce) { #loading::after { animation: none; } }
   #empty-sign { position: absolute; left: 50%; top: 45%;
     transform: translate(-50%, -50%); background: var(--panel);
     border: 2px solid var(--line); border-radius: 8px; padding: .8rem 1.2rem;
