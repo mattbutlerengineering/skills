@@ -477,16 +477,29 @@ function showFallback(model, notice) {
   main.hidden = false;
 }
 
-function setHeader(model, day) {
+// The header summarises what the floor shows. `tally` is the floor's own
+// count — {active, completed, busiest, most} — so mid-replay the header,
+// the chips and the amber sign never disagree (counting each run's
+// end-of-day station, it once said "piling up at Operate (29)" while
+// Review's chip was amber at 16). Without a floor (no WebGL, or before
+// the factory builds) it counts the model's own placement: today's.
+function setHeader(model, day, tally) {
   const runs = Array.isArray(model && model.runs) ? model.runs : [];
   const at = day || (model && model.generated ? model.generated.slice(0, 10) : "");
-  const placed = day ? runs.map((run) => stationAt(run, day)) : runs.map((run) => run.station);
-  const active = placed.filter((s) => s && s !== "completed").length;
-  const completed = placed.filter((s) => s === "completed").length;
+  if (!tally) {
+    const counts = {};
+    runs.forEach((run) => {
+      if (run.station && run.station !== "completed") counts[run.station] = (counts[run.station] || 0) + 1;
+    });
+    const busiest = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || null;
+    tally = {active: Object.values(counts).reduce((a, b) => a + b, 0),
+      completed: runs.filter((run) => run.station === "completed").length,
+      busiest, most: busiest ? counts[busiest] : 0};
+  }
   $("title").textContent = (model && model.repo) || "Assembly line";
   const meta = $("meta");
-  meta.replaceChildren(el("b", {}, String(active)), " in flight · ",
-    el("b", {}, String(completed)), " done", at ? ` · as of ${at}` : "");
+  meta.replaceChildren(el("b", {}, String(tally.active)), " in flight · ",
+    el("b", {}, String(tally.completed)), " done", at ? ` · as of ${at}` : "");
   // Runs the placement tool could not read are in neither number above,
   // and they are the ones a maintainer most needs to hear about: say so
   // in the summary, not only on the floor's amber bin.
@@ -495,14 +508,9 @@ function setHeader(model, day) {
     meta.append(" · ", el("b", {}, String(unreadable)),
       unreadable === 1 ? " needs attention" : " need attention");
   }
-  const counts = {};
-  placed.forEach((s) => { if (s && s !== "completed") counts[s] = (counts[s] || 0) + 1; });
-  const busiest = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
-  if (busiest && counts[busiest] > 1) {
-    meta.append(" · piling up at ", el("b", {}, nameOf(busiest)),
-      ` (${counts[busiest]})`);
+  if (tally.busiest && tally.most > 1) {
+    meta.append(" · piling up at ", el("b", {}, nameOf(tally.busiest)), ` (${tally.most})`);
   }
-  return busiest;
 }
 
 function webglAvailable() {
@@ -516,12 +524,6 @@ function webglAvailable() {
 const DAY_MS = 86400000;
 const dayIndex = (iso) => Math.round(Date.parse(iso + "T00:00:00Z") / DAY_MS);
 const isoOf = (index) => new Date(index * DAY_MS).toISOString().slice(0, 10);
-function stationAt(run, day) {
-  if (run.status === "attention") return null;
-  let station = null;
-  for (const hop of run.history) { if (hop.day <= day) station = hop.station; }
-  return station;
-}
 // Within a played day a run's arrivals are spread evenly in stage order.
 function hopTimes(run) {
   const byDay = {};
@@ -1644,6 +1646,14 @@ function factory(THREE, model) {
     Object.keys(GRID).forEach((key) =>
       updateSign(key, counts[key] || 0, key === hotKey));
     updateChips(counts, hotKey);
+    // In flight counts crates on the belt too; the bin is the header's
+    // separate "need attention".
+    const active = runs.filter((run) => {
+      const where = crateOf.get(run).where;
+      return where && where.station !== "completed" && where.station !== "bin";
+    }).length;
+    setHeader(model, isToday() ? null : currentDay(),
+      {active, completed: counts.completed || 0, busiest: hotKey, most});
     runs.forEach((run) => {
       const entry = crateOf.get(run);
       const where = entry.where;
@@ -2491,7 +2501,6 @@ function factory(THREE, model) {
     $("today").hidden = !off || state.playing;
     play.textContent = state.playing ? "❚❚ Pause" : "▶ Play";
     play.setAttribute("aria-label", state.playing ? "Pause the replay" : "Play the replay");
-    setHeader(model, isToday() ? null : currentDay());
   }
   $("today").addEventListener("click", () => goToDay(LAST + 1));
   const enabled = runs.length > 0;
