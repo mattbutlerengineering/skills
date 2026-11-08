@@ -1054,24 +1054,31 @@ function factory(THREE, model) {
   // words the hover card and panel rows print (CONTEXT.md's run kinds).
   // Maintenance is also taped ACROSS (a cross on the lid, one mesh): to
   // deuteranopia and protanopia the green and amber tapes are one
-  // mustard, and the two commonest kinds were the same crate.
+  // mustard, and the two commonest kinds were the same crate. Its
+  // building keeps the mark: a dark cross on the roof (ensureBuilding).
   const TAPE = {feature: 0x7cc44e, product: 0x8f6fd8, maintenance: 0xe0903a};
-  const crossTapeGeo = (() => {
-    // The cross arm stands 0.01 prouder so the shared centre never z-fights.
-    const parts = [new THREE.BoxGeometry(CRATE + 0.02, 0.1, 0.3).toNonIndexed(),
-      new THREE.BoxGeometry(0.3, 0.12, CRATE + 0.02).toNonIndexed()];
+  // One mesh per cross: a len × h × w strip and its perpendicular twin
+  // merged; the twin stands 0.02 prouder so the shared centre never
+  // z-fights. Cached per size.
+  const crossCache = {};
+  function crossGeo(len, h, w) {
+    const key = `${len},${h},${w}`;
+    if (crossCache[key]) return crossCache[key];
+    const parts = [new THREE.BoxGeometry(len, h, w).toNonIndexed(),
+      new THREE.BoxGeometry(w, h + 0.02, len).toNonIndexed()];
     const geo = new THREE.BufferGeometry();
     for (const name of ["position", "normal"]) {
       geo.setAttribute(name, new THREE.Float32BufferAttribute(
         parts.flatMap((part) => Array.from(part.attributes[name].array)), 3));
     }
     parts.forEach((part) => part.dispose());
-    return geo;
-  })();
+    return (crossCache[key] = geo);
+  }
   function crateMesh(color = COLORS.crate, kind) {
     const mesh = outlined(new THREE.Mesh(boxGeo(CRATE, CRATE * 0.8, CRATE), mat(color)));
     mesh.castShadow = true;
-    const strip = new THREE.Mesh(kind === "maintenance" ? crossTapeGeo : boxGeo(CRATE + 0.02, 0.1, 0.3),
+    const strip = new THREE.Mesh(kind === "maintenance" ? crossGeo(CRATE + 0.02, 0.1, 0.3)
+      : boxGeo(CRATE + 0.02, 0.1, 0.3),
       mat(TAPE[kind] || COLORS.tape));
     strip.position.y = CRATE * 0.4;
     mesh.add(strip);
@@ -1561,6 +1568,16 @@ function factory(THREE, model) {
       box(1.34, 0.14, 1.34, trim, 0, height + 1.26, 0, building);
     }
     const capTop = tall ? height + 1.4 : height + 0.16;
+    // A maintenance roof is taped across like its crate was: its amber
+    // trim alone is a green feature roof's mustard to red-green
+    // colour-blind eyes, and the cross is what still tells them apart.
+    // Deep amber, a darker tape: a near-black cross read as a "rejected" X.
+    if (run.kind === "maintenance") {
+      const span = tall ? 1.34 : 1.98;
+      const cross = new THREE.Mesh(crossGeo(span - 0.12, 0.04, 0.24), mat(0x8a4a14));
+      cross.position.y = capTop + 0.02;
+      building.add(cross);
+    }
     if (hash % 3 === 0) {
       box(0.1, 1.0, 0.1, COLORS.dark, -0.55, capTop, -0.5, building);
       const tipMat = new THREE.MeshBasicMaterial({color: 0x8f6fd8});
