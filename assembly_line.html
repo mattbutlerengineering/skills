@@ -938,12 +938,30 @@ function factory(THREE, model) {
   // One billboard per station: step number, name and a live count, big
   // enough to read in a screenshot. The busiest station's sign goes
   // amber — the bottleneck is the first thing the factory should say.
-  function signTexture(key, count, hot) {
+  // Compact (signsCompact below): an empty station's sign is its step
+  // number alone, so a small stage can draw every sign at a readable size
+  // without the empty ones burying the floor.
+  function signTexture(key, count, hot, compact = false) {
     const step = STEP[key] || "";
     const name = nameOf(key).toUpperCase();
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const H = 148, PAD = 26, GAP = 18;
+    if (compact) {
+      ctx.font = "800 64px system-ui, sans-serif";
+      const width = Math.ceil(Math.max(H, ctx.measureText(step).width + 2 * PAD));
+      canvas.width = width; canvas.height = H;
+      ctx.fillStyle = "rgba(255,255,255,0.96)"; ctx.strokeStyle = "#2f3238"; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.roundRect(5, 5, width - 10, H - 10, 26);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#6a4cc4"; ctx.textBaseline = "middle";
+      ctx.font = "800 64px system-ui, sans-serif";
+      ctx.fillText(step, (width - ctx.measureText(step).width) / 2, H / 2 + 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+      return {texture, aspect: width / H};
+    }
     ctx.font = "700 62px system-ui, sans-serif";
     const nameWidth = ctx.measureText(name).width;
     ctx.font = "800 56px system-ui, sans-serif";
@@ -999,9 +1017,20 @@ function factory(THREE, model) {
   const CLIP_SIGN_SCALE = 1.3;
   let signScale = 1;
   // One rule for a sign's height: map labels at 1×, out of the way close
-  // up, swollen a touch while hovered.
-  const signHeight = (sign) => SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom))
-    * (sign.boost || 1) * signScale;
+  // up, swollen a touch while hovered — and never under MIN_SIGN_PX on
+  // screen. Sized in world units alone a sign shrank with the stage: 12
+  // px tall on a 390-px phone, its name and count 4-px text, and the
+  // same physical size at 200% browser zoom while every other word
+  // doubled. Raising every sign to the floor buried a short landscape
+  // stage in labels, so while the floor is in force (signsCompact) an
+  // empty station's sign shrinks to its step number; hovering it (or its
+  // chip) spells it out again. A clip keeps its own scale.
+  const MIN_SIGN_PX = 20;
+  let signsCompact = false;
+  const signFloor = () => captureSize ? 0
+    : MIN_SIGN_PX * 2 * frameBox.halfH / (view.zoom * Math.max(1, stage.clientHeight));
+  const signHeight = (sign) => Math.max(SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom))
+    * signScale, signFloor()) * (sign.boost || 1);
   Object.keys(GRID).forEach((key) => {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true,
       depthTest: false}));
@@ -1016,19 +1045,25 @@ function factory(THREE, model) {
     scene.add(sprite);
     signs[key] = {sprite, last: ""};
   });
+  function drawSign(key) {
+    const sign = signs[key];
+    if (sign.count === undefined) return; // layout() has not counted yet
+    const compact = signsCompact && sign.count === 0 && !sign.hot && !(sign.boost > 1);
+    const want = `${sign.count}|${sign.hot}|${compact}`;
+    if (sign.last === want) return;
+    const {texture, aspect} = signTexture(key, sign.count, sign.hot, compact);
+    if (sign.sprite.material.map) sign.sprite.material.map.dispose();
+    sign.sprite.material.map = texture;
+    sign.sprite.material.needsUpdate = true;
+    sign.aspect = aspect;
+    const h = signHeight(sign);
+    sign.sprite.scale.set(h * aspect, h, 1);
+    sign.last = want;
+  }
   function updateSign(key, count, hot) {
     const sign = signs[key];
-    const want = `${count}|${hot}`;
-    if (sign.last !== want) {
-      const {texture, aspect} = signTexture(key, count, hot);
-      if (sign.sprite.material.map) sign.sprite.material.map.dispose();
-      sign.sprite.material.map = texture;
-      sign.sprite.material.needsUpdate = true;
-      sign.aspect = aspect;
-      const h = signHeight(sign);
-      sign.sprite.scale.set(h * aspect, h, 1);
-      sign.last = want;
-    }
+    sign.count = count; sign.hot = hot;
+    drawSign(key);
     sign.sprite.visible = key !== "bin" || count > 0;
     if (key === "bin") stationGroups.bin.visible = count > 0;
   }
@@ -2087,6 +2122,11 @@ function factory(THREE, model) {
     camera.left = cx - halfW; camera.right = cx + halfW;
     camera.top = cy + halfH; camera.bottom = cy - halfH;
     camera.updateProjectionMatrix();
+    // Small stage? Then signs draw at MIN_SIGN_PX and the empty ones go
+    // compact; the redraw happens only when a sign's state changes.
+    const floor = signFloor();
+    signsCompact = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom)) * signScale < floor;
+    Object.keys(signs).forEach(drawSign);
     Object.values(signs).forEach((sign) => {
       const h = signHeight(sign);
       if (sign.aspect) sign.sprite.scale.set(h * sign.aspect, h, 1);
