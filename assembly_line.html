@@ -2072,6 +2072,13 @@ function factory(THREE, model) {
     return Math.max(0, now - arrived);
   }
   const daysText = (n) => `${n} day${n === 1 ? "" : "s"}`;
+  // A finished run's lead time: whole days from its first recorded stage
+  // to Done (null while unfinished) — the building card's and the Done
+  // card's one rule.
+  function leadDays(run) {
+    const landed = run.history.findLast((hop) => hop.station === "completed");
+    return landed ? dayIndex(landed.day) - dayIndex(run.history[0].day) : null;
+  }
   function skippedOf(run) {
     return run.ladder.filter((row) => row.state === "skipped").map((row) => nameOf(row.stage));
   }
@@ -2088,10 +2095,15 @@ function factory(THREE, model) {
     // The pile's age: how long its oldest crate has waited (runsAt sorts
     // oldest first). Not for the city or the bin — nothing waits there.
     const longest = here.length && key !== "completed" && key !== "bin" ? waitedDays(here[0]) : 0;
+    // The city's own number: how long a shipped run took, median of the
+    // buildings standing now (the lower middle, so it is a real run's).
+    const leads = key === "completed" ? here.map(leadDays).filter((d) => d !== null).sort((a, b) => a - b) : [];
+    const median = leads.length ? leads[Math.floor((leads.length - 1) / 2)] : null;
     card.replaceChildren(el("h3", {}, name), el("p", {}, line),
       el("p", {class: "muted"}, `${here.length} run${here.length === 1 ? "" : "s"} · as of ${asOf()}`),
       ...(here.length ? [el("p", {}, `oldest: ${oldest}${here.length > 5 ? ", …" : ""}`)] : []),
-      ...(longest ? [el("p", {}, `longest wait: ${daysText(longest)}`)] : []));
+      ...(longest ? [el("p", {}, `longest wait: ${daysText(longest)}`)] : []),
+      ...(median !== null ? [el("p", {}, `median lead time: ${daysText(median)}, first stage to Done`)] : []));
   }
   // Tape colours, as CSS, for the card's kind dot.
   const KIND_CSS = {feature: "#7cc44e", maintenance: "#e0903a", product: "#8f6fd8"};
@@ -2117,8 +2129,9 @@ function factory(THREE, model) {
       }
       if (built) {
         const landed = run.history.findLast((hop) => hop.station === "completed");
-        const n = run.work_orders.length;
+        const n = run.work_orders.length, lead = leadDays(run);
         line = `${run.kind}${landed ? ` · finished ${landed.day}` : ""}`
+          + (lead === null ? "" : lead ? `, ${daysText(lead)} after it started` : ", the day it started")
           + (n ? ` · ${n} work order${n === 1 ? "" : "s"}` : "");
       }
       if (where && where.station === "implement" && run.work_orders.length)
