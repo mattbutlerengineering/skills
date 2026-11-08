@@ -2238,12 +2238,15 @@ function factory(THREE, model) {
   // Open on load: the first thing a cold viewer sees is the key to the
   // picture, and closing it is one click (pinning closes it too). On a
   // phone it would cover the whole factory, so there it starts closed
-  // and the "? How to read this" button opens it as a bottom sheet.
+  // and the "? How to read this" button opens it as a bottom sheet. A
+  // portrait-shaped stage (a tablet held upright) starts closed too:
+  // the floor fills the width there and the city lands top-right, under
+  // the legend — 55% of it covered on an iPad, 43% at 900×1000.
   function setLegend(openIt) {
     $("legend").hidden = !openIt;
     $("legend-open").setAttribute("aria-expanded", String(openIt));
   }
-  setLegend(matchMedia("(min-width: 721px) and (min-height: 481px)").matches);
+  setLegend(matchMedia("(min-width: 721px) and (min-height: 481px) and (min-aspect-ratio: 1/1)").matches);
   $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
   $("legend-close").addEventListener("click", () => setLegend(false));
 
