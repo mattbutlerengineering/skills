@@ -252,6 +252,12 @@
   #scrub-wrap #scrub { position: relative; display: block; margin: 0; }
   #activity { position: absolute; left: 0; bottom: calc(50% + 3px); width: 100%;
     height: 11px; pointer-events: none; color: var(--muted); opacity: .75; }
+  /* A pointer over the slider reads the day under it and its arrivals
+     (scrub hover, beside drawActivity). */
+  #scrub-tip { position: absolute; bottom: calc(50% + 17px); z-index: 4;
+    transform: translateX(-50%); pointer-events: none; white-space: nowrap;
+    background: var(--panel); border: 1.5px solid var(--line); border-radius: 6px;
+    padding: .05rem .4rem; font-size: .75rem; font-variant-numeric: tabular-nums; }
   #day { font-variant-numeric: tabular-nums; min-width: 6.5rem; }
   #honesty { grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
   #export-status { grid-column: 1 / -1; font-size: .8rem; }
@@ -422,7 +428,8 @@
 <main id="fallback" hidden></main>
 <footer id="transport" hidden>
   <button id="play" aria-label="Play the replay" disabled>▶ Play</button>
-  <span id="scrub-wrap"><canvas id="activity" aria-hidden="true"></canvas><input
+  <span id="scrub-wrap"><canvas id="activity" aria-hidden="true"></canvas><span
+    id="scrub-tip" aria-hidden="true" hidden></span><input
     id="scrub" type="range" min="0" max="0" step="1" value="0"
     aria-label="Replay date" disabled></span>
   <span id="day"></span>
@@ -2902,6 +2909,25 @@ function factory(THREE, model) {
   }
   drawActivity();
   addEventListener("resize", drawActivity);
+  // The strip shows where the history is; a mouse over the slider says
+  // which day a bar is and how many arrivals it holds, before a drag
+  // (or a click, which jumps the thumb there) commits to it. Mouse only:
+  // a touch is the drag itself, and #day already reads it.
+  const scrubTip = $("scrub-tip");
+  scrub.addEventListener("pointermove", (event) => {
+    if (event.pointerType !== "mouse" || event.buttons || scrub.disabled) { scrubTip.hidden = true; return; }
+    const r = scrub.getBoundingClientRect(), inset = 8, span = Math.max(1, arrivals.length - 1);
+    const k = Math.max(0, Math.min(span, Math.round((event.clientX - r.left - inset) / Math.max(1, r.width - 2 * inset) * span)));
+    const index = FIRST + k, n = arrivals[k];
+    const date = index >= TODAY_STOP ? `${model.generated.slice(0, 10)} (today)` : isoOf(index);
+    scrubTip.textContent = `${date} · ${n ? `${n} arrival${n === 1 ? "" : "s"}` : "quiet"}`;
+    scrubTip.hidden = false;
+    const half = scrubTip.offsetWidth / 2, x = inset + (k / span) * (r.width - 2 * inset);
+    scrubTip.style.left = `${Math.max(half, Math.min(r.width - half, x))}px`;
+  });
+  for (const type of ["pointerleave", "pointerdown"]) {
+    scrub.addEventListener(type, () => { scrubTip.hidden = true; });
+  }
   function dayLabel() { return isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay(); }
   function syncTransport() {
     // The thumb tracks the playhead: smooth while the replay runs,
