@@ -801,7 +801,12 @@ function factory(THREE, model) {
   })();
   const beltFlows = [];
   // The belt: green top on a dark frame, rollers on the sides, legs below.
-  function beltSegment(a, b, rollerSpin) {
+  // Legs and rollers are recorded, not built: hundreds of identical tiny
+  // parts drawn one by one (with an outline and a shadow pass each) were
+  // two-thirds of a frame's ~1,900 draw calls; instancedBeltParts() below
+  // draws each kind in one call.
+  const legMatrices = [], rollerBases = [];
+  function beltSegment(a, b) {
     const length = a.distanceTo(b);
     if (length < 0.01) return;
     const group = new THREE.Group();
@@ -818,19 +823,53 @@ function factory(THREE, model) {
     arrows.position.y = BELT_Y + 0.14;
     group.add(arrows);
     beltFlows.push(flow);
+    group.updateMatrix(); // the group sits at the scene root: matrix = world
+    const at3 = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
     for (let x = -length / 2; x <= length / 2; x += 3) {
-      box(0.25, BELT_Y - 0.5, 0.25, COLORS.frame, x, 0, BELT_W / 2 - 0.1, group);
-      box(0.25, BELT_Y - 0.5, 0.25, COLORS.frame, x, 0, -BELT_W / 2 + 0.1, group);
+      for (const z of [BELT_W / 2 - 0.1, -BELT_W / 2 + 0.1])
+        legMatrices.push(group.matrix.clone().multiply(at3(x, (BELT_Y - 0.5) / 2, z)));
     }
     for (let x = -length / 2; x <= length / 2; x += 0.9) {
-      const roller = cyl(0.18, 0.1, COLORS.dark, x, 0, BELT_W / 2 + 0.18, group, 8);
-      roller.rotation.x = Math.PI / 2;
-      roller.position.y = BELT_Y - 0.25;
-      rollerSpin.push(roller);
+      rollerBases.push(group.matrix.clone().multiply(at3(x, BELT_Y - 0.25, BELT_W / 2 + 0.18))
+        .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
     }
     scene.add(group);
   }
-  const rollers = [];
+  // One instanced mesh per part kind. The legs keep their outline as one
+  // merged line set (they never move); the rollers, which spin, go
+  // without — at 0.36 units across their edges never read anyway.
+  const LEG_GEO = boxGeo(0.25, BELT_Y - 0.5, 0.25);
+  const ROLLER_GEO = geoCache["c0.18,0.1,8"]
+    || (geoCache["c0.18,0.1,8"] = new THREE.CylinderGeometry(0.18, 0.18, 0.1, 8));
+  let rollerMesh = null, rollerAngle = 0;
+  function instancedBeltParts() {
+    const legs = new THREE.InstancedMesh(LEG_GEO, mat(COLORS.frame), legMatrices.length);
+    legMatrices.forEach((m, i) => legs.setMatrixAt(i, m));
+    legs.castShadow = true; legs.receiveShadow = true; legs.frustumCulled = false;
+    scene.add(legs);
+    const edges = new THREE.EdgesGeometry(LEG_GEO, 25).attributes.position;
+    const positions = new Float32Array(edges.count * 3 * legMatrices.length);
+    const v = new THREE.Vector3();
+    legMatrices.forEach((m, i) => {
+      for (let k = 0; k < edges.count; k++) {
+        v.fromBufferAttribute(edges, k).applyMatrix4(m).toArray(positions, (i * edges.count + k) * 3);
+      }
+    });
+    const outline = new THREE.BufferGeometry();
+    outline.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    scene.add(new THREE.LineSegments(outline, lineMat));
+    rollerMesh = new THREE.InstancedMesh(ROLLER_GEO, mat(COLORS.dark), rollerBases.length);
+    rollerBases.forEach((m, i) => rollerMesh.setMatrixAt(i, m));
+    rollerMesh.castShadow = true; rollerMesh.frustumCulled = false;
+    scene.add(rollerMesh);
+  }
+  const spinMatrix = new THREE.Matrix4(), rollerMatrix = new THREE.Matrix4();
+  function spinRollers(dt) {
+    rollerAngle += dt * 4;
+    spinMatrix.makeRotationY(rollerAngle);
+    rollerBases.forEach((base, i) => rollerMesh.setMatrixAt(i, rollerMatrix.multiplyMatrices(base, spinMatrix)));
+    rollerMesh.instanceMatrix.needsUpdate = true;
+  }
   // The route pulse: a bright charge that runs the whole line from
   // Idea to the city gate every few seconds. The serpentine is the one
   // thing a static frame can't teach; the pulse traces it endlessly.
@@ -848,8 +887,9 @@ function factory(THREE, model) {
     plates[key] = plate(key);
     stationGroups[key] = plates[key];
   });
-  for (let i = 1; i < mainPoints.length; i++) beltSegment(mainPoints[i - 1], mainPoints[i], rollers);
-  for (let i = 1; i < sidePoints.length; i++) beltSegment(sidePoints[i - 1], sidePoints[i], rollers);
+  for (let i = 1; i < mainPoints.length; i++) beltSegment(mainPoints[i - 1], mainPoints[i]);
+  for (let i = 1; i < sidePoints.length; i++) beltSegment(sidePoints[i - 1], sidePoints[i]);
+  instancedBeltParts();
 
   // ------------------------------------------------------ station signs
   // One billboard per station: step number, name and a live count, big
@@ -2966,7 +3006,7 @@ function factory(THREE, model) {
     if (!reducedMotion && !exporting) {
       clock += dt;
       animators.forEach((animate) => animate(clock));
-      rollers.forEach((roller) => { roller.rotation.y += dt * 4; });
+      spinRollers(dt);
       beltFlows.forEach((flow) => { flow.offset.x = -(clock * 0.45) % 1; });
       {
         const lap = mainPath.total + 26; // a breather between runs
