@@ -1749,7 +1749,21 @@ function factory(THREE, model) {
     cam.far = reach * 3;
     cam.updateProjectionMatrix();
   }
-  addEventListener("resize", () => { fit(); requestRender(); });
+  // A resize (a phone turning, a window snapping) refits the floor but
+  // keeps the pan, which lives in camera space, so what the viewer was
+  // looking at drifted: portrait → landscape left a pinned building on
+  // the stage's top edge. A pin is re-centred in the free region at the
+  // same zoom, and a tour beat is re-framed; a bare hand-framed view
+  // keeps its pan as before.
+  addEventListener("resize", () => {
+    fit();
+    if (!exporting && tourStep >= 0) showTourStep();
+    else if (!exporting && state.pinned) {
+      const {key, run} = state.pinned;
+      focusOn(run ? runFocus(run) : focusTargetOf(key), view.zoom);
+    }
+    requestRender();
+  });
   // The resting view sits a touch inside the fitted frame: the floor's
   // corners are empty, so 1.1× buys a visibly larger factory while the
   // top row's sign keeps clear of the header.
