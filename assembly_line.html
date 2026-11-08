@@ -2612,7 +2612,10 @@ function factory(THREE, model) {
   // ------------------------------------------------------------- find
   // "Where is run X?" is the first question a room asks. Typing a slug
   // (the datalist offers them all) flies the camera to the crate and
-  // pins its row; a name that matches nothing flashes the box amber.
+  // pins its row. A name that matches nothing turns the box amber and
+  // invalid until it is edited, and says so to a screen reader: the old
+  // 900 ms flash was the only sign, silent to one and gone before a
+  // glance back from the keyboard.
   const find = $("find");
   find.hidden = false;
   runs.slice().sort((a, b) => (a.slug || a.ref).localeCompare(b.slug || b.ref))
@@ -2625,10 +2628,11 @@ function factory(THREE, model) {
       || runs.find((r) => (r.slug || r.ref).toLowerCase().includes(wanted));
     if (!run) {
       find.classList.add("miss");
-      setTimeout(() => find.classList.remove("miss"), 900);
+      find.setAttribute("aria-invalid", "true");
+      announce(`No run matches “${find.value.trim()}”.`);
       return;
     }
-    find.classList.remove("miss");
+    clearMiss();
     // Finding means "where is it NOW": from the past the crate may not
     // exist yet (the camera would fly to an invisible crate's stale
     // position and no panel could open), so the view snaps to today.
@@ -2639,6 +2643,11 @@ function factory(THREE, model) {
     focusPanel(find);
     requestRender();
   });
+  function clearMiss() {
+    find.classList.remove("miss");
+    find.removeAttribute("aria-invalid");
+  }
+  find.addEventListener("input", clearMiss);
   let panelDay = null, panelRuns = [];
   const sameRuns = (a, b) => a.length === b.length && a.every((run, i) => run === b[i]);
   function renderPanel() {
