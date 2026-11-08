@@ -2358,11 +2358,18 @@ function factory(THREE, model) {
     // After goToDay, which writes #day: the trace is the shareable fact.
     history.replaceState(null, "", `#trace=${encodeURIComponent(run.slug || run.ref)}`);
     if (!state.playing) play.click();
+    // The trace closed the panel its button lived in, which handed focus
+    // back to the panel's opener — a chip, so Space opened that chip's
+    // panel and ended the trace. Focus goes to Play: Space pauses it.
+    play.focus();
   }
   function endTrace() {
     if (!state.trace) return;
     state.trace = null;
+    // Stopping from the banner hides the button that had focus.
+    const hadFocus = $("trace-banner").contains(document.activeElement);
     $("trace-banner").hidden = true;
+    if (hadFocus) play.focus();
     if (location.hash.startsWith("#trace="))
       history.replaceState(null, "", location.pathname + location.search);
     // The trace ended zoomed on its crate; leaving it gives the floor back.
@@ -2738,7 +2745,13 @@ function factory(THREE, model) {
       if (event.key === " ") { event.preventDefault(); play.click(); }
       return;
     }
-    if (event.target.closest("input, button, details, summary")) return;
+    // A transport button owns only Space and Enter; the arrows, Home, End
+    // and / still drive the timeline from one (focus sits on Play once a
+    // trace or the tour's last beat starts the replay). Other buttons —
+    // a panel row's trace, a chip — keep every key.
+    if (event.target.closest("input, details, summary")) return;
+    const button = event.target.closest("button");
+    if (button && (!button.closest("#transport") || event.key === " " || event.key === "Enter")) return;
     const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
     if (event.key === " ") { event.preventDefault(); play.click(); }
     else if (event.key === "ArrowLeft") { event.preventDefault(); goToDay(Math.max(FIRST, day - 1)); }
