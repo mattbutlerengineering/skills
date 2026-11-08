@@ -2919,6 +2919,11 @@ function factory(THREE, model) {
     find.removeAttribute("aria-invalid");
   }
   find.addEventListener("input", clearMiss);
+  // The trace button's reserve follows the button whenever its width
+  // changes, not only when the panel renders: text spacing applied with
+  // the panel open (WCAG 1.4.12) widened the button over the row's "2/2".
+  const setTraceReserve = (btn) => $("panel").style.setProperty("--trace-w", `${btn.offsetWidth + 8}px`);
+  const traceReserve = new ResizeObserver(([entry]) => setTraceReserve(entry.target));
   let panelDay = null, panelRuns = [];
   const sameRuns = (a, b) => a.length === b.length && a.every((run, i) => run === b[i]);
   function renderPanel() {
@@ -2946,7 +2951,8 @@ function factory(THREE, model) {
     if (opened) requestAnimationFrame(() => opened.scrollIntoView({block: "nearest"}));
     $("panel").hidden = false;
     const traceBtn = body.querySelector(".trace-btn");
-    if (traceBtn) $("panel").style.setProperty("--trace-w", `${traceBtn.offsetWidth + 8}px`);
+    traceReserve.disconnect();
+    if (traceBtn) { setTraceReserve(traceBtn); traceReserve.observe(traceBtn); }
     if (run) { state.highlighted = run; layout(); }
   }
   renderer.domElement.addEventListener("click", (event) => {
