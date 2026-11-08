@@ -2941,8 +2941,10 @@ function factory(THREE, model) {
     const hadFocus = $("trace-banner").contains(document.activeElement);
     $("trace-banner").hidden = true;
     if (hadFocus) play.focus();
-    if (location.hash.startsWith("#trace="))
-      history.replaceState(null, "", location.pathname + location.search);
+    // The #trace= link goes; the bar names what is left — a trace stops
+    // on its run's last day (2026-10-26), and an emptied bar reloaded
+    // at today. A replay still running updates it at pause or end.
+    if (location.hash.startsWith("#trace=")) syncHash();
     // The trace ended zoomed on its crate; leaving it gives the floor back.
     resetView();
     layout(); requestRender();
