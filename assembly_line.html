@@ -2848,7 +2848,14 @@ function factory(THREE, model) {
       if (index >= FIRST && index <= LAST) { goToDay(toStop(index)); intro = null; resetView(); }
     }
     const run = hash.get("run");
-    if (run) { find.value = run; find.dispatchEvent(new Event("change")); intro = null; }
+    if (run) {
+      find.value = run; find.dispatchEvent(new Event("change"));
+      // Only a found run owns the camera (the finder pinned it and flew
+      // there). An unknown slug is ignored like any bad value: cancelling
+      // the intro anyway froze the view at its 1.45× starting frame,
+      // cropped under the legend.
+      if (state.pinned && state.pinned.run) intro = null;
+    }
     const station = hash.get("station");
     if (station && GRID[station]) {
       openPanel({kind: "station", station});
