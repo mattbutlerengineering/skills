@@ -2940,6 +2940,17 @@ function factory(THREE, model) {
       entry.chip.hidden = key === "bin" && count === 0;
     });
   }
+  // On a phone the chip row scrolls, and it opened at Capture: the first
+  // four chips (all zero here) filled the screen while the header said
+  // "piling up at Operate" and the amber chip sat off to the right. At
+  // load the row centres the pile-up's chip — once, never under a
+  // viewer's own scrolling.
+  function revealHotChip() {
+    const row = $("pipeline");
+    if (!lastHot || !chips[lastHot] || row.scrollWidth <= row.clientWidth) return;
+    const r = row.getBoundingClientRect(), c = chips[lastHot].chip.getBoundingClientRect();
+    row.scrollLeft += (c.left + c.width / 2) - (r.left + r.width / 2);
+  }
 
   // ------------------------------------------------------------ legend
   // Open on load: the first thing a cold viewer sees is the key to the
@@ -3517,6 +3528,7 @@ function factory(THREE, model) {
   view.zoom = intro !== null ? lastRest.zoom * INTRO_CLOSER : lastRest.zoom;
   applyView();
   syncTransport();
+  revealHotChip();
   // The city follows the room: lit windows after dark, live on change.
   const darkScheme = matchMedia("(prefers-color-scheme: dark)");
   setCityNight(darkScheme.matches);
