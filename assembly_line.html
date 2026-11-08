@@ -349,7 +349,12 @@
      legend: full height, it covered the whole stage and the camera
      flew to a building nobody could see. focusOn centres above it. */
   @media (max-width: 720px) and (min-height: 481px) {
-    #panel { top: auto; left: .5rem; right: .5rem; width: auto; max-height: 48%; }
+    /* 48% of the stage, but never under 13rem (while 5rem of floor stays
+       above it): on a 320×568 phone 48% of the 309 px stage was 148 px
+       and the list under the header showed no whole row. 15rem showed no
+       more rows there and left too little floor to centre the crate. */
+    #panel { top: auto; left: .5rem; right: .5rem; width: auto;
+      max-height: min(calc(100% - 5rem), max(48%, 13rem)); }
   }
   /* A short landscape screen gets the tour card at the side: across the
      bottom it took 101 of the stage's 253 px and the floor shrank to
