@@ -4,13 +4,18 @@ candidates (issue #681). The deterministic half of the knowledge-base
 skill's transcript-harvest ingest; the judgement half — which candidate
 is a non-inferable fact, and where it goes — stays in the skill.
 
-Two shapes are mined:
+Three shapes are mined:
 
 - **arcs**: a check (a Bash command) fails, files are edited, and the
   same check later passes in the same session. A failure followed by a
   pass with no edit between is a flake or a retry, never an arc.
 - **recurring errors**: the same tool error, digits and shas
   normalized, seen two or more times across the scanned transcripts.
+- **human turns**: in a top-level transcript, a human turn that
+  corrects the agent turn before it (its opening words), or answers an
+  agent question (a text turn ending in `?`, or the question tool),
+  under its own `human_turns` key. Approvals, plain instructions,
+  harness-injected turns and subagent transcripts yield none.
 
 The tool only reads. It prints candidates as JSON for the skill to turn
 into proposals a human promotes; nothing is written anywhere. Transcript
@@ -48,6 +53,17 @@ EXIT_LINE = re.compile(r"^Exit code (\d+)$")
 FAIL_LINE = re.compile(r"error|fail|traceback|problem\(s\)|not found|"
                        r"denied|refus|stale|drift|out of sync", re.I)
 NOT_ERRORS = ("The user doesn't want to proceed", "[Request interrupted")
+QUESTION_TOOL = "AskUserQuestion"
+# A human turn whose opening words push back on what the agent just did.
+CORRECTION = re.compile(
+    r"^(no|nope|don'?t|do not|stop|wait|actually|wrong|that'?s (not|wrong)"
+    r"|not that|instead|undo|revert|why did you"
+    r"|you (should|shouldn'?t|didn'?t|forgot)|never|double[- ]check)\b")
+# Replies that only say "carry on": an answer to nothing worth keeping.
+APPROVALS = frozenset((
+    "yes", "y", "ok", "okay", "go ahead", "sure", "do it", "continue",
+    "proceed", "lgtm", "sounds good", "yep", "please do"))
+PUNCT = re.compile(r"[^\w\s']")
 SEGMENT = re.compile(r"&&|\|\||;|\|")
 ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=\S*$")
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
@@ -238,6 +254,100 @@ def recurring(errors):
                   key=lambda g: (-g["count"], g["tool"], g["error"]))
 
 
+def _line(text):
+    """text's last non-empty line, whitespace collapsed."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    return " ".join(lines[-1].split()) if lines else ""
+
+
+def _clip(text):
+    return " ".join(text.split())[:EXCERPT]
+
+
+def _action(item, cwd):
+    """`<tool>: <what it acted on>` for an agent tool_use."""
+    name, inputs = item.get("name"), item.get("input") or {}
+    if name == "Bash" and inputs.get("command"):
+        what = check_key(inputs["command"])
+    elif inputs.get("file_path") or inputs.get("notebook_path"):
+        what = _relative(inputs.get("file_path")
+                         or inputs.get("notebook_path"), cwd)
+    else:
+        questions = inputs.get("questions")
+        first = questions[0] if isinstance(questions, list) and questions \
+            else {}
+        what = first.get("question", "") if isinstance(first, dict) else ""
+    return _clip(f"{name}: {what}" if what else str(name))
+
+
+def _human_kind(text, agent):
+    """(kind, signal) for a human text turn after the agent turn, or
+    None when it is neither a correction nor an answer."""
+    lowered = text.strip().lower()
+    if CORRECTION.match(lowered):
+        return "correction", "correction-wording"
+    reply = " ".join(PUNCT.sub("", lowered).split())
+    if agent["question"] and reply not in APPROVALS:
+        return "answer", "after-agent-question"
+    return None
+
+
+def human_turns(records):
+    """Corrections and answered questions in one top-level transcript.
+    A human turn counts only after an agent turn, which it consumes, so
+    two human turns in a row yield at most one candidate."""
+    found, agent, asked = [], None, {}
+
+    def turn(kind, signal, human, said, record):
+        found.append({"kind": kind, "signal": signal, "human": _clip(human),
+                      "agent": said, "session": record.get("sessionId", ""),
+                      "at": record.get("timestamp", "")})
+
+    for record in records:
+        message = record.get("message")
+        if record.get("isSidechain") or record.get("isMeta") \
+                or not isinstance(message, dict):
+            continue
+        content = message.get("content")
+        items = content if isinstance(content, list) else [
+            {"type": "text", "text": content}] if isinstance(
+                content, str) else []
+        items = [item for item in items if isinstance(item, dict)]
+        if record.get("type") == "assistant":
+            for item in items:
+                if item.get("type") == "text" and _line(item.get("text", "")):
+                    said = _line(item["text"])
+                    agent = {"excerpt": said[:EXCERPT],
+                             "question": said.endswith("?")}
+                elif item.get("type") == "tool_use":
+                    said = _action(item, record.get("cwd", ""))
+                    agent = {"excerpt": said, "question": False}
+                    if item.get("name") == QUESTION_TOOL:
+                        asked[item.get("id")] = said
+            continue
+        if record.get("type") != "user":
+            continue
+        results = [item for item in items
+                   if item.get("type") == "tool_result"]
+        for item in results:
+            said = asked.pop(item.get("tool_use_id"), None)
+            text = _text(item.get("content"))
+            if said is not None and not _failed(item, text) \
+                    and not text.startswith(NOT_ERRORS):
+                turn("answer", "question-tool", text, said, record)
+        if results:
+            continue
+        text = _text(items).strip()
+        if not text or text.startswith("<") or text.startswith(NOT_ERRORS):
+            continue
+        if agent is not None:
+            kind = _human_kind(text, agent)
+            if kind:
+                turn(*kind, text, agent["excerpt"], record)
+        agent = None
+    return found
+
+
 def _records(text):
     records, skipped = [], 0
     for _, record, err in cli.json_lines(text):
@@ -253,7 +363,7 @@ def _records(text):
 
 def mine(paths):
     """(result, problems) for the transcripts at paths."""
-    found, errors, problems, skipped = [], [], [], 0
+    found, errors, problems, skipped, turns = [], [], [], 0, []
     for path in paths:
         text, problem = cli.read_file(path, str(path), str)
         if problem:
@@ -264,9 +374,12 @@ def mine(paths):
         stream = list(events(records))
         found += arcs(stream)
         errors += [detail for kind, detail in stream if kind == "error"]
+        if not Path(path).name.startswith("agent-"):
+            turns += human_turns(records)
     return {"scanned": {"transcripts": len(paths) - len(problems),
                         "skipped_lines": skipped},
-            "arcs": found, "recurring_errors": recurring(errors)}, problems
+            "arcs": found, "recurring_errors": recurring(errors),
+            "human_turns": turns}, problems
 
 
 def main_checkout(root):

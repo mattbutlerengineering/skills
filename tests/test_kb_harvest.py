@@ -280,6 +280,160 @@ class TestMine(Tree):
         self.assertEqual(result["scanned"]["transcripts"], 1)
 
 
+class Talk(Session):
+    """A transcript with human and agent text turns besides tool calls,
+    the shape an interactive session has."""
+
+    def _add(self, kind, content, **extra):
+        self.lines.append(json.dumps({
+            "type": kind, "sessionId": self.sid, "cwd": self.cwd,
+            "timestamp": f"2026-10-01T00:00:{len(self.lines):02d}Z",
+            "message": {"role": kind, "content": content}, **extra}))
+        return self
+
+    def human(self, text, **extra):
+        return self._add("user", text, **extra)
+
+    def say(self, text, **extra):
+        return self._add("assistant", [{"type": "text", "text": text}],
+                         **extra)
+
+    def at(self, index):
+        return f"2026-10-01T00:00:{index:02d}Z"
+
+
+class TestHumanTurns(Tree):
+    """Human corrections and answered questions, mined only from
+    top-level interactive transcripts, under their own key."""
+
+    def turns(self, talk, name=None, **kwargs):
+        self.save(talk, name=name)
+        result, problems = self.harvest(**kwargs)
+        self.assertEqual(problems, [])
+        return result["human_turns"]
+
+    def test_a_correction_after_an_agent_action(self):
+        talk = (Talk().human("fix the build")
+                .bash("make check", "ok")
+                .human("No, don't run make check here; use run_tests.py."))
+        self.assertEqual(self.turns(talk), [{
+            "kind": "correction", "signal": "correction-wording",
+            "human": "No, don't run make check here; use run_tests.py.",
+            "agent": "Bash: make check",
+            "session": "s1", "at": talk.at(3)}])
+
+    def test_an_edit_is_named_by_its_path(self):
+        talk = (Talk().human("tidy it").edit(f"{REPO}/src/a.py")
+                .human("Revert that, it was right."))
+        turn, = self.turns(talk)
+        self.assertEqual((turn["kind"], turn["agent"]),
+                         ("correction", "Edit: src/a.py"))
+
+    def test_excerpts_are_capped(self):
+        talk = (Talk().human("go").say("x" * 300)
+                .human("Actually " + "y" * 300))
+        turn, = self.turns(talk)
+        self.assertLessEqual(len(turn["human"]), kb_harvest.EXCERPT)
+        self.assertLessEqual(len(turn["agent"]), kb_harvest.EXCERPT)
+
+    def test_an_answer_to_a_text_question(self):
+        talk = (Talk().human("rename the flag")
+                .say("I found two callers.\n\nShould I keep the old flag?")
+                .human([{"type": "text",
+                         "text": "Keep it, the CI scripts still pass it."}]))
+        self.assertEqual(self.turns(talk), [{
+            "kind": "answer", "signal": "after-agent-question",
+            "human": "Keep it, the CI scripts still pass it.",
+            "agent": "Should I keep the old flag?",
+            "session": "s1", "at": talk.at(2)}])
+
+    def test_an_answer_through_the_question_tool(self):
+        talk = (Talk().human("ship it")
+                .tool("AskUserQuestion",
+                      {"questions": [{"question": "Which branch?"}]},
+                      "User has answered your questions: release"))
+        self.assertEqual(self.turns(talk), [{
+            "kind": "answer", "signal": "question-tool",
+            "human": "User has answered your questions: release",
+            "agent": "AskUserQuestion: Which branch?",
+            "session": "s1", "at": talk.at(2)}])
+
+    def test_a_question_tool_error_is_no_answer(self):
+        talk = (Talk().human("ship it")
+                .tool("AskUserQuestion",
+                      {"questions": [{"question": "Which branch?"}]},
+                      "Exit code 1\ntool failed", error=True))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_approvals_are_not_answers(self):
+        for reply in ("go ahead", "OK.", "Yes!", "sounds good"):
+            with self.subTest(reply=reply):
+                talk = (Talk().human("push it").say("Shall I push now?")
+                        .human(reply))
+                self.assertEqual(self.turns(talk), [])
+
+    def test_a_plain_instruction_is_not_listed(self):
+        talk = (Talk().human("add the test").say("Added the test.")
+                .human("Now update the README too."))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_meta_and_tagged_turns_are_skipped(self):
+        talk = (Talk().human("start").say("Done.")
+                .human("No, that is injected.", isMeta=True)
+                .human("<command-name>/clear</command-name> no"))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_two_human_turns_in_a_row_yield_at_most_one(self):
+        talk = (Talk().human("start").say("Use the new parser?")
+                .human("No, keep the old one.")
+                .human("Wait, actually stop."))
+        self.assertEqual(len(self.turns(talk)), 1)
+
+    def test_an_autonomous_transcript_yields_none(self):
+        talk = (Talk().human("Work the queue. Never ask.")
+                .bash("make check", "Exit code 1\nboom", error=True)
+                .edit(f"{REPO}/a.py").bash("make check", "ok"))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_a_subagent_file_yields_none(self):
+        talk = (Talk().human("start").bash("ls", "a")
+                .human("No, do not list."))
+        self.assertEqual(self.turns(talk, name="agent-x.jsonl", days=7), [])
+
+    def test_sidechain_records_yield_none(self):
+        talk = (Talk().human("start", isSidechain=True)
+                .say("Should I stop?", isSidechain=True)
+                .human("Stop, wrong file.", isSidechain=True))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_existing_kinds_are_unchanged_and_the_key_is_empty(self):
+        self.save(Session()
+                  .bash("make check", "Exit code 2\nboom", error=True)
+                  .edit(f"{REPO}/a.py")
+                  .bash("make check", "ok"))
+        result, problems = self.harvest()
+        self.assertEqual(problems, [])
+        self.assertEqual(sorted(result), ["arcs", "human_turns",
+                                          "recurring_errors", "scanned"])
+        self.assertEqual(result["human_turns"], [])
+        self.assertEqual(result["scanned"], {
+            "transcripts": 1, "skipped_lines": 0,
+            "dirs": [str(self.dir)]})
+        self.assertEqual(result["recurring_errors"], [])
+        self.assertEqual([a["check"] for a in result["arcs"]],
+                         ["make check"])
+
+    def test_main_prints_the_key(self):
+        self.save(Talk().human("go").say("Keep it?").human("Drop it."))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = kb.main(["harvest", REPO, "--projects-dir",
+                            str(self.projects)])
+        self.assertEqual(code, 0)
+        self.assertEqual([t["kind"] for t in json.loads(
+            out.getvalue())["human_turns"]], ["answer"])
+
+
 class TestMain(Tree):
     def run_main(self, argv):
         out = io.StringIO()

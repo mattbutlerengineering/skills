@@ -49,10 +49,10 @@ Demonstrable: `python3 kb.py harvest --projects-dir <fixture>` prints a
 for its approvals, autonomous or subagent transcripts, with `arcs`,
 `recurring_errors` and `scanned` unchanged.
 
-- [ ] **K4 Human-turn tests** — cases in `tests/test_kb_harvest.py` for `kb_harvest.human_turns(records)` and the `human_turns` key, over fixture transcripts under a temporary projects directory — size:M
+- [x] **K4 Human-turn tests** — cases in `tests/test_kb_harvest.py` for `kb_harvest.human_turns(records)` and the `human_turns` key, over fixture transcripts under a temporary projects directory — size:M
   - Accept: the cases exist and fail before K5 lands. A fixture top-level transcript whose human turn opens with correction wording after an agent action yields exactly one `human_turns` entry with `kind` `correction` and `signal` `correction-wording`, carrying a `human` excerpt and an `agent` excerpt each at most 160 characters. An agent text turn ending in `?` followed by a human text answer yields one `answer` with signal `after-agent-question`; a non-error tool_result of an `AskUserQuestion` tool_use yields one `answer` with signal `question-tool`. Approvals from `APPROVALS` ("go ahead", "ok") after a question, plain new instructions, `isMeta` records and text opening with a tag yield none; two human turns in a row yield at most one candidate; a fixture autonomous transcript with no human turn after the first, a file named `agent-*`, and records carrying `isSidechain` yield none. Over the existing harvest fixtures `arcs`, `recurring_errors` and `scanned` are equal to their current values and `human_turns` is present and empty. Every case passes `projects=` or `--projects-dir` a temporary directory (PRD 9, 10, 11, 12, 27).
   - Blocked by: —
-- [ ] **K5 Human turns in kb_harvest.py** — add `human_turns`, the `CORRECTION` and `APPROVALS` patterns, and the always-present `human_turns` key to the Candidate miner — `kb_harvest.py` component, mined only from top-level transcripts — size:M
+- [x] **K5 Human turns in kb_harvest.py** — add `human_turns`, the `CORRECTION` and `APPROVALS` patterns, and the always-present `human_turns` key to the Candidate miner — `kb_harvest.py` component, mined only from top-level transcripts — size:M
   - Accept: the K4 cases pass, and every case already in `tests/test_kb_harvest.py` passes unedited. `mine(paths)` calls `human_turns` once per path not named `agent-*`, computes `arcs` and `recurring_errors` exactly as before, and writes no file. `kb_harvest.py` gains no import beyond `cli` and the standard library (PRD 9, 10, 11, 12, 25).
   - Blocked by: K4 Human-turn tests
 
@@ -188,3 +188,18 @@ Implement, 2026-11-08 (unattended, autorun).
   `kb: docs/kb/main-unprotected.md is past its declared age: checked
   2026-11-08, max-age 30d, due 2026-12-08 — re-check it`; with
   2026-12-08 it reports nothing.
+- **K4, red before K5.** `python3 -m unittest -v
+  tests.test_kb_harvest.TestHumanTurns` before K5: all 15 cases red,
+  `FAILED (failures=1, errors=17)` counting subtests; the 17 errors are
+  `KeyError: 'human_turns'` and the failure is the key-set case
+  (`['arcs', 'recurring_errors', 'scanned']` lacks `human_turns`).
+- **K4/K5 default taken.** The `agent` excerpt of an `AskUserQuestion`
+  tool_use is `AskUserQuestion: <first question's text>` when the input
+  carries a `questions` list, since the architecture's
+  `<check_key(command) or edited path>` form names neither for that
+  tool; any other tool with neither is its bare name. An answer through
+  the question tool does not consume the pending agent turn (a
+  tool_result is not a human text turn).
+- **K5, green.** `python3 -m unittest tests.test_kb_harvest tests.test_kb`:
+  `Ran 78 tests`, `OK`, no existing case edited. `kb_harvest.py`'s
+  imports are unchanged (`json`, `os`, `re`, `time`, `pathlib`, `cli`).
