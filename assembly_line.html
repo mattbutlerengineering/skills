@@ -2111,8 +2111,14 @@ function factory(THREE, model) {
           // (and then over it, below): lifted 1.2 from its own layer it
           // stayed inside the pile, 0–3% of it visible for most of
           // Operate's 69, with only the marker showing where it was.
-          if (state.highlighted === run && state.trace !== run && i >= 6)
+          if (state.highlighted === run && state.trace !== run && (i >= 6 || key === "bin")) {
             pos.y = Math.max(pos.y, slotPosition(key, list.length - 1, list.length).y);
+            // The bin's walls stand 2.2 tall: lifted 1.2 from the floor
+            // of the bin (its slots fill from the far corner), a pinned
+            // crate still showed only its top over the near wall. Its
+            // underside clears the rim once the lift below is added.
+            if (key === "bin") pos.y = Math.max(pos.y, PLATE_H + 2.2 + CRATE * 0.4 + 0.1 - 1.2);
+          }
           placeCrate(crateOf.get(run), pos);
           crateOf.get(run).mesh.rotation.set(0, 0, 0);
           // A heap crate takes its packed thickness; belt slots stay whole.
