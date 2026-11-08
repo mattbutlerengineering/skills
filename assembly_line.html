@@ -338,7 +338,8 @@
   </span>
   <button id="export" disabled>Export clip</button>
   <span id="honesty">Dates to the day from artifact frontmatter; order
-    within a day is inferred; work-order progress is today's.</span>
+    within a day is inferred; quiet days replay faster; work-order progress
+    is today's.</span>
   <span id="export-status" role="status" hidden></span>
 </footer>
 
@@ -1415,6 +1416,38 @@ function factory(THREE, model) {
   const FIRST = dayIndex(model.timeline.first_day);
   const LAST = dayIndex(model.timeline.last_day);
   const times = new Map(runs.map((run) => [run, hopTimes(run)]));
+  // Quiet days pass faster. A day with an arrival — or the day after
+  // one, while its crates still ride the belts — plays at full length;
+  // an idle day at QUIET_WEIGHT of it, and 30s/60s still sets the whole
+  // replay's length. On this repo's 126 days (64 of them quiet) an even
+  // pace spent 15 of the 30 seconds showing nothing happen; now 5, and
+  // a busy day lasts 0.4s instead of 0.24s.
+  // u is evenly paced replay time; tFromU/uFromT convert to days (t).
+  const QUIET_WEIGHT = 0.2;
+  const SPAN = LAST + 1 - FIRST;
+  const busy = new Uint8Array(SPAN + 1);
+  runs.forEach((run) => (run.history || []).forEach((hop) => {
+    const k = dayIndex(hop.day) - FIRST;
+    if (k >= 0 && k < SPAN) { busy[k] = 1; busy[k + 1] = 1; }
+  }));
+  const dayWeight = (k) => (busy[k] ? 1 : QUIET_WEIGHT);
+  const cumU = new Float64Array(SPAN + 1);
+  for (let k = 0; k < SPAN; k++) cumU[k + 1] = cumU[k] + dayWeight(k);
+  const TOTAL_U = cumU[SPAN];
+  function uFromT(t) {
+    const x = Math.min(SPAN, Math.max(0, t - FIRST));
+    const k = Math.min(SPAN - 1, Math.floor(x));
+    return cumU[k] + (x - k) * dayWeight(k);
+  }
+  function tFromU(u) {
+    const v = Math.min(TOTAL_U, Math.max(0, u));
+    let lo = 0, hi = SPAN - 1; // the last day starting at or before v
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (cumU[mid] <= v) lo = mid; else hi = mid - 1;
+    }
+    return FIRST + lo + (v - cumU[lo]) / dayWeight(lo);
+  }
   const state = {t: LAST + 1, playing: false, seconds: 30, highlighted: null, pinned: null};
   let lastHot = null;
   const isToday = () => state.t >= LAST + 1 - 1e-9;
@@ -2335,7 +2368,7 @@ function factory(THREE, model) {
       // The glide is live-replay only: a capture places crates exactly,
       // and reduced motion asks for none of this.
       glideK = (exporting || reducedMotion) ? 1 : 1 - Math.exp(-dt / GLIDE_TAU);
-      state.t += dt * (LAST + 1 - FIRST) / state.seconds;
+      state.t = tFromU(uFromT(state.t) + dt * TOTAL_U / state.seconds);
       const stop = state.trace ? traceEnd : LAST + 1;
       if (state.t >= stop) {
         // The last frame lands on the placement, never near it.
@@ -2494,8 +2527,9 @@ function factory(THREE, model) {
     };
     const total = FPS * PLAY_SECONDS;
     for (let i = 0; i <= total + HOLD_FRAMES; i++) {
-      state.t = Math.min(LAST + 1, FIRST + (LAST + 1 - FIRST) * Math.min(1, i / total));
-      // The clip is a replay too, and a faster one (10.5 days/s): without
+      state.t = Math.min(LAST + 1, tFromU(TOTAL_U * Math.min(1, i / total)));
+      // The clip is a replay too, and a faster one (quiet days compressed
+      // like the page's, busy days ~6 a second): without
       // the glide a crate crossed the floor in a median of 2 frames, so
       // the artifact people share showed teleports, not belts. Each frame
       // advances the glide by exactly one frame's worth of clip time, and
