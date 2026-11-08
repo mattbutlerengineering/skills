@@ -1503,9 +1503,13 @@ function factory(THREE, model) {
     if (k >= 0 && k < SPAN) { busy[k] = 1; busy[k + 1] = 1; }
   }));
   const dayWeight = (k) => (busy[k] ? 1 : QUIET_WEIGHT);
-  // Is the playhead on a quiet (fast-forwarded) day? The date badge and
-  // the clip's stamp mark it.
-  const quietNow = () => !isToday() && !busy[Math.floor(state.t) - FIRST];
+  // Is the playhead fast-forwarding? The date badge and the clip's stamp
+  // mark it. The whole replay races quiet days; a trace keeps its own
+  // clock and races the waits between its stops (traceRacing) — judged
+  // by the repo's quiet days, the marker flickered on and off through a
+  // 39-day wait that a trace crosses in 0.2 s.
+  const quietNow = () => !isToday()
+    && (state.trace ? traceRacing(state.t) : !busy[Math.floor(state.t) - FIRST]);
   const cumU = new Float64Array(SPAN + 1);
   for (let k = 0; k < SPAN; k++) cumU[k + 1] = cumU[k] + dayWeight(k);
   const TOTAL_U = cumU[SPAN];
@@ -2214,6 +2218,13 @@ function factory(THREE, model) {
       if (next > rideEnd) { w += TRACE_GAP_S; knots.push([w, next]); }
     });
     return knots;
+  }
+  // On a knot segment that spans more than a day: the trace is racing a
+  // wait, not showing a ride.
+  function traceRacing(t) {
+    const k = traceKnots;
+    for (let i = 1; i < k.length; i++) if (t < k[i][1]) return k[i][1] - k[i - 1][1] > 1;
+    return false;
   }
   // Linear between knots: t → wall position, forward dt, wall → t.
   function traceAdvance(t, dt) {
