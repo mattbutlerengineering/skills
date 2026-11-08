@@ -246,6 +246,12 @@
   #transport button:disabled, #transport input:disabled { opacity: .45;
     cursor: default; }
   #scrub { width: 100%; accent-color: var(--accent); }
+  /* The activity strip: one bar per day's arrivals, drawn just above the
+     slider's track (drawActivity). */
+  #scrub-wrap { position: relative; display: block; }
+  #scrub-wrap #scrub { position: relative; display: block; margin: 0; }
+  #activity { position: absolute; left: 0; bottom: calc(50% + 3px); width: 100%;
+    height: 11px; pointer-events: none; color: var(--muted); opacity: .75; }
   #day { font-variant-numeric: tabular-nums; min-width: 6.5rem; }
   #honesty { grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
   #export-status { grid-column: 1 / -1; font-size: .8rem; }
@@ -298,9 +304,10 @@
     .chip { flex: none; }
     #legend { left: .5rem; right: .5rem; top: auto; bottom: .5rem;
       width: auto; max-height: 55%; overflow: auto; }
+    /* Top padding clears the activity strip above the slider. */
     #transport { display: flex; flex-wrap: wrap; gap: .3rem .5rem;
-      padding: .4rem .6rem .5rem; align-items: center; }
-    #scrub { flex: 1 1 100%; order: -1; }
+      padding: .75rem .6rem .5rem; align-items: center; }
+    #scrub-wrap { flex: 1 1 100%; order: -1; }
     #day { min-width: 0; margin-left: auto; }
   }
   /* A portrait phone gets the pinned panel as a bottom sheet, like the
@@ -415,8 +422,9 @@
 <main id="fallback" hidden></main>
 <footer id="transport" hidden>
   <button id="play" aria-label="Play the replay" disabled>▶ Play</button>
-  <input id="scrub" type="range" min="0" max="0" step="1" value="0"
-         aria-label="Replay date" disabled>
+  <span id="scrub-wrap"><canvas id="activity" aria-hidden="true"></canvas><input
+    id="scrub" type="range" min="0" max="0" step="1" value="0"
+    aria-label="Replay date" disabled></span>
   <span id="day"></span>
   <button id="today" aria-label="Back to today" hidden>⏭ today</button>
   <span class="speed" role="group" aria-label="Replay length">
@@ -2858,6 +2866,34 @@ function factory(THREE, model) {
   const TODAY_STOP = model.generated.slice(0, 10) === model.timeline.last_day ? LAST : LAST + 1;
   const toStop = (index) => (index >= TODAY_STOP ? LAST + 1 : index);
   scrub.min = String(FIRST); scrub.max = String(TODAY_STOP); scrub.value = String(TODAY_STOP);
+  // The activity strip: a bar per day of station arrivals above the
+  // slider, so it shows where the history happens — and where it went
+  // quiet — before anyone drags it. Square-root heights keep a 30-hop
+  // day from flattening the rest.
+  const activity = $("activity");
+  const arrivals = new Uint16Array(Math.max(1, TODAY_STOP - FIRST + 1));
+  runs.forEach((run) => (run.history || []).forEach((hop) => {
+    const k = dayIndex(hop.day) - FIRST;
+    if (k >= 0 && k < arrivals.length) arrivals[k]++;
+  }));
+  function drawActivity() {
+    const w = activity.clientWidth, h = activity.clientHeight;
+    if (!w || !h) return;
+    const dpr = Math.min(devicePixelRatio, 2);
+    activity.width = Math.round(w * dpr); activity.height = Math.round(h * dpr);
+    const ctx = activity.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = getComputedStyle(activity).color;
+    // A native thumb's centre runs from half its width in from each end.
+    const inset = 8, span = Math.max(1, arrivals.length - 1), most = Math.max(1, ...arrivals);
+    arrivals.forEach((n, k) => {
+      if (!n) return;
+      const x = inset + (k / span) * (w - 2 * inset), bar = Math.max(2, Math.sqrt(n / most) * h);
+      ctx.fillRect(x - 0.75, h - bar, 1.5, bar);
+    });
+  }
+  drawActivity();
+  addEventListener("resize", drawActivity);
   function dayLabel() { return isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay(); }
   function syncTransport() {
     // The thumb tracks the playhead: smooth while the replay runs,
@@ -3215,6 +3251,7 @@ function factory(THREE, model) {
   setCityNight(darkScheme.matches);
   darkScheme.addEventListener("change", (event) => {
     if (!exporting) setCityNight(event.matches);
+    drawActivity(); // its bars take the scheme's muted ink
   });
   // Deep links: #day=YYYY-MM-DD scrubs there, #run=<slug> finds the
   // crate, #station=<key> pins the station — the links the hash writers
