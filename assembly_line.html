@@ -295,6 +295,8 @@
   #panel .journey b { font-variant-numeric: tabular-nums; font-weight: 600; margin-right: .2rem; }
   #panel li.done::before { content: "☑ "; }
   #panel li.open::before { content: "☐ "; }
+  #panel li code { font: .9em ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: rgba(127,127,127,.16); border-radius: 3px; padding: 0 .2em; }
   #transport { flex: none; display: grid; gap: .2rem .8rem;
     grid-template-columns: auto 1fr auto auto auto auto; align-items: center;
     padding: .5rem 1rem .6rem; background: rgba(255,255,255,.72);
@@ -656,6 +658,23 @@ function el(tag, attrs, ...children) {
   return node;
 }
 const doneCount = (run) => run.work_orders.filter((wo) => wo.done).length;
+// A work order's title is a line of its breakdown's markdown: 135 of this
+// repo's 688 carry `code` spans and a few *emphasis*, which the panel
+// printed with their backticks and asterisks. Code spans first (their
+// insides stay literal), then **strong** and *em*; built as DOM, never
+// as HTML, and an unclosed marker stays the character it is.
+function inlineMarkdown(text) {
+  const frag = document.createDocumentFragment();
+  String(text).split(/(`[^`]+`)/).forEach((part) => {
+    if (/^`[^`]+`$/.test(part)) { frag.append(el("code", {}, part.slice(1, -1))); return; }
+    part.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/).forEach((piece) => {
+      if (/^\*\*[^*]+\*\*$/.test(piece)) frag.append(el("strong", {}, piece.slice(2, -2)));
+      else if (/^\*[^*\s][^*]*\*$/.test(piece)) frag.append(el("em", {}, piece.slice(1, -1)));
+      else if (piece) frag.append(piece);
+    });
+  });
+  return frag;
+}
 
 // ---------------------------------------------------------------- fallback
 function showFallback(model, notice) {
@@ -2999,7 +3018,7 @@ function factory(THREE, model) {
     if (run.work_orders.length) {
       if (!isToday()) details.append(el("p", {class: "muted"}, "progress as of today"));
       const ul = el("ul", {});
-      run.work_orders.forEach((wo) => ul.append(el("li", {class: wo.done ? "done" : "open"}, wo.title)));
+      run.work_orders.forEach((wo) => ul.append(el("li", {class: wo.done ? "done" : "open"}, inlineMarkdown(wo.title))));
       details.append(ul);
     }
     summary.addEventListener("click", () => { state.highlighted = run; layout(); requestRender(); });
