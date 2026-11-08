@@ -146,3 +146,4 @@ the canonical vocabulary.
 | [0123](0123-the-orchestrator-derives-the-reviewer-verdict-from-the-score.md) | The orchestrator derives the reviewer verdict from the score | provisional |
 | [0124](0124-the-assembly-line-page-bundles-three-js.md) | The assembly-line page bundles three.js | accepted |
 | [0125](0125-a-kb-page-declares-its-outside-check-and-lint-ages-it-offline.md) | A knowledge-base page declares its outside check, and lint ages it offline | provisional |
+| [0126](0126-kb-harvest-reads-memory-frontmatter-through-protocol-and-joins-its-root-only-importers.md) | kb_harvest reads a memory file's frontmatter through protocol.frontmatter_end and joins the root-only importers of protocol.py | provisional |

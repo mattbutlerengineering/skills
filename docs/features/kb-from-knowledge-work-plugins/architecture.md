@@ -15,6 +15,7 @@ assumptions:
   - "max-age for docs/kb/main-unprotected.md is 30d: the page's claim was checked by hand on 2026-10-10 and again on 2026-11-08 (the brief), about monthly. Its `checked:` is the date Implement re-runs the page's two gh api commands, or 2026-11-08, the date the brief records the claim holding, if Implement cannot run them."
   - "Memory-to-page pairing uses file-name tokens only, at two or more shared tokens. A pairing is a hint: an unpaired memory that duplicates a page under another name is still caught by ingest's existing dedupe step."
   - "ADR written unattended, so ADR-0125 is provisional, and ADR-0078's status line and index row say it is amended."
+  - "Re-run of Architect, unattended, 2026-11-08, to resolve Implement's K12 stop (breakdown.md Notes): `kb_harvest._block` defined the frontmatter fence a second time, failing ADR-0118's one-owner pin (`tests.test_protocol_frontmatter.TestOneFenceDefinition.test_the_exact_count_map`), because this file had said `kb_harvest.py` imports nothing beyond `cli`. Resolved by Implement's recommended option (a), the draft-first call: `kb_harvest.py` imports `protocol` and calls `frontmatter_end`, recorded by provisional ADR-0126, which adds the pair (kb_harvest, protocol) to ADR-0091's pinned set. Option (b), kb.py parsing memory frontmatter, is logged under Decisions & alternatives. Only the Candidate miner's collaborators, the memory interfaces, Stack & dependencies, Decisions & alternatives and ADRs changed; no requirement or other design moved."
 ---
 
 # Architecture: Teach the knowledge base what it cannot see yet
@@ -58,8 +59,10 @@ and a new module adds a dual-membership pair (below) for one caller.
   two sources: human turns from top-level transcripts (always), and
   auto-memory entries paired with pages (on `--memory`). Read-only.
 - Collaborators: `cli.read_file` and `cli.json_lines` (existing
-  imports, so no new root-only to mirrored pair), the page slugs under
-  the `kb_dir` that `kb.py` passes.
+  imports), `protocol.frontmatter_end` (new import, ADR-0126: the one
+  owner of where a memory file's frontmatter block ends, per ADR-0118;
+  it adds the pinned root-only to mirrored pair `kb_harvest` to
+  `protocol`), the page slugs under the `kb_dir` that `kb.py` passes.
 
 ### Skill body — `skills/knowledge-base/SKILL.md`
 
@@ -274,7 +277,10 @@ Rules, owned by `kb_harvest.py`:
   `human_turns` to its result; `arcs` and `recurring_errors` are
   computed exactly as now.
 - `memory_type`: file text → one of the three listed types, `"user"`, or
-  None (skip).
+  None (skip). The frontmatter block is the lines `protocol.frontmatter_end(
+  text.splitlines())` bounds (ADR-0118, ADR-0126); None from it means no
+  block, a skip. `kb_harvest.py` defines no fence of its own, and
+  `memory_candidates` reads `name` and `description` from the same block.
 - `pair`: a stem and the page slugs → `(slug or None, shared tokens)`.
 - `memory_candidates`: directory and slugs → the `memory` object above.
 
@@ -331,9 +337,13 @@ Rules, owned by `kb_harvest.py`:
 
 - Python 3 standard library only (`datetime`, `re`, `pathlib`), no new
   dependency — standard `stdlib-only`.
-- No new module and no new import: `kb.py` keeps `cli`, `protocol` and
-  `knowledge_plane`; `kb_harvest.py` keeps `cli`. The dual-membership
-  pin in `tests/test_dual_membership.py` (ADR-0091) does not move.
+- No new module. `kb.py` keeps `cli`, `protocol` and `knowledge_plane`.
+  `kb_harvest.py` keeps `cli` and gains one import, `protocol`, to call
+  `frontmatter_end` (ADR-0126). That adds the pair `kb_harvest` to
+  `protocol` to the dual-membership pin in
+  `tests/test_dual_membership.py` (ADR-0091): its `protocol.py` row gains
+  `kb_harvest`, 61 pairs to 62. `protocol` imports no caller, so no
+  cycle; `kb_harvest` is not mirrored, so no payload change.
 - `LEDGER.md` is untouched: the knowledge-base row stays at draft,
   and the knowledge-base skill's frontmatter `description` is not
   edited, so no routing eval is owed.
@@ -370,8 +380,23 @@ Rules, owned by `kb_harvest.py`:
 - **Item 2 carrier: harvest reads memory, in `kb_harvest.py`, on
   `--memory`** over a new `kb_memory.py` (one caller, and a new root-only
   importer of `cli` adds a dual-membership pair that ADR-0091's pin
-  records by ADR) and over reading memory on every harvest (re-lists the
-  same entries each run, with the watermark rejected).
+  records by ADR; it would have needed `protocol` too, so two pairs and a
+  module against `kb_harvest`'s one pair) and over reading memory on
+  every harvest (re-lists the same entries each run, with the watermark
+  rejected).
+- **A memory file's frontmatter block is found by
+  `protocol.frontmatter_end`, which `kb_harvest.py` imports** (ADR-0126;
+  added on the Architect re-run that resolved Implement's K12 stop), over
+  `kb.py` parsing each memory file and passing the fields or a parser in
+  (the page-contract owner would read harness memory files, the
+  `memory_type(text)` and `memory_candidates` interfaces would change,
+  and `protocol.parse_frontmatter` keeps only the last value of a
+  repeated key, so a file with `type: user` and a nested `type: project`
+  would read as `project` and `kb_harvest` would still scan the block's
+  lines for the fail-safe distinct-type rule) and over a disguised copy
+  of the fence literal (it hides a second fence rule from ADR-0118's
+  detector without removing it). The cost is one pinned pair, as
+  `launch_demo` (ADR-0118) and `assembly_line` (ADR-0124) paid.
 - **The memory directory is found beside the transcripts it already
   resolves, with `--projects-dir` as the test seam**, over a
   `--memory-dir DIR` flag (a second path flag for a location the tool
@@ -418,3 +443,7 @@ Rules, owned by `kb_harvest.py`:
 - [ADR-0125](../../adr/0125-a-kb-page-declares-its-outside-check-and-lint-ages-it-offline.md)
   — A knowledge-base page declares its outside check, and lint ages it
   offline (provisional; amends ADR-0078 decisions 2 and 6).
+- [ADR-0126](../../adr/0126-kb-harvest-reads-memory-frontmatter-through-protocol-and-joins-its-root-only-importers.md)
+  — `kb_harvest` reads a memory file's frontmatter through
+  `protocol.frontmatter_end` and joins the root-only importers of
+  `protocol.py` (provisional; written on the Architect re-run for K12).
