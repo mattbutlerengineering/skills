@@ -826,6 +826,10 @@ function factory(THREE, model) {
     return texture;
   })();
   const beltFlows = [];
+  // The belts and their legs stand outside every station's group, and
+  // the long run past Architect sticks out beyond the plates: floorExtent
+  // measures them too, or a fitted frame sat left of centre.
+  const beltParts = [];
   // The belt: green top on a dark frame, rollers on the sides, legs below.
   // Legs and rollers are recorded, not built: hundreds of identical tiny
   // parts drawn one by one (with an outline and a shadow pass each) were
@@ -860,6 +864,7 @@ function factory(THREE, model) {
         .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
     }
     scene.add(group);
+    beltParts.push(group);
   }
   // One instanced mesh per part kind. The legs keep their outline as one
   // merged line set (they never move); the rollers, which spin, go
@@ -873,6 +878,7 @@ function factory(THREE, model) {
     legMatrices.forEach((m, i) => legs.setMatrixAt(i, m));
     legs.castShadow = true; legs.receiveShadow = true; legs.frustumCulled = false;
     scene.add(legs);
+    beltParts.push(legs);
     const edges = new THREE.EdgesGeometry(LEG_GEO, 25).attributes.position;
     const positions = new Float32Array(edges.count * 3 * legMatrices.length);
     const v = new THREE.Vector3();
@@ -2132,26 +2138,34 @@ function factory(THREE, model) {
       history.replaceState(null, "", `#view=${view.zoom.toFixed(2)},${view.panX.toFixed(1)},${view.panY.toFixed(1)}`);
     }, 400);
   }
-  // The resting view: fit()'s frame at BASE_ZOOM — unless the open
-  // legend would cover part of the floor there (a ~1000px window put
-  // Operate's pile-up under it), in which case the floor is fitted into
+  // The resting view centres today's drawn floor (restExtent, measured
+  // once at load: camera-space, so no resize or replay day moves it) in
+  // the stage at BASE_ZOOM, or smaller if it would not fit. fit()'s frame
+  // pads for invisible things — sign headroom over every corner, the
+  // city's full grid width — so at pan 0 the floor sat off-centre: 8 px
+  // from a phone's left edge and 71 px from its right, and on a laptop
+  // Capture touched the stage's bottom (1 px) under 126 px of empty sky.
+  // If the open legend would then cover part of the floor (a ~1000px
+  // window put Operate's pile-up under it), the floor is fitted into
   // what the legend leaves free. lastRest remembers the last rest view
   // applied, so a legend toggle or a resize can re-rest an untouched view
   // without disturbing one the viewer framed by hand.
-  let lastRest = null;
+  let lastRest = null, restExtent = null;
   function restView() {
     const plain = {zoom: BASE_ZOOM, panX: 0, panY: 0};
+    const e = restExtent;
+    if (!e || !isFinite(e.minX)) return plain;
+    const s = stage.getBoundingClientRect();
+    const centred = fitInFree(e, {w: s.width, h: s.height, right: s.width, bottom: s.height}) || plain;
     const L = $("legend");
-    if (L.hidden) return plain;
-    const e = floorExtent();
-    if (!isFinite(e.minX)) return plain;
-    const s = stage.getBoundingClientRect(), l = L.getBoundingClientRect();
-    const perPx = 2 * frameBox.halfH / (BASE_ZOOM * Math.max(1, s.height));
-    const right = s.width / 2 + (e.maxX - frameBox.cx) / perPx;
-    const top = s.height / 2 - (e.maxY - frameBox.cy) / perPx;
-    const bottom = s.height / 2 - (e.minY - frameBox.cy) / perPx;
-    if (right <= l.left - s.left || bottom <= l.top - s.top || top >= l.bottom - s.top) return plain;
-    return fitInFree(e) || plain;
+    if (L.hidden) return centred;
+    const l = L.getBoundingClientRect();
+    const perPx = 2 * frameBox.halfH / (centred.zoom * Math.max(1, s.height));
+    const right = s.width / 2 + (e.maxX - frameBox.cx - centred.panX) / perPx;
+    const top = s.height / 2 - (e.maxY - frameBox.cy - centred.panY) / perPx;
+    const bottom = s.height / 2 - (e.minY - frameBox.cy - centred.panY) / perPx;
+    if (right <= l.left - s.left || bottom <= l.top - s.top || top >= l.bottom - s.top) return centred;
+    return fitInFree(e) || centred;
   }
   // (Still easing in counts as resting: the intro is heading to lastRest.)
   const isResting = () => !!lastRest && (intro !== null || (Math.abs(view.zoom - lastRest.zoom) < 1e-6
@@ -2180,10 +2194,10 @@ function factory(THREE, model) {
     }
     return {w: s.width, h: s.height, right, bottom};
   }
-  // The view that fits the floor's extent into freeRect(), capped at
-  // BASE_ZOOM (6% breathing room); null when nothing is free.
-  function fitInFree(e = floorExtent()) {
-    const f = freeRect();
+  // The view that fits the floor's extent into freeRect() (or the free
+  // rect given), capped at BASE_ZOOM (6% breathing room); null when
+  // nothing is free.
+  function fitInFree(e = floorExtent(), f = freeRect()) {
     if (f.right <= 0 || f.bottom <= 0 || !isFinite(e.minX)) return null;
     const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
     // World units per pixel at zoom z is 2·halfH / (z·H).
@@ -2863,7 +2877,11 @@ function factory(THREE, model) {
       for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y])
         for (const z of [box.min.z, box.max.z]) { v.set(x, y, z).applyMatrix4(inv); add(v.x, v.y); }
     };
-    Object.values(stationGroups).forEach(addObject);
+    // Visible stations only: a repo with no unreadable runs hides the
+    // bin, and its empty footprint at the floor's far right pushed every
+    // fitted frame left of centre.
+    Object.values(stationGroups).forEach((g) => { if (g.visible) addObject(g); });
+    beltParts.forEach(addObject);
     crateOf.forEach((c) => { if (c.mesh.visible) addObject(c.mesh); });
     buildingOf.forEach((b) => { if (b.visible) addObject(b); });
     Object.values(signs).forEach(({sprite}) => {
@@ -3354,6 +3372,7 @@ function factory(THREE, model) {
   fit();
   layout();
   // The resting view needs the laid-out floor (restView measures it).
+  restExtent = floorExtent();
   lastRest = restView();
   view.panX = lastRest.panX; view.panY = lastRest.panY;
   view.zoom = intro !== null ? 1.45 : lastRest.zoom;
