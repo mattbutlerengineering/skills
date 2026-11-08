@@ -804,7 +804,14 @@ function hopTimes(run) {
 // blanks.
 async function loadThree() {
   const decode = (id) => atob($(id).textContent.trim());
-  const bytes = (text) => Uint8Array.from(text, (c) => c.charCodeAt(0));
+  // A plain loop, not Uint8Array.from(text, mapper): calling a mapper
+  // per byte over 2.1 MB of three.js took 92 ms of the first long task
+  // (384 ms on a 4× slower CPU); the loop takes 6 (20).
+  const bytes = (text) => {
+    const out = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) out[i] = text.charCodeAt(i);
+    return out;
+  };
   const coreUrl = URL.createObjectURL(new Blob([bytes(decode("three-core"))],
     {type: "text/javascript"}));
   const moduleText = new TextDecoder().decode(bytes(decode("three-module")))
