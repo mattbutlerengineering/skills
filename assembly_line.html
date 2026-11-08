@@ -220,7 +220,10 @@
   #panel .run { position: relative; border-bottom: 1px solid #eee; }
   #panel details { padding: .25rem 0; }
   #panel .run > .trace-btn { position: absolute; top: .3rem; right: 0; }
-  #panel .run.traceable summary { padding-right: 4.6rem; }
+  /* The reserve is the button's measured width (renderPanel writes
+     --trace-w): a fixed 4.6rem let the count run under the button once
+     user text spacing (WCAG 1.4.12) widened it. */
+  #panel .run.traceable summary { padding-right: var(--trace-w, 4.6rem); }
   #panel summary { cursor: pointer; display: flex; gap: .5rem;
     justify-content: space-between; overflow-wrap: anywhere; }
   #panel summary .prog { color: var(--muted); white-space: nowrap;
@@ -2585,6 +2588,8 @@ function factory(THREE, model) {
     // bring it into view once the panel is laid out.
     if (opened) requestAnimationFrame(() => opened.scrollIntoView({block: "nearest"}));
     $("panel").hidden = false;
+    const traceBtn = body.querySelector(".trace-btn");
+    if (traceBtn) $("panel").style.setProperty("--trace-w", `${traceBtn.offsetWidth + 8}px`);
     if (run) { state.highlighted = run; layout(); }
   }
   renderer.domElement.addEventListener("click", (event) => {
