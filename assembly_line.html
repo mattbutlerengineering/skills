@@ -2986,8 +2986,13 @@ function factory(THREE, model) {
   // the legend — 55% of it covered on an iPad, 43% at 900×1000.
   function setLegend(openIt) {
     const resting = isResting();
+    // Closing it with focus inside (its ✕ by keyboard) hands focus back
+    // to the "How to read this" button; hidden, the ✕ dropped focus to
+    // <body>, which a screen reader announces as nothing at all.
+    const hadFocus = !openIt && $("legend").contains(document.activeElement);
     $("legend").hidden = !openIt;
     $("legend-open").setAttribute("aria-expanded", String(openIt));
+    if (hadFocus) $("legend-open").focus();
     // An untouched resting view re-rests: beside the legend while it is
     // open (restView), back to the plain frame once it closes.
     if (resting) resetView();
