@@ -3385,7 +3385,13 @@ function factory(THREE, model) {
     // and / still drive the timeline from one (focus sits on Play once a
     // trace or the tour's last beat starts the replay). Other buttons —
     // a panel row's trace, a chip — keep every key.
-    if (event.target.closest("input, details, summary")) return;
+    if (event.target.closest("input")) return;
+    // A panel row (details/summary) keeps only the keys it uses — Space
+    // and Enter toggle it, the vertical keys scroll the list. ← → and
+    // the camera keys pass: after a row was opened with the mouse, focus
+    // stayed on its summary and stepping a day did nothing.
+    if (event.target.closest("details, summary")
+      && [" ", "Enter", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)) return;
     // The camera from the keyboard too: wheel, drag and double-click were
     // pointer-only, so a keyboard user could never get closer than the
     // rest view. + / − zoom on the stage's centre, ⇧ + arrows pan an
