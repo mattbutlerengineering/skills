@@ -71,8 +71,11 @@
   .chip:hover { border-color: var(--line); background: #fff; }
   .chip .n { min-width: 1.7em; text-align: center; font-weight: 700;
     background: var(--belt); border-radius: 999px; padding: .02rem .4rem; }
-  .chip.zero { opacity: .55; }
-  .chip.zero .n { background: #e8eae8; }
+  /* An empty station's chip recedes by colour, not opacity: at .55
+     opacity the label measured 3.6:1 on the light page, under AA's
+     4.5:1 for text this size. --muted stays above it in both schemes. */
+  .chip.zero { color: var(--muted); border-color: rgba(47,50,56,.14); }
+  .chip.zero .n { background: #eef0ee; color: var(--muted); }
   .chip.hot { border-color: var(--hot); background: #fff3e2;
     box-shadow: 0 0 0 3px rgba(224,144,58,.18); }
   /* Dark ink on the hot and done pills: white fails WCAG AA on both
@@ -237,6 +240,7 @@
     #find::placeholder { color: var(--muted); }
     .chip .n, #transport button[aria-pressed="true"] { color: #1c2518; }
     .chip.zero .n { background: #2c332d; color: var(--muted); }
+    .chip.zero { border-color: #3a413b; }
     .chip.hot { background: #3a2b16; }
     #pipeline .flow { color: #5c665e; }
     #hint, #replay-date { background: rgba(28,34,30,.85); color: var(--ink);
