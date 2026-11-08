@@ -2623,9 +2623,18 @@ function factory(THREE, model) {
   find.addEventListener("change", () => {
     const wanted = find.value.trim().toLowerCase();
     if (!wanted) return;
-    const run = runs.find((r) => (r.slug || "").toLowerCase() === wanted)
-      || runs.find((r) => r.ref.toLowerCase() === wanted)
-      || runs.find((r) => (r.slug || r.ref).toLowerCase().includes(wanted));
+    // A partial name prefers the run it starts (or starts a word of) over
+    // one that merely contains it: "eval" found decompose-eval-suite, the
+    // first of four in model order, ahead of eval-trends.
+    const name = (r) => (r.slug || r.ref).toLowerCase();
+    const tiers = [
+      (r) => (r.slug || "").toLowerCase() === wanted,
+      (r) => r.ref.toLowerCase() === wanted,
+      (r) => name(r).startsWith(wanted),
+      (r) => ["-", ":", "/", "_"].some((sep) => name(r).includes(sep + wanted)),
+      (r) => name(r).includes(wanted)];
+    let run = null;
+    for (const tier of tiers) if ((run = runs.find(tier))) break;
     if (!run) {
       find.classList.add("miss");
       find.setAttribute("aria-invalid", "true");
@@ -2641,6 +2650,11 @@ function factory(THREE, model) {
     focusOn(runFocus(run), 2.4);
     // (openPanel wrote the #run link)
     focusPanel(find);
+    // Several matches: the panel shows one, so say there are others.
+    const matches = runs.filter((r) => name(r).includes(wanted)).length;
+    if (matches > 1 && name(run) !== wanted) {
+      announce(`${run.slug || run.ref}: one of ${matches} runs matching “${find.value.trim()}”; keep typing to narrow.`);
+    }
     requestRender();
   });
   function clearMiss() {
