@@ -2055,8 +2055,14 @@ function factory(THREE, model) {
     }
     const rect = stage.getBoundingClientRect();
     card.hidden = false;
-    const x = Math.min(event.clientX - rect.left + 16, rect.width - card.offsetWidth - 8);
-    const y = Math.min(event.clientY - rect.top + 16, rect.height - card.offsetHeight - 8);
+    // In the stage area the overlays leave free (freeRect): the card sits
+    // under the legend, panel and tour card in z-order, so near them it
+    // was half hidden. Past the free edge it flips to the cursor's left.
+    const f = freeRect();
+    let x = event.clientX - rect.left + 16;
+    if (x + card.offsetWidth > f.right - 8) x = event.clientX - rect.left - 16 - card.offsetWidth;
+    x = Math.max(8, x);
+    const y = Math.max(8, Math.min(event.clientY - rect.top + 16, f.bottom - card.offsetHeight - 8));
     card.style.left = `${x}px`; card.style.top = `${y}px`;
     renderer.domElement.style.cursor = "pointer";
   });
