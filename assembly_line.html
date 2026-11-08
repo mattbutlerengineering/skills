@@ -2587,6 +2587,7 @@ function factory(THREE, model) {
     const hadFocus = $("panel").contains(document.activeElement);
     $("panel").hidden = true; state.pinned = null; state.highlighted = null;
     if (rowBoxed) rowBox(null); // a row's box would outlive its row
+    syncTitle();
     if (hadFocus && panelOpener && panelOpener.isConnected && !panelOpener.hidden) panelOpener.focus();
     panelOpener = null;
     // The bar says what the view shows: a closed panel's link goes too.
@@ -2840,6 +2841,7 @@ function factory(THREE, model) {
     if (!state.pinned) return;
     panelDay = currentDay();
     if (rowBoxed) rowBox(null); // the rows being replaced never fire pointerleave
+    syncTitle();
     const {key, run} = state.pinned;
     const here = runsAt(key);
     panelRuns = here;
@@ -3141,7 +3143,22 @@ function factory(THREE, model) {
     scrub.addEventListener(type, () => { scrubTip.hidden = true; });
   }
   function dayLabel() { return isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay(); }
+  // The tab names what the view shows: the pinned run or station and a
+  // parked past day lead it, so a tab strip, a bookmark or the history
+  // list of a #run= / #day= link says which. It stayed "skills · assembly
+  // line" for all of them. Written only on change; a running replay's
+  // date stays out (it would rewrite the title every frame).
+  function syncTitle() {
+    const parts = [];
+    if (state.pinned) parts.push(state.pinned.run ? state.pinned.run.slug || state.pinned.run.ref
+      : nameOf(state.pinned.key));
+    if (!isToday() && !state.playing) parts.push(currentDay());
+    parts.push(`${model.repo} · assembly line`);
+    const title = parts.join(" · ");
+    if (document.title !== title) document.title = title;
+  }
   function syncTransport() {
+    syncTitle();
     // The thumb tracks the playhead: smooth while the replay runs,
     // snapped to the day when parked (a drag mid-flight pauses first,
     // so this write never fights the user's hand). A parked day d sits
