@@ -1503,6 +1503,27 @@ function factory(THREE, model) {
       PLATE_H,
       CITY_BASE.z + 2.6 + Math.floor(index / CITY_COLS) * CITY_SZ);
   }
+  // Every finished run has a lot, marked on the district's ground: early
+  // in a replay the city was a bare sand slab sized for buildings that
+  // did not exist yet, and the lots now say where the skyline will rise.
+  // A built lot vanishes under its building (the outline sits inside the
+  // 1.9 footprint), so today's skyline is unchanged. One draw call.
+  {
+    const half = 0.85, points = [];
+    for (let i = 0; i < CITY_TOTAL; i++) {
+      const c = citySlot(i), y = PLATE_H + 0.02;
+      const corners = [[-half, -half], [half, -half], [half, half], [-half, half]];
+      corners.forEach(([x, z], k) => {
+        const [nx, nz] = corners[(k + 1) % 4];
+        points.push(c.x + x, y, c.z + z, c.x + nx, y, c.z + nz);
+      });
+    }
+    if (points.length) {
+      const lotGeo = new THREE.BufferGeometry();
+      lotGeo.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+      scene.add(new THREE.LineSegments(lotGeo, new THREE.LineBasicMaterial({color: 0xbfa985})));
+    }
+  }
   const buildingOf = new Map();
   // At night the city lights up: in the dark colour scheme the window
   // strips swap to a self-lit warm material (the scene's lights never
