@@ -102,6 +102,20 @@ watermark (it adds state; `--days`/`--session` cover it), and a
 per-page cold-reader test (too costly; the Graduation ablation tests
 the same thing in aggregate).
 
+## Owner scope decision after the first PRD (2026-11-08)
+
+The first PRD draft (commit 307adf8) kept items 1 and 2, deferred item 3
+and cut items 4 to 8 for having no failure observed in this repo. Shown
+that list, the Owner answered **"Reinstate all 8"**. All eight items are
+in scope. The PRD records the evidence label of each one (observed here,
+or external practice unmeasured here) and keeps it, but evidence
+strength is no longer a reason to cut. The orchestrator's six rejected
+candidates stay rejected, and the Moonshot rung (running a page's check
+from lint or on a schedule) stays out. For item 4 the orchestrator
+suggested a rubric-level rule (when three or more pages share a cause,
+propose one class page) rather than tooling. That suggestion is not the
+Owner's ruling; Architect decides the carrier.
+
 ## Idea inputs
 
 - **Problem, from the sufferer's side.** An agent working in a repo
