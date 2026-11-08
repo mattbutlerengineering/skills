@@ -21,7 +21,7 @@ arbitrate severity.
 3. **Scope the diff.** The review covers what this run changed — the diff
    since the run began, not the whole repo.
 
-4. **Review in six passes:**
+4. **Review in five passes:**
    - **Correctness** — logic errors, unhandled failure modes, edge cases the
      tests missed. For each suspected bug, state the concrete failure
      scenario (inputs → wrong behavior); a bug you can't scenario-ize is a
@@ -33,12 +33,6 @@ arbitrate severity.
      existing ADR's Decision section where a superseding ADR was owed.
    - **Security** — inputs validated at boundaries, no secrets in code,
      injection surfaces parameterized, errors don't leak internals.
-   - **Performance** — work on a path the diff touches that grows faster
-     than its input: a query, read or call per item in a loop, a scan
-     nested inside a scan, a query or read with no bound, a handle or
-     connection opened and never closed. State the input size at which it
-     hurts, measured or derived from the data the code really sees; a
-     cost you can't size is a hunch, not a finding.
    - **Complexity** — apply `lean`'s cut-list in
      `../lean/references/cut-list.md` to the run's diff. Each confirmed cut
      is a finding: its cut-list line and the evidence its tag owes stand in

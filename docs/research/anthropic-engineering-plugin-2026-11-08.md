@@ -40,16 +40,24 @@ invocations and no hand-off from one skill to the next.
 1. **A performance dimension in code review.** `code-review` reviews
    four dimensions; one is Performance: "N+1 queries", "Algorithmic
    complexity (O(n²) in hot paths)", "Unbounded queries or loops",
-   "Resource leaks". Here, `review` ran five passes (correctness,
-   design, security, complexity, ADR compliance) and none asks about
-   cost; "performance" appears in the review skill only in
-   `references/migrations.md`, as something *not* to suggest. The
-   miss is on record: detector H's zero-count read in
-   `gates._names_unknown` was quadratic, shipped through a reviewed
-   run, and needed its own maintenance run
-   (`docs/fixes/a-long-line-stalls-the-gate/`, PR #1079, `bff792c`).
-   Main carries four `perf` commits; 12 of 107 `review.md` files
-   mention performance at all.
+   "Resource leaks". Here, `review` runs five passes (correctness,
+   design, security, complexity, ADR compliance) and none names cost;
+   "performance" appears in the review skill only in
+   `references/migrations.md`, as something *not* to suggest. But no
+   miss is on record. The one cost defect that went through a run,
+   detector H's quadratic zero-count read in `gates._names_unknown`
+   (introduced by #1018, `41d407a`), was caught by that run's own
+   review, measured (1.57 s on a 22 kB line) and deferred as a seed
+   (`docs/fixes/a-zero-count-names-nothing/review.md:216`, "Minor:
+   `_names_unknown` is quadratic in line length"); the fix in PR #1079
+   (`bff792c`) is that seed being claimed. The other three `perf`
+   commits on main touch only `assembly_line.html` and carry no run
+   artifacts, so no review ran on them. 12 of 107 `review.md` files
+   raise a cost concern (performance, N+1, quadratic, unbounded, O(n)).
+   `lean` already covers the deliberate case: a quadratic scan kept on
+   purpose carries a `lean:` marker naming its ceiling
+   (`skills/lean/SKILL.md:89-92`), which review's Complexity pass
+   checks.
 2. **Rollback triggers decided before the deploy.** `deploy-checklist`
    ends with "Rollback Triggers" (error rate, latency, a named flow
    failing) and the tip "Decide when to roll back before you deploy,
@@ -103,7 +111,7 @@ invocations and no hand-off from one skill to the next.
 
 | # | Engineering-plugin practice | Verdict | Carrier here | Why |
 |---|---|---|---|---|
-| 1 | Performance dimension in code review | **Adopt** (done in this PR) | a sixth pass in `skills/review/SKILL.md` step 4, and `performance` in `TEMPLATE.md`'s clean-pass list | an observed miss (#1079) that no pass would have caught; written to match the Correctness pass, so a cost with no input size is a hunch, not a finding |
+| 1 | Performance dimension in code review | **Take nothing now** | — | the one cost defect that went through a run was caught by its review without such a pass (#1018's review, Minor 4); a pass with no recorded miss would add effort to every review. Revisit when a cost defect reaches main through a reviewed run; the carrier then is a sixth pass in `skills/review/SKILL.md` step 4 that leaves a `lean:`-marked shortcut alone while its ceiling holds |
 | 2 | Rollback triggers decided before deploy | **Adopt** (done in this PR) | one clause in `ship` step 3's rollback bullet and a `Trigger:` line in `skills/ship/TEMPLATE.md` | two lines; the plan already names steps, door and blast radius, and the trigger is the missing "when". Unmeasured benefit: no release here has ever rolled back |
 | 3 | Incident response skill | **Take nothing now** | — | no stamped repo has asked for one and nothing on record shows an incident handled badly for lack of it; the pipeline's scope ends at feedback, not on-call. Revisit when a stamped product repo records a production incident |
 | 4 | Blameless postmortem with five whys | **Reject** (ahead) | — | `operate` step 6 goes further: each mistake gets a classified carrier |
@@ -114,20 +122,18 @@ invocations and no hand-off from one skill to the next.
 
 ## Seeds
 
-None. Rows 1 and 2 are implemented in the same PR as this note; row 3 is
-a revisit condition, not work; the rest are rejected.
+None. Row 2 is implemented in the same PR as this note; rows 1 and 3
+are revisit conditions, not work; the rest are rejected.
 
 ## Couldn't verify
 
-- Whether a performance pass catches the next #1079. The pass is
-  prevention written from one observed miss; no eval measures review
-  recall on a cost defect, and `plugin-evals/` has no review suite that
-  would.
-- Whether the `implement-queue` reviewer (whose verdict is this repo's
-  auto-merge gate) should carry the same dimension. Its contract,
-  `skills/implement-queue/references/reviewer-contract.md`, was left
-  alone to keep this change to the two stage skills; it is a separate
-  question.
+- How often review catches a cost defect. The record holds one, caught;
+  no eval measures review recall on cost, and `plugin-evals/` has no
+  review suite that would. Assembly-line changes made outside the
+  pipeline are never reviewed, so their three `perf` fixes say nothing
+  either way.
+- Whether a rollback trigger changes any release. No release here has
+  rolled back, so row 2 is a template hole filled, not a failure fixed.
 - How the engineering plugin's skills perform: it ships no evals, and
   its 35,193 stars belong to the whole knowledge-work-plugins repo, not
   to this plugin.
