@@ -2532,18 +2532,29 @@ function factory(THREE, model) {
   // The hint promises "double-tap reset", but WebKit (Playwright's, with
   // touch) fires no dblclick for two taps, as Chromium does — no reset.
   // Two taps within 350 ms and 30 px reset it here; where dblclick fires
-  // too, the second resetView only restarts the same flight.
-  let lastTap = null;
-  renderer.domElement.addEventListener("pointerup", (event) => {
+  // too, the second resetView only restarts the same flight. On a phone
+  // the first tap often opens a panel under the finger (a station's
+  // plate is a hit), so the second tap counts wherever it lands, and
+  // the click it makes is swallowed: a row or trace button under it
+  // must not take the tap meant for the floor.
+  let lastTap = null, swallowClickUntil = 0;
+  addEventListener("pointerup", (event) => {
     if (event.pointerType !== "touch" || dragged || touches.size > 1) return;
     const now = performance.now();
+    const onFloor = event.target === renderer.domElement;
     if (lastTap && now - lastTap.t < 350
       && Math.hypot(event.clientX - lastTap.x, event.clientY - lastTap.y) < 30) {
       lastTap = null; traceFollow = false; resetView();
+      if (!onFloor) swallowClickUntil = now + 500;
       return;
     }
-    lastTap = {t: now, x: event.clientX, y: event.clientY};
-  });
+    lastTap = onFloor ? {t: now, x: event.clientX, y: event.clientY} : null;
+  }, true);
+  addEventListener("click", (event) => {
+    if (performance.now() > swallowClickUntil) return;
+    swallowClickUntil = 0;
+    event.preventDefault(); event.stopPropagation();
+  }, true);
 
   // --------------------------------------------------------- hover, pin
   const raycaster = new THREE.Raycaster();
