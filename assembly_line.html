@@ -114,13 +114,14 @@
   #trace-banner button { font: inherit; border: 1.5px solid var(--line);
     background: var(--panel); color: var(--ink); border-radius: 999px;
     padding: .1rem .6rem; cursor: pointer; }
-  /* Top-aligned and pushed right: on a run name that wraps, a
-     stretched pill swelled into a two-line lozenge, and space-between
-     left every button at a different x. */
+  /* A sibling of the row's <details>, not inside its <summary>: a button
+     nested in a summary is an interactive control inside another (axe
+     nested-interactive), announced and reached unreliably. It sits over
+     the summary's reserved right edge, top-aligned, at one x on every
+     row. */
   .trace-btn { font: inherit; font-size: .75rem; border: 1.5px solid
     rgba(47,50,56,.3); background: none; color: #6a4cc4;
-    border-radius: 999px; padding: 0 .5rem; cursor: pointer;
-    margin-left: auto; flex: none; align-self: flex-start; white-space: nowrap; }
+    border-radius: 999px; padding: 0 .5rem; cursor: pointer; white-space: nowrap; }
   .trace-btn:hover { border-color: var(--accent); }
   /* While a trace banner occupies the top-left, the date badge yields
      the centre and docks right — and on a narrow stage, where the banner
@@ -196,7 +197,10 @@
   #panel header button { border: 0; background: none; font-size: 1.1rem;
     cursor: pointer; color: inherit; }
   #panel .body { overflow: auto; padding: .4rem .8rem .8rem; }
-  #panel details { border-bottom: 1px solid #eee; padding: .25rem 0; }
+  #panel .run { position: relative; border-bottom: 1px solid #eee; }
+  #panel details { padding: .25rem 0; }
+  #panel .run > .trace-btn { position: absolute; top: .3rem; right: 0; }
+  #panel .run.traceable summary { padding-right: 4.6rem; }
   #panel summary { cursor: pointer; display: flex; gap: .5rem;
     justify-content: space-between; overflow-wrap: anywhere; }
   #panel summary .prog { color: var(--muted); white-space: nowrap;
@@ -250,7 +254,7 @@
       border-color: #4a524b; }
     #notice { background: #3a2b16; color: #f3c892; }
     #panel header { border-bottom-color: #2e352f; }
-    #panel details { border-bottom-color: #2e352f; }
+    #panel .run { border-bottom-color: #2e352f; }
     .trace-btn { border-color: #4a524b; color: #b8a3f2; }
     #transport { background: rgba(18,23,19,.8);
       border-top-color: rgba(255,255,255,.08); }
@@ -2109,20 +2113,19 @@ function factory(THREE, model) {
   function runRow(run, open) {
     const summary = el("summary", {});
     summary.append(el("span", {}, run.ref));
-    if (run.status !== "attention") {
-      const traceBtn = el("button", {class: "trace-btn",
-        title: "Replay this run's journey, solo"}, "◉ trace");
-      traceBtn.addEventListener("click", (event) => {
-        event.preventDefault();
-        startTrace(run);
-      });
-      summary.append(traceBtn);
-    }
     // The progress column is always there (empty without work orders),
-    // so every row's trace button lands at the same x.
+    // so every row's count lands at the same x.
     summary.append(el("span", {class: isToday() ? "prog" : "prog past"}, run.work_orders.length
       ? `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}` : ""));
     const details = el("details", {}, summary);
+    const row = el("div", {class: "run"}, details);
+    if (run.status !== "attention") {
+      const traceBtn = el("button", {class: "trace-btn",
+        title: "Replay this run's journey, solo"}, "◉ trace");
+      traceBtn.addEventListener("click", () => startTrace(run));
+      row.classList.add("traceable");
+      row.append(traceBtn);
+    }
     if (open) details.open = true;
     if (run.status === "attention") details.append(el("p", {class: "muted"}, run.reason));
     else {
@@ -2148,7 +2151,7 @@ function factory(THREE, model) {
       details.append(ul);
     }
     summary.addEventListener("click", () => { state.highlighted = run; layout(); requestRender(); });
-    return details;
+    return row;
   }
   // ------------------------------------------------------------- trace
   // "Show me THIS run's journey": hide every other crate and replay
