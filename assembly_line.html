@@ -1788,15 +1788,16 @@ function factory(THREE, model) {
   // keeps the pan, which lives in camera space, so what the viewer was
   // looking at drifted: portrait → landscape left a pinned building on
   // the stage's top edge. A pin is re-centred in the free region at the
-  // same zoom, and a tour beat is re-framed; a bare hand-framed view
-  // keeps its pan as before.
+  // same zoom, a tour beat is re-framed, an untouched resting view
+  // re-rests; a hand-framed view keeps its pan.
   addEventListener("resize", () => {
+    const resting = isResting();
     fit();
     if (!exporting && tourStep >= 0) showTourStep();
     else if (!exporting && state.pinned) {
       const {key, run} = state.pinned;
       focusOn(run ? runFocus(run) : focusTargetOf(key), view.zoom);
-    }
+    } else if (resting) resetView();
     requestRender();
   });
   // The resting view sits a touch inside the fitted frame: the floor's
@@ -1815,26 +1816,67 @@ function factory(THREE, model) {
       history.replaceState(null, "", `#view=${view.zoom.toFixed(2)},${view.panX.toFixed(1)},${view.panY.toFixed(1)}`);
     }, 400);
   }
+  // The resting view: fit()'s frame at BASE_ZOOM — unless the open
+  // legend would cover part of the floor there (a ~1000px window put
+  // Operate's pile-up under it), in which case the floor is fitted into
+  // what the legend leaves free. lastRest remembers the last rest view
+  // applied, so a legend toggle or a resize can re-rest an untouched view
+  // without disturbing one the viewer framed by hand.
+  let lastRest = null;
+  function restView() {
+    const plain = {zoom: BASE_ZOOM, panX: 0, panY: 0};
+    const L = $("legend");
+    if (L.hidden) return plain;
+    const e = floorExtent();
+    if (!isFinite(e.minX)) return plain;
+    const s = stage.getBoundingClientRect(), l = L.getBoundingClientRect();
+    const perPx = 2 * frameBox.halfH / (BASE_ZOOM * Math.max(1, s.height));
+    const right = s.width / 2 + (e.maxX - frameBox.cx) / perPx;
+    const top = s.height / 2 - (e.maxY - frameBox.cy) / perPx;
+    const bottom = s.height / 2 - (e.minY - frameBox.cy) / perPx;
+    if (right <= l.left - s.left || bottom <= l.top - s.top || top >= l.bottom - s.top) return plain;
+    return fitInFree(e) || plain;
+  }
+  // (Still easing in counts as resting: the intro is heading to lastRest.)
+  const isResting = () => !!lastRest && (intro !== null || (Math.abs(view.zoom - lastRest.zoom) < 1e-6
+    && Math.abs(view.panX - lastRest.panX) < 1e-6 && Math.abs(view.panY - lastRest.panY) < 1e-6));
   const resetView = () => {
     if (exporting) return; // the capture owns the camera
-    view.zoom = BASE_ZOOM; view.panX = 0; view.panY = 0; applyView(); requestRender();
+    lastRest = restView();
+    view.zoom = lastRest.zoom; view.panX = lastRest.panX; view.panY = lastRest.panY;
+    applyView(); requestRender();
     clearTimeout(viewHashTimer);
     if (location.hash.startsWith("#view="))
       history.replaceState(null, "", location.pathname + location.search);
   };
   // The part of the stage the overlays leave free, in stage pixels: left
-  // of a side panel or side tour card, above a bottom sheet or a bottom
-  // tour card. One owner for every camera move that must land in view.
+  // of a side panel, side tour card or the legend, above a bottom sheet
+  // or a bottom tour card. One owner for every camera move that must
+  // land in view.
   function freeRect() {
     const s = stage.getBoundingClientRect();
     let right = s.width, bottom = s.height;
-    for (const el of [$("panel"), $("tour")]) {
+    for (const el of [$("panel"), $("tour"), $("legend")]) {
       if (el.hidden) continue;
       const r = el.getBoundingClientRect();
       if (r.top > s.top + s.height / 3) bottom = Math.min(bottom, r.top - s.top);
       else if (r.left > s.left + s.width / 2) right = Math.min(right, r.left - s.left);
     }
     return {w: s.width, h: s.height, right, bottom};
+  }
+  // The view that fits the floor's extent into freeRect(), capped at
+  // BASE_ZOOM (6% breathing room); null when nothing is free.
+  function fitInFree(e = floorExtent()) {
+    const f = freeRect();
+    if (f.right <= 0 || f.bottom <= 0 || !isFinite(e.minX)) return null;
+    const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
+    // World units per pixel at zoom z is 2·halfH / (z·H).
+    const zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * f.bottom / (f.h * spanY),
+      2 * frameBox.halfH * f.right / (f.h * spanX));
+    const perPx = 2 * frameBox.halfH / (zoom * f.h);
+    return {zoom,
+      panX: (e.minX + e.maxX) / 2 - frameBox.cx + (f.w - f.right) / 2 * perPx,
+      panY: (e.minY + e.maxY) / 2 - frameBox.cy - (f.h - f.bottom) / 2 * perPx};
   }
   // Centre a world point and zoom to it (the chips fly the camera) — in
   // freeRect(), not the whole stage: there a phone's sheet covered the
@@ -2243,8 +2285,12 @@ function factory(THREE, model) {
   // the floor fills the width there and the city lands top-right, under
   // the legend — 55% of it covered on an iPad, 43% at 900×1000.
   function setLegend(openIt) {
+    const resting = isResting();
     $("legend").hidden = !openIt;
     $("legend-open").setAttribute("aria-expanded", String(openIt));
+    // An untouched resting view re-rests: beside the legend while it is
+    // open (restView), back to the plain frame once it closes.
+    if (resting) resetView();
   }
   setLegend(matchMedia("(min-width: 721px) and (min-height: 481px) and (min-aspect-ratio: 1/1)").matches);
   $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
@@ -2301,16 +2347,9 @@ function factory(THREE, model) {
   // what the card leaves free.
   function frameClearOfTour() {
     if (exporting) return; // the capture owns the camera
-    const f = freeRect();
-    const e = floorExtent();
-    if (f.right <= 0 || f.bottom <= 0 || !isFinite(e.minX)) { resetView(); return; }
-    // World units per pixel at zoom z is 2·halfH / (z·H); 6% breathing room.
-    const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
-    view.zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * f.bottom / (f.h * spanY),
-      2 * frameBox.halfH * f.right / (f.h * spanX));
-    const perPx = 2 * frameBox.halfH / (view.zoom * f.h);
-    view.panX = (e.minX + e.maxX) / 2 - frameBox.cx + (f.w - f.right) / 2 * perPx;
-    view.panY = (e.minY + e.maxY) / 2 - frameBox.cy - (f.h - f.bottom) / 2 * perPx;
+    const v = fitInFree();
+    if (!v) { resetView(); return; }
+    view.zoom = v.zoom; view.panX = v.panX; view.panY = v.panY;
     applyView(); requestRender();
   }
   function showTourStep() {
@@ -2501,7 +2540,7 @@ function factory(THREE, model) {
     if (intro !== null) {
       intro = Math.min(1, intro + dt / 1.1);
       const ease = 1 - Math.pow(1 - intro, 3);
-      view.zoom = BASE_ZOOM + (1.45 - BASE_ZOOM) * (1 - ease);
+      view.zoom = lastRest.zoom + (1.45 - lastRest.zoom) * (1 - ease);
       applyView();
       if (intro >= 1) intro = null;
       needsRender = true;
@@ -2683,9 +2722,13 @@ function factory(THREE, model) {
   // ------------------------------------------------------------- start
   // A one-breath settle: the floor eases in from a slightly wider frame.
   let intro = reducedMotion ? null : 0;
-  view.zoom = intro !== null ? 1.45 : BASE_ZOOM;
   fit();
   layout();
+  // The resting view needs the laid-out floor (restView measures it).
+  lastRest = restView();
+  view.panX = lastRest.panX; view.panY = lastRest.panY;
+  view.zoom = intro !== null ? 1.45 : lastRest.zoom;
+  applyView();
   syncTransport();
   // The city follows the room: lit windows after dark, live on change.
   const darkScheme = matchMedia("(prefers-color-scheme: dark)");
@@ -2703,7 +2746,7 @@ function factory(THREE, model) {
     const day = hash.get("day");
     if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
       const index = dayIndex(day);
-      if (index >= FIRST && index <= LAST) { goToDay(toStop(index)); intro = null; view.zoom = BASE_ZOOM; applyView(); }
+      if (index >= FIRST && index <= LAST) { goToDay(toStop(index)); intro = null; resetView(); }
     }
     const run = hash.get("run");
     if (run) { find.value = run; find.dispatchEvent(new Event("change")); intro = null; }
