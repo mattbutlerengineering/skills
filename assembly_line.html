@@ -543,9 +543,12 @@ function factory(THREE, model) {
   // sand ground, a brown road — reads as a different place behind the
   // floor's cool greens and greys. Roof trim stays the run's kind
   // colour (the legend promises it) and lit windows stay 0xf6e7ae.
+  // Windows are blue-grey glass by day — dark brown strips covered half
+  // of each facade and turned the sand city into a brown block — and at
+  // night lit (0xf6e7ae) or, one strip in seven, dark (windowDark).
   const CITY_COLORS = {
     wall: 0xd8c3a5, wallAlt: 0xc9b291, wallPale: 0xe3d4ba,
-    window: 0x6d5844, ground: 0xeee3cf, groundSide: 0xd9c9ab,
+    window: 0x9db3c4, windowDark: 0x3a3530, ground: 0xeee3cf, groundSide: 0xd9c9ab,
     road: 0x7a6a56
   };
   const CITY_WALLS = [CITY_COLORS.wall, CITY_COLORS.wallAlt, CITY_COLORS.wallPale];
@@ -1258,11 +1261,13 @@ function factory(THREE, model) {
     mesh.material = building === pinnedBuilding ? pinWallMat
       : cityNight ? duskMat(color) : mat(color);
   }
+  function windowMat(i) {
+    return !cityNight ? mat(CITY_COLORS.window)
+      : litAtNight(i) ? winNightMat : mat(CITY_COLORS.windowDark);
+  }
   function setCityNight(on) {
     cityNight = on;
-    cityWindows.forEach((win, i) => {
-      win.material = on && litAtNight(i) ? winNightMat : mat(CITY_COLORS.window);
-    });
+    cityWindows.forEach((win, i) => { win.material = windowMat(i); });
     cityWalls.forEach(paintWall);
     requestRender();
   }
@@ -1341,10 +1346,8 @@ function factory(THREE, model) {
       const winZ = box(0.5, height * 0.7, 0.06, CITY_COLORS.window, off, height * 0.12, -0.95, building);
       const base = cityWindows.length;
       cityWindows.push(winX, winZ);
-      if (cityNight) {
-        if (litAtNight(base)) winX.material = winNightMat;
-        if (litAtNight(base + 1)) winZ.material = winNightMat;
-      }
+      winX.material = windowMat(base);
+      winZ.material = windowMat(base + 1);
     }
     box(1.98, 0.16, 1.98, trim, 0, height, 0, building);
     // A tall tower steps back once under its roof, so the skyline has a
