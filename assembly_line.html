@@ -1798,9 +1798,59 @@ function factory(THREE, model) {
   // (scroll to zoom, drag to pan, double-click to reset).
   const view = {zoom: 1, panX: 0, panY: 0};
   const frameBox = {cx: 0, cy: 0, halfH: 1, aspect: 1};
+  // The floor's outline in camera space, one convex polygon per visible
+  // station (its footprint's hull; the city's ground is Done's),
+  // measured by fit(). One hull of the whole floor filled its notches —
+  // Capture's spur, the gaps between rows — and deep zoom parked there.
+  let floorPolys = [];
+  function hullOf(points) { // Andrew's monotone chain, counter-clockwise
+    const p = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const half = (list) => {
+      const out = [];
+      for (const q of list) {
+        while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+        out.push(q);
+      }
+      out.pop();
+      return out;
+    };
+    return half(p).concat(half(p.reverse()));
+  }
+  // The nearest outline point to (x, y), or null when it is on the floor.
+  function offFloor(x, y) {
+    let best = null, bestD = Infinity;
+    for (const h of floorPolys) {
+      let inside = h.length > 2;
+      for (let i = 0; i < h.length; i++) {
+        const [ax, ay] = h[i], [bx, by] = h[(i + 1) % h.length];
+        if ((bx - ax) * (y - ay) - (by - ay) * (x - ax) < 0) inside = false;
+        const len = (bx - ax) ** 2 + (by - ay) ** 2 || 1;
+        const f = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / len));
+        const qx = ax + f * (bx - ax), qy = ay + f * (by - ay);
+        const d = (x - qx) ** 2 + (y - qy) ** 2;
+        if (d < bestD) { bestD = d; best = [qx, qy]; }
+      }
+      if (inside) return null;
+    }
+    return best;
+  }
   function applyView() {
     const halfH = frameBox.halfH / view.zoom;
     const halfW = halfH * frameBox.aspect;
+    // The floor never leaves the frame: the view's centre stays within
+    // half the view's smaller half-extent of the floor's outline, so at
+    // any zoom some floor is on screen. Unbounded, a long drag (or a
+    // stale #view link) left an empty room, the floor nowhere in sight.
+    const near = offFloor(frameBox.cx + view.panX, frameBox.cy + view.panY);
+    if (near) {
+      const dx = frameBox.cx + view.panX - near[0], dy = frameBox.cy + view.panY - near[1];
+      const d = Math.hypot(dx, dy), m = Math.min(halfW, halfH) / 2;
+      if (d > m) {
+        view.panX = near[0] + dx * m / d - frameBox.cx;
+        view.panY = near[1] + dy * m / d - frameBox.cy;
+      }
+    }
     const cx = frameBox.cx + view.panX, cy = frameBox.cy + view.panY;
     camera.left = cx - halfW; camera.right = cx + halfW;
     camera.top = cy + halfH; camera.bottom = cy - halfH;
@@ -1850,6 +1900,17 @@ function factory(THREE, model) {
     frameBox.aspect = width / Math.max(1, height);
     frameBox.halfH = Math.max(spanY, spanX / frameBox.aspect) / 2 * 1.02;
     frameBox.cx = (minX + maxX) / 2; frameBox.cy = (minY + maxY) / 2;
+    // Footprints, not full-height boxes: a tall group's box reaches into
+    // empty sky, and deep zoom parked over that was an empty frame again.
+    floorPolys = Object.values(stationGroups).filter((g) => g.visible).map((g) => {
+      const box = new THREE.Box3().setFromObject(g), corners = [];
+      for (const x of [box.min.x, box.max.x]) for (const y of [0, PLATE_H])
+        for (const z of [box.min.z, box.max.z]) {
+          const v = new THREE.Vector3(x, y, z).applyMatrix4(inv);
+          corners.push([v.x, v.y]);
+        }
+      return hullOf(corners);
+    });
     applyView();
     // The sun's shadow frustum covers the whole floor once. The sun turns
     // with the camera (both yaw 180°), so shadows still fall toward the
