@@ -16,7 +16,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='24' rx='5' fill='%23a6e07a' stroke='%232f3238' stroke-width='2.5'/%3E%3Crect x='4' y='13' width='24' height='6' fill='%238f6fd8' stroke='%232f3238' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
   :root {
-    --ground: #e9f6ee; --ink: #23262c; --muted: #68717d;
+    --ground: #e9f6ee; --ink: #23262c; --muted: #5f6873;
     --belt: #a6e07a; --accent: #8f6fd8; --hot: #e0903a; --panel: #ffffff;
     --line: #2f3238; --ok: #5cb85c;
   }
@@ -63,7 +63,8 @@
      second row and the stage lost a row's height. */
   #pipeline { flex: none; display: flex; align-items: center; gap: .2rem;
     padding: 0 1rem .55rem; flex-wrap: wrap; }
-  #pipeline .flow { color: #9aa49c; font-weight: 700; }
+  /* The arrows carry the stage order, so they keep 3:1 (non-text). */
+  #pipeline .flow { color: #78827a; font-weight: 700; }
   .chip { font: inherit; font-size: .8rem; display: inline-flex; gap: .3rem;
     align-items: center; border: 1.5px solid rgba(47,50,56,.22);
     border-radius: 999px; padding: .18rem .45rem .18rem .3rem;
@@ -117,7 +118,7 @@
      stretched pill swelled into a two-line lozenge, and space-between
      left every button at a different x. */
   .trace-btn { font: inherit; font-size: .75rem; border: 1.5px solid
-    rgba(47,50,56,.3); background: none; color: var(--accent);
+    rgba(47,50,56,.3); background: none; color: #6a4cc4;
     border-radius: 999px; padding: 0 .5rem; cursor: pointer;
     margin-left: auto; flex: none; align-self: flex-start; white-space: nowrap; }
   .trace-btn:hover { border-color: var(--accent); }
@@ -150,7 +151,7 @@
     align-items: center; margin: 0 0 .4rem; }
   #legend h2 { margin: 0; font-size: .95rem; }
   #legend button { border: 0; background: none; font-size: 1.05rem;
-    cursor: pointer; }
+    cursor: pointer; color: inherit; }
   #legend ul { margin: 0; padding: 0; list-style: none; display: grid;
     gap: .45rem; }
   #legend li { display: flex; gap: .6rem; align-items: baseline; }
@@ -193,7 +194,7 @@
     border-bottom: 1px solid #ddd; }
   #panel header h2 { margin: 0; font-size: .95rem; }
   #panel header button { border: 0; background: none; font-size: 1.1rem;
-    cursor: pointer; }
+    cursor: pointer; color: inherit; }
   #panel .body { overflow: auto; padding: .4rem .8rem .8rem; }
   #panel details { border-bottom: 1px solid #eee; padding: .25rem 0; }
   #panel summary { cursor: pointer; display: flex; gap: .5rem;
@@ -242,13 +243,13 @@
     .chip.zero .n { background: #2c332d; color: var(--muted); }
     .chip.zero { border-color: #3a413b; }
     .chip.hot { background: #3a2b16; }
-    #pipeline .flow { color: #5c665e; }
+    #pipeline .flow { color: #75807a; }
     #hint, #replay-date { background: rgba(28,34,30,.85); color: var(--ink);
       border-color: #4a524b; }
     #notice { background: #3a2b16; color: #f3c892; }
     #panel header { border-bottom-color: #2e352f; }
     #panel details { border-bottom-color: #2e352f; }
-    .trace-btn { border-color: #4a524b; }
+    .trace-btn { border-color: #4a524b; color: #b8a3f2; }
     #transport { background: rgba(18,23,19,.8);
       border-top-color: rgba(255,255,255,.08); }
   }
