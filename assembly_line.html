@@ -3874,7 +3874,9 @@ function factory(THREE, model) {
       paint();
       const when = isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay();
       stamp(model.repo, ` · ${when}${quietNow() ? " ▸▸" : ""} · ${lastTally.active} in flight · ${lastTally.completed} done`);
-      gif.frame(ctx.getImageData(0, 0, W, H).data, i === total + HOLD_FRAMES ? 300 : 100 / FPS);
+      // The first hold frame is encoded exactly (no sticky indices): the
+      // clip ends on it, so slow last-moment drift may not linger there.
+      gif.frame(ctx.getImageData(0, 0, W, H).data, i === total + HOLD_FRAMES ? 300 : 100 / FPS, i === total + 1);
       if (i % 10 === 0) {
         status.textContent = `Exporting clip… ${Math.round(100 * i / (total + HOLD_FRAMES))}%`;
         stage.dataset.capture = status.textContent;
@@ -4032,20 +4034,25 @@ class GifWriter {
       new Uint8Array([0x21, 0xff, 0x0b, ...Array.from("NETSCAPE2.0", (c) => c.charCodeAt(0)),
         0x03, 0x01, 0x00, 0x00, 0x00]));
   }
-  frame(rgba, delayCs) {
+  frame(rgba, delayCs, exact = false) {
     const W = this.width, H = this.height, n = W * H;
     const indices = new Uint8Array(n);
-    const pal = this.palette, prev = this.prev;
+    const pal = this.palette, prev = exact ? null : this.prev, before = this.prevRgba;
     for (let p = 0, q = 0; p < n; p++, q += 4) {
       indices[p] = this.lookup[((rgba[q] >> 3) << 10) | ((rgba[q + 1] >> 3) << 5) | (rgba[q + 2] >> 3)];
       // Antialiased edges and soft shadows shimmer between neighbouring
       // palette bins frame to frame; a pixel keeps its previous index
       // while that index still matches its colour closely, so the
-      // shimmer never widens the delta rectangle below.
+      // shimmer never widens the delta rectangle below — but only while
+      // the pixel itself barely changed. A real change within that
+      // match (a light crate leaving light floor, the stamp's white edge
+      // as it narrowed) stuck too, and 4,486 pixels of the clip's last
+      // frame were ghosts of earlier frames.
       if (prev && indices[p] !== prev[p]) {
+        const er = rgba[q] - before[q], eg = rgba[q + 1] - before[q + 1], eb = rgba[q + 2] - before[q + 2];
         const k = prev[p] * 3;
         const dr = rgba[q] - pal[k], dg = rgba[q + 1] - pal[k + 1], db = rgba[q + 2] - pal[k + 2];
-        if (dr * dr + dg * dg + db * db <= 900) indices[p] = prev[p];
+        if (er * er + eg * eg + eb * eb <= 192 && dr * dr + dg * dg + db * db <= 900) indices[p] = prev[p];
       }
     }
     const delay = Math.max(2, Math.round(delayCs));
@@ -4080,6 +4087,7 @@ class GifWriter {
       w & 255, w >> 8, h & 255, h >> 8, 0]));
     this.chunks.push(lzw(rect, 8));
     this.prev = indices;
+    this.prevRgba = rgba;
   }
   finish() {
     this.chunks.push(new Uint8Array([0x3b]));
