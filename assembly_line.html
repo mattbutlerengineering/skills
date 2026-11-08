@@ -44,7 +44,10 @@
   #find { font: inherit; font-size: .85rem;
     border: 1.5px solid rgba(47,50,56,.3); background: rgba(255,255,255,.8);
     border-radius: 999px; padding: .2rem .8rem; width: 15em; }
-  #find:focus { border-color: var(--line); background: #fff; outline: none; }
+  /* The browser's focus ring stays, as on every chip and button: with
+     outline: none the dark scheme marked focus only by a border going
+     from #4a524b to #7d887f — its hover look, a 1.9:1 change. */
+  #find:focus { border-color: var(--line); background: #fff; }
   #find.miss { border-color: var(--hot); box-shadow: 0 0 0 3px rgba(224,144,58,.25); }
   #legend-open, #tour-open { font: inherit; font-size: .85rem;
     border: 1.5px solid rgba(47,50,56,.3); background: rgba(255,255,255,.8);
@@ -101,13 +104,21 @@
   /* While a clip renders, the canvas holds 720×450 frames stretched to
      the stage; a veil hides them and says what is happening. The stage
      keeps its size, so nothing on the page jumps. */
-  #stage.capturing::after { content: attr(data-capture); position: absolute;
+  #stage.capturing::after, #stage.lost::after { content: attr(data-capture); position: absolute;
     inset: 0; z-index: 7; display: grid; place-items: center;
     background: var(--panel);
     color: var(--ink); font-weight: 600; }
+  /* A lost graphics context (a GPU reset, a laptop waking) blanks the
+     canvas until the browser hands it back; the stage says so meanwhile
+     instead of showing an empty room. Over an export's veil too. */
+  #stage.lost::after { content: "Redrawing the factory… (reload the page if it stays blank)"; }
   #hint { position: absolute; left: .8rem; bottom: .6rem; color: var(--muted);
     font-size: .75rem; background: rgba(255,255,255,.7); padding: .15rem .6rem;
     border-radius: 999px; pointer-events: none; }
+  /* The slider's hover readout rises into the stage's bottom edge, where
+     the hint sits: over the left third the two overlapped, the tip's top
+     4 px across the hint's text. The hint steps aside while it shows. */
+  body:has(#scrub-tip:not([hidden])) #hint { visibility: hidden; }
   /* A touch screen with no keyboard or mouse (a tablet: phones hide the
      hint) gets its own gestures — in the hint and the legend — not
      "space", "scroll", "hover" and "double-click". */
@@ -122,7 +133,11 @@
     background: rgba(255,255,255,.92); border: 2px solid var(--line);
     border-radius: 999px; padding: .15rem 1.1rem; pointer-events: none;
     z-index: 2; }
+  /* max-width keeps the same .8rem margin on the right: unbounded, a
+     phone's banner wrapped only at the stage edge, its border flush
+     against the screen's right side. */
   #trace-banner { position: absolute; left: .8rem; top: .6rem; z-index: 5;
+    max-width: calc(100% - 1.6rem);
     display: flex; gap: .6rem; align-items: center;
     background: var(--panel); border: 2px solid var(--accent);
     border-radius: 999px; padding: .25rem .5rem .25rem .9rem; }
@@ -147,6 +162,13 @@
   @media (max-width: 720px) {
     #trace-banner:not([hidden]) ~ #replay-date { top: auto; bottom: .6rem;
       font-size: 1.1rem; }
+  }
+  /* A short stage puts the floor's top-row signs right under the centred
+     badge: at 640×360 (a 1280×720 window at 200% zoom) and 667×375 it
+     covered a sign on every replay day. There it docks top-left, smaller,
+     over the corner the isometric floor leaves empty. */
+  @media (max-height: 480px) {
+    #replay-date { left: .8rem; transform: none; font-size: 1.05rem; }
   }
   /* Visible from the first progressive paint on a slow link (the page
      is one multi-MB file); the .5s appear delay keeps fast loads from
@@ -216,7 +238,10 @@
   #panel .run { position: relative; border-bottom: 1px solid #eee; }
   #panel details { padding: .25rem 0; }
   #panel .run > .trace-btn { position: absolute; top: .3rem; right: 0; }
-  #panel .run.traceable summary { padding-right: 4.6rem; }
+  /* The reserve is the button's measured width (renderPanel writes
+     --trace-w): a fixed 4.6rem let the count run under the button once
+     user text spacing (WCAG 1.4.12) widened it. */
+  #panel .run.traceable summary { padding-right: var(--trace-w, 4.6rem); }
   #panel summary { cursor: pointer; display: flex; gap: .5rem;
     justify-content: space-between; overflow-wrap: anywhere; }
   #panel summary .prog { color: var(--muted); white-space: nowrap;
@@ -239,6 +264,18 @@
   #transport button:disabled, #transport input:disabled { opacity: .45;
     cursor: default; }
   #scrub { width: 100%; accent-color: var(--accent); }
+  /* The activity strip: one bar per day's arrivals, drawn just above the
+     slider's track (drawActivity). */
+  #scrub-wrap { position: relative; display: block; }
+  #scrub-wrap #scrub { position: relative; display: block; margin: 0; }
+  #activity { position: absolute; left: 0; bottom: calc(50% + 3px); width: 100%;
+    height: 11px; pointer-events: none; color: var(--muted); opacity: .75; }
+  /* A pointer over the slider reads the day under it and its arrivals
+     (scrub hover, beside drawActivity). */
+  #scrub-tip { position: absolute; bottom: calc(50% + 17px); z-index: 4;
+    transform: translateX(-50%); pointer-events: none; white-space: nowrap;
+    background: var(--panel); border: 1.5px solid var(--line); border-radius: 6px;
+    padding: .05rem .4rem; font-size: .75rem; font-variant-numeric: tabular-nums; }
   #day { font-variant-numeric: tabular-nums; min-width: 6.5rem; }
   #honesty { grid-column: 1 / -1; color: var(--muted); font-size: .8rem; }
   #export-status { grid-column: 1 / -1; font-size: .8rem; }
@@ -291,9 +328,10 @@
     .chip { flex: none; }
     #legend { left: .5rem; right: .5rem; top: auto; bottom: .5rem;
       width: auto; max-height: 55%; overflow: auto; }
+    /* Top padding clears the activity strip above the slider. */
     #transport { display: flex; flex-wrap: wrap; gap: .3rem .5rem;
-      padding: .4rem .6rem .5rem; align-items: center; }
-    #scrub { flex: 1 1 100%; order: -1; }
+      padding: .75rem .6rem .5rem; align-items: center; }
+    #scrub-wrap { flex: 1 1 100%; order: -1; }
     #day { min-width: 0; margin-left: auto; }
   }
   /* A portrait phone gets the pinned panel as a bottom sheet, like the
@@ -311,6 +349,41 @@
       overflow: auto; }
     #tour .row { flex-wrap: wrap; justify-content: flex-end; }
     #tour .dots { flex: 1 1 100%; }
+    /* And one transport row: the phone layout stacks the slider over the
+       buttons, 70 px of a 390-px-tall screen, while a landscape width
+       holds Play, slider, date and buttons side by side. (Still wrapping:
+       the export status takes its own line.) */
+    #scrub-wrap { flex: 1 1 8rem; order: 0; }
+    #day { margin-left: 0; white-space: nowrap; }
+    #export-status { flex: 1 1 100%; }
+  }
+  /* Forced colours (Windows high contrast) repaint every chip and button
+     alike, so the amber pile-up chip and the pressed replay length read
+     like their neighbours. System colours carry them instead: the
+     pile-up chip and its count in Highlight, the pressed length filled. */
+  @media (forced-colors: active) {
+    .chip.hot { border: 2px solid Highlight; }
+    .chip.hot .n { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+    #transport button[aria-pressed="true"] { forced-color-adjust: none;
+      background: Highlight; color: HighlightText; border-color: Highlight; }
+    /* The legend's swatches and the card's kind dot name colours the
+       canvas still draws (forced colours never repaint WebGL), so they
+       keep them; repainted, every swatch was an empty box. */
+    #legend .swatch, .card .kdot { forced-color-adjust: none; }
+  }
+  /* Printed (or saved as PDF) the page is a report: the controls go —
+     finder, Tour and legend buttons, the transport's buttons and slider,
+     the key hint and every ✕ — and the colour that carries meaning
+     prints: legend swatches, chip counts, the amber pile-up chip. Printed
+     without, the swatches were empty boxes beside "green done, grey
+     open" and the page showed a Play button nobody could press. */
+  @media print {
+    header .tools, #hint, #legend-close, #panel-close, #trace-banner button,
+    #scrub-tip, .trace-btn, #export-status,
+    #transport > :not(#honesty) { display: none !important; }
+    #transport { border-top: 0; padding-top: .3rem; }
+    #legend .swatch, .chip, .chip .n, .kdot {
+      print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   }
 </style>
 </head>
@@ -325,7 +398,7 @@
     <datalist id="find-list"></datalist>
     <button id="tour-open" hidden>▶ Tour</button>
     <button id="legend-open" aria-expanded="false"
-      aria-controls="legend">? How to read this</button>
+      aria-controls="legend" hidden>? How to read this</button>
   </div>
   <p id="story"><b>Each crate is one run</b> — a feature, maintenance or
     product run — riding the belt from <b>Idea</b> to <b>Ship</b>. Crates
@@ -338,8 +411,8 @@
 <div id="stage" role="main" aria-label="The factory floor" hidden>
   <div id="empty-sign" hidden>No runs yet — start one with /idea</div>
   <div class="card" id="card" hidden></div>
-  <span id="hint"><span class="keys">space play · ← → step a day · scroll zoom ·
-    drag pan · double-click reset</span><span class="touch">pinch zoom · drag pan ·
+  <span id="hint"><span class="keys">space play · ← → step a day · scroll or + − zoom ·
+    drag or ⇧ arrows pan · double-click or 0 reset</span><span class="touch">pinch zoom · drag pan ·
     double-tap reset · tap a crate or station for its list</span></span>
   <div id="trace-banner" hidden>
     <span>tracing <b id="trace-name"></b> — <span id="trace-detail"></span></span>
@@ -378,12 +451,19 @@
       <li><span class="swatch" style="background:
         linear-gradient(90deg,#7cc44e 33%,#e0903a 33% 66%,#8f6fd8 66%)"></span>
         <span><b>Tape colour</b> is the run's kind: green feature, amber
-          maintenance, purple product.</span></li>
+          maintenance (taped across), purple product.</span></li>
       <li id="legend-bin" hidden><span class="swatch"
         style="background:#e0903a"></span>
         <span>The <b>bin</b> holds runs the placement tool could not
           read; <span class="keys">hover</span><span class="touch">tap</span>
           one for the reason.</span></li>
+      <li id="legend-days"><span class="swatch" style="background:
+        linear-gradient(var(--muted),var(--muted)) 20% 100%/2px 45% no-repeat,
+        linear-gradient(var(--muted),var(--muted)) 50% 100%/2px 95% no-repeat,
+        linear-gradient(var(--muted),var(--muted)) 80% 100%/2px 65% no-repeat"></span>
+        <span>The <b>ticks over the slider</b> are each day's arrivals —
+          taller is busier; <span class="keys">hover the slider for a day's
+          date and count.</span><span class="touch">drag it to that day.</span></span></li>
     </ul>
     <p class="foot"><span class="keys">Hover anything for detail; click to pin a
       list.</span><span class="touch">Tap anything to pin its list.</span><span
@@ -398,8 +478,10 @@
 <main id="fallback" hidden></main>
 <footer id="transport" hidden>
   <button id="play" aria-label="Play the replay" disabled>▶ Play</button>
-  <input id="scrub" type="range" min="0" max="0" step="1" value="0"
-         aria-label="Replay date" disabled>
+  <span id="scrub-wrap"><canvas id="activity" aria-hidden="true"></canvas><span
+    id="scrub-tip" aria-hidden="true" hidden></span><input
+    id="scrub" type="range" min="0" max="0" step="1" value="0"
+    aria-label="Replay date" disabled></span>
   <span id="day"></span>
   <button id="today" aria-label="Back to today" hidden>⏭ today</button>
   <span class="speed" role="group" aria-label="Replay length">
@@ -545,6 +627,14 @@ function setHeader(model, day, tally) {
   if (tally.busiest && tally.most > 1) {
     meta.append(" · piling up at ", el("b", {}, nameOf(tally.busiest)), ` (${tally.most})`);
   }
+  // The canvas says what it shows: an unnamed <canvas> read as "canvas"
+  // (or nothing) between the chips and the legend. Same summary as the
+  // meta line, rewritten only when it changes.
+  const canvas = document.querySelector("#stage canvas");
+  if (canvas) {
+    const label = `3D assembly line: ${meta.textContent}`;
+    if (canvas.getAttribute("aria-label") !== label) canvas.setAttribute("aria-label", label);
+  }
 }
 
 function webglAvailable() {
@@ -583,7 +673,11 @@ async function loadThree() {
   const moduleText = new TextDecoder().decode(bytes(decode("three-module")))
     .split("'./three.core.js'").join(JSON.stringify(coreUrl));
   const moduleUrl = URL.createObjectURL(new Blob([moduleText], {type: "text/javascript"}));
-  return import(moduleUrl);
+  // Once loaded the modules live on without their URLs; revoked, the
+  // blobs behind them (~1.3 MB of source) can be freed.
+  return import(moduleUrl).finally(() => {
+    URL.revokeObjectURL(moduleUrl); URL.revokeObjectURL(coreUrl);
+  });
 }
 
 const MODEL = readModel();
@@ -638,7 +732,12 @@ function factory(THREE, model) {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
+  renderer.domElement.setAttribute("role", "img");
   stage.prepend(renderer.domElement);
+  renderer.domElement.addEventListener("webglcontextlost", () => stage.classList.add("lost"));
+  renderer.domElement.addEventListener("webglcontextrestored", () => {
+    stage.classList.remove("lost"); requestRender();
+  });
   const scene = new THREE.Scene();
   // This three build divides light intensity by π (physical units), so
   // these read ~×3 what a top face receives: lit ≈ 1.0, shadowed ≈ 0.6.
@@ -775,8 +874,17 @@ function factory(THREE, model) {
     return texture;
   })();
   const beltFlows = [];
+  // The belts and their legs stand outside every station's group, and
+  // the long run past Architect sticks out beyond the plates: floorExtent
+  // measures them too, or a fitted frame sat left of centre.
+  const beltParts = [];
   // The belt: green top on a dark frame, rollers on the sides, legs below.
-  function beltSegment(a, b, rollerSpin) {
+  // Legs and rollers are recorded, not built: hundreds of identical tiny
+  // parts drawn one by one (with an outline and a shadow pass each) were
+  // two-thirds of a frame's ~1,900 draw calls; instancedBeltParts() below
+  // draws each kind in one call.
+  const legMatrices = [], rollerBases = [];
+  function beltSegment(a, b) {
     const length = a.distanceTo(b);
     if (length < 0.01) return;
     const group = new THREE.Group();
@@ -793,19 +901,55 @@ function factory(THREE, model) {
     arrows.position.y = BELT_Y + 0.14;
     group.add(arrows);
     beltFlows.push(flow);
+    group.updateMatrix(); // the group sits at the scene root: matrix = world
+    const at3 = (x, y, z) => new THREE.Matrix4().makeTranslation(x, y, z);
     for (let x = -length / 2; x <= length / 2; x += 3) {
-      box(0.25, BELT_Y - 0.5, 0.25, COLORS.frame, x, 0, BELT_W / 2 - 0.1, group);
-      box(0.25, BELT_Y - 0.5, 0.25, COLORS.frame, x, 0, -BELT_W / 2 + 0.1, group);
+      for (const z of [BELT_W / 2 - 0.1, -BELT_W / 2 + 0.1])
+        legMatrices.push(group.matrix.clone().multiply(at3(x, (BELT_Y - 0.5) / 2, z)));
     }
     for (let x = -length / 2; x <= length / 2; x += 0.9) {
-      const roller = cyl(0.18, 0.1, COLORS.dark, x, 0, BELT_W / 2 + 0.18, group, 8);
-      roller.rotation.x = Math.PI / 2;
-      roller.position.y = BELT_Y - 0.25;
-      rollerSpin.push(roller);
+      rollerBases.push(group.matrix.clone().multiply(at3(x, BELT_Y - 0.25, BELT_W / 2 + 0.18))
+        .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
     }
     scene.add(group);
+    beltParts.push(group);
   }
-  const rollers = [];
+  // One instanced mesh per part kind. The legs keep their outline as one
+  // merged line set (they never move); the rollers, which spin, go
+  // without — at 0.36 units across their edges never read anyway.
+  const LEG_GEO = boxGeo(0.25, BELT_Y - 0.5, 0.25);
+  const ROLLER_GEO = geoCache["c0.18,0.1,8"]
+    || (geoCache["c0.18,0.1,8"] = new THREE.CylinderGeometry(0.18, 0.18, 0.1, 8));
+  let rollerMesh = null, rollerAngle = 0;
+  function instancedBeltParts() {
+    const legs = new THREE.InstancedMesh(LEG_GEO, mat(COLORS.frame), legMatrices.length);
+    legMatrices.forEach((m, i) => legs.setMatrixAt(i, m));
+    legs.castShadow = true; legs.receiveShadow = true; legs.frustumCulled = false;
+    scene.add(legs);
+    beltParts.push(legs);
+    const edges = new THREE.EdgesGeometry(LEG_GEO, 25).attributes.position;
+    const positions = new Float32Array(edges.count * 3 * legMatrices.length);
+    const v = new THREE.Vector3();
+    legMatrices.forEach((m, i) => {
+      for (let k = 0; k < edges.count; k++) {
+        v.fromBufferAttribute(edges, k).applyMatrix4(m).toArray(positions, (i * edges.count + k) * 3);
+      }
+    });
+    const outline = new THREE.BufferGeometry();
+    outline.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    scene.add(new THREE.LineSegments(outline, lineMat));
+    rollerMesh = new THREE.InstancedMesh(ROLLER_GEO, mat(COLORS.dark), rollerBases.length);
+    rollerBases.forEach((m, i) => rollerMesh.setMatrixAt(i, m));
+    rollerMesh.castShadow = true; rollerMesh.frustumCulled = false;
+    scene.add(rollerMesh);
+  }
+  const spinMatrix = new THREE.Matrix4(), rollerMatrix = new THREE.Matrix4();
+  function spinRollers(dt) {
+    rollerAngle += dt * 4;
+    spinMatrix.makeRotationY(rollerAngle);
+    rollerBases.forEach((base, i) => rollerMesh.setMatrixAt(i, rollerMatrix.multiplyMatrices(base, spinMatrix)));
+    rollerMesh.instanceMatrix.needsUpdate = true;
+  }
   // The route pulse: a bright charge that runs the whole line from
   // Idea to the city gate every few seconds. The serpentine is the one
   // thing a static frame can't teach; the pulse traces it endlessly.
@@ -823,19 +967,38 @@ function factory(THREE, model) {
     plates[key] = plate(key);
     stationGroups[key] = plates[key];
   });
-  for (let i = 1; i < mainPoints.length; i++) beltSegment(mainPoints[i - 1], mainPoints[i], rollers);
-  for (let i = 1; i < sidePoints.length; i++) beltSegment(sidePoints[i - 1], sidePoints[i], rollers);
+  for (let i = 1; i < mainPoints.length; i++) beltSegment(mainPoints[i - 1], mainPoints[i]);
+  for (let i = 1; i < sidePoints.length; i++) beltSegment(sidePoints[i - 1], sidePoints[i]);
+  instancedBeltParts();
 
   // ------------------------------------------------------ station signs
   // One billboard per station: step number, name and a live count, big
   // enough to read in a screenshot. The busiest station's sign goes
   // amber — the bottleneck is the first thing the factory should say.
-  function signTexture(key, count, hot) {
+  // Compact (signsCompact below): an empty station's sign is its step
+  // number alone, so a small stage can draw every sign at a readable size
+  // without the empty ones burying the floor.
+  function signTexture(key, count, hot, compact = false) {
     const step = STEP[key] || "";
     const name = nameOf(key).toUpperCase();
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const H = 148, PAD = 26, GAP = 18;
+    if (compact) {
+      ctx.font = "800 64px system-ui, sans-serif";
+      const width = Math.ceil(Math.max(H, ctx.measureText(step).width + 2 * PAD));
+      canvas.width = width; canvas.height = H;
+      ctx.fillStyle = "rgba(255,255,255,0.96)"; ctx.strokeStyle = "#2f3238"; ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.roundRect(5, 5, width - 10, H - 10, 26);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#6a4cc4"; ctx.textBaseline = "middle";
+      ctx.font = "800 64px system-ui, sans-serif";
+      ctx.fillText(step, (width - ctx.measureText(step).width) / 2, H / 2 + 2);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = 4;
+      return {texture, aspect: width / H};
+    }
     ctx.font = "700 62px system-ui, sans-serif";
     const nameWidth = ctx.measureText(name).width;
     ctx.font = "800 56px system-ui, sans-serif";
@@ -891,9 +1054,20 @@ function factory(THREE, model) {
   const CLIP_SIGN_SCALE = 1.3;
   let signScale = 1;
   // One rule for a sign's height: map labels at 1×, out of the way close
-  // up, swollen a touch while hovered.
-  const signHeight = (sign) => SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom))
-    * (sign.boost || 1) * signScale;
+  // up, swollen a touch while hovered — and never under MIN_SIGN_PX on
+  // screen. Sized in world units alone a sign shrank with the stage: 12
+  // px tall on a 390-px phone, its name and count 4-px text, and the
+  // same physical size at 200% browser zoom while every other word
+  // doubled. Raising every sign to the floor buried a short landscape
+  // stage in labels, so while the floor is in force (signsCompact) an
+  // empty station's sign shrinks to its step number; hovering it (or its
+  // chip) spells it out again. A clip keeps its own scale.
+  const MIN_SIGN_PX = 20;
+  let signsCompact = false;
+  const signFloor = () => captureSize ? 0
+    : MIN_SIGN_PX * 2 * frameBox.halfH / (view.zoom * Math.max(1, stage.clientHeight));
+  const signHeight = (sign) => Math.max(SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom))
+    * signScale, signFloor()) * (sign.boost || 1);
   Object.keys(GRID).forEach((key) => {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true,
       depthTest: false}));
@@ -908,25 +1082,37 @@ function factory(THREE, model) {
     scene.add(sprite);
     signs[key] = {sprite, last: ""};
   });
+  function drawSign(key) {
+    const sign = signs[key];
+    if (sign.count === undefined) return; // layout() has not counted yet
+    const compact = signsCompact && sign.count === 0 && !sign.hot && !(sign.boost > 1);
+    const want = `${sign.count}|${sign.hot}|${compact}`;
+    if (sign.last === want) return;
+    const {texture, aspect} = signTexture(key, sign.count, sign.hot, compact);
+    if (sign.sprite.material.map) sign.sprite.material.map.dispose();
+    sign.sprite.material.map = texture;
+    sign.sprite.material.needsUpdate = true;
+    sign.aspect = aspect;
+    const h = signHeight(sign);
+    sign.sprite.scale.set(h * aspect, h, 1);
+    sign.last = want;
+  }
   function updateSign(key, count, hot) {
     const sign = signs[key];
-    const want = `${count}|${hot}`;
-    if (sign.last !== want) {
-      const {texture, aspect} = signTexture(key, count, hot);
-      if (sign.sprite.material.map) sign.sprite.material.map.dispose();
-      sign.sprite.material.map = texture;
-      sign.sprite.material.needsUpdate = true;
-      sign.aspect = aspect;
-      const h = signHeight(sign);
-      sign.sprite.scale.set(h * aspect, h, 1);
-      sign.last = want;
-    }
+    sign.count = count; sign.hot = hot;
+    drawSign(key);
     sign.sprite.visible = key !== "bin" || count > 0;
     if (key === "bin") stationGroups.bin.visible = count > 0;
   }
 
   // ----------------------------------------------------------- machines
+  // Each machine animates on its own clock, and only while its station
+  // holds work (layout's stationCounts): the floor's motion now says
+  // where the crates are. Every station used to move at once — the empty
+  // Verify arm swinging as busily as the 69-run Operate forklift. A
+  // station that fills again resumes from its own pose, never jumps.
   const animators = [];
+  let stationCounts = {};
   // Machines line up with their belt, their back (local -z) always away
   // from the camera, so workers and arms never hide the tile's label.
   const alongZ = (key) => Math.abs((inDir[key] || new THREE.Vector3(1, 0, 0)).z) > 0.5;
@@ -955,11 +1141,33 @@ function factory(THREE, model) {
   // Tape colour says what kind of run the crate is: green = feature,
   // purple = product, amber = maintenance. The legend repeats it, in the
   // words the hover card and panel rows print (CONTEXT.md's run kinds).
+  // Maintenance is also taped ACROSS (a cross on the lid, one mesh): to
+  // deuteranopia and protanopia the green and amber tapes are one
+  // mustard, and the two commonest kinds were the same crate. Its
+  // building keeps the mark: a dark cross on the roof (ensureBuilding).
   const TAPE = {feature: 0x7cc44e, product: 0x8f6fd8, maintenance: 0xe0903a};
+  // One mesh per cross: a len × h × w strip and its perpendicular twin
+  // merged; the twin stands 0.02 prouder so the shared centre never
+  // z-fights. Cached per size.
+  const crossCache = {};
+  function crossGeo(len, h, w) {
+    const key = `${len},${h},${w}`;
+    if (crossCache[key]) return crossCache[key];
+    const parts = [new THREE.BoxGeometry(len, h, w).toNonIndexed(),
+      new THREE.BoxGeometry(w, h + 0.02, len).toNonIndexed()];
+    const geo = new THREE.BufferGeometry();
+    for (const name of ["position", "normal"]) {
+      geo.setAttribute(name, new THREE.Float32BufferAttribute(
+        parts.flatMap((part) => Array.from(part.attributes[name].array)), 3));
+    }
+    parts.forEach((part) => part.dispose());
+    return (crossCache[key] = geo);
+  }
   function crateMesh(color = COLORS.crate, kind) {
     const mesh = outlined(new THREE.Mesh(boxGeo(CRATE, CRATE * 0.8, CRATE), mat(color)));
     mesh.castShadow = true;
-    const strip = new THREE.Mesh(boxGeo(CRATE + 0.02, 0.1, 0.3),
+    const strip = new THREE.Mesh(kind === "maintenance" ? crossGeo(CRATE + 0.02, 0.1, 0.3)
+      : boxGeo(CRATE + 0.02, 0.1, 0.3),
       mat(TAPE[kind] || COLORS.tape));
     strip.position.y = CRATE * 0.4;
     mesh.add(strip);
@@ -1230,7 +1438,7 @@ function factory(THREE, model) {
     const g = new THREE.Group();
     stationGroups[key].add(g);
     if (MAIN.includes(key) || key === "capture") align(g, key);
-    animators.push(build(g));
+    animators.push({key, animate: build(g), t: 0});
   });
   Object.keys(GRID).forEach((key) => tag(stationGroups[key], {kind: "station", station: key}));
 
@@ -1324,6 +1532,27 @@ function factory(THREE, model) {
       CITY_BASE.x - ((CITY_COLS - 1) / 2) * CITY_SX + (index % CITY_COLS) * CITY_SX,
       PLATE_H,
       CITY_BASE.z + 2.6 + Math.floor(index / CITY_COLS) * CITY_SZ);
+  }
+  // Every finished run has a lot, marked on the district's ground: early
+  // in a replay the city was a bare sand slab sized for buildings that
+  // did not exist yet, and the lots now say where the skyline will rise.
+  // A built lot vanishes under its building (the outline sits inside the
+  // 1.9 footprint), so today's skyline is unchanged. One draw call.
+  {
+    const half = 0.85, points = [];
+    for (let i = 0; i < CITY_TOTAL; i++) {
+      const c = citySlot(i), y = PLATE_H + 0.02;
+      const corners = [[-half, -half], [half, -half], [half, half], [-half, half]];
+      corners.forEach(([x, z], k) => {
+        const [nx, nz] = corners[(k + 1) % 4];
+        points.push(c.x + x, y, c.z + z, c.x + nx, y, c.z + nz);
+      });
+    }
+    if (points.length) {
+      const lotGeo = new THREE.BufferGeometry();
+      lotGeo.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+      scene.add(new THREE.LineSegments(lotGeo, new THREE.LineBasicMaterial({color: 0xbfa985})));
+    }
   }
   const buildingOf = new Map();
   // At night the city lights up: in the dark colour scheme the window
@@ -1449,6 +1678,16 @@ function factory(THREE, model) {
       box(1.34, 0.14, 1.34, trim, 0, height + 1.26, 0, building);
     }
     const capTop = tall ? height + 1.4 : height + 0.16;
+    // A maintenance roof is taped across like its crate was: its amber
+    // trim alone is a green feature roof's mustard to red-green
+    // colour-blind eyes, and the cross is what still tells them apart.
+    // Deep amber, a darker tape: a near-black cross read as a "rejected" X.
+    if (run.kind === "maintenance") {
+      const span = tall ? 1.34 : 1.98;
+      const cross = new THREE.Mesh(crossGeo(span - 0.12, 0.04, 0.24), mat(0x8a4a14));
+      cross.position.y = capTop + 0.02;
+      building.add(cross);
+    }
     if (hash % 3 === 0) {
       box(0.1, 1.0, 0.1, COLORS.dark, -0.55, capTop, -0.5, building);
       const tipMat = new THREE.MeshBasicMaterial({color: 0x8f6fd8});
@@ -1483,12 +1722,16 @@ function factory(THREE, model) {
     buildingOf.set(run, building);
     return building;
   }
-  // The pinned building, pointed at: an accent pin over its roof, on top
-  // of its lavender walls (paintWall). A pinned crate lifts off its
-  // belt; a building cannot. A traced run carries it too, crate or
-  // building. Never pickable, and layout() alone shows it, so a capture
-  // (which clears pin and trace) never draws it.
-  const pinMarker = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 4),
+  // The pinned run, pointed at: an accent pin over its building's roof
+  // (on top of the lavender walls, paintWall) or over its crate. The
+  // crate's 1.2 lift alone was not enough: inside Operate's 69-crate
+  // heap a lifted crate reads as one more layer. A traced run carries it
+  // too, crate or building. Never pickable, and layout() alone shows it,
+  // so a capture (which clears pin and trace) never draws it.
+  // Its tip is the mesh's origin (the cone shifted down by half its
+  // height, then flipped), so the zoom-scaled marker grows away from
+  // what it points at and placement is just "tip here".
+  const pinMarker = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 4).translate(0, -0.6, 0),
     new THREE.MeshBasicMaterial({color: COLORS.accent, transparent: true, depthTest: false}));
   // Drawn over everything, station signs included (sprites, renderOrder
   // 8, in the transparent pass — hence transparent here): a traced crate
@@ -1504,6 +1747,38 @@ function factory(THREE, model) {
   pinMarker.rotation.x = Math.PI; // point down
   pinMarker.visible = false;
   scene.add(pinMarker);
+  // The hovered run, boxed: an accent outline with a faint accent fill,
+  // drawn over everything, around the crate or building the hover card
+  // describes. Inside Operate's 69-crate heap nothing on the floor said
+  // which crate the card was about. (The fill carries it: WebGL lines are
+  // one pixel, too faint alone around a tower.) One box, moved and
+  // resized by hover(); clips never draw it (the capture hides it).
+  const hoverBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+    new THREE.LineBasicMaterial({color: COLORS.accent, transparent: true, depthTest: false}));
+  hoverBox.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({
+    color: COLORS.accent, transparent: true, opacity: 0.22, depthTest: false, depthWrite: false})));
+  hoverBox.children[0].renderOrder = 9;
+  hoverBox.renderOrder = 9;
+  hoverBox.visible = false;
+  scene.add(hoverBox);
+  const hoverBounds = new THREE.Box3();
+  function boxRun(run) {
+    const building = run && buildingOf.get(run);
+    const crate = run && crateOf.get(run).mesh;
+    const was = hoverBox.visible;
+    hoverBox.visible = false;
+    if (building && building.visible) {
+      hoverBounds.setFromObject(building);
+      hoverBounds.getCenter(hoverBox.position);
+      hoverBounds.getSize(hoverBox.scale).multiplyScalar(1.08);
+      hoverBox.visible = true;
+    } else if (crate && crate.visible) {
+      hoverBox.position.copy(crate.position);
+      hoverBox.scale.set(CRATE * 1.12, CRATE * 0.8 * crate.scale.y * 1.12, CRATE * 1.12);
+      hoverBox.visible = true;
+    }
+    if (was || hoverBox.visible) requestRender();
+  }
 
   function slotPosition(key, index, total) {
     const base = at(key);
@@ -1699,7 +1974,7 @@ function factory(THREE, model) {
             if (state.highlighted === run) nextPin = building;
             pinMarker.visible = true;
             pinMarker.position.copy(building.position);
-            pinMarker.position.y += building.userData.top * building.scale.y + 1.5;
+            pinMarker.position.y += building.userData.top * building.scale.y + 0.4;
           }
         });
       } else {
@@ -1739,6 +2014,7 @@ function factory(THREE, model) {
       return where && where.station !== "completed" && where.station !== "bin";
     }).length;
     lastTally = {active, completed: counts.completed || 0, busiest: hotKey, most};
+    stationCounts = counts;
     setHeader(model, isToday() ? null : currentDay(), lastTally);
     runs.forEach((run) => {
       const entry = crateOf.get(run);
@@ -1765,34 +2041,44 @@ function factory(THREE, model) {
       // Counts and signs stay whole-floor truth; the banner says why
       // the floor looks empty.
       if (state.trace && run !== state.trace) entry.mesh.visible = false;
-      // The traced crate carries the marker as it rides: alone on a wide
+      // The traced crate carries the marker as it rides (alone on a wide
       // floor, a white crate among white machines was hard to find, and a
-      // crate on a belt cannot lift like a pinned one.
-      if (state.trace === run && entry.mesh.visible) {
+      // crate on a belt cannot lift), and so does the pinned one.
+      if ((state.trace === run || state.highlighted === run) && entry.mesh.visible) {
         pinMarker.visible = true;
         pinMarker.position.copy(entry.mesh.position);
-        pinMarker.position.y += CRATE + 1.2;
+        // Just above the lid — or the parts a pinned Implement crate lays
+        // out over it (showParts: 1.2 up, 0.5 tall). 2.5 up, the marker
+        // floated over the heap's back row, pointing at the wrong crate.
+        const parts = state.highlighted === run && entry.where && entry.where.station === "implement"
+          && run.work_orders.length;
+        pinMarker.position.y += (parts ? 1.45 : CRATE * 0.4) + 0.3;
       }
     });
     showParts();
     $("empty-sign").hidden = runs.length > 0;
     yieldSigns();
   }
-  // A label never hides the building the viewer pinned: signs draw over
+  // A label never hides the run the viewer pinned: signs draw over
   // everything (depthTest off), and Operate's, Ship's and Done's stand
   // in front of the city, so one whose quad overlaps the pinned
-  // building fades to a ghost while the pin lasts. Crates are left
-  // alone — they lift clear of their pile, and a station's own sign
-  // (Operate's amber one above all) must not fade over its queue.
+  // building — or the pinned crate and its parts — fades to a ghost
+  // while the pin lasts. The lift alone does not clear a crate: found at
+  // Implement, the pinned crate sat under "6 IMPLEMENT 15", its parts
+  // peeking over the sign's top edge. Unpinned, every sign stays solid
+  // over its queue (Operate's amber one above all).
   const yieldBox = new THREE.Box3(), yieldV = new THREE.Vector3();
   function yieldSigns() {
     const run = state.highlighted;
     const building = run && buildingOf.get(run);
-    const pinned = building && building.visible ? building : null;
+    const entry = run && crateOf.get(run);
+    const pinned = building && building.visible ? building
+      : entry && entry.where && entry.mesh.visible ? entry.mesh : null;
     const inv = camera.matrixWorldInverse;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     if (pinned) {
       yieldBox.setFromObject(pinned);
+      if (pinned === entry.mesh && partsGroup.children.length) yieldBox.expandByObject(partsGroup);
       for (const x of [yieldBox.min.x, yieldBox.max.x]) for (const y of [yieldBox.min.y, yieldBox.max.y])
         for (const z of [yieldBox.min.z, yieldBox.max.z]) {
           yieldV.set(x, y, z).applyMatrix4(inv);
@@ -1894,6 +2180,11 @@ function factory(THREE, model) {
     camera.left = cx - halfW; camera.right = cx + halfW;
     camera.top = cy + halfH; camera.bottom = cy - halfH;
     camera.updateProjectionMatrix();
+    // Small stage? Then signs draw at MIN_SIGN_PX and the empty ones go
+    // compact; the redraw happens only when a sign's state changes.
+    const floor = signFloor();
+    signsCompact = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom)) * signScale < floor;
+    Object.keys(signs).forEach(drawSign);
     Object.values(signs).forEach((sign) => {
       const h = signHeight(sign);
       if (sign.aspect) sign.sprite.scale.set(h * sign.aspect, h, 1);
@@ -1980,10 +2271,15 @@ function factory(THREE, model) {
     } else if (resting) resetView();
     requestRender();
   });
-  // The resting view sits a touch inside the fitted frame: the floor's
-  // corners are empty, so 1.1× buys a visibly larger factory while the
-  // top row's sign keeps clear of the header.
-  const BASE_ZOOM = 1.1;
+  // Fitted views (rest, legend, tour overviews) size the measured floor
+  // to its frame with 10% breathing room, up to FIT_MAX_ZOOM. The old cap
+  // of 1.1 dates from a padded frame (sign headroom, the city's full grid
+  // width); against the measured floor it left a laptop's factory 613 px
+  // tall in a 734 px stage. The cap now only stops a huge stage from
+  // blowing the floor up past reading size.
+  const FIT_MAX_ZOOM = 1.6;
+  // The intro settles onto the rest view from this much closer.
+  const INTRO_CLOSER = 1.32;
   // A hand-framed shot is shareable too: after zooming or panning, the
   // hash becomes #view=zoom,panX,panY (debounced; never clobbers a
   // semantic link like #run or #day). Reset clears it.
@@ -1997,26 +2293,34 @@ function factory(THREE, model) {
       history.replaceState(null, "", `#view=${view.zoom.toFixed(2)},${view.panX.toFixed(1)},${view.panY.toFixed(1)}`);
     }, 400);
   }
-  // The resting view: fit()'s frame at BASE_ZOOM — unless the open
-  // legend would cover part of the floor there (a ~1000px window put
-  // Operate's pile-up under it), in which case the floor is fitted into
+  // The resting view centres today's drawn floor (restExtent, measured
+  // once at load: camera-space, so no resize or replay day moves it) in
+  // the stage, fitted (fitInFree). fit()'s frame
+  // pads for invisible things — sign headroom over every corner, the
+  // city's full grid width — so at pan 0 the floor sat off-centre: 8 px
+  // from a phone's left edge and 71 px from its right, and on a laptop
+  // Capture touched the stage's bottom (1 px) under 126 px of empty sky.
+  // If the open legend would then cover part of the floor (a ~1000px
+  // window put Operate's pile-up under it), the floor is fitted into
   // what the legend leaves free. lastRest remembers the last rest view
   // applied, so a legend toggle or a resize can re-rest an untouched view
   // without disturbing one the viewer framed by hand.
-  let lastRest = null;
+  let lastRest = null, restExtent = null;
   function restView() {
-    const plain = {zoom: BASE_ZOOM, panX: 0, panY: 0};
+    const plain = {zoom: 1, panX: 0, panY: 0};
+    const e = restExtent;
+    if (!e || !isFinite(e.minX)) return plain;
+    const s = stage.getBoundingClientRect();
+    const centred = fitInFree(e, {w: s.width, h: s.height, right: s.width, bottom: s.height}) || plain;
     const L = $("legend");
-    if (L.hidden) return plain;
-    const e = floorExtent();
-    if (!isFinite(e.minX)) return plain;
-    const s = stage.getBoundingClientRect(), l = L.getBoundingClientRect();
-    const perPx = 2 * frameBox.halfH / (BASE_ZOOM * Math.max(1, s.height));
-    const right = s.width / 2 + (e.maxX - frameBox.cx) / perPx;
-    const top = s.height / 2 - (e.maxY - frameBox.cy) / perPx;
-    const bottom = s.height / 2 - (e.minY - frameBox.cy) / perPx;
-    if (right <= l.left - s.left || bottom <= l.top - s.top || top >= l.bottom - s.top) return plain;
-    return fitInFree(e) || plain;
+    if (L.hidden) return centred;
+    const l = L.getBoundingClientRect();
+    const perPx = 2 * frameBox.halfH / (centred.zoom * Math.max(1, s.height));
+    const right = s.width / 2 + (e.maxX - frameBox.cx - centred.panX) / perPx;
+    const top = s.height / 2 - (e.maxY - frameBox.cy - centred.panY) / perPx;
+    const bottom = s.height / 2 - (e.minY - frameBox.cy - centred.panY) / perPx;
+    if (right <= l.left - s.left || bottom <= l.top - s.top || top >= l.bottom - s.top) return centred;
+    return fitInFree(e) || centred;
   }
   // (Still easing in counts as resting: the intro is heading to lastRest.)
   const isResting = () => !!lastRest && (intro !== null || (Math.abs(view.zoom - lastRest.zoom) < 1e-6
@@ -2045,14 +2349,15 @@ function factory(THREE, model) {
     }
     return {w: s.width, h: s.height, right, bottom};
   }
-  // The view that fits the floor's extent into freeRect(), capped at
-  // BASE_ZOOM (6% breathing room); null when nothing is free.
-  function fitInFree(e = floorExtent()) {
-    const f = freeRect();
+  // The view that fits the floor's extent into freeRect() (or the free
+  // rect given), capped at FIT_MAX_ZOOM (10% breathing room: at 6% the
+  // fitted floor came within 10 px of a phone's edges); null when
+  // nothing is free.
+  function fitInFree(e = floorExtent(), f = freeRect()) {
     if (f.right <= 0 || f.bottom <= 0 || !isFinite(e.minX)) return null;
-    const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
+    const spanX = (e.maxX - e.minX) * 1.1, spanY = (e.maxY - e.minY) * 1.1;
     // World units per pixel at zoom z is 2·halfH / (z·H).
-    const zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * f.bottom / (f.h * spanY),
+    const zoom = Math.min(FIT_MAX_ZOOM, 2 * frameBox.halfH * f.bottom / (f.h * spanY),
       2 * frameBox.halfH * f.right / (f.h * spanX));
     const perPx = 2 * frameBox.halfH / (zoom * f.h);
     return {zoom,
@@ -2266,7 +2571,9 @@ function factory(THREE, model) {
     return (crate || hits[0] || {}).object ? (crate || hits[0]).object.userData.pick : null;
   }
   // Hovering acknowledges its station in-scene: the sign swells a touch
-  // while the card is up, so the card and the sign read as one thing.
+  // while the card is up, so the card and the sign read as one thing —
+  // and so does pointing at (or tabbing to) a chip, which shows where on
+  // the floor that station stands.
   let hoveredSign = null;
   function boostSign(key) {
     if (hoveredSign === key) return;
@@ -2282,12 +2589,16 @@ function factory(THREE, model) {
   let hoverAt = null;
   function hover(at) {
     const hit = pick(at);
-    if (!hit) { card.hidden = true; renderer.domElement.style.cursor = ""; boostSign(null); return; }
-    if (hit.kind === "station") { stationCard(hit.station); boostSign(hit.station); }
+    if (!hit) {
+      card.hidden = true; renderer.domElement.style.cursor = ""; boostSign(null); boxRun(null);
+      return;
+    }
+    if (hit.kind === "station") { stationCard(hit.station); boostSign(hit.station); boxRun(null); }
     else {
       crateCard(hit.run);
       const where = crateOf.get(hit.run).where;
       boostSign(where ? where.station : null);
+      boxRun(hit.run);
     }
     const rect = stage.getBoundingClientRect();
     card.hidden = false;
@@ -2307,7 +2618,7 @@ function factory(THREE, model) {
     hover(hoverAt);
   });
   renderer.domElement.addEventListener("pointerleave", () => {
-    hoverAt = null; card.hidden = true; boostSign(null);
+    hoverAt = null; card.hidden = true; boostSign(null); boxRun(null);
   });
   // Keyboard flow for the panel: a chip or the finder that opens it moves
   // focus to its title (Tab then walks its rows), and closing it while
@@ -2319,10 +2630,22 @@ function factory(THREE, model) {
     panelOpener = opener;
     $("panel-title").focus();
   }
+  // The panel rows' use of the hover box, tracked so a rebuilt or closed
+  // panel clears only a box a row put there, never the canvas's own.
+  let rowBoxed = false;
+  function rowBox(run) { rowBoxed = !!run; boxRun(run); }
   function closePanel() {
     const hadFocus = $("panel").contains(document.activeElement);
+    const key = state.pinned && state.pinned.key;
     $("panel").hidden = true; state.pinned = null; state.highlighted = null;
-    if (hadFocus && panelOpener && panelOpener.isConnected && !panelOpener.hidden) panelOpener.focus();
+    if (rowBoxed) rowBox(null); // a row's box would outlive its row
+    syncTitle();
+    // Without an opener — a panel from a #run=/#station= link or a canvas
+    // click — focus goes to the station's chip, the panel's keyboard
+    // twin; it fell to <body> when the ✕ under it was hidden.
+    const back = panelOpener && panelOpener.isConnected && !panelOpener.hidden ? panelOpener
+      : key && chips[key] && !chips[key].chip.hidden ? chips[key].chip : null;
+    if (hadFocus && back) back.focus();
     panelOpener = null;
     // The bar says what the view shows: a closed panel's link goes too.
     if (/^#(run|station)=/.test(location.hash))
@@ -2338,6 +2661,13 @@ function factory(THREE, model) {
       ? `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}` : ""));
     const details = el("details", {}, summary);
     const row = el("div", {class: "run"}, details);
+    // Pointing at a row (or tabbing into it) boxes its crate or building
+    // on the floor, the hover box the canvas uses: a station's list of 69
+    // names otherwise never said which crate in the heap was which.
+    row.addEventListener("pointerenter", () => rowBox(run));
+    row.addEventListener("pointerleave", () => rowBox(null));
+    row.addEventListener("focusin", () => rowBox(run));
+    row.addEventListener("focusout", () => rowBox(null));
     if (run.status !== "attention") {
       const traceBtn = el("button", {class: "trace-btn",
         title: "Replay this run's journey, solo"}, "◉ trace");
@@ -2512,7 +2842,10 @@ function factory(THREE, model) {
   // ------------------------------------------------------------- find
   // "Where is run X?" is the first question a room asks. Typing a slug
   // (the datalist offers them all) flies the camera to the crate and
-  // pins its row; a name that matches nothing flashes the box amber.
+  // pins its row. A name that matches nothing turns the box amber and
+  // invalid until it is edited, and says so to a screen reader: the old
+  // 900 ms flash was the only sign, silent to one and gone before a
+  // glance back from the keyboard.
   const find = $("find");
   find.hidden = false;
   runs.slice().sort((a, b) => (a.slug || a.ref).localeCompare(b.slug || b.ref))
@@ -2520,15 +2853,25 @@ function factory(THREE, model) {
   find.addEventListener("change", () => {
     const wanted = find.value.trim().toLowerCase();
     if (!wanted) return;
-    const run = runs.find((r) => (r.slug || "").toLowerCase() === wanted)
-      || runs.find((r) => r.ref.toLowerCase() === wanted)
-      || runs.find((r) => (r.slug || r.ref).toLowerCase().includes(wanted));
+    // A partial name prefers the run it starts (or starts a word of) over
+    // one that merely contains it: "eval" found decompose-eval-suite, the
+    // first of four in model order, ahead of eval-trends.
+    const name = (r) => (r.slug || r.ref).toLowerCase();
+    const tiers = [
+      (r) => (r.slug || "").toLowerCase() === wanted,
+      (r) => r.ref.toLowerCase() === wanted,
+      (r) => name(r).startsWith(wanted),
+      (r) => ["-", ":", "/", "_"].some((sep) => name(r).includes(sep + wanted)),
+      (r) => name(r).includes(wanted)];
+    let run = null;
+    for (const tier of tiers) if ((run = runs.find(tier))) break;
     if (!run) {
       find.classList.add("miss");
-      setTimeout(() => find.classList.remove("miss"), 900);
+      find.setAttribute("aria-invalid", "true");
+      announce(`No run matches “${find.value.trim()}”.`);
       return;
     }
-    find.classList.remove("miss");
+    clearMiss();
     // Finding means "where is it NOW": from the past the crate may not
     // exist yet (the camera would fly to an invisible crate's stale
     // position and no panel could open), so the view snaps to today.
@@ -2537,13 +2880,25 @@ function factory(THREE, model) {
     focusOn(runFocus(run), 2.4);
     // (openPanel wrote the #run link)
     focusPanel(find);
+    // Several matches: the panel shows one, so say there are others.
+    const matches = runs.filter((r) => name(r).includes(wanted)).length;
+    if (matches > 1 && name(run) !== wanted) {
+      announce(`${run.slug || run.ref}: one of ${matches} runs matching “${find.value.trim()}”; keep typing to narrow.`);
+    }
     requestRender();
   });
+  function clearMiss() {
+    find.classList.remove("miss");
+    find.removeAttribute("aria-invalid");
+  }
+  find.addEventListener("input", clearMiss);
   let panelDay = null, panelRuns = [];
   const sameRuns = (a, b) => a.length === b.length && a.every((run, i) => run === b[i]);
   function renderPanel() {
     if (!state.pinned) return;
     panelDay = currentDay();
+    if (rowBoxed) rowBox(null); // the rows being replaced never fire pointerleave
+    syncTitle();
     const {key, run} = state.pinned;
     const here = runsAt(key);
     panelRuns = here;
@@ -2563,6 +2918,8 @@ function factory(THREE, model) {
     // bring it into view once the panel is laid out.
     if (opened) requestAnimationFrame(() => opened.scrollIntoView({block: "nearest"}));
     $("panel").hidden = false;
+    const traceBtn = body.querySelector(".trace-btn");
+    if (traceBtn) $("panel").style.setProperty("--trace-w", `${traceBtn.offsetWidth + 8}px`);
     if (run) { state.highlighted = run; layout(); }
   }
   renderer.domElement.addEventListener("click", (event) => {
@@ -2572,12 +2929,13 @@ function factory(THREE, model) {
     openPanel(hit);
     // The panel opens over the stage. If it now covers the very spot
     // that was clicked (a phone's bottom sheet over a tap in the lower
-    // half, or a side panel over a click at the right), re-centre the
-    // subject in the free region at the current zoom; otherwise the
-    // camera stays put.
-    const p = $("panel").getBoundingClientRect();
-    if (event.clientX >= p.left && event.clientX <= p.right
-        && event.clientY >= p.top && event.clientY <= p.bottom) {
+    // half, or a side panel over a click at the right) — or leaves it in
+    // the last 15% of the free region beside the panel, where a tapped
+    // crate sat 16 px above the sheet with its station behind it —
+    // re-centre the subject in the free region at the current zoom;
+    // otherwise the camera stays put.
+    const s = stage.getBoundingClientRect(), f = freeRect();
+    if (event.clientY - s.top > f.bottom * 0.85 || event.clientX - s.left > f.right * 0.85) {
       focusOn(hit.kind === "crate" ? runFocus(hit.run) : focusTargetOf(hit.station), view.zoom);
     }
     requestRender();
@@ -2610,6 +2968,10 @@ function factory(THREE, model) {
       focusOn(focusTargetOf(key), 2.1);
       requestRender();
     });
+    chip.addEventListener("pointerenter", () => boostSign(key));
+    chip.addEventListener("pointerleave", () => boostSign(null));
+    chip.addEventListener("focus", () => boostSign(key));
+    chip.addEventListener("blur", () => boostSign(null));
     pipeline.append(chip);
     chips[key] = {chip, n, name, lastText: "", lastHot: null};
   });
@@ -2635,6 +2997,17 @@ function factory(THREE, model) {
       entry.chip.hidden = key === "bin" && count === 0;
     });
   }
+  // On a phone the chip row scrolls, and it opened at Capture: the first
+  // four chips (all zero here) filled the screen while the header said
+  // "piling up at Operate" and the amber chip sat off to the right. At
+  // load the row centres the pile-up's chip — once, never under a
+  // viewer's own scrolling.
+  function revealHotChip() {
+    const row = $("pipeline");
+    if (!lastHot || !chips[lastHot] || row.scrollWidth <= row.clientWidth) return;
+    const r = row.getBoundingClientRect(), c = chips[lastHot].chip.getBoundingClientRect();
+    row.scrollLeft += (c.left + c.width / 2) - (r.left + r.width / 2);
+  }
 
   // ------------------------------------------------------------ legend
   // Open on load: the first thing a cold viewer sees is the key to the
@@ -2646,13 +3019,21 @@ function factory(THREE, model) {
   // the legend — 55% of it covered on an iPad, 43% at 900×1000.
   function setLegend(openIt) {
     const resting = isResting();
+    // Closing it with focus inside (its ✕ by keyboard) hands focus back
+    // to the "How to read this" button; hidden, the ✕ dropped focus to
+    // <body>, which a screen reader announces as nothing at all.
+    const hadFocus = !openIt && $("legend").contains(document.activeElement);
     $("legend").hidden = !openIt;
     $("legend-open").setAttribute("aria-expanded", String(openIt));
+    if (hadFocus) $("legend-open").focus();
     // An untouched resting view re-rests: beside the legend while it is
     // open (restView), back to the plain frame once it closes.
     if (resting) resetView();
   }
   setLegend(matchMedia("(min-width: 721px) and (min-height: 481px) and (min-aspect-ratio: 1/1)").matches);
+  // Shown once it works, like Tour and the finder: in the markup it sat
+  // live through the whole load (10+ s on a slow link) and did nothing.
+  $("legend-open").hidden = false;
   $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
   $("legend-close").addEventListener("click", () => setLegend(false));
 
@@ -2696,7 +3077,11 @@ function factory(THREE, model) {
       for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y])
         for (const z of [box.min.z, box.max.z]) { v.set(x, y, z).applyMatrix4(inv); add(v.x, v.y); }
     };
-    Object.values(stationGroups).forEach(addObject);
+    // Visible stations only: a repo with no unreadable runs hides the
+    // bin, and its empty footprint at the floor's far right pushed every
+    // fitted frame left of centre.
+    Object.values(stationGroups).forEach((g) => { if (g.visible) addObject(g); });
+    beltParts.forEach(addObject);
     crateOf.forEach((c) => { if (c.mesh.visible) addObject(c.mesh); });
     buildingOf.forEach((b) => { if (b.visible) addObject(b); });
     Object.values(signs).forEach(({sprite}) => {
@@ -2785,22 +3170,88 @@ function factory(THREE, model) {
   const TODAY_STOP = model.generated.slice(0, 10) === model.timeline.last_day ? LAST : LAST + 1;
   const toStop = (index) => (index >= TODAY_STOP ? LAST + 1 : index);
   scrub.min = String(FIRST); scrub.max = String(TODAY_STOP); scrub.value = String(TODAY_STOP);
+  // The activity strip: a bar per day of station arrivals above the
+  // slider, so it shows where the history happens — and where it went
+  // quiet — before anyone drags it. Square-root heights keep a 30-hop
+  // day from flattening the rest.
+  const activity = $("activity");
+  const arrivals = new Uint16Array(Math.max(1, TODAY_STOP - FIRST + 1));
+  runs.forEach((run) => (run.history || []).forEach((hop) => {
+    const k = dayIndex(hop.day) - FIRST;
+    if (k >= 0 && k < arrivals.length) arrivals[k]++;
+  }));
+  function drawActivity() {
+    const w = activity.clientWidth, h = activity.clientHeight;
+    if (!w || !h) return;
+    const dpr = Math.min(devicePixelRatio, 2);
+    activity.width = Math.round(w * dpr); activity.height = Math.round(h * dpr);
+    const ctx = activity.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = getComputedStyle(activity).color;
+    // A native thumb's centre runs from half its width in from each end.
+    const inset = 8, span = Math.max(1, arrivals.length - 1), most = Math.max(1, ...arrivals);
+    arrivals.forEach((n, k) => {
+      if (!n) return;
+      const x = inset + (k / span) * (w - 2 * inset), bar = Math.max(2, Math.sqrt(n / most) * h);
+      ctx.fillRect(x - 0.75, h - bar, 1.5, bar);
+    });
+  }
+  drawActivity();
+  addEventListener("resize", drawActivity);
+  // The strip shows where the history is; a mouse over the slider says
+  // which day a bar is and how many arrivals it holds, before a drag
+  // (or a click, which jumps the thumb there) commits to it. Mouse only:
+  // a touch is the drag itself, and #day already reads it.
+  const scrubTip = $("scrub-tip");
+  const arrivalsText = (n) => n ? `${n} arrival${n === 1 ? "" : "s"}` : "quiet";
+  scrub.addEventListener("pointermove", (event) => {
+    if (event.pointerType !== "mouse" || event.buttons || scrub.disabled) { scrubTip.hidden = true; return; }
+    const r = scrub.getBoundingClientRect(), inset = 8, span = Math.max(1, arrivals.length - 1);
+    const k = Math.max(0, Math.min(span, Math.round((event.clientX - r.left - inset) / Math.max(1, r.width - 2 * inset) * span)));
+    const index = FIRST + k, n = arrivals[k];
+    const date = index >= TODAY_STOP ? `${model.generated.slice(0, 10)} (today)` : isoOf(index);
+    scrubTip.textContent = `${date} · ${arrivalsText(n)}`;
+    scrubTip.hidden = false;
+    const half = scrubTip.offsetWidth / 2, x = inset + (k / span) * (r.width - 2 * inset);
+    scrubTip.style.left = `${Math.max(half, Math.min(r.width - half, x))}px`;
+  });
+  for (const type of ["pointerleave", "pointerdown"]) {
+    scrub.addEventListener(type, () => { scrubTip.hidden = true; });
+  }
   function dayLabel() { return isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay(); }
+  // The tab names what the view shows: the pinned run or station and a
+  // parked past day lead it, so a tab strip, a bookmark or the history
+  // list of a #run= / #day= link says which. It stayed "skills · assembly
+  // line" for all of them. Written only on change; a running replay's
+  // date stays out (it would rewrite the title every frame).
+  function syncTitle() {
+    const parts = [];
+    if (state.pinned) parts.push(state.pinned.run ? state.pinned.run.slug || state.pinned.run.ref
+      : nameOf(state.pinned.key));
+    if (!isToday() && !state.playing) parts.push(currentDay());
+    parts.push(`${model.repo} · assembly line`);
+    const title = parts.join(" · ");
+    if (document.title !== title) document.title = title;
+  }
   function syncTransport() {
+    syncTitle();
     // The thumb tracks the playhead: smooth while the replay runs,
     // snapped to the day when parked (a drag mid-flight pauses first,
     // so this write never fights the user's hand). A parked day d sits
     // at t = d + 1 − 1e-6 (goToDay), so it snaps down, not to the
     // nearest: rounding showed d + 1, and the slider's own ← then landed
     // back on d — every press after the first did nothing.
-    scrub.value = state.playing ? String(state.t)
-      : String(isToday() ? TODAY_STOP : Math.floor(state.t));
+    const stop = isToday() ? TODAY_STOP : Math.floor(state.t);
+    scrub.value = state.playing ? String(state.t) : String(stop);
     const label = dayLabel();
     $("day").textContent = label;
     // The slider's value is a day index (20640); assistive tech reads
-    // the date instead. Written only on change: the replay calls this
-    // every frame.
-    if (scrub.getAttribute("aria-valuetext") !== label) scrub.setAttribute("aria-valuetext", label);
+    // the date instead — and, parked, that day's arrivals, the count the
+    // activity strip draws and the mouse's hover readout states (the
+    // strip itself is aria-hidden). Written only on change: the replay
+    // calls this every frame.
+    const spoken = state.playing ? label : `${label}, ${arrivalsText(arrivals[stop - FIRST] || 0)}`;
+    if (scrub.getAttribute("aria-valuetext") !== spoken) scrub.setAttribute("aria-valuetext", spoken);
     // The big date over the canvas: during a replay (or scrubbed into
     // the past) the canvas is where everyone looks, and the transport
     // bar's date is too small to carry "you are watching time pass".
@@ -2826,7 +3277,7 @@ function factory(THREE, model) {
   // under a "(today)" label).
   if (!enabled) {
     $("tour-open").hidden = true; find.hidden = true;
-    $("hint").hidden = true; $("legend-play").hidden = true;
+    $("hint").hidden = true; $("legend-play").hidden = true; $("legend-days").hidden = true;
     scrub.min = String(TODAY_STOP - 1);
   }
   // The bin's line is only true of a repo that has one.
@@ -2875,6 +3326,26 @@ function factory(THREE, model) {
     // trace or the tour's last beat starts the replay). Other buttons —
     // a panel row's trace, a chip — keep every key.
     if (event.target.closest("input, details, summary")) return;
+    // The camera from the keyboard too: wheel, drag and double-click were
+    // pointer-only, so a keyboard user could never get closer than the
+    // rest view. + / − zoom on the stage's centre, ⇧ + arrows pan an
+    // eighth of the view, 0 resets — from any button as well (none uses
+    // these keys; a chip is where Tab usually leaves focus). Browser zoom
+    // (⌘/Ctrl with + − 0) stays the browser's.
+    if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+      const r = renderer.domElement.getBoundingClientRect();
+      const step = frameBox.halfH / view.zoom / 4;
+      const pan = {ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step]}[event.key];
+      if (event.key === "+" || event.key === "=") { event.preventDefault(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.25); return; }
+      if (event.key === "-" || event.key === "_") { event.preventDefault(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 0.8); return; }
+      if (event.key === "0") { event.preventDefault(); resetView(); return; }
+      if (event.shiftKey && pan) {
+        event.preventDefault();
+        view.panX += pan[0]; view.panY += pan[1];
+        applyView(); requestRender(); scheduleViewHash();
+        return;
+      }
+    }
     const button = event.target.closest("button");
     if (button && (!button.closest("#transport") || event.key === " " || event.key === "Enter")) return;
     const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
@@ -2909,7 +3380,8 @@ function factory(THREE, model) {
       state.t = state.trace ? traceAdvance(state.t, dt)
         : tFromU(uFromT(state.t) + dt * TOTAL_U / state.seconds);
       const stop = state.trace ? traceEnd : LAST + 1;
-      if (state.t >= stop) {
+      const finished = state.t >= stop;
+      if (finished) {
         // The last frame lands on the placement, never near it.
         glideK = 1;
         state.t = stop; state.playing = false; renderPanel();
@@ -2918,6 +3390,14 @@ function factory(THREE, model) {
         if (state.trace) { layout(); focusOn(runFocus(state.trace), 2.4); }
       }
       layout(); syncTransport(); needsRender = true;
+      // The end is said aloud: the floor simply stopping (and the button
+      // reverting to Play) told a screen reader nothing.
+      if (finished) {
+        const where = state.trace && crateOf.get(state.trace).where;
+        announce(state.trace
+          ? `Trace finished: ${state.trace.slug || state.trace.ref} is at ${where ? nameOf(where.station) : "its last stop"}.`
+          : `Replay finished at today: ${lastTally.active} in flight, ${lastTally.completed} done.`);
+      }
       if (state.trace && traceFollow && state.playing) followTrace(dt);
       if (hoverAt && !exporting) hover(hoverAt);
       glideK = 1; // every layout outside the replay places exactly
@@ -2931,15 +3411,19 @@ function factory(THREE, model) {
     if (intro !== null) {
       intro = Math.min(1, intro + dt / 1.1);
       const ease = 1 - Math.pow(1 - intro, 3);
-      view.zoom = lastRest.zoom + (1.45 - lastRest.zoom) * (1 - ease);
+      view.zoom = lastRest.zoom * (1 + (INTRO_CLOSER - 1) * (1 - ease));
       applyView();
       if (intro >= 1) intro = null;
       needsRender = true;
     }
     if (!reducedMotion && !exporting) {
       clock += dt;
-      animators.forEach((animate) => animate(clock));
-      rollers.forEach((roller) => { roller.rotation.y += dt * 4; });
+      animators.forEach((a) => {
+        if (!stationCounts[a.key]) return;
+        a.t += dt;
+        a.animate(a.t);
+      });
+      spinRollers(dt);
       beltFlows.forEach((flow) => { flow.offset.x = -(clock * 0.45) % 1; });
       {
         const lap = mainPath.total + 26; // a breather between runs
@@ -3001,6 +3485,11 @@ function factory(THREE, model) {
     captureSize = null; signScale = 1; stage.classList.remove("capturing");
     fit(); layout(); syncTransport(); requestRender();
     $("export").disabled = !enabled; play.disabled = !enabled;
+    // A capture disables Export (and Play) under the keyboard's focus,
+    // which drops it to <body>; it comes back to where it was, so Enter
+    // on Export leaves the viewer on Export, beside the status line.
+    if (saved.focus && saved.focus !== document.body && saved.focus.isConnected
+      && document.activeElement === document.body) saved.focus.focus();
     saved = null;
   }
   async function exportGif() {
@@ -3010,7 +3499,7 @@ function factory(THREE, model) {
     status.textContent = "Exporting clip…";
     saved = {t: state.t, ratio: renderer.getPixelRatio(),
       zoom: view.zoom, panX: view.panX, panY: view.panY,
-      highlighted: state.highlighted, trace: state.trace};
+      highlighted: state.highlighted, trace: state.trace, focus: document.activeElement};
     state.playing = false;
     exporting = true;
     // Capture purity: the clip records the repo, not this session — the
@@ -3023,7 +3512,7 @@ function factory(THREE, model) {
     $("trace-banner").hidden = true;
     setCityNight(false); // the clip's backdrop is daylight
     pulse.visible = false; pulseTrail.visible = false;
-    card.hidden = true;
+    card.hidden = true; hoverBox.visible = false;
     document.body.style.pointerEvents = "none";
     view.zoom = 1; view.panX = 0; view.panY = 0;
     $("export").disabled = true; play.disabled = true;
@@ -3112,31 +3601,39 @@ function factory(THREE, model) {
       }
     }
     const blob = new Blob([gif.finish()], {type: "image/gif"});
-    const link = el("a", {href: URL.createObjectURL(blob), download: `${model.repo}-assembly-line.gif`});
+    const url = URL.createObjectURL(blob);
+    const link = el("a", {href: url, download: `${model.repo}-assembly-line.gif`});
     document.body.append(link);
     link.click();
     link.remove();
+    // The download has its bytes once it starts; unrevoked, every export
+    // kept its 2.5 MB blob alive for the page's lifetime. Some browsers
+    // read the URL a moment after the click, hence the delay.
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
     window.__assemblyLine.lastGif = blob;
     status.textContent = `Clip exported (${(blob.size / 1048576).toFixed(1)} MB). Commit it and reference it from your README as an image.`;
     restoreAfterExport();
   }
 
   // ------------------------------------------------------------- start
-  // A one-breath settle: the floor eases in from a slightly wider frame.
+  // A one-breath settle: the floor eases out onto its rest from closer in.
   let intro = reducedMotion ? null : 0;
   fit();
   layout();
   // The resting view needs the laid-out floor (restView measures it).
+  restExtent = floorExtent();
   lastRest = restView();
   view.panX = lastRest.panX; view.panY = lastRest.panY;
-  view.zoom = intro !== null ? 1.45 : lastRest.zoom;
+  view.zoom = intro !== null ? lastRest.zoom * INTRO_CLOSER : lastRest.zoom;
   applyView();
   syncTransport();
+  revealHotChip();
   // The city follows the room: lit windows after dark, live on change.
   const darkScheme = matchMedia("(prefers-color-scheme: dark)");
   setCityNight(darkScheme.matches);
   darkScheme.addEventListener("change", (event) => {
     if (!exporting) setCityNight(event.matches);
+    drawActivity(); // its bars take the scheme's muted ink
   });
   // Deep links: #day=YYYY-MM-DD scrubs there, #run=<slug> finds the
   // crate, #station=<key> pins the station — the links the hash writers
@@ -3155,7 +3652,7 @@ function factory(THREE, model) {
       find.value = run; find.dispatchEvent(new Event("change"));
       // Only a found run owns the camera (the finder pinned it and flew
       // there). An unknown slug is ignored like any bad value: cancelling
-      // the intro anyway froze the view at its 1.45× starting frame,
+      // the intro anyway froze the view at its closer starting frame,
       // cropped under the legend.
       if (state.pinned && state.pinned.run) intro = null;
     }
