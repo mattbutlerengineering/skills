@@ -1923,6 +1923,20 @@ function factory(THREE, model) {
   // Plain floor: t ∈ [d, d+1) is day d. (A subtractive epsilon here
   // misread the export's exact-integer frames as the previous day.)
   const currentDay = () => isoOf(Math.min(LAST, Math.floor(state.t)));
+  // The bar names both facts a link restores together (applyHash reads
+  // them as one query): the parked day and the pinned crate or station.
+  // Written one at a time, opening a panel on a parked day replaced
+  // #day=2026-11-03 with #station=implement, and closing it emptied the
+  // bar while the floor still showed 2026-11-03.
+  function syncHash() {
+    const facts = [];
+    if (!isToday()) facts.push(`day=${currentDay()}`);
+    if (state.pinned) facts.push(state.pinned.run
+      ? `run=${encodeURIComponent(state.pinned.run.slug || state.pinned.run.ref)}`
+      : `station=${state.pinned.key}`);
+    history.replaceState(null, "", facts.length
+      ? `#${facts.join("&")}` : location.pathname + location.search);
+  }
   // Where a run is at time t: its station and, mid-move, its belt position.
   const TRAVEL = 0.6;
   function placement(run, t) {
@@ -2759,8 +2773,7 @@ function factory(THREE, model) {
     if (hadFocus && back && returnFocus) back.focus();
     panelOpener = null;
     // The bar says what the view shows: a closed panel's link goes too.
-    if (/^#(run|station)=/.test(location.hash))
-      history.replaceState(null, "", location.pathname + location.search);
+    if (/(^#|&)(run|station)=/.test(location.hash)) syncHash();
     layout(); requestRender();
   }
   function runRow(run, open) {
@@ -2945,9 +2958,7 @@ function factory(THREE, model) {
     state.pinned = {key, run: hit.kind === "crate" ? hit.run : null};
     // Every pin is a link — clicking a crate on the canvas shares the
     // same as finding it. One writer here instead of one per caller.
-    history.replaceState(null, "", hit.kind === "crate"
-      ? `#run=${encodeURIComponent(hit.run.slug || hit.run.ref)}`
-      : `#station=${key}`);
+    syncHash();
     renderPanel();
   }
   // ------------------------------------------------------------- find
@@ -3416,10 +3427,10 @@ function factory(THREE, model) {
     state.t = t >= LAST + 1 ? LAST + 1 : t + 1 - 1e-6;
     card.hidden = true; // a hover card from another moment is a stale claim
     layout(); syncTransport(); renderPanel(); requestRender();
-    // The hash mirrors the day, so the current view is a copyable link;
-    // back at today the hash clears rather than naming it.
-    history.replaceState(null, "", isToday()
-      ? location.pathname + location.search : `#day=${currentDay()}`);
+    // The hash mirrors the day (beside any pin), so the current view is
+    // a copyable link; back at today the day leaves it rather than
+    // naming today.
+    syncHash();
   }
   scrub.addEventListener("input", () => { goToDay(toStop(Number(scrub.value))); });
   // Presenter keys: Space plays and pauses, the arrows step one day at
@@ -3813,7 +3824,17 @@ function factory(THREE, model) {
     }
     const run = hash.get("run");
     if (run) {
-      find.value = run; find.dispatchEvent(new Event("change"));
+      // On a parked day (#day=…&run=…, the pair syncHash writes) a run on
+      // the floor that day is pinned there; the finder snaps to today
+      // ("where is it now"), so the link lost its day on the way back.
+      const wanted = run.toLowerCase();
+      const exact = !isToday() && runs.find((r) =>
+        (r.slug || "").toLowerCase() === wanted || r.ref.toLowerCase() === wanted);
+      find.value = run;
+      if (exact && crateOf.get(exact).where) {
+        openPanel({kind: "crate", run: exact});
+        focusOn(runFocus(exact), 2.4);
+      } else find.dispatchEvent(new Event("change"));
       // Only a found run owns the camera (the finder pinned it and flew
       // there). An unknown slug is ignored like any bad value: cancelling
       // the intro anyway froze the view at its closer starting frame,
