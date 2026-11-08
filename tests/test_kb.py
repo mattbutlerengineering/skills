@@ -383,6 +383,29 @@ class TestAge(Tree):
         self.assertEqual(direct, expected)
 
 
+class TestPageShapes(Tree):
+    """The rubric's new page shapes are guidance, not lint rules: each
+    lints clean, and so does a page without it (PRD 15, 17, 22, 24)."""
+
+    def test_new_shapes_lint_clean_both_ways(self):
+        write(self.root / "src" / "b.py", "y = 1\n")
+        write(self.root / "src" / "c.py", "z = 1\n")
+        self.kb_page("absent-is-not-zero",
+                     summary="A missing reading is not a zero: three"
+                     " readers once treated it as one.",
+                     sources="src/a.py, src/b.py, src/c.py",
+                     body="Rule: absent is not zero.\n\n"
+                     "- src/a.py reads it as 0.\n- src/b.py reads it as"
+                     " 0.\n- src/c.py reads it as 0.\n")
+        self.kb_page("topic-summary", summary="Notes about the cache.")
+        self.kb_page("pair", summary="`make check` exits 0 on a skipped"
+                     " suite: run it with -v.",
+                     body="Wrong: `make check`\n\nRight: `make check -v`\n")
+        self.kb_page("no-pair")
+        self.assertEqual(kb.index(self.root), [])
+        self.assertEqual(self.lint(), [])
+
+
 class TestStale(unittest.TestCase):
     """Freshness against a real git history: a page is stale once any
     source it cites changed between its verified commit and HEAD."""

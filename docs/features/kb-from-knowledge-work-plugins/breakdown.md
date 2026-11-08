@@ -75,16 +75,16 @@ memory index file.
 Demonstrable: `python3 -m unittest tests.test_knowledge_base_shape` passes
 over the shipped skill files, and fixture pages in each new shape lint clean.
 
-- [ ] **K8 Shape tests and lint-clean fixtures** — new `tests/test_knowledge_base_shape.py` with text assertions over the shipped skill files (the `tests/test_polish_shape.py` pattern), plus lint-clean fixture pages in `tests/test_kb.py` — size:M
+- [x] **K8 Shape tests and lint-clean fixtures** — new `tests/test_knowledge_base_shape.py` with text assertions over the shipped skill files (the `tests/test_polish_shape.py` pattern), plus lint-clean fixture pages in `tests/test_kb.py` — size:M
   - Accept: the shape cases exist and fail on the current text. They assert: `references/page-rubric.md` names `checked-against`, `checked` and `max-age` and when to declare all three, a class page proposed when three or more pages or candidates share one cause, a gotcha summary that leads with the symptom inside the 200-byte cap, and one optional `Wrong:` / `Right:` pair under Shape; `references/ingest.md` routes memory, human-turn and setup-answer candidates through the NOOP, CONFLICT, UPDATE, DELETE and ADD table with a human promoting, says a user-scoped or personal fact is never proposed, and carries the one-rule-over-many-instances paragraph; `skills/knowledge-base/SKILL.md` setup asks the newcomer-mistake question one question per turn, at most three, each with a recommendation, keeps answers inside the five-page cap and propose-and-promote, skips the step and says so with no human present, has a flow-table row to run it alone, names a class page in the over-budget advice, and credits anthropics/knowledge-work-plugins (Apache-2.0); no file under `skills/knowledge-base/` contains `~/.claude`, `.claude/projects`, `CLAUDE_CONFIG_DIR`, `MEMORY.md` or a `/memory/` path segment. The `tests/test_kb.py` additions, a class page (one rule, three cited instances), a gotcha page whose summary leads with no symptom, a page with one `Wrong:` / `Right:` pair and one without, each lint clean under `lint` and pass on arrival because they pin existing behaviour (PRD 8, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 28, 29).
   - Blocked by: —
-- [ ] **K9 Page rubric text** — the Page rubric — `references/page-rubric.md` component: the three optional fields, class pages under Admit, the symptom-first gotcha summary, the optional wrong/right pair — size:S
+- [x] **K9 Page rubric text** — the Page rubric — `references/page-rubric.md` component: the three optional fields, class pages under Admit, the symptom-first gotcha summary, the optional wrong/right pair — size:S
   - Accept: the rubric-file cases in `tests/test_knowledge_base_shape.py` pass; "exactly these fields" becomes "these four fields, plus three optional ones"; the class-page rule names three or more pages or candidates sharing one cause; the symptom-first rule stays inside the existing 200-byte summary cap and adds no lint rule; every line is restated in this repo's words and no sentence is copied from knowledge-work-plugins (PRD 14, 16, 21, 23).
   - Blocked by: K8 Shape tests and lint-clean fixtures
-- [ ] **K10 Ingest rules text** — the Ingest rules — `references/ingest.md` component: how to judge a human-turn, memory and setup-answer candidate through the unchanged verb table, the one-rule-over-many-instances paragraph, harvest kinds named — size:S
+- [x] **K10 Ingest rules text** — the Ingest rules — `references/ingest.md` component: how to judge a human-turn, memory and setup-answer candidate through the unchanged verb table, the one-rule-over-many-instances paragraph, harvest kinds named — size:S
   - Accept: the ingest-file cases in `tests/test_knowledge_base_shape.py` pass; a paired memory candidate is judged NOOP, CONFLICT or UPDATE and an unpaired one ADD or NOOP; a candidate is a lead whose lesson cites a repo path, never a memory file or transcript; a setup answer with no repo file to cite becomes a proposed always-loaded guardrail or a NOOP; memory text and human words are restated, never pasted; a harvest-sourced item names its kind so the Promoter can decline a kind wholesale; no new path writes to `docs/kb/` (PRD 14, 28).
   - Blocked by: K8 Shape tests and lint-clean fixtures
-- [ ] **K11 Skill body text** — the Skill body — `skills/knowledge-base/SKILL.md` component: setup's tribal-knowledge step and flow-table row, step 2a's two new candidate kinds and `--memory`, step 3's age and malformed-declaration problems and class-page remedy, "The tool" usage, the credit paragraph — size:M
+- [x] **K11 Skill body text** — the Skill body — `skills/knowledge-base/SKILL.md` component: setup's tribal-knowledge step and flow-table row, step 2a's two new candidate kinds and `--memory`, step 3's age and malformed-declaration problems and class-page remedy, "The tool" usage, the credit paragraph — size:M
   - Accept: every case in `tests/test_knowledge_base_shape.py` passes; step 3 tells the agent what to do with a `is past its declared age` problem (re-run the page's check, then update `checked`) and with each malformed-declaration string; step 2a describes memory as the harness's auto-memory for this repo where the harness keeps one, naming no path; "The tool" lists `[--memory]`; `git diff main -- skills/knowledge-base/SKILL.md` shows no change between the frontmatter `---` lines, so `description` is unchanged and no routing eval is owed (PRD 8, 14, 18, 19, 20, 29, 30).
   - Blocked by: K8 Shape tests and lint-clean fixtures; K7 Memory source and the --memory flag
 
@@ -238,3 +238,41 @@ Implement, 2026-11-08 (unattended, autorun).
   `PAIR_MIN = 2` and the architecture's stopword list are in
   `kb_harvest.py`; its docstring credits anthropics/knowledge-work-plugins
   (Apache-2.0) for the two new sources; no module or import was added.
+- **K8, red before K9 to K11.** The first run of
+  `python3 -m unittest tests.test_knowledge_base_shape` failed for the
+  wrong reason: the test's `section()` helper matched no heading, so
+  every case saw empty text. Implement fixed the helper and re-ran it
+  against the unchanged skill text: `FAILED (failures=16)` of 17, each
+  failure a phrase missing from a section that was found (for example
+  `'these four fields, plus three optional ones' not found in 'Every
+  page in docs/kb/ opens with exactly these fields. ...'` and the flow
+  table's `0 != 1`). The one case that passed, `TestNeutrality`, pins
+  existing behaviour: the current skill text already names no
+  harness-specific path, and the case keeps it that way. The
+  `tests/test_kb.py` fixture case `TestPageShapes` (a class page, a
+  gotcha summary with no symptom, a page with one `Wrong:` / `Right:`
+  pair and one without) passed on arrival, as K8's Accept says it should.
+- **K8 default taken.** The shape cases assert anchor phrases inside
+  named sections (whitespace collapsed, so a line wrap does not matter),
+  the `tests/test_polish_shape.py` style; they do not pin the frontmatter
+  `description`, which K11 checks by diff against `main` instead.
+- **K9, green.** `python3 -m unittest
+  tests.test_knowledge_base_shape.TestRubric`: `OK`. "exactly these
+  fields" is now "these four fields, plus three optional ones"; the
+  class page sits under Admit at three or more pages or candidates; the
+  symptom-first rule is inside the existing 200-byte cap and adds no
+  lint rule; the wrong/right pair is one optional pair under Shape.
+- **K10, green.** `TestIngest` and `TestNeutrality`: `OK`. The first
+  draft named the verb table without listing DELETE and failed
+  `test_new_kinds_go_through_the_verbs_and_a_human_promotes`; the text
+  was corrected (the test was right), not the test.
+- **K11, green.** `python3 -m unittest tests.test_knowledge_base_shape`:
+  `Ran 17 tests`, `OK`. `git diff main -- skills/knowledge-base/SKILL.md`
+  starts at line 23, and a diff of lines 1 to 4 against `main` is empty,
+  so the frontmatter `description` is byte-identical and no routing eval
+  is owed. Setup's item numbers moved from 1-5 to 1-6 to fit the new
+  item 3. `python3 lint.py`: `lint: 0 problem(s) across 36 skills`,
+  exit 0. Every new line in the skill, rubric and ingest files was
+  written for this repo from the brief's summary of the source; no
+  sentence of knowledge-work-plugins was read into or copied from in
+  this stage.
