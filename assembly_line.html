@@ -158,14 +158,14 @@
     rgba(47,50,56,.3); background: none; color: #6a4cc4;
     border-radius: 999px; padding: 0 .5rem; cursor: pointer; white-space: nowrap; }
   .trace-btn:hover { border-color: var(--accent); }
-  /* While a trace banner occupies the top-left, the date badge yields
-     the centre and docks right — and on a narrow stage, where the banner
-     spans the width and covered it, to the bottom right. */
+  /* While a trace banner occupies the top, the date badge docks to the
+     bottom right at every width. Top-right held only while the banner
+     stayed short: a tablet's (768 wide) reached under the badge (35×37
+     px), and a long slug wraps the banner across any stage. */
   #trace-banner:not([hidden]) ~ #replay-date { left: auto; right: .8rem;
-    transform: none; }
+    top: auto; bottom: .6rem; transform: none; }
   @media (max-width: 720px) {
-    #trace-banner:not([hidden]) ~ #replay-date { top: auto; bottom: .6rem;
-      font-size: 1.1rem; }
+    #trace-banner:not([hidden]) ~ #replay-date { font-size: 1.1rem; }
   }
   /* A short stage puts the floor's top-row signs right under the centred
      badge: at 640×360 (a 1280×720 window at 200% zoom) and 667×375 it
