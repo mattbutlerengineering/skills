@@ -812,7 +812,9 @@ function factory(THREE, model) {
     ctx.fill(); ctx.stroke();
     let x = PAD;
     if (step) {
-      ctx.fillStyle = hot ? "#c06514" : "#8f6fd8";
+      // Darker than the accent/amber they echo: on a sign seen at map
+      // size those read 3.5:1; these read 5.6:1 and 5.2:1.
+      ctx.fillStyle = hot ? "#9a4d0c" : "#6a4cc4";
       ctx.font = "800 56px system-ui, sans-serif";
       ctx.textBaseline = "middle";
       ctx.fillText(step, x, H / 2 + 2);
@@ -828,7 +830,8 @@ function factory(THREE, model) {
       ctx.beginPath();
       ctx.roundRect(x, H / 2 - 34, countWidth, 68, 34);
       ctx.fill();
-      ctx.fillStyle = hot ? "#ffffff" : "#2f3238";
+      // Dark ink on the amber pill, as on the amber chip: white read 2.55:1.
+      ctx.fillStyle = hot ? "#3a2206" : "#2f3238";
       ctx.font = "700 54px system-ui, sans-serif";
       ctx.fillText(countText, x + (countWidth - ctx.measureText(countText).width) / 2,
         H / 2 + 2);
