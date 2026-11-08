@@ -144,7 +144,10 @@
     max-width: calc(100% - 1.6rem);
     display: flex; gap: .6rem; align-items: center;
     background: var(--panel); border: 2px solid var(--accent);
-    border-radius: 999px; padding: .25rem .5rem .25rem .9rem; }
+    /* 1.3rem, not a pill: one line (37 px) still reads as a pill, but
+       wrapped to four lines on a phone a 999px radius rounded the box
+       into a 46 px curve the text's first and last lines crossed. */
+    border-radius: 1.3rem; padding: .25rem .5rem .25rem .9rem; }
   #trace-banner b { overflow-wrap: anywhere; }
   #trace-banner button { font: inherit; border: 1.5px solid var(--line);
     background: var(--panel); color: var(--ink); border-radius: 999px;
