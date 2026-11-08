@@ -2186,9 +2186,13 @@ function factory(THREE, model) {
     camera.top = cy + halfH; camera.bottom = cy - halfH;
     camera.updateProjectionMatrix();
     // Small stage? Then signs draw at MIN_SIGN_PX and the empty ones go
-    // compact; the redraw happens only when a sign's state changes.
+    // compact — except during the tour, whose beats name the stations
+    // they show ("Work enters at this end: … Idea or PRD, … Capture"):
+    // over tiles reading 1, 2 and ↩ a phone had no names to match.
+    // The redraw happens only when a sign's state changes.
     const floor = signFloor();
-    signsCompact = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom)) * signScale < floor;
+    signsCompact = tourStep < 0
+      && SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom)) * signScale < floor;
     Object.keys(signs).forEach(drawSign);
     Object.values(signs).forEach((sign) => {
       const h = signHeight(sign);
