@@ -2649,12 +2649,13 @@ function factory(THREE, model) {
     openPanel(hit);
     // The panel opens over the stage. If it now covers the very spot
     // that was clicked (a phone's bottom sheet over a tap in the lower
-    // half, or a side panel over a click at the right), re-centre the
-    // subject in the free region at the current zoom; otherwise the
-    // camera stays put.
-    const p = $("panel").getBoundingClientRect();
-    if (event.clientX >= p.left && event.clientX <= p.right
-        && event.clientY >= p.top && event.clientY <= p.bottom) {
+    // half, or a side panel over a click at the right) — or leaves it in
+    // the last 15% of the free region beside the panel, where a tapped
+    // crate sat 16 px above the sheet with its station behind it —
+    // re-centre the subject in the free region at the current zoom;
+    // otherwise the camera stays put.
+    const s = stage.getBoundingClientRect(), f = freeRect();
+    if (event.clientY - s.top > f.bottom * 0.85 || event.clientX - s.left > f.right * 0.85) {
       focusOn(hit.kind === "crate" ? runFocus(hit.run) : focusTargetOf(hit.station), view.zoom);
     }
     requestRender();
