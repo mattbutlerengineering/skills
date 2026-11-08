@@ -94,6 +94,8 @@
      the amber and the purple (axe: 2.55:1). */
   .chip.hot .n { background: var(--hot); color: #3a2206; }
   .chip.done .n { background: var(--accent); color: #120b26; }
+  /* The bin's chip warns, like its sign: green read as work going well. */
+  .chip.attn .n { background: var(--hot); color: #3a2206; }
   .chip .tag { font-size: .68rem; font-weight: 700; color: var(--hot);
     text-transform: uppercase; letter-spacing: .05em; }
   #notice { margin: 0 1rem .5rem; padding: .5rem .75rem; border-radius: 6px;
@@ -1031,12 +1033,15 @@ function factory(THREE, model) {
     ctx.fillText(name, x, H / 2 + 2);
     x += nameWidth + GAP;
     if (count !== null) {
-      ctx.fillStyle = hot ? "#e0903a" : (count ? "#a6e07a" : "#e8eae8");
+      // The bin's count is a warning, never the green of work under way:
+      // "Needs attention 5" read as five things going well.
+      const warn = hot || (key === "bin" && count > 0);
+      ctx.fillStyle = warn ? "#e0903a" : (count ? "#a6e07a" : "#e8eae8");
       ctx.beginPath();
       ctx.roundRect(x, H / 2 - 34, countWidth, 68, 34);
       ctx.fill();
       // Dark ink on the amber pill, as on the amber chip: white read 2.55:1.
-      ctx.fillStyle = hot ? "#3a2206" : "#2f3238";
+      ctx.fillStyle = warn ? "#3a2206" : "#2f3238";
       ctx.font = "700 54px system-ui, sans-serif";
       ctx.fillText(countText, x + (countWidth - ctx.measureText(countText).width) / 2,
         H / 2 + 2);
@@ -2986,6 +2991,7 @@ function factory(THREE, model) {
       if (entry.lastHot !== hot) {
         entry.chip.classList.toggle("hot", hot);
         entry.chip.classList.toggle("done", key === "completed");
+        entry.chip.classList.toggle("attn", key === "bin");
         entry.lastHot = hot;
       }
       // Read as "69 Operate runs, the busiest" — the visible "69 Operate"
