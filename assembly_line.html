@@ -1908,21 +1908,26 @@ function factory(THREE, model) {
     $("empty-sign").hidden = runs.length > 0;
     yieldSigns();
   }
-  // A label never hides the building the viewer pinned: signs draw over
+  // A label never hides the run the viewer pinned: signs draw over
   // everything (depthTest off), and Operate's, Ship's and Done's stand
   // in front of the city, so one whose quad overlaps the pinned
-  // building fades to a ghost while the pin lasts. Crates are left
-  // alone — they lift clear of their pile, and a station's own sign
-  // (Operate's amber one above all) must not fade over its queue.
+  // building — or the pinned crate and its parts — fades to a ghost
+  // while the pin lasts. The lift alone does not clear a crate: found at
+  // Implement, the pinned crate sat under "6 IMPLEMENT 15", its parts
+  // peeking over the sign's top edge. Unpinned, every sign stays solid
+  // over its queue (Operate's amber one above all).
   const yieldBox = new THREE.Box3(), yieldV = new THREE.Vector3();
   function yieldSigns() {
     const run = state.highlighted;
     const building = run && buildingOf.get(run);
-    const pinned = building && building.visible ? building : null;
+    const entry = run && crateOf.get(run);
+    const pinned = building && building.visible ? building
+      : entry && entry.where && entry.mesh.visible ? entry.mesh : null;
     const inv = camera.matrixWorldInverse;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     if (pinned) {
       yieldBox.setFromObject(pinned);
+      if (pinned === entry.mesh && partsGroup.children.length) yieldBox.expandByObject(partsGroup);
       for (const x of [yieldBox.min.x, yieldBox.max.x]) for (const y of [yieldBox.min.y, yieldBox.max.y])
         for (const z of [yieldBox.min.z, yieldBox.max.z]) {
           yieldV.set(x, y, z).applyMatrix4(inv);
