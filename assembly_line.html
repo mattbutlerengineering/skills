@@ -28,9 +28,12 @@
   html, body { margin: 0; height: 100%;
     background: radial-gradient(1100px 700px at 50% 10%, #f7fcf8 0%,
       var(--ground) 55%, #d5ebdd 100%);
-    color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI",
+    /* 87.5% of the reader's own default (14 px at the usual 16): a fixed
+       14px ignored a larger default font size entirely — every rem and
+       inherited size stayed put at a 24 px setting. */
+    color: var(--ink); font: 87.5%/1.45 system-ui, -apple-system, "Segoe UI",
     sans-serif; overflow: hidden; }
-  body { display: flex; flex-direction: column; }
+  body { font-size: 1rem; display: flex; flex-direction: column; }
   header { display: flex; flex-wrap: wrap; gap: .2rem 1rem;
     align-items: baseline; padding: .75rem 1.1rem .1rem; flex: none; }
   header h1 { font-size: 1.3rem; margin: 0; letter-spacing: -.01em; }
