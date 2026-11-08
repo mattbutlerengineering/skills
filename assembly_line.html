@@ -2211,6 +2211,7 @@ function factory(THREE, model) {
     const width = captureSize ? captureSize.w : stage.clientWidth;
     const height = captureSize ? captureSize.h : stage.clientHeight;
     renderer.setSize(width, height, false);
+    if (!captureSize) { fittedW = width; fittedH = height; }
     const bounds = new THREE.Box3();
     Object.values(stationGroups).forEach((g) => bounds.expandByPoint(g.position));
     // Both far corners of the district: a wide city must stay in frame.
@@ -2274,7 +2275,14 @@ function factory(THREE, model) {
   // the stage's top edge. A pin is re-centred in the free region at the
   // same zoom, a tour beat is re-framed, an untouched resting view
   // re-rests; a hand-framed view keeps its pan.
-  addEventListener("resize", () => {
+  // Watched on the stage itself, not the window: the stage also changes
+  // size when the header reflows. On a phone the first layout() fills the
+  // meta line, which wraps to a second row after fit() has sized the
+  // canvas — 638 px tall in a 602-px stage, the floor squashed 6% until
+  // the window happened to resize.
+  let fittedW = 0, fittedH = 0;
+  new ResizeObserver(() => {
+    if (stage.clientWidth === fittedW && stage.clientHeight === fittedH) return;
     const resting = isResting();
     fit();
     if (!exporting && tourStep >= 0) showTourStep();
@@ -2283,7 +2291,7 @@ function factory(THREE, model) {
       focusOn(run ? runFocus(run) : focusTargetOf(key), view.zoom);
     } else if (resting) resetView();
     requestRender();
-  });
+  }).observe(stage);
   // Fitted views (rest, legend, tour overviews) size the measured floor
   // to its frame with 10% breathing room, up to FIT_MAX_ZOOM. The old cap
   // of 1.1 dates from a padded frame (sign headroom, the city's full grid
