@@ -1065,9 +1065,9 @@ function factory(THREE, model) {
   // Compact (signsCompact below): an empty station's sign is its step
   // number alone, so a small stage can draw every sign at a readable size
   // without the empty ones burying the floor.
-  function signTexture(key, count, hot, compact = false) {
+  function signTexture(key, count, hot, compact = false, nameless = false) {
     const step = STEP[key] || "";
-    const name = nameOf(key).toUpperCase();
+    const name = nameless ? "" : nameOf(key).toUpperCase();
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const H = 148, PAD = 26, GAP = 18;
@@ -1180,9 +1180,15 @@ function factory(THREE, model) {
     // crate's stop never needs this: the crate counts there.)
     const pinned = state.pinned && state.pinned.key === key;
     const compact = signsCompact && sign.count === 0 && !sign.hot && !(sign.boost > 1) && !pinned;
-    const want = `${sign.count}|${sign.hot}|${compact}`;
+    // A working station's sign that would run into the amber pile-up
+    // sign drops its name, keeping its step and count: on a 568–780 px
+    // landscape phone the Operate sign covered Implement's count ("6
+    // IMPLEME|10 OPERATE 69"). Hovering it (or its chip) spells it out.
+    const nameless = !compact && signsCompact && !sign.hot && !(sign.boost > 1) && !pinned
+      && crowdsHotSign(key, sign);
+    const want = `${sign.count}|${sign.hot}|${compact}|${nameless}`;
     if (sign.last === want) return;
-    const {texture, aspect} = signTexture(key, sign.count, sign.hot, compact);
+    const {texture, aspect} = signTexture(key, sign.count, sign.hot, compact, nameless);
     if (sign.sprite.material.map) sign.sprite.material.map.dispose();
     sign.sprite.material.map = texture;
     sign.sprite.material.needsUpdate = true;
@@ -1190,6 +1196,26 @@ function factory(THREE, model) {
     const h = signHeight(sign);
     sign.sprite.scale.set(h * aspect, h, 1);
     sign.last = want;
+  }
+  // Whether this sign, drawn in full, would overlap a pile-up sign:
+  // camera-space rectangles at the heights this view gives them (an
+  // orthographic camera, so pan never changes the answer; zoom does).
+  const crowdV = new THREE.Vector3(), crowdW = new THREE.Vector3();
+  function crowdsHotSign(key, sign) {
+    const fullKey = `${sign.count}|${sign.hot}`;
+    if (sign.fullKey !== fullKey) {
+      const full = signTexture(key, sign.count, sign.hot);
+      full.texture.dispose();
+      sign.fullAspect = full.aspect; sign.fullKey = fullKey;
+    }
+    const h = signHeight(sign), w = h * sign.fullAspect;
+    crowdV.copy(sign.sprite.position).applyMatrix4(camera.matrixWorldInverse);
+    return Object.entries(signs).some(([other, s]) => {
+      if (other === key || !s.hot || !s.aspect || !s.sprite.visible) return false;
+      const oh = signHeight(s), ow = oh * s.aspect;
+      crowdW.copy(s.sprite.position).applyMatrix4(camera.matrixWorldInverse);
+      return Math.abs(crowdV.x - crowdW.x) < (w + ow) / 2 && Math.abs(crowdV.y - crowdW.y) < (h + oh) / 2;
+    });
   }
   function updateSign(key, count, hot) {
     const sign = signs[key];
@@ -2204,6 +2230,9 @@ function factory(THREE, model) {
     lastHot = hotKey;
     Object.keys(GRID).forEach((key) =>
       updateSign(key, counts[key] || 0, key === hotKey));
+    // Again once every count is in: a sign drawn before the pile-up's
+    // own (GRID order) judged its crowding against last frame's.
+    Object.keys(GRID).forEach(drawSign);
     updateChips(counts, hotKey);
     // In flight counts crates on the belt too; the bin is the header's
     // separate "need attention".
