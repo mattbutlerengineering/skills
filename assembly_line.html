@@ -1249,6 +1249,23 @@ function factory(THREE, model) {
   // subject — to a thumbnail. Capped at 12 columns, the widest that
   // stays inside the floor's own width.
   const CITY_COLS = Math.min(12, Math.max(4, Math.ceil(Math.sqrt(CITY_TOTAL))));
+  const CITY_ROWS = Math.max(1, Math.ceil(CITY_TOTAL / CITY_COLS));
+  // The road from the gate runs on as the city's main street: the
+  // columns split either side of it, the innermost 1.95 from its axis
+  // (a 2.0 gap between facades for the 1.5 road). Laid edge to edge, the
+  // middle column (or an even grid's centre pair) stood 0.55 behind the
+  // gate, so the belt's road ran into a wall.
+  const CITY_LEFT = Math.floor(CITY_COLS / 2);
+  const cityColX = (c) => c < CITY_LEFT
+    ? -1.95 - (CITY_LEFT - 1 - c) * CITY_SX
+    : 1.95 + (c - CITY_LEFT) * CITY_SX;
+  // Row 0's centre and the district's far edge, from the station's centre.
+  // Every row stands on the district's own ground, past the station
+  // plate's far edge (5.15): rows 0 and 1 used to stand on the plate,
+  // which is 10.3 wide under a grid 13 wide (and 31 at 12 columns, over
+  // Operate's and the bin's plates), so their outer lots hung off it.
+  const CITY_Z0 = 5.15 + 0.35 + 0.95;
+  const CITY_FAR = CITY_Z0 + (CITY_ROWS - 1) * CITY_SZ + 1.8;
   const MACHINES = {
     "capture"(g) {
       box(4.5, 1.6, 2.4, COLORS.steel, -1, PLATE_H, -3.2, g);
@@ -1435,20 +1452,17 @@ function factory(THREE, model) {
       // gate, and every completed run raises a named building on the
       // grid (ensureBuilding below). Ground, road and gate are the only
       // built-ins — the skyline itself is pure data.
-      // One owner for the grid: CITY_COLS/CITY_SX/CITY_SZ below size
-      // the buildings, and this slab is cut to carry exactly them.
-      const rows = Math.max(1, Math.ceil(CITY_TOTAL / CITY_COLS));
-      const beyond = 2.0 + (rows - 1) * CITY_SZ + 2.4 - 5.15;
-      const wide = Math.max(10.3, CITY_COLS * CITY_SX + 1.2);
-      if (beyond > 0) {
-        const side = mat(CITY_COLORS.groundSide), top = mat(CITY_COLORS.ground);
-        const slab = outlined(new THREE.Mesh(boxGeo(wide, PLATE_H, beyond),
-          [side, side, top, side, side, side]));
-        slab.position.set(0, PLATE_H / 2, 5.15 + beyond / 2);
-        slab.receiveShadow = true;
-        g.add(slab);
-      }
-      const road = box(1.5, 0.1, 2.8, CITY_COLORS.road, 0, PLATE_H, 0.9, g);
+      // One owner for the grid: CITY_COLS/cityColX/CITY_Z0 above size
+      // the buildings, and this ground is cut to carry exactly them; the
+      // road runs from the belt's end through the gate to its far edge.
+      const x0 = cityColX(0) - 1.55, x1 = cityColX(CITY_COLS - 1) + 1.55;
+      const side = mat(CITY_COLORS.groundSide), top = mat(CITY_COLORS.ground);
+      const slab = outlined(new THREE.Mesh(boxGeo(x1 - x0, PLATE_H, CITY_FAR - 5.15),
+        [side, side, top, side, side, side]));
+      slab.position.set((x0 + x1) / 2, PLATE_H / 2, (5.15 + CITY_FAR) / 2);
+      slab.receiveShadow = true;
+      g.add(slab);
+      const road = box(1.5, 0.1, CITY_FAR + 0.5, CITY_COLORS.road, 0, PLATE_H, (CITY_FAR - 0.5) / 2, g);
       road.receiveShadow = true;
       box(0.3, 3.4, 0.3, COLORS.accent, -1.15, PLATE_H, 1.1, g);
       box(0.3, 3.4, 0.3, COLORS.accent, 1.15, PLATE_H, 1.1, g);
@@ -1552,13 +1566,13 @@ function factory(THREE, model) {
   // (CITY_SX/CITY_SZ/CITY_TOTAL/CITY_COLS are declared with the city's
   // grid above, where the district's slab is cut.)
   const CITY_BASE = at("completed");
-  const CITY_FARZ = CITY_BASE.z + 2.0
-    + (Math.max(1, Math.ceil(CITY_TOTAL / CITY_COLS)) - 1) * CITY_SZ + 2.4;
+  const CITY_FARZ = CITY_BASE.z + CITY_FAR;
   // Flying "to Done" means flying to the district, not the old tile
   // centre — the city extends well past it. And a completed run's
   // camera target is its building: its crate is never placed.
-  const CITY_CENTER = new THREE.Vector3(CITY_BASE.x, 0,
-    (CITY_BASE.z + 2.6 + CITY_FARZ - 2.4) / 2);
+  const CITY_CENTER = new THREE.Vector3(
+    CITY_BASE.x + (cityColX(0) + cityColX(CITY_COLS - 1)) / 2, 0,
+    CITY_BASE.z + CITY_Z0 + (CITY_ROWS - 1) * CITY_SZ / 2);
   const focusTargetOf = (key) => key === "completed" ? CITY_CENTER : at(key);
   function runFocus(run) {
     const building = buildingOf.get(run);
@@ -1567,9 +1581,9 @@ function factory(THREE, model) {
   }
   function citySlot(index) {
     return new THREE.Vector3(
-      CITY_BASE.x - ((CITY_COLS - 1) / 2) * CITY_SX + (index % CITY_COLS) * CITY_SX,
+      CITY_BASE.x + cityColX(index % CITY_COLS),
       PLATE_H,
-      CITY_BASE.z + 2.6 + Math.floor(index / CITY_COLS) * CITY_SZ);
+      CITY_BASE.z + CITY_Z0 + Math.floor(index / CITY_COLS) * CITY_SZ);
   }
   // Every finished run has a lot, marked on the district's ground: early
   // in a replay the city was a bare sand slab sized for buildings that
@@ -2246,9 +2260,8 @@ function factory(THREE, model) {
     const bounds = new THREE.Box3();
     Object.values(stationGroups).forEach((g) => bounds.expandByPoint(g.position));
     // Both far corners of the district: a wide city must stay in frame.
-    const cityHalfX = (CITY_COLS - 1) / 2 * CITY_SX;
-    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x - cityHalfX, 0, CITY_FARZ));
-    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x + cityHalfX, 0, CITY_FARZ));
+    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x + cityColX(0), 0, CITY_FARZ));
+    bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x + cityColX(CITY_COLS - 1), 0, CITY_FARZ));
     bounds.expandByScalar(HALF + 1);
     bounds.getCenter(target);
     // Viewed from behind the pipeline's start, so the district — which
