@@ -1877,6 +1877,7 @@ function factory(THREE, model) {
   // semantic link like #run or #day). Reset clears it.
   let viewHashTimer = 0;
   function scheduleViewHash() {
+    traceFollow = false; // a hand on the camera keeps it
     clearTimeout(viewHashTimer);
     viewHashTimer = setTimeout(() => {
       if (exporting || tourStep >= 0) return;
@@ -1946,21 +1947,37 @@ function factory(THREE, model) {
       panX: (e.minX + e.maxX) / 2 - frameBox.cx + (f.w - f.right) / 2 * perPx,
       panY: (e.minY + e.maxY) / 2 - frameBox.cy - (f.h - f.bottom) / 2 * perPx};
   }
-  // Centre a world point and zoom to it (the chips fly the camera) — in
-  // freeRect(), not the whole stage: there a phone's sheet covered the
-  // very building the finder flew to, and a tour beat parked its station
-  // half behind the card.
-  function focusOn(point, zoom) {
-    if (exporting) return; // nothing moves the camera inside a capture
+  // The view that centres a world point at a zoom (the chips fly the
+  // camera there) — in freeRect(), not the whole stage: there a phone's
+  // sheet covered the very building the finder flew to, and a tour beat
+  // parked its station half behind the card.
+  function viewFor(point, zoom) {
     const v = point.clone().applyMatrix4(camera.matrixWorldInverse);
-    view.zoom = zoom;
-    view.panX = v.x - frameBox.cx;
-    view.panY = v.y + 2 / zoom - frameBox.cy;
     const f = freeRect();
     const perPx = 2 * frameBox.halfH / (zoom * Math.max(1, f.h));
-    view.panX += (f.w - f.right) / 2 * perPx;
-    view.panY -= (f.h - f.bottom) / 2 * perPx;
+    return {zoom,
+      panX: v.x - frameBox.cx + (f.w - f.right) / 2 * perPx,
+      panY: v.y + 2 / zoom - frameBox.cy - (f.h - f.bottom) / 2 * perPx};
+  }
+  function focusOn(point, zoom) {
+    if (exporting) return; // nothing moves the camera inside a capture
+    Object.assign(view, viewFor(point, zoom));
     applyView(); requestRender();
+  }
+  // A playing trace follows its crate at TRACE_ZOOM: on a phone the whole
+  // floor is ~380 px wide and the solo crate a speck. The camera eases
+  // (never snaps) toward the crate; any hand pan, zoom or reset hands the
+  // camera back for the rest of the trace, and reduced motion keeps the
+  // whole floor.
+  const TRACE_ZOOM = 2, FOLLOW_TAU = 0.4;
+  let traceFollow = false;
+  function followTrace(dt) {
+    const target = viewFor(runFocus(state.trace), TRACE_ZOOM);
+    const k = 1 - Math.exp(-dt / FOLLOW_TAU);
+    view.zoom += (target.zoom - view.zoom) * k;
+    view.panX += (target.panX - view.panX) * k;
+    view.panY += (target.panY - view.panY) * k;
+    applyView();
   }
   // The hand-zoom range, one owner for wheel, pinch and #view links. 14×
   // deep, not 8×: the city's point is that every building is named, and
@@ -2034,7 +2051,7 @@ function factory(THREE, model) {
   });
   addEventListener("pointerup", (event) => { touches.delete(event.pointerId); pinchDist = 0; drag = null; });
   addEventListener("pointercancel", (event) => { touches.delete(event.pointerId); pinchDist = 0; drag = null; });
-  renderer.domElement.addEventListener("dblclick", resetView);
+  renderer.domElement.addEventListener("dblclick", () => { traceFollow = false; resetView(); });
 
   // --------------------------------------------------------- hover, pin
   const raycaster = new THREE.Raycaster();
@@ -2299,6 +2316,7 @@ function factory(THREE, model) {
       `${stops} station${stops === 1 ? "" : "s"}, ${span}, now at ${nameOf(run.station)}`;
     $("trace-banner").hidden = false;
     resetView();
+    traceFollow = !reducedMotion;
     goToDay(dayIndex(run.history[0].day));
     // goToDay parks at a day's END (a parked day shows its final floor);
     // a trace starts at its first hop. From the end, a one-day journey —
@@ -2717,6 +2735,7 @@ function factory(THREE, model) {
         if (state.trace) { layout(); focusOn(runFocus(state.trace), 2.4); }
       }
       layout(); syncTransport(); needsRender = true;
+      if (state.trace && traceFollow && state.playing) followTrace(dt);
       if (hoverAt && !exporting) hover(hoverAt);
       glideK = 1; // every layout outside the replay places exactly
       // A pinned panel follows the replay: rebuilt at each day boundary,
