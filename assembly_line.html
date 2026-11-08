@@ -134,12 +134,15 @@
     .keys { display: none; }
     .touch { display: inline; }
   }
+  /* nowrap: centred from left: 50%, the badge shrink-fits to half the
+     stage, and on a 320-px phone that broke the date into "2026-09-" /
+     "20" — a 69-px two-line badge over the floor. */
   #replay-date { position: absolute; left: 50%; top: .6rem;
     transform: translateX(-50%); font-size: 1.5rem; font-weight: 700;
     font-variant-numeric: tabular-nums; color: var(--ink);
     background: rgba(255,255,255,.92); border: 2px solid var(--line);
     border-radius: 999px; padding: .15rem 1.1rem; pointer-events: none;
-    z-index: 2; }
+    z-index: 2; white-space: nowrap; }
   /* max-width keeps the same .8rem margin on the right: unbounded, a
      phone's banner wrapped only at the stage edge, its border flush
      against the screen's right side. */
