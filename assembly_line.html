@@ -2096,8 +2096,13 @@ function factory(THREE, model) {
     if (key && signs[key]) signs[key].boost = 1.18;
     applyView(); requestRender();
   }
-  renderer.domElement.addEventListener("pointermove", (event) => {
-    const hit = pick(event);
+  // Where the pointer rests on the canvas. During a replay the floor moves
+  // under a still cursor, so the replay re-picks here each frame: the card
+  // says what is under the cursor now, not what was there when it last
+  // moved (resting on Review, it read "0 runs" while the chip said 16).
+  let hoverAt = null;
+  function hover(at) {
+    const hit = pick(at);
     if (!hit) { card.hidden = true; renderer.domElement.style.cursor = ""; boostSign(null); return; }
     if (hit.kind === "station") { stationCard(hit.station); boostSign(hit.station); }
     else {
@@ -2111,14 +2116,20 @@ function factory(THREE, model) {
     // under the legend, panel and tour card in z-order, so near them it
     // was half hidden. Past the free edge it flips to the cursor's left.
     const f = freeRect();
-    let x = event.clientX - rect.left + 16;
-    if (x + card.offsetWidth > f.right - 8) x = event.clientX - rect.left - 16 - card.offsetWidth;
+    let x = at.clientX - rect.left + 16;
+    if (x + card.offsetWidth > f.right - 8) x = at.clientX - rect.left - 16 - card.offsetWidth;
     x = Math.max(8, x);
-    const y = Math.max(8, Math.min(event.clientY - rect.top + 16, f.bottom - card.offsetHeight - 8));
+    const y = Math.max(8, Math.min(at.clientY - rect.top + 16, f.bottom - card.offsetHeight - 8));
     card.style.left = `${x}px`; card.style.top = `${y}px`;
     renderer.domElement.style.cursor = "pointer";
+  }
+  renderer.domElement.addEventListener("pointermove", (event) => {
+    hoverAt = {clientX: event.clientX, clientY: event.clientY};
+    hover(hoverAt);
   });
-  renderer.domElement.addEventListener("pointerleave", () => { card.hidden = true; boostSign(null); });
+  renderer.domElement.addEventListener("pointerleave", () => {
+    hoverAt = null; card.hidden = true; boostSign(null);
+  });
   function closePanel() {
     $("panel").hidden = true; state.pinned = null; state.highlighted = null;
     // The bar says what the view shows: a closed panel's link goes too.
@@ -2605,6 +2616,7 @@ function factory(THREE, model) {
         if (state.trace) { layout(); focusOn(runFocus(state.trace), 2.4); }
       }
       layout(); syncTransport(); needsRender = true;
+      if (hoverAt && !exporting) hover(hoverAt);
       glideK = 1; // every layout outside the replay places exactly
       // A pinned panel follows the replay: rebuilt at each day boundary,
       // so it never claims today's list against last summer's floor, and
