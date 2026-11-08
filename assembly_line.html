@@ -152,9 +152,15 @@
        into a 46 px curve the text's first and last lines crossed. */
     border-radius: 1.3rem; padding: .25rem .5rem .25rem .9rem; }
   #trace-banner b { overflow-wrap: anywhere; }
+  /* A date never breaks at its hyphens ("2026-09-" / "20" on a phone). */
+  #trace-banner time { white-space: nowrap; }
+  /* One line, never shrunk: as a flex item beside a wrapping slug it was
+     squeezed to 39 px and broke "✕ stop" into a two-line 46 px blob at
+     every phone and tablet width. A phone keeps just the ✕, as the
+     panel and legend do, so the slug loses no width to the word. */
   #trace-banner button { font: inherit; border: 1.5px solid var(--line);
     background: var(--panel); color: var(--ink); border-radius: 999px;
-    padding: .1rem .6rem; cursor: pointer; }
+    padding: .1rem .6rem; cursor: pointer; white-space: nowrap; flex: none; }
   /* A sibling of the row's <details>, not inside its <summary>: a button
      nested in a summary is an interactive control inside another (axe
      nested-interactive), announced and reached unreliably. It sits over
@@ -368,6 +374,7 @@
      sheet (it no longer opens on load there — see setLegend). */
   @media (max-width: 720px), (max-height: 480px) {
     #story, #hint, #honesty { display: none; }
+    #trace-stop .word { display: none; }
     header { padding: .5rem .7rem 0; }
     header h1 { font-size: 1.05rem; }
     header h1 .soft { display: none; }
@@ -518,7 +525,8 @@
     double-tap reset · tap a crate or station for its list</span></span>
   <div id="trace-banner" hidden>
     <span>tracing <b id="trace-name"></b> — <span id="trace-detail"></span></span>
-    <button id="trace-stop" aria-keyshortcuts="Escape">✕ stop</button>
+    <button id="trace-stop" aria-label="Stop tracing" aria-keyshortcuts="Escape">✕<span
+      class="word"> stop</span></button>
   </div>
   <span id="replay-date" hidden></span>
   <aside id="tour" hidden aria-label="Guided tour">
@@ -3116,9 +3124,11 @@ function factory(THREE, model) {
     const firstDay = run.history[0].day;
     const lastDay = run.history[run.history.length - 1].day;
     const stops = new Set(run.history.map((hop) => hop.station)).size;
-    const span = firstDay === lastDay ? `all on ${firstDay}` : `${firstDay} → ${lastDay}`;
-    $("trace-detail").textContent =
-      `${stops} station${stops === 1 ? "" : "s"}, ${span}, now at ${nameOf(run.station)}`;
+    const date = (day) => Object.assign(document.createElement("time"), { dateTime: day, textContent: day });
+    const span = firstDay === lastDay ? ["all on ", date(firstDay)]
+      : [date(firstDay), " → ", date(lastDay)];
+    $("trace-detail").replaceChildren(`${stops} station${stops === 1 ? "" : "s"}, `,
+      ...span, `, now at ${nameOf(run.station)}`);
     $("trace-banner").hidden = false;
     announce(`Tracing ${run.slug || run.ref}: ${$("trace-detail").textContent}.`);
     resetView();
