@@ -120,8 +120,11 @@
     width: 320px; background: var(--panel); border: 2px solid var(--line);
     border-radius: 12px; padding: .8rem 1rem;
     box-shadow: 0 14px 40px rgba(31,42,35,.22); }
-  #legend h2 { margin: 0 0 .4rem; font-size: .95rem; display: flex;
-    justify-content: space-between; align-items: center; }
+  /* The close button sits beside the heading, not inside it: inside,
+     the heading's accessible name was "How to read this Close legend". */
+  #legend .legend-head { display: flex; justify-content: space-between;
+    align-items: center; margin: 0 0 .4rem; }
+  #legend h2 { margin: 0; font-size: .95rem; }
   #legend button { border: 0; background: none; font-size: 1.05rem;
     cursor: pointer; }
   #legend ul { margin: 0; padding: 0; list-style: none; display: grid;
@@ -289,8 +292,8 @@
     </div>
   </aside>
   <aside id="legend" aria-label="How to read this">
-    <h2>How to read this
-      <button id="legend-close" aria-label="Close legend">✕</button></h2>
+    <div class="legend-head"><h2>How to read this</h2>
+      <button id="legend-close" aria-label="Close legend">✕</button></div>
     <ul>
       <li><span class="swatch" style="background:#d3d6db"></span>
         <span>A <b>crate</b> is one run in flight: feature, maintenance or
@@ -301,10 +304,11 @@
       <li><span class="swatch" style="background:#e0903a"></span>
         <span>The <b>amber sign</b> marks the busiest station — the
           pile-up.</span></li>
-      <li><span class="swatch" style="background:#8f6fd8"></span>
-        <span><b>Implement</b> crates carry their work orders as parts;
-          click one to see them.</span></li>
-      <li><span class="swatch" style="background:#ffffff"></span>
+      <li><span class="swatch" style="background:
+        linear-gradient(90deg,#6fd36f 50%,#c9cdd3 50%)"></span>
+        <span><b>Implement</b> crates carry their work orders as parts —
+          green done, grey open; click one to see them.</span></li>
+      <li><span class="swatch" style="background:#d8c3a5"></span>
         <span>The <b>city</b> at the end of the line is finished work:
           one named building per shipped run.</span></li>
       <li><span class="swatch" style="background:
