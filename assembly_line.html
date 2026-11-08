@@ -857,6 +857,15 @@ function factory(THREE, model) {
   }
   const signs = {};
   const SIGN_H = 2.5;
+  // An exported clip is 720 px wide, so at the screen's sign size its
+  // labels drew ~7-px text — the counts unreadable in a README. The
+  // export raises this while it captures.
+  const CLIP_SIGN_SCALE = 1.3;
+  let signScale = 1;
+  // One rule for a sign's height: map labels at 1×, out of the way close
+  // up, swollen a touch while hovered.
+  const signHeight = (sign) => SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom))
+    * (sign.boost || 1) * signScale;
   Object.keys(GRID).forEach((key) => {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true,
       depthTest: false}));
@@ -880,7 +889,7 @@ function factory(THREE, model) {
       sign.sprite.material.map = texture;
       sign.sprite.material.needsUpdate = true;
       sign.aspect = aspect;
-      const h = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom)) * (sign.boost || 1);
+      const h = signHeight(sign);
       sign.sprite.scale.set(h * aspect, h, 1);
       sign.last = want;
     }
@@ -1755,12 +1764,9 @@ function factory(THREE, model) {
     camera.left = cx - halfW; camera.right = cx + halfW;
     camera.top = cy + halfH; camera.bottom = cy - halfH;
     camera.updateProjectionMatrix();
-    // Signs shrink as the viewer zooms in: at 1× they are map labels,
-    // close up they get out of the way of the machines.
-    const h = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom));
     Object.values(signs).forEach((sign) => {
-      const hb = h * (sign.boost || 1);
-      if (sign.aspect) sign.sprite.scale.set(hb * sign.aspect, hb, 1);
+      const h = signHeight(sign);
+      if (sign.aspect) sign.sprite.scale.set(h * sign.aspect, h, 1);
     });
     yieldSigns();
   }
@@ -2695,7 +2701,7 @@ function factory(THREE, model) {
     $("trace-banner").hidden = !state.trace;
     view.zoom = saved.zoom; view.panX = saved.panX; view.panY = saved.panY;
     renderer.setPixelRatio(saved.ratio);
-    captureSize = null; stage.classList.remove("capturing");
+    captureSize = null; signScale = 1; stage.classList.remove("capturing");
     fit(); layout(); syncTransport(); requestRender();
     $("export").disabled = !enabled; play.disabled = !enabled;
     saved = null;
@@ -2727,6 +2733,7 @@ function factory(THREE, model) {
     // The renderer draws at the clip's size; the stage itself never
     // resizes (it used to, and a phone saw the floor jump and crop).
     captureSize = {w: W, h: H};
+    signScale = CLIP_SIGN_SCALE;
     stage.dataset.capture = "Exporting clip…";
     stage.classList.add("capturing");
     renderer.setPixelRatio(1);
