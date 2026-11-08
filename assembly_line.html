@@ -331,7 +331,7 @@
   <input id="scrub" type="range" min="0" max="0" step="1" value="0"
          aria-label="Replay date" disabled>
   <span id="day"></span>
-  <button id="today" hidden>⏭ today</button>
+  <button id="today" aria-label="Back to today" hidden>⏭ today</button>
   <span class="speed" role="group" aria-label="Replay length">
     <button id="speed-30" aria-pressed="true" disabled>30s</button>
     <button id="speed-60" aria-pressed="false" disabled>60s</button>
@@ -2246,13 +2246,18 @@ function factory(THREE, model) {
     // snapped to the day when parked (a drag mid-flight pauses first,
     // so this write never fights the user's hand).
     scrub.value = state.playing ? String(state.t) : String(Math.round(state.t));
-    $("day").textContent = dayLabel();
+    const label = dayLabel();
+    $("day").textContent = label;
+    // The slider's value is a day index (20640); assistive tech reads
+    // the date instead. Written only on change: the replay calls this
+    // every frame.
+    if (scrub.getAttribute("aria-valuetext") !== label) scrub.setAttribute("aria-valuetext", label);
     // The big date over the canvas: during a replay (or scrubbed into
     // the past) the canvas is where everyone looks, and the transport
     // bar's date is too small to carry "you are watching time pass".
     const off = state.playing || !isToday();
     $("replay-date").hidden = !off;
-    if (off) $("replay-date").textContent = dayLabel();
+    if (off) $("replay-date").textContent = label;
     // The way back for the mouse: End is keyboard-only and the scrubber
     // asks for a precise drag, so off-today grows a "today" button.
     $("today").hidden = !off || state.playing;
