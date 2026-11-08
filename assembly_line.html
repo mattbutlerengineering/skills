@@ -376,8 +376,12 @@
        second beat inside a 204 px limit and scrolled its buttons away. */
     #tour { left: auto; right: .5rem; top: .5rem; bottom: auto;
       transform: none; width: min(300px, 46vw); max-height: calc(100% - 1rem);
-      overflow: auto; }
-    #tour .row { flex-wrap: wrap; justify-content: flex-end; }
+      display: flex; flex-direction: column; overflow: hidden; }
+    /* Too tall for the card, only the words scroll: the whole card used
+       to, and at 600×320 four of six beats pushed End and Next out of
+       view below the fold of a 160 px card. */
+    #tour p { flex: 0 1 auto; min-height: 0; overflow: auto; }
+    #tour .row { flex: none; flex-wrap: wrap; justify-content: flex-end; }
     #tour .dots { flex: 1 1 100%; }
   }
   /* And one transport row: the phone layout stacks the slider over the
