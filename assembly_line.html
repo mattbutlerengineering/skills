@@ -203,6 +203,8 @@
     min-width: 3.4em; text-align: right; font-variant-numeric: tabular-nums; }
   #panel summary .prog.past { min-width: 7.6em; }
   #panel ul { margin: .2rem 0 .2rem 1rem; padding: 0; list-style: none; }
+  #panel .journey { margin: .1rem 0; font-size: .78rem; }
+  #panel .journey b { font-variant-numeric: tabular-nums; font-weight: 600; margin-right: .2rem; }
   #panel li.done::before { content: "☑ "; }
   #panel li.open::before { content: "☐ "; }
   #transport { flex: none; display: grid; gap: .2rem .8rem;
@@ -2105,7 +2107,22 @@ function factory(THREE, model) {
     const details = el("details", {}, summary);
     if (open) details.open = true;
     if (run.status === "attention") details.append(el("p", {class: "muted"}, run.reason));
-    else details.append(el("p", {class: "muted"}, run.dir));
+    else {
+      details.append(el("p", {class: "muted"}, run.dir));
+      // The journey by day — what a trace replays, readable at a glance.
+      // On a past day only the hops up to it: the panel never claims a
+      // future the floor has not reached.
+      const until = isToday() ? null : currentDay();
+      const days = [];
+      run.history.forEach((hop) => {
+        if (until && hop.day > until) return;
+        const last = days[days.length - 1];
+        if (last && last.day === hop.day) last.stops.push(nameOf(hop.station));
+        else days.push({day: hop.day, stops: [nameOf(hop.station)]});
+      });
+      days.forEach(({day, stops}) => details.append(
+        el("p", {class: "journey"}, el("b", {}, day), ` ${stops.join(" → ")}`)));
+    }
     if (run.work_orders.length) {
       if (!isToday()) details.append(el("p", {class: "muted"}, "progress as of today"));
       const ul = el("ul", {});
