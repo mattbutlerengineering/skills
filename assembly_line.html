@@ -2121,10 +2121,15 @@ function factory(THREE, model) {
     } else if (resting) resetView();
     requestRender();
   });
-  // The resting view sits a touch inside the fitted frame: the floor's
-  // corners are empty, so 1.1× buys a visibly larger factory while the
-  // top row's sign keeps clear of the header.
-  const BASE_ZOOM = 1.1;
+  // Fitted views (rest, legend, tour overviews) size the measured floor
+  // to its frame with 10% breathing room, up to FIT_MAX_ZOOM. The old cap
+  // of 1.1 dates from a padded frame (sign headroom, the city's full grid
+  // width); against the measured floor it left a laptop's factory 613 px
+  // tall in a 734 px stage. The cap now only stops a huge stage from
+  // blowing the floor up past reading size.
+  const FIT_MAX_ZOOM = 1.6;
+  // The intro settles onto the rest view from this much closer.
+  const INTRO_CLOSER = 1.32;
   // A hand-framed shot is shareable too: after zooming or panning, the
   // hash becomes #view=zoom,panX,panY (debounced; never clobbers a
   // semantic link like #run or #day). Reset clears it.
@@ -2140,7 +2145,7 @@ function factory(THREE, model) {
   }
   // The resting view centres today's drawn floor (restExtent, measured
   // once at load: camera-space, so no resize or replay day moves it) in
-  // the stage at BASE_ZOOM, or smaller if it would not fit. fit()'s frame
+  // the stage, fitted (fitInFree). fit()'s frame
   // pads for invisible things — sign headroom over every corner, the
   // city's full grid width — so at pan 0 the floor sat off-centre: 8 px
   // from a phone's left edge and 71 px from its right, and on a laptop
@@ -2152,7 +2157,7 @@ function factory(THREE, model) {
   // without disturbing one the viewer framed by hand.
   let lastRest = null, restExtent = null;
   function restView() {
-    const plain = {zoom: BASE_ZOOM, panX: 0, panY: 0};
+    const plain = {zoom: 1, panX: 0, panY: 0};
     const e = restExtent;
     if (!e || !isFinite(e.minX)) return plain;
     const s = stage.getBoundingClientRect();
@@ -2195,13 +2200,14 @@ function factory(THREE, model) {
     return {w: s.width, h: s.height, right, bottom};
   }
   // The view that fits the floor's extent into freeRect() (or the free
-  // rect given), capped at BASE_ZOOM (6% breathing room); null when
+  // rect given), capped at FIT_MAX_ZOOM (10% breathing room: at 6% the
+  // fitted floor came within 10 px of a phone's edges); null when
   // nothing is free.
   function fitInFree(e = floorExtent(), f = freeRect()) {
     if (f.right <= 0 || f.bottom <= 0 || !isFinite(e.minX)) return null;
-    const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
+    const spanX = (e.maxX - e.minX) * 1.1, spanY = (e.maxY - e.minY) * 1.1;
     // World units per pixel at zoom z is 2·halfH / (z·H).
-    const zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * f.bottom / (f.h * spanY),
+    const zoom = Math.min(FIT_MAX_ZOOM, 2 * frameBox.halfH * f.bottom / (f.h * spanY),
       2 * frameBox.halfH * f.right / (f.h * spanX));
     const perPx = 2 * frameBox.halfH / (zoom * f.h);
     return {zoom,
@@ -3167,7 +3173,7 @@ function factory(THREE, model) {
     if (intro !== null) {
       intro = Math.min(1, intro + dt / 1.1);
       const ease = 1 - Math.pow(1 - intro, 3);
-      view.zoom = lastRest.zoom + (1.45 - lastRest.zoom) * (1 - ease);
+      view.zoom = lastRest.zoom * (1 + (INTRO_CLOSER - 1) * (1 - ease));
       applyView();
       if (intro >= 1) intro = null;
       needsRender = true;
@@ -3367,7 +3373,7 @@ function factory(THREE, model) {
   }
 
   // ------------------------------------------------------------- start
-  // A one-breath settle: the floor eases in from a slightly wider frame.
+  // A one-breath settle: the floor eases out onto its rest from closer in.
   let intro = reducedMotion ? null : 0;
   fit();
   layout();
@@ -3375,7 +3381,7 @@ function factory(THREE, model) {
   restExtent = floorExtent();
   lastRest = restView();
   view.panX = lastRest.panX; view.panY = lastRest.panY;
-  view.zoom = intro !== null ? 1.45 : lastRest.zoom;
+  view.zoom = intro !== null ? lastRest.zoom * INTRO_CLOSER : lastRest.zoom;
   applyView();
   syncTransport();
   // The city follows the room: lit windows after dark, live on change.
@@ -3402,7 +3408,7 @@ function factory(THREE, model) {
       find.value = run; find.dispatchEvent(new Event("change"));
       // Only a found run owns the camera (the finder pinned it and flew
       // there). An unknown slug is ignored like any bad value: cancelling
-      // the intro anyway froze the view at its 1.45× starting frame,
+      // the intro anyway froze the view at its closer starting frame,
       // cropped under the legend.
       if (state.pinned && state.pinned.run) intro = null;
     }
