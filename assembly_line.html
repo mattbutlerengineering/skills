@@ -2992,7 +2992,8 @@ function factory(THREE, model) {
     }
     // #tour walks its recipient through the floor; #trace=<slug> replays
     // one run's journey, solo — the links the tour and trace write.
-    if (hash.has("tour")) { startTour(); intro = null; }
+    // Only a tour that started owns the camera (as with #run=).
+    if (hash.has("tour")) { startTour(); if (tourStep >= 0) intro = null; }
     const trace = hash.get("trace");
     if (trace) {
       const wanted = trace.toLowerCase();
