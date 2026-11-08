@@ -32,10 +32,10 @@ past its declared age and each malformed declaration, runs nothing to do it,
 and this repo's `docs/kb/main-unprotected.md` declares its check and lints
 clean.
 
-- [ ] **K1 Age-check tests** — cases in `tests/test_kb.py` for `kb.age_problems(page, today)` and `kb.lint(root, git=_git, today=None)` over fixture pages — size:M
+- [x] **K1 Age-check tests** — cases in `tests/test_kb.py` for `kb.age_problems(page, today)` and `kb.lint(root, git=_git, today=None)` over fixture pages — size:M
   - Accept: the cases exist and fail before K2 lands. Over a fixture page with `checked-against`, `checked` and `max-age: 30d`, `lint` with an injected `today` one day after `checked` + 30 days returns exactly one string `kb: <path> is past its declared age: checked <date>, max-age <N>d, due <due> — re-check it` naming that page, and with `today` on the due date returns none. Each malformed form returns its exact string from architecture.md: a missing field (one string per missing field when `checked` or `max-age` is present), an empty `checked-against`, a `checked` that is not a date, a `checked` after today, and a `max-age` that is not a whole number of days (`0d`, `30`, `thirty`), so no malformed page reads as fresh. An offline case calls `age_problems` and `lint` with `cli.runner` and `socket.socket` patched to raise on any call and gets the same strings. A page with `checked-against` alone and a page with none of the three fields each return no age string (PRD 1, 2, 3, 24).
   - Blocked by: —
-- [ ] **K2 Age check in kb.py** — add `age_problems` and the `today` parameter to the Page contract and lint — `kb.py` component, per ADR-0125 — size:M
+- [x] **K2 Age check in kb.py** — add `age_problems` and the `today` parameter to the Page contract and lint — `kb.py` component, per ADR-0125 — size:M
   - Accept: the K1 cases pass, and every case already in `tests/test_kb.py` passes unedited. `lint` orders field problems, then link and age problems per page, then index, then staleness, as architecture.md's interface states. `age_problems` reads only the parsed fields and `today`, and the rendered index line never includes `checked-against`, `checked` or `max-age`. Run over this repo before K3, `python3 kb.py lint` prints the same output it printed on `main` for the six current pages (PRD 1, 2, 3, 25).
   - Blocked by: K1 Age-check tests
 - [ ] **K3 main-unprotected.md declares its check** — the First user — `docs/kb/main-unprotected.md` component: add the three fields and drop the hand-written re-check paragraph — size:S
@@ -148,4 +148,27 @@ assumptions are carried into K4 and K6 as fixture shapes, not resolved here.
 
 ## Notes
 
-None yet. Implement logs deviations here, dated.
+Implement, 2026-11-08 (unattended, autorun).
+
+- **K1, red before K2.** `python3 -m unittest -v tests.test_kb.TestAge`
+  against the tree before K2: 12 of 13 cases (16 counting subtests)
+  ERROR with `TypeError: lint() got an unexpected keyword argument
+  'today'` or `AttributeError: module 'kb' has no attribute
+  'age_problems'`; `FAILED (errors=16)`. The one case that passed on
+  arrival, `test_the_index_line_never_carries_the_fields`, pins existing
+  behaviour (K2's Accept line that the rendered index never includes the
+  three fields), so it is not vacuous.
+- **K1 default taken.** The offline case injects the git runner as a
+  stub, as every `TestLint` case does, and patches `cli.runner` and
+  `socket.socket` to raise `AssertionError`; patching `cli.runner`
+  without the stub would make the existing staleness check (not the age
+  check) report `git is unavailable`, which is not what the case tests.
+- **K2, green.** `python3 -m unittest tests.test_kb`: `Ran 42 tests`,
+  `OK`; no existing case edited (only imports and a helper were added).
+  `python3 kb.py lint` over this repo before K3: `kb: 0 problem(s)`,
+  the same as before the change.
+- **K2 default taken.** Within one page, `age_problems` orders its
+  strings: missing fields (in `checked-against`, `checked`, `max-age`
+  order), empty `checked-against`, the `checked` problem, the `max-age`
+  problem, then past-age. A future `checked` is not also aged. The
+  architecture fixes the strings, not their order within a page.
