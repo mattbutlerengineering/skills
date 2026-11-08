@@ -119,9 +119,14 @@
     margin-left: auto; flex: none; align-self: flex-start; white-space: nowrap; }
   .trace-btn:hover { border-color: var(--accent); }
   /* While a trace banner occupies the top-left, the date badge yields
-     the centre and docks right. */
+     the centre and docks right — and on a narrow stage, where the banner
+     spans the width and covered it, to the bottom right. */
   #trace-banner:not([hidden]) ~ #replay-date { left: auto; right: .8rem;
     transform: none; }
+  @media (max-width: 720px) {
+    #trace-banner:not([hidden]) ~ #replay-date { top: auto; bottom: .6rem;
+      font-size: 1.1rem; }
+  }
   /* Visible from the first progressive paint on a slow link (the page
      is one multi-MB file); the .5s appear delay keeps fast loads from
      flashing it. Both boot paths hide it. */
@@ -2051,7 +2056,9 @@ function factory(THREE, model) {
     // day lands the next day: ending at that day's start left the crate
     // frozen mid-belt under a banner saying "now at" its station.
     const hops = times.get(run);
-    traceEnd = Math.min(LAST + 1, Math.ceil(hops[hops.length - 1].t + TRAVEL + 0.25));
+    // toStop: a trace that ends on the last recorded day ends at today —
+    // the same date — not at that day's start under a "today" button.
+    traceEnd = toStop(Math.min(LAST + 1, Math.ceil(hops[hops.length - 1].t + TRAVEL + 0.25)));
     $("trace-name").textContent = run.slug || run.ref;
     // Most journeys here happen inside one day: without this line the
     // trace is a motionless frame and the viewer learns nothing. The
