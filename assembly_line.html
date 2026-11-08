@@ -3032,19 +3032,34 @@ function factory(THREE, model) {
     syncTitle();
     const {key, run} = state.pinned;
     const here = runsAt(key);
-    panelRuns = here;
     $("panel-title").textContent = `${nameOf(key)} · as of ${asOf()}`;
     const body = $("panel-body");
+    // Stepping a day rebuilds the rows. Focus on a row (its summary or
+    // trace button) followed it out of the document, to <body>, so a
+    // keyboard user stepping days from the panel lost their place: it
+    // returns to the same run's row (still open if it was), or to the
+    // panel's title when the run has moved on.
+    const had = body.contains(document.activeElement) ? document.activeElement : null;
+    const oldRow = had && had.closest(".run");
+    const keep = oldRow && panelRuns[[...body.querySelectorAll(".run")].indexOf(oldRow)];
+    const keepOpen = oldRow && oldRow.querySelector("details").open;
+    const keepPart = had && had.classList.contains("trace-btn") ? ".trace-btn" : "summary";
+    panelRuns = here;
     // The bin has no order to claim: its runs carry no dates.
     body.replaceChildren(el("p", {class: "muted"}, here.length
       ? `${here.length} run${here.length === 1 ? "" : "s"}${key === "bin" ? "" : ", oldest first"}`
       : `No runs here as of ${asOf()}`));
-    let opened = null;
+    let opened = null, kept = null;
     here.forEach((r) => {
-      const row = runRow(r, r === run);
+      const row = runRow(r, r === run || (r === keep && keepOpen));
       body.append(row);
       if (r === run) opened = row;
+      if (r === keep) kept = row;
     });
+    if (had) {
+      const target = kept && kept.querySelector(keepPart);
+      (target || $("panel-title")).focus({preventScroll: !target});
+    }
     // The clicked crate's row opens below the fold in a long list:
     // bring it into view once the panel is laid out.
     if (opened) requestAnimationFrame(() => opened.scrollIntoView({block: "nearest"}));
@@ -3463,10 +3478,10 @@ function factory(THREE, model) {
       if (event.key === " ") { event.preventDefault(); play.click(); }
       return;
     }
-    // A transport button owns only Space and Enter; the arrows, Home, End
-    // and / still drive the timeline from one (focus sits on Play once a
-    // trace or the tour's last beat starts the replay). Other buttons —
-    // a panel row's trace, a chip — keep every key.
+    // A button owns only Space and Enter; ← →, Home, End and / still drive
+    // the timeline from one (focus sits on Play once a trace or the tour's
+    // last beat starts the replay, on a chip once Esc closes its panel).
+    // In the scrolling panel and legend, Home and End keep scrolling.
     if (event.target.closest("input")) return;
     // A panel row (details/summary) keeps only the keys it uses — Space
     // and Enter toggle it, the vertical keys scroll the list. ← → and
@@ -3495,7 +3510,8 @@ function factory(THREE, model) {
       }
     }
     const button = event.target.closest("button");
-    if (button && (!button.closest("#transport") || event.key === " " || event.key === "Enter")) return;
+    if (button && (event.key === " " || event.key === "Enter"
+      || ((event.key === "Home" || event.key === "End") && button.closest("#panel, #legend")))) return;
     const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
     if (event.key === " ") { event.preventDefault(); play.click(); }
     else if (event.key === "ArrowLeft") { event.preventDefault(); goToDay(Math.max(FIRST, day - 1)); }
