@@ -2107,6 +2107,12 @@ function factory(THREE, model) {
           // at Operate it hung four layers up over an empty pallet.
           const pos = state.trace === run ? slotPosition(key, 0, 1)
             : slotPosition(key, i, list.length);
+          // A pinned crate inside a heap is lifted to the heap's top layer
+          // (and then over it, below): lifted 1.2 from its own layer it
+          // stayed inside the pile, 0–3% of it visible for most of
+          // Operate's 69, with only the marker showing where it was.
+          if (state.highlighted === run && state.trace !== run && i >= 6)
+            pos.y = Math.max(pos.y, slotPosition(key, list.length - 1, list.length).y);
           placeCrate(crateOf.get(run), pos);
           crateOf.get(run).mesh.rotation.set(0, 0, 0);
           // A heap crate takes its packed thickness; belt slots stay whole.
