@@ -316,8 +316,8 @@
         <span>The <b>bin</b> holds runs the placement tool could not
           read; hover one for the reason.</span></li>
     </ul>
-    <p class="foot">Hover anything for detail; click to pin a list. Press
-      Play to replay the repo's whole history.</p>
+    <p class="foot">Hover anything for detail; click to pin a list.<span
+      id="legend-play"> Press Play to replay the repo's whole history.</span></p>
   </aside>
   <aside id="panel" hidden aria-label="Pinned detail">
     <header><h2 id="panel-title"></h2>
@@ -2326,9 +2326,16 @@ function factory(THREE, model) {
   $("today").addEventListener("click", () => goToDay(LAST + 1));
   const enabled = runs.length > 0;
   [play, scrub, $("speed-30"), $("speed-60"), $("export")].forEach((b) => { b.disabled = !enabled; });
-  // An empty repo has nothing to tour and nothing to find; the empty
-  // sign already says what to do instead.
-  if (!enabled) { $("tour-open").hidden = true; find.hidden = true; }
+  // An empty repo has nothing to tour, find or replay; the empty sign
+  // already says what to do instead. So no tour, finder, key hint or
+  // "Press Play" line, and the disabled slider's thumb sits at today
+  // (its range was one day wide, which parks a native thumb at the left
+  // under a "(today)" label).
+  if (!enabled) {
+    $("tour-open").hidden = true; find.hidden = true;
+    $("hint").hidden = true; $("legend-play").hidden = true;
+    scrub.min = String(TODAY_STOP - 1);
+  }
   // The bin's line is only true of a repo that has one.
   $("legend-bin").hidden = !runs.some((run) => run.status === "attention");
   play.addEventListener("click", () => {
