@@ -412,7 +412,7 @@
       <li><span class="swatch" style="background:
         linear-gradient(90deg,#7cc44e 33%,#e0903a 33% 66%,#8f6fd8 66%)"></span>
         <span><b>Tape colour</b> is the run's kind: green feature, amber
-          maintenance, purple product.</span></li>
+          maintenance (taped across), purple product.</span></li>
       <li id="legend-bin" hidden><span class="swatch"
         style="background:#e0903a"></span>
         <span>The <b>bin</b> holds runs the placement tool could not
@@ -1052,11 +1052,26 @@ function factory(THREE, model) {
   // Tape colour says what kind of run the crate is: green = feature,
   // purple = product, amber = maintenance. The legend repeats it, in the
   // words the hover card and panel rows print (CONTEXT.md's run kinds).
+  // Maintenance is also taped ACROSS (a cross on the lid, one mesh): to
+  // deuteranopia and protanopia the green and amber tapes are one
+  // mustard, and the two commonest kinds were the same crate.
   const TAPE = {feature: 0x7cc44e, product: 0x8f6fd8, maintenance: 0xe0903a};
+  const crossTapeGeo = (() => {
+    // The cross arm stands 0.01 prouder so the shared centre never z-fights.
+    const parts = [new THREE.BoxGeometry(CRATE + 0.02, 0.1, 0.3).toNonIndexed(),
+      new THREE.BoxGeometry(0.3, 0.12, CRATE + 0.02).toNonIndexed()];
+    const geo = new THREE.BufferGeometry();
+    for (const name of ["position", "normal"]) {
+      geo.setAttribute(name, new THREE.Float32BufferAttribute(
+        parts.flatMap((part) => Array.from(part.attributes[name].array)), 3));
+    }
+    parts.forEach((part) => part.dispose());
+    return geo;
+  })();
   function crateMesh(color = COLORS.crate, kind) {
     const mesh = outlined(new THREE.Mesh(boxGeo(CRATE, CRATE * 0.8, CRATE), mat(color)));
     mesh.castShadow = true;
-    const strip = new THREE.Mesh(boxGeo(CRATE + 0.02, 0.1, 0.3),
+    const strip = new THREE.Mesh(kind === "maintenance" ? crossTapeGeo : boxGeo(CRATE + 0.02, 0.1, 0.3),
       mat(TAPE[kind] || COLORS.tape));
     strip.position.y = CRATE * 0.4;
     mesh.add(strip);
