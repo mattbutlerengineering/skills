@@ -1431,6 +1431,9 @@ function factory(THREE, model) {
     if (k >= 0 && k < SPAN) { busy[k] = 1; busy[k + 1] = 1; }
   }));
   const dayWeight = (k) => (busy[k] ? 1 : QUIET_WEIGHT);
+  // Is the playhead on a quiet (fast-forwarded) day? The date badge and
+  // the clip's stamp mark it.
+  const quietNow = () => !isToday() && !busy[Math.floor(state.t) - FIRST];
   const cumU = new Float64Array(SPAN + 1);
   for (let k = 0; k < SPAN; k++) cumU[k + 1] = cumU[k] + dayWeight(k);
   const TOTAL_U = cumU[SPAN];
@@ -2309,7 +2312,10 @@ function factory(THREE, model) {
     // bar's date is too small to carry "you are watching time pass".
     const off = state.playing || !isToday();
     $("replay-date").hidden = !off;
-    if (off) $("replay-date").textContent = label;
+    // While the replay fast-forwards a quiet day the date says so (▸▸):
+    // the footer's "quiet days replay faster" is small print, and dates
+    // racing past otherwise read as a glitch.
+    if (off) $("replay-date").textContent = state.playing && quietNow() ? `${label} ▸▸` : label;
     // The way back for the mouse: End is keyboard-only and the scrubber
     // asks for a precise drag, so off-today grows a "today" button.
     $("today").hidden = !off || state.playing;
@@ -2569,7 +2575,8 @@ function factory(THREE, model) {
       // scene between these renders.
       renderer.render(scene, camera);
       paint();
-      stamp(`${model.repo} · ${isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay()}`);
+      const when = isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay();
+      stamp(`${model.repo} · ${when}${quietNow() ? " ▸▸" : ""}`);
       gif.frame(ctx.getImageData(0, 0, W, H).data, i === total + HOLD_FRAMES ? 300 : 100 / FPS);
       if (i % 10 === 0) {
         status.textContent = `Exporting clip… ${Math.round(100 * i / (total + HOLD_FRAMES))}%`;
