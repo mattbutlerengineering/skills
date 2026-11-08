@@ -3,11 +3,15 @@ summary: main has no branch protection or rulesets — ADR-0036's required check
 sources: docs/adr/0036-agent-merge-under-independent-review.md, docs/adr/0070-github-merge-queue-composes-with-agent-merge.md
 verified: f2ba566331b8ff91d0113fdf97833e91edb43ca8
 related: pr-body-contract, cross-pr-merge-hazards
+checked-against: the GitHub API (main's branch protection and the repo's rulesets); not GitHub's merge-queue docs, and nothing in this repo records the setting
+checked: 2026-11-08
+max-age: 30d
 ---
 
 # main is unprotected
 
-Checked 2026-10-10 against the GitHub API, not the repo:
+Re-check with these two commands against the GitHub API (the
+results shown are what they returned on the `checked:` date):
 
 ```
 gh api repos/mattbutlerengineering/skills/branches/main/protection  -> 404 "Branch not protected"
@@ -22,6 +26,3 @@ gh api repos/mattbutlerengineering/skills/rulesets                  -> []
   verified against GitHub's docs).
 - Because the queue is off, PRs merge one at a time with no re-test
   against the new `main`. That is why `cross-pr-merge-hazards` exists.
-
-Re-check with the two commands above before relying on this page. They
-are the source of truth, and nothing in the repo records the setting.

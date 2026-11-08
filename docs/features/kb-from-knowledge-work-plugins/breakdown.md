@@ -38,7 +38,7 @@ clean.
 - [x] **K2 Age check in kb.py** — add `age_problems` and the `today` parameter to the Page contract and lint — `kb.py` component, per ADR-0125 — size:M
   - Accept: the K1 cases pass, and every case already in `tests/test_kb.py` passes unedited. `lint` orders field problems, then link and age problems per page, then index, then staleness, as architecture.md's interface states. `age_problems` reads only the parsed fields and `today`, and the rendered index line never includes `checked-against`, `checked` or `max-age`. Run over this repo before K3, `python3 kb.py lint` prints the same output it printed on `main` for the six current pages (PRD 1, 2, 3, 25).
   - Blocked by: K1 Age-check tests
-- [ ] **K3 main-unprotected.md declares its check** — the First user — `docs/kb/main-unprotected.md` component: add the three fields and drop the hand-written re-check paragraph — size:S
+- [x] **K3 main-unprotected.md declares its check** — the First user — `docs/kb/main-unprotected.md` component: add the three fields and drop the hand-written re-check paragraph — size:S
   - Accept: the page's frontmatter carries `checked-against` naming the GitHub API (and what it was not checked against), `checked` as the date Implement re-ran its two `gh api` commands or 2026-11-08 if it could not, and `max-age: 30d`; the two `gh api` commands stay as how to re-check; the "Re-check … nothing in the repo records the setting" paragraph is gone; `summary`, `sources`, `verified` and `related` are unchanged, so the knowledge-base index lines in `CLAUDE.md` and `AGENTS.md` show no diff; `python3 kb.py lint` over this repo exits 0 and prints `kb: 0 problem(s)` (PRD 4).
   - Blocked by: K2 Age check in kb.py
 
@@ -172,3 +172,19 @@ Implement, 2026-11-08 (unattended, autorun).
   order), empty `checked-against`, the `checked` problem, the `max-age`
   problem, then past-age. A future `checked` is not also aged. The
   architecture fixes the strings, not their order within a page.
+- **K3, the check re-run.** Implement ran the page's two read-only
+  commands on 2026-11-08:
+  `gh api repos/mattbutlerengineering/skills/branches/main/protection`
+  printed `{"message":"Branch not protected",...,"status":"404"}` and
+  `gh: Branch not protected (HTTP 404)` (exit 1), and
+  `gh api repos/mattbutlerengineering/skills/rulesets` printed `[]`
+  (exit 0). The claim holds, so `checked: 2026-11-08`. `verified:` stays
+  `f2ba566`, which `git merge-base --is-ancestor` confirms is on
+  `origin/main` (6f921cb), as the page rubric asks. The body's
+  "Checked 2026-10-10" lead-in now points at the `checked:` field
+  instead of carrying a second date. `python3 kb.py lint`:
+  `kb: 0 problem(s)`, exit 0; `kb.py index` left `CLAUDE.md` and
+  `AGENTS.md` unchanged. With `today` 2026-12-09 lint reports
+  `kb: docs/kb/main-unprotected.md is past its declared age: checked
+  2026-11-08, max-age 30d, due 2026-12-08 — re-check it`; with
+  2026-12-08 it reports nothing.
