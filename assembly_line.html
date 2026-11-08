@@ -198,7 +198,11 @@
   /* The close button sits beside the heading, not inside it: inside,
      the heading's accessible name was "How to read this Close legend". */
   #legend .legend-head { display: flex; justify-content: space-between;
-    align-items: center; margin: 0 0 .4rem; }
+    align-items: center; margin: -.8rem 0 .4rem; padding-top: .8rem;
+    /* Pinned while the legend scrolls: the ✕ scrolled away with the
+       heading, on every capped legend from a phone sheet to a 1440×500
+       window, leaving Esc or the header button as the way out. */
+    position: sticky; top: -.8rem; z-index: 1; background: var(--panel); }
   #legend h2 { margin: 0; font-size: .95rem; }
   #legend button { border: 0; background: none; font-size: 1.05rem;
     cursor: pointer; color: inherit; }
