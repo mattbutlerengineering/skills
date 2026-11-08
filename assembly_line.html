@@ -2279,13 +2279,25 @@ function factory(THREE, model) {
 
   // ---------------------------------------------------------- transport
   const play = $("play"), scrub = $("scrub");
-  scrub.min = String(FIRST); scrub.max = String(LAST + 1); scrub.value = String(LAST + 1);
+  // The model's last day is never before its generation date
+  // (assembly_line.py: last_day = max(days + [today])), so the end of
+  // the last day and "today" are usually one calendar date. Then they
+  // are one stop: the first step back from today used to land on the
+  // same floor under the same date minus "(today)", a step that seemed
+  // to do nothing. TODAY_STOP is the day index that means today.
+  const TODAY_STOP = model.generated.slice(0, 10) === model.timeline.last_day ? LAST : LAST + 1;
+  const toStop = (index) => (index >= TODAY_STOP ? LAST + 1 : index);
+  scrub.min = String(FIRST); scrub.max = String(TODAY_STOP); scrub.value = String(TODAY_STOP);
   function dayLabel() { return isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay(); }
   function syncTransport() {
     // The thumb tracks the playhead: smooth while the replay runs,
     // snapped to the day when parked (a drag mid-flight pauses first,
-    // so this write never fights the user's hand).
-    scrub.value = state.playing ? String(state.t) : String(Math.round(state.t));
+    // so this write never fights the user's hand). A parked day d sits
+    // at t = d + 1 − 1e-6 (goToDay), so it snaps down, not to the
+    // nearest: rounding showed d + 1, and the slider's own ← then landed
+    // back on d — every press after the first did nothing.
+    scrub.value = state.playing ? String(state.t)
+      : String(isToday() ? TODAY_STOP : Math.floor(state.t));
     const label = dayLabel();
     $("day").textContent = label;
     // The slider's value is a day index (20640); assistive tech reads
@@ -2329,7 +2341,7 @@ function factory(THREE, model) {
     history.replaceState(null, "", isToday()
       ? location.pathname + location.search : `#day=${currentDay()}`);
   }
-  scrub.addEventListener("input", () => { goToDay(Number(scrub.value)); });
+  scrub.addEventListener("input", () => { goToDay(toStop(Number(scrub.value))); });
   // Presenter keys: Space plays and pauses, the arrows step one day at
   // a time (a 180-day history is too fine for the scrubber's thumb),
   // Home and End jump to the first day and back to today. Keys inside
@@ -2346,10 +2358,10 @@ function factory(THREE, model) {
       return;
     }
     if (event.target.closest("input, button, details, summary")) return;
-    const day = Math.min(LAST + 1, Math.floor(state.t));
+    const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
     if (event.key === " ") { event.preventDefault(); play.click(); }
     else if (event.key === "ArrowLeft") { event.preventDefault(); goToDay(Math.max(FIRST, day - 1)); }
-    else if (event.key === "ArrowRight") { event.preventDefault(); goToDay(Math.min(LAST + 1, day + 1)); }
+    else if (event.key === "ArrowRight") { event.preventDefault(); goToDay(toStop(Math.min(LAST + 1, day + 1))); }
     else if (event.key === "Home") { event.preventDefault(); goToDay(FIRST); }
     else if (event.key === "End") { event.preventDefault(); goToDay(LAST + 1); }
     else if (event.key === "/") { event.preventDefault(); find.focus(); }
@@ -2590,7 +2602,7 @@ function factory(THREE, model) {
     const day = hash.get("day");
     if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
       const index = dayIndex(day);
-      if (index >= FIRST && index <= LAST) { goToDay(index); intro = null; view.zoom = BASE_ZOOM; applyView(); }
+      if (index >= FIRST && index <= LAST) { goToDay(toStop(index)); intro = null; view.zoom = BASE_ZOOM; applyView(); }
     }
     const run = hash.get("run");
     if (run) { find.value = run; find.dispatchEvent(new Event("change")); intro = null; }
