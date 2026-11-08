@@ -583,7 +583,11 @@ async function loadThree() {
   const moduleText = new TextDecoder().decode(bytes(decode("three-module")))
     .split("'./three.core.js'").join(JSON.stringify(coreUrl));
   const moduleUrl = URL.createObjectURL(new Blob([moduleText], {type: "text/javascript"}));
-  return import(moduleUrl);
+  // Once loaded the modules live on without their URLs; revoked, the
+  // blobs behind them (~1.3 MB of source) can be freed.
+  return import(moduleUrl).finally(() => {
+    URL.revokeObjectURL(moduleUrl); URL.revokeObjectURL(coreUrl);
+  });
 }
 
 const MODEL = readModel();
@@ -3112,10 +3116,15 @@ function factory(THREE, model) {
       }
     }
     const blob = new Blob([gif.finish()], {type: "image/gif"});
-    const link = el("a", {href: URL.createObjectURL(blob), download: `${model.repo}-assembly-line.gif`});
+    const url = URL.createObjectURL(blob);
+    const link = el("a", {href: url, download: `${model.repo}-assembly-line.gif`});
     document.body.append(link);
     link.click();
     link.remove();
+    // The download has its bytes once it starts; unrevoked, every export
+    // kept its 2.5 MB blob alive for the page's lifetime. Some browsers
+    // read the URL a moment after the click, hence the delay.
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
     window.__assemblyLine.lastGif = blob;
     status.textContent = `Clip exported (${(blob.size / 1048576).toFixed(1)} MB). Commit it and reference it from your README as an image.`;
     restoreAfterExport();
