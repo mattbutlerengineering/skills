@@ -372,7 +372,7 @@
       id="legend-play"> Press Play to replay the repo's whole history.</span></p>
   </aside>
   <aside id="panel" hidden aria-label="Pinned detail">
-    <header><h2 id="panel-title"></h2>
+    <header><h2 id="panel-title" tabindex="-1"></h2>
       <button id="panel-close" aria-label="Close panel">✕</button></header>
     <div class="body" id="panel-body"></div>
   </aside>
@@ -2203,8 +2203,21 @@ function factory(THREE, model) {
   renderer.domElement.addEventListener("pointerleave", () => {
     hoverAt = null; card.hidden = true; boostSign(null);
   });
+  // Keyboard flow for the panel: a chip or the finder that opens it moves
+  // focus to its title (Tab then walks its rows), and closing it while
+  // focus is inside hands focus back to that opener. Before, focus stayed
+  // on the chip (Tab went to the next chip, never into the panel), and
+  // Esc left it wherever it was.
+  let panelOpener = null;
+  function focusPanel(opener) {
+    panelOpener = opener;
+    $("panel-title").focus();
+  }
   function closePanel() {
+    const hadFocus = $("panel").contains(document.activeElement);
     $("panel").hidden = true; state.pinned = null; state.highlighted = null;
+    if (hadFocus && panelOpener && panelOpener.isConnected && !panelOpener.hidden) panelOpener.focus();
+    panelOpener = null;
     // The bar says what the view shows: a closed panel's link goes too.
     if (/^#(run|station)=/.test(location.hash))
       history.replaceState(null, "", location.pathname + location.search);
@@ -2401,7 +2414,7 @@ function factory(THREE, model) {
     openPanel({kind: "crate", run});
     focusOn(runFocus(run), 2.4);
     // (openPanel wrote the #run link)
-    find.blur();
+    focusPanel(find);
     requestRender();
   });
   let panelDay = null, panelRuns = [];
@@ -2469,6 +2482,7 @@ function factory(THREE, model) {
     const chip = el("button", {class: "chip", title: infoOf(key)[1]}, n, name);
     chip.addEventListener("click", () => {
       openPanel({kind: "station", station: key});
+      focusPanel(chip);
       focusOn(focusTargetOf(key), 2.1);
       requestRender();
     });
@@ -2591,17 +2605,23 @@ function factory(THREE, model) {
     // stations whose crates are hidden.
     endTrace();
     closePanel(); setLegend(false); card.hidden = true;
-    $("tour-open").blur();
+    // Focus goes to the tour's Next (set after showTourStep below), not
+    // nowhere: blurred, a keyboard user restarted from the top of the page.
     if (!isToday()) goToDay(LAST + 1);
     tourBeats = tourScript();
     tourStep = 0;
     $("tour").hidden = false;
     history.replaceState(null, "", "#tour");
     showTourStep();
+    $("tour-next").focus();
   }
   function nextTour() {
     const beat = tourBeats[tourStep];
-    if (beat && beat.thenPlay) { endTour(); if (!state.playing) play.click(); return; }
+    if (beat && beat.thenPlay) {
+      // The tour hands over to the replay, so focus goes to Play: Space
+      // pauses, rather than restarting the tour from its button.
+      endTour(); if (!state.playing) play.click(); play.focus(); return;
+    }
     tourStep++;
     if (tourStep >= tourBeats.length) { endTour(); return; }
     showTourStep();
@@ -2609,7 +2629,10 @@ function factory(THREE, model) {
   function endTour() {
     if (tourStep < 0) return;
     tourStep = -1;
+    // Closing the box with focus in it hands focus back to the Tour button.
+    const hadFocus = $("tour").contains(document.activeElement);
     $("tour").hidden = true;
+    if (hadFocus) $("tour-open").focus();
     if (location.hash === "#tour")
       history.replaceState(null, "", location.pathname + location.search);
     resetView();
