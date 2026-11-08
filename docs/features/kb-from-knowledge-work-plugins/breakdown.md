@@ -276,3 +276,68 @@ Implement, 2026-11-08 (unattended, autorun).
   written for this repo from the brief's summary of the source; no
   sentence of knowledge-work-plugins was read into or copied from in
   this stage.
+- **K12 NOT checked: stopped on a design gap, routed back to Architect.**
+  `python3 run_tests.py` exits 1: `tests: 4141 tests across 132 modules
+  in 26.5s on 8 workers, 1 problem(s)`. The one failure is
+  `tests.test_protocol_frontmatter.TestOneFenceDefinition.test_the_exact_count_map`,
+  which now finds `'kb_harvest.py': ['---', '---']`, the frontmatter
+  fence that K7's `_block` helper (commit 78b1a1b) defines so
+  `memory_type` can find a memory file's frontmatter block. ADR-0118
+  gives that rule one owner, `protocol.frontmatter_end`, and the test
+  pins it. architecture.md ("Stack & dependencies", and K5's Accept)
+  says `kb_harvest.py` gains no import beyond `cli`, so it cannot call
+  `protocol.frontmatter_end`. Importing `protocol` would add the pair
+  `(kb_harvest, protocol)` to ADR-0091's dual-membership set, which
+  `tests/test_dual_membership.py` pins and which has to be recorded by
+  ADR. architecture.md rejected `kb_memory.py` partly to avoid adding
+  such a pair. It did not see that reading a memory file's frontmatter
+  in `kb_harvest.py` needs the fence. Either way out changes a pinned
+  invariant that an ADR records, so Implement did not pick one. The
+  choices for Architect:
+  (a) `kb_harvest.py` imports `protocol` and calls
+  `frontmatter_end`; a new ADR (or an amendment to provisional
+  ADR-0125) records the pair, and the pin in
+  `tests/test_dual_membership.py` gains `kb_harvest` in its protocol
+  row. This is the path launch_demo (ADR-0118) and assembly_line
+  (ADR-0124) took. Implement's recommendation: it keeps one fence owner
+  and costs one recorded pair.
+  (b) `kb.py`, which already imports `protocol`, parses memory
+  frontmatter and passes the parsed fields or a parser into
+  `kb_harvest`. That changes the architecture's
+  `memory_type(text)` / `memory_candidates` interfaces.
+  Disguising the literal (for example `"-" * 3`) would hide the copy
+  from the detector without removing it. Implement rejected that as
+  gaming the ADR-0118 gate.
+  The rest of the battery, run on 9cd4f2e plus this note: `python3
+  lint.py` gave `lint: 0 problem(s) across 36 skills` (exit 0), `python3
+  kb.py drift` gave `drift: 0 problem(s)` (exit 0), `python3 kb.py lint`
+  gave `kb: 0 problem(s)` (exit 0), `python3 gates.py` gave `gates: 0
+  problem(s)` (exit 0), and `python3 gates.py --selftest` gave
+  `selftest: ok` (exit 0). K12's invariant checks all hold: no stray
+  `.orig`/`.rej`; `python3 factory_init.py update-manifest` gave
+  `factory-init: 0 problem(s)` and left `git status --porcelain` empty;
+  `git diff main -- LEDGER.md .claude-plugin/plugin.json` is empty; the
+  `Path.home\|~/.claude` grep's only hit is
+  `tests/test_knowledge_base_shape.py:22`, the neutrality test's
+  forbidden-string list; and `git diff --name-only main -- docs/kb/`
+  lists only `docs/kb/main-unprotected.md`.
+- **NOT RUN for the Owner (recorded for Verify).**
+  - PRD 13, precision of the human-turn kind: on the Owner's machine,
+    run `python3 kb.py harvest --days N` over this repo's interactive
+    transcripts. Hand-label each `human_turns` candidate as a real
+    correction or answered question, or not, and record both counts. No
+    threshold is set. This decides whether human turns stay on by
+    default (architecture.md's flagged assumption).
+  - PRD 32, the demo: (1) before, `kb.py lint` prints `kb: 0 problem(s)`
+    over a page whose GitHub claim nothing re-checks; (2) after, lint
+    flags that page once it is past its declared age (shown offline
+    above with an injected today of 2026-12-09); (3) `python3 kb.py
+    harvest --memory` over the Owner's real memory directory pairs the
+    three known duplicates and lists the memory-only gotchas; (4) a
+    model session runs the knowledge-base skill's ingest on that output
+    and proposes NOOP/CONFLICT for the pairs and ADD for an unpaired
+    gotcha, with a human promoting. Steps 3 and 4 need the real memory
+    directory and a model session.
+  - Routing eval, `python3 trigger_eval.py`: not owed. K11 left the
+    skill's frontmatter `description` byte-identical. It is owed only if
+    a later stage changes the description.
