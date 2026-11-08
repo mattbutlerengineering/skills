@@ -531,7 +531,11 @@ const STEP = {
   "ship": "9", "operate": "10", "completed": "✓", "capture": "↩"
 };
 const REQUIRED = ["generated", "repo", "stations", "runs", "timeline"];
-const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+// Live, not read once: switching the system setting on with the page
+// open left every machine, belt and roller moving (56 draws in 2 s).
+const reducedMotionQuery = matchMedia("(prefers-reduced-motion: reduce)");
+let reducedMotion = reducedMotionQuery.matches;
+reducedMotionQuery.addEventListener("change", (event) => { reducedMotion = event.matches; });
 const $ = (id) => document.getElementById(id);
 
 function readModel() {
@@ -3656,6 +3660,14 @@ function factory(THREE, model) {
   // ------------------------------------------------------------- start
   // A one-breath settle: the floor eases out onto its rest from closer in.
   let intro = reducedMotion ? null : 0;
+  // Motion turned off mid-session: the intro lands at once, a trace stops
+  // steering the camera, and the ambient loop (frame) already checks.
+  reducedMotionQuery.addEventListener("change", (event) => {
+    if (!event.matches) return;
+    if (intro !== null && lastRest) { intro = null; view.zoom = lastRest.zoom; applyView(); }
+    traceFollow = false;
+    requestRender();
+  });
   fit();
   layout();
   // The resting view needs the laid-out floor (restView measures it).
