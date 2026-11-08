@@ -2197,16 +2197,17 @@ function factory(THREE, model) {
     closePanel(); setLegend(false); endTour(); card.hidden = true;
     state.highlighted = null;
     state.trace = run;
-    // A trace is one run's story, so it ends where the story does: on
-    // the first day boundary after its last hop has finished arriving
-    // (the ride takes TRAVEL of a day, plus a beat to see it land), not
-    // months later at today with a motionless crate. A hop late in its
-    // day lands the next day: ending at that day's start left the crate
-    // frozen mid-belt under a banner saying "now at" its station.
+    // A trace is one run's story, so it ends where the story does — not
+    // months later at today with a motionless crate. It parks at the end
+    // of the day its last ride lands (the ride takes TRAVEL of a day; a
+    // parked day d is t = d + 1 − 1e-6, as goToDay parks), so the crate
+    // has arrived and the date is its landing day. (Rounding up past a
+    // beat after landing rolled into the next day and dated a run done on
+    // 07-06 as 07-08.) Landing on the last recorded day ends at today —
+    // the same date — not under a "today" button.
     const hops = times.get(run);
-    // toStop: a trace that ends on the last recorded day ends at today —
-    // the same date — not at that day's start under a "today" button.
-    traceEnd = toStop(Math.min(LAST + 1, Math.ceil(hops[hops.length - 1].t + TRAVEL + 0.25)));
+    const landDay = Math.floor(hops[hops.length - 1].t + TRAVEL);
+    traceEnd = landDay >= TODAY_STOP ? LAST + 1 : landDay + 1 - 1e-6;
     $("trace-name").textContent = run.slug || run.ref;
     // Most journeys here happen inside one day: without this line the
     // trace is a motionless frame and the viewer learns nothing. The
@@ -2220,6 +2221,12 @@ function factory(THREE, model) {
     $("trace-banner").hidden = false;
     resetView();
     goToDay(dayIndex(run.history[0].day));
+    // goToDay parks at a day's END (a parked day shows its final floor);
+    // a trace starts at its first hop. From the end, a one-day journey —
+    // most of them here — played as a motionless frame, and a two-day
+    // one skipped its whole first day.
+    state.t = times.get(run)[0].t;
+    layout(); syncTransport();
     // After goToDay, which writes #day: the trace is the shareable fact.
     history.replaceState(null, "", `#trace=${encodeURIComponent(run.slug || run.ref)}`);
     if (!state.playing) play.click();
