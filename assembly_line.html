@@ -1989,6 +1989,14 @@ function factory(THREE, model) {
     }).sort((a, b) => crateOf.get(a).where.since - crateOf.get(b).where.since);
   }
   const asOf = () => isToday() ? model.generated.slice(0, 10) : currentDay();
+  // Whole days a standing crate has waited at its station, to today or to
+  // the replay's parked day — the crate card's and station card's one rule.
+  function waitedDays(run) {
+    const arrived = Math.floor(crateOf.get(run).where.since);
+    const now = isToday() ? dayIndex(model.generated.slice(0, 10)) : Math.floor(state.t);
+    return Math.max(0, now - arrived);
+  }
+  const daysText = (n) => `${n} day${n === 1 ? "" : "s"}`;
   function skippedOf(run) {
     return run.ladder.filter((row) => row.state === "skipped").map((row) => nameOf(row.stage));
   }
@@ -2002,9 +2010,13 @@ function factory(THREE, model) {
     const [name, line] = key === "bin" ? ["Needs attention", "Runs the placement tool could not read."]
       : STATION_INFO[key];
     const oldest = here.slice(0, 5).map((run) => run.slug).join(", ");
+    // The pile's age: how long its oldest crate has waited (runsAt sorts
+    // oldest first). Not for the city or the bin — nothing waits there.
+    const longest = here.length && key !== "completed" && key !== "bin" ? waitedDays(here[0]) : 0;
     card.replaceChildren(el("h3", {}, name), el("p", {}, line),
       el("p", {class: "muted"}, `${here.length} run${here.length === 1 ? "" : "s"} · as of ${asOf()}`),
-      ...(here.length ? [el("p", {}, `oldest: ${oldest}${here.length > 5 ? ", …" : ""}`)] : []));
+      ...(here.length ? [el("p", {}, `oldest: ${oldest}${here.length > 5 ? ", …" : ""}`)] : []),
+      ...(longest ? [el("p", {}, `longest wait: ${daysText(longest)}`)] : []));
   }
   // Tape colours, as CSS, for the card's kind dot.
   const KIND_CSS = {feature: "#7cc44e", maintenance: "#e0903a", product: "#8f6fd8"};
@@ -2025,11 +2037,8 @@ function factory(THREE, model) {
       // How long it has stood here — what a pile means. The arrival day is
       // the placement's hop; "now" is the replay's day, or today.
       if (where && !built && !where.moving) {
-        const arrived = Math.floor(where.since);
-        const now = isToday() ? dayIndex(model.generated.slice(0, 10)) : Math.floor(state.t);
-        const waited = Math.max(0, now - arrived);
-        line += ` since ${isoOf(arrived)}`
-          + (waited ? ` (${waited} day${waited === 1 ? "" : "s"})` : "");
+        const waited = waitedDays(run);
+        line += ` since ${isoOf(Math.floor(where.since))}` + (waited ? ` (${daysText(waited)})` : "");
       }
       if (built) {
         const landed = run.history.findLast((hop) => hop.station === "completed");
