@@ -335,7 +335,14 @@
     header h1 .soft { display: none; }
     #find { width: 9em; }
     #pipeline { flex-wrap: nowrap; overflow-x: auto; padding: .3rem .7rem .45rem;
-      -webkit-overflow-scrolling: touch; }
+      -webkit-overflow-scrolling: touch; scroll-padding-inline: 2rem; }
+    /* An edge with chips beyond it fades out: cut mid-word ("eview",
+       "Decompo"), the row read as broken rather than scrollable. The
+       scroll padding keeps a chip that takes focus clear of the fade. */
+    #pipeline.more-left { mask-image: linear-gradient(to right, transparent, #000 2rem); }
+    #pipeline.more-right { mask-image: linear-gradient(to left, transparent, #000 2rem); }
+    #pipeline.more-left.more-right { mask-image: linear-gradient(to right,
+      transparent, #000 2rem, #000 calc(100% - 2rem), transparent); }
     .chip { flex: none; }
     #legend { left: .5rem; right: .5rem; top: auto; bottom: .5rem;
       width: auto; max-height: 55%; overflow: auto; }
@@ -3223,6 +3230,13 @@ function factory(THREE, model) {
     const r = row.getBoundingClientRect(), c = chips[lastHot].chip.getBoundingClientRect();
     row.scrollLeft += (c.left + c.width / 2) - (r.left + r.width / 2);
   }
+  function syncChipEdges() {
+    const row = $("pipeline");
+    row.classList.toggle("more-left", row.scrollLeft > 1);
+    row.classList.toggle("more-right", row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
+  }
+  $("pipeline").addEventListener("scroll", syncChipEdges, {passive: true});
+  addEventListener("resize", syncChipEdges);
 
   // ------------------------------------------------------------ legend
   // Open on load: the first thing a cold viewer sees is the key to the
@@ -3919,6 +3933,7 @@ function factory(THREE, model) {
   applyView();
   syncTransport();
   revealHotChip();
+  syncChipEdges();
   // The city follows the room: lit windows after dark, live on change.
   const darkScheme = matchMedia("(prefers-color-scheme: dark)");
   setCityNight(darkScheme.matches);
