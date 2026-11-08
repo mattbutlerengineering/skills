@@ -1625,12 +1625,16 @@ function factory(THREE, model) {
     buildingOf.set(run, building);
     return building;
   }
-  // The pinned building, pointed at: an accent pin over its roof, on top
-  // of its lavender walls (paintWall). A pinned crate lifts off its
-  // belt; a building cannot. A traced run carries it too, crate or
-  // building. Never pickable, and layout() alone shows it, so a capture
-  // (which clears pin and trace) never draws it.
-  const pinMarker = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 4),
+  // The pinned run, pointed at: an accent pin over its building's roof
+  // (on top of the lavender walls, paintWall) or over its crate. The
+  // crate's 1.2 lift alone was not enough: inside Operate's 69-crate
+  // heap a lifted crate reads as one more layer. A traced run carries it
+  // too, crate or building. Never pickable, and layout() alone shows it,
+  // so a capture (which clears pin and trace) never draws it.
+  // Its tip is the mesh's origin (the cone shifted down by half its
+  // height, then flipped), so the zoom-scaled marker grows away from
+  // what it points at and placement is just "tip here".
+  const pinMarker = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 4).translate(0, -0.6, 0),
     new THREE.MeshBasicMaterial({color: COLORS.accent, transparent: true, depthTest: false}));
   // Drawn over everything, station signs included (sprites, renderOrder
   // 8, in the transparent pass — hence transparent here): a traced crate
@@ -1841,7 +1845,7 @@ function factory(THREE, model) {
             if (state.highlighted === run) nextPin = building;
             pinMarker.visible = true;
             pinMarker.position.copy(building.position);
-            pinMarker.position.y += building.userData.top * building.scale.y + 1.5;
+            pinMarker.position.y += building.userData.top * building.scale.y + 0.4;
           }
         });
       } else {
@@ -1908,13 +1912,18 @@ function factory(THREE, model) {
       // Counts and signs stay whole-floor truth; the banner says why
       // the floor looks empty.
       if (state.trace && run !== state.trace) entry.mesh.visible = false;
-      // The traced crate carries the marker as it rides: alone on a wide
+      // The traced crate carries the marker as it rides (alone on a wide
       // floor, a white crate among white machines was hard to find, and a
-      // crate on a belt cannot lift like a pinned one.
-      if (state.trace === run && entry.mesh.visible) {
+      // crate on a belt cannot lift), and so does the pinned one.
+      if ((state.trace === run || state.highlighted === run) && entry.mesh.visible) {
         pinMarker.visible = true;
         pinMarker.position.copy(entry.mesh.position);
-        pinMarker.position.y += CRATE + 1.2;
+        // Just above the lid — or the parts a pinned Implement crate lays
+        // out over it (showParts: 1.2 up, 0.5 tall). 2.5 up, the marker
+        // floated over the heap's back row, pointing at the wrong crate.
+        const parts = state.highlighted === run && entry.where && entry.where.station === "implement"
+          && run.work_orders.length;
+        pinMarker.position.y += (parts ? 1.45 : CRATE * 0.4) + 0.3;
       }
     });
     showParts();
