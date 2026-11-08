@@ -2578,6 +2578,10 @@ function factory(THREE, model) {
     requestRender();
   }
   function startTour() {
+    // An empty repo has nothing to tour (its button is hidden): a #tour
+    // link there narrated crates that don't exist and ended on "press
+    // Play" beside a disabled Play.
+    if (!enabled) return;
     // One mode at a time: a tour over a solo-trace floor would narrate
     // stations whose crates are hidden.
     endTrace();
@@ -2988,7 +2992,8 @@ function factory(THREE, model) {
     }
     // #tour walks its recipient through the floor; #trace=<slug> replays
     // one run's journey, solo — the links the tour and trace write.
-    if (hash.has("tour")) { startTour(); intro = null; }
+    // Only a tour that started owns the camera (as with #run=).
+    if (hash.has("tour")) { startTour(); if (tourStep >= 0) intro = null; }
     const trace = hash.get("trace");
     if (trace) {
       const wanted = trace.toLowerCase();
