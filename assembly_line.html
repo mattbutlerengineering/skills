@@ -2578,6 +2578,10 @@ function factory(THREE, model) {
     requestRender();
   }
   function startTour() {
+    // An empty repo has nothing to tour (its button is hidden): a #tour
+    // link there narrated crates that don't exist and ended on "press
+    // Play" beside a disabled Play.
+    if (!enabled) return;
     // One mode at a time: a tour over a solo-trace floor would narrate
     // stations whose crates are hidden.
     endTrace();
