@@ -2190,7 +2190,9 @@ function factory(THREE, model) {
     }
     return best;
   }
+  let viewStamp = 0, hoverStamp = 0;
   function applyView() {
+    viewStamp++;
     const halfH = frameBox.halfH / view.zoom;
     const halfW = halfH * frameBox.aspect;
     // The floor never leaves the frame: the view's centre stays within
@@ -3478,6 +3480,15 @@ function factory(THREE, model) {
       applyView();
       if (intro >= 1) intro = null;
       needsRender = true;
+    }
+    // The camera moved under a still cursor (keyboard zoom or pan, a
+    // flight to a found run, a reset, the intro): re-pick once, so the
+    // card describes what is under the pointer now. After four presses
+    // of + over a crate in the heap, the card still named it while the
+    // pointer sat on Verify's plate.
+    if (hoverAt && !exporting && hoverStamp !== viewStamp) {
+      hoverStamp = viewStamp;
+      hover(hoverAt);
     }
     if (!reducedMotion && !exporting) {
       clock += dt;
