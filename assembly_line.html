@@ -333,7 +333,12 @@
     header { padding: .5rem .7rem 0; }
     header h1 { font-size: 1.05rem; }
     header h1 .soft { display: none; }
-    #find { width: 9em; }
+    /* The finder gives way before the buttons wrap: at 320 px "▶ Tour"
+       and "? How to read this" broke onto two lines (43 px tall pills)
+       and the header grew 18 px over the floor. */
+    #find { width: 9em; flex: 0 1 9em; min-width: 5em; padding-inline: .5rem; }
+    #tour-open, #legend-open { white-space: nowrap; flex: none; }
+    header .tools { min-width: 0; max-width: 100%; gap: .35rem; }
     #pipeline { flex-wrap: nowrap; overflow-x: auto; padding: .3rem .7rem .45rem;
       -webkit-overflow-scrolling: touch; scroll-padding-inline: 2rem; }
     /* An edge with chips beyond it fades out: cut mid-word ("eview",
