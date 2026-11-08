@@ -21,7 +21,8 @@ On `--memory` it also lists the harness's auto-memory entries for the
 repo (`memory/` beside the main checkout's transcripts), each paired by
 file-name tokens with the page it may duplicate. An entry typed `user`
 is counted and nothing else about it is kept; an entry whose type
-cannot be read is counted as skipped, never listed. The two new sources
+cannot be read, and a symlinked entry, is counted as skipped, never
+listed or followed. The two new sources
 adapt practices from anthropics/knowledge-work-plugins (Apache-2.0).
 
 The tool only reads. It prints candidates as JSON for the skill to turn
@@ -71,11 +72,20 @@ CORRECTION = re.compile(
 APPROVALS = frozenset((
     "yes", "y", "ok", "okay", "go ahead", "sure", "do it", "continue",
     "proceed", "lgtm", "sounds good", "yep", "please do"))
+# A reply made only of these words is an approval too ("yes, go ahead").
+APPROVAL_WORDS = frozenset(word for phrase in APPROVALS
+                           for word in phrase.split()) | frozenset((
+                               "please", "thanks", "thank", "you"))
+# Where the harness appends its own context to a human's words.
+REMINDER = "<system-reminder>"
 PUNCT = re.compile(r"[^\w\s']")
 MEMORY_DIR = "memory"
 MEMORY_INDEX = "MEMORY.md"
 LISTED_TYPES = ("feedback", "project", "reference")
 TYPE_LINE = re.compile(r"^\s*type:\s*(.*?)\s*$")
+# A user scope anywhere in the block, even where TYPE_LINE cannot see it
+# (a list item, a flow mapping).
+USER_TYPE = re.compile(r"\btype\s*:\s*['\"]?user\b")
 FIELD_LINE = re.compile(r"^(name|description):\s*(.*?)\s*$")
 # A memory file pairs with a page sharing at least this many file-name
 # tokens; a miss is cheap, since ingest's dedupe step still greps.
@@ -306,9 +316,18 @@ def _human_kind(text, agent):
     if CORRECTION.match(lowered):
         return "correction", "correction-wording"
     reply = " ".join(PUNCT.sub("", lowered).split())
-    if agent["question"] and reply not in APPROVALS:
+    if agent["question"] and not set(reply.split()) <= APPROVAL_WORDS:
         return "answer", "after-agent-question"
     return None
+
+
+def _words(items):
+    """A human turn's own words: its text items that open with no
+    harness tag, cut before a system reminder appended to them."""
+    text = "\n".join(item.get("text", "") for item in items
+                     if item.get("type") == "text"
+                     and not item.get("text", "").lstrip().startswith("<"))
+    return text.split(REMINDER, 1)[0].strip()
 
 
 def human_turns(records):
@@ -359,7 +378,8 @@ def human_turns(records):
         text = _text(items).strip()
         if not text or text.startswith("<") or text.startswith(NOT_ERRORS):
             continue
-        if agent is not None:
+        text = _words(items)
+        if agent is not None and text:
             kind = _human_kind(text, agent)
             if kind:
                 turn(*kind, text, agent["excerpt"], record)
@@ -420,6 +440,8 @@ def memory_type(text):
     if len(values) != 1:
         return None
     value = values.pop()
+    if value != "user" and any(USER_TYPE.search(line) for line in block):
+        return None
     return value if value == "user" or value in LISTED_TYPES else None
 
 
@@ -447,12 +469,19 @@ def memory_candidates(memory_dir, pages):
     """The memory object: every *.md directly in memory_dir except the
     index, typed by memory_type and paired against pages, a mapping of
     page slug to its repo-relative path. User-scoped entries are only
-    counted; unreadable or untyped ones are counted as skipped."""
+    counted; unreadable, untyped or symlinked ones are counted as
+    skipped."""
     memory_dir = Path(memory_dir)
     result = {"dir": str(memory_dir), "listed": 0, "user_scoped": 0,
               "skipped": 0, "candidates": []}
     for path in sorted(memory_dir.glob("*.md")):
-        if path.name == MEMORY_INDEX or not path.is_file():
+        if path.name == MEMORY_INDEX:
+            continue
+        if path.is_symlink():
+            # Never followed: it could name the index or a file outside.
+            result["skipped"] += 1
+            continue
+        if not path.is_file():
             continue
         text, problem = cli.read_file(path, path.name, str)
         kind = None if problem or text is None else memory_type(text)

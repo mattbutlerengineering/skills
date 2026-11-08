@@ -384,6 +384,28 @@ class TestHumanTurns(Tree):
                 .human("<command-name>/clear</command-name> no"))
         self.assertEqual(self.turns(talk), [])
 
+    def test_injected_text_after_the_human_words_is_dropped(self):
+        reminder = "<system-reminder>MEMORY-SENTINEL</system-reminder>"
+        for content in (
+                [{"type": "text", "text": "No, revert that."},
+                 {"type": "text", "text": reminder}],
+                f"No, revert that.\n{reminder}"):
+            with self.subTest(content=content):
+                talk = Talk().human("start").say("Done.").human(content)
+                turn, = self.turns(talk)
+                self.assertEqual((turn["kind"], turn["human"]),
+                                 ("correction", "No, revert that."))
+
+    def test_compound_approvals_are_not_answers(self):
+        for reply in ("yes, go ahead", "Yes please, do it.", "ok thanks"):
+            with self.subTest(reply=reply):
+                talk = (Talk().human("push it").say("Shall I push now?")
+                        .human(reply))
+                self.assertEqual(self.turns(talk), [])
+        talk = (Talk().human("push it").say("Shall I push now?")
+                .human("Yes, but keep the old flag."))
+        self.assertEqual([t["kind"] for t in self.turns(talk)], ["answer"])
+
     def test_two_human_turns_in_a_row_yield_at_most_one(self):
         talk = (Talk().human("start").say("Use the new parser?")
                 .human("No, keep the old one.")
@@ -557,6 +579,30 @@ class TestMemory(Tree):
             self.assertNotIn(secret, printed)
         self.assertEqual(result["memory"]["user_scoped"], 1)
         self.assertEqual(result["memory"]["listed"], 4)
+
+    def test_a_user_type_in_a_list_or_flow_map_is_skipped(self):
+        for extra in ("tags:\n  - type: user\n",
+                      "metadata: {type: user}\n"):
+            with self.subTest(extra=extra):
+                self.assertIsNone(kb_harvest.memory_type(
+                    memory_file("a", kind="feedback", extra=extra)))
+
+    def test_a_symlinked_entry_is_skipped_never_read(self):
+        self.seed()
+        index = self.remember("MEMORY", memory_file(
+            "Index", "INDEX-SENTINEL", kind="feedback"))
+        outside = Path(self._tmp.name) / "elsewhere.md"
+        outside.write_text(memory_file("Out", "OUTSIDE-SENTINEL"),
+                           encoding="utf-8")
+        (self.memory / "alias.md").symlink_to(index)
+        (self.memory / "outside.md").symlink_to(outside)
+        memory = kb_harvest.memory_candidates(self.memory, self.pages)
+        printed = json.dumps(memory)
+        for secret in ("INDEX-SENTINEL", "OUTSIDE-SENTINEL", "alias",
+                       "outside"):
+            self.assertNotIn(secret, printed)
+        self.assertEqual((memory["listed"], memory["user_scoped"],
+                          memory["skipped"]), (4, 0, 2))
 
     def test_every_skip_reason_is_counted(self):
         self.seed()
