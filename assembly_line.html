@@ -3429,6 +3429,11 @@ function factory(THREE, model) {
     captureSize = null; signScale = 1; stage.classList.remove("capturing");
     fit(); layout(); syncTransport(); requestRender();
     $("export").disabled = !enabled; play.disabled = !enabled;
+    // A capture disables Export (and Play) under the keyboard's focus,
+    // which drops it to <body>; it comes back to where it was, so Enter
+    // on Export leaves the viewer on Export, beside the status line.
+    if (saved.focus && saved.focus !== document.body && saved.focus.isConnected
+      && document.activeElement === document.body) saved.focus.focus();
     saved = null;
   }
   async function exportGif() {
@@ -3438,7 +3443,7 @@ function factory(THREE, model) {
     status.textContent = "Exporting clip…";
     saved = {t: state.t, ratio: renderer.getPixelRatio(),
       zoom: view.zoom, panX: view.panX, panY: view.panY,
-      highlighted: state.highlighted, trace: state.trace};
+      highlighted: state.highlighted, trace: state.trace, focus: document.activeElement};
     state.playing = false;
     exporting = true;
     // Capture purity: the clip records the repo, not this session — the
