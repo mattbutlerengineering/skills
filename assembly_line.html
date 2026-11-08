@@ -2114,6 +2114,10 @@ function factory(THREE, model) {
   // #day=2026-11-03 with #station=implement, and closing it emptied the
   // bar while the floor still showed 2026-11-03.
   function syncHash() {
+    // A trace and the tour own their own #trace= / #tour links: stepping
+    // a day (or pressing "today") inside a finished trace replaced
+    // #trace=… with nothing while the solo view stayed on screen.
+    if (state.trace || tourStep >= 0) return;
     const facts = [];
     if (!isToday()) facts.push(`day=${currentDay()}`);
     if (state.pinned) facts.push(state.pinned.run
@@ -3677,8 +3681,7 @@ function factory(THREE, model) {
     else { if (isToday()) state.t = FIRST; state.playing = true; }
     // Paused, the bar names the day the replay stopped on: it kept the
     // day it started from (#day=2026-10-20 over a floor on 2026-10-26).
-    // A trace and the tour own their own #trace= / #tour links.
-    if (!state.playing && !state.trace && tourStep < 0) syncHash();
+    if (!state.playing) syncHash();
     syncTransport(); requestRender();
   });
   function goToDay(t) {
@@ -3818,7 +3821,7 @@ function factory(THREE, model) {
         glideK = 1;
         state.t = stop; state.playing = false; renderPanel();
         // Finished at today, the started-from day leaves the bar.
-        if (!state.trace && tourStep < 0 && !exporting) syncHash();
+        if (!exporting) syncHash();
         // A solo crate on a wide floor is hard to find: when a trace
         // reaches its end, the camera goes to where the run ended up.
         if (state.trace) { layout(); focusOn(runFocus(state.trace), 2.4); }
