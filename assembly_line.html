@@ -1525,6 +1525,9 @@ function factory(THREE, model) {
   }
   const state = {t: LAST + 1, playing: false, seconds: 30, highlighted: null, pinned: null};
   let lastHot = null;
+  // The floor's last count, as layout() handed it to the header — the
+  // clip's stamp reads it too, so a frame's numbers are that frame's.
+  let lastTally = {active: 0, completed: 0, busiest: null, most: 0};
   const isToday = () => state.t >= LAST + 1 - 1e-9;
   // Plain floor: t ∈ [d, d+1) is day d. (A subtractive epsilon here
   // misread the export's exact-integer frames as the previous day.)
@@ -1667,8 +1670,8 @@ function factory(THREE, model) {
       const where = crateOf.get(run).where;
       return where && where.station !== "completed" && where.station !== "bin";
     }).length;
-    setHeader(model, isToday() ? null : currentDay(),
-      {active, completed: counts.completed || 0, busiest: hotKey, most});
+    lastTally = {active, completed: counts.completed || 0, busiest: hotKey, most};
+    setHeader(model, isToday() ? null : currentDay(), lastTally);
     runs.forEach((run) => {
       const entry = crateOf.get(run);
       const where = entry.where;
@@ -2768,8 +2771,9 @@ function factory(THREE, model) {
     renderer.render(scene, camera);
     paint();
     const gif = new GifWriter(W, H, ctx.getImageData(0, 0, W, H).data);
-    // Each clip frame carries the repo and the replay's date, top left:
-    // a README viewer has no transport bar to read it from.
+    // Each clip frame carries the repo, the replay's date and the floor's
+    // in-flight and done counts, top left: a README viewer has no
+    // transport bar or header to read them from.
     const stamp = (text) => {
       ctx.font = "600 15px system-ui, sans-serif";
       const width = ctx.measureText(text).width + 20;
@@ -2796,7 +2800,7 @@ function factory(THREE, model) {
       renderer.render(scene, camera);
       paint();
       const when = isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay();
-      stamp(`${model.repo} · ${when}${quietNow() ? " ▸▸" : ""}`);
+      stamp(`${model.repo} · ${when}${quietNow() ? " ▸▸" : ""} · ${lastTally.active} in flight · ${lastTally.completed} done`);
       gif.frame(ctx.getImageData(0, 0, W, H).data, i === total + HOLD_FRAMES ? 300 : 100 / FPS);
       if (i % 10 === 0) {
         status.textContent = `Exporting clip… ${Math.round(100 * i / (total + HOLD_FRAMES))}%`;
