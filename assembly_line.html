@@ -1632,6 +1632,61 @@ function factory(THREE, model) {
     mesh.material = building === pinnedBuilding ? pinWallMat
       : cityNight ? duskMat(color) : mat(color);
   }
+  // Lavender walls only help where walls show: a pinned building in the
+  // city's back rows was mostly hidden by the towers in front of it (a
+  // median 38% of it showed, 12% at worst). While one is pinned, the
+  // buildings between it and the camera draw as outlines only — for that
+  // frame (drawPinned swaps materials in and out around the render, so
+  // night and pin paint stay the materials' one owner). Translucent
+  // faces stacked: three towers deep, 16% glass tinted the walls past
+  // recognition; an outline stacks nothing.
+  const glassCache = new WeakMap();
+  const glassOf = (m) => {
+    let g = glassCache.get(m);
+    if (!g) {
+      g = m.clone();
+      g.transparent = true; g.depthWrite = false;
+      if (m.isLineBasicMaterial) g.opacity = 0.35;
+      else g.colorWrite = false;
+      glassCache.set(m, g);
+    }
+    return g;
+  };
+  const glassV = new THREE.Vector3();
+  // A building's camera-space rectangle and its centre's depth.
+  function viewRect(b) {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    const top = b.userData.top * b.scale.y;
+    for (const dx of [-0.99, 0.99]) for (const dz of [-0.99, 0.99]) for (const y of [0, top]) {
+      glassV.set(b.position.x + dx, b.position.y + y, b.position.z + dz).applyMatrix4(camera.matrixWorldInverse);
+      x0 = Math.min(x0, glassV.x); x1 = Math.max(x1, glassV.x);
+      y0 = Math.min(y0, glassV.y); y1 = Math.max(y1, glassV.y);
+    }
+    glassV.copy(b.position).applyMatrix4(camera.matrixWorldInverse);
+    return [x0, x1, y0, y1, glassV.z];
+  }
+  function drawPinned() {
+    const me = pinnedBuilding;
+    const swapped = [];
+    if (me && me.visible) {
+      const [a0, a1, b0, b1, z] = viewRect(me);
+      buildingOf.forEach((b) => {
+        if (b === me || !b.visible) return;
+        const [c0, c1, d0, d1, bz] = viewRect(b);
+        if (bz <= z || c1 <= a0 || c0 >= a1 || d1 <= b0 || d0 >= b1) return;
+        b.traverse((o) => {
+          if (!o.material) return;
+          // Glass casts no shadow either: the towers' shadows alone
+          // still darkened the pinned walls they no longer hid.
+          swapped.push([o, o.material, o.castShadow]);
+          o.material = Array.isArray(o.material) ? o.material.map(glassOf) : glassOf(o.material);
+          o.castShadow = false;
+        });
+      });
+    }
+    renderer.render(scene, camera);
+    swapped.forEach(([o, m, cast]) => { o.material = m; o.castShadow = cast; });
+  }
   function windowMat(i) {
     return !cityNight ? mat(CITY_COLORS.window)
       : litAtNight(i) ? winNightMat : mat(CITY_COLORS.windowDark);
@@ -3663,7 +3718,7 @@ function factory(THREE, model) {
     // moves fast enough to need more, and a presenter's battery does.
     // Interactions (requestRender) and the replay draw immediately.
     if (needsRender && (forceRender || state.playing || now - lastDraw >= 32)) {
-      renderer.render(scene, camera);
+      drawPinned();
       needsRender = false; forceRender = false; lastDraw = now;
       fps.draws++;
     }
