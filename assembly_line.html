@@ -3059,8 +3059,17 @@ function factory(THREE, model) {
     // Each clip frame carries the repo, the replay's date and the floor's
     // in-flight and done counts, top left: a README viewer has no
     // transport bar or header to read them from.
-    const stamp = (text) => {
+    // It fits the frame: a long repo name gives up its tail ("…"), never
+    // the date or the counts — a 60-character name pushed "84 in flight ·
+    // 23 done" off the 720-px frame.
+    const stamp = (repo, rest) => {
       ctx.font = "600 15px system-ui, sans-serif";
+      const room = W - 20 - 20; // frame margins and the plate's padding
+      let name = repo, text = `${name}${rest}`;
+      while (ctx.measureText(text).width > room && name.length > 1) {
+        name = name.slice(0, -1);
+        text = `${name.replace(/[\s·-]+$/, "")}…${rest}`;
+      }
       const width = ctx.measureText(text).width + 20;
       ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#2f3238"; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(10, 10, width, 28, 6); ctx.fill(); ctx.stroke();
@@ -3085,7 +3094,7 @@ function factory(THREE, model) {
       renderer.render(scene, camera);
       paint();
       const when = isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay();
-      stamp(`${model.repo} · ${when}${quietNow() ? " ▸▸" : ""} · ${lastTally.active} in flight · ${lastTally.completed} done`);
+      stamp(model.repo, ` · ${when}${quietNow() ? " ▸▸" : ""} · ${lastTally.active} in flight · ${lastTally.completed} done`);
       gif.frame(ctx.getImageData(0, 0, W, H).data, i === total + HOLD_FRAMES ? 300 : 100 / FPS);
       if (i % 10 === 0) {
         status.textContent = `Exporting clip… ${Math.round(100 * i / (total + HOLD_FRAMES))}%`;
