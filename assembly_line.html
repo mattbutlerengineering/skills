@@ -435,7 +435,13 @@ function missingKey(model) {
   if (!model || typeof model !== "object") return "model";
   return REQUIRED.find((key) => !(key in model)) || null;
 }
-const nameOf = (station) => (STATION_INFO[station] || [station])[0];
+// The bin is not a pipeline station (STATION_INFO lists those, and the
+// fallback walks it), but it has one name and one line everywhere: the
+// chip said "Attention" while its sign, card, panel and header said
+// "Needs attention".
+const BIN_INFO = ["Needs attention", "Runs the placement tool could not read."];
+const infoOf = (key) => (key === "bin" ? BIN_INFO : STATION_INFO[key]);
+const nameOf = (station) => (infoOf(station) || [station])[0];
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
   Object.entries(attrs || {}).forEach(([key, value]) => {
@@ -478,7 +484,7 @@ function showFallback(model, notice) {
     ? `${run.ref} · ${doneCount(run)}/${run.work_orders.length}` : run.ref;
   stations.forEach((station) => main.append(
     section(nameOf(station), runs.filter((run) => run.station === station), "", label)));
-  main.append(section("Needs attention", runs.filter((run) => run.status === "attention"),
+  main.append(section(nameOf("bin"), runs.filter((run) => run.status === "attention"),
     "attention", (run) => `${run.dir} — ${run.reason}`));
   main.hidden = false;
 }
@@ -804,7 +810,7 @@ function factory(THREE, model) {
   // amber — the bottleneck is the first thing the factory should say.
   function signTexture(key, count, hot) {
     const step = STEP[key] || "";
-    const name = (key === "bin" ? "Needs attention" : nameOf(key)).toUpperCase();
+    const name = nameOf(key).toUpperCase();
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const H = 148, PAD = 26, GAP = 18;
@@ -2089,8 +2095,7 @@ function factory(THREE, model) {
   }
   function stationCard(key) {
     const here = runsAt(key);
-    const [name, line] = key === "bin" ? ["Needs attention", "Runs the placement tool could not read."]
-      : STATION_INFO[key];
+    const [name, line] = infoOf(key);
     const oldest = here.slice(0, 5).map((run) => run.slug).join(", ");
     // The pile's age: how long its oldest crate has waited (runsAt sorts
     // oldest first). Not for the city or the bin — nothing waits there.
@@ -2101,7 +2106,7 @@ function factory(THREE, model) {
     const median = leads.length ? leads[Math.floor((leads.length - 1) / 2)] : null;
     card.replaceChildren(el("h3", {}, name), el("p", {}, line),
       el("p", {class: "muted"}, `${here.length} run${here.length === 1 ? "" : "s"} · as of ${asOf()}`),
-      ...(here.length ? [el("p", {}, `oldest: ${oldest}${here.length > 5 ? ", …" : ""}`)] : []),
+      ...(here.length ? [el("p", {}, `${key === "bin" ? "runs" : "oldest"}: ${oldest}${here.length > 5 ? ", …" : ""}`)] : []),
       ...(longest ? [el("p", {}, `longest wait: ${daysText(longest)}`)] : []),
       ...(median !== null ? [el("p", {}, `median lead time: ${daysText(median)}, first stage to Done`)] : []));
   }
@@ -2407,10 +2412,12 @@ function factory(THREE, model) {
     const {key, run} = state.pinned;
     const here = runsAt(key);
     panelRuns = here;
-    $("panel-title").textContent = `${key === "bin" ? "Needs attention" : nameOf(key)} · as of ${asOf()}`;
+    $("panel-title").textContent = `${nameOf(key)} · as of ${asOf()}`;
     const body = $("panel-body");
+    // The bin has no order to claim: its runs carry no dates.
     body.replaceChildren(el("p", {class: "muted"}, here.length
-      ? `${here.length} run${here.length === 1 ? "" : "s"}, oldest first` : `No runs here as of ${asOf()}`));
+      ? `${here.length} run${here.length === 1 ? "" : "s"}${key === "bin" ? "" : ", oldest first"}`
+      : `No runs here as of ${asOf()}`));
     let opened = null;
     here.forEach((r) => {
       const row = runRow(r, r === run);
@@ -2457,11 +2464,9 @@ function factory(THREE, model) {
   const pipeline = $("pipeline");
   CHIP_ORDER.forEach((key, i) => {
     if (i && key !== "bin") pipeline.append(el("span", {class: "flow"}, "→"));
-    const name = key === "bin" ? "Attention" : nameOf(key);
+    const name = nameOf(key);
     const n = el("span", {class: "n"}, "0");
-    const chip = el("button", {class: "chip", title:
-      (STATION_INFO[key] || ["", "Runs the placement tool could not read."])[1]},
-      n, name);
+    const chip = el("button", {class: "chip", title: infoOf(key)[1]}, n, name);
     chip.addEventListener("click", () => {
       openPanel({kind: "station", station: key});
       focusOn(focusTargetOf(key), 2.1);
