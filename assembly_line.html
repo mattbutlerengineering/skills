@@ -101,10 +101,14 @@
   /* While a clip renders, the canvas holds 720×450 frames stretched to
      the stage; a veil hides them and says what is happening. The stage
      keeps its size, so nothing on the page jumps. */
-  #stage.capturing::after { content: attr(data-capture); position: absolute;
+  #stage.capturing::after, #stage.lost::after { content: attr(data-capture); position: absolute;
     inset: 0; z-index: 7; display: grid; place-items: center;
     background: var(--panel);
     color: var(--ink); font-weight: 600; }
+  /* A lost graphics context (a GPU reset, a laptop waking) blanks the
+     canvas until the browser hands it back; the stage says so meanwhile
+     instead of showing an empty room. Over an export's veil too. */
+  #stage.lost::after { content: "Redrawing the factory… (reload the page if it stays blank)"; }
   #hint { position: absolute; left: .8rem; bottom: .6rem; color: var(--muted);
     font-size: .75rem; background: rgba(255,255,255,.7); padding: .15rem .6rem;
     border-radius: 999px; pointer-events: none; }
@@ -643,6 +647,10 @@ function factory(THREE, model) {
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
   stage.prepend(renderer.domElement);
+  renderer.domElement.addEventListener("webglcontextlost", () => stage.classList.add("lost"));
+  renderer.domElement.addEventListener("webglcontextrestored", () => {
+    stage.classList.remove("lost"); requestRender();
+  });
   const scene = new THREE.Scene();
   // This three build divides light intensity by π (physical units), so
   // these read ~×3 what a top face receives: lit ≈ 1.0, shadowed ≈ 0.6.
