@@ -340,6 +340,19 @@ class TestAge(Tree):
                     f"kb: docs/kb/gh.md max-age {value!r} is not a whole"
                     " number of days like 30d"])
 
+    def test_an_age_past_the_calendar_is_never_due(self):
+        self.declare("checked-against: the GitHub API\n"
+                     "checked: 2026-10-01\nmax-age: 999999999d")
+        self.assertEqual(self.lint_on(date(2036, 1, 1)), [])
+
+    def test_an_absurd_max_age_is_a_problem_not_a_crash(self):
+        value = "1" + "0" * 12 + "d"
+        self.declare("checked-against: the GitHub API\n"
+                     f"checked: 2026-10-01\nmax-age: {value}")
+        self.assertEqual(self.lint_on(date(2026, 10, 2)), [
+            f"kb: docs/kb/gh.md max-age {value!r} is not a whole"
+            " number of days like 30d"])
+
     def test_checked_against_alone_never_ages(self):
         self.declare("checked-against: macOS zsh with gh 2.62; not Linux CI")
         self.assertEqual(self.lint_on(date(2036, 1, 1)), [])
