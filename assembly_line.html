@@ -2678,7 +2678,11 @@ function factory(THREE, model) {
   // panel clears only a box a row put there, never the canvas's own.
   let rowBoxed = false;
   function rowBox(run) { rowBoxed = !!run; boxRun(run); }
-  function closePanel() {
+  // returnFocus is false for a pointer click (event.detail > 0): handing
+  // focus to the opener then parked it on a button that keeps Space and
+  // the arrows, so after a mouse close Space reopened the panel instead
+  // of playing. A keyboard close (Enter/Space on ✕, Esc) still returns it.
+  function closePanel(returnFocus = true) {
     const hadFocus = $("panel").contains(document.activeElement);
     const key = state.pinned && state.pinned.key;
     $("panel").hidden = true; state.pinned = null; state.highlighted = null;
@@ -2689,7 +2693,7 @@ function factory(THREE, model) {
     // twin; it fell to <body> when the ✕ under it was hidden.
     const back = panelOpener && panelOpener.isConnected && !panelOpener.hidden ? panelOpener
       : key && chips[key] && !chips[key].chip.hidden ? chips[key].chip : null;
-    if (hadFocus && back) back.focus();
+    if (hadFocus && back && returnFocus) back.focus();
     panelOpener = null;
     // The bar says what the view shows: a closed panel's link goes too.
     if (/^#(run|station)=/.test(location.hash))
@@ -2990,7 +2994,7 @@ function factory(THREE, model) {
     }
     requestRender();
   });
-  $("panel-close").addEventListener("click", closePanel);
+  $("panel-close").addEventListener("click", (event) => closePanel(event.detail === 0));
   addEventListener("keydown", (event) => {
     if (exporting) return; // no input unwinds state mid-capture
     // Esc inside the finder just clears the finder.
@@ -3068,7 +3072,7 @@ function factory(THREE, model) {
   // portrait-shaped stage (a tablet held upright) starts closed too:
   // the floor fills the width there and the city lands top-right, under
   // the legend — 55% of it covered on an iPad, 43% at 900×1000.
-  function setLegend(openIt) {
+  function setLegend(openIt, returnFocus = true) {
     const resting = isResting();
     // Closing it with focus inside (its ✕ by keyboard) hands focus back
     // to the "How to read this" button; hidden, the ✕ dropped focus to
@@ -3076,7 +3080,7 @@ function factory(THREE, model) {
     const hadFocus = !openIt && $("legend").contains(document.activeElement);
     $("legend").hidden = !openIt;
     $("legend-open").setAttribute("aria-expanded", String(openIt));
-    if (hadFocus) $("legend-open").focus();
+    if (hadFocus && returnFocus) $("legend-open").focus();
     // An untouched resting view re-rests: beside the legend while it is
     // open (restView), back to the plain frame once it closes.
     if (resting) resetView();
@@ -3086,7 +3090,7 @@ function factory(THREE, model) {
   // live through the whole load (10+ s on a slow link) and did nothing.
   $("legend-open").hidden = false;
   $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
-  $("legend-close").addEventListener("click", () => setLegend(false));
+  $("legend-close").addEventListener("click", (event) => setLegend(false, event.detail === 0));
 
   // -------------------------------------------------------------- tour
   // Thirty guided seconds for a cold room: five beats ending in the
@@ -3194,13 +3198,13 @@ function factory(THREE, model) {
     if (tourStep >= tourBeats.length) { endTour(); return; }
     showTourStep();
   }
-  function endTour() {
+  function endTour(returnFocus = true) {
     if (tourStep < 0) return;
     tourStep = -1;
     // Closing the box with focus in it hands focus back to the Tour button.
     const hadFocus = $("tour").contains(document.activeElement);
     $("tour").hidden = true;
-    if (hadFocus) $("tour-open").focus();
+    if (hadFocus && returnFocus) $("tour-open").focus();
     if (location.hash === "#tour")
       history.replaceState(null, "", location.pathname + location.search);
     resetView();
@@ -3208,7 +3212,7 @@ function factory(THREE, model) {
   $("tour-open").hidden = false;
   $("tour-open").addEventListener("click", startTour);
   $("tour-next").addEventListener("click", nextTour);
-  $("tour-skip").addEventListener("click", endTour);
+  $("tour-skip").addEventListener("click", (event) => endTour(event.detail === 0));
 
   // ---------------------------------------------------------- transport
   const play = $("play"), scrub = $("scrub");
@@ -3537,7 +3541,7 @@ function factory(THREE, model) {
   }
 
   // ---------------------------------------------------------- GIF export
-  $("export").addEventListener("click", () => exportGif().catch((err) => {
+  $("export").addEventListener("click", (event) => exportGif(event.detail === 0).catch((err) => {
     const status = $("export-status");
     status.hidden = false;
     status.textContent = `Export failed: ${err.message}. Nothing was downloaded.`;
@@ -3566,14 +3570,14 @@ function factory(THREE, model) {
       && document.activeElement === document.body) saved.focus.focus();
     saved = null;
   }
-  async function exportGif() {
+  async function exportGif(byKeyboard = false) {
     const W = 720, H = 450, FPS = 10, PLAY_SECONDS = 12, HOLD_FRAMES = 20;
     const status = $("export-status");
     status.hidden = false;
     status.textContent = "Exporting clip…";
     saved = {t: state.t,
       zoom: view.zoom, panX: view.panX, panY: view.panY,
-      highlighted: state.highlighted, trace: state.trace, focus: document.activeElement};
+      highlighted: state.highlighted, trace: state.trace, focus: byKeyboard ? document.activeElement : null};
     state.playing = false;
     exporting = true;
     // Capture purity: the clip records the repo, not this session — the
