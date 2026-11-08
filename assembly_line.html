@@ -3475,7 +3475,7 @@ function factory(THREE, model) {
     // of its own: after dragging it (focus stays on it), Space did
     // nothing at all instead of playing from the dragged-to day.
     if (event.target === scrub) {
-      if (event.key === " ") { event.preventDefault(); play.click(); }
+      if (event.key === " ") { event.preventDefault(); playFromKeys(); }
       return;
     }
     // A button owns only Space and Enter; ← →, Home, End and / still drive
@@ -3513,7 +3513,7 @@ function factory(THREE, model) {
     if (button && (event.key === " " || event.key === "Enter"
       || ((event.key === "Home" || event.key === "End") && button.closest("#panel, #legend")))) return;
     const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
-    if (event.key === " ") { event.preventDefault(); play.click(); return; }
+    if (event.key === " ") { event.preventDefault(); playFromKeys(); return; }
     if (event.key === "/") { event.preventDefault(); find.focus(); return; }
     const to = {ArrowLeft: Math.max(FIRST, day - 1), ArrowRight: toStop(Math.min(LAST + 1, day + 1)),
       Home: FIRST, End: LAST + 1}[event.key];
@@ -3525,6 +3525,14 @@ function factory(THREE, model) {
     // header's counts, which are not a live region.
     announce(`${scrub.getAttribute("aria-valuetext")}: ${lastTally.active} in flight, ${lastTally.completed} done.`);
   });
+  // Space away from the Play button (whose own label a screen reader
+  // reads) started and paused the replay in silence: only its end was
+  // announced. It says which, and where a pause landed.
+  function playFromKeys() {
+    play.click();
+    announce(state.playing ? `Replaying from ${dayLabel()}.`
+      : `Paused on ${scrub.getAttribute("aria-valuetext")}: ${lastTally.active} in flight, ${lastTally.completed} done.`);
+  }
   // A mouse click leaves the header's and transport's buttons focused
   // (Chrome on macOS), and a focused button keeps Space: after clicking
   // 60s, Space pressed 60s again; after "How to read this", it toggled
