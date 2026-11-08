@@ -15,6 +15,10 @@
 <meta name="theme-color" content="#e9f6ee" media="(prefers-color-scheme: light)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='24' rx='5' fill='%23a6e07a' stroke='%232f3238' stroke-width='2.5'/%3E%3Crect x='4' y='13' width='24' height='6' fill='%238f6fd8' stroke='%232f3238' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
+  /* Native controls — the finder's clear button and suggestion list,
+     scrollbars, the slider — take the declared scheme. Undeclared, a dark
+     page drew the clear button in light-scheme blue. */
+  :root { color-scheme: light dark; }
   :root {
     --ground: #e9f6ee; --ink: #23262c; --muted: #5f6873;
     --belt: #a6e07a; --accent: #8f6fd8; --hot: #e0903a; --panel: #ffffff;
