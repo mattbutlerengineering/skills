@@ -1764,22 +1764,29 @@ function factory(THREE, model) {
       history.replaceState(null, "", location.pathname + location.search);
   };
   // Centre a world point and zoom to it (the chips fly the camera) — in
-  // the part of the stage an open panel leaves free: left of the side
-  // panel, above a phone's bottom sheet. Centred on the whole stage, a
-  // phone's sheet covered the very building the finder flew to.
+  // the part of the stage the overlays leave free: left of the side
+  // panel, above a phone's bottom sheet or the tour card. Centred on the
+  // whole stage, a phone's sheet covered the very building the finder
+  // flew to, and a tour beat parked its station half behind the card.
   function focusOn(point, zoom) {
     if (exporting) return; // nothing moves the camera inside a capture
     const v = point.clone().applyMatrix4(camera.matrixWorldInverse);
     view.zoom = zoom;
     view.panX = v.x - frameBox.cx;
     view.panY = v.y + 2 / zoom - frameBox.cy;
+    const s = stage.getBoundingClientRect();
+    const perPx = 2 * frameBox.halfH / (zoom * Math.max(1, s.height));
+    let coverBottom = 0, coverRight = 0;
     const panel = $("panel");
     if (!panel.hidden) {
-      const s = stage.getBoundingClientRect(), p = panel.getBoundingClientRect();
-      const perPx = 2 * frameBox.halfH / (zoom * Math.max(1, s.height));
-      if (p.top > s.top + s.height / 3) view.panY -= (s.bottom - p.top) / 2 * perPx;
-      else if (p.left > s.left + s.width / 2) view.panX += (s.right - p.left) / 2 * perPx;
+      const p = panel.getBoundingClientRect();
+      if (p.top > s.top + s.height / 3) coverBottom = s.bottom - p.top;
+      else if (p.left > s.left + s.width / 2) coverRight = s.right - p.left;
     }
+    if (!$("tour").hidden)
+      coverBottom = Math.max(coverBottom, s.bottom - $("tour").getBoundingClientRect().top);
+    view.panY -= coverBottom / 2 * perPx;
+    view.panX += coverRight / 2 * perPx;
     applyView(); requestRender();
   }
   stage.addEventListener("wheel", (event) => {
