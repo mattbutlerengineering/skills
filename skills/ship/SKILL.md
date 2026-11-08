@@ -30,7 +30,10 @@ branch.
      row in `docs/adr/README.md`'s index; a collision renumbers per the
      protocol's "When to write an ADR" numbering rule.
    - The rollback plan exists and is concrete: the actual commands or steps
-     to undo this release, not "revert if needed". Beside the steps it
+     to undo this release, not "revert if needed", and its trigger: the
+     observation that makes you run them (a smoke check failing, an error
+     rate above a stated number, a named user flow breaking), decided now
+     rather than mid-release. Beside the steps it
      records the door (one-way or two-way) and the blast radius in the
      words of the protocol's Pull request body section, so `release.md`
      and the PR body make the same call.
