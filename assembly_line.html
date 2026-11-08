@@ -15,8 +15,12 @@
 <meta name="theme-color" content="#e9f6ee" media="(prefers-color-scheme: light)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='24' rx='5' fill='%23a6e07a' stroke='%232f3238' stroke-width='2.5'/%3E%3Crect x='4' y='13' width='24' height='6' fill='%238f6fd8' stroke='%232f3238' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
+  /* Native controls — the finder's clear button and suggestion list,
+     scrollbars, the slider — take the declared scheme. Undeclared, a dark
+     page drew the clear button in light-scheme blue. */
+  :root { color-scheme: light dark; }
   :root {
-    --ground: #e9f6ee; --ink: #23262c; --muted: #68717d;
+    --ground: #e9f6ee; --ink: #23262c; --muted: #5f6873;
     --belt: #a6e07a; --accent: #8f6fd8; --hot: #e0903a; --panel: #ffffff;
     --line: #2f3238; --ok: #5cb85c;
   }
@@ -33,7 +37,11 @@
   header h1 .soft { color: var(--muted); font-weight: 500; }
   header .meta { color: var(--muted); }
   header .meta b { color: var(--ink); }
-  #find { margin-left: auto; font: inherit; font-size: .85rem;
+  /* The finder, Tour and legend buttons wrap as one group, right-aligned:
+     loose, a narrow header split them and left "? How to read this"
+     alone at the start of the second line, reading as part of the story. */
+  header .tools { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+  #find { font: inherit; font-size: .85rem;
     border: 1.5px solid rgba(47,50,56,.3); background: rgba(255,255,255,.8);
     border-radius: 999px; padding: .2rem .8rem; width: 15em; }
   #find:focus { border-color: var(--line); background: #fff; outline: none; }
@@ -50,8 +58,8 @@
     box-shadow: 0 14px 40px rgba(31,42,35,.22); }
   #tour p { margin: 0 0 .5rem; }
   #tour .row { display: flex; align-items: center; gap: .5rem; }
-  #tour .dots { color: var(--muted); letter-spacing: .2em; flex: 1; }
-  #tour button { font: inherit; border: 1.5px solid var(--line);
+  #tour .dots { color: var(--muted); letter-spacing: .2em; flex: 1; white-space: nowrap; }
+  #tour button { font: inherit; border: 1.5px solid var(--line); white-space: nowrap;
     background: var(--panel); color: var(--ink); border-radius: 8px;
     padding: .25rem .8rem; cursor: pointer; }
   #tour .primary { background: var(--belt); color: #1c2518; font-weight: 600; }
@@ -63,7 +71,8 @@
      second row and the stage lost a row's height. */
   #pipeline { flex: none; display: flex; align-items: center; gap: .2rem;
     padding: 0 1rem .55rem; flex-wrap: wrap; }
-  #pipeline .flow { color: #9aa49c; font-weight: 700; }
+  /* The arrows carry the stage order, so they keep 3:1 (non-text). */
+  #pipeline .flow { color: #78827a; font-weight: 700; }
   .chip { font: inherit; font-size: .8rem; display: inline-flex; gap: .3rem;
     align-items: center; border: 1.5px solid rgba(47,50,56,.22);
     border-radius: 999px; padding: .18rem .45rem .18rem .3rem;
@@ -71,8 +80,11 @@
   .chip:hover { border-color: var(--line); background: #fff; }
   .chip .n { min-width: 1.7em; text-align: center; font-weight: 700;
     background: var(--belt); border-radius: 999px; padding: .02rem .4rem; }
-  .chip.zero { opacity: .55; }
-  .chip.zero .n { background: #e8eae8; }
+  /* An empty station's chip recedes by colour, not opacity: at .55
+     opacity the label measured 3.6:1 on the light page, under AA's
+     4.5:1 for text this size. --muted stays above it in both schemes. */
+  .chip.zero { color: var(--muted); border-color: rgba(47,50,56,.14); }
+  .chip.zero .n { background: #eef0ee; color: var(--muted); }
   .chip.hot { border-color: var(--hot); background: #fff3e2;
     box-shadow: 0 0 0 3px rgba(224,144,58,.18); }
   /* Dark ink on the hot and done pills: white fails WCAG AA on both
@@ -96,6 +108,14 @@
   #hint { position: absolute; left: .8rem; bottom: .6rem; color: var(--muted);
     font-size: .75rem; background: rgba(255,255,255,.7); padding: .15rem .6rem;
     border-radius: 999px; pointer-events: none; }
+  /* A touch screen with no keyboard or mouse (a tablet: phones hide the
+     hint) gets its own gestures — in the hint and the legend — not
+     "space", "scroll", "hover" and "double-click". */
+  .touch { display: none; }
+  @media (hover: none) and (pointer: coarse) {
+    .keys { display: none; }
+    .touch { display: inline; }
+  }
   #replay-date { position: absolute; left: 50%; top: .6rem;
     transform: translateX(-50%); font-size: 1.5rem; font-weight: 700;
     font-variant-numeric: tabular-nums; color: var(--ink);
@@ -110,13 +130,14 @@
   #trace-banner button { font: inherit; border: 1.5px solid var(--line);
     background: var(--panel); color: var(--ink); border-radius: 999px;
     padding: .1rem .6rem; cursor: pointer; }
-  /* Top-aligned and pushed right: on a run name that wraps, a
-     stretched pill swelled into a two-line lozenge, and space-between
-     left every button at a different x. */
+  /* A sibling of the row's <details>, not inside its <summary>: a button
+     nested in a summary is an interactive control inside another (axe
+     nested-interactive), announced and reached unreliably. It sits over
+     the summary's reserved right edge, top-aligned, at one x on every
+     row. */
   .trace-btn { font: inherit; font-size: .75rem; border: 1.5px solid
-    rgba(47,50,56,.3); background: none; color: var(--accent);
-    border-radius: 999px; padding: 0 .5rem; cursor: pointer;
-    margin-left: auto; flex: none; align-self: flex-start; white-space: nowrap; }
+    rgba(47,50,56,.3); background: none; color: #6a4cc4;
+    border-radius: 999px; padding: 0 .5rem; cursor: pointer; white-space: nowrap; }
   .trace-btn:hover { border-color: var(--accent); }
   /* While a trace banner occupies the top-left, the date badge yields
      the centre and docks right — and on a narrow stage, where the banner
@@ -147,7 +168,7 @@
     align-items: center; margin: 0 0 .4rem; }
   #legend h2 { margin: 0; font-size: .95rem; }
   #legend button { border: 0; background: none; font-size: 1.05rem;
-    cursor: pointer; }
+    cursor: pointer; color: inherit; }
   #legend ul { margin: 0; padding: 0; list-style: none; display: grid;
     gap: .45rem; }
   #legend li { display: flex; gap: .6rem; align-items: baseline; }
@@ -190,15 +211,20 @@
     border-bottom: 1px solid #ddd; }
   #panel header h2 { margin: 0; font-size: .95rem; }
   #panel header button { border: 0; background: none; font-size: 1.1rem;
-    cursor: pointer; }
+    cursor: pointer; color: inherit; }
   #panel .body { overflow: auto; padding: .4rem .8rem .8rem; }
-  #panel details { border-bottom: 1px solid #eee; padding: .25rem 0; }
+  #panel .run { position: relative; border-bottom: 1px solid #eee; }
+  #panel details { padding: .25rem 0; }
+  #panel .run > .trace-btn { position: absolute; top: .3rem; right: 0; }
+  #panel .run.traceable summary { padding-right: 4.6rem; }
   #panel summary { cursor: pointer; display: flex; gap: .5rem;
     justify-content: space-between; overflow-wrap: anywhere; }
   #panel summary .prog { color: var(--muted); white-space: nowrap;
     min-width: 3.4em; text-align: right; font-variant-numeric: tabular-nums; }
   #panel summary .prog.past { min-width: 7.6em; }
   #panel ul { margin: .2rem 0 .2rem 1rem; padding: 0; list-style: none; }
+  #panel .journey { margin: .1rem 0; font-size: .78rem; }
+  #panel .journey b { font-variant-numeric: tabular-nums; font-weight: 600; margin-right: .2rem; }
   #panel li.done::before { content: "☑ "; }
   #panel li.open::before { content: "☐ "; }
   #transport { flex: none; display: grid; gap: .2rem .8rem;
@@ -218,6 +244,8 @@
   #export-status { grid-column: 1 / -1; font-size: .8rem; }
   .speed { display: flex; gap: .25rem; }
   [hidden] { display: none !important; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; }
   /* In a dark room the shell dims and the lit factory floor floats
      like a diorama; the floor's colours never change (only the city
      behind it keeps night: dusk stone, lit windows — setCityNight). */
@@ -237,14 +265,15 @@
     #find::placeholder { color: var(--muted); }
     .chip .n, #transport button[aria-pressed="true"] { color: #1c2518; }
     .chip.zero .n { background: #2c332d; color: var(--muted); }
+    .chip.zero { border-color: #3a413b; }
     .chip.hot { background: #3a2b16; }
-    #pipeline .flow { color: #5c665e; }
+    #pipeline .flow { color: #75807a; }
     #hint, #replay-date { background: rgba(28,34,30,.85); color: var(--ink);
       border-color: #4a524b; }
     #notice { background: #3a2b16; color: #f3c892; }
     #panel header { border-bottom-color: #2e352f; }
-    #panel details { border-bottom-color: #2e352f; }
-    .trace-btn { border-color: #4a524b; }
+    #panel .run { border-bottom-color: #2e352f; }
+    .trace-btn { border-color: #4a524b; color: #b8a3f2; }
     #transport { background: rgba(18,23,19,.8);
       border-top-color: rgba(255,255,255,.08); }
   }
@@ -273,6 +302,16 @@
   @media (max-width: 720px) and (min-height: 481px) {
     #panel { top: auto; left: .5rem; right: .5rem; width: auto; max-height: 48%; }
   }
+  /* A short landscape screen gets the tour card at the side: across the
+     bottom it took 101 of the stage's 253 px and the floor shrank to
+     zoom 0.65 above it. frameClearOfTour and focusOn read either side. */
+  @media (max-height: 480px) and (min-width: 600px) {
+    #tour { left: auto; right: .5rem; top: .5rem; bottom: auto;
+      transform: none; width: min(300px, 40vw); max-height: calc(100% - 1rem);
+      overflow: auto; }
+    #tour .row { flex-wrap: wrap; justify-content: flex-end; }
+    #tour .dots { flex: 1 1 100%; }
+  }
 </style>
 </head>
 <body>
@@ -280,12 +319,14 @@
   <h1><span id="title">Assembly line</span>
     <span class="soft">· the software factory</span></h1>
   <span class="meta" id="meta"></span>
-  <input id="find" type="search" list="find-list" placeholder="find a run…"
-    aria-label="Find a run by name" hidden>
-  <datalist id="find-list"></datalist>
-  <button id="tour-open" hidden>▶ Tour</button>
-  <button id="legend-open" aria-expanded="false"
-    aria-controls="legend">? How to read this</button>
+  <div class="tools">
+    <input id="find" type="search" list="find-list" placeholder="find a run…"
+      aria-label="Find a run by name" hidden>
+    <datalist id="find-list"></datalist>
+    <button id="tour-open" hidden>▶ Tour</button>
+    <button id="legend-open" aria-expanded="false"
+      aria-controls="legend">? How to read this</button>
+  </div>
   <p id="story"><b>Each crate is one run</b> — a feature, maintenance or
     product run — riding the belt from <b>Idea</b> to <b>Ship</b>. Crates
     pile up where work waits; finished runs raise the <b>city</b> at the end
@@ -297,8 +338,9 @@
 <div id="stage" role="main" aria-label="The factory floor" hidden>
   <div id="empty-sign" hidden>No runs yet — start one with /idea</div>
   <div class="card" id="card" hidden></div>
-  <span id="hint">space play · ← → step a day · scroll zoom · drag pan ·
-    double-click reset</span>
+  <span id="hint"><span class="keys">space play · ← → step a day · scroll zoom ·
+    drag pan · double-click reset</span><span class="touch">pinch zoom · drag pan ·
+    double-tap reset · tap a crate or station for its list</span></span>
   <div id="trace-banner" hidden>
     <span>tracing <b id="trace-name"></b> — <span id="trace-detail"></span></span>
     <button id="trace-stop">✕ stop</button>
@@ -307,7 +349,7 @@
   <aside id="tour" hidden aria-label="Guided tour">
     <p id="tour-text"></p>
     <div class="row">
-      <span class="dots" id="tour-dots"></span>
+      <span class="dots" id="tour-dots" aria-hidden="true"></span>
       <button id="tour-skip">✕ End</button>
       <button id="tour-next" class="primary">Next →</button>
     </div>
@@ -328,7 +370,8 @@
       <li><span class="swatch" style="background:
         linear-gradient(90deg,#6fd36f 50%,#c9cdd3 50%)"></span>
         <span><b>Implement</b> crates carry their work orders as parts —
-          green done, grey open; click one to see them.</span></li>
+          green done, grey open; <span class="keys">click</span><span
+          class="touch">tap</span> one to see them.</span></li>
       <li><span class="swatch" style="background:#d8c3a5"></span>
         <span>The <b>city</b> at the end of the line is finished work:
           one named building per shipped run.</span></li>
@@ -339,13 +382,15 @@
       <li id="legend-bin" hidden><span class="swatch"
         style="background:#e0903a"></span>
         <span>The <b>bin</b> holds runs the placement tool could not
-          read; hover one for the reason.</span></li>
+          read; <span class="keys">hover</span><span class="touch">tap</span>
+          one for the reason.</span></li>
     </ul>
-    <p class="foot">Hover anything for detail; click to pin a list.<span
+    <p class="foot"><span class="keys">Hover anything for detail; click to pin a
+      list.</span><span class="touch">Tap anything to pin its list.</span><span
       id="legend-play"> Press Play to replay the repo's whole history.</span></p>
   </aside>
   <aside id="panel" hidden aria-label="Pinned detail">
-    <header><h2 id="panel-title"></h2>
+    <header><h2 id="panel-title" tabindex="-1"></h2>
       <button id="panel-close" aria-label="Close panel">✕</button></header>
     <div class="body" id="panel-body"></div>
   </aside>
@@ -367,6 +412,10 @@
     is today's.</span>
   <span id="export-status" role="status" hidden></span>
 </footer>
+<!-- One polite live region, always present: a tour beat's text and a
+     trace's start are announced here (text written into a box that was
+     hidden a moment ago is not reliably read). -->
+<p id="announce" class="sr-only" role="status"></p>
 
 <script id="model" type="application/json">__MODEL__</script>
 <script id="three-core" type="text/plain">__THREE_CORE__</script>
@@ -408,7 +457,13 @@ function missingKey(model) {
   if (!model || typeof model !== "object") return "model";
   return REQUIRED.find((key) => !(key in model)) || null;
 }
-const nameOf = (station) => (STATION_INFO[station] || [station])[0];
+// The bin is not a pipeline station (STATION_INFO lists those, and the
+// fallback walks it), but it has one name and one line everywhere: the
+// chip said "Attention" while its sign, card, panel and header said
+// "Needs attention".
+const BIN_INFO = ["Needs attention", "Runs the placement tool could not read."];
+const infoOf = (key) => (key === "bin" ? BIN_INFO : STATION_INFO[key]);
+const nameOf = (station) => (infoOf(station) || [station])[0];
 function el(tag, attrs, ...children) {
   const node = document.createElement(tag);
   Object.entries(attrs || {}).forEach(([key, value]) => {
@@ -451,21 +506,34 @@ function showFallback(model, notice) {
     ? `${run.ref} · ${doneCount(run)}/${run.work_orders.length}` : run.ref;
   stations.forEach((station) => main.append(
     section(nameOf(station), runs.filter((run) => run.station === station), "", label)));
-  main.append(section("Needs attention", runs.filter((run) => run.status === "attention"),
+  main.append(section(nameOf("bin"), runs.filter((run) => run.status === "attention"),
     "attention", (run) => `${run.dir} — ${run.reason}`));
   main.hidden = false;
 }
 
-function setHeader(model, day) {
+// The header summarises what the floor shows. `tally` is the floor's own
+// count — {active, completed, busiest, most} — so mid-replay the header,
+// the chips and the amber sign never disagree (counting each run's
+// end-of-day station, it once said "piling up at Operate (29)" while
+// Review's chip was amber at 16). Without a floor (no WebGL, or before
+// the factory builds) it counts the model's own placement: today's.
+function setHeader(model, day, tally) {
   const runs = Array.isArray(model && model.runs) ? model.runs : [];
   const at = day || (model && model.generated ? model.generated.slice(0, 10) : "");
-  const placed = day ? runs.map((run) => stationAt(run, day)) : runs.map((run) => run.station);
-  const active = placed.filter((s) => s && s !== "completed").length;
-  const completed = placed.filter((s) => s === "completed").length;
+  if (!tally) {
+    const counts = {};
+    runs.forEach((run) => {
+      if (run.station && run.station !== "completed") counts[run.station] = (counts[run.station] || 0) + 1;
+    });
+    const busiest = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0] || null;
+    tally = {active: Object.values(counts).reduce((a, b) => a + b, 0),
+      completed: runs.filter((run) => run.station === "completed").length,
+      busiest, most: busiest ? counts[busiest] : 0};
+  }
   $("title").textContent = (model && model.repo) || "Assembly line";
   const meta = $("meta");
-  meta.replaceChildren(el("b", {}, String(active)), " in flight · ",
-    el("b", {}, String(completed)), " done", at ? ` · as of ${at}` : "");
+  meta.replaceChildren(el("b", {}, String(tally.active)), " in flight · ",
+    el("b", {}, String(tally.completed)), " done", at ? ` · as of ${at}` : "");
   // Runs the placement tool could not read are in neither number above,
   // and they are the ones a maintainer most needs to hear about: say so
   // in the summary, not only on the floor's amber bin.
@@ -474,14 +542,9 @@ function setHeader(model, day) {
     meta.append(" · ", el("b", {}, String(unreadable)),
       unreadable === 1 ? " needs attention" : " need attention");
   }
-  const counts = {};
-  placed.forEach((s) => { if (s && s !== "completed") counts[s] = (counts[s] || 0) + 1; });
-  const busiest = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
-  if (busiest && counts[busiest] > 1) {
-    meta.append(" · piling up at ", el("b", {}, nameOf(busiest)),
-      ` (${counts[busiest]})`);
+  if (tally.busiest && tally.most > 1) {
+    meta.append(" · piling up at ", el("b", {}, nameOf(tally.busiest)), ` (${tally.most})`);
   }
-  return busiest;
 }
 
 function webglAvailable() {
@@ -495,12 +558,6 @@ function webglAvailable() {
 const DAY_MS = 86400000;
 const dayIndex = (iso) => Math.round(Date.parse(iso + "T00:00:00Z") / DAY_MS);
 const isoOf = (index) => new Date(index * DAY_MS).toISOString().slice(0, 10);
-function stationAt(run, day) {
-  if (run.status === "attention") return null;
-  let station = null;
-  for (const hop of run.history) { if (hop.day <= day) station = hop.station; }
-  return station;
-}
 // Within a played day a run's arrivals are spread evenly in stage order.
 function hopTimes(run) {
   const byDay = {};
@@ -775,7 +832,7 @@ function factory(THREE, model) {
   // amber — the bottleneck is the first thing the factory should say.
   function signTexture(key, count, hot) {
     const step = STEP[key] || "";
-    const name = (key === "bin" ? "Needs attention" : nameOf(key)).toUpperCase();
+    const name = nameOf(key).toUpperCase();
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const H = 148, PAD = 26, GAP = 18;
@@ -797,7 +854,9 @@ function factory(THREE, model) {
     ctx.fill(); ctx.stroke();
     let x = PAD;
     if (step) {
-      ctx.fillStyle = hot ? "#c06514" : "#8f6fd8";
+      // Darker than the accent/amber they echo: on a sign seen at map
+      // size those read 3.5:1; these read 5.6:1 and 5.2:1.
+      ctx.fillStyle = hot ? "#9a4d0c" : "#6a4cc4";
       ctx.font = "800 56px system-ui, sans-serif";
       ctx.textBaseline = "middle";
       ctx.fillText(step, x, H / 2 + 2);
@@ -813,7 +872,8 @@ function factory(THREE, model) {
       ctx.beginPath();
       ctx.roundRect(x, H / 2 - 34, countWidth, 68, 34);
       ctx.fill();
-      ctx.fillStyle = hot ? "#ffffff" : "#2f3238";
+      // Dark ink on the amber pill, as on the amber chip: white read 2.55:1.
+      ctx.fillStyle = hot ? "#3a2206" : "#2f3238";
       ctx.font = "700 54px system-ui, sans-serif";
       ctx.fillText(countText, x + (countWidth - ctx.measureText(countText).width) / 2,
         H / 2 + 2);
@@ -825,6 +885,15 @@ function factory(THREE, model) {
   }
   const signs = {};
   const SIGN_H = 2.5;
+  // An exported clip is 720 px wide, so at the screen's sign size its
+  // labels drew ~7-px text — the counts unreadable in a README. The
+  // export raises this while it captures.
+  const CLIP_SIGN_SCALE = 1.3;
+  let signScale = 1;
+  // One rule for a sign's height: map labels at 1×, out of the way close
+  // up, swollen a touch while hovered.
+  const signHeight = (sign) => SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom))
+    * (sign.boost || 1) * signScale;
   Object.keys(GRID).forEach((key) => {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true,
       depthTest: false}));
@@ -848,7 +917,7 @@ function factory(THREE, model) {
       sign.sprite.material.map = texture;
       sign.sprite.material.needsUpdate = true;
       sign.aspect = aspect;
-      const h = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom)) * (sign.boost || 1);
+      const h = signHeight(sign);
       sign.sprite.scale.set(h * aspect, h, 1);
       sign.last = want;
     }
@@ -1217,6 +1286,15 @@ function factory(THREE, model) {
   // One owner for the heap's footprint: slotPosition places crates on
   // it and layout() sizes the pallet board under them.
   const pileSide = (total) => (total - 6 > 27 ? 4 : 3);
+  // Past HEAP_LAYERS layers the heap stops climbing and packs instead:
+  // every crate is still there (one run each), its slab thinner, so the
+  // heap stays at roughly the city's roofline. Uncapped, a repo with 345
+  // runs at Operate stacked 22 layers — a grey tower in front of the city.
+  const HEAP_LAYERS = 7;
+  const heapScale = (total) => {
+    const layers = Math.ceil(Math.max(0, total - 6) / (pileSide(total) ** 2));
+    return layers > HEAP_LAYERS ? HEAP_LAYERS / layers : 1;
+  };
   ["capture", ...MAIN].forEach(palletFor);
 
   // --------------------------------------------------------------- city
@@ -1407,10 +1485,22 @@ function factory(THREE, model) {
   }
   // The pinned building, pointed at: an accent pin over its roof, on top
   // of its lavender walls (paintWall). A pinned crate lifts off its
-  // belt; a building cannot. Never pickable, and layout() alone shows
-  // it, so a capture (which clears the pin) never draws it.
-  const pinMarker = outlined(new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 4),
-    new THREE.MeshBasicMaterial({color: COLORS.accent})));
+  // belt; a building cannot. A traced run carries it too, crate or
+  // building. Never pickable, and layout() alone shows it, so a capture
+  // (which clears pin and trace) never draws it.
+  const pinMarker = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 4),
+    new THREE.MeshBasicMaterial({color: COLORS.accent, transparent: true, depthTest: false}));
+  // Drawn over everything, station signs included (sprites, renderOrder
+  // 8, in the transparent pass — hence transparent here): a traced crate
+  // standing at its station sits under that station's sign, which hid
+  // the pin, and machines hid it mid-ride.
+  pinMarker.renderOrder = 9;
+  {
+    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(pinMarker.geometry, 25),
+      new THREE.LineBasicMaterial({color: COLORS.line, transparent: true, depthTest: false}));
+    outline.renderOrder = 9;
+    pinMarker.add(outline);
+  }
   pinMarker.rotation.x = Math.PI; // point down
   pinMarker.visible = false;
   scene.add(pinMarker);
@@ -1440,7 +1530,9 @@ function factory(THREE, model) {
     const span = (side - 1) / 2;
     const local = new THREE.Vector3((-span + (cell % side)) * 1.3, 0,
       (-span + Math.floor(cell / side)) * 1.3);
-    return base.add(palletAt(key)).add(local).setY(PLATE_H + 0.35 + CRATE * 0.4 + layer * CRATE * 0.8);
+    const k = heapScale(total);
+    return base.add(palletAt(key)).add(local)
+      .setY(PLATE_H + 0.35 + CRATE * 0.4 * k + layer * CRATE * 0.8 * k);
   }
 
   // ---------------------------------------------------- state per moment
@@ -1461,10 +1553,23 @@ function factory(THREE, model) {
     const k = dayIndex(hop.day) - FIRST;
     if (k >= 0 && k < SPAN) { busy[k] = 1; busy[k + 1] = 1; }
   }));
-  const dayWeight = (k) => (busy[k] ? 1 : QUIET_WEIGHT);
-  // Is the playhead on a quiet (fast-forwarded) day? The date badge and
-  // the clip's stamp mark it.
-  const quietNow = () => !isToday() && !busy[Math.floor(state.t) - FIRST];
+  // And however long the silences, together they take at most a quarter
+  // of the replay: a history with a two-year gap spent 16 of its 30
+  // seconds racing an idle floor at QUIET_WEIGHT. The quiet weight drops
+  // to busy / (3 · quiet) when that is lower (this repo stays at 0.2).
+  let busyDays = 0;
+  for (let k = 0; k < SPAN; k++) busyDays += busy[k];
+  const quietDays = SPAN - busyDays;
+  const quietWeight = busyDays && quietDays
+    ? Math.min(QUIET_WEIGHT, busyDays / (3 * quietDays)) : QUIET_WEIGHT;
+  const dayWeight = (k) => (busy[k] ? 1 : quietWeight);
+  // Is the playhead fast-forwarding? The date badge and the clip's stamp
+  // mark it. The whole replay races quiet days; a trace keeps its own
+  // clock and races the waits between its stops (traceRacing) — judged
+  // by the repo's quiet days, the marker flickered on and off through a
+  // 39-day wait that a trace crosses in 0.2 s.
+  const quietNow = () => !isToday()
+    && (state.trace ? traceRacing(state.t) : !busy[Math.floor(state.t) - FIRST]);
   const cumU = new Float64Array(SPAN + 1);
   for (let k = 0; k < SPAN; k++) cumU[k + 1] = cumU[k] + dayWeight(k);
   const TOTAL_U = cumU[SPAN];
@@ -1484,6 +1589,9 @@ function factory(THREE, model) {
   }
   const state = {t: LAST + 1, playing: false, seconds: 30, highlighted: null, pinned: null};
   let lastHot = null;
+  // The floor's last count, as layout() handed it to the header — the
+  // clip's stamp reads it too, so a frame's numbers are that frame's.
+  let lastTally = {active: 0, completed: 0, busiest: null, most: 0};
   const isToday = () => state.t >= LAST + 1 - 1e-9;
   // Plain floor: t ∈ [d, d+1) is day d. (A subtractive epsilon here
   // misread the export's exact-integer frames as the previous day.)
@@ -1585,8 +1693,10 @@ function factory(THREE, model) {
           // Toward the target, not onto it: at this repo's pace the
           // 1.1-day window is 0.26 s, and on a three-year history 0.03 s.
           building.scale.y = glide(building.scale.y, rise);
-          if (state.highlighted === run && building.visible) {
-            nextPin = building;
+          // The marker points at the pinned building and at a traced run
+          // that has landed; only a pin turns the walls lavender.
+          if ((state.highlighted === run || state.trace === run) && building.visible) {
+            if (state.highlighted === run) nextPin = building;
             pinMarker.visible = true;
             pinMarker.position.copy(building.position);
             pinMarker.position.y += building.userData.top * building.scale.y + 1.5;
@@ -1601,6 +1711,8 @@ function factory(THREE, model) {
             : slotPosition(key, i, list.length);
           placeCrate(crateOf.get(run), pos);
           crateOf.get(run).mesh.rotation.set(0, 0, 0);
+          // A heap crate takes its packed thickness; belt slots stay whole.
+          crateOf.get(run).mesh.scale.y = state.trace !== run && i >= 6 ? heapScale(list.length) : 1;
         });
       }
       if (pallets[key]) {
@@ -1620,6 +1732,14 @@ function factory(THREE, model) {
     Object.keys(GRID).forEach((key) =>
       updateSign(key, counts[key] || 0, key === hotKey));
     updateChips(counts, hotKey);
+    // In flight counts crates on the belt too; the bin is the header's
+    // separate "need attention".
+    const active = runs.filter((run) => {
+      const where = crateOf.get(run).where;
+      return where && where.station !== "completed" && where.station !== "bin";
+    }).length;
+    lastTally = {active, completed: counts.completed || 0, busiest: hotKey, most};
+    setHeader(model, isToday() ? null : currentDay(), lastTally);
     runs.forEach((run) => {
       const entry = crateOf.get(run);
       const where = entry.where;
@@ -1627,6 +1747,7 @@ function factory(THREE, model) {
       if (where.moving) {
         const p = travelPoint(where.from, where.station, where.f);
         placeCrate(entry, tmpPos.set(p.x, BELT_Y + 0.08 + CRATE * 0.4, p.z));
+        entry.mesh.scale.y = 1;
       }
       entry.shadow.visible = !!where.inferred;
       const implementing = where.station === "implement" && run.work_orders.length;
@@ -1644,6 +1765,14 @@ function factory(THREE, model) {
       // Counts and signs stay whole-floor truth; the banner says why
       // the floor looks empty.
       if (state.trace && run !== state.trace) entry.mesh.visible = false;
+      // The traced crate carries the marker as it rides: alone on a wide
+      // floor, a white crate among white machines was hard to find, and a
+      // crate on a belt cannot lift like a pinned one.
+      if (state.trace === run && entry.mesh.visible) {
+        pinMarker.visible = true;
+        pinMarker.position.copy(entry.mesh.position);
+        pinMarker.position.y += CRATE + 1.2;
+      }
     });
     showParts();
     $("empty-sign").hidden = runs.length > 0;
@@ -1708,20 +1837,70 @@ function factory(THREE, model) {
   // (scroll to zoom, drag to pan, double-click to reset).
   const view = {zoom: 1, panX: 0, panY: 0};
   const frameBox = {cx: 0, cy: 0, halfH: 1, aspect: 1};
+  // The floor's outline in camera space, one convex polygon per visible
+  // station (its footprint's hull; the city's ground is Done's),
+  // measured by fit(). One hull of the whole floor filled its notches —
+  // Capture's spur, the gaps between rows — and deep zoom parked there.
+  let floorPolys = [];
+  function hullOf(points) { // Andrew's monotone chain, counter-clockwise
+    const p = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const half = (list) => {
+      const out = [];
+      for (const q of list) {
+        while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], q) <= 0) out.pop();
+        out.push(q);
+      }
+      out.pop();
+      return out;
+    };
+    return half(p).concat(half(p.reverse()));
+  }
+  // The nearest outline point to (x, y), or null when it is on the floor.
+  function offFloor(x, y) {
+    let best = null, bestD = Infinity;
+    for (const h of floorPolys) {
+      let inside = h.length > 2;
+      for (let i = 0; i < h.length; i++) {
+        const [ax, ay] = h[i], [bx, by] = h[(i + 1) % h.length];
+        if ((bx - ax) * (y - ay) - (by - ay) * (x - ax) < 0) inside = false;
+        const len = (bx - ax) ** 2 + (by - ay) ** 2 || 1;
+        const f = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / len));
+        const qx = ax + f * (bx - ax), qy = ay + f * (by - ay);
+        const d = (x - qx) ** 2 + (y - qy) ** 2;
+        if (d < bestD) { bestD = d; best = [qx, qy]; }
+      }
+      if (inside) return null;
+    }
+    return best;
+  }
   function applyView() {
     const halfH = frameBox.halfH / view.zoom;
     const halfW = halfH * frameBox.aspect;
+    // The floor never leaves the frame: the view's centre stays within
+    // half the view's smaller half-extent of the floor's outline, so at
+    // any zoom some floor is on screen. Unbounded, a long drag (or a
+    // stale #view link) left an empty room, the floor nowhere in sight.
+    const near = offFloor(frameBox.cx + view.panX, frameBox.cy + view.panY);
+    if (near) {
+      const dx = frameBox.cx + view.panX - near[0], dy = frameBox.cy + view.panY - near[1];
+      const d = Math.hypot(dx, dy), m = Math.min(halfW, halfH) / 2;
+      if (d > m) {
+        view.panX = near[0] + dx * m / d - frameBox.cx;
+        view.panY = near[1] + dy * m / d - frameBox.cy;
+      }
+    }
     const cx = frameBox.cx + view.panX, cy = frameBox.cy + view.panY;
     camera.left = cx - halfW; camera.right = cx + halfW;
     camera.top = cy + halfH; camera.bottom = cy - halfH;
     camera.updateProjectionMatrix();
-    // Signs shrink as the viewer zooms in: at 1× they are map labels,
-    // close up they get out of the way of the machines.
-    const h = SIGN_H * Math.max(0.35, 1 / Math.sqrt(view.zoom));
     Object.values(signs).forEach((sign) => {
-      const hb = h * (sign.boost || 1);
-      if (sign.aspect) sign.sprite.scale.set(hb * sign.aspect, hb, 1);
+      const h = signHeight(sign);
+      if (sign.aspect) sign.sprite.scale.set(h * sign.aspect, h, 1);
     });
+    // The marker reads at map zoom too (×1.8 at 1×, ×1 from ~3× in): at
+    // its modelled size a traced crate's pin was a ~10-px fleck at rest.
+    pinMarker.scale.setScalar(Math.min(1.8, Math.max(1, 1.8 / Math.sqrt(view.zoom))));
     yieldSigns();
   }
   function fit() {
@@ -1760,6 +1939,17 @@ function factory(THREE, model) {
     frameBox.aspect = width / Math.max(1, height);
     frameBox.halfH = Math.max(spanY, spanX / frameBox.aspect) / 2 * 1.02;
     frameBox.cx = (minX + maxX) / 2; frameBox.cy = (minY + maxY) / 2;
+    // Footprints, not full-height boxes: a tall group's box reaches into
+    // empty sky, and deep zoom parked over that was an empty frame again.
+    floorPolys = Object.values(stationGroups).filter((g) => g.visible).map((g) => {
+      const box = new THREE.Box3().setFromObject(g), corners = [];
+      for (const x of [box.min.x, box.max.x]) for (const y of [0, PLATE_H])
+        for (const z of [box.min.z, box.max.z]) {
+          const v = new THREE.Vector3(x, y, z).applyMatrix4(inv);
+          corners.push([v.x, v.y]);
+        }
+      return hullOf(corners);
+    });
     applyView();
     // The sun's shadow frustum covers the whole floor once. The sun turns
     // with the camera (both yaw 180°), so shadows still fall toward the
@@ -1778,15 +1968,16 @@ function factory(THREE, model) {
   // keeps the pan, which lives in camera space, so what the viewer was
   // looking at drifted: portrait → landscape left a pinned building on
   // the stage's top edge. A pin is re-centred in the free region at the
-  // same zoom, and a tour beat is re-framed; a bare hand-framed view
-  // keeps its pan as before.
+  // same zoom, a tour beat is re-framed, an untouched resting view
+  // re-rests; a hand-framed view keeps its pan.
   addEventListener("resize", () => {
+    const resting = isResting();
     fit();
     if (!exporting && tourStep >= 0) showTourStep();
     else if (!exporting && state.pinned) {
       const {key, run} = state.pinned;
       focusOn(run ? runFocus(run) : focusTargetOf(key), view.zoom);
-    }
+    } else if (resting) resetView();
     requestRender();
   });
   // The resting view sits a touch inside the fitted frame: the floor's
@@ -1798,6 +1989,7 @@ function factory(THREE, model) {
   // semantic link like #run or #day). Reset clears it.
   let viewHashTimer = 0;
   function scheduleViewHash() {
+    traceFollow = false; // a hand on the camera keeps it
     clearTimeout(viewHashTimer);
     viewHashTimer = setTimeout(() => {
       if (exporting || tourStep >= 0) return;
@@ -1805,39 +1997,104 @@ function factory(THREE, model) {
       history.replaceState(null, "", `#view=${view.zoom.toFixed(2)},${view.panX.toFixed(1)},${view.panY.toFixed(1)}`);
     }, 400);
   }
+  // The resting view: fit()'s frame at BASE_ZOOM — unless the open
+  // legend would cover part of the floor there (a ~1000px window put
+  // Operate's pile-up under it), in which case the floor is fitted into
+  // what the legend leaves free. lastRest remembers the last rest view
+  // applied, so a legend toggle or a resize can re-rest an untouched view
+  // without disturbing one the viewer framed by hand.
+  let lastRest = null;
+  function restView() {
+    const plain = {zoom: BASE_ZOOM, panX: 0, panY: 0};
+    const L = $("legend");
+    if (L.hidden) return plain;
+    const e = floorExtent();
+    if (!isFinite(e.minX)) return plain;
+    const s = stage.getBoundingClientRect(), l = L.getBoundingClientRect();
+    const perPx = 2 * frameBox.halfH / (BASE_ZOOM * Math.max(1, s.height));
+    const right = s.width / 2 + (e.maxX - frameBox.cx) / perPx;
+    const top = s.height / 2 - (e.maxY - frameBox.cy) / perPx;
+    const bottom = s.height / 2 - (e.minY - frameBox.cy) / perPx;
+    if (right <= l.left - s.left || bottom <= l.top - s.top || top >= l.bottom - s.top) return plain;
+    return fitInFree(e) || plain;
+  }
+  // (Still easing in counts as resting: the intro is heading to lastRest.)
+  const isResting = () => !!lastRest && (intro !== null || (Math.abs(view.zoom - lastRest.zoom) < 1e-6
+    && Math.abs(view.panX - lastRest.panX) < 1e-6 && Math.abs(view.panY - lastRest.panY) < 1e-6));
   const resetView = () => {
     if (exporting) return; // the capture owns the camera
-    view.zoom = BASE_ZOOM; view.panX = 0; view.panY = 0; applyView(); requestRender();
+    lastRest = restView();
+    view.zoom = lastRest.zoom; view.panX = lastRest.panX; view.panY = lastRest.panY;
+    applyView(); requestRender();
     clearTimeout(viewHashTimer);
     if (location.hash.startsWith("#view="))
       history.replaceState(null, "", location.pathname + location.search);
   };
-  // Centre a world point and zoom to it (the chips fly the camera) — in
-  // the part of the stage the overlays leave free: left of the side
-  // panel, above a phone's bottom sheet or the tour card. Centred on the
-  // whole stage, a phone's sheet covered the very building the finder
-  // flew to, and a tour beat parked its station half behind the card.
+  // The part of the stage the overlays leave free, in stage pixels: left
+  // of a side panel, side tour card or the legend, above a bottom sheet
+  // or a bottom tour card. One owner for every camera move that must
+  // land in view.
+  function freeRect() {
+    const s = stage.getBoundingClientRect();
+    let right = s.width, bottom = s.height;
+    for (const el of [$("panel"), $("tour"), $("legend")]) {
+      if (el.hidden) continue;
+      const r = el.getBoundingClientRect();
+      if (r.top > s.top + s.height / 3) bottom = Math.min(bottom, r.top - s.top);
+      else if (r.left > s.left + s.width / 2) right = Math.min(right, r.left - s.left);
+    }
+    return {w: s.width, h: s.height, right, bottom};
+  }
+  // The view that fits the floor's extent into freeRect(), capped at
+  // BASE_ZOOM (6% breathing room); null when nothing is free.
+  function fitInFree(e = floorExtent()) {
+    const f = freeRect();
+    if (f.right <= 0 || f.bottom <= 0 || !isFinite(e.minX)) return null;
+    const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
+    // World units per pixel at zoom z is 2·halfH / (z·H).
+    const zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * f.bottom / (f.h * spanY),
+      2 * frameBox.halfH * f.right / (f.h * spanX));
+    const perPx = 2 * frameBox.halfH / (zoom * f.h);
+    return {zoom,
+      panX: (e.minX + e.maxX) / 2 - frameBox.cx + (f.w - f.right) / 2 * perPx,
+      panY: (e.minY + e.maxY) / 2 - frameBox.cy - (f.h - f.bottom) / 2 * perPx};
+  }
+  // The view that centres a world point at a zoom (the chips fly the
+  // camera there) — in freeRect(), not the whole stage: there a phone's
+  // sheet covered the very building the finder flew to, and a tour beat
+  // parked its station half behind the card.
+  function viewFor(point, zoom) {
+    const v = point.clone().applyMatrix4(camera.matrixWorldInverse);
+    const f = freeRect();
+    const perPx = 2 * frameBox.halfH / (zoom * Math.max(1, f.h));
+    return {zoom,
+      panX: v.x - frameBox.cx + (f.w - f.right) / 2 * perPx,
+      panY: v.y + 2 / zoom - frameBox.cy - (f.h - f.bottom) / 2 * perPx};
+  }
   function focusOn(point, zoom) {
     if (exporting) return; // nothing moves the camera inside a capture
-    const v = point.clone().applyMatrix4(camera.matrixWorldInverse);
-    view.zoom = zoom;
-    view.panX = v.x - frameBox.cx;
-    view.panY = v.y + 2 / zoom - frameBox.cy;
-    const s = stage.getBoundingClientRect();
-    const perPx = 2 * frameBox.halfH / (zoom * Math.max(1, s.height));
-    let coverBottom = 0, coverRight = 0;
-    const panel = $("panel");
-    if (!panel.hidden) {
-      const p = panel.getBoundingClientRect();
-      if (p.top > s.top + s.height / 3) coverBottom = s.bottom - p.top;
-      else if (p.left > s.left + s.width / 2) coverRight = s.right - p.left;
-    }
-    if (!$("tour").hidden)
-      coverBottom = Math.max(coverBottom, s.bottom - $("tour").getBoundingClientRect().top);
-    view.panY -= coverBottom / 2 * perPx;
-    view.panX += coverRight / 2 * perPx;
+    Object.assign(view, viewFor(point, zoom));
     applyView(); requestRender();
   }
+  // A playing trace follows its crate at TRACE_ZOOM: on a phone the whole
+  // floor is ~380 px wide and the solo crate a speck. The camera eases
+  // (never snaps) toward the crate; any hand pan, zoom or reset hands the
+  // camera back for the rest of the trace, and reduced motion keeps the
+  // whole floor.
+  const TRACE_ZOOM = 2, FOLLOW_TAU = 0.4;
+  let traceFollow = false;
+  function followTrace(dt) {
+    const target = viewFor(runFocus(state.trace), TRACE_ZOOM);
+    const k = 1 - Math.exp(-dt / FOLLOW_TAU);
+    view.zoom += (target.zoom - view.zoom) * k;
+    view.panX += (target.panX - view.panX) * k;
+    view.panY += (target.panY - view.panY) * k;
+    applyView();
+  }
+  // The hand-zoom range, one owner for wheel, pinch and #view links. 14×
+  // deep, not 8×: the city's point is that every building is named, and
+  // at 8× its nameplates still read as grey smudges; at 14× they read.
+  const clampZoom = (z) => Math.min(14, Math.max(0.7, z));
   stage.addEventListener("wheel", (event) => {
     if (event.target !== renderer.domElement) return;
     event.preventDefault();
@@ -1845,7 +2102,7 @@ function factory(THREE, model) {
     const nx = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     const ny = -(((event.clientY - rect.top) / rect.height) * 2 - 1);
     const old = view.zoom;
-    view.zoom = Math.min(8, Math.max(0.7, old * Math.exp(-event.deltaY * 0.0016)));
+    view.zoom = clampZoom(old * Math.exp(-event.deltaY * 0.0016));
     // Keep the world point under the cursor still while zooming.
     view.panX += nx * frameBox.aspect * frameBox.halfH * (1 / old - 1 / view.zoom);
     view.panY += ny * frameBox.halfH * (1 / old - 1 / view.zoom);
@@ -1861,7 +2118,7 @@ function factory(THREE, model) {
     const nx = ((clientX - rect.left) / rect.width) * 2 - 1;
     const ny = -(((clientY - rect.top) / rect.height) * 2 - 1);
     const old = view.zoom;
-    view.zoom = Math.min(8, Math.max(0.7, old * factor));
+    view.zoom = clampZoom(old * factor);
     view.panX += nx * frameBox.aspect * frameBox.halfH * (1 / old - 1 / view.zoom);
     view.panY += ny * frameBox.halfH * (1 / old - 1 / view.zoom);
     applyView(); requestRender(); scheduleViewHash();
@@ -1906,7 +2163,7 @@ function factory(THREE, model) {
   });
   addEventListener("pointerup", (event) => { touches.delete(event.pointerId); pinchDist = 0; drag = null; });
   addEventListener("pointercancel", (event) => { touches.delete(event.pointerId); pinchDist = 0; drag = null; });
-  renderer.domElement.addEventListener("dblclick", resetView);
+  renderer.domElement.addEventListener("dblclick", () => { traceFollow = false; resetView(); });
 
   // --------------------------------------------------------- hover, pin
   const raycaster = new THREE.Raycaster();
@@ -1919,6 +2176,21 @@ function factory(THREE, model) {
     }).sort((a, b) => crateOf.get(a).where.since - crateOf.get(b).where.since);
   }
   const asOf = () => isToday() ? model.generated.slice(0, 10) : currentDay();
+  // Whole days a standing crate has waited at its station, to today or to
+  // the replay's parked day — the crate card's and station card's one rule.
+  function waitedDays(run) {
+    const arrived = Math.floor(crateOf.get(run).where.since);
+    const now = isToday() ? dayIndex(model.generated.slice(0, 10)) : Math.floor(state.t);
+    return Math.max(0, now - arrived);
+  }
+  const daysText = (n) => `${n} day${n === 1 ? "" : "s"}`;
+  // A finished run's lead time: whole days from its first recorded stage
+  // to Done (null while unfinished) — the building card's and the Done
+  // card's one rule.
+  function leadDays(run) {
+    const landed = run.history.findLast((hop) => hop.station === "completed");
+    return landed ? dayIndex(landed.day) - dayIndex(run.history[0].day) : null;
+  }
   function skippedOf(run) {
     return run.ladder.filter((row) => row.state === "skipped").map((row) => nameOf(row.stage));
   }
@@ -1929,12 +2201,20 @@ function factory(THREE, model) {
   }
   function stationCard(key) {
     const here = runsAt(key);
-    const [name, line] = key === "bin" ? ["Needs attention", "Runs the placement tool could not read."]
-      : STATION_INFO[key];
+    const [name, line] = infoOf(key);
     const oldest = here.slice(0, 5).map((run) => run.slug).join(", ");
+    // The pile's age: how long its oldest crate has waited (runsAt sorts
+    // oldest first). Not for the city or the bin — nothing waits there.
+    const longest = here.length && key !== "completed" && key !== "bin" ? waitedDays(here[0]) : 0;
+    // The city's own number: how long a shipped run took, median of the
+    // buildings standing now (the lower middle, so it is a real run's).
+    const leads = key === "completed" ? here.map(leadDays).filter((d) => d !== null).sort((a, b) => a - b) : [];
+    const median = leads.length ? leads[Math.floor((leads.length - 1) / 2)] : null;
     card.replaceChildren(el("h3", {}, name), el("p", {}, line),
       el("p", {class: "muted"}, `${here.length} run${here.length === 1 ? "" : "s"} · as of ${asOf()}`),
-      ...(here.length ? [el("p", {}, `oldest: ${oldest}${here.length > 5 ? ", …" : ""}`)] : []));
+      ...(here.length ? [el("p", {}, `${key === "bin" ? "runs" : "oldest"}: ${oldest}${here.length > 5 ? ", …" : ""}`)] : []),
+      ...(longest ? [el("p", {}, `longest wait: ${daysText(longest)}`)] : []),
+      ...(median !== null ? [el("p", {}, `median lead time: ${daysText(median)}, first stage to Done`)] : []));
   }
   // Tape colours, as CSS, for the card's kind dot.
   const KIND_CSS = {feature: "#7cc44e", maintenance: "#e0903a", product: "#8f6fd8"};
@@ -1952,10 +2232,17 @@ function factory(THREE, model) {
       const dot = el("span", {class: "kdot"});
       dot.style.background = KIND_CSS[run.kind] || "#9aa0a8";
       let line = `${run.kind} · at ${station}`;
+      // How long it has stood here — what a pile means. The arrival day is
+      // the placement's hop; "now" is the replay's day, or today.
+      if (where && !built && !where.moving) {
+        const waited = waitedDays(run);
+        line += ` since ${isoOf(Math.floor(where.since))}` + (waited ? ` (${daysText(waited)})` : "");
+      }
       if (built) {
         const landed = run.history.findLast((hop) => hop.station === "completed");
-        const n = run.work_orders.length;
+        const n = run.work_orders.length, lead = leadDays(run);
         line = `${run.kind}${landed ? ` · finished ${landed.day}` : ""}`
+          + (lead === null ? "" : lead ? `, ${daysText(lead)} after it started` : ", the day it started")
           + (n ? ` · ${n} work order${n === 1 ? "" : "s"}` : "");
       }
       if (where && where.station === "implement" && run.work_orders.length)
@@ -1988,8 +2275,13 @@ function factory(THREE, model) {
     if (key && signs[key]) signs[key].boost = 1.18;
     applyView(); requestRender();
   }
-  renderer.domElement.addEventListener("pointermove", (event) => {
-    const hit = pick(event);
+  // Where the pointer rests on the canvas. During a replay the floor moves
+  // under a still cursor, so the replay re-picks here each frame: the card
+  // says what is under the cursor now, not what was there when it last
+  // moved (resting on Review, it read "0 runs" while the chip said 16).
+  let hoverAt = null;
+  function hover(at) {
+    const hit = pick(at);
     if (!hit) { card.hidden = true; renderer.domElement.style.cursor = ""; boostSign(null); return; }
     if (hit.kind === "station") { stationCard(hit.station); boostSign(hit.station); }
     else {
@@ -1999,14 +2291,39 @@ function factory(THREE, model) {
     }
     const rect = stage.getBoundingClientRect();
     card.hidden = false;
-    const x = Math.min(event.clientX - rect.left + 16, rect.width - card.offsetWidth - 8);
-    const y = Math.min(event.clientY - rect.top + 16, rect.height - card.offsetHeight - 8);
+    // In the stage area the overlays leave free (freeRect): the card sits
+    // under the legend, panel and tour card in z-order, so near them it
+    // was half hidden. Past the free edge it flips to the cursor's left.
+    const f = freeRect();
+    let x = at.clientX - rect.left + 16;
+    if (x + card.offsetWidth > f.right - 8) x = at.clientX - rect.left - 16 - card.offsetWidth;
+    x = Math.max(8, x);
+    const y = Math.max(8, Math.min(at.clientY - rect.top + 16, f.bottom - card.offsetHeight - 8));
     card.style.left = `${x}px`; card.style.top = `${y}px`;
     renderer.domElement.style.cursor = "pointer";
+  }
+  renderer.domElement.addEventListener("pointermove", (event) => {
+    hoverAt = {clientX: event.clientX, clientY: event.clientY};
+    hover(hoverAt);
   });
-  renderer.domElement.addEventListener("pointerleave", () => { card.hidden = true; boostSign(null); });
+  renderer.domElement.addEventListener("pointerleave", () => {
+    hoverAt = null; card.hidden = true; boostSign(null);
+  });
+  // Keyboard flow for the panel: a chip or the finder that opens it moves
+  // focus to its title (Tab then walks its rows), and closing it while
+  // focus is inside hands focus back to that opener. Before, focus stayed
+  // on the chip (Tab went to the next chip, never into the panel), and
+  // Esc left it wherever it was.
+  let panelOpener = null;
+  function focusPanel(opener) {
+    panelOpener = opener;
+    $("panel-title").focus();
+  }
   function closePanel() {
+    const hadFocus = $("panel").contains(document.activeElement);
     $("panel").hidden = true; state.pinned = null; state.highlighted = null;
+    if (hadFocus && panelOpener && panelOpener.isConnected && !panelOpener.hidden) panelOpener.focus();
+    panelOpener = null;
     // The bar says what the view shows: a closed panel's link goes too.
     if (/^#(run|station)=/.test(location.hash))
       history.replaceState(null, "", location.pathname + location.search);
@@ -2015,23 +2332,37 @@ function factory(THREE, model) {
   function runRow(run, open) {
     const summary = el("summary", {});
     summary.append(el("span", {}, run.ref));
-    if (run.status !== "attention") {
-      const traceBtn = el("button", {class: "trace-btn",
-        title: "Replay this run's journey, solo"}, "◉ trace");
-      traceBtn.addEventListener("click", (event) => {
-        event.preventDefault();
-        startTrace(run);
-      });
-      summary.append(traceBtn);
-    }
     // The progress column is always there (empty without work orders),
-    // so every row's trace button lands at the same x.
+    // so every row's count lands at the same x.
     summary.append(el("span", {class: isToday() ? "prog" : "prog past"}, run.work_orders.length
       ? `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}` : ""));
     const details = el("details", {}, summary);
+    const row = el("div", {class: "run"}, details);
+    if (run.status !== "attention") {
+      const traceBtn = el("button", {class: "trace-btn",
+        title: "Replay this run's journey, solo"}, "◉ trace");
+      traceBtn.addEventListener("click", () => startTrace(run));
+      row.classList.add("traceable");
+      row.append(traceBtn);
+    }
     if (open) details.open = true;
     if (run.status === "attention") details.append(el("p", {class: "muted"}, run.reason));
-    else details.append(el("p", {class: "muted"}, run.dir));
+    else {
+      details.append(el("p", {class: "muted"}, run.dir));
+      // The journey by day — what a trace replays, readable at a glance.
+      // On a past day only the hops up to it: the panel never claims a
+      // future the floor has not reached.
+      const until = isToday() ? null : currentDay();
+      const days = [];
+      run.history.forEach((hop) => {
+        if (until && hop.day > until) return;
+        const last = days[days.length - 1];
+        if (last && last.day === hop.day) last.stops.push(nameOf(hop.station));
+        else days.push({day: hop.day, stops: [nameOf(hop.station)]});
+      });
+      days.forEach(({day, stops}) => details.append(
+        el("p", {class: "journey"}, el("b", {}, day), ` ${stops.join(" → ")}`)));
+    }
     if (run.work_orders.length) {
       if (!isToday()) details.append(el("p", {class: "muted"}, "progress as of today"));
       const ul = el("ul", {});
@@ -2039,26 +2370,85 @@ function factory(THREE, model) {
       details.append(ul);
     }
     summary.addEventListener("click", () => { state.highlighted = run; layout(); requestRender(); });
-    return details;
+    return row;
+  }
+  // Say it to a screen reader: the tour's text and the trace banner
+  // change silently otherwise (focus stays on Next, or moves to Play).
+  // Cleared first, so the same words twice are still announced.
+  function announce(text) {
+    const region = $("announce");
+    region.textContent = "";
+    setTimeout(() => { region.textContent = text; }, 50);
   }
   // ------------------------------------------------------------- trace
   // "Show me THIS run's journey": hide every other crate and replay
   // from the run's first recorded day. Esc or the banner stops it.
   let traceEnd = Infinity;
+  // A trace keeps its own clock: one beat per stop, whatever the calendar
+  // between them. At the whole-history pace a nine-stop, one-day journey
+  // flashed past in 0.77 s (~85 ms a stop). Knots map wall seconds (at the
+  // 30 s speed; 60 s halves it) to t: each hop gets TRACE_RIDE_S for its
+  // ride (the first, for being seen), then TRACE_GAP_S for any wait
+  // before the next hop, however many days that wait spans.
+  const TRACE_RIDE_S = 0.5, TRACE_GAP_S = 0.2;
+  let traceKnots = [];
+  function buildTraceKnots(hops) {
+    const knots = [[0, hops[0].t]];
+    let w = 0;
+    hops.forEach((hop, i) => {
+      const next = i + 1 < hops.length ? hops[i + 1].t : traceEnd;
+      // The ride placement() draws: TRAVEL of the slice to the next hop
+      // (a whole day's worth for the last).
+      const slice = i + 1 < hops.length ? Math.min(1, next - hop.t) : 1;
+      const rideEnd = Math.min(next, hop.t + TRAVEL * slice);
+      w += TRACE_RIDE_S; knots.push([w, rideEnd]);
+      if (next > rideEnd) { w += TRACE_GAP_S; knots.push([w, next]); }
+    });
+    return knots;
+  }
+  // On a knot segment that spans more than a day: the trace is racing a
+  // wait, not showing a ride.
+  function traceRacing(t) {
+    const k = traceKnots;
+    for (let i = 1; i < k.length; i++) if (t < k[i][1]) return k[i][1] - k[i - 1][1] > 1;
+    return false;
+  }
+  // Linear between knots: t → wall position, forward dt, wall → t.
+  function traceAdvance(t, dt) {
+    const k = traceKnots;
+    let w = k[k.length - 1][0];
+    for (let i = 1; i < k.length; i++) {
+      if (t < k[i][1]) {
+        const [w0, t0] = k[i - 1], [w1, t1] = k[i];
+        w = w0 + (w1 - w0) * Math.max(0, (t - t0) / (t1 - t0));
+        break;
+      }
+    }
+    w += dt * 30 / state.seconds;
+    for (let i = 1; i < k.length; i++) {
+      if (w < k[i][0]) {
+        const [w0, t0] = k[i - 1], [w1, t1] = k[i];
+        return t0 + (t1 - t0) * (w - w0) / (w1 - w0);
+      }
+    }
+    return traceEnd;
+  }
   function startTrace(run) {
     closePanel(); setLegend(false); endTour(); card.hidden = true;
     state.highlighted = null;
     state.trace = run;
-    // A trace is one run's story, so it ends where the story does: on
-    // the first day boundary after its last hop has finished arriving
-    // (the ride takes TRAVEL of a day, plus a beat to see it land), not
-    // months later at today with a motionless crate. A hop late in its
-    // day lands the next day: ending at that day's start left the crate
-    // frozen mid-belt under a banner saying "now at" its station.
+    // A trace is one run's story, so it ends where the story does — not
+    // months later at today with a motionless crate. It parks at the end
+    // of the day its last ride lands (the ride takes TRAVEL of a day; a
+    // parked day d is t = d + 1 − 1e-6, as goToDay parks), so the crate
+    // has arrived and the date is its landing day. (Rounding up past a
+    // beat after landing rolled into the next day and dated a run done on
+    // 07-06 as 07-08.) Landing on the last recorded day ends at today —
+    // the same date — not under a "today" button.
     const hops = times.get(run);
-    // toStop: a trace that ends on the last recorded day ends at today —
-    // the same date — not at that day's start under a "today" button.
-    traceEnd = toStop(Math.min(LAST + 1, Math.ceil(hops[hops.length - 1].t + TRAVEL + 0.25)));
+    const landDay = Math.floor(hops[hops.length - 1].t + TRAVEL);
+    traceEnd = landDay >= TODAY_STOP ? LAST + 1 : landDay + 1 - 1e-6;
+    traceKnots = buildTraceKnots(hops);
     $("trace-name").textContent = run.slug || run.ref;
     // Most journeys here happen inside one day: without this line the
     // trace is a motionless frame and the viewer learns nothing. The
@@ -2070,16 +2460,31 @@ function factory(THREE, model) {
     $("trace-detail").textContent =
       `${stops} station${stops === 1 ? "" : "s"}, ${span}, now at ${nameOf(run.station)}`;
     $("trace-banner").hidden = false;
+    announce(`Tracing ${run.slug || run.ref}: ${$("trace-detail").textContent}.`);
     resetView();
+    traceFollow = !reducedMotion;
     goToDay(dayIndex(run.history[0].day));
+    // goToDay parks at a day's END (a parked day shows its final floor);
+    // a trace starts at its first hop. From the end, a one-day journey —
+    // most of them here — played as a motionless frame, and a two-day
+    // one skipped its whole first day.
+    state.t = times.get(run)[0].t;
+    layout(); syncTransport();
     // After goToDay, which writes #day: the trace is the shareable fact.
     history.replaceState(null, "", `#trace=${encodeURIComponent(run.slug || run.ref)}`);
     if (!state.playing) play.click();
+    // The trace closed the panel its button lived in, which handed focus
+    // back to the panel's opener — a chip, so Space opened that chip's
+    // panel and ended the trace. Focus goes to Play: Space pauses it.
+    play.focus();
   }
   function endTrace() {
     if (!state.trace) return;
     state.trace = null;
+    // Stopping from the banner hides the button that had focus.
+    const hadFocus = $("trace-banner").contains(document.activeElement);
     $("trace-banner").hidden = true;
+    if (hadFocus) play.focus();
     if (location.hash.startsWith("#trace="))
       history.replaceState(null, "", location.pathname + location.search);
     // The trace ended zoomed on its crate; leaving it gives the floor back.
@@ -2131,19 +2536,23 @@ function factory(THREE, model) {
     openPanel({kind: "crate", run});
     focusOn(runFocus(run), 2.4);
     // (openPanel wrote the #run link)
-    find.blur();
+    focusPanel(find);
     requestRender();
   });
-  let panelDay = null;
+  let panelDay = null, panelRuns = [];
+  const sameRuns = (a, b) => a.length === b.length && a.every((run, i) => run === b[i]);
   function renderPanel() {
     if (!state.pinned) return;
     panelDay = currentDay();
     const {key, run} = state.pinned;
     const here = runsAt(key);
-    $("panel-title").textContent = `${key === "bin" ? "Needs attention" : nameOf(key)} · as of ${asOf()}`;
+    panelRuns = here;
+    $("panel-title").textContent = `${nameOf(key)} · as of ${asOf()}`;
     const body = $("panel-body");
+    // The bin has no order to claim: its runs carry no dates.
     body.replaceChildren(el("p", {class: "muted"}, here.length
-      ? `${here.length} run${here.length === 1 ? "" : "s"}, oldest first` : `No runs here as of ${asOf()}`));
+      ? `${here.length} run${here.length === 1 ? "" : "s"}${key === "bin" ? "" : ", oldest first"}`
+      : `No runs here as of ${asOf()}`));
     let opened = null;
     here.forEach((r) => {
       const row = runRow(r, r === run);
@@ -2189,14 +2598,15 @@ function factory(THREE, model) {
   const chips = {};
   const pipeline = $("pipeline");
   CHIP_ORDER.forEach((key, i) => {
-    if (i && key !== "bin") pipeline.append(el("span", {class: "flow"}, "→"));
-    const name = key === "bin" ? "Attention" : nameOf(key);
+    // The arrows draw the order; a screen reader hears it from the chips'
+    // sequence, not as "right arrow" between every pair.
+    if (i && key !== "bin") pipeline.append(el("span", {class: "flow", "aria-hidden": "true"}, "→"));
+    const name = nameOf(key);
     const n = el("span", {class: "n"}, "0");
-    const chip = el("button", {class: "chip", title:
-      (STATION_INFO[key] || ["", "Runs the placement tool could not read."])[1]},
-      n, name);
+    const chip = el("button", {class: "chip", title: infoOf(key)[1]}, n, name);
     chip.addEventListener("click", () => {
       openPanel({kind: "station", station: key});
+      focusPanel(chip);
       focusOn(focusTargetOf(key), 2.1);
       requestRender();
     });
@@ -2209,12 +2619,18 @@ function factory(THREE, model) {
       const count = counts[key] || 0;
       const hot = key === hotKey;
       const text = String(count);
+      const changed = entry.lastText !== text || entry.lastHot !== hot;
       if (entry.lastText !== text) { entry.n.textContent = text; entry.lastText = text; }
       if (entry.lastHot !== hot) {
         entry.chip.classList.toggle("hot", hot);
         entry.chip.classList.toggle("done", key === "completed");
         entry.lastHot = hot;
       }
+      // Read as "69 Operate runs, the busiest" — the visible "69 Operate"
+      // first (label in name, for voice control), then what the eye gets
+      // from the amber.
+      if (changed) entry.chip.setAttribute("aria-label",
+        `${count} ${entry.name} run${count === 1 ? "" : "s"}${hot ? ", the busiest" : ""}`);
       entry.chip.classList.toggle("zero", count === 0);
       entry.chip.hidden = key === "bin" && count === 0;
     });
@@ -2224,12 +2640,19 @@ function factory(THREE, model) {
   // Open on load: the first thing a cold viewer sees is the key to the
   // picture, and closing it is one click (pinning closes it too). On a
   // phone it would cover the whole factory, so there it starts closed
-  // and the "? How to read this" button opens it as a bottom sheet.
+  // and the "? How to read this" button opens it as a bottom sheet. A
+  // portrait-shaped stage (a tablet held upright) starts closed too:
+  // the floor fills the width there and the city lands top-right, under
+  // the legend — 55% of it covered on an iPad, 43% at 900×1000.
   function setLegend(openIt) {
+    const resting = isResting();
     $("legend").hidden = !openIt;
     $("legend-open").setAttribute("aria-expanded", String(openIt));
+    // An untouched resting view re-rests: beside the legend while it is
+    // open (restView), back to the plain frame once it closes.
+    if (resting) resetView();
   }
-  setLegend(matchMedia("(min-width: 721px) and (min-height: 481px)").matches);
+  setLegend(matchMedia("(min-width: 721px) and (min-height: 481px) and (min-aspect-ratio: 1/1)").matches);
   $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
   $("legend-close").addEventListener("click", () => setLegend(false));
 
@@ -2239,11 +2662,17 @@ function factory(THREE, model) {
   // so the bottleneck beat names the real pile-up.
   let tourStep = -1;
   function tourScript() {
+    // The pile-up beat says how big and how old the pile is: "piles mean
+    // waiting" lands harder with the wait in days.
+    const pile = lastHot ? runsAt(lastHot) : [];
+    const oldest = pile.length ? waitedDays(pile[0]) : 0;
     const beats = [
       {text: `This is ${model.repo}'s software factory. Every crate is one run — feature, maintenance or product — riding the belts from Idea to Ship.`, reset: true},
       {text: "Work enters at this end: features and products at Idea or PRD, maintenance at Capture beside them. The numbered stations carry each crate through spec, design, build and checks.", station: "idea"},
-      {text: "Implement assembles the code. Click any crate here and its work orders lay out as parts — green done, grey open.", station: "implement"},
-      lastHot ? {text: `The amber sign is the pile-up: ${nameOf(lastHot)} holds the most work right now. Piles mean waiting.`, station: lastHot}
+      // The same touch test as the CSS that swaps the hint and legend.
+      {text: `Implement assembles the code. ${matchMedia("(hover: none) and (pointer: coarse)").matches ? "Tap" : "Click"} any crate here and its work orders lay out as parts — green done, grey open.`, station: "implement"},
+      lastHot ? {text: `The amber sign is the pile-up: ${nameOf(lastHot)} holds the most work right now — ${pile.length} runs`
+        + (oldest ? `, the oldest waiting ${daysText(oldest)}` : "") + ". Piles mean waiting.", station: lastHot}
         : {text: "An amber sign would mark the busiest station — right now no queue stands out.", reset: true},
       {text: "And the end of the line is the city: every finished run raises a building named after it. The skyline is what the factory has shipped.", station: "completed"},
       {text: "And this is the whole story: press Play to replay the repo's history and watch every crate flow.", reset: true, thenPlay: true}
@@ -2278,49 +2707,53 @@ function factory(THREE, model) {
     });
     return ext;
   }
-  // The card covers the bottom of the stage, and seen from the
-  // pipeline's start that is where Capture and Idea stand. An overview
-  // beat fits the whole floor into the band above the card instead.
-  function frameAboveTour() {
+  // The card covers part of the stage — the bottom, where seen from the
+  // pipeline's start Capture and Idea stand, or on a short landscape
+  // screen the right side. An overview beat fits the whole floor into
+  // what the card leaves free.
+  function frameClearOfTour() {
     if (exporting) return; // the capture owns the camera
-    const W = stage.clientWidth, H = stage.clientHeight;
-    const band = $("tour").getBoundingClientRect().top - stage.getBoundingClientRect().top;
-    const e = floorExtent();
-    if (band <= 0 || band >= H || !isFinite(e.minX)) { resetView(); return; }
-    // World units per pixel at zoom z is 2·halfH / (z·H); 6% breathing room.
-    const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
-    view.zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * band / (H * spanY),
-      2 * frameBox.halfH * W / (H * spanX));
-    const h = frameBox.halfH / view.zoom;
-    view.panX = (e.minX + e.maxX) / 2 - frameBox.cx;
-    view.panY = (e.minY + e.maxY) / 2 - frameBox.cy - h * (1 - band / H);
+    const v = fitInFree();
+    if (!v) { resetView(); return; }
+    view.zoom = v.zoom; view.panX = v.panX; view.panY = v.panY;
     applyView(); requestRender();
   }
   function showTourStep() {
     const beat = tourBeats[tourStep];
     $("tour-text").textContent = beat.text;
+    announce(`Tour, step ${tourStep + 1} of ${tourBeats.length}: ${beat.text}`);
     $("tour-dots").textContent = tourBeats.map((b, i) => i === tourStep ? "●" : "○").join(" ");
     $("tour-next").textContent = tourStep === tourBeats.length - 1 ? "Play ▶" : "Next →";
-    if (beat.reset) frameAboveTour();
+    if (beat.reset) frameClearOfTour();
     if (beat.station) { focusOn(focusTargetOf(beat.station), 1.9); }
     requestRender();
   }
   function startTour() {
+    // An empty repo has nothing to tour (its button is hidden): a #tour
+    // link there narrated crates that don't exist and ended on "press
+    // Play" beside a disabled Play.
+    if (!enabled) return;
     // One mode at a time: a tour over a solo-trace floor would narrate
     // stations whose crates are hidden.
     endTrace();
     closePanel(); setLegend(false); card.hidden = true;
-    $("tour-open").blur();
+    // Focus goes to the tour's Next (set after showTourStep below), not
+    // nowhere: blurred, a keyboard user restarted from the top of the page.
     if (!isToday()) goToDay(LAST + 1);
     tourBeats = tourScript();
     tourStep = 0;
     $("tour").hidden = false;
     history.replaceState(null, "", "#tour");
     showTourStep();
+    $("tour-next").focus();
   }
   function nextTour() {
     const beat = tourBeats[tourStep];
-    if (beat && beat.thenPlay) { endTour(); if (!state.playing) play.click(); return; }
+    if (beat && beat.thenPlay) {
+      // The tour hands over to the replay, so focus goes to Play: Space
+      // pauses, rather than restarting the tour from its button.
+      endTour(); if (!state.playing) play.click(); play.focus(); return;
+    }
     tourStep++;
     if (tourStep >= tourBeats.length) { endTour(); return; }
     showTourStep();
@@ -2328,7 +2761,10 @@ function factory(THREE, model) {
   function endTour() {
     if (tourStep < 0) return;
     tourStep = -1;
+    // Closing the box with focus in it hands focus back to the Tour button.
+    const hadFocus = $("tour").contains(document.activeElement);
     $("tour").hidden = true;
+    if (hadFocus) $("tour-open").focus();
     if (location.hash === "#tour")
       history.replaceState(null, "", location.pathname + location.search);
     resetView();
@@ -2379,7 +2815,6 @@ function factory(THREE, model) {
     $("today").hidden = !off || state.playing;
     play.textContent = state.playing ? "❚❚ Pause" : "▶ Play";
     play.setAttribute("aria-label", state.playing ? "Pause the replay" : "Play the replay");
-    setHeader(model, isToday() ? null : currentDay());
   }
   $("today").addEventListener("click", () => goToDay(LAST + 1));
   const enabled = runs.length > 0;
@@ -2435,7 +2870,13 @@ function factory(THREE, model) {
       if (event.key === " ") { event.preventDefault(); play.click(); }
       return;
     }
-    if (event.target.closest("input, button, details, summary")) return;
+    // A transport button owns only Space and Enter; the arrows, Home, End
+    // and / still drive the timeline from one (focus sits on Play once a
+    // trace or the tour's last beat starts the replay). Other buttons —
+    // a panel row's trace, a chip — keep every key.
+    if (event.target.closest("input, details, summary")) return;
+    const button = event.target.closest("button");
+    if (button && (!button.closest("#transport") || event.key === " " || event.key === "Enter")) return;
     const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
     if (event.key === " ") { event.preventDefault(); play.click(); }
     else if (event.key === "ArrowLeft") { event.preventDefault(); goToDay(Math.max(FIRST, day - 1)); }
@@ -2465,7 +2906,8 @@ function factory(THREE, model) {
       // The glide is live-replay only: a capture places crates exactly,
       // and reduced motion asks for none of this.
       glideK = (exporting || reducedMotion) ? 1 : 1 - Math.exp(-dt / GLIDE_TAU);
-      state.t = tFromU(uFromT(state.t) + dt * TOTAL_U / state.seconds);
+      state.t = state.trace ? traceAdvance(state.t, dt)
+        : tFromU(uFromT(state.t) + dt * TOTAL_U / state.seconds);
       const stop = state.trace ? traceEnd : LAST + 1;
       if (state.t >= stop) {
         // The last frame lands on the placement, never near it.
@@ -2476,15 +2918,20 @@ function factory(THREE, model) {
         if (state.trace) { layout(); focusOn(runFocus(state.trace), 2.4); }
       }
       layout(); syncTransport(); needsRender = true;
+      if (state.trace && traceFollow && state.playing) followTrace(dt);
+      if (hoverAt && !exporting) hover(hoverAt);
       glideK = 1; // every layout outside the replay places exactly
       // A pinned panel follows the replay: rebuilt at each day boundary,
-      // so it never claims today's list against last summer's floor.
-      if (state.pinned && currentDay() !== panelDay) renderPanel();
+      // so it never claims today's list against last summer's floor, and
+      // whenever its station's crates change within a day — mid-day on
+      // 2026-08-27 Review's chip read 16 while the panel said "No runs".
+      if (state.pinned && (currentDay() !== panelDay
+        || !sameRuns(runsAt(state.pinned.key), panelRuns))) renderPanel();
     }
     if (intro !== null) {
       intro = Math.min(1, intro + dt / 1.1);
       const ease = 1 - Math.pow(1 - intro, 3);
-      view.zoom = BASE_ZOOM + (1.45 - BASE_ZOOM) * (1 - ease);
+      view.zoom = lastRest.zoom + (1.45 - lastRest.zoom) * (1 - ease);
       applyView();
       if (intro >= 1) intro = null;
       needsRender = true;
@@ -2551,7 +2998,7 @@ function factory(THREE, model) {
     $("trace-banner").hidden = !state.trace;
     view.zoom = saved.zoom; view.panX = saved.panX; view.panY = saved.panY;
     renderer.setPixelRatio(saved.ratio);
-    captureSize = null; stage.classList.remove("capturing");
+    captureSize = null; signScale = 1; stage.classList.remove("capturing");
     fit(); layout(); syncTransport(); requestRender();
     $("export").disabled = !enabled; play.disabled = !enabled;
     saved = null;
@@ -2583,6 +3030,7 @@ function factory(THREE, model) {
     // The renderer draws at the clip's size; the stage itself never
     // resizes (it used to, and a phone saw the floor jump and crop).
     captureSize = {w: W, h: H};
+    signScale = CLIP_SIGN_SCALE;
     stage.dataset.capture = "Exporting clip…";
     stage.classList.add("capturing");
     renderer.setPixelRatio(1);
@@ -2617,10 +3065,20 @@ function factory(THREE, model) {
     renderer.render(scene, camera);
     paint();
     const gif = new GifWriter(W, H, ctx.getImageData(0, 0, W, H).data);
-    // Each clip frame carries the repo and the replay's date, top left:
-    // a README viewer has no transport bar to read it from.
-    const stamp = (text) => {
+    // Each clip frame carries the repo, the replay's date and the floor's
+    // in-flight and done counts, top left: a README viewer has no
+    // transport bar or header to read them from.
+    // It fits the frame: a long repo name gives up its tail ("…"), never
+    // the date or the counts — a 60-character name pushed "84 in flight ·
+    // 23 done" off the 720-px frame.
+    const stamp = (repo, rest) => {
       ctx.font = "600 15px system-ui, sans-serif";
+      const room = W - 20 - 20; // frame margins and the plate's padding
+      let name = repo, text = `${name}${rest}`;
+      while (ctx.measureText(text).width > room && name.length > 1) {
+        name = name.slice(0, -1);
+        text = `${name.replace(/[\s·-]+$/, "")}…${rest}`;
+      }
       const width = ctx.measureText(text).width + 20;
       ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#2f3238"; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.roundRect(10, 10, width, 28, 6); ctx.fill(); ctx.stroke();
@@ -2645,7 +3103,7 @@ function factory(THREE, model) {
       renderer.render(scene, camera);
       paint();
       const when = isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay();
-      stamp(`${model.repo} · ${when}${quietNow() ? " ▸▸" : ""}`);
+      stamp(model.repo, ` · ${when}${quietNow() ? " ▸▸" : ""} · ${lastTally.active} in flight · ${lastTally.completed} done`);
       gif.frame(ctx.getImageData(0, 0, W, H).data, i === total + HOLD_FRAMES ? 300 : 100 / FPS);
       if (i % 10 === 0) {
         status.textContent = `Exporting clip… ${Math.round(100 * i / (total + HOLD_FRAMES))}%`;
@@ -2666,9 +3124,13 @@ function factory(THREE, model) {
   // ------------------------------------------------------------- start
   // A one-breath settle: the floor eases in from a slightly wider frame.
   let intro = reducedMotion ? null : 0;
-  view.zoom = intro !== null ? 1.45 : BASE_ZOOM;
   fit();
   layout();
+  // The resting view needs the laid-out floor (restView measures it).
+  lastRest = restView();
+  view.panX = lastRest.panX; view.panY = lastRest.panY;
+  view.zoom = intro !== null ? 1.45 : lastRest.zoom;
+  applyView();
   syncTransport();
   // The city follows the room: lit windows after dark, live on change.
   const darkScheme = matchMedia("(prefers-color-scheme: dark)");
@@ -2686,10 +3148,17 @@ function factory(THREE, model) {
     const day = hash.get("day");
     if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
       const index = dayIndex(day);
-      if (index >= FIRST && index <= LAST) { goToDay(toStop(index)); intro = null; view.zoom = BASE_ZOOM; applyView(); }
+      if (index >= FIRST && index <= LAST) { goToDay(toStop(index)); intro = null; resetView(); }
     }
     const run = hash.get("run");
-    if (run) { find.value = run; find.dispatchEvent(new Event("change")); intro = null; }
+    if (run) {
+      find.value = run; find.dispatchEvent(new Event("change"));
+      // Only a found run owns the camera (the finder pinned it and flew
+      // there). An unknown slug is ignored like any bad value: cancelling
+      // the intro anyway froze the view at its 1.45× starting frame,
+      // cropped under the legend.
+      if (state.pinned && state.pinned.run) intro = null;
+    }
     const station = hash.get("station");
     if (station && GRID[station]) {
       openPanel({kind: "station", station});
@@ -2698,7 +3167,8 @@ function factory(THREE, model) {
     }
     // #tour walks its recipient through the floor; #trace=<slug> replays
     // one run's journey, solo — the links the tour and trace write.
-    if (hash.has("tour")) { startTour(); intro = null; }
+    // Only a tour that started owns the camera (as with #run=).
+    if (hash.has("tour")) { startTour(); if (tourStep >= 0) intro = null; }
     const trace = hash.get("trace");
     if (trace) {
       const wanted = trace.toLowerCase();
@@ -2712,7 +3182,7 @@ function factory(THREE, model) {
       && !station && !hash.has("tour") && !trace) {
       const [z, px, py] = viewParam.split(",").map(Number);
       if ([z, px, py].every(Number.isFinite)) {
-        view.zoom = Math.min(8, Math.max(0.7, z));
+        view.zoom = clampZoom(z);
         view.panX = px; view.panY = py;
         applyView();
         intro = null;
