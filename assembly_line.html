@@ -1390,9 +1390,12 @@ function factory(THREE, model) {
   function slotPosition(key, index, total) {
     const base = at(key);
     if (key === "bin") {
+      // Filled from the far (+x, +z) corner: the camera looks in from
+      // -x, -z, and the bin's walls stand taller than a crate, so the
+      // near corner — where the first crates used to go — is hidden.
       const col = index % 4, row = Math.floor(index / 4) % 3, layer = Math.floor(index / 12);
-      return base.add(new THREE.Vector3(-2.1 + col * 1.4, PLATE_H + 0.3 + CRATE * 0.4 + layer * CRATE * 0.8,
-        -1.4 + row * 1.4));
+      return base.add(new THREE.Vector3(2.1 - col * 1.4, PLATE_H + 0.3 + CRATE * 0.4 + layer * CRATE * 0.8,
+        1.4 - row * 1.4));
     }
     const dir = inDir[key];
     if (index < 6) {
