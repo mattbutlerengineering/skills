@@ -86,6 +86,13 @@
   #stage { position: relative; flex: 1; min-height: 0; }
   #stage canvas { display: block; width: 100%; height: 100%;
     touch-action: none; }
+  /* While a clip renders, the canvas holds 720×450 frames stretched to
+     the stage; a veil hides them and says what is happening. The stage
+     keeps its size, so nothing on the page jumps. */
+  #stage.capturing::after { content: attr(data-capture); position: absolute;
+    inset: 0; z-index: 7; display: grid; place-items: center;
+    background: var(--panel);
+    color: var(--ink); font-weight: 600; }
   #hint { position: absolute; left: .8rem; bottom: .6rem; color: var(--muted);
     font-size: .75rem; background: rgba(255,255,255,.7); padding: .15rem .6rem;
     border-radius: 999px; pointer-events: none; }
@@ -1713,7 +1720,8 @@ function factory(THREE, model) {
     yieldSigns();
   }
   function fit() {
-    const width = stage.clientWidth, height = stage.clientHeight;
+    const width = captureSize ? captureSize.w : stage.clientWidth;
+    const height = captureSize ? captureSize.h : stage.clientHeight;
     renderer.setSize(width, height, false);
     const bounds = new THREE.Box3();
     Object.values(stationGroups).forEach((g) => bounds.expandByPoint(g.position));
@@ -2513,7 +2521,7 @@ function factory(THREE, model) {
     status.textContent = `Export failed: ${err.message}. Nothing was downloaded.`;
     restoreAfterExport();
   }));
-  let saved = null, exporting = false;
+  let saved = null, exporting = false, captureSize = null;
   function restoreAfterExport() {
     if (!saved) return;
     exporting = false;
@@ -2526,7 +2534,7 @@ function factory(THREE, model) {
     $("trace-banner").hidden = !state.trace;
     view.zoom = saved.zoom; view.panX = saved.panX; view.panY = saved.panY;
     renderer.setPixelRatio(saved.ratio);
-    stage.style.width = ""; stage.style.height = ""; stage.style.flex = "";
+    captureSize = null; stage.classList.remove("capturing");
     fit(); layout(); syncTransport(); requestRender();
     $("export").disabled = !enabled; play.disabled = !enabled;
     saved = null;
@@ -2555,7 +2563,11 @@ function factory(THREE, model) {
     document.body.style.pointerEvents = "none";
     view.zoom = 1; view.panX = 0; view.panY = 0;
     $("export").disabled = true; play.disabled = true;
-    stage.style.flex = "none"; stage.style.width = `${W}px`; stage.style.height = `${H}px`;
+    // The renderer draws at the clip's size; the stage itself never
+    // resizes (it used to, and a phone saw the floor jump and crop).
+    captureSize = {w: W, h: H};
+    stage.dataset.capture = "Exporting clip…";
+    stage.classList.add("capturing");
     renderer.setPixelRatio(1);
     fit();
     const grab = document.createElement("canvas");
@@ -2620,6 +2632,7 @@ function factory(THREE, model) {
       gif.frame(ctx.getImageData(0, 0, W, H).data, i === total + HOLD_FRAMES ? 300 : 100 / FPS);
       if (i % 10 === 0) {
         status.textContent = `Exporting clip… ${Math.round(100 * i / (total + HOLD_FRAMES))}%`;
+        stage.dataset.capture = status.textContent;
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
     }
