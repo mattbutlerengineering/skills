@@ -1650,6 +1650,38 @@ function factory(THREE, model) {
   pinMarker.rotation.x = Math.PI; // point down
   pinMarker.visible = false;
   scene.add(pinMarker);
+  // The hovered run, boxed: an accent outline with a faint accent fill,
+  // drawn over everything, around the crate or building the hover card
+  // describes. Inside Operate's 69-crate heap nothing on the floor said
+  // which crate the card was about. (The fill carries it: WebGL lines are
+  // one pixel, too faint alone around a tower.) One box, moved and
+  // resized by hover(); clips never draw it (the capture hides it).
+  const hoverBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+    new THREE.LineBasicMaterial({color: COLORS.accent, transparent: true, depthTest: false}));
+  hoverBox.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({
+    color: COLORS.accent, transparent: true, opacity: 0.22, depthTest: false, depthWrite: false})));
+  hoverBox.children[0].renderOrder = 9;
+  hoverBox.renderOrder = 9;
+  hoverBox.visible = false;
+  scene.add(hoverBox);
+  const hoverBounds = new THREE.Box3();
+  function boxRun(run) {
+    const building = run && buildingOf.get(run);
+    const crate = run && crateOf.get(run).mesh;
+    const was = hoverBox.visible;
+    hoverBox.visible = false;
+    if (building && building.visible) {
+      hoverBounds.setFromObject(building);
+      hoverBounds.getCenter(hoverBox.position);
+      hoverBounds.getSize(hoverBox.scale).multiplyScalar(1.08);
+      hoverBox.visible = true;
+    } else if (crate && crate.visible) {
+      hoverBox.position.copy(crate.position);
+      hoverBox.scale.set(CRATE * 1.12, CRATE * 0.8 * crate.scale.y * 1.12, CRATE * 1.12);
+      hoverBox.visible = true;
+    }
+    if (was || hoverBox.visible) requestRender();
+  }
 
   function slotPosition(key, index, total) {
     const base = at(key);
@@ -2455,12 +2487,16 @@ function factory(THREE, model) {
   let hoverAt = null;
   function hover(at) {
     const hit = pick(at);
-    if (!hit) { card.hidden = true; renderer.domElement.style.cursor = ""; boostSign(null); return; }
-    if (hit.kind === "station") { stationCard(hit.station); boostSign(hit.station); }
+    if (!hit) {
+      card.hidden = true; renderer.domElement.style.cursor = ""; boostSign(null); boxRun(null);
+      return;
+    }
+    if (hit.kind === "station") { stationCard(hit.station); boostSign(hit.station); boxRun(null); }
     else {
       crateCard(hit.run);
       const where = crateOf.get(hit.run).where;
       boostSign(where ? where.station : null);
+      boxRun(hit.run);
     }
     const rect = stage.getBoundingClientRect();
     card.hidden = false;
@@ -2480,7 +2516,7 @@ function factory(THREE, model) {
     hover(hoverAt);
   });
   renderer.domElement.addEventListener("pointerleave", () => {
-    hoverAt = null; card.hidden = true; boostSign(null);
+    hoverAt = null; card.hidden = true; boostSign(null); boxRun(null);
   });
   // Keyboard flow for the panel: a chip or the finder that opens it moves
   // focus to its title (Tab then walks its rows), and closing it while
@@ -3285,7 +3321,7 @@ function factory(THREE, model) {
     $("trace-banner").hidden = true;
     setCityNight(false); // the clip's backdrop is daylight
     pulse.visible = false; pulseTrail.visible = false;
-    card.hidden = true;
+    card.hidden = true; hoverBox.visible = false;
     document.body.style.pointerEvents = "none";
     view.zoom = 1; view.panX = 0; view.panY = 0;
     $("export").disabled = true; play.disabled = true;
