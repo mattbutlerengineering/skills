@@ -731,7 +731,9 @@ function factory(THREE, model) {
   // the floor floats in a lit room instead of a flat colour field.
   const renderer = new THREE.WebGLRenderer({antialias: true, alpha: true,
     preserveDrawingBuffer: false});
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  // One rule for drawing density: the screen's, capped at 2×.
+  const screenRatio = () => Math.min(devicePixelRatio, 2);
+  renderer.setPixelRatio(screenRatio());
   renderer.setClearColor(0x000000, 0);
   renderer.shadowMap.enabled = true;
   renderer.domElement.setAttribute("role", "img");
@@ -3205,7 +3207,7 @@ function factory(THREE, model) {
   function drawActivity() {
     const w = activity.clientWidth, h = activity.clientHeight;
     if (!w || !h) return;
-    const dpr = Math.min(devicePixelRatio, 2);
+    const dpr = screenRatio();
     activity.width = Math.round(w * dpr); activity.height = Math.round(h * dpr);
     const ctx = activity.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -3400,6 +3402,15 @@ function factory(THREE, model) {
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    // The pixel ratio is read at boot; a window dragged from a 1× display
+    // to a 2× one (or the reverse) changes it without resizing anything,
+    // and the canvas and the activity strip stayed at the old density —
+    // half resolution on the retina screen. One comparison a frame
+    // catches it in every browser (a resolution media query's change
+    // event is not dispatched everywhere, Chrome's emulation included).
+    if (!exporting && renderer.getPixelRatio() !== screenRatio()) {
+      renderer.setPixelRatio(screenRatio()); fit(); drawActivity(); requestRender();
+    }
     if (state.playing) {
       // The glide is live-replay only: a capture places crates exactly,
       // and reduced motion asks for none of this.
@@ -3508,7 +3519,7 @@ function factory(THREE, model) {
     state.trace = saved.trace || null;
     $("trace-banner").hidden = !state.trace;
     view.zoom = saved.zoom; view.panX = saved.panX; view.panY = saved.panY;
-    renderer.setPixelRatio(saved.ratio);
+    renderer.setPixelRatio(screenRatio()); // the screen's now, if it moved mid-capture
     captureSize = null; signScale = 1; stage.classList.remove("capturing");
     fit(); layout(); syncTransport(); requestRender();
     $("export").disabled = !enabled; play.disabled = !enabled;
@@ -3524,7 +3535,7 @@ function factory(THREE, model) {
     const status = $("export-status");
     status.hidden = false;
     status.textContent = "Exporting clip…";
-    saved = {t: state.t, ratio: renderer.getPixelRatio(),
+    saved = {t: state.t,
       zoom: view.zoom, panX: view.panX, panY: view.panY,
       highlighted: state.highlighted, trace: state.trace, focus: document.activeElement};
     state.playing = false;
