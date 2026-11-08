@@ -3513,12 +3513,17 @@ function factory(THREE, model) {
     if (button && (event.key === " " || event.key === "Enter"
       || ((event.key === "Home" || event.key === "End") && button.closest("#panel, #legend")))) return;
     const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
-    if (event.key === " ") { event.preventDefault(); play.click(); }
-    else if (event.key === "ArrowLeft") { event.preventDefault(); goToDay(Math.max(FIRST, day - 1)); }
-    else if (event.key === "ArrowRight") { event.preventDefault(); goToDay(toStop(Math.min(LAST + 1, day + 1))); }
-    else if (event.key === "Home") { event.preventDefault(); goToDay(FIRST); }
-    else if (event.key === "End") { event.preventDefault(); goToDay(LAST + 1); }
-    else if (event.key === "/") { event.preventDefault(); find.focus(); }
+    if (event.key === " ") { event.preventDefault(); play.click(); return; }
+    if (event.key === "/") { event.preventDefault(); find.focus(); return; }
+    const to = {ArrowLeft: Math.max(FIRST, day - 1), ArrowRight: toStop(Math.min(LAST + 1, day + 1)),
+      Home: FIRST, End: LAST + 1}[event.key];
+    if (to === undefined) return;
+    event.preventDefault();
+    goToDay(to);
+    // Stepped from anywhere but the slider (which speaks its own
+    // valuetext), the floor changed in silence: say the day and the
+    // header's counts, which are not a live region.
+    announce(`${scrub.getAttribute("aria-valuetext")}: ${lastTally.active} in flight, ${lastTally.completed} done.`);
   });
   // A mouse click leaves the header's and transport's buttons focused
   // (Chrome on macOS), and a focused button keeps Space: after clicking
