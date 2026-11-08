@@ -2925,13 +2925,14 @@ function factory(THREE, model) {
   // (or a click, which jumps the thumb there) commits to it. Mouse only:
   // a touch is the drag itself, and #day already reads it.
   const scrubTip = $("scrub-tip");
+  const arrivalsText = (n) => n ? `${n} arrival${n === 1 ? "" : "s"}` : "quiet";
   scrub.addEventListener("pointermove", (event) => {
     if (event.pointerType !== "mouse" || event.buttons || scrub.disabled) { scrubTip.hidden = true; return; }
     const r = scrub.getBoundingClientRect(), inset = 8, span = Math.max(1, arrivals.length - 1);
     const k = Math.max(0, Math.min(span, Math.round((event.clientX - r.left - inset) / Math.max(1, r.width - 2 * inset) * span)));
     const index = FIRST + k, n = arrivals[k];
     const date = index >= TODAY_STOP ? `${model.generated.slice(0, 10)} (today)` : isoOf(index);
-    scrubTip.textContent = `${date} · ${n ? `${n} arrival${n === 1 ? "" : "s"}` : "quiet"}`;
+    scrubTip.textContent = `${date} · ${arrivalsText(n)}`;
     scrubTip.hidden = false;
     const half = scrubTip.offsetWidth / 2, x = inset + (k / span) * (r.width - 2 * inset);
     scrubTip.style.left = `${Math.max(half, Math.min(r.width - half, x))}px`;
@@ -2947,14 +2948,17 @@ function factory(THREE, model) {
     // at t = d + 1 − 1e-6 (goToDay), so it snaps down, not to the
     // nearest: rounding showed d + 1, and the slider's own ← then landed
     // back on d — every press after the first did nothing.
-    scrub.value = state.playing ? String(state.t)
-      : String(isToday() ? TODAY_STOP : Math.floor(state.t));
+    const stop = isToday() ? TODAY_STOP : Math.floor(state.t);
+    scrub.value = state.playing ? String(state.t) : String(stop);
     const label = dayLabel();
     $("day").textContent = label;
     // The slider's value is a day index (20640); assistive tech reads
-    // the date instead. Written only on change: the replay calls this
-    // every frame.
-    if (scrub.getAttribute("aria-valuetext") !== label) scrub.setAttribute("aria-valuetext", label);
+    // the date instead — and, parked, that day's arrivals, the count the
+    // activity strip draws and the mouse's hover readout states (the
+    // strip itself is aria-hidden). Written only on change: the replay
+    // calls this every frame.
+    const spoken = state.playing ? label : `${label}, ${arrivalsText(arrivals[stop - FIRST] || 0)}`;
+    if (scrub.getAttribute("aria-valuetext") !== spoken) scrub.setAttribute("aria-valuetext", spoken);
     // The big date over the canvas: during a replay (or scrubbed into
     // the past) the canvas is where everyone looks, and the transport
     // bar's date is too small to carry "you are watching time pass".
