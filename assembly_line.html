@@ -184,9 +184,13 @@
     transform: translate(-50%, -50%); background: var(--panel);
     border: 2px solid var(--line); border-radius: 8px; padding: .8rem 1.2rem;
     font-weight: 600; pointer-events: none; }
+  /* Capped to the stage, scrolling inside: uncapped, a 495-px legend on
+     a 434-px stage (a 1280×600 window) hung 70 px over the transport and
+     hid the date, 30s, 60s and Export clip. */
   #legend { position: absolute; right: .8rem; top: .6rem; z-index: 6;
     width: 320px; background: var(--panel); border: 2px solid var(--line);
     border-radius: 12px; padding: .8rem 1rem;
+    max-height: calc(100% - 1.2rem); overflow: auto;
     box-shadow: 0 14px 40px rgba(31,42,35,.22); }
   /* The close button sits beside the heading, not inside it: inside,
      the heading's accessible name was "How to read this Close legend". */
