@@ -3244,6 +3244,16 @@ function factory(THREE, model) {
     const keep = oldRow && panelRuns[[...body.querySelectorAll(".run")].indexOf(oldRow)];
     const keepOpen = oldRow && oldRow.querySelector("details").open;
     const keepPart = had && had.classList.contains("trace-btn") ? ".trace-btn" : "summary";
+    // The scrolled list keeps its place too: the run at the top of its
+    // view stays at the same offset. By scrollTop alone a day step
+    // moved it — past days add a wider count column, rows rewrap, and
+    // 900 px down Operate's list showed a row three runs earlier.
+    const bodyTop = body.getBoundingClientRect().top;
+    const rowsBefore = [...body.querySelectorAll(".run")];
+    const topIndex = body.scrollTop > 0
+      ? rowsBefore.findIndex((r) => r.getBoundingClientRect().bottom > bodyTop) : -1;
+    const anchor = topIndex >= 0
+      ? {run: panelRuns[topIndex], dy: rowsBefore[topIndex].getBoundingClientRect().top - bodyTop} : null;
     panelRuns = here;
     // The bin has no order to claim: its runs carry no dates.
     body.replaceChildren(el("p", {class: "muted"}, here.length
@@ -3256,6 +3266,11 @@ function factory(THREE, model) {
       if (r === run) opened = row;
       if (r === keep) kept = row;
     });
+    const anchorIndex = anchor ? here.indexOf(anchor.run) : -1;
+    if (anchorIndex >= 0) {
+      const row = body.querySelectorAll(".run")[anchorIndex];
+      body.scrollTop += row.getBoundingClientRect().top - bodyTop - anchor.dy;
+    }
     if (had) {
       const target = kept && kept.querySelector(keepPart);
       (target || $("panel-title")).focus({preventScroll: !target});
