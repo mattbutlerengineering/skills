@@ -2396,11 +2396,16 @@ function factory(THREE, model) {
   // so the bottleneck beat names the real pile-up.
   let tourStep = -1;
   function tourScript() {
+    // The pile-up beat says how big and how old the pile is: "piles mean
+    // waiting" lands harder with the wait in days.
+    const pile = lastHot ? runsAt(lastHot) : [];
+    const oldest = pile.length ? waitedDays(pile[0]) : 0;
     const beats = [
       {text: `This is ${model.repo}'s software factory. Every crate is one run — feature, maintenance or product — riding the belts from Idea to Ship.`, reset: true},
       {text: "Work enters at this end: features and products at Idea or PRD, maintenance at Capture beside them. The numbered stations carry each crate through spec, design, build and checks.", station: "idea"},
       {text: "Implement assembles the code. Click any crate here and its work orders lay out as parts — green done, grey open.", station: "implement"},
-      lastHot ? {text: `The amber sign is the pile-up: ${nameOf(lastHot)} holds the most work right now. Piles mean waiting.`, station: lastHot}
+      lastHot ? {text: `The amber sign is the pile-up: ${nameOf(lastHot)} holds the most work right now — ${pile.length} runs`
+        + (oldest ? `, the oldest waiting ${daysText(oldest)}` : "") + ". Piles mean waiting.", station: lastHot}
         : {text: "An amber sign would mark the busiest station — right now no queue stands out.", reset: true},
       {text: "And the end of the line is the city: every finished run raises a building named after it. The skyline is what the factory has shipped.", station: "completed"},
       {text: "And this is the whole story: press Play to replay the repo's history and watch every crate flow.", reset: true, thenPlay: true}
