@@ -2193,6 +2193,48 @@ function factory(THREE, model) {
   // "Show me THIS run's journey": hide every other crate and replay
   // from the run's first recorded day. Esc or the banner stops it.
   let traceEnd = Infinity;
+  // A trace keeps its own clock: one beat per stop, whatever the calendar
+  // between them. At the whole-history pace a nine-stop, one-day journey
+  // flashed past in 0.77 s (~85 ms a stop). Knots map wall seconds (at the
+  // 30 s speed; 60 s halves it) to t: each hop gets TRACE_RIDE_S for its
+  // ride (the first, for being seen), then TRACE_GAP_S for any wait
+  // before the next hop, however many days that wait spans.
+  const TRACE_RIDE_S = 0.5, TRACE_GAP_S = 0.2;
+  let traceKnots = [];
+  function buildTraceKnots(hops) {
+    const knots = [[0, hops[0].t]];
+    let w = 0;
+    hops.forEach((hop, i) => {
+      const next = i + 1 < hops.length ? hops[i + 1].t : traceEnd;
+      // The ride placement() draws: TRAVEL of the slice to the next hop
+      // (a whole day's worth for the last).
+      const slice = i + 1 < hops.length ? Math.min(1, next - hop.t) : 1;
+      const rideEnd = Math.min(next, hop.t + TRAVEL * slice);
+      w += TRACE_RIDE_S; knots.push([w, rideEnd]);
+      if (next > rideEnd) { w += TRACE_GAP_S; knots.push([w, next]); }
+    });
+    return knots;
+  }
+  // Linear between knots: t → wall position, forward dt, wall → t.
+  function traceAdvance(t, dt) {
+    const k = traceKnots;
+    let w = k[k.length - 1][0];
+    for (let i = 1; i < k.length; i++) {
+      if (t < k[i][1]) {
+        const [w0, t0] = k[i - 1], [w1, t1] = k[i];
+        w = w0 + (w1 - w0) * Math.max(0, (t - t0) / (t1 - t0));
+        break;
+      }
+    }
+    w += dt * 30 / state.seconds;
+    for (let i = 1; i < k.length; i++) {
+      if (w < k[i][0]) {
+        const [w0, t0] = k[i - 1], [w1, t1] = k[i];
+        return t0 + (t1 - t0) * (w - w0) / (w1 - w0);
+      }
+    }
+    return traceEnd;
+  }
   function startTrace(run) {
     closePanel(); setLegend(false); endTour(); card.hidden = true;
     state.highlighted = null;
@@ -2208,6 +2250,7 @@ function factory(THREE, model) {
     const hops = times.get(run);
     const landDay = Math.floor(hops[hops.length - 1].t + TRAVEL);
     traceEnd = landDay >= TODAY_STOP ? LAST + 1 : landDay + 1 - 1e-6;
+    traceKnots = buildTraceKnots(hops);
     $("trace-name").textContent = run.slug || run.ref;
     // Most journeys here happen inside one day: without this line the
     // trace is a motionless frame and the viewer learns nothing. The
@@ -2626,7 +2669,8 @@ function factory(THREE, model) {
       // The glide is live-replay only: a capture places crates exactly,
       // and reduced motion asks for none of this.
       glideK = (exporting || reducedMotion) ? 1 : 1 - Math.exp(-dt / GLIDE_TAU);
-      state.t = tFromU(uFromT(state.t) + dt * TOTAL_U / state.seconds);
+      state.t = state.trace ? traceAdvance(state.t, dt)
+        : tFromU(uFromT(state.t) + dt * TOTAL_U / state.seconds);
       const stop = state.trace ? traceEnd : LAST + 1;
       if (state.t >= stop) {
         // The last frame lands on the placement, never near it.
