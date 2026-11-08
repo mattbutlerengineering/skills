@@ -518,20 +518,20 @@
     double-tap reset · tap a crate or station for its list</span></span>
   <div id="trace-banner" hidden>
     <span>tracing <b id="trace-name"></b> — <span id="trace-detail"></span></span>
-    <button id="trace-stop">✕ stop</button>
+    <button id="trace-stop" aria-keyshortcuts="Escape">✕ stop</button>
   </div>
   <span id="replay-date" hidden></span>
   <aside id="tour" hidden aria-label="Guided tour">
     <p id="tour-text"></p>
     <div class="row">
       <span class="dots" id="tour-dots" aria-hidden="true"></span>
-      <button id="tour-skip">✕ End</button>
-      <button id="tour-next" class="primary">Next →</button>
+      <button id="tour-skip" aria-keyshortcuts="Escape">✕ End</button>
+      <button id="tour-next" class="primary" aria-keyshortcuts="ArrowRight">Next →</button>
     </div>
   </aside>
   <aside id="legend" aria-label="How to read this">
     <div class="legend-head"><h2>How to read this</h2>
-      <button id="legend-close" aria-label="Close legend">✕</button></div>
+      <button id="legend-close" aria-label="Close legend" aria-keyshortcuts="Escape">✕</button></div>
     <ul>
       <li><span class="swatch" style="background:#d3d6db"></span>
         <span>A <b>crate</b> is one run in flight: feature, maintenance or
@@ -573,19 +573,19 @@
   </aside>
   <aside id="panel" hidden aria-label="Pinned detail">
     <header><h2 id="panel-title" tabindex="-1"></h2>
-      <button id="panel-close" aria-label="Close panel">✕</button></header>
+      <button id="panel-close" aria-label="Close panel" aria-keyshortcuts="Escape">✕</button></header>
     <div class="body" id="panel-body"></div>
   </aside>
 </div>
 <main id="fallback" hidden></main>
 <footer id="transport" hidden>
-  <button id="play" aria-label="Play the replay" disabled>▶ Play</button>
+  <button id="play" aria-label="Play the replay" aria-keyshortcuts="Space" disabled>▶ Play</button>
   <span id="scrub-wrap"><canvas id="activity" aria-hidden="true"></canvas><span
     id="scrub-tip" aria-hidden="true" hidden></span><input
     id="scrub" type="range" min="0" max="0" step="1" value="0"
     aria-label="Replay date" disabled></span>
   <span id="day"></span>
-  <button id="today" aria-label="Back to today" hidden>⏭ today</button>
+  <button id="today" aria-label="Back to today" aria-keyshortcuts="End" hidden>⏭ today</button>
   <span class="speed" role="group" aria-label="Replay length">
     <button id="speed-30" aria-pressed="true" disabled>30s</button>
     <button id="speed-60" aria-pressed="false" disabled>60s</button>
