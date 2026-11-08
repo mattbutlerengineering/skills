@@ -2357,6 +2357,13 @@ function factory(THREE, model) {
       else if (event.key === "/") { event.preventDefault(); endTour(); find.focus(); }
       return;
     }
+    // The slider keeps its native arrows/Home/End, but it has no Space
+    // of its own: after dragging it (focus stays on it), Space did
+    // nothing at all instead of playing from the dragged-to day.
+    if (event.target === scrub) {
+      if (event.key === " ") { event.preventDefault(); play.click(); }
+      return;
+    }
     if (event.target.closest("input, button, details, summary")) return;
     const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
     if (event.key === " ") { event.preventDefault(); play.click(); }
