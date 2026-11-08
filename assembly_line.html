@@ -335,6 +335,13 @@
       overflow: auto; }
     #tour .row { flex-wrap: wrap; justify-content: flex-end; }
     #tour .dots { flex: 1 1 100%; }
+    /* And one transport row: the phone layout stacks the slider over the
+       buttons, 70 px of a 390-px-tall screen, while a landscape width
+       holds Play, slider, date and buttons side by side. (Still wrapping:
+       the export status takes its own line.) */
+    #scrub-wrap { flex: 1 1 8rem; order: 0; }
+    #day { margin-left: 0; white-space: nowrap; }
+    #export-status { flex: 1 1 100%; }
   }
   /* Forced colours (Windows high contrast) repaint every chip and button
      alike, so the amber pile-up chip and the pressed replay length read
