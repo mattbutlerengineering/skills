@@ -2262,12 +2262,14 @@ function factory(THREE, model) {
     find.blur();
     requestRender();
   });
-  let panelDay = null;
+  let panelDay = null, panelRuns = [];
+  const sameRuns = (a, b) => a.length === b.length && a.every((run, i) => run === b[i]);
   function renderPanel() {
     if (!state.pinned) return;
     panelDay = currentDay();
     const {key, run} = state.pinned;
     const here = runsAt(key);
+    panelRuns = here;
     $("panel-title").textContent = `${key === "bin" ? "Needs attention" : nameOf(key)} · as of ${asOf()}`;
     const body = $("panel-body");
     body.replaceChildren(el("p", {class: "muted"}, here.length
@@ -2605,8 +2607,11 @@ function factory(THREE, model) {
       layout(); syncTransport(); needsRender = true;
       glideK = 1; // every layout outside the replay places exactly
       // A pinned panel follows the replay: rebuilt at each day boundary,
-      // so it never claims today's list against last summer's floor.
-      if (state.pinned && currentDay() !== panelDay) renderPanel();
+      // so it never claims today's list against last summer's floor, and
+      // whenever its station's crates change within a day — mid-day on
+      // 2026-08-27 Review's chip read 16 while the panel said "No runs".
+      if (state.pinned && (currentDay() !== panelDay
+        || !sameRuns(runsAt(state.pinned.key), panelRuns))) renderPanel();
     }
     if (intro !== null) {
       intro = Math.min(1, intro + dt / 1.1);
