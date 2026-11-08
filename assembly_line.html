@@ -3810,7 +3810,7 @@ function factory(THREE, model) {
     status.textContent = `Export failed: ${err.message}. Nothing was downloaded.`;
     restoreAfterExport();
   }));
-  let saved = null, exporting = false, captureSize = null;
+  let saved = null, exporting = false, captureSize = null, statusTimer = 0;
   function restoreAfterExport() {
     if (!saved) return;
     exporting = false;
@@ -3836,6 +3836,7 @@ function factory(THREE, model) {
   async function exportGif(byKeyboard = false) {
     const W = 720, H = 450, FPS = 10, PLAY_SECONDS = 12, HOLD_FRAMES = 20;
     const status = $("export-status");
+    clearTimeout(statusTimer);
     status.hidden = false;
     status.textContent = "Exporting clip…";
     saved = {t: state.t,
@@ -3955,6 +3956,10 @@ function factory(THREE, model) {
     setTimeout(() => URL.revokeObjectURL(url), 30000);
     window.__assemblyLine.lastGif = blob;
     status.textContent = `Clip exported (${(blob.size / 1048576).toFixed(1)} MB). Commit it and reference it from your README as an image.`;
+    // The note has said its piece (and the status region announced it):
+    // kept, it held a line of the transport for the rest of the session —
+    // 37 px of a phone's floor. A failure stays until the next try.
+    statusTimer = setTimeout(() => { status.hidden = true; }, 20000);
     restoreAfterExport();
   }
 
