@@ -50,8 +50,8 @@
     box-shadow: 0 14px 40px rgba(31,42,35,.22); }
   #tour p { margin: 0 0 .5rem; }
   #tour .row { display: flex; align-items: center; gap: .5rem; }
-  #tour .dots { color: var(--muted); letter-spacing: .2em; flex: 1; }
-  #tour button { font: inherit; border: 1.5px solid var(--line);
+  #tour .dots { color: var(--muted); letter-spacing: .2em; flex: 1; white-space: nowrap; }
+  #tour button { font: inherit; border: 1.5px solid var(--line); white-space: nowrap;
     background: var(--panel); color: var(--ink); border-radius: 8px;
     padding: .25rem .8rem; cursor: pointer; }
   #tour .primary { background: var(--belt); color: #1c2518; font-weight: 600; }
@@ -272,6 +272,16 @@
      flew to a building nobody could see. focusOn centres above it. */
   @media (max-width: 720px) and (min-height: 481px) {
     #panel { top: auto; left: .5rem; right: .5rem; width: auto; max-height: 48%; }
+  }
+  /* A short landscape screen gets the tour card at the side: across the
+     bottom it took 101 of the stage's 253 px and the floor shrank to
+     zoom 0.65 above it. frameClearOfTour and focusOn read either side. */
+  @media (max-height: 480px) and (min-width: 600px) {
+    #tour { left: auto; right: .5rem; top: .5rem; bottom: auto;
+      transform: none; width: min(300px, 40vw); max-height: calc(100% - 1rem);
+      overflow: auto; }
+    #tour .row { flex-wrap: wrap; justify-content: flex-end; }
+    #tour .dots { flex: 1 1 100%; }
   }
 </style>
 </head>
@@ -1812,30 +1822,34 @@ function factory(THREE, model) {
     if (location.hash.startsWith("#view="))
       history.replaceState(null, "", location.pathname + location.search);
   };
+  // The part of the stage the overlays leave free, in stage pixels: left
+  // of a side panel or side tour card, above a bottom sheet or a bottom
+  // tour card. One owner for every camera move that must land in view.
+  function freeRect() {
+    const s = stage.getBoundingClientRect();
+    let right = s.width, bottom = s.height;
+    for (const el of [$("panel"), $("tour")]) {
+      if (el.hidden) continue;
+      const r = el.getBoundingClientRect();
+      if (r.top > s.top + s.height / 3) bottom = Math.min(bottom, r.top - s.top);
+      else if (r.left > s.left + s.width / 2) right = Math.min(right, r.left - s.left);
+    }
+    return {w: s.width, h: s.height, right, bottom};
+  }
   // Centre a world point and zoom to it (the chips fly the camera) — in
-  // the part of the stage the overlays leave free: left of the side
-  // panel, above a phone's bottom sheet or the tour card. Centred on the
-  // whole stage, a phone's sheet covered the very building the finder
-  // flew to, and a tour beat parked its station half behind the card.
+  // freeRect(), not the whole stage: there a phone's sheet covered the
+  // very building the finder flew to, and a tour beat parked its station
+  // half behind the card.
   function focusOn(point, zoom) {
     if (exporting) return; // nothing moves the camera inside a capture
     const v = point.clone().applyMatrix4(camera.matrixWorldInverse);
     view.zoom = zoom;
     view.panX = v.x - frameBox.cx;
     view.panY = v.y + 2 / zoom - frameBox.cy;
-    const s = stage.getBoundingClientRect();
-    const perPx = 2 * frameBox.halfH / (zoom * Math.max(1, s.height));
-    let coverBottom = 0, coverRight = 0;
-    const panel = $("panel");
-    if (!panel.hidden) {
-      const p = panel.getBoundingClientRect();
-      if (p.top > s.top + s.height / 3) coverBottom = s.bottom - p.top;
-      else if (p.left > s.left + s.width / 2) coverRight = s.right - p.left;
-    }
-    if (!$("tour").hidden)
-      coverBottom = Math.max(coverBottom, s.bottom - $("tour").getBoundingClientRect().top);
-    view.panY -= coverBottom / 2 * perPx;
-    view.panX += coverRight / 2 * perPx;
+    const f = freeRect();
+    const perPx = 2 * frameBox.halfH / (zoom * Math.max(1, f.h));
+    view.panX += (f.w - f.right) / 2 * perPx;
+    view.panY -= (f.h - f.bottom) / 2 * perPx;
     applyView(); requestRender();
   }
   stage.addEventListener("wheel", (event) => {
@@ -2278,22 +2292,22 @@ function factory(THREE, model) {
     });
     return ext;
   }
-  // The card covers the bottom of the stage, and seen from the
-  // pipeline's start that is where Capture and Idea stand. An overview
-  // beat fits the whole floor into the band above the card instead.
-  function frameAboveTour() {
+  // The card covers part of the stage — the bottom, where seen from the
+  // pipeline's start Capture and Idea stand, or on a short landscape
+  // screen the right side. An overview beat fits the whole floor into
+  // what the card leaves free.
+  function frameClearOfTour() {
     if (exporting) return; // the capture owns the camera
-    const W = stage.clientWidth, H = stage.clientHeight;
-    const band = $("tour").getBoundingClientRect().top - stage.getBoundingClientRect().top;
+    const f = freeRect();
     const e = floorExtent();
-    if (band <= 0 || band >= H || !isFinite(e.minX)) { resetView(); return; }
+    if (f.right <= 0 || f.bottom <= 0 || !isFinite(e.minX)) { resetView(); return; }
     // World units per pixel at zoom z is 2·halfH / (z·H); 6% breathing room.
     const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
-    view.zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * band / (H * spanY),
-      2 * frameBox.halfH * W / (H * spanX));
-    const h = frameBox.halfH / view.zoom;
-    view.panX = (e.minX + e.maxX) / 2 - frameBox.cx;
-    view.panY = (e.minY + e.maxY) / 2 - frameBox.cy - h * (1 - band / H);
+    view.zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * f.bottom / (f.h * spanY),
+      2 * frameBox.halfH * f.right / (f.h * spanX));
+    const perPx = 2 * frameBox.halfH / (view.zoom * f.h);
+    view.panX = (e.minX + e.maxX) / 2 - frameBox.cx + (f.w - f.right) / 2 * perPx;
+    view.panY = (e.minY + e.maxY) / 2 - frameBox.cy - (f.h - f.bottom) / 2 * perPx;
     applyView(); requestRender();
   }
   function showTourStep() {
@@ -2301,7 +2315,7 @@ function factory(THREE, model) {
     $("tour-text").textContent = beat.text;
     $("tour-dots").textContent = tourBeats.map((b, i) => i === tourStep ? "●" : "○").join(" ");
     $("tour-next").textContent = tourStep === tourBeats.length - 1 ? "Play ▶" : "Next →";
-    if (beat.reset) frameAboveTour();
+    if (beat.reset) frameClearOfTour();
     if (beat.station) { focusOn(focusTargetOf(beat.station), 1.9); }
     requestRender();
   }
