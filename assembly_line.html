@@ -407,8 +407,8 @@
 <div id="stage" role="main" aria-label="The factory floor" hidden>
   <div id="empty-sign" hidden>No runs yet — start one with /idea</div>
   <div class="card" id="card" hidden></div>
-  <span id="hint"><span class="keys">space play · ← → step a day · scroll zoom ·
-    drag pan · double-click reset</span><span class="touch">pinch zoom · drag pan ·
+  <span id="hint"><span class="keys">space play · ← → step a day · scroll or + − zoom ·
+    drag or ⇧ arrows pan · double-click or 0 reset</span><span class="touch">pinch zoom · drag pan ·
     double-tap reset · tap a crate or station for its list</span></span>
   <div id="trace-banner" hidden>
     <span>tracing <b id="trace-name"></b> — <span id="trace-detail"></span></span>
@@ -3319,6 +3319,26 @@ function factory(THREE, model) {
     // trace or the tour's last beat starts the replay). Other buttons —
     // a panel row's trace, a chip — keep every key.
     if (event.target.closest("input, details, summary")) return;
+    // The camera from the keyboard too: wheel, drag and double-click were
+    // pointer-only, so a keyboard user could never get closer than the
+    // rest view. + / − zoom on the stage's centre, ⇧ + arrows pan an
+    // eighth of the view, 0 resets — from any button as well (none uses
+    // these keys; a chip is where Tab usually leaves focus). Browser zoom
+    // (⌘/Ctrl with + − 0) stays the browser's.
+    if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+      const r = renderer.domElement.getBoundingClientRect();
+      const step = frameBox.halfH / view.zoom / 4;
+      const pan = {ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, step], ArrowDown: [0, -step]}[event.key];
+      if (event.key === "+" || event.key === "=") { event.preventDefault(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.25); return; }
+      if (event.key === "-" || event.key === "_") { event.preventDefault(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 0.8); return; }
+      if (event.key === "0") { event.preventDefault(); resetView(); return; }
+      if (event.shiftKey && pan) {
+        event.preventDefault();
+        view.panX += pan[0]; view.panY += pan[1];
+        applyView(); requestRender(); scheduleViewHash();
+        return;
+      }
+    }
     const button = event.target.closest("button");
     if (button && (!button.closest("#transport") || event.key === " " || event.key === "Enter")) return;
     const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
