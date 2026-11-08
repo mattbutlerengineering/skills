@@ -232,6 +232,8 @@
   #export-status { grid-column: 1 / -1; font-size: .8rem; }
   .speed { display: flex; gap: .25rem; }
   [hidden] { display: none !important; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; }
   /* In a dark room the shell dims and the lit factory floor floats
      like a diorama; the floor's colours never change (only the city
      behind it keeps night: dusk stone, lit windows — setCityNight). */
@@ -334,7 +336,7 @@
   <aside id="tour" hidden aria-label="Guided tour">
     <p id="tour-text"></p>
     <div class="row">
-      <span class="dots" id="tour-dots"></span>
+      <span class="dots" id="tour-dots" aria-hidden="true"></span>
       <button id="tour-skip">✕ End</button>
       <button id="tour-next" class="primary">Next →</button>
     </div>
@@ -394,6 +396,10 @@
     is today's.</span>
   <span id="export-status" role="status" hidden></span>
 </footer>
+<!-- One polite live region, always present: a tour beat's text and a
+     trace's start are announced here (text written into a box that was
+     hidden a moment ago is not reliably read). -->
+<p id="announce" class="sr-only" role="status"></p>
 
 <script id="model" type="application/json">__MODEL__</script>
 <script id="three-core" type="text/plain">__THREE_CORE__</script>
@@ -2266,6 +2272,14 @@ function factory(THREE, model) {
     summary.addEventListener("click", () => { state.highlighted = run; layout(); requestRender(); });
     return row;
   }
+  // Say it to a screen reader: the tour's text and the trace banner
+  // change silently otherwise (focus stays on Next, or moves to Play).
+  // Cleared first, so the same words twice are still announced.
+  function announce(text) {
+    const region = $("announce");
+    region.textContent = "";
+    setTimeout(() => { region.textContent = text; }, 50);
+  }
   // ------------------------------------------------------------- trace
   // "Show me THIS run's journey": hide every other crate and replay
   // from the run's first recorded day. Esc or the banner stops it.
@@ -2346,6 +2360,7 @@ function factory(THREE, model) {
     $("trace-detail").textContent =
       `${stops} station${stops === 1 ? "" : "s"}, ${span}, now at ${nameOf(run.station)}`;
     $("trace-banner").hidden = false;
+    announce(`Tracing ${run.slug || run.ref}: ${$("trace-detail").textContent}.`);
     resetView();
     traceFollow = !reducedMotion;
     goToDay(dayIndex(run.history[0].day));
@@ -2597,6 +2612,7 @@ function factory(THREE, model) {
   function showTourStep() {
     const beat = tourBeats[tourStep];
     $("tour-text").textContent = beat.text;
+    announce(`Tour, step ${tourStep + 1} of ${tourBeats.length}: ${beat.text}`);
     $("tour-dots").textContent = tourBeats.map((b, i) => i === tourStep ? "●" : "○").join(" ");
     $("tour-next").textContent = tourStep === tourBeats.length - 1 ? "Play ▶" : "Next →";
     if (beat.reset) frameClearOfTour();
