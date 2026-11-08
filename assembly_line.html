@@ -1553,7 +1553,16 @@ function factory(THREE, model) {
     const k = dayIndex(hop.day) - FIRST;
     if (k >= 0 && k < SPAN) { busy[k] = 1; busy[k + 1] = 1; }
   }));
-  const dayWeight = (k) => (busy[k] ? 1 : QUIET_WEIGHT);
+  // And however long the silences, together they take at most a quarter
+  // of the replay: a history with a two-year gap spent 16 of its 30
+  // seconds racing an idle floor at QUIET_WEIGHT. The quiet weight drops
+  // to busy / (3 · quiet) when that is lower (this repo stays at 0.2).
+  let busyDays = 0;
+  for (let k = 0; k < SPAN; k++) busyDays += busy[k];
+  const quietDays = SPAN - busyDays;
+  const quietWeight = busyDays && quietDays
+    ? Math.min(QUIET_WEIGHT, busyDays / (3 * quietDays)) : QUIET_WEIGHT;
+  const dayWeight = (k) => (busy[k] ? 1 : quietWeight);
   // Is the playhead fast-forwarding? The date badge and the clip's stamp
   // mark it. The whole replay races quiet days; a trace keeps its own
   // clock and races the waits between its stops (traceRacing) — judged
