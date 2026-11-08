@@ -398,7 +398,7 @@
     <datalist id="find-list"></datalist>
     <button id="tour-open" hidden>▶ Tour</button>
     <button id="legend-open" aria-expanded="false"
-      aria-controls="legend">? How to read this</button>
+      aria-controls="legend" hidden>? How to read this</button>
   </div>
   <p id="story"><b>Each crate is one run</b> — a feature, maintenance or
     product run — riding the belt from <b>Idea</b> to <b>Ship</b>. Crates
@@ -3031,6 +3031,9 @@ function factory(THREE, model) {
     if (resting) resetView();
   }
   setLegend(matchMedia("(min-width: 721px) and (min-height: 481px) and (min-aspect-ratio: 1/1)").matches);
+  // Shown once it works, like Tour and the finder: in the markup it sat
+  // live through the whole load (10+ s on a slow link) and did nothing.
+  $("legend-open").hidden = false;
   $("legend-open").addEventListener("click", () => setLegend($("legend").hidden));
   $("legend-close").addEventListener("click", () => setLegend(false));
 
