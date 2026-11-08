@@ -1448,10 +1448,22 @@ function factory(THREE, model) {
   }
   // The pinned building, pointed at: an accent pin over its roof, on top
   // of its lavender walls (paintWall). A pinned crate lifts off its
-  // belt; a building cannot. Never pickable, and layout() alone shows
-  // it, so a capture (which clears the pin) never draws it.
-  const pinMarker = outlined(new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 4),
-    new THREE.MeshBasicMaterial({color: COLORS.accent})));
+  // belt; a building cannot. A traced run carries it too, crate or
+  // building. Never pickable, and layout() alone shows it, so a capture
+  // (which clears pin and trace) never draws it.
+  const pinMarker = new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 4),
+    new THREE.MeshBasicMaterial({color: COLORS.accent, transparent: true, depthTest: false}));
+  // Drawn over everything, station signs included (sprites, renderOrder
+  // 8, in the transparent pass — hence transparent here): a traced crate
+  // standing at its station sits under that station's sign, which hid
+  // the pin, and machines hid it mid-ride.
+  pinMarker.renderOrder = 9;
+  {
+    const outline = new THREE.LineSegments(new THREE.EdgesGeometry(pinMarker.geometry, 25),
+      new THREE.LineBasicMaterial({color: COLORS.line, transparent: true, depthTest: false}));
+    outline.renderOrder = 9;
+    pinMarker.add(outline);
+  }
   pinMarker.rotation.x = Math.PI; // point down
   pinMarker.visible = false;
   scene.add(pinMarker);
@@ -1633,8 +1645,10 @@ function factory(THREE, model) {
           // Toward the target, not onto it: at this repo's pace the
           // 1.1-day window is 0.26 s, and on a three-year history 0.03 s.
           building.scale.y = glide(building.scale.y, rise);
-          if (state.highlighted === run && building.visible) {
-            nextPin = building;
+          // The marker points at the pinned building and at a traced run
+          // that has landed; only a pin turns the walls lavender.
+          if ((state.highlighted === run || state.trace === run) && building.visible) {
+            if (state.highlighted === run) nextPin = building;
             pinMarker.visible = true;
             pinMarker.position.copy(building.position);
             pinMarker.position.y += building.userData.top * building.scale.y + 1.5;
@@ -1700,6 +1714,14 @@ function factory(THREE, model) {
       // Counts and signs stay whole-floor truth; the banner says why
       // the floor looks empty.
       if (state.trace && run !== state.trace) entry.mesh.visible = false;
+      // The traced crate carries the marker as it rides: alone on a wide
+      // floor, a white crate among white machines was hard to find, and a
+      // crate on a belt cannot lift like a pinned one.
+      if (state.trace === run && entry.mesh.visible) {
+        pinMarker.visible = true;
+        pinMarker.position.copy(entry.mesh.position);
+        pinMarker.position.y += CRATE + 1.2;
+      }
     });
     showParts();
     $("empty-sign").hidden = runs.length > 0;
@@ -1775,6 +1797,9 @@ function factory(THREE, model) {
       const h = signHeight(sign);
       if (sign.aspect) sign.sprite.scale.set(h * sign.aspect, h, 1);
     });
+    // The marker reads at map zoom too (×1.8 at 1×, ×1 from ~3× in): at
+    // its modelled size a traced crate's pin was a ~10-px fleck at rest.
+    pinMarker.scale.setScalar(Math.min(1.8, Math.max(1, 1.8 / Math.sqrt(view.zoom))));
     yieldSigns();
   }
   function fit() {
