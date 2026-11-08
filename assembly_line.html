@@ -316,6 +316,16 @@
     #tour .row { flex-wrap: wrap; justify-content: flex-end; }
     #tour .dots { flex: 1 1 100%; }
   }
+  /* Forced colours (Windows high contrast) repaint every chip and button
+     alike, so the amber pile-up chip and the pressed replay length read
+     like their neighbours. System colours carry them instead: the
+     pile-up chip and its count in Highlight, the pressed length filled. */
+  @media (forced-colors: active) {
+    .chip.hot { border: 2px solid Highlight; }
+    .chip.hot .n { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+    #transport button[aria-pressed="true"] { forced-color-adjust: none;
+      background: Highlight; color: HighlightText; border-color: Highlight; }
+  }
 </style>
 </head>
 <body>
