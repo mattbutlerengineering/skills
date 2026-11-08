@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assembly line</title>
+<!-- What a link preview shows (Slack, iMessage, social cards read the
+     static head and never run the script that names the repo). -->
+<meta name="description" content="Every run in this repo's software factory as a crate on a 3D assembly line: belts from Idea to Ship, piles where work waits, and a city of finished runs. Replay its whole history.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Assembly line · the software factory">
+<meta property="og:description" content="Every run as a crate on a 3D assembly line: belts from Idea to Ship, piles where work waits, and a city of finished runs.">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#161c18" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#e9f6ee" media="(prefers-color-scheme: light)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='4' y='4' width='24' height='24' rx='5' fill='%23a6e07a' stroke='%232f3238' stroke-width='2.5'/%3E%3Crect x='4' y='13' width='24' height='6' fill='%238f6fd8' stroke='%232f3238' stroke-width='2.5'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -49,12 +58,15 @@
   #story { margin: 0; padding: .1rem 0 .15rem; color: var(--muted);
     flex: 1 1 100%; }
   #story b { color: var(--ink); font-weight: 600; }
-  #pipeline { flex: none; display: flex; align-items: center; gap: .3rem;
+  /* Spacing sized so the twelve chips and their arrows hold one row
+     down to ~1180px; looser, a 1200px window wrapped Done alone onto a
+     second row and the stage lost a row's height. */
+  #pipeline { flex: none; display: flex; align-items: center; gap: .2rem;
     padding: 0 1rem .55rem; flex-wrap: wrap; }
   #pipeline .flow { color: #9aa49c; font-weight: 700; }
-  .chip { font: inherit; font-size: .8rem; display: inline-flex; gap: .4rem;
+  .chip { font: inherit; font-size: .8rem; display: inline-flex; gap: .3rem;
     align-items: center; border: 1.5px solid rgba(47,50,56,.22);
-    border-radius: 999px; padding: .18rem .65rem .18rem .3rem;
+    border-radius: 999px; padding: .18rem .45rem .18rem .3rem;
     background: rgba(255,255,255,.78); cursor: pointer; color: var(--ink); }
   .chip:hover { border-color: var(--line); background: #fff; }
   .chip .n { min-width: 1.7em; text-align: center; font-weight: 700;
@@ -74,6 +86,13 @@
   #stage { position: relative; flex: 1; min-height: 0; }
   #stage canvas { display: block; width: 100%; height: 100%;
     touch-action: none; }
+  /* While a clip renders, the canvas holds 720×450 frames stretched to
+     the stage; a veil hides them and says what is happening. The stage
+     keeps its size, so nothing on the page jumps. */
+  #stage.capturing::after { content: attr(data-capture); position: absolute;
+    inset: 0; z-index: 7; display: grid; place-items: center;
+    background: var(--panel);
+    color: var(--ink); font-weight: 600; }
   #hint { position: absolute; left: .8rem; bottom: .6rem; color: var(--muted);
     font-size: .75rem; background: rgba(255,255,255,.7); padding: .15rem .6rem;
     border-radius: 999px; pointer-events: none; }
@@ -91,15 +110,23 @@
   #trace-banner button { font: inherit; border: 1.5px solid var(--line);
     background: var(--panel); color: var(--ink); border-radius: 999px;
     padding: .1rem .6rem; cursor: pointer; }
+  /* Top-aligned and pushed right: on a run name that wraps, a
+     stretched pill swelled into a two-line lozenge, and space-between
+     left every button at a different x. */
   .trace-btn { font: inherit; font-size: .75rem; border: 1.5px solid
     rgba(47,50,56,.3); background: none; color: var(--accent);
     border-radius: 999px; padding: 0 .5rem; cursor: pointer;
-    margin-left: .4rem; flex: none; }
+    margin-left: auto; flex: none; align-self: flex-start; white-space: nowrap; }
   .trace-btn:hover { border-color: var(--accent); }
   /* While a trace banner occupies the top-left, the date badge yields
-     the centre and docks right. */
+     the centre and docks right — and on a narrow stage, where the banner
+     spans the width and covered it, to the bottom right. */
   #trace-banner:not([hidden]) ~ #replay-date { left: auto; right: .8rem;
     transform: none; }
+  @media (max-width: 720px) {
+    #trace-banner:not([hidden]) ~ #replay-date { top: auto; bottom: .6rem;
+      font-size: 1.1rem; }
+  }
   /* Visible from the first progressive paint on a slow link (the page
      is one multi-MB file); the .5s appear delay keeps fast loads from
      flashing it. Both boot paths hide it. */
@@ -114,8 +141,11 @@
     width: 320px; background: var(--panel); border: 2px solid var(--line);
     border-radius: 12px; padding: .8rem 1rem;
     box-shadow: 0 14px 40px rgba(31,42,35,.22); }
-  #legend h2 { margin: 0 0 .4rem; font-size: .95rem; display: flex;
-    justify-content: space-between; align-items: center; }
+  /* The close button sits beside the heading, not inside it: inside,
+     the heading's accessible name was "How to read this Close legend". */
+  #legend .legend-head { display: flex; justify-content: space-between;
+    align-items: center; margin: 0 0 .4rem; }
+  #legend h2 { margin: 0; font-size: .95rem; }
   #legend button { border: 0; background: none; font-size: 1.05rem;
     cursor: pointer; }
   #legend ul { margin: 0; padding: 0; list-style: none; display: grid;
@@ -125,9 +155,12 @@
     border: 1.5px solid var(--line); border-radius: 3px;
     align-self: center; }
   #legend .foot { margin: .6rem 0 0; color: var(--muted); font-size: .8rem; }
+  /* align-items: start — a grid row otherwise stretches every card to
+     its tallest: beside Operate's 69 runs, five empty stations stood
+     2740px tall each. */
   #fallback { display: grid; gap: .75rem; padding: 0 1rem 1rem;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    overflow: auto; flex: 1; }
+    align-items: start; overflow: auto; flex: 1; }
   #fallback section { background: var(--panel); border-radius: 8px;
     padding: .6rem .75rem; box-shadow: 0 1px 0 rgba(0,0,0,.08); }
   #fallback h2 { font-size: .95rem; margin: 0 0 .35rem;
@@ -162,7 +195,9 @@
   #panel details { border-bottom: 1px solid #eee; padding: .25rem 0; }
   #panel summary { cursor: pointer; display: flex; gap: .5rem;
     justify-content: space-between; overflow-wrap: anywhere; }
-  #panel summary .prog { color: var(--muted); white-space: nowrap; }
+  #panel summary .prog { color: var(--muted); white-space: nowrap;
+    min-width: 3.4em; text-align: right; font-variant-numeric: tabular-nums; }
+  #panel summary .prog.past { min-width: 7.6em; }
   #panel ul { margin: .2rem 0 .2rem 1rem; padding: 0; list-style: none; }
   #panel li.done::before { content: "☑ "; }
   #panel li.open::before { content: "☐ "; }
@@ -184,15 +219,21 @@
   .speed { display: flex; gap: .25rem; }
   [hidden] { display: none !important; }
   /* In a dark room the shell dims and the lit factory floor floats
-     like a diorama; the scene's own colours never change. */
+     like a diorama; the floor's colours never change (only the city
+     behind it keeps night: dusk stone, lit windows — setCityNight). */
   @media (prefers-color-scheme: dark) {
     :root { --ink: #e7ebe6; --muted: #98a39a; --panel: #1c221e;
       --line: #4a524b; }
     html, body { background: radial-gradient(1100px 700px at 50% 10%,
       #232c25 0%, #161c18 55%, #0e130f 100%); }
-    #find, #legend-open, .chip, #transport button {
+    #find, #legend-open, #tour-open, .chip, #transport button {
       background: rgba(30,37,32,.85); color: var(--ink);
       border-color: #4a524b; }
+    /* The light rules brighten to #fff on hover and focus; under light
+       ink that left the finder's typed text and a hovered chip white on
+       white. Before .chip.hot, so the pile-up keeps its amber. */
+    #find:focus, #legend-open:hover, #tour-open:hover, .chip:hover {
+      background: #27302a; border-color: #7d887f; }
     #find::placeholder { color: var(--muted); }
     .chip .n, #transport button[aria-pressed="true"] { color: #1c2518; }
     .chip.zero .n { background: #2c332d; color: var(--muted); }
@@ -203,6 +244,7 @@
     #notice { background: #3a2b16; color: #f3c892; }
     #panel header { border-bottom-color: #2e352f; }
     #panel details { border-bottom-color: #2e352f; }
+    .trace-btn { border-color: #4a524b; }
     #transport { background: rgba(18,23,19,.8);
       border-top-color: rgba(255,255,255,.08); }
   }
@@ -225,6 +267,12 @@
     #scrub { flex: 1 1 100%; order: -1; }
     #day { min-width: 0; margin-left: auto; }
   }
+  /* A portrait phone gets the pinned panel as a bottom sheet, like the
+     legend: full height, it covered the whole stage and the camera
+     flew to a building nobody could see. focusOn centres above it. */
+  @media (max-width: 720px) and (min-height: 481px) {
+    #panel { top: auto; left: .5rem; right: .5rem; width: auto; max-height: 48%; }
+  }
 </style>
 </head>
 <body>
@@ -238,9 +286,10 @@
   <button id="tour-open" hidden>▶ Tour</button>
   <button id="legend-open" aria-expanded="false"
     aria-controls="legend">? How to read this</button>
-  <p id="story"><b>Each crate is one run</b> — a feature or fix — riding the
-    belt from <b>Idea</b> to <b>Ship</b>. Crates pile up where work waits;
-    finished runs raise the <b>city</b> at the end of the line.</p>
+  <p id="story"><b>Each crate is one run</b> — a feature, maintenance or
+    product run — riding the belt from <b>Idea</b> to <b>Ship</b>. Crates
+    pile up where work waits; finished runs raise the <b>city</b> at the end
+    of the line.</p>
 </header>
 <nav id="pipeline" aria-label="Stations" hidden></nav>
 <p id="notice" hidden></p>
@@ -264,34 +313,36 @@
     </div>
   </aside>
   <aside id="legend" aria-label="How to read this">
-    <h2>How to read this
-      <button id="legend-close" aria-label="Close legend">✕</button></h2>
+    <div class="legend-head"><h2>How to read this</h2>
+      <button id="legend-close" aria-label="Close legend">✕</button></div>
     <ul>
       <li><span class="swatch" style="background:#d3d6db"></span>
-        <span>A <b>crate</b> is one run: a feature or fix in flight.</span></li>
+        <span>A <b>crate</b> is one run in flight: feature, maintenance or
+          product.</span></li>
       <li><span class="swatch" style="background:#a6e07a"></span>
         <span><b>Belts</b> carry crates through the stages, in the arrows'
           direction.</span></li>
       <li><span class="swatch" style="background:#e0903a"></span>
         <span>The <b>amber sign</b> marks the busiest station — the
           pile-up.</span></li>
-      <li><span class="swatch" style="background:#8f6fd8"></span>
-        <span><b>Implement</b> crates carry their work orders as parts;
-          click one to see them.</span></li>
-      <li><span class="swatch" style="background:#ffffff"></span>
+      <li><span class="swatch" style="background:
+        linear-gradient(90deg,#6fd36f 50%,#c9cdd3 50%)"></span>
+        <span><b>Implement</b> crates carry their work orders as parts —
+          green done, grey open; click one to see them.</span></li>
+      <li><span class="swatch" style="background:#d8c3a5"></span>
         <span>The <b>city</b> at the end of the line is finished work:
           one named building per shipped run.</span></li>
       <li><span class="swatch" style="background:
         linear-gradient(90deg,#7cc44e 33%,#e0903a 33% 66%,#8f6fd8 66%)"></span>
         <span><b>Tape colour</b> is the run's kind: green feature, amber
-          fix, purple product.</span></li>
+          maintenance, purple product.</span></li>
       <li id="legend-bin" hidden><span class="swatch"
         style="background:#e0903a"></span>
         <span>The <b>bin</b> holds runs the placement tool could not
           read; hover one for the reason.</span></li>
     </ul>
-    <p class="foot">Hover anything for detail; click to pin a list. Press
-      Play to replay the repo's whole history.</p>
+    <p class="foot">Hover anything for detail; click to pin a list.<span
+      id="legend-play"> Press Play to replay the repo's whole history.</span></p>
   </aside>
   <aside id="panel" hidden aria-label="Pinned detail">
     <header><h2 id="panel-title"></h2>
@@ -305,14 +356,15 @@
   <input id="scrub" type="range" min="0" max="0" step="1" value="0"
          aria-label="Replay date" disabled>
   <span id="day"></span>
-  <button id="today" hidden>⏭ today</button>
+  <button id="today" aria-label="Back to today" hidden>⏭ today</button>
   <span class="speed" role="group" aria-label="Replay length">
     <button id="speed-30" aria-pressed="true" disabled>30s</button>
     <button id="speed-60" aria-pressed="false" disabled>60s</button>
   </span>
   <button id="export" disabled>Export clip</button>
   <span id="honesty">Dates to the day from artifact frontmatter; order
-    within a day is inferred; work-order progress is today's.</span>
+    within a day is inferred; quiet days replay faster; work-order progress
+    is today's.</span>
   <span id="export-status" role="status" hidden></span>
 </footer>
 
@@ -334,7 +386,9 @@ const STATION_INFO = {
   "review": ["Review", "Inspects the change and stamps approval."],
   "ship": ["Ship", "Packs and loads the release."],
   "operate": ["Operate", "Shipped, waiting on a retro."],
-  "completed": ["Completed", "Finished runs raise the city: one building per shipped run."]
+  // "Done", like the header's "23 done": the sign and chip said Done
+  // while every card, panel title and the fallback said Completed.
+  "completed": ["Done", "Finished runs raise the city: one building per shipped run."]
 };
 // Step numbers for the signs and chips: the pipeline reads 1..10 at a
 // glance; Capture is the side door returns come in through.
@@ -374,6 +428,9 @@ function showFallback(model, notice) {
   $("transport").hidden = true;
   $("story").hidden = true;
   $("pipeline").hidden = true;
+  // The legend explains the 3D floor and lives inside the stage, which
+  // is hidden here: its button would toggle nothing visible.
+  $("legend-open").hidden = true;
   const main = $("fallback");
   main.replaceChildren();
   const runs = Array.isArray(model && model.runs) ? model.runs : [];
@@ -494,6 +551,19 @@ function factory(THREE, model) {
     crate: 0xd3d6db, tape: 0x9aa0a8, line: 0x2f3238, warn: 0xe0903a,
     glass: 0x8f6fd8, ok: 0x6fd36f, wood: 0xb9bdc4
   };
+  // The city is not the factory. Its own warm palette — stone walls,
+  // sand ground, a brown road — reads as a different place behind the
+  // floor's cool greens and greys. Roof trim stays the run's kind
+  // colour (the legend promises it) and lit windows stay 0xf6e7ae.
+  // Windows are blue-grey glass by day — dark brown strips covered half
+  // of each facade and turned the sand city into a brown block — and at
+  // night lit (0xf6e7ae) or, one strip in seven, dark (windowDark).
+  const CITY_COLORS = {
+    wall: 0xd8c3a5, wallAlt: 0xc9b291, wallPale: 0xe3d4ba,
+    window: 0x9db3c4, windowDark: 0x3a3530, ground: 0xeee3cf, groundSide: 0xd9c9ab,
+    road: 0x7a6a56
+  };
+  const CITY_WALLS = [CITY_COLORS.wall, CITY_COLORS.wallAlt, CITY_COLORS.wallPale];
   const TILE = 12.5, HALF = 6.25, PLATE_H = 0.9, BELT_Y = 1.8, BELT_W = 2.4;
   const CRATE = 1.3;
   const stage = $("stage");
@@ -705,8 +775,7 @@ function factory(THREE, model) {
   // amber — the bottleneck is the first thing the factory should say.
   function signTexture(key, count, hot) {
     const step = STEP[key] || "";
-    const name = (key === "bin" ? "Needs attention" : key === "completed"
-      ? "Done" : nameOf(key)).toUpperCase();
+    const name = (key === "bin" ? "Needs attention" : nameOf(key)).toUpperCase();
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const H = 148, PAD = 26, GAP = 18;
@@ -815,7 +884,8 @@ function factory(THREE, model) {
     return {person, arm, body, legs};
   }
   // Tape colour says what kind of run the crate is: green = feature,
-  // purple = product, amber = maintenance (a fix). The legend repeats it.
+  // purple = product, amber = maintenance. The legend repeats it, in the
+  // words the hover card and panel rows print (CONTEXT.md's run kinds).
   const TAPE = {feature: 0x7cc44e, product: 0x8f6fd8, maintenance: 0xe0903a};
   function crateMesh(color = COLORS.crate, kind) {
     const mesh = outlined(new THREE.Mesh(boxGeo(CRATE, CRATE * 0.8, CRATE), mat(color)));
@@ -1056,14 +1126,14 @@ function factory(THREE, model) {
       const beyond = 2.0 + (rows - 1) * CITY_SZ + 2.4 - 5.15;
       const wide = Math.max(10.3, CITY_COLS * CITY_SX + 1.2);
       if (beyond > 0) {
-        const side = mat(COLORS.plateSide), top = mat(COLORS.plate);
+        const side = mat(CITY_COLORS.groundSide), top = mat(CITY_COLORS.ground);
         const slab = outlined(new THREE.Mesh(boxGeo(wide, PLATE_H, beyond),
           [side, side, top, side, side, side]));
         slab.position.set(0, PLATE_H / 2, 5.15 + beyond / 2);
         slab.receiveShadow = true;
         g.add(slab);
       }
-      const road = box(1.5, 0.1, 2.8, COLORS.dark, 0, PLATE_H, 0.9, g);
+      const road = box(1.5, 0.1, 2.8, CITY_COLORS.road, 0, PLATE_H, 0.9, g);
       road.receiveShadow = true;
       box(0.3, 3.4, 0.3, COLORS.accent, -1.15, PLATE_H, 1.1, g);
       box(0.3, 3.4, 0.3, COLORS.accent, 1.15, PLATE_H, 1.1, g);
@@ -1180,15 +1250,44 @@ function factory(THREE, model) {
   const buildingOf = new Map();
   // At night the city lights up: in the dark colour scheme the window
   // strips swap to a self-lit warm material (the scene's lights never
-  // change — the glow has to be the material). The GIF always paints a
-  // light backdrop, so captures force the windows back to day.
+  // change — the glow has to be the material), and the stone dims to
+  // dusk, because a lit strip on pale sand reads as a paler stripe, not
+  // as light. The GIF always paints a light backdrop, so captures force
+  // the city back to day.
   const cityWindows = [];
+  const cityWalls = []; // [mesh, day colour, building]
   const winNightMat = new THREE.MeshBasicMaterial({color: 0xf6e7ae});
+  const duskCache = {};
+  const duskMat = (color) => duskCache[color] || (duskCache[color] =
+    new THREE.MeshLambertMaterial({color: new THREE.Color(color).multiplyScalar(0.42),
+      flatShading: true}));
+  // A real skyline is never uniformly lit: one strip in seven stays dark.
+  const litAtNight = (i) => i % 7 !== 3;
   let cityNight = false;
+  // The pinned building's stone turns lavender (the accent, softened):
+  // among two dozen towers a marker alone gets lost behind its
+  // neighbours, and the walls are what still shows.
+  let pinnedBuilding = null;
+  const pinWallMat = new THREE.MeshLambertMaterial({color: 0xc4b2f2, flatShading: true});
+  function paintWall([mesh, color, building]) {
+    mesh.material = building === pinnedBuilding ? pinWallMat
+      : cityNight ? duskMat(color) : mat(color);
+  }
+  function windowMat(i) {
+    return !cityNight ? mat(CITY_COLORS.window)
+      : litAtNight(i) ? winNightMat : mat(CITY_COLORS.windowDark);
+  }
   function setCityNight(on) {
     cityNight = on;
-    cityWindows.forEach((win) => { win.material = on ? winNightMat : mat(0x3a4047); });
+    cityWindows.forEach((win, i) => { win.material = windowMat(i); });
+    cityWalls.forEach(paintWall);
     requestRender();
+  }
+  function cityWall(mesh, color, building) {
+    const entry = [mesh, color, building];
+    cityWalls.push(entry);
+    paintWall(entry);
+    return mesh;
   }
   function nameHash(text) {
     let h = 0;
@@ -1251,47 +1350,80 @@ function factory(THREE, model) {
     const hash = nameHash(slug);
     const height = 2.3 + Math.min(run.work_orders.length, 12) * 0.32 + (hash % 4) * 0.5;
     const trim = TAPE[run.kind] || COLORS.tape;
-    box(1.9, height, 1.9, COLORS.steel, 0, 0, 0, building);
-    // window strips on the two camera-facing facades
+    const wall = CITY_WALLS[hash % CITY_WALLS.length];
+    cityWall(box(1.9, height, 1.9, wall, 0, 0, 0, building), wall, building);
+    // Window strips on the two facades the camera sees: -x and -z.
     for (const off of [-0.5, 0.2]) {
-      const winX = box(0.06, height * 0.7, 0.5, 0x3a4047, 0.95, height * 0.12, off, building);
-      const winZ = box(0.5, height * 0.7, 0.06, 0x3a4047, off, height * 0.12, 0.95, building);
+      const winX = box(0.06, height * 0.7, 0.5, CITY_COLORS.window, -0.95, height * 0.12, off, building);
+      const winZ = box(0.5, height * 0.7, 0.06, CITY_COLORS.window, off, height * 0.12, -0.95, building);
+      const base = cityWindows.length;
       cityWindows.push(winX, winZ);
-      if (cityNight) { winX.material = winNightMat; winZ.material = winNightMat; }
+      winX.material = windowMat(base);
+      winZ.material = windowMat(base + 1);
     }
     box(1.98, 0.16, 1.98, trim, 0, height, 0, building);
+    // A tall tower steps back once under its roof, so the skyline has a
+    // silhouette instead of a row of equal blocks. Deterministic: the
+    // step depends only on the building's height (work orders + name).
+    const tall = height >= 4.6;
+    if (tall) {
+      cityWall(box(1.26, 1.1, 1.26, wall, 0, height + 0.16, 0, building), wall, building);
+      box(1.34, 0.14, 1.34, trim, 0, height + 1.26, 0, building);
+    }
+    const capTop = tall ? height + 1.4 : height + 0.16;
     if (hash % 3 === 0) {
-      box(0.1, 1.0, 0.1, COLORS.dark, 0.55, height + 0.16, -0.5, building);
+      box(0.1, 1.0, 0.1, COLORS.dark, -0.55, capTop, -0.5, building);
       const tipMat = new THREE.MeshBasicMaterial({color: 0x8f6fd8});
       const tip = new THREE.Mesh(boxGeo(0.22, 0.22, 0.22), tipMat);
-      tip.position.set(0.55, height + 1.27, -0.5);
+      tip.position.set(-0.55, capTop + 1.11, -0.5);
       building.add(tip);
       cityBeacons.push(tipMat);
+    }
+    // Some short roofs carry a water tank (never a tall tower's: its
+    // setback owns the roof centre). Opposite corner from the beacon.
+    if (!tall && hash % 5 === 1) {
+      cityWall(cyl(0.26, 0.5, CITY_COLORS.wallAlt, 0.6, height + 0.16, 0.5, building, 10),
+        CITY_COLORS.wallAlt, building);
     }
     // The name, readable from both camera-facing facades, up under the
     // roof where towers rarely occlude each other.
     const plateMat = new THREE.MeshBasicMaterial({map: nameTex(slug)});
     const plateGeo = new THREE.PlaneGeometry(1.84, 1.84 * 64 / 288);
     const plateX = new THREE.Mesh(plateGeo, plateMat);
-    plateX.rotation.y = Math.PI / 2;
-    plateX.position.set(0.97, height - 0.45, 0);
+    plateX.rotation.y = -Math.PI / 2;
+    plateX.position.set(-0.97, height - 0.45, 0);
     building.add(plateX);
     const plateZ = new THREE.Mesh(plateGeo, plateMat);
-    plateZ.position.set(0, height - 0.45, 0.97);
+    plateZ.rotation.y = Math.PI;
+    plateZ.position.set(0, height - 0.45, -0.97);
     building.add(plateZ);
+    // How high the roof furniture reaches, for the pin marker.
+    building.userData.top = capTop + (hash % 3 === 0 ? 1.22 : 0);
     tag(building, {kind: "crate", run});
     building.visible = false;
     scene.add(building);
     buildingOf.set(run, building);
     return building;
   }
+  // The pinned building, pointed at: an accent pin over its roof, on top
+  // of its lavender walls (paintWall). A pinned crate lifts off its
+  // belt; a building cannot. Never pickable, and layout() alone shows
+  // it, so a capture (which clears the pin) never draws it.
+  const pinMarker = outlined(new THREE.Mesh(new THREE.ConeGeometry(0.55, 1.2, 4),
+    new THREE.MeshBasicMaterial({color: COLORS.accent})));
+  pinMarker.rotation.x = Math.PI; // point down
+  pinMarker.visible = false;
+  scene.add(pinMarker);
 
   function slotPosition(key, index, total) {
     const base = at(key);
     if (key === "bin") {
+      // Filled from the far (+x, +z) corner: the camera looks in from
+      // -x, -z, and the bin's walls stand taller than a crate, so the
+      // near corner — where the first crates used to go — is hidden.
       const col = index % 4, row = Math.floor(index / 4) % 3, layer = Math.floor(index / 12);
-      return base.add(new THREE.Vector3(-2.1 + col * 1.4, PLATE_H + 0.3 + CRATE * 0.4 + layer * CRATE * 0.8,
-        -1.4 + row * 1.4));
+      return base.add(new THREE.Vector3(2.1 - col * 1.4, PLATE_H + 0.3 + CRATE * 0.4 + layer * CRATE * 0.8,
+        1.4 - row * 1.4));
     }
     const dir = inDir[key];
     if (index < 6) {
@@ -1315,6 +1447,41 @@ function factory(THREE, model) {
   const FIRST = dayIndex(model.timeline.first_day);
   const LAST = dayIndex(model.timeline.last_day);
   const times = new Map(runs.map((run) => [run, hopTimes(run)]));
+  // Quiet days pass faster. A day with an arrival — or the day after
+  // one, while its crates still ride the belts — plays at full length;
+  // an idle day at QUIET_WEIGHT of it, and 30s/60s still sets the whole
+  // replay's length. On this repo's 126 days (64 of them quiet) an even
+  // pace spent 15 of the 30 seconds showing nothing happen; now 5, and
+  // a busy day lasts 0.4s instead of 0.24s.
+  // u is evenly paced replay time; tFromU/uFromT convert to days (t).
+  const QUIET_WEIGHT = 0.2;
+  const SPAN = LAST + 1 - FIRST;
+  const busy = new Uint8Array(SPAN + 1);
+  runs.forEach((run) => (run.history || []).forEach((hop) => {
+    const k = dayIndex(hop.day) - FIRST;
+    if (k >= 0 && k < SPAN) { busy[k] = 1; busy[k + 1] = 1; }
+  }));
+  const dayWeight = (k) => (busy[k] ? 1 : QUIET_WEIGHT);
+  // Is the playhead on a quiet (fast-forwarded) day? The date badge and
+  // the clip's stamp mark it.
+  const quietNow = () => !isToday() && !busy[Math.floor(state.t) - FIRST];
+  const cumU = new Float64Array(SPAN + 1);
+  for (let k = 0; k < SPAN; k++) cumU[k + 1] = cumU[k] + dayWeight(k);
+  const TOTAL_U = cumU[SPAN];
+  function uFromT(t) {
+    const x = Math.min(SPAN, Math.max(0, t - FIRST));
+    const k = Math.min(SPAN - 1, Math.floor(x));
+    return cumU[k] + (x - k) * dayWeight(k);
+  }
+  function tFromU(u) {
+    const v = Math.min(TOTAL_U, Math.max(0, u));
+    let lo = 0, hi = SPAN - 1; // the last day starting at or before v
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (cumU[mid] <= v) lo = mid; else hi = mid - 1;
+    }
+    return FIRST + lo + (v - cumU[lo]) / dayWeight(lo);
+  }
   const state = {t: LAST + 1, playing: false, seconds: 30, highlighted: null, pinned: null};
   let lastHot = null;
   const isToday = () => state.t >= LAST + 1 - 1e-9;
@@ -1379,6 +1546,8 @@ function factory(THREE, model) {
     const t = state.t;
     const groups = {};
     buildingOf.forEach((building) => { building.visible = false; });
+    pinMarker.visible = false;
+    let nextPin = null;
     runs.forEach((run) => {
       const where = placement(run, t);
       const entry = crateOf.get(run);
@@ -1416,10 +1585,20 @@ function factory(THREE, model) {
           // Toward the target, not onto it: at this repo's pace the
           // 1.1-day window is 0.26 s, and on a three-year history 0.03 s.
           building.scale.y = glide(building.scale.y, rise);
+          if (state.highlighted === run && building.visible) {
+            nextPin = building;
+            pinMarker.visible = true;
+            pinMarker.position.copy(building.position);
+            pinMarker.position.y += building.userData.top * building.scale.y + 1.5;
+          }
         });
       } else {
         list.forEach((run, i) => {
-          const pos = slotPosition(key, i, list.length);
+          // A trace shows one crate, so it takes the station's first slot,
+          // not its place in a queue whose other crates are hidden: 69th
+          // at Operate it hung four layers up over an empty pallet.
+          const pos = state.trace === run ? slotPosition(key, 0, 1)
+            : slotPosition(key, i, list.length);
           placeCrate(crateOf.get(run), pos);
           crateOf.get(run).mesh.rotation.set(0, 0, 0);
         });
@@ -1431,6 +1610,7 @@ function factory(THREE, model) {
         pallets[key].board.scale.set(grow, 1, grow);
       }
     });
+    if (nextPin !== pinnedBuilding) { pinnedBuilding = nextPin; cityWalls.forEach(paintWall); }
     // The bottleneck: the fullest working station (Done and the bin are
     // not queues). Its sign and chip go amber together.
     const working = Object.keys(counts).filter((k) => k !== "completed" && k !== "bin");
@@ -1467,6 +1647,40 @@ function factory(THREE, model) {
     });
     showParts();
     $("empty-sign").hidden = runs.length > 0;
+    yieldSigns();
+  }
+  // A label never hides the building the viewer pinned: signs draw over
+  // everything (depthTest off), and Operate's, Ship's and Done's stand
+  // in front of the city, so one whose quad overlaps the pinned
+  // building fades to a ghost while the pin lasts. Crates are left
+  // alone — they lift clear of their pile, and a station's own sign
+  // (Operate's amber one above all) must not fade over its queue.
+  const yieldBox = new THREE.Box3(), yieldV = new THREE.Vector3();
+  function yieldSigns() {
+    const run = state.highlighted;
+    const building = run && buildingOf.get(run);
+    const pinned = building && building.visible ? building : null;
+    const inv = camera.matrixWorldInverse;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    if (pinned) {
+      yieldBox.setFromObject(pinned);
+      for (const x of [yieldBox.min.x, yieldBox.max.x]) for (const y of [yieldBox.min.y, yieldBox.max.y])
+        for (const z of [yieldBox.min.z, yieldBox.max.z]) {
+          yieldV.set(x, y, z).applyMatrix4(inv);
+          minX = Math.min(minX, yieldV.x); maxX = Math.max(maxX, yieldV.x);
+          minY = Math.min(minY, yieldV.y); maxY = Math.max(maxY, yieldV.y);
+        }
+    }
+    Object.values(signs).forEach(({sprite}) => {
+      let over = false;
+      if (pinned) {
+        sprite.getWorldPosition(yieldV).applyMatrix4(inv);
+        const hx = sprite.scale.x / 2, hy = sprite.scale.y / 2;
+        over = yieldV.x + hx > minX && yieldV.x - hx < maxX
+          && yieldV.y + hy > minY && yieldV.y - hy < maxY;
+      }
+      sprite.material.opacity = over ? 0.22 : 1;
+    });
   }
   // A highlighted Implement crate opens its tray: one part per work
   // order, finished parts green, open parts grey, laid out above it.
@@ -1508,9 +1722,11 @@ function factory(THREE, model) {
       const hb = h * (sign.boost || 1);
       if (sign.aspect) sign.sprite.scale.set(hb * sign.aspect, hb, 1);
     });
+    yieldSigns();
   }
   function fit() {
-    const width = stage.clientWidth, height = stage.clientHeight;
+    const width = captureSize ? captureSize.w : stage.clientWidth;
+    const height = captureSize ? captureSize.h : stage.clientHeight;
     renderer.setSize(width, height, false);
     const bounds = new THREE.Box3();
     Object.values(stationGroups).forEach((g) => bounds.expandByPoint(g.position));
@@ -1520,7 +1736,12 @@ function factory(THREE, model) {
     bounds.expandByPoint(new THREE.Vector3(CITY_BASE.x + cityHalfX, 0, CITY_FARZ));
     bounds.expandByScalar(HALF + 1);
     bounds.getCenter(target);
-    camera.position.copy(target).add(new THREE.Vector3(60, 60, 60));
+    // Viewed from behind the pipeline's start, so the district — which
+    // sits at the floor's far corner and grows away from it — is the
+    // deepest thing in frame and the skyline rises behind the factory
+    // instead of crowding in front of it. Elevation 45° (was the
+    // true-isometric 35.3°) overlaps the rows less.
+    camera.position.copy(target).add(new THREE.Vector3(-60, 85, -60));
     camera.lookAt(target);
     camera.updateMatrixWorld();
     // Project the bounds' corners to find the view extent; the 12 keeps
@@ -1540,11 +1761,12 @@ function factory(THREE, model) {
     frameBox.halfH = Math.max(spanY, spanX / frameBox.aspect) / 2 * 1.02;
     frameBox.cx = (minX + maxX) / 2; frameBox.cy = (minY + maxY) / 2;
     applyView();
-    // The sun's shadow frustum covers the whole floor once. A lowish
-    // sun from the back-right throws readable shadows to the front-left.
+    // The sun's shadow frustum covers the whole floor once. The sun turns
+    // with the camera (both yaw 180°), so shadows still fall toward the
+    // viewer's front-left exactly as they did.
     sun.target.position.copy(target);
     const reach = Math.max(bounds.max.x - bounds.min.x, bounds.max.z - bounds.min.z);
-    sun.position.copy(target).add(new THREE.Vector3(0.85, 0.75, -0.55)
+    sun.position.copy(target).add(new THREE.Vector3(-0.85, 0.75, 0.55)
       .multiplyScalar(reach));
     const cam = sun.shadow.camera;
     cam.left = cam.bottom = -reach * 0.8;
@@ -1552,7 +1774,21 @@ function factory(THREE, model) {
     cam.far = reach * 3;
     cam.updateProjectionMatrix();
   }
-  addEventListener("resize", () => { fit(); requestRender(); });
+  // A resize (a phone turning, a window snapping) refits the floor but
+  // keeps the pan, which lives in camera space, so what the viewer was
+  // looking at drifted: portrait → landscape left a pinned building on
+  // the stage's top edge. A pin is re-centred in the free region at the
+  // same zoom, and a tour beat is re-framed; a bare hand-framed view
+  // keeps its pan as before.
+  addEventListener("resize", () => {
+    fit();
+    if (!exporting && tourStep >= 0) showTourStep();
+    else if (!exporting && state.pinned) {
+      const {key, run} = state.pinned;
+      focusOn(run ? runFocus(run) : focusTargetOf(key), view.zoom);
+    }
+    requestRender();
+  });
   // The resting view sits a touch inside the fitted frame: the floor's
   // corners are empty, so 1.1× buys a visibly larger factory while the
   // top row's sign keeps clear of the header.
@@ -1576,13 +1812,30 @@ function factory(THREE, model) {
     if (location.hash.startsWith("#view="))
       history.replaceState(null, "", location.pathname + location.search);
   };
-  // Centre a world point and zoom to it (the chips fly the camera).
+  // Centre a world point and zoom to it (the chips fly the camera) — in
+  // the part of the stage the overlays leave free: left of the side
+  // panel, above a phone's bottom sheet or the tour card. Centred on the
+  // whole stage, a phone's sheet covered the very building the finder
+  // flew to, and a tour beat parked its station half behind the card.
   function focusOn(point, zoom) {
     if (exporting) return; // nothing moves the camera inside a capture
     const v = point.clone().applyMatrix4(camera.matrixWorldInverse);
     view.zoom = zoom;
     view.panX = v.x - frameBox.cx;
     view.panY = v.y + 2 / zoom - frameBox.cy;
+    const s = stage.getBoundingClientRect();
+    const perPx = 2 * frameBox.halfH / (zoom * Math.max(1, s.height));
+    let coverBottom = 0, coverRight = 0;
+    const panel = $("panel");
+    if (!panel.hidden) {
+      const p = panel.getBoundingClientRect();
+      if (p.top > s.top + s.height / 3) coverBottom = s.bottom - p.top;
+      else if (p.left > s.left + s.width / 2) coverRight = s.right - p.left;
+    }
+    if (!$("tour").hidden)
+      coverBottom = Math.max(coverBottom, s.bottom - $("tour").getBoundingClientRect().top);
+    view.panY -= coverBottom / 2 * perPx;
+    view.panX += coverRight / 2 * perPx;
     applyView(); requestRender();
   }
   stage.addEventListener("wheel", (event) => {
@@ -1681,13 +1934,16 @@ function factory(THREE, model) {
     const oldest = here.slice(0, 5).map((run) => run.slug).join(", ");
     card.replaceChildren(el("h3", {}, name), el("p", {}, line),
       el("p", {class: "muted"}, `${here.length} run${here.length === 1 ? "" : "s"} · as of ${asOf()}`),
-      el("p", {}, here.length ? `oldest: ${oldest}${here.length > 5 ? ", …" : ""}` : "0 runs"));
+      ...(here.length ? [el("p", {}, `oldest: ${oldest}${here.length > 5 ? ", …" : ""}`)] : []));
   }
   // Tape colours, as CSS, for the card's kind dot.
   const KIND_CSS = {feature: "#7cc44e", maintenance: "#e0903a", product: "#8f6fd8"};
   function crateCard(run) {
     const where = crateOf.get(run).where;
-    const rows = [el("h3", {}, "Crate · one run"),
+    // A finished run is a building in the city, not a crate on a belt:
+    // the card names what the viewer is pointing at and when it landed.
+    const built = where && where.station === "completed";
+    const rows = [el("h3", {}, built ? "Building · one finished run" : "Crate · one run"),
       el("p", {class: "ref"}, run.slug || run.ref)];
     if (run.status === "attention") {
       rows.push(el("p", {}, run.dir), el("p", {}, run.reason));
@@ -1696,6 +1952,12 @@ function factory(THREE, model) {
       const dot = el("span", {class: "kdot"});
       dot.style.background = KIND_CSS[run.kind] || "#9aa0a8";
       let line = `${run.kind} · at ${station}`;
+      if (built) {
+        const landed = run.history.findLast((hop) => hop.station === "completed");
+        const n = run.work_orders.length;
+        line = `${run.kind}${landed ? ` · finished ${landed.day}` : ""}`
+          + (n ? ` · ${n} work order${n === 1 ? "" : "s"}` : "");
+      }
       if (where && where.station === "implement" && run.work_orders.length)
         line += ` · ${doneCount(run)}/${run.work_orders.length} WOs${isToday() ? "" : " (today)"}`;
       rows.push(el("p", {}, dot, line), el("p", {class: "muted"}, run.dir));
@@ -1762,8 +2024,10 @@ function factory(THREE, model) {
       });
       summary.append(traceBtn);
     }
-    if (run.work_orders.length) summary.append(el("span", {class: "prog"},
-      `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}`));
+    // The progress column is always there (empty without work orders),
+    // so every row's trace button lands at the same x.
+    summary.append(el("span", {class: isToday() ? "prog" : "prog past"}, run.work_orders.length
+      ? `${doneCount(run)}/${run.work_orders.length}${isToday() ? "" : " ·today"}` : ""));
     const details = el("details", {}, summary);
     if (open) details.open = true;
     if (run.status === "attention") details.append(el("p", {class: "muted"}, run.reason));
@@ -1785,11 +2049,16 @@ function factory(THREE, model) {
     closePanel(); setLegend(false); endTour(); card.hidden = true;
     state.highlighted = null;
     state.trace = run;
-    // A trace is one run's story, so it ends where the story does: the
-    // day after its last recorded hop (a beat to see the arrival), not
-    // months later at today with a motionless crate.
-    traceEnd = Math.min(LAST + 1,
-      dayIndex(run.history[run.history.length - 1].day) + 1);
+    // A trace is one run's story, so it ends where the story does: on
+    // the first day boundary after its last hop has finished arriving
+    // (the ride takes TRAVEL of a day, plus a beat to see it land), not
+    // months later at today with a motionless crate. A hop late in its
+    // day lands the next day: ending at that day's start left the crate
+    // frozen mid-belt under a banner saying "now at" its station.
+    const hops = times.get(run);
+    // toStop: a trace that ends on the last recorded day ends at today —
+    // the same date — not at that day's start under a "today" button.
+    traceEnd = toStop(Math.min(LAST + 1, Math.ceil(hops[hops.length - 1].t + TRAVEL + 0.25)));
     $("trace-name").textContent = run.slug || run.ref;
     // Most journeys here happen inside one day: without this line the
     // trace is a motionless frame and the viewer learns nothing. The
@@ -1892,6 +2161,16 @@ function factory(THREE, model) {
     const hit = pick(event);
     if (!hit) { closePanel(); return; }
     openPanel(hit);
+    // The panel opens over the stage. If it now covers the very spot
+    // that was clicked (a phone's bottom sheet over a tap in the lower
+    // half, or a side panel over a click at the right), re-centre the
+    // subject in the free region at the current zoom; otherwise the
+    // camera stays put.
+    const p = $("panel").getBoundingClientRect();
+    if (event.clientX >= p.left && event.clientX <= p.right
+        && event.clientY >= p.top && event.clientY <= p.bottom) {
+      focusOn(hit.kind === "crate" ? runFocus(hit.run) : focusTargetOf(hit.station), view.zoom);
+    }
     requestRender();
   });
   $("panel-close").addEventListener("click", closePanel);
@@ -1911,8 +2190,7 @@ function factory(THREE, model) {
   const pipeline = $("pipeline");
   CHIP_ORDER.forEach((key, i) => {
     if (i && key !== "bin") pipeline.append(el("span", {class: "flow"}, "→"));
-    const name = key === "bin" ? "Attention" :
-      key === "completed" ? "Done" : nameOf(key);
+    const name = key === "bin" ? "Attention" : nameOf(key);
     const n = el("span", {class: "n"}, "0");
     const chip = el("button", {class: "chip", title:
       (STATION_INFO[key] || ["", "Runs the placement tool could not read."])[1]},
@@ -1962,23 +2240,68 @@ function factory(THREE, model) {
   let tourStep = -1;
   function tourScript() {
     const beats = [
-      {text: `This is ${model.repo}'s software factory. Every crate is one run — a feature or a fix — riding the belts from Idea to Ship.`, reset: true},
-      {text: "Work enters here: Idea builds the crate, and the numbered stations carry it through spec, design, build and checks.", station: "idea"},
+      {text: `This is ${model.repo}'s software factory. Every crate is one run — feature, maintenance or product — riding the belts from Idea to Ship.`, reset: true},
+      {text: "Work enters at this end: features and products at Idea or PRD, maintenance at Capture beside them. The numbered stations carry each crate through spec, design, build and checks.", station: "idea"},
       {text: "Implement assembles the code. Click any crate here and its work orders lay out as parts — green done, grey open.", station: "implement"},
       lastHot ? {text: `The amber sign is the pile-up: ${nameOf(lastHot)} holds the most work right now. Piles mean waiting.`, station: lastHot}
         : {text: "An amber sign would mark the busiest station — right now no queue stands out.", reset: true},
       {text: "And the end of the line is the city: every finished run raises a building named after it. The skyline is what the factory has shipped.", station: "completed"},
-      {text: "And this is the whole story: press Next to replay the repo's history and watch every crate flow.", reset: true, thenPlay: true}
+      {text: "And this is the whole story: press Play to replay the repo's history and watch every crate flow.", reset: true, thenPlay: true}
     ];
     return beats;
   }
   let tourBeats = [];
+  // What is actually drawn, in camera space: every station, crate,
+  // standing building and sign. fit() frames generous margins (sign
+  // headroom, a tile of slack); a tight reframe needs the real extent.
+  function floorExtent() {
+    const inv = camera.matrixWorldInverse, box = new THREE.Box3(), v = new THREE.Vector3();
+    const ext = {minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity};
+    const add = (x, y) => {
+      ext.minX = Math.min(ext.minX, x); ext.maxX = Math.max(ext.maxX, x);
+      ext.minY = Math.min(ext.minY, y); ext.maxY = Math.max(ext.maxY, y);
+    };
+    const addObject = (obj) => {
+      box.setFromObject(obj);
+      if (box.isEmpty()) return;
+      for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y])
+        for (const z of [box.min.z, box.max.z]) { v.set(x, y, z).applyMatrix4(inv); add(v.x, v.y); }
+    };
+    Object.values(stationGroups).forEach(addObject);
+    crateOf.forEach((c) => { if (c.mesh.visible) addObject(c.mesh); });
+    buildingOf.forEach((b) => { if (b.visible) addObject(b); });
+    Object.values(signs).forEach(({sprite}) => {
+      if (!sprite.visible) return;
+      sprite.getWorldPosition(v).applyMatrix4(inv);
+      add(v.x - sprite.scale.x / 2, v.y - sprite.scale.y / 2);
+      add(v.x + sprite.scale.x / 2, v.y + sprite.scale.y / 2);
+    });
+    return ext;
+  }
+  // The card covers the bottom of the stage, and seen from the
+  // pipeline's start that is where Capture and Idea stand. An overview
+  // beat fits the whole floor into the band above the card instead.
+  function frameAboveTour() {
+    if (exporting) return; // the capture owns the camera
+    const W = stage.clientWidth, H = stage.clientHeight;
+    const band = $("tour").getBoundingClientRect().top - stage.getBoundingClientRect().top;
+    const e = floorExtent();
+    if (band <= 0 || band >= H || !isFinite(e.minX)) { resetView(); return; }
+    // World units per pixel at zoom z is 2·halfH / (z·H); 6% breathing room.
+    const spanX = (e.maxX - e.minX) * 1.06, spanY = (e.maxY - e.minY) * 1.06;
+    view.zoom = Math.min(BASE_ZOOM, 2 * frameBox.halfH * band / (H * spanY),
+      2 * frameBox.halfH * W / (H * spanX));
+    const h = frameBox.halfH / view.zoom;
+    view.panX = (e.minX + e.maxX) / 2 - frameBox.cx;
+    view.panY = (e.minY + e.maxY) / 2 - frameBox.cy - h * (1 - band / H);
+    applyView(); requestRender();
+  }
   function showTourStep() {
     const beat = tourBeats[tourStep];
     $("tour-text").textContent = beat.text;
     $("tour-dots").textContent = tourBeats.map((b, i) => i === tourStep ? "●" : "○").join(" ");
     $("tour-next").textContent = tourStep === tourBeats.length - 1 ? "Play ▶" : "Next →";
-    if (beat.reset) resetView();
+    if (beat.reset) frameAboveTour();
     if (beat.station) { focusOn(focusTargetOf(beat.station), 1.9); }
     requestRender();
   }
@@ -2017,20 +2340,40 @@ function factory(THREE, model) {
 
   // ---------------------------------------------------------- transport
   const play = $("play"), scrub = $("scrub");
-  scrub.min = String(FIRST); scrub.max = String(LAST + 1); scrub.value = String(LAST + 1);
+  // The model's last day is never before its generation date
+  // (assembly_line.py: last_day = max(days + [today])), so the end of
+  // the last day and "today" are usually one calendar date. Then they
+  // are one stop: the first step back from today used to land on the
+  // same floor under the same date minus "(today)", a step that seemed
+  // to do nothing. TODAY_STOP is the day index that means today.
+  const TODAY_STOP = model.generated.slice(0, 10) === model.timeline.last_day ? LAST : LAST + 1;
+  const toStop = (index) => (index >= TODAY_STOP ? LAST + 1 : index);
+  scrub.min = String(FIRST); scrub.max = String(TODAY_STOP); scrub.value = String(TODAY_STOP);
   function dayLabel() { return isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay(); }
   function syncTransport() {
     // The thumb tracks the playhead: smooth while the replay runs,
     // snapped to the day when parked (a drag mid-flight pauses first,
-    // so this write never fights the user's hand).
-    scrub.value = state.playing ? String(state.t) : String(Math.round(state.t));
-    $("day").textContent = dayLabel();
+    // so this write never fights the user's hand). A parked day d sits
+    // at t = d + 1 − 1e-6 (goToDay), so it snaps down, not to the
+    // nearest: rounding showed d + 1, and the slider's own ← then landed
+    // back on d — every press after the first did nothing.
+    scrub.value = state.playing ? String(state.t)
+      : String(isToday() ? TODAY_STOP : Math.floor(state.t));
+    const label = dayLabel();
+    $("day").textContent = label;
+    // The slider's value is a day index (20640); assistive tech reads
+    // the date instead. Written only on change: the replay calls this
+    // every frame.
+    if (scrub.getAttribute("aria-valuetext") !== label) scrub.setAttribute("aria-valuetext", label);
     // The big date over the canvas: during a replay (or scrubbed into
     // the past) the canvas is where everyone looks, and the transport
     // bar's date is too small to carry "you are watching time pass".
     const off = state.playing || !isToday();
     $("replay-date").hidden = !off;
-    if (off) $("replay-date").textContent = dayLabel();
+    // While the replay fast-forwards a quiet day the date says so (▸▸):
+    // the footer's "quiet days replay faster" is small print, and dates
+    // racing past otherwise read as a glitch.
+    if (off) $("replay-date").textContent = state.playing && quietNow() ? `${label} ▸▸` : label;
     // The way back for the mouse: End is keyboard-only and the scrubber
     // asks for a precise drag, so off-today grows a "today" button.
     $("today").hidden = !off || state.playing;
@@ -2041,9 +2384,16 @@ function factory(THREE, model) {
   $("today").addEventListener("click", () => goToDay(LAST + 1));
   const enabled = runs.length > 0;
   [play, scrub, $("speed-30"), $("speed-60"), $("export")].forEach((b) => { b.disabled = !enabled; });
-  // An empty repo has nothing to tour and nothing to find; the empty
-  // sign already says what to do instead.
-  if (!enabled) { $("tour-open").hidden = true; find.hidden = true; }
+  // An empty repo has nothing to tour, find or replay; the empty sign
+  // already says what to do instead. So no tour, finder, key hint or
+  // "Press Play" line, and the disabled slider's thumb sits at today
+  // (its range was one day wide, which parks a native thumb at the left
+  // under a "(today)" label).
+  if (!enabled) {
+    $("tour-open").hidden = true; find.hidden = true;
+    $("hint").hidden = true; $("legend-play").hidden = true;
+    scrub.min = String(TODAY_STOP - 1);
+  }
   // The bin's line is only true of a repo that has one.
   $("legend-bin").hidden = !runs.some((run) => run.status === "attention");
   play.addEventListener("click", () => {
@@ -2062,7 +2412,7 @@ function factory(THREE, model) {
     history.replaceState(null, "", isToday()
       ? location.pathname + location.search : `#day=${currentDay()}`);
   }
-  scrub.addEventListener("input", () => { goToDay(Number(scrub.value)); });
+  scrub.addEventListener("input", () => { goToDay(toStop(Number(scrub.value))); });
   // Presenter keys: Space plays and pauses, the arrows step one day at
   // a time (a 180-day history is too fine for the scrubber's thumb),
   // Home and End jump to the first day and back to today. Keys inside
@@ -2078,11 +2428,18 @@ function factory(THREE, model) {
       else if (event.key === "/") { event.preventDefault(); endTour(); find.focus(); }
       return;
     }
+    // The slider keeps its native arrows/Home/End, but it has no Space
+    // of its own: after dragging it (focus stays on it), Space did
+    // nothing at all instead of playing from the dragged-to day.
+    if (event.target === scrub) {
+      if (event.key === " ") { event.preventDefault(); play.click(); }
+      return;
+    }
     if (event.target.closest("input, button, details, summary")) return;
-    const day = Math.min(LAST + 1, Math.floor(state.t));
+    const day = isToday() ? TODAY_STOP : Math.min(LAST + 1, Math.floor(state.t));
     if (event.key === " ") { event.preventDefault(); play.click(); }
     else if (event.key === "ArrowLeft") { event.preventDefault(); goToDay(Math.max(FIRST, day - 1)); }
-    else if (event.key === "ArrowRight") { event.preventDefault(); goToDay(Math.min(LAST + 1, day + 1)); }
+    else if (event.key === "ArrowRight") { event.preventDefault(); goToDay(toStop(Math.min(LAST + 1, day + 1))); }
     else if (event.key === "Home") { event.preventDefault(); goToDay(FIRST); }
     else if (event.key === "End") { event.preventDefault(); goToDay(LAST + 1); }
     else if (event.key === "/") { event.preventDefault(); find.focus(); }
@@ -2098,7 +2455,8 @@ function factory(THREE, model) {
   let last = performance.now(), clock = 0;
   const fps = {frames: 0, draws: 0, since: performance.now(), value: 0, samples: []};
   window.__assemblyLine = {fps, state, runs, crateOf, layout, LAST, FIRST,
-    renderer, camera, scene, view, applyView, requestRender};
+    renderer, camera, scene, view, applyView, requestRender,
+    buildingOf, cityWindows};
   function requestRender() { needsRender = true; forceRender = true; }
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
@@ -2107,7 +2465,7 @@ function factory(THREE, model) {
       // The glide is live-replay only: a capture places crates exactly,
       // and reduced motion asks for none of this.
       glideK = (exporting || reducedMotion) ? 1 : 1 - Math.exp(-dt / GLIDE_TAU);
-      state.t += dt * (LAST + 1 - FIRST) / state.seconds;
+      state.t = tFromU(uFromT(state.t) + dt * TOTAL_U / state.seconds);
       const stop = state.trace ? traceEnd : LAST + 1;
       if (state.t >= stop) {
         // The last frame lands on the placement, never near it.
@@ -2180,7 +2538,7 @@ function factory(THREE, model) {
     status.textContent = `Export failed: ${err.message}. Nothing was downloaded.`;
     restoreAfterExport();
   }));
-  let saved = null, exporting = false;
+  let saved = null, exporting = false, captureSize = null;
   function restoreAfterExport() {
     if (!saved) return;
     exporting = false;
@@ -2193,7 +2551,7 @@ function factory(THREE, model) {
     $("trace-banner").hidden = !state.trace;
     view.zoom = saved.zoom; view.panX = saved.panX; view.panY = saved.panY;
     renderer.setPixelRatio(saved.ratio);
-    stage.style.width = ""; stage.style.height = ""; stage.style.flex = "";
+    captureSize = null; stage.classList.remove("capturing");
     fit(); layout(); syncTransport(); requestRender();
     $("export").disabled = !enabled; play.disabled = !enabled;
     saved = null;
@@ -2209,9 +2567,10 @@ function factory(THREE, model) {
     state.playing = false;
     exporting = true;
     // Capture purity: the clip records the repo, not this session — the
-    // lifted crate and its parts tray are personal selection, so they
-    // stay out; and no input (keys above, pointers here) may move the
-    // camera or the timeline between captured frames.
+    // lifted crate, its parts tray and a pinned building's pin and
+    // lavender walls are personal selection, so they stay out; and no
+    // input (keys above, pointers here) may move the camera or the
+    // timeline between captured frames.
     state.highlighted = null;
     state.trace = null;
     $("trace-banner").hidden = true;
@@ -2221,7 +2580,11 @@ function factory(THREE, model) {
     document.body.style.pointerEvents = "none";
     view.zoom = 1; view.panX = 0; view.panY = 0;
     $("export").disabled = true; play.disabled = true;
-    stage.style.flex = "none"; stage.style.width = `${W}px`; stage.style.height = `${H}px`;
+    // The renderer draws at the clip's size; the stage itself never
+    // resizes (it used to, and a phone saw the floor jump and crop).
+    captureSize = {w: W, h: H};
+    stage.dataset.capture = "Exporting clip…";
+    stage.classList.add("capturing");
     renderer.setPixelRatio(1);
     fit();
     const grab = document.createElement("canvas");
@@ -2236,6 +2599,21 @@ function factory(THREE, model) {
     // The palette comes from today's frame: every crate and machine on it.
     state.t = LAST + 1;
     layout();
+    // Frame the clip on what is drawn — today's floor and its whole
+    // skyline, the most the replay ever builds — in the band below the
+    // date stamp, rather than fit()'s generous margins (sign headroom, a
+    // tile of slack), which left the floor in 57% of the frame's width.
+    // One framing for every frame: the clip's camera never moves.
+    {
+      const e = floorExtent();
+      const TOP = 46, PAD = 10, bandH = H - TOP - PAD, bandW = W - 2 * PAD;
+      view.zoom = Math.min(2 * frameBox.halfH * bandH / (H * (e.maxY - e.minY)),
+        2 * frameBox.halfH * bandW / (H * (e.maxX - e.minX)));
+      const perPx = 2 * frameBox.halfH / (view.zoom * H);
+      view.panX = (e.minX + e.maxX) / 2 - frameBox.cx;
+      view.panY = (e.minY + e.maxY) / 2 - frameBox.cy + (TOP + bandH / 2 - H / 2) * perPx;
+      applyView();
+    }
     renderer.render(scene, camera);
     paint();
     const gif = new GifWriter(W, H, ctx.getImageData(0, 0, W, H).data);
@@ -2250,8 +2628,9 @@ function factory(THREE, model) {
     };
     const total = FPS * PLAY_SECONDS;
     for (let i = 0; i <= total + HOLD_FRAMES; i++) {
-      state.t = Math.min(LAST + 1, FIRST + (LAST + 1 - FIRST) * Math.min(1, i / total));
-      // The clip is a replay too, and a faster one (10.5 days/s): without
+      state.t = Math.min(LAST + 1, tFromU(TOTAL_U * Math.min(1, i / total)));
+      // The clip is a replay too, and a faster one (quiet days compressed
+      // like the page's, busy days ~6 a second): without
       // the glide a crate crossed the floor in a median of 2 frames, so
       // the artifact people share showed teleports, not belts. Each frame
       // advances the glide by exactly one frame's worth of clip time, and
@@ -2265,10 +2644,12 @@ function factory(THREE, model) {
       // scene between these renders.
       renderer.render(scene, camera);
       paint();
-      stamp(`${model.repo} · ${isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay()}`);
+      const when = isToday() ? `${model.generated.slice(0, 10)} (today)` : currentDay();
+      stamp(`${model.repo} · ${when}${quietNow() ? " ▸▸" : ""}`);
       gif.frame(ctx.getImageData(0, 0, W, H).data, i === total + HOLD_FRAMES ? 300 : 100 / FPS);
       if (i % 10 === 0) {
         status.textContent = `Exporting clip… ${Math.round(100 * i / (total + HOLD_FRAMES))}%`;
+        stage.dataset.capture = status.textContent;
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
     }
@@ -2305,7 +2686,7 @@ function factory(THREE, model) {
     const day = hash.get("day");
     if (day && /^\d{4}-\d{2}-\d{2}$/.test(day)) {
       const index = dayIndex(day);
-      if (index >= FIRST && index <= LAST) { goToDay(index); intro = null; view.zoom = BASE_ZOOM; applyView(); }
+      if (index >= FIRST && index <= LAST) { goToDay(toStop(index)); intro = null; view.zoom = BASE_ZOOM; applyView(); }
     }
     const run = hash.get("run");
     if (run) { find.value = run; find.dispatchEvent(new Event("change")); intro = null; }
