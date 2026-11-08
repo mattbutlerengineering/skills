@@ -2498,7 +2498,9 @@ function factory(THREE, model) {
   const chips = {};
   const pipeline = $("pipeline");
   CHIP_ORDER.forEach((key, i) => {
-    if (i && key !== "bin") pipeline.append(el("span", {class: "flow"}, "→"));
+    // The arrows draw the order; a screen reader hears it from the chips'
+    // sequence, not as "right arrow" between every pair.
+    if (i && key !== "bin") pipeline.append(el("span", {class: "flow", "aria-hidden": "true"}, "→"));
     const name = nameOf(key);
     const n = el("span", {class: "n"}, "0");
     const chip = el("button", {class: "chip", title: infoOf(key)[1]}, n, name);
@@ -2517,12 +2519,18 @@ function factory(THREE, model) {
       const count = counts[key] || 0;
       const hot = key === hotKey;
       const text = String(count);
+      const changed = entry.lastText !== text || entry.lastHot !== hot;
       if (entry.lastText !== text) { entry.n.textContent = text; entry.lastText = text; }
       if (entry.lastHot !== hot) {
         entry.chip.classList.toggle("hot", hot);
         entry.chip.classList.toggle("done", key === "completed");
         entry.lastHot = hot;
       }
+      // Read as "69 Operate runs, the busiest" — the visible "69 Operate"
+      // first (label in name, for voice control), then what the eye gets
+      // from the amber.
+      if (changed) entry.chip.setAttribute("aria-label",
+        `${count} ${entry.name} run${count === 1 ? "" : "s"}${hot ? ", the busiest" : ""}`);
       entry.chip.classList.toggle("zero", count === 0);
       entry.chip.hidden = key === "bin" && count === 0;
     });
