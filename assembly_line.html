@@ -367,6 +367,20 @@
     #transport button[aria-pressed="true"] { forced-color-adjust: none;
       background: Highlight; color: HighlightText; border-color: Highlight; }
   }
+  /* Printed (or saved as PDF) the page is a report: the controls go —
+     finder, Tour and legend buttons, the transport's buttons and slider,
+     the key hint and every ✕ — and the colour that carries meaning
+     prints: legend swatches, chip counts, the amber pile-up chip. Printed
+     without, the swatches were empty boxes beside "green done, grey
+     open" and the page showed a Play button nobody could press. */
+  @media print {
+    header .tools, #hint, #legend-close, #panel-close, #trace-banner button,
+    #scrub-tip, .trace-btn, #export-status,
+    #transport > :not(#honesty) { display: none !important; }
+    #transport { border-top: 0; padding-top: .3rem; }
+    #legend .swatch, .chip, .chip .n, .kdot {
+      print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
 </style>
 </head>
 <body>
