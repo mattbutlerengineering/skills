@@ -17,6 +17,13 @@ Three shapes are mined:
   under its own `human_turns` key. Approvals, plain instructions,
   harness-injected turns and subagent transcripts yield none.
 
+On `--memory` it also lists the harness's auto-memory entries for the
+repo (`memory/` beside the main checkout's transcripts), each paired by
+file-name tokens with the page it may duplicate. An entry typed `user`
+is counted and nothing else about it is kept; an entry whose type
+cannot be read is counted as skipped, never listed. The two new sources
+adapt practices from anthropics/knowledge-work-plugins (Apache-2.0).
+
 The tool only reads. It prints candidates as JSON for the skill to turn
 into proposals a human promotes; nothing is written anywhere. Transcript
 text is untrusted data, and the excerpts it prints are capped.
@@ -31,7 +38,7 @@ Run from a linked worktree, the root resolves to the main checkout (the
 parent of git's common dir) first, so the same transcripts are found.
 
   python3 kb.py harvest [root] [--days N] [--session ID]
-                        [--projects-dir DIR]
+                        [--projects-dir DIR] [--memory]
 
 No flag scans the newest top-level session; --days N scans every
 transcript, subagents included, modified in the last N days.
@@ -64,6 +71,17 @@ APPROVALS = frozenset((
     "yes", "y", "ok", "okay", "go ahead", "sure", "do it", "continue",
     "proceed", "lgtm", "sounds good", "yep", "please do"))
 PUNCT = re.compile(r"[^\w\s']")
+MEMORY_DIR = "memory"
+MEMORY_INDEX = "MEMORY.md"
+LISTED_TYPES = ("feedback", "project", "reference")
+TYPE_LINE = re.compile(r"^\s*type:\s*(.*?)\s*$")
+FIELD_LINE = re.compile(r"^(name|description):\s*(.*?)\s*$")
+# A memory file pairs with a page sharing at least this many file-name
+# tokens; a miss is cheap, since ingest's dedupe step still greps.
+PAIR_MIN = 2
+STOPWORDS = frozenset(("a", "an", "and", "the", "of", "to", "in", "on",
+                       "for", "is", "by", "with", "no", "not", "only"))
+TOKEN_SPLIT = re.compile(r"[^A-Za-z0-9]+")
 SEGMENT = re.compile(r"&&|\|\||;|\|")
 ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=\S*$")
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
@@ -382,6 +400,81 @@ def mine(paths):
             "human_turns": turns}, problems
 
 
+def _block(text):
+    """The lines of text's leading `---` frontmatter block, or None."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    end = next((i for i, line in enumerate(lines[1:], 1)
+                if line.strip() == "---"), None)
+    return None if end is None else lines[1:end]
+
+
+def memory_type(text):
+    """One of LISTED_TYPES, "user", or None (skip): exactly one distinct
+    `type:` value, at any indentation, inside the frontmatter block."""
+    block = _block(text)
+    if block is None:
+        return None
+    values = {match.group(1).strip("'\"") for line in block
+              if (match := TYPE_LINE.match(line))}
+    if len(values) != 1:
+        return None
+    value = values.pop()
+    return value if value == "user" or value in LISTED_TYPES else None
+
+
+def _tokens(name):
+    words = [w.lower() for w in TOKEN_SPLIT.split(name) if w]
+    # A plural's one trailing s is cut; a double ss (cross) is a stem.
+    return [w[:-1] if len(w) > 3 and w.endswith("s")
+            and not w.endswith("ss") else w
+            for w in words if w not in STOPWORDS]
+
+
+def pair(stem, slugs):
+    """(slug, shared tokens in the slug's order) for the page sharing the
+    most file-name tokens with stem, at least PAIR_MIN; ties go to the
+    first slug in sorted order. (None, []) below that."""
+    mine, best = set(_tokens(stem)), (None, [])
+    for slug in sorted(slugs):
+        shared = [t for t in dict.fromkeys(_tokens(slug)) if t in mine]
+        if len(shared) >= PAIR_MIN and len(shared) > len(best[1]):
+            best = (slug, shared)
+    return best
+
+
+def memory_candidates(memory_dir, pages):
+    """The memory object: every *.md directly in memory_dir except the
+    index, typed by memory_type and paired against pages, a mapping of
+    page slug to its repo-relative path. User-scoped entries are only
+    counted; unreadable or untyped ones are counted as skipped."""
+    memory_dir = Path(memory_dir)
+    result = {"dir": str(memory_dir), "listed": 0, "user_scoped": 0,
+              "skipped": 0, "candidates": []}
+    for path in sorted(memory_dir.glob("*.md")):
+        if path.name == MEMORY_INDEX or not path.is_file():
+            continue
+        text, problem = cli.read_file(path, path.name, str)
+        kind = None if problem or text is None else memory_type(text)
+        if kind is None:
+            result["skipped"] += 1
+            continue
+        if kind == "user":
+            result["user_scoped"] += 1
+            continue
+        fields = dict(match.groups() for line in _block(text)
+                      if (match := FIELD_LINE.match(line)))
+        slug, shared = pair(path.stem, pages)
+        result["listed"] += 1
+        result["candidates"].append({
+            "file": path.name, "name": fields.get("name") or path.stem,
+            "type": kind,
+            "description": _clip(fields.get("description", "")),
+            "page": pages[slug] if slug else None, "shared": shared})
+    return result
+
+
 def main_checkout(root):
     """root's main checkout: the parent of git's common dir, so a linked
     worktree finds the transcripts filed under the main checkout's slug
@@ -398,25 +491,44 @@ def main_checkout(root):
     return root if main == root.resolve() else main
 
 
-def harvest(root, projects=None, days=None, session=None, now=None):
-    """(result, problems): the candidates in root's transcripts."""
+def _pages(root, kb_dir):
+    """Page slug -> repo-relative path for the pages under kb_dir; empty
+    when there is no kb_dir or no directory there."""
+    if kb_dir is None:
+        return {}
+    folder = Path(root) / kb_dir
+    return {path.stem: (Path(kb_dir) / path.name).as_posix()
+            for path in sorted(folder.glob("*.md"))} if folder.is_dir() \
+        else {}
+
+
+def harvest(root, projects=None, days=None, session=None, now=None,
+            memory=False, kb_dir=None):
+    """(result, problems): the candidates in root's transcripts and, with
+    memory, its auto-memory entries paired with the pages in kb_dir."""
     projects = Path(projects) if projects else projects_dir()
     checkout = main_checkout(root)
     dirs = project_dirs(checkout, projects)
     if not dirs:
         return None, [f"{LABEL}: no Claude Code transcripts for {root}"
                       f" under {projects} (looked for {slug(checkout)})"]
+    memory_dir = dirs[0] / MEMORY_DIR
+    if memory and not memory_dir.is_dir():
+        return None, [f"{LABEL}: no memory directory at {memory_dir}"]
     paths = select(dirs, days, session, time.time() if now is None else now)
     if session is not None and not paths:
         return None, [f"{LABEL}: no session transcript {session!r} in"
                       f" {dirs[0]}"]
     result, problems = mine(paths)
     result["scanned"]["dirs"] = [str(d) for d in dirs]
+    if memory:
+        result["memory"] = memory_candidates(memory_dir,
+                                             _pages(root, kb_dir))
     return result, problems
 
 
 USAGE = ("usage: kb.py harvest [root] [--days N] [--session ID]"
-         " [--projects-dir DIR]")
+         " [--projects-dir DIR] [--memory]")
 
 
 def _options(argv):
@@ -426,7 +538,9 @@ def _options(argv):
              "--projects-dir": "projects"}
     while rest:
         arg = rest.pop(0)
-        if arg in flags and rest:
+        if arg == "--memory":
+            options["memory"] = True
+        elif arg in flags and rest:
             options[flags[arg]] = rest.pop(0)
         elif arg.startswith("-"):
             return None, None, [USAGE]
@@ -442,15 +556,16 @@ def _options(argv):
     return root, options, problems
 
 
-def main(argv):
-    """`kb.py harvest ...`: candidates as JSON, or problem strings."""
+def main(argv, kb_dir=None):
+    """`kb.py harvest ...`: candidates as JSON, or problem strings.
+    kb_dir is the page directory kb.py owns, for memory pairing."""
     root, options, problems = _options(argv)
     if root is None:
         print(problems[0])
         return 2
     if problems:
         return cli.report(LABEL, problems)
-    result, problems = harvest(root, **options)
+    result, problems = harvest(root, kb_dir=kb_dir, **options)
     if problems:
         return cli.report(LABEL, problems)
     print(json.dumps(result, indent=2))

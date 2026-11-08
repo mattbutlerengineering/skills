@@ -18,9 +18,9 @@ offline, and reports each malformed one (ADR-0125).
   python3 kb.py lint [root]    check the knowledge base
   python3 kb.py stats [root]   page count, index size, page lengths (JSON)
   python3 kb.py drift [root]   instruction-file drift (kb_drift.py)
-  python3 kb.py harvest [root] [--days N] [--session ID]
-                               transcript candidates for ingest (JSON;
-                               kb_harvest.py)
+  python3 kb.py harvest [root] [--days N] [--session ID] [--memory]
+                               transcript and memory candidates for
+                               ingest (JSON; kb_harvest.py)
 
 Root defaults to the working directory, the way the skill invokes it.
 Not to be confused with knowledge_plane.py: the knowledge plane is the
@@ -343,7 +343,7 @@ def stats(root):
 
 USAGE = ("usage: kb.py index|lint|stats|drift [root]\n"
          "       kb.py harvest [root] [--days N] [--session ID]"
-         " [--projects-dir DIR]")
+         " [--projects-dir DIR] [--memory]")
 
 
 def main(argv):
@@ -351,7 +351,7 @@ def main(argv):
     (kb_drift.py), or `harvest`, which takes its own flags
     (kb_harvest.py)."""
     if argv and argv[0] == "harvest":
-        return kb_harvest.main(argv[1:])
+        return kb_harvest.main(argv[1:], KB_DIR)
     if argv and argv[0] == "drift":
         return kb_drift.main(argv[1:])
     if not argv or argv[0] not in ("index", "lint", "stats") or len(argv) > 2:

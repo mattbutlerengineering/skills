@@ -63,10 +63,10 @@ the three fixture memory files named in PRD 5 with their pages, lists one
 unpaired memory-only gotcha, and never shows a user-scoped entry or the
 memory index file.
 
-- [ ] **K6 Memory tests** — cases in `tests/test_kb_harvest.py` for `kb_harvest.memory_type(text)`, `kb_harvest.pair(stem, slugs)`, `kb_harvest.memory_candidates(memory_dir, slugs)` and `harvest(..., memory=True, kb_dir=...)` over a fixture memory directory and fixture `docs/kb/` — size:M
+- [x] **K6 Memory tests** — cases in `tests/test_kb_harvest.py` for `kb_harvest.memory_type(text)`, `kb_harvest.pair(stem, slugs)`, `kb_harvest.memory_candidates(memory_dir, slugs)` and `harvest(..., memory=True, kb_dir=...)` over a fixture memory directory and fixture `docs/kb/` — size:M
   - Accept: the cases exist and fail before K7 lands. Fixture memory files named `cross-pr-hazard-pairwise-merge-test`, `manifest-regen-stray-patch-files` and `pr-body-no-work-order-waiver` (text written for the test) pair with fixture pages `cross-pr-merge-hazards`, `manifest-regen` and `pr-body-contract`, with `shared` equal to architecture.md's worked tokens; a fixture `gh-pr-edit-broken-use-rest` has `page` null and empty `shared`. A file with `type: user` holding a sentinel string adds one to `user_scoped`, and neither its name nor the sentinel appears anywhere in the printed JSON; `MEMORY.md` is not listed. A file with no frontmatter block, no `type`, two distinct `type` values, an unknown value, and an undecodable one each add one to `skipped`, and `listed + user_scoped + skipped` equals the files examined. With `--memory` and no memory directory, harvest returns the one problem `harvest: no memory directory at <path>` and prints no JSON; with no `kb_dir` every candidate is unpaired; without `--memory` the output has no `memory` key. After a harvest over the memory and transcript fixtures every fixture file and the fixture `docs/kb/` are byte-identical to before, and every `description` excerpt is at most 160 characters. Every case uses a temporary projects directory (PRD 5, 6, 7, 26, 27).
   - Blocked by: K5 Human turns in kb_harvest.py
-- [ ] **K7 Memory source and the --memory flag** — add `memory_type`, `pair`, `memory_candidates` and the `memory`/`kb_dir` parameters to the Candidate miner — `kb_harvest.py`, and have the Page contract and lint — `kb.py` dispatch `kb_harvest.main(argv[1:], KB_DIR)` with `[--memory]` in its usage text — size:M
+- [x] **K7 Memory source and the --memory flag** — add `memory_type`, `pair`, `memory_candidates` and the `memory`/`kb_dir` parameters to the Candidate miner — `kb_harvest.py`, and have the Page contract and lint — `kb.py` dispatch `kb_harvest.main(argv[1:], KB_DIR)` with `[--memory]` in its usage text — size:M
   - Accept: the K6 cases pass, and every earlier case in `tests/test_kb.py` and `tests/test_kb_harvest.py` still passes. `PAIR_MIN = 2` and the stopword list are architecture.md's. No new module is created and `tests/test_dual_membership.py` passes unedited. `kb_harvest.py`'s docstring carries a one-line credit to anthropics/knowledge-work-plugins (Apache-2.0) for the two new sources. `python3 kb.py harvest --help` or a bad flag prints usage containing `[--memory]` and exits 2 (PRD 5, 6, 7, 26).
   - Blocked by: K6 Memory tests; K2 Age check in kb.py
 
@@ -203,3 +203,38 @@ Implement, 2026-11-08 (unattended, autorun).
 - **K5, green.** `python3 -m unittest tests.test_kb_harvest tests.test_kb`:
   `Ran 78 tests`, `OK`, no existing case edited. `kb_harvest.py`'s
   imports are unchanged (`json`, `os`, `re`, `time`, `pathlib`, `cli`).
+- **K6, red before K7.** `python3 -m unittest -v
+  tests.test_kb_harvest.TestMemory` before K7: 14 of 15 cases red,
+  `FAILED (failures=4, errors=18)` counting subtests, with
+  `AttributeError: module 'kb_harvest' has no attribute 'memory_type'`
+  (and `pair`, `memory_candidates`), `TypeError: harvest() got an
+  unexpected keyword argument 'memory'`, and usage text without
+  `[--memory]`. `test_without_the_flag_there_is_no_memory_key` passed on
+  arrival: it pins existing behaviour (K6's Accept line that the output
+  has no `memory` key without the flag), so it is not vacuous.
+- **K6/K7 default taken: `memory_candidates(memory_dir, pages)` takes a
+  mapping of slug to repo-relative page path**, not a bare slug list,
+  so `page` reads `docs/kb/<slug>.md` from the directory `kb.py` passes
+  rather than a second hard-coded copy of the page layout (the
+  architecture gives `kb.py` the one owner of that layout). `pair`
+  iterates the mapping's keys, so it takes slugs as written.
+- **K7 deviation, logged: the stemming rule versus its worked example.**
+  architecture.md says to cut "one trailing `s` from a token longer than
+  three characters", and its worked example lists `cross` as a shared
+  token; the rule as written makes it `cros`. Pairing results are the
+  same either way (both sides stem alike). Implement kept the worked
+  example: a token ending in a double `ss` is not cut. All four worked
+  pairings in architecture.md hold exactly. Not an ADR: the token is an
+  internal matching key, and no contract outside the tool reads it.
+- **K7 default taken: harvest's `--memory` check runs after the
+  transcript directory is found** and before transcripts are selected,
+  so a repo with no transcripts still reports the existing
+  "no Claude Code transcripts" problem first.
+- **K7, green.** `python3 -m unittest tests.test_kb_harvest tests.test_kb
+  tests.test_dual_membership`: `Ran 96 tests`, `OK`, with no earlier case
+  edited. `python3 kb.py harvest --help` printed `usage: kb.py harvest
+  [root] [--days N] [--session ID] [--projects-dir DIR] [--memory]` and
+  exited 2 (it stops at argument parsing and reads no transcript).
+  `PAIR_MIN = 2` and the architecture's stopword list are in
+  `kb_harvest.py`; its docstring credits anthropics/knowledge-work-plugins
+  (Apache-2.0) for the two new sources; no module or import was added.
