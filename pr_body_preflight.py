@@ -541,6 +541,39 @@ def _directory_change(record):
                             for word in record.words[1:]))
 
 
+# Redirections that only read, so they never unbind.
+READ_OPERATORS = frozenset({"<", "<<", "<<<", "<&"})
+BLOCK_CLOSERS = ("}", "done", "fi", "esac")
+_REWRITTEN = ("{} may be rewritten or removed by {} between the heredoc and "
+              "gh pr create")
+
+
+def _verb(record):
+    """The command word of record, or None for a redirect-only command
+    (the digits of `2>&1` tokenize as a word: a descriptor prefix)."""
+    if record.words and not (record.redirects
+                             and all(w.isdigit() for w in record.words)):
+        return record.words[0]
+    return None
+
+
+def _write_redirect(record):
+    """The text of the first redirection of record that may write a file,
+    else None: any operator but the read ones, and a `<(` or `>(`, unless
+    its target is /dev/null or /dev/stderr or, for `>&`, a descriptor
+    number or `-` (a duplication or a close). Never compares F."""
+    for operator, target in record.redirects:
+        if operator == "procsub":
+            return target
+        if operator in READ_OPERATORS or target in ("/dev/null",
+                                                    "/dev/stderr"):
+            continue
+        if operator == ">&" and (target.isdigit() or target == "-"):
+            continue
+        return f"{operator} {target}"
+    return None
+
+
 def _bound_body(spelling, context):
     """The text `cat > SPELLING <<D` leaves at SPELLING when it surely ran
     before this gh pr create. Raises _Unreadable: today's note when no such
@@ -567,16 +600,26 @@ def _bound_body(spelling, context):
     if not _surely_ran(records, index, at):
         raise _Unreadable(f"the heredoc that writes {spelling} is not "
                           "certain to run before gh pr create")
+    for earlier in records[:index]:
+        if earlier.words[:1] == ["exec"] and _write_redirect(earlier):
+            raise _Unreadable(_REWRITTEN.format(spelling, "exec"))
+    for between in records[index + 1:at + 1]:
+        redirect = _write_redirect(between)
+        if redirect:
+            raise _Unreadable(_REWRITTEN.format(spelling, redirect))
+    for later in records[at + 1:]:
+        if (later.words and later.words[0] in BLOCK_CLOSERS
+                or ")" in later.joiner):
+            redirect = _write_redirect(later)
+            if redirect:
+                raise _Unreadable(_REWRITTEN.format(spelling, redirect))
     # lean: a directory change is the only command admitted between writer
     # and reader; the rest of the inert list (architecture.md) arrives in
     # Milestone 3, so any other command unbinds.
     for between in records[index + 1:at]:
-        if not _directory_change(between):
-            what = (between.words[0] if between.words
-                    else " ".join(between.redirects[0]))
-            raise _Unreadable(f"{spelling} may be rewritten or removed by "
-                              f"{what} between the heredoc and gh pr create")
-        if not spelling.startswith("/"):
+        if _verb(between) and not _directory_change(between):
+            raise _Unreadable(_REWRITTEN.format(spelling, _verb(between)))
+        if _verb(between) and not spelling.startswith("/"):
             raise _Unreadable("a cd between the heredoc and gh pr create "
                               f"may change what {spelling} names")
     return heredoc.text

@@ -61,7 +61,7 @@ When this milestone is done, the corpus shapes the funnel counts (`cd "$D" && ca
 
 When this milestone is done, the fail-closed invalidation is complete: any write redirect, process substitution, hostile joiner, shell keyword or command off the inert list between writer and reader unbinds, and the inert commands let the common `cd`, `git status` and `gh pr view` shapes through. The between-commands blanket unbinding from Milestone 1 is replaced by these rules.
 
-- [ ] **Unbind on write redirects process substitutions and hostile joiners** — Heredoc binding invalidation rules 1 to 3 over writer-exclusive, reader-inclusive records — size:M
+- [x] **Unbind on write redirects process substitutions and hostile joiners** — Heredoc binding invalidation rules 1 to 3 over writer-exclusive, reader-inclusive records — size:M
   - Accept: fixtures in `TestSameCallHeredoc` give a note for each of `> F` alone on a line after a newline, `>| F`, `&> F`, `>& F`, `>> "$BODY"`, `./F` for `F` by redirect, a `<(` or `>(` anywhere between, a hostile joiner, and a shell keyword or an `export` or `unset` of a name F's spelling holds between writer and reader; `2>&1`, `> /dev/null`, `>&2` and `>&-` between writer and reader are still judged.
   - Accept (P3 gap 1): an `exec` carrying a write redirect before the reader unbinds, and a closing `}`, `)`, `done`, `fi` or `esac` after the reader that carries a write redirect other than `/dev/null` unbinds (`{ cat > F <<D … D` … `gh pr create -F F; } > F` and the descriptor opened onto F before the writer are notes), while the same closers with `> /dev/null` are judged.
   - Blocked by: Compare F by spelling under the spelling rule

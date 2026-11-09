@@ -757,6 +757,138 @@ class TestSameCallHeredoc(unittest.TestCase):
                 self.assertEqual(len(lines), 1)
                 self.assertNotIn("B:", lines[0])
 
+    # --- Milestone 3, invalidation rules 1 to 3 ---------------------------
+    def unbound(self, what, spelling="/tmp/b.md"):
+        return (0, [note(f"{spelling} may be rewritten or removed by {what} "
+                         "between the heredoc and gh pr create")])
+
+    def assert_a_note(self, command, cwd=None):
+        code, lines = run(command, cwd)
+        self.assertEqual(code, 0, command)
+        self.assertEqual(len(lines), 1, command)
+        self.assertTrue(lines[0].startswith("pr-body-preflight: not checked"),
+                        command)
+
+    def test_a_write_redirect_between_is_a_note(self):
+        for between, what in (
+                ("> /tmp/b.md\n", "> /tmp/b.md"),
+                (">| /tmp/b.md\n", ">| /tmp/b.md"),
+                ("&> /tmp/b.md\n", "&> /tmp/b.md"),
+                (">& /tmp/b.md\n", ">& /tmp/b.md"),
+                ('>> "$BODY"\n', ">> $BODY"),
+                ("> ./b.md\n", "> ./b.md"),
+                ("<> /tmp/b.md\n", "<> /tmp/b.md"),
+                (">&2 > /tmp/b.md\n", "> /tmp/b.md"),
+                ("2> /tmp/b.md\n", "> /tmp/b.md")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between)),
+                    self.unbound(what))
+
+    def test_a_file_descriptor_or_null_redirect_between_is_judged(self):
+        for between in ("> /dev/null\n", ">&2\n", ">&-\n", ">/dev/stderr\n",
+                        "2>&1\n", "2> /dev/null\n",
+                        "&> /dev/null\n", "< /tmp/x\n"):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between)),
+                    refused(self.BAD + "\n"))
+
+    def test_a_write_redirect_on_the_reader_is_a_note(self):
+        for tail, what in ((" > /tmp/b.md", "> /tmp/b.md"),
+                           (' >> "$BODY"', ">> $BODY"),
+                           (" > ./b.md", "> ./b.md"),
+                           (" &> /tmp/b.md", "&> /tmp/b.md"),
+                           (" >& /tmp/b.md", ">& /tmp/b.md")):
+            with self.subTest(tail=tail):
+                self.assertEqual(run(self.spelled("/tmp/b.md") + tail),
+                                 self.unbound(what))
+
+    def test_a_descriptor_or_null_redirect_on_the_reader_is_judged(self):
+        for tail in (" 2>&1", " > /dev/null", " >&2", " >&-",
+                     " > /dev/null 2>&1"):
+            with self.subTest(tail=tail):
+                self.assertEqual(run(self.spelled("/tmp/b.md") + tail),
+                                 refused(self.BAD + "\n"))
+
+    def test_a_process_substitution_between_is_a_note(self):
+        for between in ("cat <(echo hi)\n", "diff <(a) <(b)\n",
+                        "tee >(cat)\n", ": <(rm /tmp/b.md)\n"):
+            with self.subTest(between=between):
+                self.assert_a_note(
+                    self.spelled("/tmp/b.md", between=between))
+
+    def test_a_hostile_joiner_or_keyword_between_is_a_note(self):
+        for between in ("true | true\n", "true || true\n", "true &\n",
+                        "( true )\n", "{ true; }\n", "if true; then\nfi\n",
+                        "while false; do\ndone\n", "! true\n",
+                        "case x in\nx) true;;\nesac\n"):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between)),
+                    (0, [self.CHAIN_NOTE]))
+
+    def test_an_export_or_unset_of_a_name_the_spelling_holds_is_a_note(self):
+        for between, what in (("export S=/x\n", "export"),
+                              ("export S\n", "export"), ("unset S\n", "unset"),
+                              ("unset -v S\n", "unset")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("$S/b.md", before="S=/tmp\n",
+                                     between=between)),
+                    self.unbound(what, "$S/b.md"))
+
+    def test_an_exec_with_a_write_redirect_unbinds(self):
+        for name, command in (
+                ("between", self.spelled("/tmp/b.md",
+                                         between="exec > /tmp/log\n")),
+                ("descriptor before the writer",
+                 self.spelled("/tmp/b.md", before="exec 3> /tmp/b.md\n",
+                              between="echo hi >&3\n")),
+                ("append before the writer",
+                 self.spelled("/tmp/b.md", before="exec 3>> /tmp/b.md\n")),
+                ("read-write before the writer",
+                 self.spelled("/tmp/b.md", before="exec 3<> /tmp/b.md\n"))):
+            with self.subTest(shape=name):
+                self.assert_a_note(command)
+        self.assertEqual(
+            run(self.spelled("/tmp/b.md", before="exec 2>&1\n")),
+            refused(self.BAD + "\n"))
+        self.assertEqual(
+            run(self.spelled("/tmp/b.md", before="exec > /dev/null\n")),
+            refused(self.BAD + "\n"))
+
+    def closed(self, opener, closer, tail=""):
+        """A writer and reader inside a block, `closer` after the reader."""
+        return (f"{opener}\n" + self.write(self.BAD) + self.READ
+                + f"\n{closer}{tail}")
+
+    def test_a_closer_after_the_reader_with_a_write_redirect_unbinds(self):
+        for opener, closer in (("{", "}"), ("(true", ")"),
+                               ("while true; do", "done"),
+                               ("if true; then", "fi")):
+            for tail, what in ((" > /tmp/b.md", "> /tmp/b.md"),
+                               (" >> /tmp/log", ">> /tmp/log"),
+                               (" &> /tmp/log", "&> /tmp/log"),
+                               (" 2>&1 > /tmp/log", "> /tmp/log")):
+                with self.subTest(closer=closer, tail=tail):
+                    self.assertEqual(run(self.closed(opener, closer, tail)),
+                                     self.unbound(what))
+            with self.subTest(closer=closer, tail="/dev/null"):
+                self.assertEqual(
+                    run(self.closed(opener, closer, " > /dev/null")),
+                    refused(self.BAD + "\n"))
+            with self.subTest(closer=closer, tail="none"):
+                self.assertEqual(run(self.closed(opener, closer)),
+                                 refused(self.BAD + "\n"))
+        self.assert_a_note("case x in\nx)\n" + self.write(self.BAD)
+                           + self.READ + "\n;;\nesac > /tmp/b.md")
+
+    def test_a_writer_on_the_blocks_opening_line_is_a_note(self):
+        self.assertEqual(
+            run("{ " + self.write(self.BAD) + self.READ + "; } > /tmp/b.md"),
+            (0, [self.NOT_FIRST]))
+
 
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
