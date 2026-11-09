@@ -131,14 +131,15 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
 1. **Clean.** `git -C <path> status --porcelain` exits 0 and prints
    nothing on stdout. A failed `git` call is a failure, not a clean tree.
 2. **Idle.** `lsof` is on `PATH`, `<path>` exists, and `lsof -w +D
-   <path>` prints nothing on stdout or stderr. `-w` silences the
-   harmless warnings some hosts print (an unreadable mount) while real
-   errors still reach stderr. `lsof` exits 1 for both an idle directory
-   and an error, so read the output, never the exit status; any stderr
-   output is a failure.
+   <path>` prints nothing on stdout or stderr. `-w` silences all of
+   lsof's warnings, so one on an unreadable mount cannot block every
+   reap; an error that stops the scan still reaches stderr. `lsof` exits
+   1 for both an idle directory and an error, so read the output, never
+   the exit status; any stderr output is a failure.
 3. **No open PR.** `gh pr list --head <branch> --state open` exits 0 and
-   prints nothing. A failed `gh` call is a failure, not an empty list. A
-   detached worktree has no branch and skips this test.
+   prints nothing on stdout (`gh` writes its "no matches" notice to
+   stderr on a terminal). A failed `gh` call is a failure, not an empty
+   list. A detached worktree has no branch and skips this test.
 4. **Positive evidence that this tip merged.** Either `<tip>` is a
    `headRefOid` in `gh pr list --head <branch> --base main --state
    merged --json headRefOid`, or `git merge-base --is-ancestor <tip>
