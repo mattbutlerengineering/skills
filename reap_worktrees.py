@@ -116,15 +116,18 @@ def test_clean(runner, path):
     if proc.stdout.strip():
         return False, "dirty: uncommitted changes", False
     # assume-unchanged (lowercase tag) and skip-worktree (S) files hide
-    # their edits from status, so read the index flags too.
-    args = ["git", "-C", path, "ls-files", "-v"]
+    # their edits from status, so read the index flags too. A skip-worktree
+    # entry whose file is absent is no edit (`git sparse-checkout` marks
+    # every file outside its cone so), so only a file that exists counts.
+    args = ["git", "-C", path, "ls-files", "-v", "-z"]
     proc, why = _try(runner, args)
     if why:
         return False, why, True
     if proc.returncode != 0:
         return False, _failed(args, proc), True
-    for line in proc.stdout.splitlines():
-        if line[:1].islower() or line[:1] == "S":
+    for entry in proc.stdout.split("\0"):
+        if (entry[:1].islower() or entry[:1] == "S") and os.path.lexists(
+                os.path.join(path, entry[2:])):
             return False, "dirty (hidden index flags)", False
     return True, "", False
 
@@ -204,6 +207,23 @@ def _within(path, parent):
     return os.path.commonpath([path, parent]) == parent
 
 
+def _nested_in(inner, outer):
+    """True if `outer` is a parent directory of `inner`, by file identity:
+    a string compare misses a case-variant spelling on a case-insensitive
+    filesystem (`OUTER` vs `outer`)."""
+    parent = os.path.dirname(inner)
+    while True:
+        try:
+            if os.path.samefile(parent, outer):
+                return True
+        except OSError:
+            pass
+        up = os.path.dirname(parent)
+        if up == parent:
+            return False
+        parent = up
+
+
 def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
          out=print, fetch=True):
     """Returns (problems, freed_bytes, candidates, kept). Prints one line
@@ -240,7 +260,7 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
             out(f"{LABEL}: skip {shown(path)} (outside {SCOPE}, "
                 f"{human(size(path)) if os.path.isdir(path) else 'missing'})")
             continue
-        inner = min((r for r in reals if r != real and _within(r, real)),
+        inner = min((r for r in reals if r != real and _nested_in(r, real)),
                     default=None)
         if inner is not None:
             kept += 1
@@ -281,7 +301,7 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
         note = human(nbytes)
         branch = wt["branch"]
         if branch is not None and branch != "main":
-            args = ["git", "branch", "-D", branch]
+            args = ["git", "branch", "-D", "--", branch]
             proc, why = _try(runner, args, cwd=repo)
             if why or proc.returncode != 0:
                 reason = why or _failed(args, proc)

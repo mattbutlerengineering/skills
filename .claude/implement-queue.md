@@ -167,7 +167,10 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
    `diff.ignoreSubmodules`, which would hide untracked files or a dirty
    submodule). `git -C <path> ls-files -v` also exits 0, and any line
    whose tag is lowercase (assume-unchanged) or `S` (skip-worktree) is
-   dirty, because those flags hide edits from `status`. A failed `git`
+   dirty when its file exists in the worktree, because those flags hide
+   edits from `status`; a flagged file that is absent is no edit (`git
+   sparse-checkout` flags every file outside its cone), so a sparse
+   worktree is not dirty for that. A failed `git`
    call is a failure, not a clean tree. "Clean" means exactly that:
    gitignored files (for example `.env`, `plugin-evals/results/`,
    `__pycache__`) are not checked and are deleted with the worktree, on
@@ -193,11 +196,14 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
    with no PR, is unmerged work, never reaped.
 
 On a pass, `git worktree remove <path>` (never `--force`), then, if it
-had a branch other than `main`, `git branch -D <branch>`: the squash merge leaves the
+had a branch other than `main`, `git branch -D -- <branch>` (the `--` keeps a branch named `-x` from
+parsing as an option): the squash merge leaves the
 branch off `refs/remotes/origin/main`'s history, so `-d` would refuse a branch that
 test 4 already proved merged. A locked worktree (`git worktree lock`) is kept, never
-reaped, and so is a worktree whose path contains another listed
-worktree (`.git/info/exclude` hides the nested one from the outer's
+reaped, and so is a worktree that is a parent directory of another
+listed worktree, decided by file identity (`os.path.samefile`), not path
+text, so a case-variant spelling on a case-insensitive filesystem still
+counts (`.git/info/exclude` hides the nested one from the outer's
 `status` and from `git worktree remove`'s own check, so reaping the outer
 would delete the inner's work). Never touch a worktree outside
 `.claude/worktrees/`, and never the checkout the session runs in.
