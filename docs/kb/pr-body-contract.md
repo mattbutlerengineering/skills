@@ -1,7 +1,7 @@
 ---
 summary: A PR body needs a WO id or a "No work order:" line plus Closes #N; B skips locally, only the gh pr create hook catches it early.
 sources: gates.py, knowledge_plane.py, validator.py, pr_body_preflight.py, .github/workflows/validator.yml
-verified: 39319220d5eec1585d532a9021f2c9dc464b7685
+verified: b18835678b7d862e189d518e4c6b72154344bc85
 related: gates-scan-every-doc
 ---
 
@@ -20,7 +20,10 @@ that exists, and a same-call heredoc: `cat > F <<'EOF'` followed in the
 same command by `gh pr create --body-file F` is judged on the heredoc's
 text, when the writer surely ran, nothing between it and the reader
 could have changed F, and nothing before the writer opens a descriptor
-onto F or redefines the commands that run. It fails open: a body it
+onto F or redefines the commands that run. A body file is read as it
+is on disk: a truncating redirect earlier in the same command (`> F`,
+then `gh pr create -F F`) is not modelled, so a stale passing file is
+judged. It fails open: a body it
 cannot read (`--fill`,
 `--web`, a shell expansion, another repository, a binding it cannot
 establish) gets a "not checked" note and passes. A PR opened any other
