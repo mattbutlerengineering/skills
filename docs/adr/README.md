@@ -111,7 +111,7 @@ the canonical vocabulary.
 | [0088](0088-a-fast-path-classification-is-the-review-for-auto-merge.md) | A fast-path classification is the review for auto-merge | accepted |
 | [0089](0089-an-enforced-standard-may-cite-a-standing-adr.md) | An enforced standard may cite a standing ADR | accepted |
 | [0090](0090-the-gate-timeline-read-and-open-queues-join-human-gates.md) | The gate timeline read and the open queues join human_gates | accepted |
-| [0091](0091-the-restructure-blockers-re-measured-and-pinned.md) | The tools/factory restructure blockers, re-measured and pinned | superseded in part by ADR-0110 (the knowledge_plane.py and protocol.py rows) and ADR-0106 (the cli.py and gates.py rows; the cli.py row earlier by ADR-0097, later by ADR-0110) |
+| [0091](0091-the-restructure-blockers-re-measured-and-pinned.md) | The tools/factory restructure blockers, re-measured and pinned | superseded in part by ADR-0110 (the knowledge_plane.py and protocol.py rows) and ADR-0106 (the cli.py and gates.py rows; the cli.py row earlier by ADR-0097, later by ADR-0110 and ADR-0128) |
 | [0092](0092-a-derived-trace-view-joins-the-knowledge-owners-over-time.md) | A derived trace view joins the knowledge owners over time | accepted (Owner, 2026-10-14) |
 | [0093](0093-every-plugin-eval-case-carries-its-skill-tag.md) | Every plugin-eval case carries its skill directory as a tag | accepted (Owner, 2026-10-14) |
 | [0094](0094-parse-run-reads-every-artifact-through-the-guarded-read.md) | parse_run reads every run artifact and the ADR index through the guarded read | accepted (Owner, 2026-10-14) |
@@ -148,3 +148,4 @@ the canonical vocabulary.
 | [0125](0125-a-kb-page-declares-its-outside-check-and-lint-ages-it-offline.md) | A knowledge-base page declares its outside check, and lint ages it offline | provisional |
 | [0126](0126-kb-harvest-reads-memory-frontmatter-through-protocol-and-joins-its-root-only-importers.md) | kb_harvest reads a memory file's frontmatter through protocol.frontmatter_end and joins the root-only importers of protocol.py | provisional |
 | [0127](0127-work-queue-folds-into-implement-queue.md) | work-queue folds into implement-queue | accepted |
+| [0128](0128-reap-worktrees-is-root-only-and-joins-the-cli-py-row.md) | reap_worktrees is a root-only tool and joins the cli.py row of the dual-membership set | provisional |

@@ -17,7 +17,11 @@ import cli
 
 LABEL = "reap"
 SCOPE = os.path.join(".claude", "worktrees")
-USAGE = "usage: python3 reap_worktrees.py [--apply]"
+USAGE = "usage: python3 reap_worktrees.py [--apply | --no-fetch]"
+# The full ref: a bare `origin/main` resolves refs/tags/origin/main and
+# refs/heads/origin/main before refs/remotes/origin/main, so a stray local
+# branch or tag of that name would stand in for the remote.
+REMOTE_MAIN = "refs/remotes/origin/main"
 TIMEOUT = 120
 
 
@@ -31,25 +35,34 @@ def run(args, cwd=None):
 
 
 def parse_worktrees(text):
-    """`git worktree list --porcelain` -> [{path, head, branch}], the
-    branch without its refs/heads/ prefix, None when detached or bare."""
+    """`git worktree list --porcelain -z` -> [{path, head, branch}], the
+    branch without its refs/heads/ prefix, None when detached or bare.
+    NUL separates fields and an empty field ends a record, so a path
+    holding a newline survives intact."""
     out, cur = [], None
-    for line in text.splitlines() + [""]:
-        if not line:
-            if cur and "path" in cur:
+    for field in text.split("\0"):
+        if not field:
+            if cur and cur["path"] is not None:
                 out.append(cur)
             cur = None
             continue
         if cur is None:
             cur = {"path": None, "head": None, "branch": None}
-        key, _, val = line.partition(" ")
+        key, _, val = field.partition(" ")
         if key == "worktree":
             cur["path"] = val
         elif key == "HEAD":
             cur["head"] = val
         elif key == "branch":
             cur["branch"] = val.removeprefix("refs/heads/")
+    if cur and cur["path"] is not None:
+        out.append(cur)
     return out
+
+
+def shown(path):
+    """A path for one output line: a newline never splits the line."""
+    return path.replace("\n", "\\n").replace("\r", "\\r")
 
 
 def dir_size(path):
@@ -82,7 +95,7 @@ def _try(runner, args, cwd=None):
 
 def _failed(args, proc):
     err = (proc.stderr or "").strip().splitlines()
-    return f"`{' '.join(args)}` exited {proc.returncode}" + (
+    return f"`{shown(' '.join(args))}` exited {proc.returncode}" + (
         f": {err[-1]}" if err else "")
 
 
@@ -144,14 +157,14 @@ def test_tip_merged(runner, repo, branch, tip):
             return False, "gh merged-PR list was not the expected JSON", True
         if tip in oids:
             return True, "", False
-    args = ["git", "merge-base", "--is-ancestor", tip, "origin/main"]
+    args = ["git", "merge-base", "--is-ancestor", tip, REMOTE_MAIN]
     proc, why = _try(runner, args, cwd=repo)
     if why:
         return False, why, True
     if proc.returncode == 0:
         return True, "", False
     if proc.returncode == 1:
-        return False, "tip not merged: no merged PR carries it and it is not on origin/main", False
+        return False, f"tip not merged: no merged PR carries it and it is not on {REMOTE_MAIN}", False
     return False, _failed(args, proc), True
 
 
@@ -174,16 +187,19 @@ def _within(path, parent):
 
 
 def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
-         out=print):
+         out=print, fetch=True):
     """Returns (problems, freed_bytes, candidates, kept). Prints one line
     per worktree through `out`."""
     cwd = os.path.realpath(cwd or os.getcwd())
     problems = []
-    proc, why = _try(runner, ["git", "-C", cwd, "fetch", "origin", "--prune"])
-    if why or proc.returncode != 0:
-        return [f"{LABEL}: git fetch origin --prune failed, nothing removed: "
-                + (why or _failed(["git", "fetch"], proc))], 0, 0, 0
-    args = ["git", "-C", cwd, "worktree", "list", "--porcelain"]
+    if fetch:
+        proc, why = _try(runner,
+                         ["git", "-C", cwd, "fetch", "origin", "--prune"])
+        if why or proc.returncode != 0:
+            return [f"{LABEL}: git fetch origin --prune failed, nothing "
+                    "removed: "
+                    + (why or _failed(["git", "fetch"], proc))], 0, 0, 0
+    args = ["git", "-C", cwd, "worktree", "list", "--porcelain", "-z"]
     proc, why = _try(runner, args)
     if why or proc.returncode != 0:
         return [f"{LABEL}: cannot list worktrees: "
@@ -192,31 +208,35 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
     if not trees:
         return [f"{LABEL}: no worktrees listed"], 0, 0, 0
     repo = trees[0]["path"]
-    scope = os.path.join(os.path.realpath(repo), SCOPE)
+    scope = os.path.realpath(os.path.join(repo, SCOPE))
+    seen = {os.path.realpath(repo)}
     freed = candidates = kept = 0
     for wt in trees[1:]:
         path = wt["path"]
         real = os.path.realpath(path)
+        if real in seen:
+            continue
+        seen.add(real)
         if not _within(real, scope) or real == scope:
-            out(f"{LABEL}: skip {path} (outside {SCOPE}, "
+            out(f"{LABEL}: skip {shown(path)} (outside {SCOPE}, "
                 f"{human(size(path)) if os.path.isdir(path) else 'missing'})")
             continue
         if _within(cwd, real):
             kept += 1
-            out(f"{LABEL}: keep {path} (the checkout this run is in)")
+            out(f"{LABEL}: keep {shown(path)} (the checkout this run is in)")
             continue
         ok, reason, is_problem = judge(runner, repo, wt, which)
         if not ok:
             kept += 1
-            out(f"{LABEL}: keep {path} ({reason})")
+            out(f"{LABEL}: keep {shown(path)} ({reason})")
             if is_problem:
-                problems.append(f"{LABEL}: {path}: {reason}")
+                problems.append(f"{LABEL}: {shown(path)}: {reason}")
             continue
         nbytes = size(path)
         candidates += 1
         if not apply:
             freed += nbytes
-            out(f"{LABEL}: would-remove {path} ({human(nbytes)})")
+            out(f"{LABEL}: would-remove {shown(path)} ({human(nbytes)})")
             continue
         args = ["git", "worktree", "remove", path]
         proc, why = _try(runner, args, cwd=repo)
@@ -224,8 +244,8 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
             kept += 1
             candidates -= 1
             reason = why or _failed(args, proc)
-            out(f"{LABEL}: keep {path} (remove failed: {reason})")
-            problems.append(f"{LABEL}: {path}: remove failed: {reason}")
+            out(f"{LABEL}: keep {shown(path)} (remove failed: {reason})")
+            problems.append(f"{LABEL}: {shown(path)}: remove failed: {reason}")
             continue
         freed += nbytes
         note = human(nbytes)
@@ -236,22 +256,24 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
             if why or proc.returncode != 0:
                 reason = why or _failed(args, proc)
                 problems.append(
-                    f"{LABEL}: {path}: branch {branch} not deleted: {reason}")
+                    f"{LABEL}: {shown(path)}: branch {branch} not deleted: {reason}")
                 note += f", branch {branch} not deleted"
             else:
                 note += f", branch {branch} deleted"
-        out(f"{LABEL}: removed {path} ({note})")
+        out(f"{LABEL}: removed {shown(path)} ({note})")
     return problems, freed, candidates, kept
 
 
 def main(argv, runner=run, cwd=None, size=dir_size, which=shutil.which):
-    """`python3 reap_worktrees.py [--apply]` — exit 0 clean, 1 with
-    problems, 2 on usage."""
-    if argv not in ([], ["--apply"]):
+    """`python3 reap_worktrees.py [--apply | --no-fetch]` — exit 0 clean,
+    1 with problems, 2 on usage. `--no-fetch` is the offline dry run;
+    with `--apply` the fetch is mandatory, so the two never combine."""
+    if argv not in ([], ["--apply"], ["--no-fetch"]):
         print(USAGE)
         return 2
-    apply = bool(argv)
-    problems, freed, candidates, kept = reap(apply, runner, cwd, size, which)
+    apply = argv == ["--apply"]
+    problems, freed, candidates, kept = reap(
+        apply, runner, cwd, size, which, fetch=argv != ["--no-fetch"])
     verb = "freed" if apply else "would free"
     noun = "removed" if apply else "would remove"
     print(f"{LABEL}: {noun} {candidates}, kept {kept}, {verb} "

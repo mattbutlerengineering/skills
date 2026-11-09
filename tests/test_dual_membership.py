@@ -27,7 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # protocol.py row; ADR-0119 added voice_grade to the cli.py row; ADR-0120
 # added npx_bundle to the cli.py row; ADR-0124 added assembly_line to the
 # cli.py, knowledge_plane.py and protocol.py rows; ADR-0126 added
-# kb_harvest to the protocol.py row; #1640 added reap_worktrees to the
+# kb_harvest to the protocol.py row; ADR-0128 added reap_worktrees to the
 # cli.py row). The
 # pairs land one per item as the module grows its imports.
 ROOT_ONLY_IMPORTS_MIRRORED = frozenset(

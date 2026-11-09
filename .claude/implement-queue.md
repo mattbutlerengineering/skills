@@ -151,9 +151,10 @@ that moment before the next PR starts (`docs/kb/cross-pr-merge-hazards.md`).
 ## reap
 
 The hook is `python3 reap_worktrees.py --apply` (no flag: a dry run that
-removes nothing); that tool implements this section, and the rules below
-are its definition. It runs `git fetch origin --prune` first and removes
-nothing if the fetch fails. For each worktree that
+removes no worktree or branch; `--no-fetch` makes the dry run offline);
+that tool implements this section, and the rules below are its
+definition. It runs `git fetch origin --prune` first, which prunes
+remote-tracking refs, and removes nothing if the fetch fails. For each worktree that
 `git worktree list --porcelain` lists under `.claude/worktrees/`,
 apply all four tests; any failure leaves the worktree and its branch
 alone and reports the path with the failed test. `<branch>` below is
@@ -175,13 +176,15 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
 4. **Positive evidence that this tip merged.** Either `<tip>` is a
    `headRefOid` in `gh pr list --head <branch> --base main --state
    merged --json headRefOid`, or `git merge-base --is-ancestor <tip>
-   origin/main` exits 0. A merged PR for the branch *name* is not
+   refs/remotes/origin/main` exits 0 (the full ref: a bare `origin/main`
+   resolves a local branch or tag of that name first, and an unmerged
+   branch so named would pass). A merged PR for the branch *name* is not
    evidence: a branch that gained commits after its PR merged, or
    reused the name, fails here. A tip no merged PR carries, on a branch
    with no PR, is unmerged work, never reaped.
 
 On a pass, `git worktree remove <path>` (never `--force`), then, if it
 had a branch, `git branch -D <branch>`: the squash merge leaves the
-branch off `origin/main`'s history, so `-d` would refuse a branch that
+branch off `refs/remotes/origin/main`'s history, so `-d` would refuse a branch that
 test 4 already proved merged. Never touch a worktree outside
 `.claude/worktrees/`, and never the checkout the session runs in.

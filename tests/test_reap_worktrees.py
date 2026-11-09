@@ -5,10 +5,16 @@ import json
 import os
 import subprocess
 import tempfile
+import sys
 import unittest
 from contextlib import redirect_stdout
+from pathlib import Path
 
 import reap_worktrees
+
+# selective package-style runs need tests/ on sys.path for git_repo
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import git_repo  # noqa: E402
 
 TIP = "a" * 40
 OTHER = "b" * 40
@@ -16,6 +22,16 @@ OTHER = "b" * 40
 
 def proc(out="", rc=0, err=""):
     return subprocess.CompletedProcess([], rc, out, err)
+
+
+def z(repo, head, branch, *more):
+    """`git worktree list --porcelain -z` text: the main checkout first,
+    then (path, head, branch-or-None) per extra worktree."""
+    out = ""
+    for path, tip, ref in ((repo, head, branch),) + more:
+        out += f"worktree {path}\0HEAD {tip}\0"
+        out += f"branch {ref}\0\0" if ref else "detached\0\0"
+    return out
 
 
 class Fake:
@@ -76,13 +92,10 @@ class Case(unittest.TestCase):
             f.write("x" * 100)
 
     def listing(self, branch="refs/heads/work", tip=TIP, extra=True):
-        text = f"worktree {self.repo}\nHEAD {OTHER}\nbranch refs/heads/main\n\n"
-        text += f"worktree {self.wt}\nHEAD {tip}\n"
-        text += f"branch {branch}\n\n" if branch else "detached\n\n"
-        if extra:
-            text += (f"worktree {self.out_wt}\nHEAD {tip}\n"
-                     "branch refs/heads/main\n\n")
-        return text
+        return z(self.repo, OTHER, "refs/heads/main",
+                 *([(self.wt, tip, branch)]
+                   + ([(self.out_wt, tip, "refs/heads/main")] if extra
+                      else [])))
 
     def go(self, fake, apply=True):
         buf = io.StringIO()
@@ -152,8 +165,21 @@ class Passing(Case):
         code, _ = self.go(fake)
         self.assertEqual(code, 0)
         self.assertEqual(fake.ran("merge-base")[0][-3:],
-                         ["--is-ancestor", TIP, "origin/main"])
+                         ["--is-ancestor", TIP, "refs/remotes/origin/main"])
         self.assertTrue(fake.ran("remove"))
+
+    def test_merge_base_names_the_full_remote_ref(self):
+        fake = Fake(self.listing(), merged=[])
+        self.go(fake)
+        self.assertEqual(fake.ran("merge-base"), [
+            ["git", "merge-base", "--is-ancestor", TIP,
+             "refs/remotes/origin/main"]])
+
+    def test_list_is_nul_separated(self):
+        fake = Fake(self.listing())
+        self.go(fake)
+        self.assertEqual(fake.ran("list"), [
+            ["git", "-C", self.repo, "worktree", "list", "--porcelain", "-z"]])
 
     def test_branch_delete_failure_is_a_problem(self):
         fake = Fake(self.listing(), over={"branch-D": proc(rc=1, err="boom")})
@@ -181,12 +207,59 @@ class Scope(Case):
     def test_sibling_prefix_is_not_in_scope(self):
         sib = os.path.join(self.repo, ".claude", "worktrees-old", "x")
         os.makedirs(sib)
-        text = self.listing(extra=False) + (
-            f"worktree {sib}\nHEAD {TIP}\nbranch refs/heads/z\n\n")
+        text = self.listing(extra=False) + z(
+            self.repo, OTHER, None, (sib, TIP, "refs/heads/z"))[
+                len(f"worktree {self.repo}\0HEAD {OTHER}\0detached\0\0"):]
         fake = Fake(text)
         _, out = self.go(fake)
         self.assertIn(f"reap: skip {sib}", out)
         self.assertEqual(len(fake.ran("remove")), 1)
+
+    def test_symlinked_scope_root_is_resolved(self):
+        real = os.path.join(self.repo + "-store")
+        os.makedirs(os.path.join(real, "agent-1"))
+        os.rename(os.path.join(self.repo, ".claude", "worktrees"),
+                  os.path.join(self.repo, "gone"))
+        os.symlink(real, os.path.join(self.repo, ".claude", "worktrees"))
+        fake = Fake(self.listing(extra=False))
+        _, out = self.go(fake)
+        self.assertTrue(fake.ran("remove"), out)
+
+    def test_symlink_pointing_out_of_scope_is_not_reaped(self):
+        target = os.path.join(self.repo + "-elsewhere")
+        os.makedirs(target)
+        link = os.path.join(self.repo, ".claude", "worktrees", "agent-link")
+        os.symlink(target, link)
+        text = self.listing(extra=False) + z(
+            self.repo, OTHER, None, (link, TIP, "refs/heads/l"))[
+                len(f"worktree {self.repo}\0HEAD {OTHER}\0detached\0\0"):]
+        fake = Fake(text)
+        _, out = self.go(fake)
+        self.assertEqual(len(fake.ran("remove")), 1)
+        self.assertIn(f"reap: skip {link}", out)
+
+    def test_duplicate_realpath_is_judged_once(self):
+        link = os.path.join(self.repo + "-alias")
+        os.symlink(self.wt, link)
+        text = self.listing(extra=False) + z(
+            self.repo, OTHER, None, (link, TIP, "refs/heads/work"))[
+                len(f"worktree {self.repo}\0HEAD {OTHER}\0detached\0\0"):]
+        fake = Fake(text)
+        _, out = self.go(fake)
+        self.assertEqual(len(fake.ran("remove")), 1)
+        self.assertEqual(out.count("removed"), 2)  # one line + summary
+
+    def test_path_with_newline_is_handled_and_one_line(self):
+        odd = os.path.join(self.repo, ".claude", "worktrees", "a\nb")
+        os.makedirs(odd)
+        text = z(self.repo, OTHER, "refs/heads/main",
+                 (odd, TIP, "refs/heads/odd"))
+        fake = Fake(text)
+        code, out = self.go(fake)
+        self.assertEqual(code, 0)
+        self.assertEqual(fake.ran("remove"), [["git", "worktree", "remove", odd]])
+        self.assertIn(f"reap: removed {odd.replace(chr(10), chr(92) + 'n')} (", out)
+        self.assertTrue(all(l.startswith("reap:") for l in out.splitlines()))
 
     def test_checkout_the_run_is_in_is_kept(self):
         fake = Fake(self.listing())
@@ -284,13 +357,13 @@ class FailsClosed(Case):
         self.keep(Fake(self.listing(), merged=[],
                        over={"merge-base": proc(rc=1)}),
                   "tip not merged: no merged PR carries it and it is not on "
-                  "origin/main")
+                  "refs/remotes/origin/main")
 
     def test_merged_pr_with_different_head_oid(self):
         fake = Fake(self.listing(), merged=[{"headRefOid": OTHER}],
                     over={"merge-base": proc(rc=1)})
         self.keep(fake, "tip not merged: no merged PR carries it and it is "
-                        "not on origin/main")
+                        "not on refs/remotes/origin/main")
 
     def test_failed_gh_merged_call(self):
         r = ("`gh pr list --head work --base main --state merged --json "
@@ -321,8 +394,9 @@ class FailsClosed(Case):
     def test_one_failure_does_not_block_the_others(self):
         second = os.path.join(self.repo, ".claude", "worktrees", "agent-2")
         os.makedirs(second)
-        text = self.listing(extra=False) + (
-            f"worktree {second}\nHEAD {TIP}\nbranch refs/heads/two\n\n")
+        text = self.listing(extra=False) + z(
+            self.repo, OTHER, None, (second, TIP, "refs/heads/two"))[
+                len(f"worktree {self.repo}\0HEAD {OTHER}\0detached\0\0"):]
 
         class Mixed(Fake):
             def __call__(s, args, cwd=None):
@@ -346,6 +420,27 @@ class FetchAndUsage(Case):
         self.assertIn("reap: git fetch origin --prune failed, nothing "
                       "removed: `git fetch` exited 1: network down", out)
 
+    def test_no_fetch_dry_run_never_fetches_or_removes(self):
+        fake = Fake(self.listing())
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = reap_worktrees.main(
+                ["--no-fetch"], runner=fake, cwd=self.repo,
+                size=lambda p: 1, which=lambda b: "x")
+        self.assertEqual(code, 0)
+        self.assertFalse(fake.ran("fetch"))
+        self.assertFalse(fake.ran("remove"))
+        self.assertIn("would-remove", buf.getvalue())
+
+    def test_apply_with_no_fetch_is_refused(self):
+        fake = Fake(self.listing())
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = reap_worktrees.main(["--apply", "--no-fetch"], runner=fake,
+                                       cwd=self.repo)
+        self.assertEqual(code, 2)
+        self.assertEqual(fake.calls, [])
+
     def test_fetch_that_cannot_run_removes_nothing(self):
         fake = Fake(self.listing(), over={"fetch": OSError("no git")})
         code, _ = self.go(fake)
@@ -365,13 +460,78 @@ class FetchAndUsage(Case):
         self.assertIn("usage:", buf.getvalue())
 
 
+class RealGit(unittest.TestCase):
+    """A real temp repo: git is real, gh and lsof report nothing."""
+
+    def git(self, *args, cwd):
+        subprocess.run(["git", *args], cwd=cwd, check=True,
+                       capture_output=True, env={
+                           **os.environ, "GIT_AUTHOR_NAME": "t",
+                           "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                           "GIT_COMMITTER_EMAIL": "t@t"})
+
+    def runner(self, args, cwd=None):
+        if args[0] == "gh":
+            return proc("[]" if "--json" in args else "")
+        if args[0] == "lsof":
+            return proc()
+        return subprocess.run(args, capture_output=True, text=True, cwd=cwd)
+
+    def test_local_branch_or_tag_named_origin_main_cannot_stand_in(self):
+        for kind in ("branch", "tag"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as t:
+                t = os.path.realpath(t)
+                origin, repo = os.path.join(t, "o.git"), os.path.join(t, "r")
+                git_repo.init(origin, "--bare", "-b", "main")
+                git_repo.clone(origin, repo)
+                self.git("commit", "-q", "--allow-empty", "-m", "base",
+                         cwd=repo)
+                self.git("push", "-q", "origin", "HEAD:main", cwd=repo)
+                wt = os.path.join(repo, ".claude", "worktrees", "w")
+                self.git("worktree", "add", "-q", "-b", "work", wt, cwd=repo)
+                self.git("commit", "-q", "--allow-empty", "-m", "unmerged",
+                         cwd=wt)
+                if kind == "branch":
+                    self.git("branch", "origin/main", "work", cwd=repo)
+                else:
+                    self.git("tag", "origin/main", "work", cwd=repo)
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    code = reap_worktrees.main(
+                        ["--apply"], runner=self.runner, cwd=repo,
+                        size=lambda p: 1, which=lambda b: "x")
+                self.assertEqual(code, 0, buf.getvalue())
+                self.assertIn("tip not merged", buf.getvalue())
+                self.assertTrue(os.path.isdir(wt))
+
+    def test_a_truly_merged_tip_is_reaped(self):
+        with tempfile.TemporaryDirectory() as t:
+            t = os.path.realpath(t)
+            origin, repo = os.path.join(t, "o.git"), os.path.join(t, "r")
+            git_repo.init(origin, "--bare", "-b", "main")
+            git_repo.clone(origin, repo)
+            self.git("commit", "-q", "--allow-empty", "-m", "base", cwd=repo)
+            wt = os.path.join(repo, ".claude", "worktrees", "w")
+            self.git("worktree", "add", "-q", "-b", "work", wt, cwd=repo)
+            self.git("commit", "-q", "--allow-empty", "-m", "done", cwd=wt)
+            self.git("push", "-q", "origin", "work:main", cwd=wt)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = reap_worktrees.main(
+                    ["--apply"], runner=self.runner, cwd=repo,
+                    size=lambda p: 1, which=lambda b: "x")
+            self.assertEqual(code, 0, buf.getvalue())
+            self.assertFalse(os.path.exists(wt))
+
+
 class Helpers(unittest.TestCase):
-    def test_parse_worktrees(self):
-        text = ("worktree /r\nHEAD 1\nbranch refs/heads/main\n\n"
-                "worktree /r/.claude/worktrees/a\nHEAD 2\ndetached\n")
+    def test_parse_worktrees_splits_on_nul_and_keeps_newlines(self):
+        text = z("/r", "1", "refs/heads/main",
+                 ("/r/.claude/worktrees/a\nb", "2", None))
         self.assertEqual(reap_worktrees.parse_worktrees(text), [
             {"path": "/r", "head": "1", "branch": "main"},
-            {"path": "/r/.claude/worktrees/a", "head": "2", "branch": None}])
+            {"path": "/r/.claude/worktrees/a\nb", "head": "2",
+             "branch": None}])
 
     def test_human(self):
         self.assertEqual(reap_worktrees.human(512), "512 B")

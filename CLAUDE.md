@@ -118,12 +118,14 @@ pre-pass, deliberately **not** a gate:
   like the four above. The size is a report, never a failure. Both
   diagram skills' step 7 run it. `python3 factory.py svg-check` is the same
   tool.
-- `python3 reap_worktrees.py [--apply]` — removes merged, idle worktrees
-  under `.claude/worktrees/` by the four tests in `.claude/implement-queue.md`
-  `## reap`: a dry run unless `--apply`, never `--force`, never the main
-  checkout or a worktree elsewhere (listed with its size, not reaped), and a
-  failed command or fetch is a failure, never a pass. Root-only, outside every
-  gate; it needs `git`, `gh` and `lsof`.
+- `python3 reap_worktrees.py [--apply | --no-fetch]` — reaps merged, idle
+  worktrees under `.claude/worktrees/` by the four tests in
+  `.claude/implement-queue.md` `## reap`. A dry run unless `--apply`: it
+  removes no worktree or branch, but it fetches and prunes remote-tracking
+  refs unless `--no-fetch` (refused with `--apply`). Never `--force`, never
+  the main checkout or a worktree elsewhere (listed with its size), and a
+  failed command or fetch is a failure, never a pass. Root-only and outside
+  every gate (ADR-0128); it needs `git`, `gh` and `lsof`.
   <!-- drift-ignore: .claude/worktrees/ -->
 
 ## Hard conventions
