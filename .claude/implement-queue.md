@@ -112,16 +112,26 @@ as awaiting a human merge and never retried by another route
 (ADR-0087).
 
 `--delete-branch` has left the remote branch behind in this repo (#1636),
-so once `gh pr view <N> --json state,headRefName,headRefOid` reports
-`MERGED`, delete the remote branch yourself, but only when
-`git ls-remote --heads origin <headRefName>` prints the same commit as
-`headRefOid`:
+so delete it yourself once `gh pr view <N> --json
+state,headRefName,headRefOid,isCrossRepository` reports `MERGED`. If the
+PR is not yet `MERGED` (an `--auto` merge waiting on checks), do nothing
+now and repeat this step when it is. Delete only when all of these hold,
+and otherwise leave the branch alone and report it by name:
 
-    git push origin --delete <headRefName>
+1. `isCrossRepository` is `false`.
+2. `<headRefName>` is not the default branch (`main`).
+3. `gh pr list --base <headRefName> --state open --json number` is
+   empty, so no open PR is stacked on it.
+4. `git ls-remote origin refs/heads/<headRefName>` prints exactly one
+   line, and its commit equals `headRefOid`. The full ref is required:
+   `--heads <name>` also matches any branch whose name ends in it.
 
-A branch whose remote tip differs from the merged head carries later
-commits and is left alone, reported with its name. This step never
-touches `main` or a branch another open PR uses as its base.
+Then pin the delete to that commit, so a push that lands after the check
+is refused instead of deleted:
+
+    git push --force-with-lease=refs/heads/<headRefName>:<headRefOid> origin --delete refs/heads/<headRefName>
+
+A remote tip that differs from `headRefOid` carries later commits.
 
 ## update-branch
 
