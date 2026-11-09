@@ -16,7 +16,7 @@ import factory_init
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # ADR-0091's table as (root-only importer, mirrored module) pairs:
-# 62 pairs over nine mirrored modules (ADR-0097 added fast_path to the
+# 63 pairs over nine mirrored modules (ADR-0097 added fast_path to the
 # cli.py row; ADR-0106 added pr_body_preflight to the cli.py and gates.py
 # rows; ADR-0110 added decompose_signals to the cli.py, knowledge_plane.py
 # and protocol.py rows; ADR-0112 added size_band_calibration to the cli.py,
@@ -27,7 +27,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # protocol.py row; ADR-0119 added voice_grade to the cli.py row; ADR-0120
 # added npx_bundle to the cli.py row; ADR-0124 added assembly_line to the
 # cli.py, knowledge_plane.py and protocol.py rows; ADR-0126 added
-# kb_harvest to the protocol.py row). The
+# kb_harvest to the protocol.py row; #1640 added reap_worktrees to the
+# cli.py row). The
 # pairs land one per item as the module grows its imports.
 ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
     {(tool, "cli") for tool in (
@@ -36,7 +37,7 @@ ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
         "decompose_signals", "eval_schema", "eval_trends",
         "factory_init", "fast_path", "kb", "kb_drift", "kb_harvest",
         "launch_demo", "lint", "md_claims", "npx_bundle", "one_owner",
-        "plane_drift", "pr_body_preflight",
+        "plane_drift", "pr_body_preflight", "reap_worktrees",
         "size_band_calibration", "sweeps", "trigger_eval", "voice_grade",
     )}
     | {(tool, "knowledge_plane") for tool in (

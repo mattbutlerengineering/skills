@@ -150,8 +150,11 @@ that moment before the next PR starts (`docs/kb/cross-pr-merge-hazards.md`).
 
 ## reap
 
-Run after `git fetch origin --prune`. For each worktree that
-`git worktree list --porcelain` lists under `.claude/worktrees/agent-*`,
+The hook is `python3 reap_worktrees.py --apply` (no flag: a dry run that
+removes nothing); that tool implements this section, and the rules below
+are its definition. It runs `git fetch origin --prune` first and removes
+nothing if the fetch fails. For each worktree that
+`git worktree list --porcelain` lists under `.claude/worktrees/`,
 apply all four tests; any failure leaves the worktree and its branch
 alone and reports the path with the failed test. `<branch>` below is
 the porcelain `branch` line without its `refs/heads/` prefix, and
