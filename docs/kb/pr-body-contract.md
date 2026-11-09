@@ -29,7 +29,7 @@ The body must carry both:
    `Resolves #N` (`knowledge_plane.CLOSES_TOKEN`). The waiver does not
    excuse this half.
 
-Two traps when fixing a red B:
+Three traps when fixing a red B:
 
 - Issues #178 and #181 are permanent state (the gate queue and the
   improvement journal). Never write `Closes #178` or `Closes #181` to
@@ -38,6 +38,14 @@ Two traps when fixing a red B:
   the edit itself re-runs the check; a re-run replays the payload it was
   dispatched with, stale body and all (issue #216). A factory-opened PR
   gets no events at all — dispatch `validator.yml` with `-f pr=<N>`.
+- A body that only says "Partially addresses #N" has no closing keyword
+  and fails B. A PR toward a multi-part issue needs its own issue to
+  close, split from the parent.
+- `gh pr edit` can exit 1 with a Projects (classic) GraphQL deprecation
+  error (`repository.pullRequest.projectCards`), leaving the body
+  unchanged and the check red. The REST call works:
+  `gh api -X PATCH repos/{owner}/{repo}/pulls/<N> -F body=@<file>`
+  (observed 2026-11-09, #1631).
 
 ## Quoted tokens, and the job an edit does not re-run
 
