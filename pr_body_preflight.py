@@ -483,6 +483,33 @@ def _writer_of(record, spelling):
     return int(placeholder[1]) if placeholder else None
 
 
+# A joiner the chain rule reads: one `;`, `&&` or newline, then newlines.
+# Anything else (`||`, `|`, `&`, a paren, `;;`, `&& ;`) is hostile.
+SEQUENTIAL = re.compile(r"(?:;|&&|\n)\n*")
+START_OR_SEMICOLON = re.compile(r"(?:[;\n]\n*)?")
+ONLY_AND = re.compile(r"&&\n*")
+SHELL_KEYWORDS = frozenset({
+    "if", "then", "else", "elif", "fi", "for", "while", "until", "do",
+    "done", "case", "esac", "function", "{", "}", "!"})
+
+
+def _surely_ran(records, index, at):
+    """True when the writer at records[index] runs whenever the reader at
+    records[at] does: the writer's own joiner is the start, `;` or a
+    newline, or every joiner from the writer through the reader is a run
+    whose only operator is && (newlines allowed); in both cases no joiner
+    after the writer is hostile and no record starts a shell construct."""
+    after = records[index + 1:at + 1]
+    if any(not SEQUENTIAL.fullmatch(record.joiner)
+           or (record.words and record.words[0] in SHELL_KEYWORDS)
+           for record in after):
+        return False
+    if START_OR_SEMICOLON.fullmatch(records[index].joiner):
+        return True
+    return all(ONLY_AND.fullmatch(record.joiner)
+               for record in [records[index]] + after)
+
+
 def _bound_body(spelling, context):
     """The text `cat > SPELLING <<D` leaves at an absolute SPELLING when
     it is the command right before this gh pr create. Raises _Unreadable:
@@ -505,7 +532,10 @@ def _bound_body(spelling, context):
     if not heredoc.literal:
         raise _Unreadable(
             "an unquoted heredoc body holds $, a backtick or a backslash")
-    # lean: only the adjacent writer binds; the chain, spelling and inert-list
+    if not _surely_ran(records, index, at):
+        raise _Unreadable(f"the heredoc that writes {spelling} is not "
+                          "certain to run before gh pr create")
+    # lean: only the adjacent writer binds; the spelling and inert-list
     # rules (architecture.md) relax this in Milestones 2 and 3.
     if index != at - 1:
         between = records[index + 1]
@@ -513,11 +543,6 @@ def _bound_body(spelling, context):
                 else " ".join(between.redirects[0]))
         raise _Unreadable(f"{spelling} may be rewritten or removed by {what} "
                           "between the heredoc and gh pr create")
-    # fail closed: the writer must surely run, and the reader only after it
-    if not (re.fullmatch(r"[;\n]*", records[index].joiner)
-            and re.fullmatch(r"(?:[;\n]|&&)+", records[at].joiner)):
-        raise _Unreadable(f"the heredoc that writes {spelling} is not "
-                          "certain to run before gh pr create")
     return heredoc.text
 
 

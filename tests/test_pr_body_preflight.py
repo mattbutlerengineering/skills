@@ -580,6 +580,100 @@ class TestSameCallHeredoc(unittest.TestCase):
         self.assertFalse(heredocs[0].terminated)
 
 
+    # --- Milestone 2, chain rule: the writer's joiners ---------------------
+    CHAIN_WRITER = "cat > /tmp/b.md <<'EOF'"
+    CHAIN_BODY = "{}\nEOF\n".format(BAD)
+    CHAIN_NOTE = note("the heredoc that writes /tmp/b.md is not certain to "
+                      "run before gh pr create")
+
+    def chain(self, before="", after="\n", reader=READ):
+        """`before` the writer, then the reader joined to the writer by
+        `after` (a newline puts the reader after the heredoc body, any
+        other joiner puts it on the writer's own line)."""
+        if after.endswith("\n") and after.strip() == "":
+            return (f"{before}{self.CHAIN_WRITER}\n{self.CHAIN_BODY}"
+                    f"{reader}")
+        return (f"{before}{self.CHAIN_WRITER} {after} {reader}\n"
+                f"{self.CHAIN_BODY}")
+
+    def test_a_writer_that_surely_ran_is_judged(self):
+        judged = refused(self.BAD + "\n")
+        for name, command in (
+                ("start", self.chain()),
+                ("semicolon", self.chain("true; ")),
+                ("semicolon newline", self.chain("true;\n")),
+                ("newline", self.chain("true\n")),
+                ("and chain, newline writer", self.chain("a && b\n")),
+                ("hostile run before a ; writer", self.chain("a | b ; ")),
+                ("hostile run before a newline writer",
+                 self.chain("a | b\n")),
+                ("and newline", self.chain("true &&\n", "&&")),
+                ("and space newline", self.chain("true && \n", "&&")),
+                ("and comment newline", self.chain("true && # c\n", "&&")),
+                ("and continuation", self.chain("true && \\\n", "&&")),
+                ("semicolon reader", self.chain(after=";")),
+                ("and reader after semicolon writer",
+                 self.chain("true; ", "&&"))):
+            with self.subTest(shape=name):
+                self.assertEqual(run(command), judged)
+
+    def test_a_writer_the_shell_may_skip_is_a_note(self):
+        for name, command in (
+                ("or before", self.chain("test -f /tmp/b.md || ", "&&")),
+                ("or newline before", self.chain("test -f x ||\n", "&&")),
+                ("or space newline before", self.chain("a || \n", "&&")),
+                ("and before, newline reader",
+                 self.chain("test -d /x && ")),
+                ("git push and, newline reader", self.chain("git push && ")),
+                ("and newline before, newline reader",
+                 self.chain("a &&\n")),
+                ("and comment before, newline reader",
+                 self.chain("a && # c\n")),
+                ("or after", self.chain(after="||")),
+                ("background writer", self.chain(after="&")),
+                ("background newline", self.chain("a &\n", "&&")),
+                ("pipeline", self.chain(after="|")),
+                ("pipeline reader", self.chain(reader="x | " + self.READ)),
+                ("subshell reader", self.chain(reader="( " + self.READ + " )")),
+                ("subshell writer", self.chain("( ", "&&")),
+                ("double semicolon before", self.chain("a;; ")),
+                ("double semicolon after", self.chain(after=";;")),
+                ("and semicolon before", self.chain("a && ; ", "&&")),
+                ("and semicolon after", self.chain(after="&& ;")),
+                ("semicolon and after", self.chain(after="; &&"))):
+            with self.subTest(shape=name):
+                self.assertEqual(run(command), (0, [self.CHAIN_NOTE]))
+
+    def test_an_if_between_writer_and_reader_is_a_note(self):
+        for reader in ("if true; then\n" + self.READ + "\nfi",
+                       "if true\nthen\n" + self.READ + "\nfi",
+                       "while true; do\n" + self.READ + "\ndone"):
+            with self.subTest(reader=reader):
+                self.assertEqual(run(self.chain(reader=reader)),
+                                 (0, [self.CHAIN_NOTE]))
+
+    def test_a_cd_before_the_writer_is_judged_only_when_it_surely_ran(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            (top / "d").mkdir()
+            for name, command, expected in (
+                    ("and to the reader", self.chain("cd d && ", "&&"),
+                     refused(self.BAD + "\n")),
+                    ("three links", self.chain("cd d && true && ", "&&"),
+                     refused(self.BAD + "\n")),
+                    ("newline before the reader", self.chain("cd d && "),
+                     (0, [self.CHAIN_NOTE])),
+                    ("or to the reader", self.chain("cd d || ", "&&"),
+                     (0, [self.CHAIN_NOTE]))):
+                with self.subTest(shape=name):
+                    self.assertEqual(run(command, top), expected)
+
+    def test_a_reader_joined_by_or_to_a_surely_run_writer_is_a_note(self):
+        self.assertEqual(
+            run(self.chain("true; ", "||")), (0, [self.CHAIN_NOTE]))
+
+
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
         reason = note("the body holds $ or a backtick the hook cannot expand")
