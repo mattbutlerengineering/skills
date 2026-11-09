@@ -149,6 +149,27 @@ class Passing(Case):
         self.go(fake)
         self.assertTrue(fake.ran("remove"))
         self.assertFalse(fake.ran("branch-D"))
+        self.assertNotIn(["git", "branch", "-D", "main"], fake.calls)
+
+    def test_status_overrides_repo_config_that_hides_files(self):
+        fake = Fake(self.listing())
+        self.go(fake)
+        self.assertEqual(fake.ran("status"), [[
+            "git", "-C", self.wt, "status", "--porcelain",
+            "--untracked-files=all", "--ignore-submodules=none"]])
+
+    def test_locked_worktree_is_kept_in_dry_run_and_apply(self):
+        text = self.listing(extra=False).replace(
+            "branch refs/heads/work\0\0", "branch refs/heads/work\0locked\0\0")
+        for apply in (False, True):
+            with self.subTest(apply=apply):
+                fake = Fake(text)
+                code, out = self.go(fake, apply=apply)
+                self.assertEqual(code, 0)
+                self.assertIn(f"reap: keep {self.wt} (locked)", out)
+                self.assertNotIn("would-remove", out)
+                self.assertFalse(fake.ran("remove"))
+                self.assertFalse(fake.ran("branch-D"))
 
     def test_detached_skips_pr_test_and_deletes_no_branch(self):
         fake = Fake(self.listing(branch=None),
@@ -289,7 +310,8 @@ class FailsClosed(Case):
                   "dirty: uncommitted changes")
 
     def test_status_command_failure(self):
-        r = "`git -C %s status --porcelain` exited 128: fatal" % self.wt
+        r = ("`git -C %s status --porcelain --untracked-files=all "
+             "--ignore-submodules=none` exited 128: fatal" % self.wt)
         self.keep(Fake(self.listing(),
                        over={"status": proc(rc=128, err="fatal")}), r, r)
 
@@ -504,6 +526,29 @@ class RealGit(unittest.TestCase):
                 self.assertIn("tip not merged", buf.getvalue())
                 self.assertTrue(os.path.isdir(wt))
 
+    def test_untracked_file_is_dirty_even_when_config_hides_it(self):
+        with tempfile.TemporaryDirectory() as t:
+            t = os.path.realpath(t)
+            origin, repo = os.path.join(t, "o.git"), os.path.join(t, "r")
+            git_repo.init(origin, "--bare", "-b", "main")
+            git_repo.clone(origin, repo)
+            self.git("commit", "-q", "--allow-empty", "-m", "base", cwd=repo)
+            wt = os.path.join(repo, ".claude", "worktrees", "w")
+            self.git("worktree", "add", "-q", "-b", "work", wt, cwd=repo)
+            self.git("commit", "-q", "--allow-empty", "-m", "done", cwd=wt)
+            self.git("push", "-q", "origin", "work:main", cwd=wt)
+            self.git("config", "status.showUntrackedFiles", "no", cwd=repo)
+            with open(os.path.join(wt, "scratch.txt"), "w") as f:
+                f.write("unsaved")
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = reap_worktrees.main(
+                    ["--apply"], runner=self.runner, cwd=repo,
+                    size=lambda p: 1, which=lambda b: "x")
+            self.assertEqual(code, 0, buf.getvalue())
+            self.assertIn("dirty: uncommitted changes", buf.getvalue())
+            self.assertTrue(os.path.exists(os.path.join(wt, "scratch.txt")))
+
     def test_a_truly_merged_tip_is_reaped(self):
         with tempfile.TemporaryDirectory() as t:
             t = os.path.realpath(t)
@@ -529,9 +574,16 @@ class Helpers(unittest.TestCase):
         text = z("/r", "1", "refs/heads/main",
                  ("/r/.claude/worktrees/a\nb", "2", None))
         self.assertEqual(reap_worktrees.parse_worktrees(text), [
-            {"path": "/r", "head": "1", "branch": "main"},
+            {"path": "/r", "head": "1", "branch": "main", "locked": False},
             {"path": "/r/.claude/worktrees/a\nb", "head": "2",
-             "branch": None}])
+             "branch": None, "locked": False}])
+
+    def test_parse_records_locked_with_or_without_a_reason(self):
+        text = ("worktree /a\0HEAD 1\0detached\0locked\0\0"
+                "worktree /b\0HEAD 2\0detached\0locked why\0\0")
+        self.assertEqual(
+            [w["locked"] for w in reap_worktrees.parse_worktrees(text)],
+            [True, True])
 
     def test_human(self):
         self.assertEqual(reap_worktrees.human(512), "512 B")

@@ -47,7 +47,8 @@ def parse_worktrees(text):
             cur = None
             continue
         if cur is None:
-            cur = {"path": None, "head": None, "branch": None}
+            cur = {"path": None, "head": None, "branch": None,
+                   "locked": False}
         key, _, val = field.partition(" ")
         if key == "worktree":
             cur["path"] = val
@@ -55,6 +56,8 @@ def parse_worktrees(text):
             cur["head"] = val
         elif key == "branch":
             cur["branch"] = val.removeprefix("refs/heads/")
+        elif key == "locked":
+            cur["locked"] = True
     if cur and cur["path"] is not None:
         out.append(cur)
     return out
@@ -100,7 +103,11 @@ def _failed(args, proc):
 
 
 def test_clean(runner, path):
-    args = ["git", "-C", path, "status", "--porcelain"]
+    # --untracked-files=all and --ignore-submodules=none override a repo's
+    # status.showUntrackedFiles / diff.ignoreSubmodules, which would hide
+    # untracked files or dirty submodules from a plain `status --porcelain`.
+    args = ["git", "-C", path, "status", "--porcelain",
+            "--untracked-files=all", "--ignore-submodules=none"]
     proc, why = _try(runner, args)
     if why:
         return False, why, True
@@ -224,6 +231,10 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
         if _within(cwd, real):
             kept += 1
             out(f"{LABEL}: keep {shown(path)} (the checkout this run is in)")
+            continue
+        if wt["locked"]:
+            kept += 1
+            out(f"{LABEL}: keep {shown(path)} (locked)")
             continue
         ok, reason, is_problem = judge(runner, repo, wt, which)
         if not ok:

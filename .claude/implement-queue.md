@@ -161,8 +161,11 @@ alone and reports the path with the failed test. `<branch>` below is
 the porcelain `branch` line without its `refs/heads/` prefix, and
 `<tip>` is the worktree's `HEAD` commit:
 
-1. **Clean.** `git -C <path> status --porcelain` exits 0 and prints
-   nothing on stdout. A failed `git` call is a failure, not a clean tree.
+1. **Clean.** `git -C <path> status --porcelain --untracked-files=all
+   --ignore-submodules=none` exits 0 and prints nothing on stdout (the
+   two flags override a repo's `status.showUntrackedFiles` and
+   `diff.ignoreSubmodules`, which would hide untracked files or a dirty
+   submodule). A failed `git` call is a failure, not a clean tree.
 2. **Idle.** `lsof` is on `PATH`, `<path>` exists, and `lsof -w +D
    <path>` prints nothing on stdout or stderr. `-w` silences all of
    lsof's warnings, so one on an unreadable mount cannot block every
@@ -184,7 +187,8 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
    with no PR, is unmerged work, never reaped.
 
 On a pass, `git worktree remove <path>` (never `--force`), then, if it
-had a branch, `git branch -D <branch>`: the squash merge leaves the
+had a branch other than `main`, `git branch -D <branch>`: the squash merge leaves the
 branch off `refs/remotes/origin/main`'s history, so `-d` would refuse a branch that
-test 4 already proved merged. Never touch a worktree outside
+test 4 already proved merged. A locked worktree (`git worktree lock`) is kept, never
+reaped. Never touch a worktree outside
 `.claude/worktrees/`, and never the checkout the session runs in.
