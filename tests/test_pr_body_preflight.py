@@ -508,6 +508,32 @@ class TestSameCallHeredoc(unittest.TestCase):
             (0, [self.NOT_FIRST]))
 
 
+    PROCSUB = note("a process substitution in gh pr create hides the body file")
+
+    def test_a_process_substitution_in_the_reader_is_a_note(self):
+        """As the compound's first command and after a writer, with no
+        disk read of `a`: its text would fail B if it were read."""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "a").write_text("x\n", encoding="utf-8")
+            for command in (
+                    "gh pr create --title t -F <(cat a c)",
+                    "gh pr create --title t --body-file >(cat a c)",
+                    self.write(self.BAD)
+                    + "gh pr create --title t -F <(cat a c)"):
+                with self.subTest(command=command):
+                    self.assertEqual(run(command, cwd=tmp), (0, [self.PROCSUB]))
+
+    def test_the_splitter_records_a_process_substitution_anywhere(self):
+        for command, op in (("diff <(a) b", "<("), ("echo x >(tee f)", ">(")):
+            with self.subTest(command=command):
+                records = self.split(command)
+                self.assertIn(("procsub", op), records[0].redirects)
+
+    def test_a_here_string_is_never_a_writer(self):
+        self.assertEqual(
+            run('cat > /tmp/b.md <<< "x"\n' + self.READ), (0, [self.NOT_FIRST]))
+
+
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
         reason = note("the body holds $ or a backtick the hook cannot expand")

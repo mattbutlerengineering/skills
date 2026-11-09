@@ -328,7 +328,8 @@ def _simple_commands(tokens):
     redirect-only command. A redirection is a punctuation run holding `<`
     or `>`, split off from any separator before it (a lone `&` directly
     before `>` stays in the operator: `&>`, `&>>`) and paired with the
-    word that follows; the joiner is every separator run since the
+    word that follows (a `<(` or `>(` is kind `procsub` and takes none);
+    the joiner is every separator run since the
     previous record."""
     records, joiner = [], ""
     words, redirects, operator = [], [], None
@@ -348,7 +349,10 @@ def _simple_commands(tokens):
                     words, redirects, joiner = [], [], ""
                 joiner += head
             if cut is not None:
-                operator = token[cut:]
+                if token[cut:] in ("<(", ">("):  # opens a command, no target
+                    redirects.append(("procsub", token[cut:]))
+                else:
+                    operator = token[cut:]
         else:
             words.append(token)
     if words or redirects:
@@ -528,6 +532,10 @@ def _resolve(value, context):
 def _body(args, context):
     """(body text, [-R/--repo values]) for one gh pr create. Raises
     _Unreadable."""
+    if any(kind == "procsub" for kind, _ in
+           context["records"][context["record"]].redirects):
+        raise _Unreadable(
+            "a process substitution in gh pr create hides the body file")
     sources, repos = _body_sources(args)
     if not sources:
         raise _Unreadable("no --body or --body-file")
