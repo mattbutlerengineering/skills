@@ -483,18 +483,19 @@ def _writer_of(record, spelling):
     return int(placeholder[1]) if placeholder else None
 
 
-# A joiner the chain rule reads: one `;`, `&&` or newline, then newlines.
-# Anything else (`||`, `|`, `&`, a paren, `;;`, `&& ;`) is hostile.
 # Names a shell changes without an assignment, so two spellings of one are
 # not one file.
 SHELL_MAINTAINED = frozenset({
     "RANDOM", "SRANDOM", "SECONDS", "EPOCHSECONDS", "EPOCHREALTIME", "LINENO",
-    "BASHPID", "PIPESTATUS", "HISTCMD", "PWD", "OLDPWD", "_"})
+    "BASHPID", "PIPESTATUS", "HISTCMD", "DIRSTACK", "status", "pipestatus",
+    "PWD", "OLDPWD", "_"})
 NAME_FORM = re.compile(
     r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
 # An argument that runs a command or assigns: a substitution (the tokenizer
 # splits `$(` after its `$`), a backtick, `$[`, or `${NAME=` / `${NAME:=`.
 UNSAFE_ARGUMENT = re.compile(r"`|\$\(|\$\[|\$$|\$\{[^}]*=")
+# A joiner the chain rule reads: one `;`, `&&` or newline, then newlines.
+# Anything else (`||`, `|`, `&`, a paren, `;;`, `&& ;`) is hostile.
 SEQUENTIAL = re.compile(r"(?:;|&&|\n)\n*")
 START_OR_SEMICOLON = re.compile(r"(?:[;\n]\n*)?")
 ONLY_AND = re.compile(r"&&\n*")
@@ -520,16 +521,27 @@ def _surely_ran(records, index, at):
                for record in [records[index]] + after)
 
 
+def _names(spelling):
+    """The variable names a spelling expands."""
+    return [m[1] or m[2] for m in NAME_FORM.finditer(spelling)]
+
+
 def _comparable(spelling):
     """True when SPELLING names a file the hook can compare by identity:
     no backtick, `$(`, glob, brace outside `${NAME}` or leading `~`, and
     every `$` begins `$NAME` or `${NAME}` of a name the shell leaves to
     assignments."""
-    names = [m[1] or m[2] for m in NAME_FORM.finditer(spelling)]
+    names = _names(spelling)
     return not (spelling.startswith("~")
                 or re.search(r"[`$*?\[\]{}]", NAME_FORM.sub("", spelling))
                 or any(name in SHELL_MAINTAINED or name.startswith("BASH")
                        for name in names))
+
+
+def _runs(word):
+    """True when WORD may run a command or assign: an unsafe argument, or
+    a placeholder for a masked `$(cat <<'D' ...)` substitution."""
+    return bool(UNSAFE_ARGUMENT.search(word) or PLACEHOLDER_WORD.search(word))
 
 
 def _directory_change(record):
@@ -537,8 +549,165 @@ def _directory_change(record):
     nothing and assign nothing."""
     return bool(record.words and record.words[0] in DIRECTORY_CHANGERS
                 and not record.redirects
-                and not any(UNSAFE_ARGUMENT.search(word)
-                            for word in record.words[1:]))
+                and not any(_runs(word) for word in record.words))
+
+
+# Commands that leave every file alone when their arguments do not run
+# anything: builtins, then read-only verbs (architecture.md's inert list).
+INERT_VERBS = frozenset({
+    "echo", "printf", "true", ":", "sleep",
+    "cat", "grep", "egrep", "fgrep", "head", "tail", "wc", "ls", "test", "[",
+    "diff", "cmp", "stat"})
+# Names whose value steers a later command (git, gh, a pager, the search
+# path, word splitting, a startup file, the loader): never a plain assignment.
+STEERING_NAME = re.compile(
+    r"GIT_.*|GH_.*|.*PAGER|PATH|IFS|BASH_ENV|ENV|LD_.*|DYLD_.*")
+# The git subcommands that only read, and `gh` commands that only read as
+# (group, command); `git config --get` and `git branch --show-current` are
+# read by their one flag.
+GIT_VERBS = frozenset({"status", "diff", "log", "rev-parse"})
+GIT_CONFIG_SCOPES = frozenset({"--global", "--local", "--system", "--worktree"})
+GH_VERBS = frozenset({
+    ("pr", "view"), ("pr", "list"), ("pr", "status"), ("pr", "checks"),
+    ("pr", "diff"), ("issue", "view"), ("issue", "list")})
+# `gh api` options that send a body, choose a method or write a file.
+GH_API_WRITES = frozenset({
+    "--output", "--method", "--field", "--raw-field", "--input"})
+# Redirections that only read, so they never unbind.
+READ_OPERATORS = frozenset({"<", "<<", "<<<", "<&"})
+BLOCK_CLOSERS = ("}", "done", "fi", "esac")
+_REWRITTEN = ("{} may be rewritten or removed by {} between the heredoc and "
+              "gh pr create")
+
+
+def _verb(record):
+    """The command word of record, or None for a redirect-only command."""
+    return record.words[0] if record.words else None
+
+
+def _command_word(record):
+    """The command record runs: its first word after leading assignments
+    and `command` / `builtin`."""
+    words = list(record.words)
+    while words and (ASSIGNMENT.match(words[0])
+                     or words[0] in ("command", "builtin")):
+        words.pop(0)
+    return words[0] if words else None
+
+
+def _running_redirect(record, statements):
+    """The text of the first redirection of record whose target can run a
+    command: a word holding a substitution, a masked substitution's
+    placeholder, or a statement heredoc that is not literal (an unquoted
+    body expands) or never closes."""
+    for operator, target in record.redirects:
+        if operator == "procsub":
+            continue
+        found = PLACEHOLDER_WORD.fullmatch(target)
+        if operator == "<<" and found:
+            number = int(found[1])
+            if (number >= len(statements) or not statements[number].literal
+                    or not statements[number].terminated):
+                return "<< an unquoted heredoc"
+        elif _runs(target):
+            return f"{operator} {target}"
+    return None
+
+
+def _write_redirect(record):
+    """The text of the first redirection of record that may write a file,
+    else None: any operator but the read ones, and a `<(` or `>(`, unless
+    its target is /dev/null or /dev/stderr or, for `>&`, a descriptor
+    number or `-` (a duplication or a close). Never compares F."""
+    for operator, target in record.redirects:
+        if operator == "procsub":
+            return target
+        if operator in READ_OPERATORS or target in ("/dev/null",
+                                                    "/dev/stderr"):
+            continue
+        if operator == ">&" and (target.isdigit() or target == "-"):
+            continue
+        return f"{operator} {target}"
+    return None
+
+
+def _removed_by(record):
+    """What a note names: the name of an assignment (its value may be
+    long), `git` or `gh` with the word that picks the command, else the
+    verb."""
+    verb, words = _verb(record), record.words
+    if ASSIGNMENT.match(verb):
+        return verb.split("=", 1)[0] + "="
+    if verb == "git":
+        return " ".join(words[:2])
+    if verb == "gh":
+        two = len(words) < 3 or words[1] == "api" or words[1].startswith("-")
+        return " ".join(words[:2 if two else 3])
+    return verb
+
+
+def _long_option(word, name):
+    """True when WORD spells the long option NAME, or an abbreviation of
+    it git's parser would accept (`--outp=F`), or an option NAME begins."""
+    option = word.split("=", 1)[0]
+    return (len(option) > 2 and option.startswith("--")
+            and (name.startswith(option) or option.startswith(name)))
+
+
+def _inert_git(words, spelling):
+    """True for the read-only git forms of the architecture's list whose
+    arguments neither spell SPELLING nor name an output or config file."""
+    if len(words) < 2 or any(spelling in word for word in words[2:]):
+        return False
+    verb, args = words[1], words[2:]
+    if verb == "branch":
+        return args == ["--show-current"]
+    if verb == "config":
+        return args[:1] == ["--get"] and all(
+            arg in GIT_CONFIG_SCOPES or not arg.startswith("-")
+            for arg in args[1:])
+    return verb in GIT_VERBS and not any(
+        _long_option(arg, "--output") or _long_option(arg, "--file")
+        or (arg.startswith("-f") and not arg.startswith("--"))
+        for arg in args)
+
+
+def _inert_gh(words):
+    """True for the read-only gh commands of the architecture's list and
+    `gh api` with no option that sends a body, picks a method or writes."""
+    if words[1:2] == ["api"]:
+        return not any(
+            word.split("=", 1)[0] in GH_API_WRITES
+            or (word.startswith("-") and word[1:2] != "-"
+                and set(word[1:]) & set("XfF"))
+            for word in words[2:])
+    return tuple(words[1:3]) in GH_VERBS
+
+
+def _inert(record, spelling):
+    """True when record, a command between writer and reader, leaves
+    SPELLING alone: a bare cd, a standalone assignment or `export` of a
+    name SPELLING does not hold, or an inert verb with no argument that
+    runs or assigns and, for printf, no `-v`. Write redirects are judged
+    before this."""
+    words = record.words
+    if _directory_change(record):
+        return True
+    if any(_runs(word) for word in words):
+        return False
+    assignments = words[1:] if words[0] == "export" else words
+    if assignments and all(ASSIGNMENT.match(word) for word in assignments):
+        held = _names(spelling)
+        names = [word.split("=", 1)[0] for word in assignments]
+        return not any(name in held or STEERING_NAME.fullmatch(name)
+                       for name in names)
+    if words[0] == "printf" and any(w.startswith("-v") for w in words[1:]):
+        return False
+    if words[0] == "git":
+        return _inert_git(words, spelling)
+    if words[0] == "gh":
+        return _inert_gh(words)
+    return words[0] in INERT_VERBS
 
 
 def _bound_body(spelling, context):
@@ -549,6 +718,9 @@ def _bound_body(spelling, context):
     not_first = _Unreadable("a body file is read only from the first command")
     records, at = context["records"], context["record"]
     if not _comparable(spelling):
+        if spelling.endswith("$"):  # the tokenizer cut `$(` after its `$`
+            raise _Unreadable("a command substitution names the body file, "
+                              "which the hook cannot compare")
         raise _Unreadable(f"{spelling} names a file through an expansion "
                           "the hook cannot compare")
     for index in range(at - 1, -1, -1):
@@ -567,16 +739,27 @@ def _bound_body(spelling, context):
     if not _surely_ran(records, index, at):
         raise _Unreadable(f"the heredoc that writes {spelling} is not "
                           "certain to run before gh pr create")
-    # lean: a directory change is the only command admitted between writer
-    # and reader; the rest of the inert list (architecture.md) arrives in
-    # Milestone 3, so any other command unbinds.
+    if context["ansi_c"] and index + 1 < at:  # `$'\\''` hides what follows
+        raise _Unreadable(_REWRITTEN.format(spelling, "$'...'"))
+    for earlier in records[:index]:
+        if _command_word(earlier) == "exec" and _write_redirect(earlier):
+            raise _Unreadable(_REWRITTEN.format(spelling, "exec"))
+    for between in records[index + 1:at + 1]:
+        redirect = (_write_redirect(between)
+                    or _running_redirect(between, context["statements"]))
+        if redirect:
+            raise _Unreadable(_REWRITTEN.format(spelling, redirect))
+    for later in records[at + 1:]:
+        if (later.words and later.words[0] in BLOCK_CLOSERS
+                or ")" in later.joiner):
+            redirect = _write_redirect(later)
+            if redirect:
+                raise _Unreadable(_REWRITTEN.format(spelling, redirect))
     for between in records[index + 1:at]:
-        if not _directory_change(between):
-            what = (between.words[0] if between.words
-                    else " ".join(between.redirects[0]))
-            raise _Unreadable(f"{spelling} may be rewritten or removed by "
-                              f"{what} between the heredoc and gh pr create")
-        if not spelling.startswith("/"):
+        verb = _verb(between)
+        if verb and not _inert(between, spelling):
+            raise _Unreadable(_REWRITTEN.format(spelling, _removed_by(between)))
+        if verb in DIRECTORY_CHANGERS and not spelling.startswith("/"):
             raise _Unreadable("a cd between the heredoc and gh pr create "
                               f"may change what {spelling} names")
     return heredoc.text
@@ -735,7 +918,8 @@ def _verdicts(command, cwd, environ):
     masked, heredocs, originals = _mask_heredocs(command)
     unrun = _Unrun(masked, originals)
     try:
-        tokens = _tokens(unrun.run())
+        source = unrun.run()
+        tokens = _tokens(source)
     except ValueError as exc:
         return False, [NOTE.format(f"cannot parse the command: {exc}")]
     records = _simple_commands(tokens)
@@ -752,7 +936,7 @@ def _verdicts(command, cwd, environ):
         context = {"first": position == 0, "cwd": cwd, "heredocs": heredocs,
                    "commands": commands, "position": position,
                    "records": records, "record": with_words[position],
-                   "statements": unrun.heredocs,
+                   "statements": unrun.heredocs, "ansi_c": "$'" in source,
                    "prefix": words[:len(words) - len(args) - 3],
                    "environ": environ}
         try:
