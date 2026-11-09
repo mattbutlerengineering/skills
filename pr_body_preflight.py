@@ -20,6 +20,7 @@ Root-only (not mirrored).
 
   python3 pr_body_preflight.py < payload.json
 """
+import collections
 import json
 import os
 import re
@@ -56,6 +57,9 @@ HEREDOC_OPEN = re.compile(
 HEREDOC_CLOSE = re.compile(r"\s*\)")
 PLACEHOLDER = "__pr_body_preflight_heredoc_{}__"
 PLACEHOLDER_WORD = re.compile(r"__pr_body_preflight_heredoc_(\d+)__")
+# One statement-level heredoc: the bytes a shell writes, whether the shell
+# would expand nothing in them, and whether the delimiter line closed it.
+Heredoc = collections.namedtuple("Heredoc", "text literal terminated")
 # `$(cat PATH)` or `$(< PATH)` with a plain path: read as a body file.
 CAT_FILE = re.compile(
     r"\$\(\s*(?:cat\s+|<\s*)(?P<path>[^\s$`'\"()<>|;&\\]+)\s*\)")
@@ -89,11 +93,13 @@ def _heredoc_at(command, match):
 
 
 def _mask_heredocs(command):
-    """(masked command, [heredoc bodies]): each heredoc substitution is
-    cut from the raw string and replaced by a placeholder word before
-    shlex sees it, because shlex does not know $( ) opens a new quoting
-    context and would strip the body's inner quotes."""
-    pieces, bodies, start = [], [], 0
+    """(masked command, [heredoc bodies], [(placeholder, original span)]):
+    each heredoc substitution is cut from the raw string and replaced by a
+    placeholder word before shlex sees it, because shlex does not know
+    $( ) opens a new quoting context and would strip the body's inner
+    quotes. The pairs let _Unrun restore a span that sits inside a
+    statement-level heredoc body."""
+    pieces, bodies, originals, start = [], [], [], 0
     for match in HEREDOC_OPEN.finditer(command):
         if match.start() < start:
             continue
@@ -101,12 +107,13 @@ def _mask_heredocs(command):
         if found is None:
             continue
         body, end = found
-        pieces += [command[start:match.start()],
-                   PLACEHOLDER.format(len(bodies))]
+        placeholder = PLACEHOLDER.format(len(bodies))
+        pieces += [command[start:match.start()], placeholder]
         bodies.append(body)
+        originals.append((placeholder, command[match.start():end]))
         start = end
     pieces.append(command[start:])
-    return "".join(pieces), bodies
+    return "".join(pieces), bodies, originals
 
 
 # Characters after which an unquoted `#` starts a comment: whitespace and
@@ -122,11 +129,16 @@ class _Unrun:
     shape it cannot classify (an unclosed quote, substitution or
     backtick, or a heredoc delimiter it cannot read), which the caller
     turns into a note: the shell would reject the first kinds, and the
-    last fails open."""
+    last fails open. Each statement-level heredoc is recorded in
+    `heredocs` (a Heredoc, in queue order) and its operator and delimiter
+    are rewritten to `<<` plus a numbered placeholder word; originals are
+    the (placeholder, span) pairs _mask_heredocs cut, restored in a body
+    before `literal` is decided."""
 
-    def __init__(self, text):
+    def __init__(self, text, originals=()):
         self.text, self.pos, self.out = text, 0, []
         self.pending, self.boundary, self.braces = [], True, 0
+        self.originals, self.heredocs = originals, []
 
     def run(self):
         self._normal(nested=False)
@@ -243,11 +255,12 @@ class _Unrun:
         index += dash
         while index < len(text) and text[index] in " \t":
             index += 1
-        delim = []
+        delim, quoted = [], False
         while index < len(text) and text[index] not in WORD_BREAK:
             ch = text[index]
             if ch in "$`":
                 raise ValueError("a heredoc delimiter the hook cannot read")
+            quoted = quoted or ch in "'\"\\"
             if ch in "'\"":
                 close = text.find(ch, index + 1)
                 if close < 0:
@@ -260,21 +273,36 @@ class _Unrun:
                 index += step
         if not "".join(delim):
             raise ValueError("a heredoc with no delimiter")
-        self.pending.append(("".join(delim), dash))
-        self._take(index)
+        self.out.append(
+            "<<" + PLACEHOLDER.format(len(self.heredocs)))
+        self.pos, self.boundary = index, False
+        self.pending.append(
+            (len(self.heredocs), "".join(delim), dash, quoted))
+        self.heredocs.append(None)
 
     def _bodies(self):
-        """Drop each queued heredoc's body and delimiter line. A body
-        whose delimiter line never comes runs to the end, as in bash."""
+        """Capture each queued heredoc's body and delimiter line, and cut
+        them from the output. A body whose delimiter line never comes runs
+        to the end, as in bash."""
         text = self.text
-        for delim, dash in self.pending:
+        for number, delim, dash, quoted in self.pending:
+            lines, terminated = [], False
             while self.pos < len(text):
                 end = text.find("\n", self.pos)
                 end = len(text) if end < 0 else end
                 line = text[self.pos:end]
                 self.pos = min(end + 1, len(text))
-                if (line.lstrip("\t") if dash else line) == delim:
+                if dash:
+                    line = line.lstrip("\t")
+                if line == delim:
+                    terminated = True
                     break
+                lines.append(line)
+            body = "".join(line + "\n" for line in lines)
+            for placeholder, original in self.originals:
+                body = body.replace(placeholder, original)
+            literal = quoted or not any(ch in body for ch in "$`\\")
+            self.heredocs[number] = Heredoc(body, literal, terminated)
         self.pending = []
 
 
@@ -558,9 +586,9 @@ def _check_target(repos, context):
 
 def _verdicts(command, cwd, environ):
     """(failed, notes-and-problems lines) over every gh pr create."""
-    masked, heredocs = _mask_heredocs(command)
+    masked, heredocs, originals = _mask_heredocs(command)
     try:
-        tokens = _tokens(_Unrun(masked).run())
+        tokens = _tokens(_Unrun(masked, originals).run())
     except ValueError as exc:
         return False, [NOTE.format(f"cannot parse the command: {exc}")]
     commands = _simple_commands(tokens)

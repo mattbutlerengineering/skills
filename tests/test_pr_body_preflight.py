@@ -308,6 +308,64 @@ class TestSameCallHeredoc(unittest.TestCase):
         self.assertEqual(run(self.demo(body)), (0, []))
 
 
+    def capture(self, command, pairs=()):
+        unrun = pr_body_preflight._Unrun(command, pairs)
+        return unrun.run(), unrun.heredocs
+
+    def test_a_statement_heredoc_is_captured_with_its_text(self):
+        out, heredocs = self.capture(
+            "cat > F <<'EOF'\nline one\nline two\nEOF\n")
+        self.assertEqual(
+            heredocs,
+            [pr_body_preflight.Heredoc("line one\nline two\n", True, True)])
+        self.assertEqual(out, "cat > F <<__pr_body_preflight_heredoc_0__\n")
+
+    def test_a_dash_heredoc_strips_leading_tabs_from_its_text(self):
+        _, heredocs = self.capture("cat <<-EOF > F\n\ta\n\t\tb\n\tEOF\n")
+        self.assertEqual(heredocs[0].text, "a\nb\n")
+        self.assertTrue(heredocs[0].terminated)
+
+    def test_a_delimiter_that_never_closes_is_unterminated(self):
+        _, heredocs = self.capture("cat > F <<EOF\nplain\nnever closed")
+        self.assertEqual(
+            heredocs,
+            [pr_body_preflight.Heredoc("plain\nnever closed\n", True, False)])
+
+    def test_a_here_string_is_not_a_heredoc(self):
+        out, heredocs = self.capture("cat > F <<< text\n")
+        self.assertEqual((out, heredocs), ("cat > F <<< text\n", []))
+
+    def test_literal_follows_the_quoting_and_the_body(self):
+        for command, literal in (
+                ("cat <<'D'\n$X\nD\n", True), ('cat <<"D"\n$X\nD\n', True),
+                ("cat <<\\D\n$X\nD\n", True), ("cat <<D\nplain\nD\n", True),
+                ("cat <<D\n$X\nD\n", False), ("cat <<D\n`x`\nD\n", False),
+                ("cat <<D\na\\b\nD\n", False)):
+            with self.subTest(command=command):
+                self.assertEqual(self.capture(command)[1][0].literal, literal)
+
+    def test_heredocs_are_numbered_in_queue_order(self):
+        out, heredocs = self.capture("cat <<A; cat <<B\none\nA\ntwo\nB\n")
+        self.assertEqual([h.text for h in heredocs], ["one\n", "two\n"])
+        self.assertEqual(out, "cat <<__pr_body_preflight_heredoc_0__; "
+                              "cat <<__pr_body_preflight_heredoc_1__\n")
+
+    def test_literal_and_text_are_decided_on_the_unmasked_body(self):
+        """A body that documents a `$(cat <<'B' ... B)` snippet: the masked
+        placeholder is restored before `literal` is decided, and `text` is
+        the original span (P3 gap 7)."""
+        snippet = "$(cat <<'B'\ninner\nB\n)"
+        masked, _, pairs = pr_body_preflight._mask_heredocs(
+            f"cat > F <<'EOF'\nsee {snippet} here\nEOF\n")
+        self.assertNotIn("inner", masked)
+        _, heredocs = self.capture(masked, pairs)
+        self.assertEqual(heredocs[0].text, f"see {snippet} here\n")
+        _, unquoted = self.capture(
+            masked.replace("<<'EOF'", "<<EOF"), pairs)
+        self.assertEqual(unquoted[0].text, f"see {snippet} here\n")
+        self.assertFalse(unquoted[0].literal)
+
+
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
         reason = note("the body holds $ or a backtick the hook cannot expand")
