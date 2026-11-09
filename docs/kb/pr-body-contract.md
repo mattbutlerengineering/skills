@@ -1,7 +1,7 @@
 ---
 summary: A PR body needs a WO id or a "No work order:" line plus Closes #N; B skips locally, only the gh pr create hook catches it early.
 sources: gates.py, knowledge_plane.py, validator.py, pr_body_preflight.py, .github/workflows/validator.yml
-verified: af3859e78b5379aafe338a42acbc97f553dda6c5
+verified: 8602f9015ac29a9963a500de66b1c4428cda7181
 related: gates-scan-every-doc
 ---
 
@@ -15,10 +15,16 @@ silently** — `python3 gates.py` passes on your machine and the
 One local catch exists: `pr_body_preflight.py`, a PreToolUse hook in
 `.claude/settings.json`, refuses a `gh pr create` whose body fails B
 (exit 2, B's strings from `gates.pr_body_problems`, the rule's one
-owner). It fails open: a body it cannot read (`--fill`, `--web`, a
-shell expansion, another repository) gets a "not checked" note and
-passes. A PR opened any other way, or edited later, is judged by CI's B
-alone.
+owner). It reads an inline body, a heredoc substitution, a body file
+that exists, and a same-call heredoc: `cat > F <<'EOF'` followed in the
+same command by `gh pr create --body-file F` is judged on the heredoc's
+text, when the writer surely ran, nothing between it and the reader
+could have changed F, and nothing before the writer opens a descriptor
+onto F or redefines the commands that run. It fails open: a body it
+cannot read (`--fill`,
+`--web`, a shell expansion, another repository, a binding it cannot
+establish) gets a "not checked" note and passes. A PR opened any other
+way, or edited later, is judged by CI's B alone.
 
 The body must carry both:
 

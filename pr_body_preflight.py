@@ -8,6 +8,17 @@ CI event, so locally it skips and only fails once the PR is open
 (docs/kb/pr-body-contract.md). This applies the same rule, through B's one
 owner gates.pr_body_problems, before the PR exists.
 
+A `--body-file F` is read from disk when `gh pr create` is the compound's
+first command. A same-call heredoc is also a readable shape: a not-first
+reader whose file an earlier `cat > F <<D` writes is judged on that
+heredoc's text, with no disk read, when the writer surely ran (its
+execution is implied by the reader's), F is spelled identically in both,
+and no command between them may have changed F (a write redirect, a
+process substitution, a hostile joiner or any command off the inert
+list) and nothing before the writer opens a descriptor onto F or
+redefines the commands that run. Any binding the hook cannot establish is
+a "not checked" note.
+
   exit 2   a body the hook read exactly and B judged failing: B's strings
            on stderr, one per line, then a pointer at the kb page
   exit 0   everything else: silent, or one `pr-body-preflight: not checked
@@ -57,6 +68,12 @@ HEREDOC_OPEN = re.compile(
 HEREDOC_CLOSE = re.compile(r"\s*\)")
 PLACEHOLDER = "__pr_body_preflight_heredoc_{}__"
 PLACEHOLDER_WORD = re.compile(r"__pr_body_preflight_heredoc_(\d+)__")
+# A file-descriptor prefix (`2` in `2>&1`): a digit word touching its
+# redirect operator in the unquoted source, which the tokenizer cannot tell
+# from a command word once a space separates the two. _Unrun marks it.
+FD_PREFIX = "__pr_body_preflight_fd_{}__"
+FD_WORD = re.compile(r"__pr_body_preflight_fd_(\d+)__")
+DIGITS = "0123456789"
 # One statement-level heredoc: the bytes a shell writes, whether the shell
 # would expand nothing in them, and whether the delimiter line closed it.
 Heredoc = collections.namedtuple("Heredoc", "text literal terminated")
@@ -136,12 +153,15 @@ class _Unrun:
     `heredocs` (a Heredoc, in queue order) and its operator and delimiter
     are rewritten to `<<` plus a numbered placeholder word; originals are
     the (placeholder, span) pairs _mask_heredocs cut, restored in a body
-    before `literal` is decided."""
+    before `literal` is decided. A digit word that touches its `<` or `>`
+    (a descriptor prefix) is replaced by a marker word, and `ansi_c` is
+    set when an unquoted `$'...'` string was cut."""
 
     def __init__(self, text, originals=()):
         self.text, self.pos, self.out = text, 0, []
         self.pending, self.boundary, self.braces = [], True, 0
         self.originals, self.heredocs = originals, []
+        self.ansi_c = False  # an unquoted `$'...'` string was cut
 
     def run(self):
         self._normal(nested=False)
@@ -159,6 +179,8 @@ class _Unrun:
         depth, text = 0, self.text
         while self.pos < len(text):
             ch = text[self.pos]
+            if self._fd_prefix(ch):
+                continue
             if ch == ")" and nested and depth == 0:
                 return self._take(self.pos + 1)
             if ch in "()" and nested:
@@ -170,6 +192,21 @@ class _Unrun:
         if nested:
             raise ValueError("an unclosed command substitution")
 
+    def _fd_prefix(self, ch):
+        """True after replacing a digit word that touches a `<` or `>` (at
+        a word boundary, outside `${ }`) with its marker word."""
+        text, end = self.text, self.pos
+        if not (self.boundary and not self.braces and ch in DIGITS
+                and not "".join(self.out[-2:]).endswith((">&", "<&"))):
+            return False
+        while end < len(text) and text[end] in DIGITS:
+            end += 1
+        if end >= len(text) or text[end] not in "<>":
+            return False
+        self.out.append(FD_PREFIX.format(text[self.pos:end]))
+        self.pos, self.boundary = end, False
+        return True
+
     def _special(self, ch):
         """Consume one construct starting at pos; False when ch is plain."""
         text, pos = self.text, self.pos
@@ -178,6 +215,7 @@ class _Unrun:
         elif ch == "\\":
             self._take(pos + 2)
         elif ch == "'" or text.startswith("$'", pos):
+            self.ansi_c = self.ansi_c or ch == "$"
             self._quoted(pos + (2 if ch == "$" else 1), "'", ch == "$")
         elif ch == '"':
             self._double()
@@ -336,8 +374,10 @@ def _simple_commands(tokens):
     or `>`, split off from any separator before it (a lone `&` directly
     before `>` stays in the operator: `&>`, `&>>`) and paired with the
     word that follows (a `<(` or `>(` is kind `procsub` and takes none);
-    the joiner is every separator run since the
-    previous record."""
+    the joiner is every separator run since the previous record. A digit
+    word _Unrun marked as touching its operator is that redirect's
+    descriptor prefix and is written into the operator (`2>&`), not left
+    as a word."""
     records, joiner = [], ""
     words, redirects, operator = [], [], None
     for token in tokens:
@@ -356,10 +396,13 @@ def _simple_commands(tokens):
                     words, redirects, joiner = [], [], ""
                 joiner += head
             if cut is not None:
+                fd = FD_WORD.fullmatch(words[-1]) if words and not head else None
+                if fd:  # `2>&1`: the digits belong to the operator
+                    words.pop()
                 if token[cut:] in ("<(", ">("):  # opens a command, no target
                     redirects.append(("procsub", token[cut:]))
                 else:
-                    operator = token[cut:]
+                    operator = (fd[1] if fd else "") + token[cut:]
         else:
             words.append(token)
     if words or redirects:
@@ -561,7 +604,8 @@ INERT_VERBS = frozenset({
 # Names whose value steers a later command (git, gh, a pager, the search
 # path, word splitting, a startup file, the loader): never a plain assignment.
 STEERING_NAME = re.compile(
-    r"GIT_.*|GH_.*|.*PAGER|PATH|IFS|BASH_ENV|ENV|LD_.*|DYLD_.*")
+    r"GIT_.*|GH_.*|.*PAGER|PATH|IFS|BASH_ENV|ENV|LD_.*|DYLD_.*|HOME|XDG_.*"
+    r"|BROWSER")
 # The git subcommands that only read, and `gh` commands that only read as
 # (group, command); `git config --get` and `git branch --show-current` are
 # read by their one flag.
@@ -585,14 +629,64 @@ def _verb(record):
     return record.words[0] if record.words else None
 
 
-def _command_word(record):
-    """The command record runs: its first word after leading assignments
-    and `command` / `builtin`."""
+# Words that open a command without being it.
+LEADERS = SHELL_KEYWORDS | {"time", "command", "builtin"}
+NULL_TARGETS = ("/dev/null", "/dev/stderr")
+# Names that can change the writer `cat` itself, so they unbind wherever
+# they are set; every other steering name matters only to a command that
+# runs between writer and reader.
+WRITER_STEERING = re.compile(r"PATH|LD_.*|DYLD_.*|BASH_ENV|ENV")
+FD_NAME = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+_BEFORE = "{} may be rewritten or removed by {} before the heredoc"
+
+
+def _unmark(text):
+    """text with a descriptor-prefix marker word written back as digits."""
+    return FD_WORD.sub(r"\1", text)
+
+
+def _opens_descriptor(record):
+    """True when record, before the writer, keeps a descriptor open onto
+    a file for the rest of the shell: an `exec`, or a `{NAME}` word, that
+    carries a write redirect."""
+    return ("exec" in record.words
+            or any(FD_NAME.fullmatch(word) for word in record.words)
+            ) and bool(_write_redirect(record))
+
+
+def _shadows(record, between):
+    """What in record, a command before the writer, may change how a later
+    command behaves, else None: a function definition (`name()` leaves `()`
+    in the joiner of the record after it, or the `function` keyword as the
+    command word), an alias, a trap other than on EXIT, or a standalone
+    assignment or `export` of a name that can change the writer itself
+    (WRITER_STEERING) or, when a command sits between writer and reader
+    (`between`), of any steering name. `eval`, `source`, `declare -x`,
+    `export NAME other`, `for NAME in` and `NAME+=` are accepted limits."""
+    if "()" in record.joiner:
+        return "a function definition"
     words = list(record.words)
-    while words and (ASSIGNMENT.match(words[0])
-                     or words[0] in ("command", "builtin")):
-        words.pop(0)
-    return words[0] if words else None
+    while words and words[0] in LEADERS:
+        if words.pop(0) == "function":
+            return "a function definition"
+    if not words:
+        return None
+    if words[0] == "alias":
+        return "alias"
+    if words[0] == "trap":
+        signals = words[2:]
+        if len(words) < 3 or any(s not in ("EXIT", "0") for s in signals):
+            return "trap"
+        return None
+    exported = words[0] == "export"
+    assignments = words[1:] if exported else words
+    if assignments and all(ASSIGNMENT.match(w) for w in assignments):
+        for word in assignments:
+            name = word.split("=", 1)[0]
+            if WRITER_STEERING.fullmatch(name) or (
+                    between and STEERING_NAME.fullmatch(name)):
+                return "export" if exported else name + "="
+    return None
 
 
 def _running_redirect(record, statements):
@@ -610,7 +704,7 @@ def _running_redirect(record, statements):
                     or not statements[number].terminated):
                 return "<< an unquoted heredoc"
         elif _runs(target):
-            return f"{operator} {target}"
+            return _unmark(f"{operator} {target}")
     return None
 
 
@@ -622,12 +716,16 @@ def _write_redirect(record):
     for operator, target in record.redirects:
         if operator == "procsub":
             return target
-        if operator in READ_OPERATORS or target in ("/dev/null",
-                                                    "/dev/stderr"):
-            continue
-        if operator == ">&" and (target.isdigit() or target == "-"):
-            continue
-        return f"{operator} {target}"
+        bare = operator.lstrip(DIGITS)
+        if bare == operator:
+            if operator in READ_OPERATORS or target in NULL_TARGETS:
+                continue
+        elif bare in ("<", "<&") or (bare in (">", ">>", ">|")
+                                      and target in NULL_TARGETS):
+            continue  # a prefixed read, or a prefixed write to /dev/null
+        if bare == ">&" and (target.isdigit() or target == "-"):
+            continue  # a duplication or a close, with or without a prefix
+        return _unmark(f"{operator} {target}")
     return None
 
 
@@ -741,9 +839,13 @@ def _bound_body(spelling, context):
                           "certain to run before gh pr create")
     if context["ansi_c"] and index + 1 < at:  # `$'\\''` hides what follows
         raise _Unreadable(_REWRITTEN.format(spelling, "$'...'"))
+    anything_between = index + 1 < at
     for earlier in records[:index]:
-        if _command_word(earlier) == "exec" and _write_redirect(earlier):
-            raise _Unreadable(_REWRITTEN.format(spelling, "exec"))
+        if _opens_descriptor(earlier):
+            raise _Unreadable(_BEFORE.format(spelling, "an open descriptor"))
+        shadow = _shadows(earlier, anything_between)
+        if shadow:
+            raise _Unreadable(_BEFORE.format(spelling, shadow))
     for between in records[index + 1:at + 1]:
         redirect = (_write_redirect(between)
                     or _running_redirect(between, context["statements"]))
@@ -936,7 +1038,7 @@ def _verdicts(command, cwd, environ):
         context = {"first": position == 0, "cwd": cwd, "heredocs": heredocs,
                    "commands": commands, "position": position,
                    "records": records, "record": with_words[position],
-                   "statements": unrun.heredocs, "ansi_c": "$'" in source,
+                   "statements": unrun.heredocs, "ansi_c": unrun.ansi_c,
                    "prefix": words[:len(words) - len(args) - 3],
                    "environ": environ}
         try:
