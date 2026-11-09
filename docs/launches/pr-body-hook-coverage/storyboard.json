@@ -1,0 +1,10 @@
+{"title": "Earlier pull-request checks",
+ "tagline": "Catch a bad description before the pull request exists",
+ "intro": "The early check on pull-request descriptions now reads one more kind of command.",
+ "steps": [
+  {"say": "When the description is missing its work-order line or its closing line, the command is stopped before the pull request exists.",
+   "do": ["try(){ python3 -c 'import json,sys;print(json.dumps({\"tool_name\":\"Bash\",\"tool_input\":{\"command\":sys.argv[1]}}))' \"$1\" | python3 pr_body_preflight.py 2>&1; echo \"exit $?\"; }", "clear", "try $'cat > b.md <<EOF\\nJust a summary.\\nEOF\\ngh pr create --title t --body-file b.md'"]},
+  {"say": "When the description has both lines, the command goes through untouched.",
+   "do": ["try $'cat > b.md <<EOF\\nNo work order: a demo.\\nCloses #1\\nEOF\\ngh pr create --title t --body-file b.md'"]}
+ ],
+ "outro": "Now it fails in seconds, with the same two reasons the build would give."}
