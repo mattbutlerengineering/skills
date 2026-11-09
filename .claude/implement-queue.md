@@ -116,22 +116,29 @@ so delete it yourself once `gh pr view <N> --json
 state,headRefName,headRefOid,isCrossRepository` reports `MERGED`. If the
 PR is not yet `MERGED` (an `--auto` merge waiting on checks), do nothing
 now and repeat this step when it is. Delete only when all of these hold,
-and otherwise leave the branch alone and report it by name:
+and otherwise leave the branch alone and report it by name. Each command
+must exit 0: a failed `gh` or `git` call is a failure, never an empty
+result.
 
 1. `isCrossRepository` is `false`.
 2. `<headRefName>` is not the default branch (`main`).
-3. `gh pr list --base <headRefName> --state open --json number` is
-   empty, so no open PR is stacked on it.
-4. `git ls-remote origin refs/heads/<headRefName>` prints exactly one
-   line, and its commit equals `headRefOid`. The full ref is required:
-   `--heads <name>` also matches any branch whose name ends in it.
+3. `gh pr list --base <headRefName> --state open --json number` exits 0
+   and prints `[]`, so no open PR is stacked on it.
+4. `git ls-remote origin refs/heads/<headRefName>` exits 0 and prints
+   exactly one line, and its commit equals `headRefOid`. The full ref is
+   required: `--heads <name>` also matches any branch whose name ends in
+   it. A different commit means the branch carries later commits. No
+   line at all means the branch is already gone: nothing to do, and
+   nothing to report.
 
 Then pin the delete to that commit, so a push that lands after the check
 is refused instead of deleted:
 
     git push --force-with-lease=refs/heads/<headRefName>:<headRefOid> origin --delete refs/heads/<headRefName>
 
-A remote tip that differs from `headRefOid` carries later commits.
+A refused push leaves the branch: report it by name, and never retry the
+delete without the lease or by another route (the lease is the race
+protection).
 
 ## update-branch
 
