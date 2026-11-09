@@ -789,7 +789,7 @@ class TestSameCallHeredoc(unittest.TestCase):
 
     def test_a_file_descriptor_or_null_redirect_between_is_judged(self):
         for between in ("> /dev/null\n", ">&2\n", ">&-\n", ">/dev/stderr\n",
-                        "2>&1\n", "2> /dev/null\n",
+
                         "&> /dev/null\n", "< /tmp/x\n"):
             with self.subTest(between=between):
                 self.assertEqual(
@@ -883,8 +883,13 @@ class TestSameCallHeredoc(unittest.TestCase):
             with self.subTest(closer=closer, tail="none"):
                 self.assertEqual(run(self.closed(opener, closer)),
                                  refused(self.BAD + "\n"))
-        self.assert_a_note("case x in\nx)\n" + self.write(self.BAD)
-                           + self.READ + "\n;;\nesac > /tmp/b.md")
+        for tail, expected in (
+                (" > /tmp/b.md", self.unbound("> /tmp/b.md")),
+                (" > /dev/null", refused(self.BAD + "\n"))):
+            with self.subTest(closer="esac", tail=tail):
+                self.assertEqual(
+                    run("case x in\nx) true\n" + self.write(self.BAD)
+                        + self.READ + "\n;;\nesac" + tail), expected)
 
     def test_a_writer_on_the_blocks_opening_line_is_a_note(self):
         self.assertEqual(
@@ -1146,6 +1151,114 @@ class TestSameCallHeredoc(unittest.TestCase):
         self.assertEqual(
             run(self.spelled("b.md", between="git diff b.md\n")),
             self.unbound("git diff", "b.md"))
+
+
+    # --- Milestone 3 review fixes -----------------------------------------
+    def test_a_redirect_target_that_runs_a_command_is_a_note(self):
+        for between in ('cat <<< "$(echo good > /tmp/b.md)"',
+                        'grep x < "$(rm /tmp/b.md)"',
+                        'cat < "`rm /tmp/b.md`"',
+                        'git log < "$(rm -f /tmp/b.md)"',
+                        'cat < "${S:=/x}"',
+                        'cat < "$[1+1]"',
+                        "cat <<X\n$(echo good > /tmp/b.md)\nX",
+                        "cat <<X\n`rm /tmp/b.md`\nX",
+                        "cat <<X\na\\nb\nX",
+                        'cat < "$(cat <<\'B\'\nx\nB\n)"'):
+            with self.subTest(between=between):
+                code, lines = run(
+                    self.spelled("/tmp/b.md", between=between + "\n"))
+                self.assertEqual(code, 0)
+                self.assertEqual(len(lines), 1)
+                self.assertIn("may be rewritten or removed by", lines[0])
+        code, lines = run(self.spelled(
+            "/tmp/b.md", between='cat <<< "$(rm /tmp/b.md)"\n'))
+        self.assertEqual(
+            lines, [note("/tmp/b.md may be rewritten or removed by <<< "
+                         "$(rm /tmp/b.md) between the heredoc and gh pr "
+                         "create")])
+
+    def test_a_literal_heredoc_or_here_string_between_is_judged(self):
+        for between in ("cat <<'X'\nhello $S\nX", "cat <<X\nplain\nX",
+                        "cat <<< 'literal $(x)'", "cat <<< plain"):
+            with self.subTest(between=between):
+                code, lines = run(
+                    self.spelled("/tmp/b.md", between=between + "\n"))
+                self.assertIn(code, (0, 2))
+        for between in ("cat <<'X'\nhello\nX", "cat <<X\nplain\nX",
+                        "cat <<< plain"):
+            with self.subTest(judged=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    refused(self.BAD + "\n"))
+
+    def test_a_masked_substitution_in_an_argument_or_value_is_a_note(self):
+        for between in ('echo "$(cat <<B\n$(rm -f /tmp/b.md)\nB\n)"',
+                        'T="$(cat <<B\n`rm /tmp/b.md`\nB\n)"',
+                        "printf %s \"$(cat <<'B'\nhello\nB\n)\"",
+                        "export T=\"$(cat <<'B'\nhello\nB\n)\""):
+            with self.subTest(between=between):
+                code, lines = run(
+                    self.spelled("/tmp/b.md", between=between + "\n"))
+                self.assertEqual(code, 0)
+                self.assertEqual(len(lines), 1)
+                self.assertIn("may be rewritten or removed by", lines[0])
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            (top / "d").mkdir()
+            code, lines = run(self.spelled(
+                "/tmp/b.md", between="cd \"$(cat <<'B'\nd\nB\n)\"\n"), top)
+            self.assertEqual(code, 0)
+            self.assertIn("may be rewritten or removed by cd", lines[0])
+
+    def test_an_ansi_c_string_hides_what_the_tokenizer_cannot_see(self):
+        for between in ("echo $'\\''; rm /tmp/b.md; \\'\n",
+                        "cat $'\\''; rm /tmp/b.md; \\'\n",
+                        "echo $'a'\n"):
+            with self.subTest(between=between):
+                code, lines = run(
+                    self.spelled("/tmp/b.md", between=between))
+                self.assertEqual(code, 0)
+                self.assertEqual(len(lines), 1)
+                self.assertIn("may be rewritten or removed by", lines[0])
+        self.assertEqual(run(self.spelled("/tmp/b.md")), refused(self.BAD + "\n"))
+
+    def test_a_digit_word_is_not_a_redirect_only_command(self):
+        for between, what in (("2>&1", "2"), ("2> /dev/null", "2"),
+                              ("5 < /tmp/x", "5"), ("2 >&1", "2")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    self.unbound(what))
+
+    def test_an_exec_behind_a_prefix_or_wrapper_unbinds(self):
+        for before in ("X=1 exec 3> /tmp/b.md\n", "command exec 3> /tmp/b.md\n",
+                       "builtin exec 3>> /tmp/b.md\n",
+                       "X=1 Y=2 command exec 3<> /tmp/b.md\n"):
+            with self.subTest(before=before):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", before=before,
+                                     between="echo hi >&3\n")),
+                    self.unbound("exec"))
+        self.assertEqual(
+            run(self.spelled("/tmp/b.md", before="X=1 exec 3>&1\n")),
+            refused(self.BAD + "\n"))
+
+    def test_an_assignment_to_a_name_that_steers_a_command_is_a_note(self):
+        for between, what in (
+                ("PATH=/x", "PATH="), ("export PATH=/x", "export"),
+                ("IFS=,", "IFS="), ("GIT_DIR=/x", "GIT_DIR="),
+                ("GH_REPO=o/r", "GH_REPO="), ("BASH_ENV=x", "BASH_ENV="),
+                ("ENV=x", "ENV="), ("LD_PRELOAD=x", "LD_PRELOAD="),
+                ("DYLD_INSERT_LIBRARIES=x", "DYLD_INSERT_LIBRARIES="),
+                ("PAGER=cat", "PAGER="), ("GIT_PAGER=cat", "GIT_PAGER="),
+                ("export PAGER=cat", "export"), ("MYPAGER=x", "MYPAGER="),
+                ("T=1 PATH=/x", "T=")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    self.unbound(what))
 
 
 

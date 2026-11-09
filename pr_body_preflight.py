@@ -538,13 +538,18 @@ def _comparable(spelling):
                        for name in names))
 
 
+def _runs(word):
+    """True when WORD may run a command or assign: an unsafe argument, or
+    a placeholder for a masked `$(cat <<'D' ...)` substitution."""
+    return bool(UNSAFE_ARGUMENT.search(word) or PLACEHOLDER_WORD.search(word))
+
+
 def _directory_change(record):
     """True when record is a bare cd, pushd or popd whose arguments run
     nothing and assign nothing."""
     return bool(record.words and record.words[0] in DIRECTORY_CHANGERS
                 and not record.redirects
-                and not any(UNSAFE_ARGUMENT.search(word)
-                            for word in record.words[1:]))
+                and not any(_runs(word) for word in record.words))
 
 
 # Commands that leave every file alone when their arguments do not run
@@ -553,6 +558,10 @@ INERT_VERBS = frozenset({
     "echo", "printf", "true", ":", "sleep",
     "cat", "grep", "egrep", "fgrep", "head", "tail", "wc", "ls", "test", "[",
     "diff", "cmp", "stat"})
+# Names whose value steers a later command (git, gh, a pager, the search
+# path, word splitting, a startup file, the loader): never a plain assignment.
+STEERING_NAME = re.compile(
+    r"GIT_.*|GH_.*|.*PAGER|PATH|IFS|BASH_ENV|ENV|LD_.*|DYLD_.*")
 # The git subcommands that only read, and `gh` commands that only read as
 # (group, command); `git config --get` and `git branch --show-current` are
 # read by their one flag.
@@ -572,11 +581,36 @@ _REWRITTEN = ("{} may be rewritten or removed by {} between the heredoc and "
 
 
 def _verb(record):
-    """The command word of record, or None for a redirect-only command
-    (the digits of `2>&1` tokenize as a word: a descriptor prefix)."""
-    if record.words and not (record.redirects
-                             and all(w.isdigit() for w in record.words)):
-        return record.words[0]
+    """The command word of record, or None for a redirect-only command."""
+    return record.words[0] if record.words else None
+
+
+def _command_word(record):
+    """The command record runs: its first word after leading assignments
+    and `command` / `builtin`."""
+    words = list(record.words)
+    while words and (ASSIGNMENT.match(words[0])
+                     or words[0] in ("command", "builtin")):
+        words.pop(0)
+    return words[0] if words else None
+
+
+def _running_redirect(record, statements):
+    """The text of the first redirection of record whose target can run a
+    command: a word holding a substitution, a masked substitution's
+    placeholder, or a statement heredoc that is not literal (an unquoted
+    body expands) or never closes."""
+    for operator, target in record.redirects:
+        if operator == "procsub":
+            continue
+        found = PLACEHOLDER_WORD.fullmatch(target)
+        if operator == "<<" and found:
+            number = int(found[1])
+            if (number >= len(statements) or not statements[number].literal
+                    or not statements[number].terminated):
+                return "<< an unquoted heredoc"
+        elif _runs(target):
+            return f"{operator} {target}"
     return None
 
 
@@ -659,12 +693,14 @@ def _inert(record, spelling):
     words = record.words
     if _directory_change(record):
         return True
-    if any(UNSAFE_ARGUMENT.search(word) for word in words):
+    if any(_runs(word) for word in words):
         return False
     assignments = words[1:] if words[0] == "export" else words
     if assignments and all(ASSIGNMENT.match(word) for word in assignments):
         held = _names(spelling)
-        return not any(word.split("=", 1)[0] in held for word in assignments)
+        names = [word.split("=", 1)[0] for word in assignments]
+        return not any(name in held or STEERING_NAME.fullmatch(name)
+                       for name in names)
     if words[0] == "printf" and any(w.startswith("-v") for w in words[1:]):
         return False
     if words[0] == "git":
@@ -703,11 +739,14 @@ def _bound_body(spelling, context):
     if not _surely_ran(records, index, at):
         raise _Unreadable(f"the heredoc that writes {spelling} is not "
                           "certain to run before gh pr create")
+    if context["ansi_c"] and index + 1 < at:  # `$'\\''` hides what follows
+        raise _Unreadable(_REWRITTEN.format(spelling, "$'...'"))
     for earlier in records[:index]:
-        if earlier.words[:1] == ["exec"] and _write_redirect(earlier):
+        if _command_word(earlier) == "exec" and _write_redirect(earlier):
             raise _Unreadable(_REWRITTEN.format(spelling, "exec"))
     for between in records[index + 1:at + 1]:
-        redirect = _write_redirect(between)
+        redirect = (_write_redirect(between)
+                    or _running_redirect(between, context["statements"]))
         if redirect:
             raise _Unreadable(_REWRITTEN.format(spelling, redirect))
     for later in records[at + 1:]:
@@ -879,7 +918,8 @@ def _verdicts(command, cwd, environ):
     masked, heredocs, originals = _mask_heredocs(command)
     unrun = _Unrun(masked, originals)
     try:
-        tokens = _tokens(unrun.run())
+        source = unrun.run()
+        tokens = _tokens(source)
     except ValueError as exc:
         return False, [NOTE.format(f"cannot parse the command: {exc}")]
     records = _simple_commands(tokens)
@@ -896,7 +936,7 @@ def _verdicts(command, cwd, environ):
         context = {"first": position == 0, "cwd": cwd, "heredocs": heredocs,
                    "commands": commands, "position": position,
                    "records": records, "record": with_words[position],
-                   "statements": unrun.heredocs,
+                   "statements": unrun.heredocs, "ansi_c": "$'" in source,
                    "prefix": words[:len(words) - len(args) - 3],
                    "environ": environ}
         try:
