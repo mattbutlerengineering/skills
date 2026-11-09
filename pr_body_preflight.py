@@ -520,12 +520,17 @@ def _surely_ran(records, index, at):
                for record in [records[index]] + after)
 
 
+def _names(spelling):
+    """The variable names a spelling expands."""
+    return [m[1] or m[2] for m in NAME_FORM.finditer(spelling)]
+
+
 def _comparable(spelling):
     """True when SPELLING names a file the hook can compare by identity:
     no backtick, `$(`, glob, brace outside `${NAME}` or leading `~`, and
     every `$` begins `$NAME` or `${NAME}` of a name the shell leaves to
     assignments."""
-    names = [m[1] or m[2] for m in NAME_FORM.finditer(spelling)]
+    names = _names(spelling)
     return not (spelling.startswith("~")
                 or re.search(r"[`$*?\[\]{}]", NAME_FORM.sub("", spelling))
                 or any(name in SHELL_MAINTAINED or name.startswith("BASH")
@@ -541,6 +546,12 @@ def _directory_change(record):
                             for word in record.words[1:]))
 
 
+# Commands that leave every file alone when their arguments do not run
+# anything: builtins, then read-only verbs (architecture.md's inert list).
+INERT_VERBS = frozenset({
+    "echo", "printf", "true", ":", "sleep",
+    "cat", "grep", "egrep", "fgrep", "head", "tail", "wc", "ls", "test", "[",
+    "diff", "cmp", "stat"})
 # Redirections that only read, so they never unbind.
 READ_OPERATORS = frozenset({"<", "<<", "<<<", "<&"})
 BLOCK_CLOSERS = ("}", "done", "fi", "esac")
@@ -572,6 +583,35 @@ def _write_redirect(record):
             continue
         return f"{operator} {target}"
     return None
+
+
+def _removed_by(record):
+    """The command word a note names: the name of an assignment (its value
+    may be long), else the verb."""
+    verb = _verb(record)
+    if ASSIGNMENT.match(verb):
+        return verb.split("=", 1)[0] + "="
+    return verb
+
+
+def _inert(record, spelling):
+    """True when record, a command between writer and reader, leaves
+    SPELLING alone: a bare cd, a standalone assignment or `export` of a
+    name SPELLING does not hold, or an inert verb with no argument that
+    runs or assigns and, for printf, no `-v`. Write redirects are judged
+    before this."""
+    words = record.words
+    if _directory_change(record):
+        return True
+    if any(UNSAFE_ARGUMENT.search(word) for word in words):
+        return False
+    assignments = words[1:] if words[0] == "export" else words
+    if assignments and all(ASSIGNMENT.match(word) for word in assignments):
+        held = _names(spelling)
+        return not any(word.split("=", 1)[0] in held for word in assignments)
+    if words[0] == "printf" and any(w.startswith("-v") for w in words[1:]):
+        return False
+    return words[0] in INERT_VERBS
 
 
 def _bound_body(spelling, context):
@@ -613,13 +653,11 @@ def _bound_body(spelling, context):
             redirect = _write_redirect(later)
             if redirect:
                 raise _Unreadable(_REWRITTEN.format(spelling, redirect))
-    # lean: a directory change is the only command admitted between writer
-    # and reader; the rest of the inert list (architecture.md) arrives in
-    # Milestone 3, so any other command unbinds.
     for between in records[index + 1:at]:
-        if _verb(between) and not _directory_change(between):
-            raise _Unreadable(_REWRITTEN.format(spelling, _verb(between)))
-        if _verb(between) and not spelling.startswith("/"):
+        verb = _verb(between)
+        if verb and not _inert(between, spelling):
+            raise _Unreadable(_REWRITTEN.format(spelling, _removed_by(between)))
+        if verb in DIRECTORY_CHANGERS and not spelling.startswith("/"):
             raise _Unreadable("a cd between the heredoc and gh pr create "
                               f"may change what {spelling} names")
     return heredoc.text

@@ -479,7 +479,7 @@ class TestSameCallHeredoc(unittest.TestCase):
     def test_any_command_between_writer_and_reader_is_a_note(self):
         reason = ("/tmp/b.md may be rewritten or removed by {} between "
                   "the heredoc and gh pr create")
-        for between, what in (("echo hi\n", "echo"), ("rm /tmp/b.md\n", "rm"),
+        for between, what in (("rm /tmp/b.md\n", "rm"),
                               ("> /tmp/b.md\n", "> /tmp/b.md")):
             with self.subTest(between=between):
                 self.assertEqual(
@@ -888,6 +888,154 @@ class TestSameCallHeredoc(unittest.TestCase):
         self.assertEqual(
             run("{ " + self.write(self.BAD) + self.READ + "; } > /tmp/b.md"),
             (0, [self.NOT_FIRST]))
+
+    # --- Milestone 3, rule 4: the inert shell builtins and read-only verbs --
+    INERT = (
+        "echo hi", "printf '%s\\n' hi", "true", ":", "sleep 0",
+        "cat /tmp/x", "grep -q x /tmp/x", "egrep -q x /tmp/x",
+        "fgrep -q x /tmp/x", "head -1 /tmp/x", "tail -1 /tmp/x",
+        "wc -l /tmp/x", "ls /tmp", "test -f /tmp/x", "[ -f /tmp/x ]",
+        "diff /tmp/x /tmp/y", "cmp /tmp/x /tmp/y", "stat /tmp/x", "T=1",
+        "export T=1", "T=1 U=2", "export T=1 U=2",
+        "echo hi 2>&1", "echo hi > /dev/null", "echo hi >&2",
+        "cat < /tmp/x", "grep x < /tmp/x")
+
+    def test_an_inert_command_between_writer_and_reader_is_judged(self):
+        for between in self.INERT:
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    refused(self.BAD + "\n"))
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", self.GOOD,
+                                     between=between + "\n")), (0, []))
+
+    def test_a_directory_change_between_is_judged_for_an_absolute_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            (top / "d").mkdir()
+            for between in ("cd d", "pushd d", "cd d && echo hi"):
+                with self.subTest(between=between):
+                    self.assertEqual(
+                        run(self.spelled("/tmp/b.md",
+                                         between=between + "\n"), top),
+                        refused(self.BAD + "\n"))
+
+    def test_a_verb_off_the_list_between_is_a_note(self):
+        for between, what in (
+                ("rm /tmp/b.md", "rm"), ("mv /tmp/x /tmp/b.md", "mv"),
+                ("cp /tmp/x /tmp/b.md", "cp"), ("tee /tmp/b.md", "tee"),
+                ("sed -i s/a/b/ /tmp/b.md", "sed"),
+                ("truncate -s 0 /tmp/b.md", "truncate"),
+                ("python3 x.py", "python3"), ("touch /tmp/b.md", "touch"),
+                ("sort -o /tmp/b.md x", "sort"), ("dd of=/tmp/b.md", "dd"),
+                ("install x /tmp/b.md", "install"), ("ln -sf x /tmp/b.md", "ln"),
+                ("exec true", "exec"), ("eval true", "eval"),
+                ("source x.sh", "source"), ("read x", "read"),
+                ("FOO=1 cat x", "FOO="), ("unset T", "unset"),
+                ("export T", "export"), ("export -n T=1", "export"),
+                ("export T=1 rm", "export"), ("T+=x", "T+=x"),
+                ("[[ -f x ]]", "[["), ("./b.sh", "./b.sh"), ("sh -c true", "sh"),
+                ("git", "git"), ("gh", "gh")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    self.unbound(what))
+
+    def test_an_inert_verb_that_writes_through_a_redirect_is_a_note(self):
+        for between, what in (
+                ("echo hi > /tmp/b.md", "> /tmp/b.md"),
+                ("echo hi >> /tmp/b.md", ">> /tmp/b.md"),
+                ("printf hi > /tmp/b.md", "> /tmp/b.md"),
+                ("cat > /tmp/b.md", "> /tmp/b.md"),
+                ("cat x > ./b.md", "> ./b.md"),
+                ("true 2> /tmp/b.md", "> /tmp/b.md"),
+                ("echo hi &> /tmp/b.md", "&> /tmp/b.md"),
+                ("echo hi >| /tmp/b.md", ">| /tmp/b.md")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    self.unbound(what))
+        self.assert_a_note(
+            self.spelled("/tmp/b.md", between="cat x | tee /tmp/b.md\n"))
+
+    def test_an_inert_verb_that_runs_or_assigns_in_an_argument_is_a_note(self):
+        for verb in ("echo", "printf", "cat", "grep x", "ls", "test -f", "[",
+                     "wc", "head", "stat", "sleep"):
+            for argument in ("`rm /tmp/b.md`", "$[1+1]", "${S:=x}", "${S=x}",
+                             '"$(date)"', '"`date`"', "x${S:=y}z"):
+                with self.subTest(verb=verb, argument=argument):
+                    self.assertEqual(
+                        run(self.spelled("/tmp/b.md",
+                                         between=f"{verb} {argument}\n")),
+                        self.unbound(verb.split()[0]))
+            for argument in ("$(rm /tmp/b.md)", "$((1+1))", "$((S=1))"):
+                with self.subTest(verb=verb, argument=argument):
+                    self.assert_a_note(
+                        self.spelled("/tmp/b.md",
+                                     between=f"{verb} {argument}\n"))
+
+    def test_a_bracket_expansion_in_an_inert_argument_unbinds(self):
+        """P3 gap 2: `echo $[1+1]` unbinds like `$((1+1))`."""
+        self.assertEqual(
+            run(self.spelled("/tmp/b.md", between="echo $[1+1]\n")),
+            self.unbound("echo"))
+        self.assert_a_note(
+            self.spelled("/tmp/b.md", between="echo $((1+1))\n"))
+
+    def test_printf_with_v_assigns_and_is_a_note(self):
+        for between in ("printf -vS x", "printf -v S x", "printf -v S",
+                        "printf -v T '%s' x"):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    self.unbound("printf"))
+        self.assertEqual(
+            run(self.spelled("/tmp/b.md", between="printf '%s' -vx\n")),
+            self.unbound("printf"))
+        self.assertEqual(
+            run(self.spelled("/tmp/b.md", between="printf '%s\\n' v\n")),
+            refused(self.BAD + "\n"))
+
+    def test_an_assignment_to_a_name_the_spelling_holds_is_a_note(self):
+        for between, what in ((": ${S:=x}", ":"), ("echo ${S:=x}", "echo"),
+                              ("S=1", "S="), ("export S=1", "export"),
+                              ("T=1 S=2", "T="), ("printf -v S x", "printf")):
+            for spelling in ("$S/b.md", "${S}/b.md"):
+                with self.subTest(between=between, spelling=spelling):
+                    self.assertEqual(
+                        run(self.spelled(spelling, before="S=/tmp\n",
+                                         between=between + "\n")),
+                        self.unbound(what, spelling))
+        self.assert_a_note(self.spelled("$S/b.md", before="S=/tmp\n",
+                                        between="echo $((S=1))\n"))
+        self.assertEqual(
+            run(self.spelled("$S/b.md", before="S=/tmp\n",
+                             between="T=1\nexport U=1\n")),
+            refused(self.BAD + "\n"))
+
+    def test_an_assignment_whose_value_runs_a_command_is_a_note(self):
+        for between, what in (("T=`date`", "T="), ("T=$[1+1]", "T="),
+                              ("export T=`date`", "export"),
+                              ("T=${U:=x}", "T="), ('T="$(date)"', "T=")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    self.unbound(what))
+        for between in ("T=$(date)", "export T=$(date)", "T=$((1+1))"):
+            with self.subTest(between=between):
+                self.assert_a_note(
+                    self.spelled("/tmp/b.md", between=between + "\n"))
+
+    def test_an_exec_descriptor_opened_onto_the_file_unbinds_a_dup(self):
+        self.assert_a_note(
+            self.spelled("/tmp/b.md", before="exec 3> /tmp/b.md\n",
+                         between="echo hi >&3\n"))
+        self.assertEqual(
+            run(self.spelled("/tmp/b.md", between="echo hi >&3\n")),
+            refused(self.BAD + "\n"))
+
 
 
 class TestUnreadableShapes(unittest.TestCase):
