@@ -483,18 +483,19 @@ def _writer_of(record, spelling):
     return int(placeholder[1]) if placeholder else None
 
 
-# A joiner the chain rule reads: one `;`, `&&` or newline, then newlines.
-# Anything else (`||`, `|`, `&`, a paren, `;;`, `&& ;`) is hostile.
 # Names a shell changes without an assignment, so two spellings of one are
 # not one file.
 SHELL_MAINTAINED = frozenset({
     "RANDOM", "SRANDOM", "SECONDS", "EPOCHSECONDS", "EPOCHREALTIME", "LINENO",
-    "BASHPID", "PIPESTATUS", "HISTCMD", "PWD", "OLDPWD", "_"})
+    "BASHPID", "PIPESTATUS", "HISTCMD", "DIRSTACK", "status", "pipestatus",
+    "PWD", "OLDPWD", "_"})
 NAME_FORM = re.compile(
     r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
 # An argument that runs a command or assigns: a substitution (the tokenizer
 # splits `$(` after its `$`), a backtick, `$[`, or `${NAME=` / `${NAME:=`.
 UNSAFE_ARGUMENT = re.compile(r"`|\$\(|\$\[|\$$|\$\{[^}]*=")
+# A joiner the chain rule reads: one `;`, `&&` or newline, then newlines.
+# Anything else (`||`, `|`, `&`, a paren, `;;`, `&& ;`) is hostile.
 SEQUENTIAL = re.compile(r"(?:;|&&|\n)\n*")
 START_OR_SEMICOLON = re.compile(r"(?:[;\n]\n*)?")
 ONLY_AND = re.compile(r"&&\n*")
@@ -681,6 +682,9 @@ def _bound_body(spelling, context):
     not_first = _Unreadable("a body file is read only from the first command")
     records, at = context["records"], context["record"]
     if not _comparable(spelling):
+        if spelling.endswith("$"):  # the tokenizer cut `$(` after its `$`
+            raise _Unreadable("a command substitution names the body file, "
+                              "which the hook cannot compare")
         raise _Unreadable(f"{spelling} names a file through an expansion "
                           "the hook cannot compare")
     for index in range(at - 1, -1, -1):

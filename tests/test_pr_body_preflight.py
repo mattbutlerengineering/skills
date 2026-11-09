@@ -707,7 +707,8 @@ class TestSameCallHeredoc(unittest.TestCase):
                          "$PIPESTATUS/b.md", "${HISTCMD}/b.md",
                          "$SECONDS.md", "$BASH_VERSION/b.md", "$_/b.md",
                          "$$.md", "$1/b.md", "${S:-x}/b.md", "/tmp/{a,b}.md",
-                         "$S$/b.md"):
+                         "$S$/b.md", "$DIRSTACK/b.md", "${status}/b.md",
+                         "$pipestatus/b.md"):
             with self.subTest(spelling=spelling):
                 self.assertEqual(
                     run(self.spelled(spelling)),
@@ -715,11 +716,12 @@ class TestSameCallHeredoc(unittest.TestCase):
                               "expansion the hook cannot compare")]))
 
     def test_a_command_substitution_spelling_is_a_note(self):
-        code, lines = run(self.spelled("$(mktemp)"))
-        self.assertEqual(code, 0)
-        self.assertEqual(len(lines), 1)
-        self.assertTrue(lines[0].endswith(
-            "names a file through an expansion the hook cannot compare"))
+        for spelling in ("$(mktemp)", "$(mktemp).md"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(
+                    run(self.spelled(spelling)),
+                    (0, [note("a command substitution names the body file, "
+                              "which the hook cannot compare")]))
 
     def test_a_cd_between_unbinds_a_relative_spelling(self):
         with tempfile.TemporaryDirectory() as tmp:
