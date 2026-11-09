@@ -10,11 +10,14 @@ can answer.
 import contextlib
 import io
 import json
+import socket
 import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -244,6 +247,175 @@ class TestLint(Tree):
     def test_bracketed_lists_parse_like_bare_ones(self):
         self.kb_page("cache", sources="[src/a.py]", related="[auth]")
         self.indexed("auth")
+        self.assertEqual(self.lint(), [])
+
+
+def aged(extra, **fields):
+    """page()'s text with the extra frontmatter lines (ADR-0125's
+    optional outside-check fields) after the four required ones."""
+    head, rest = page(**fields).split("\n---\n", 1)
+    return f"{head}\n{extra}\n---\n{rest}"
+
+
+class TestAge(Tree):
+    """ADR-0125: a page declares what it was checked against, when, and
+    for how long; lint ages that declaration against an injected today
+    and runs nothing to do it."""
+
+    FRESH = ("checked-against: the GitHub API; not GitHub's docs\n"
+             "checked: 2026-10-01\nmax-age: 30d")
+
+    def setUp(self):
+        super().setUp()
+        self.kb_page("cache")
+
+    def declare(self, extra, slug="gh"):
+        write(self.root / "docs" / "kb" / f"{slug}.md", aged(extra))
+        self.assertEqual(kb.index(self.root), [])
+
+    def lint_on(self, today):
+        return kb.lint(self.root, git=lambda args: "", today=today)
+
+    def page_named(self, slug):
+        return next(p for p in kb.pages(self.root) if p["slug"] == slug)
+
+    def test_one_day_past_due_is_one_problem(self):
+        self.declare(self.FRESH)
+        self.assertEqual(self.lint_on(date(2026, 11, 1)), [
+            "kb: docs/kb/gh.md is past its declared age: checked"
+            " 2026-10-01, max-age 30d, due 2026-10-31 — re-check it"])
+
+    def test_on_the_due_date_it_is_still_fresh(self):
+        self.declare(self.FRESH)
+        self.assertEqual(self.lint_on(date(2026, 10, 31)), [])
+
+    def test_age_problems_reads_one_page(self):
+        self.declare(self.FRESH)
+        gh = self.page_named("gh")
+        self.assertEqual(kb.age_problems(gh, date(2026, 10, 31)), [])
+        self.assertEqual(kb.age_problems(gh, date(2026, 12, 1)), [
+            "kb: docs/kb/gh.md is past its declared age: checked"
+            " 2026-10-01, max-age 30d, due 2026-10-31 — re-check it"])
+
+    def test_checked_without_max_age_names_the_missing_field(self):
+        self.declare("checked-against: the GitHub API\nchecked: 2026-10-01")
+        self.assertEqual(self.lint_on(date(2026, 10, 2)), [
+            "kb: docs/kb/gh.md declares an outside check but is missing"
+            " field 'max-age'"])
+
+    def test_max_age_alone_names_both_missing_fields(self):
+        self.declare("max-age: 30d")
+        self.assertEqual(self.lint_on(date(2026, 10, 2)), [
+            "kb: docs/kb/gh.md declares an outside check but is missing"
+            " field 'checked-against'",
+            "kb: docs/kb/gh.md declares an outside check but is missing"
+            " field 'checked'"])
+
+    def test_empty_checked_against(self):
+        self.declare("checked-against:\nchecked: 2026-10-01\nmax-age: 30d")
+        self.assertEqual(self.lint_on(date(2026, 10, 2)), [
+            "kb: docs/kb/gh.md has an empty 'checked-against'"])
+
+    def test_checked_that_is_not_a_date(self):
+        for value in ("yesterday", "2026-13-01", "2026/10/01"):
+            with self.subTest(value=value):
+                self.declare("checked-against: the GitHub API\n"
+                             f"checked: {value}\nmax-age: 30d")
+                self.assertEqual(self.lint_on(date(2026, 10, 2)), [
+                    f"kb: docs/kb/gh.md checked {value!r} is not a"
+                    " YYYY-MM-DD date"])
+
+    def test_checked_after_today(self):
+        self.declare(self.FRESH)
+        self.assertEqual(self.lint_on(date(2026, 9, 30)), [
+            "kb: docs/kb/gh.md checked 2026-10-01 is after today"
+            " (2026-09-30)"])
+
+    def test_max_age_that_is_not_whole_days(self):
+        for value in ("0d", "30", "thirty"):
+            with self.subTest(value=value):
+                self.declare("checked-against: the GitHub API\n"
+                             f"checked: 2026-10-01\nmax-age: {value}")
+                self.assertEqual(self.lint_on(date(2027, 10, 2)), [
+                    f"kb: docs/kb/gh.md max-age {value!r} is not a whole"
+                    " number of days like 30d"])
+
+    def test_an_age_past_the_calendar_is_never_due(self):
+        self.declare("checked-against: the GitHub API\n"
+                     "checked: 2026-10-01\nmax-age: 999999999d")
+        self.assertEqual(self.lint_on(date(2036, 1, 1)), [])
+
+    def test_an_absurd_max_age_is_a_problem_not_a_crash(self):
+        value = "1" + "0" * 12 + "d"
+        self.declare("checked-against: the GitHub API\n"
+                     f"checked: 2026-10-01\nmax-age: {value}")
+        self.assertEqual(self.lint_on(date(2026, 10, 2)), [
+            f"kb: docs/kb/gh.md max-age {value!r} is not a whole"
+            " number of days like 30d"])
+
+    def test_checked_against_alone_never_ages(self):
+        self.declare("checked-against: macOS zsh with gh 2.62; not Linux CI")
+        self.assertEqual(self.lint_on(date(2036, 1, 1)), [])
+
+    def test_a_page_with_none_of_the_fields_has_no_age(self):
+        self.assertEqual(kb.index(self.root), [])
+        self.assertEqual(self.lint_on(date(2036, 1, 1)), [])
+        self.assertEqual(
+            kb.age_problems(self.page_named("cache"), date(2036, 1, 1)), [])
+
+    def test_the_index_line_never_carries_the_fields(self):
+        self.declare(self.FRESH)
+        block = kb.render_index(kb.pages(self.root))
+        for field in ("checked-against", "checked", "max-age", "30d"):
+            self.assertNotIn(field, block)
+
+    def test_the_age_check_runs_nothing(self):
+        self.declare(self.FRESH)
+        self.declare("max-age: thirty", slug="bad")
+
+        def refuse(*args, **kwargs):
+            raise AssertionError("the age check ran something")
+
+        with mock.patch.object(kb.cli, "runner", refuse), \
+                mock.patch.object(socket, "socket", refuse):
+            problems = self.lint_on(date(2026, 11, 1))
+            direct = (kb.age_problems(self.page_named("bad"),
+                                      date(2026, 11, 1))
+                      + kb.age_problems(self.page_named("gh"),
+                                        date(2026, 11, 1)))
+        expected = [
+            "kb: docs/kb/bad.md declares an outside check but is missing"
+            " field 'checked-against'",
+            "kb: docs/kb/bad.md declares an outside check but is missing"
+            " field 'checked'",
+            "kb: docs/kb/bad.md max-age 'thirty' is not a whole number of"
+            " days like 30d",
+            "kb: docs/kb/gh.md is past its declared age: checked"
+            " 2026-10-01, max-age 30d, due 2026-10-31 — re-check it"]
+        self.assertEqual(problems, expected)
+        self.assertEqual(direct, expected)
+
+
+class TestPageShapes(Tree):
+    """The rubric's new page shapes are guidance, not lint rules: each
+    lints clean, and so does a page without it (PRD 15, 17, 22, 24)."""
+
+    def test_new_shapes_lint_clean_both_ways(self):
+        write(self.root / "src" / "b.py", "y = 1\n")
+        write(self.root / "src" / "c.py", "z = 1\n")
+        self.kb_page("absent-is-not-zero",
+                     summary="A missing reading is not a zero: three"
+                     " readers once treated it as one.",
+                     sources="src/a.py, src/b.py, src/c.py",
+                     body="Rule: absent is not zero.\n\n"
+                     "- src/a.py reads it as 0.\n- src/b.py reads it as"
+                     " 0.\n- src/c.py reads it as 0.\n")
+        self.kb_page("topic-summary", summary="Notes about the cache.")
+        self.kb_page("pair", summary="`make check` exits 0 on a skipped"
+                     " suite: run it with -v.",
+                     body="Wrong: `make check`\n\nRight: `make check -v`\n")
+        self.kb_page("no-pair")
+        self.assertEqual(kb.index(self.root), [])
         self.assertEqual(self.lint(), [])
 
 

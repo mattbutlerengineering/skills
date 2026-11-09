@@ -98,7 +98,7 @@ the canonical vocabulary.
 | [0075](0075-the-guarded-file-read-joins-the-cli-seam.md) | The guarded local-file read joins the cli seam | provisional |
 | [0076](0076-grok-supported-harness.md) | Grok is a supported harness (Claude primary) | accepted |
 | [0077](0077-the-dispatched-agent-holds-no-write-credential.md) | The dispatched agent holds no write credential | provisional |
-| [0078](0078-a-project-knowledge-base-indexed-inline.md) | A project knowledge base, indexed inline in the always-loaded file | accepted |
+| [0078](0078-a-project-knowledge-base-indexed-inline.md) | A project knowledge base, indexed inline in the always-loaded file | amended by ADR-0125 (optional outside-check page fields that lint ages offline; provisional) |
 | [0079](0079-a-utility-skill-may-own-a-project-reference-file.md) | A utility skill may own a project reference file, by section | provisional |
 | [0080](0080-accepted-means-a-dispatched-order-whose-mirror-merged.md) | Accepted means a dispatched order whose mirror merged | accepted |
 | [0081](0081-plugin-eval-is-an-on-demand-harness.md) | `claude plugin eval` is an on-demand harness with its own tree | superseded in part by ADR-0093 (the no-detector clause and the five-case count) |
@@ -145,3 +145,5 @@ the canonical vocabulary.
 | [0122](0122-the-fast-path-gates-the-autorun-brief.md) | The fast path gates the autorun brief | provisional |
 | [0123](0123-the-orchestrator-derives-the-reviewer-verdict-from-the-score.md) | The orchestrator derives the reviewer verdict from the score | provisional |
 | [0124](0124-the-assembly-line-page-bundles-three-js.md) | The assembly-line page bundles three.js | accepted |
+| [0125](0125-a-kb-page-declares-its-outside-check-and-lint-ages-it-offline.md) | A knowledge-base page declares its outside check, and lint ages it offline | provisional |
+| [0126](0126-kb-harvest-reads-memory-frontmatter-through-protocol-and-joins-its-root-only-importers.md) | kb_harvest reads a memory file's frontmatter through protocol.frontmatter_end and joins the root-only importers of protocol.py | provisional |

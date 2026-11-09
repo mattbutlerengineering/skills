@@ -1,6 +1,6 @@
 # A project knowledge base, indexed inline in the always-loaded file
 
-- Status: accepted
+- Status: amended by ADR-0125 (optional outside-check page fields that lint ages offline; provisional)
 - Date: 2026-10-10
 
 Amends no record. ADR-0023's utility-skill taxonomy, ADR-0061's one fact
