@@ -128,20 +128,24 @@ alone and reports the path with the failed test. `<branch>` below is
 the porcelain `branch` line without its `refs/heads/` prefix, and
 `<tip>` is the worktree's `HEAD` commit:
 
-1. **Clean.** `git -C <path> status --porcelain` prints nothing.
-2. **Idle.** `lsof` is on `PATH`, `<path>` exists, and `lsof +D <path>`
-   prints nothing on stdout or stderr. `lsof` exits 1 for both an idle
-   directory and an error, so read the output, never the exit status;
-   any stderr output is a failure.
-3. **No open PR.** `gh pr list --head <branch> --state open` is empty. A
+1. **Clean.** `git -C <path> status --porcelain` exits 0 and prints
+   nothing on stdout. A failed `git` call is a failure, not a clean tree.
+2. **Idle.** `lsof` is on `PATH`, `<path>` exists, and `lsof -w +D
+   <path>` prints nothing on stdout or stderr. `-w` silences the
+   harmless warnings some hosts print (an unreadable mount) while real
+   errors still reach stderr. `lsof` exits 1 for both an idle directory
+   and an error, so read the output, never the exit status; any stderr
+   output is a failure.
+3. **No open PR.** `gh pr list --head <branch> --state open` exits 0 and
+   prints nothing. A failed `gh` call is a failure, not an empty list. A
    detached worktree has no branch and skips this test.
 4. **Positive evidence that this tip merged.** Either `<tip>` is a
-   `headRefOid` in `gh pr list --head <branch> --state merged --json
-   headRefOid`, or `git merge-base --is-ancestor <tip> origin/main`
-   exits 0. A merged PR for the branch *name* is not evidence: a branch
-   that gained commits after its PR merged, or reused the name, fails
-   here. A tip no merged PR carries, on a branch with no PR, is
-   unmerged work, never reaped.
+   `headRefOid` in `gh pr list --head <branch> --base main --state
+   merged --json headRefOid`, or `git merge-base --is-ancestor <tip>
+   origin/main` exits 0. A merged PR for the branch *name* is not
+   evidence: a branch that gained commits after its PR merged, or
+   reused the name, fails here. A tip no merged PR carries, on a branch
+   with no PR, is unmerged work, never reaped.
 
 On a pass, `git worktree remove <path>` (never `--force`), then, if it
 had a branch, `git branch -D <branch>`: the squash merge leaves the
