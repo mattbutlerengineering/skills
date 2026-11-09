@@ -447,12 +447,6 @@ class TestSameCallHeredoc(unittest.TestCase):
             run(self.write(self.BAD) + "gh pr create --body-file /tmp/o.md"),
             (0, [self.NOT_FIRST]))
 
-    def test_a_relative_file_is_not_bound_yet(self):
-        self.assertEqual(
-            run(self.write(self.BAD, path="b.md")
-                + "gh pr create --body-file b.md"),
-            (0, [self.NOT_FIRST]))
-
     def test_an_unquoted_delimiter_with_an_expansion_is_a_note(self):
         reason = note("an unquoted heredoc body holds $, a backtick "
                       "or a backslash")
@@ -578,6 +572,190 @@ class TestSameCallHeredoc(unittest.TestCase):
             "cat > F <<-'EOF'\n\tSee $(cat <<'B'\n\tEOF\nB\n)\n\tEOF\n")
         _, heredocs = self.capture(masked, pairs)
         self.assertFalse(heredocs[0].terminated)
+
+
+    # --- Milestone 2, chain rule: the writer's joiners ---------------------
+    CHAIN_WRITER = "cat > /tmp/b.md <<'EOF'"
+    CHAIN_BODY = "{}\nEOF\n".format(BAD)
+    CHAIN_NOTE = note("the heredoc that writes /tmp/b.md is not certain to "
+                      "run before gh pr create")
+
+    def chain(self, before="", after="\n", reader=READ):
+        """`before` the writer, then the reader joined to the writer by
+        `after` (a newline puts the reader after the heredoc body, any
+        other joiner puts it on the writer's own line)."""
+        if after.endswith("\n") and after.strip() == "":
+            return (f"{before}{self.CHAIN_WRITER}\n{self.CHAIN_BODY}"
+                    f"{reader}")
+        return (f"{before}{self.CHAIN_WRITER} {after} {reader}\n"
+                f"{self.CHAIN_BODY}")
+
+    def test_a_writer_that_surely_ran_is_judged(self):
+        judged = refused(self.BAD + "\n")
+        for name, command in (
+                ("start", self.chain()),
+                ("semicolon", self.chain("true; ")),
+                ("semicolon newline", self.chain("true;\n")),
+                ("newline", self.chain("true\n")),
+                ("and chain, newline writer", self.chain("a && b\n")),
+                ("hostile run before a ; writer", self.chain("a | b ; ")),
+                ("hostile run before a newline writer",
+                 self.chain("a | b\n")),
+                ("and newline", self.chain("true &&\n", "&&")),
+                ("and space newline", self.chain("true && \n", "&&")),
+                ("and comment newline", self.chain("true && # c\n", "&&")),
+                ("and continuation", self.chain("true && \\\n", "&&")),
+                ("semicolon reader", self.chain(after=";")),
+                ("and reader after semicolon writer",
+                 self.chain("true; ", "&&"))):
+            with self.subTest(shape=name):
+                self.assertEqual(run(command), judged)
+
+    def test_a_writer_the_shell_may_skip_is_a_note(self):
+        for name, command in (
+                ("or before", self.chain("test -f /tmp/b.md || ", "&&")),
+                ("or newline before", self.chain("test -f x ||\n", "&&")),
+                ("or space newline before", self.chain("a || \n", "&&")),
+                ("and before, newline reader",
+                 self.chain("test -d /x && ")),
+                ("git push and, newline reader", self.chain("git push && ")),
+                ("and newline before, newline reader",
+                 self.chain("a &&\n")),
+                ("and comment before, newline reader",
+                 self.chain("a && # c\n")),
+                ("or after", self.chain(after="||")),
+                ("background writer", self.chain(after="&")),
+                ("background newline", self.chain("a &\n", "&&")),
+                ("pipeline", self.chain(after="|")),
+                ("pipeline reader", self.chain(reader="x | " + self.READ)),
+                ("subshell reader", self.chain(reader="( " + self.READ + " )")),
+                ("subshell writer", self.chain("( ", "&&")),
+                ("double semicolon before", self.chain("a;; ")),
+                ("double semicolon after", self.chain(after=";;")),
+                ("and semicolon before", self.chain("a && ; ", "&&")),
+                ("and semicolon after", self.chain(after="&& ;")),
+                ("semicolon and after", self.chain(after="; &&"))):
+            with self.subTest(shape=name):
+                self.assertEqual(run(command), (0, [self.CHAIN_NOTE]))
+
+    def test_an_if_between_writer_and_reader_is_a_note(self):
+        for reader in ("if true; then\n" + self.READ + "\nfi",
+                       "if true\nthen\n" + self.READ + "\nfi",
+                       "while true; do\n" + self.READ + "\ndone"):
+            with self.subTest(reader=reader):
+                self.assertEqual(run(self.chain(reader=reader)),
+                                 (0, [self.CHAIN_NOTE]))
+
+    def test_a_cd_before_the_writer_is_judged_only_when_it_surely_ran(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            (top / "d").mkdir()
+            for name, command, expected in (
+                    ("and to the reader", self.chain("cd d && ", "&&"),
+                     refused(self.BAD + "\n")),
+                    ("three links", self.chain("cd d && true && ", "&&"),
+                     refused(self.BAD + "\n")),
+                    ("newline before the reader", self.chain("cd d && "),
+                     (0, [self.CHAIN_NOTE])),
+                    ("or to the reader", self.chain("cd d || ", "&&"),
+                     (0, [self.CHAIN_NOTE]))):
+                with self.subTest(shape=name):
+                    self.assertEqual(run(command, top), expected)
+
+    def test_a_reader_joined_by_or_to_a_surely_run_writer_is_a_note(self):
+        self.assertEqual(
+            run(self.chain("true; ", "||")), (0, [self.CHAIN_NOTE]))
+
+
+    # --- Milestone 2, spelling rule ---------------------------------------
+    def spelled(self, spelling, body=None, before="", between=""):
+        """A writer and a reader that both spell F as `spelling`."""
+        return (before + self.write(body or self.BAD, path=spelling) + between
+                + f"gh pr create --title t --body-file {spelling}")
+
+    def test_the_same_spelling_binds(self):
+        judged = refused(self.BAD + "\n")
+        for name, command in (
+                ("absolute", self.spelled("/tmp/b.md")),
+                ("$NAME", self.spelled("$S/b.md", before="S=/tmp\n")),
+                ("${NAME}", self.spelled("${S}/b.md", before="S=/tmp\n")),
+                ("$NAME unset", self.spelled("$S/b.md")),
+                ("quoted", self.spelled('"$S/b.md"', before="S=/tmp\n")),
+                ("relative", self.spelled("b.md")),
+                ("a name that merely starts like a shell one",
+                 self.spelled("$BANANA/b.md"))):
+            with self.subTest(shape=name):
+                self.assertEqual(run(command), judged)
+
+    def test_a_passing_body_through_a_variable_path_is_silent(self):
+        self.assertEqual(
+            run(self.spelled("$S/b.md", self.GOOD, before="S=/tmp\n")),
+            (0, []))
+
+    def test_a_different_spelling_does_not_bind(self):
+        self.assertEqual(
+            run(self.write(self.BAD, path="b.md")
+                + "gh pr create --body-file ./b.md"), (0, [self.NOT_FIRST]))
+        self.assertEqual(
+            run("S=/tmp\n" + self.write(self.BAD, path="$S/b.md")
+                + "gh pr create --body-file ${S}/b.md"), (0, [self.NOT_FIRST]))
+
+    def test_a_spelling_the_hook_cannot_compare_is_a_note(self):
+        for spelling in ("/tmp/$RANDOM.md", "$PWD/b.md", "${PWD}/b.md",
+                         "/tmp/*.md", "/tmp/?.md", "/tmp/[a].md", "~/b.md",
+                         "$PIPESTATUS/b.md", "${HISTCMD}/b.md",
+                         "$SECONDS.md", "$BASH_VERSION/b.md", "$_/b.md",
+                         "$$.md", "$1/b.md", "${S:-x}/b.md", "/tmp/{a,b}.md",
+                         "$S$/b.md"):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(
+                    run(self.spelled(spelling)),
+                    (0, [note(f"{spelling} names a file through an "
+                              "expansion the hook cannot compare")]))
+
+    def test_a_command_substitution_spelling_is_a_note(self):
+        code, lines = run(self.spelled("$(mktemp)"))
+        self.assertEqual(code, 0)
+        self.assertEqual(len(lines), 1)
+        self.assertTrue(lines[0].endswith(
+            "names a file through an expansion the hook cannot compare"))
+
+    def test_a_cd_between_unbinds_a_relative_spelling(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            (top / "d").mkdir()
+            for spelling, before in (("b.md", ""), ("$S/b.md", "S=/tmp\n")):
+                for verb in ("cd d", "pushd d", "popd"):
+                    with self.subTest(spelling=spelling, verb=verb):
+                        self.assertEqual(
+                            run(self.spelled(spelling, before=before,
+                                             between=verb + "\n"), top),
+                            (0, [note("a cd between the heredoc and gh pr "
+                                      f"create may change what {spelling} "
+                                      "names")]))
+
+    def test_an_absolute_spelling_survives_a_cd(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            (top / "d").mkdir()
+            for verb in ("cd d", "pushd d"):
+                with self.subTest(verb=verb):
+                    self.assertEqual(
+                        run(self.spelled("/tmp/b.md", between=verb + "\n"),
+                            top), refused(self.BAD + "\n"))
+
+    def test_a_cd_that_hides_a_command_is_still_a_note(self):
+        for between in ("cd `rm /tmp/b.md`\n", "cd $(rm /tmp/b.md)\n",
+                        "cd d > /tmp/b.md\n", "cd d; rm /tmp/b.md\n",
+                        "cd d | rm /tmp/b.md\n"):
+            with self.subTest(between=between):
+                code, lines = run(self.spelled("/tmp/b.md", between=between))
+                self.assertEqual(code, 0)
+                self.assertEqual(len(lines), 1)
+                self.assertNotIn("B:", lines[0])
 
 
 class TestUnreadableShapes(unittest.TestCase):
