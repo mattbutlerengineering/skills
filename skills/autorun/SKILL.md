@@ -1,6 +1,6 @@
 ---
 name: autorun
-description: Use when the user wants a whole run driven end to end from a one-time brief — they supply the feature description and answers to the big questions up front, then an orchestrating agent advances the run from idea through ship, one fresh subagent per stage, answering each stage's interview from the brief and logging an assumption wherever the brief runs out. This drives many stages unattended; it is not the router (next advances one stage, interviewing live) and does not shortcut the pipeline — each stage either produces its artifact or records a protocol-sanctioned skip.
+description: Use when the user wants a whole run driven end to end from a one-time brief — they supply the feature description and answers to the big questions up front, then an orchestrating agent advances the run from idea through ship, one fresh subagent per stage, answering each stage's interview from the brief and logging an assumption wherever the brief runs out. One run, every stage — not implement-queue or conduct, which take many issues through one implement step. This drives many stages unattended; it is not the router (next advances one stage, interviewing live) and does not shortcut the pipeline — each stage either produces its artifact or records a protocol-sanctioned skip.
 ---
 
 # Autorun (agent-driven full run)
@@ -9,7 +9,9 @@ Drive a run end to end from a brief collected once, dispatching a fresh
 subagent per stage. The artifacts remain the only state between stages —
 the orchestrator carries nothing a subagent can't re-read from the run
 directory. The brief substitutes for live interviews; every gap in it
-becomes a logged assumption, never a silent guess.
+becomes a logged assumption, never a silent guess. It is the one-run skill
+of the three that drive work; the README's "Driving a run: which one"
+table says when `conduct` or `implement-queue` fits instead.
 
 ## Process
 

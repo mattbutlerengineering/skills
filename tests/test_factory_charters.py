@@ -282,11 +282,12 @@ class TestTheConcernsChannel(unittest.TestCase):
         first = actions.split("\n2. ", 1)[0]
         self.assertIn("## Concerns", first)
 
-    def test_work_queue_asks_for_it_and_reports_it(self):
-        text = (REPO_ROOT / "skills" / "work-queue" / "SKILL.md").read_text(
-            encoding="utf-8")
-        run = text.split("### 4. Run the batch", 1)[1].split("### 5.", 1)[0]
-        report = text.split("### 5. Report", 1)[1].split("### 6.", 1)[0]
+    def test_the_work_order_queue_asks_for_it_and_reports_it(self):
+        text = (REPO_ROOT / "skills" / "implement-queue" / "references"
+                / "work-orders.md").read_text(encoding="utf-8")
+        run = text.split("## Worker brief", 1)[1].split("\n## ", 1)[0]
+        report = text.split("## Report and release", 1)[1].split(
+            "\n## ", 1)[0]
         self.assertIn("## Concerns", run)
         self.assertIn("concerns", report.lower())
 

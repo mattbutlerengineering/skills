@@ -234,7 +234,7 @@ _Avoid_: subagent (an in-session agent, unmetered in dollars), agent (bare)
 A set of the Owner's issues the Conductor takes from a priced plan to
 every item merged or blocked, under one slug, on one batch branch
 (`conductor/<batch>`), closed with one scorecard.
-_Avoid_: round (work-queue's), sprint
+_Avoid_: round (implement-queue's), sprint
 
 **Batch ledger**:
 The append-only JSONL record of one batch

@@ -236,9 +236,9 @@ replaces its default weight; the batch estimate stays the size budget.
 budget from, a positive integer, 5 when absent (#940); below it
 `calibrate` still warns about a step whose attempts spent their ceiling
 half the time or more, and `plan` repeats that warning when it prices
-from the same weights. Detector F checks the table. `work-queue` still
-fans out ready work orders through one stage, and `autorun` still drives
-one run end to end. One step needs no Conductor: turn on the merge queue
+from the same weights. Detector F checks the table. `implement-queue` still
+fans out ready issues or work orders through one stage, and `autorun`
+still drives one run end to end. One step needs no Conductor: turn on the merge queue
 ADR-0070 already chose, if the repo's plan allows it; the merge turn uses
 it when present.
 

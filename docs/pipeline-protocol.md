@@ -74,9 +74,9 @@ one at a time later, and a pair that each passed CI alone breaks together.
 
 So every skill that starts new work runs this pre-flight first: `next`
 before it hands off to a stage, `autorun` before its first stage, `conduct`
-before it asks the Owner to approve a batch's spend, and the two queue
-skills, `work-queue` and `implement-queue`, in their own preflight, which
-adds their mechanics (labels, checks) to it.
+before it asks the Owner to approve a batch's spend, and the queue skill,
+`implement-queue`, in its own preflight, which adds its mechanics
+(labels, checks) to it.
 
 1. **List** the repo's open pull requests, oldest first. The concrete
    command is packaging's, like the tracker CLI's (`gh pr list --state
