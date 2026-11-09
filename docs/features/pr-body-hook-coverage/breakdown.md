@@ -1,0 +1,101 @@
+---
+stage: decompose
+run: feature:pr-body-hook-coverage
+date: 2026-11-09
+assumptions:
+  - "No live review of the cut: the Owner reviews the milestone boundaries and sizing after this draft, per the Decompose stage's draft-first rule. The judgment calls are listed in the hand-off message."
+  - "No work-order ids and no tracker markers: rows carry no WO- token and no (tracker: #N) form, because the dispatch plane never runs ahead of the knowledge plane (ADR-0032). Issue #1655 (the third review's eight P3 gaps) is not imported as a row; each of its eight one-line fixes is folded into the item it belongs to, and all eight are absorbed into architecture.md by the first item so Implement works from one consistent design."
+  - "No design decision is made here. Every item's Accept line is read from architecture.md (components, the chain rule, the invalidation rules, the inert list, the reason table) or from prd.md's success criteria. The one sequencing choice that is not in architecture.md is stated under Notes: Milestone 1 ships the binding with every between-command unbinding, and Milestone 3 relaxes it to the rules."
+  - "Size bands follow the repo's calibration by sittings: S is a short edit, M is a module piece or a test file with several cases. No item is L."
+---
+
+# Breakdown: Judge the same-call heredoc body
+
+Progress lives in the checkboxes below — Implement checks items off as their
+acceptance criteria are met. Code lands in `pr_body_preflight.py` and its
+fixtures in `tests/test_pr_body_preflight.py`, class `TestSameCallHeredoc`;
+no item adds a module, an import edge or a copy of detector B's patterns.
+Where an item's second Accept line is marked "P3 gap", it carries one of the
+eight precision fixes from issue #1655.
+
+## Milestone 1: the demo payload is refused before the PR exists
+
+When this milestone is done, the PRD's demo payload (a `cat > /tmp/b.md <<'EOF'` writer followed by `gh pr create --body-file /tmp/b.md`) exits 2 with detector B's two strings and the pointer line, the passing twin exits 0 silently, and every other not-first body file still ends in a note. The binding is deliberately narrow here: a writer binds only when no command sits between it and the reader.
+
+- [ ] **Absorb the third review's eight P3 gaps into architecture.md** — edit the eight one-line fixes of issue #1655 into `docs/features/pr-body-hook-coverage/architecture.md` so the design Implement works from is consistent — size:S
+  - Accept: `docs/features/pr-body-hook-coverage/architecture.md` states each of the eight fixes in the section the issue names, and `python3 lint.py` still passes. The eight are (1) unbind on an exec carrying a write redirect before the reader, and on a closing `}`, `)`, `done`, `fi` or `esac` after the reader that carries a write redirect other than `/dev/null`; (2) `$[` among rule 4's expanding arguments; (3) a mixed run split before the redirection operator and a lone `&` directly before `>` kept as part of `&>` / `&>>`; (4) the phrase "whose only operator is && (newlines allowed)" in chain-rule branch 2; (5) the accepted limit extended to `$'...'` and `$"..."`, and `PIPESTATUS` and `HISTCMD` among the shell-maintained names; (6) "substitutions in the reader's own arguments are trusted" recorded as an accepted limit, with the `-F -` stdin check kept ahead of the binding; (7) `literal` said to be computed on the unmasked text; (8) line 8 reads "a writer (any shape)" and the Verify span reads "`cat > <scratch>` followed by the original heredoc operator and delimiter word".
+  - Blocked by: —
+- [ ] **Pin the demo payload in TestSameCallHeredoc** — the first fixtures of the new class, full payloads through `preflight()`, failing on the tree before the change — size:S
+  - Accept: `TestSameCallHeredoc` in `tests/test_pr_body_preflight.py` holds the demo payload (expects exit 2 and stderr lines equal to `gates.pr_body_problems(body) + [POINTER]`) and its passing twin with a `No work order: <reason>` line and a `Closes #N` line (expects exit 0 and `[]`); run before any code change the demo case fails, and `python3 run_tests.py` shows no other new failure. This is the first item of the "Fixture tests and the Verify replay" component.
+  - Blocked by: Absorb the third review's eight P3 gaps into architecture.md
+- [ ] **Capture statement-level heredoc text in _Unrun** — Heredoc capture: record `Heredoc(text, literal, terminated)` per statement-level heredoc and number it through the placeholder word — size:M
+  - Accept: a fixture over `_Unrun` yields, for `cat > F <<'EOF'` with two body lines, `text` equal to the two lines each plus a newline, `literal` true and `terminated` true; `<<-` strips leading tabs from `text`; a delimiter that never closes gives `terminated` false; `<<<` produces no heredoc; the operator-plus-delimiter is rewritten to `<<` plus `__pr_body_preflight_heredoc_<N>__` with `N` in queue order.
+  - Accept (P3 gap 7): `literal` is computed on the unmasked text: a body that itself holds a `$(cat <<'B' … B)` snippet is restored from `_mask_heredocs`' `(placeholder, original)` pairs before `literal` is decided, and the captured `text` is the original span, not the placeholder.
+  - Blocked by: Pin the demo payload in TestSameCallHeredoc
+- [ ] **Keep redirections and the joiner in _simple_commands** — Command splitter: return one `Simple` per command with `words`, `redirects` and `joiner`, including a redirect-only command — size:M
+  - Accept: a fixture over `_simple_commands` returns, for `> /tmp/b.md` alone on a line after a newline, a record with no words, one `>` redirect with target `/tmp/b.md` and joiner `\n`; `cat > F <<D` and `cat <<D > F` give the same two redirects in their written order with the heredoc target being the placeholder word; `first` and `position` are computed over records that have words, so `> log` then `gh pr create -F x.md` still reads `x.md` from disk as today; every existing `_simple_commands` and `_create_args` test still passes.
+  - Accept (P3 gap 3): a mixed punctuation run is split before its first `<` or `>` (`;>` is joiner `;` then redirect `>`), and a lone `&` directly before `>` is kept as part of `&>` / `&>>` rather than read as a background joiner.
+  - Blocked by: Pin the demo payload in TestSameCallHeredoc
+- [ ] **Bind the adjacent writer through _bound_body** — Heredoc binding, wired into Body source and judged by `gates.pr_body_problems`: a `cat > F <<D` immediately before a not-first reader binds on identical spelling of an absolute F — size:M
+  - Accept: the demo payload and its passing twin from `TestSameCallHeredoc` pass (exit 2 with `gates.pr_body_problems(body) + [POINTER]`; exit 0 with no stderr); the writer is found in both orders (`cat > F <<D` and `cat <<D > F`), a later writer of the same spelling replaces an earlier one, a reader naming a different file keeps today's note `a body file is read only from the first command`, an unquoted delimiter whose body holds `$`, a backtick or a backslash gives `an unquoted heredoc body holds $, a backtick or a backslash`, an unterminated heredoc gives `the heredoc that writes <F> has no closing delimiter`, `>>` and `tee` writers are not writers, and any command between writer and reader gives the note `<F> may be rewritten or removed by <verb or redirect> between the heredoc and gh pr create`; the module holds no copy of detector B's patterns, so `TestOneOwner` still passes.
+  - Accept (P3 gap 6): the `-F -` stdin check still runs ahead of the binding: `--body-file -` after a writer of any spelling gives `--body-file - reads the body from stdin`, never a bound body.
+  - Blocked by: Capture statement-level heredoc text in _Unrun; Keep redirections and the joiner in _simple_commands
+- [ ] **Refuse a process substitution in the reader's own command** — Body source raises `_Unreadable` on `<(` or `>(` in a `gh pr create` before the binding is consulted — size:S
+  - Accept: `-F <(cat a c)` raises the note `a process substitution in gh pr create hides the body file` both as the compound's first command and after a writer, with exit 0 and no disk read of `a`; the splitter records a `<(` or `>(` anywhere as a redirect of kind `procsub`; a `<<<` here-string is never a writer. Fixtures sit in `TestSameCallHeredoc`.
+  - Blocked by: Bind the adjacent writer through _bound_body
+
+## Milestone 2: a writer behind a chain or a variable path is judged only when it surely ran
+
+When this milestone is done, the corpus shapes the funnel counts (`cd "$D" && cat > F <<EOF … EOF` and a `$S/b.md` path) are judged, and a writer that might have been skipped is still a note. Commands between writer and reader still unbind everything, so no new refusal can rest on a stale file.
+
+- [ ] **Apply the chain rule to the writer's joiners** — Heredoc binding: a writer binds only when its execution is implied by the reader's, over the effective joiner (every punctuation run since the previous record) — size:M
+  - Accept: fixtures in `TestSameCallHeredoc` judge a writer joined by the start, `;` or a newline, by `&&\n`, by `&& ` then a newline and by `&& # c` then a newline; a writer after `cd D &&` with `&&` up to the reader is judged; each of these is a note `the heredoc that writes <F> is not certain to run before gh pr create`: `test -f F || cat > F <<D … D` then `&& gh pr create`, a writer after `test -d /x &&` with a newline before the reader, a writer joined by `|| ` then a newline, a background writer `cat > F <<D &`, and a pipeline, a subshell or an `if` between writer and reader; a hostile run before a `;`-joined writer is judged.
+  - Accept (P3 gap 4): the chain rule's code comment says branch 2 applies to a run "whose only operator is && (newlines allowed)", the wording architecture.md carries after the first item, and the `&&\n`, `&& ` then newline and `&& # c` then newline fixtures above are judged under it.
+  - Blocked by: Bind the adjacent writer through _bound_body
+- [ ] **Compare F by spelling under the spelling rule** — Heredoc binding: identical `$NAME` / `${NAME}` spelling binds, an unusable spelling is a note, and a relative F is unbound by a directory change — size:M
+  - Accept: fixtures in `TestSameCallHeredoc` judge an absolute path, `$S/b.md` and `${S}/b.md` after `S=<dir>`, with the same token in writer and reader; each of `$RANDOM`, `$PWD`, `$(mktemp)`, a glob and a leading `~` gives `<F> names a file through an expansion the hook cannot compare`; a relative or `$S/b.md` F with a `cd`, `pushd` or `popd` between writer and reader gives `a cd between the heredoc and gh pr create may change what <F> names`, while an absolute F survives the same `cd`; `./b.md` for `b.md` does not bind (a no-writer note).
+  - Accept (P3 gap 5): `PIPESTATUS` and `HISTCMD` are in the shell-maintained names, so `$PIPESTATUS/b.md` and `${HISTCMD}/b.md` give the same expansion note as `$RANDOM`.
+  - Blocked by: Apply the chain rule to the writer's joiners
+
+## Milestone 3: a changed file is never judged from a stale heredoc
+
+When this milestone is done, the fail-closed invalidation is complete: any write redirect, process substitution, hostile joiner, shell keyword or command off the inert list between writer and reader unbinds, and the inert commands let the common `cd`, `git status` and `gh pr view` shapes through. The between-commands blanket unbinding from Milestone 1 is replaced by these rules.
+
+- [ ] **Unbind on write redirects process substitutions and hostile joiners** — Heredoc binding invalidation rules 1 to 3 over writer-exclusive, reader-inclusive records — size:M
+  - Accept: fixtures in `TestSameCallHeredoc` give a note for each of `> F` alone on a line after a newline, `>| F`, `&> F`, `>& F`, `>> "$BODY"`, `./F` for `F` by redirect, a `<(` or `>(` anywhere between, a hostile joiner, and a shell keyword or an `export` or `unset` of a name F's spelling holds between writer and reader; `2>&1`, `> /dev/null`, `>&2` and `>&-` between writer and reader are still judged.
+  - Accept (P3 gap 1): an `exec` carrying a write redirect before the reader unbinds, and a closing `}`, `)`, `done`, `fi` or `esac` after the reader that carries a write redirect other than `/dev/null` unbinds (`{ cat > F <<D … D` … `gh pr create -F F; } > F` and the descriptor opened onto F before the writer are notes), while the same closers with `> /dev/null` are judged.
+  - Blocked by: Compare F by spelling under the spelling rule
+- [ ] **Admit the inert shell builtins and read-only verbs between writer and reader** — Heredoc binding invalidation rule 4, first half of the inert list: assignments, `cd`, `echo`, `printf`, `true`, `:`, `sleep` and the read-only verbs, with the argument checks — size:M
+  - Accept: fixtures in `TestSameCallHeredoc` judge a payload with each of `cd`, `pushd`, `echo`, `printf`, `true`, `:`, `sleep`, `cat`, `grep`, `head`, `tail`, `wc`, `ls`, `test`, `[`, `diff`, `cmp`, `stat` and a standalone `NAME=value` or `export NAME=value` between writer and reader; each of `rm`, `mv`, `cp`, `tee`, `sed -i`, `truncate` and `python3` between gives `<F> may be rewritten or removed by <verb or redirect> between the heredoc and gh pr create`; an inert command holding `$(…)`, a backtick or `$((…))` in an argument is a note; `printf -vS` and `printf -v S` are notes; `: ${S:=x}` and `$((S=1))` between are notes when F names `$S`; an assignment whose value holds `$(` or a backtick is a note.
+  - Accept (P3 gap 2): an inert command's argument holding `$[` is a note, so `echo $[1+1]` between writer and reader unbinds like `$((1+1))`.
+  - Blocked by: Unbind on write redirects process substitutions and hostile joiners
+- [ ] **Admit the inert git and gh verbs between writer and reader** — Heredoc binding invalidation rule 4, second half of the inert list: the named `git` and `gh` subcommands with their option checks — size:S
+  - Accept: fixtures in `TestSameCallHeredoc` judge `git status`, `git diff`, `git log`, `git rev-parse`, `git branch --show-current`, `git config --get`, `gh pr view`, `gh pr list`, `gh pr status`, `gh pr checks`, `gh pr diff`, `gh issue view`, `gh issue list` and `gh api` with no write option between writer and reader; `git commit`, `git push`, `git fetch`, `git add`, `gh pr checkout`, `git diff --output=F` and `gh api --input` between are notes.
+  - Blocked by: Admit the inert shell builtins and read-only verbs between writer and reader
+
+## Milestone 4: the change is documented, green and handed to Verify
+
+When this milestone is done, the kb page and module docstring describe what is read, every gate passes, and Verify holds the exact replay specification to run on a frozen snapshot.
+
+- [ ] **Refresh the kb page and the module docstring** — `docs/kb/pr-body-contract.md` and the module docstring say a same-call heredoc is now a readable shape — size:S
+  - Accept: the one-paragraph description of the hook in `docs/kb/pr-body-contract.md` names the same-call heredoc as a readable shape, its `verified:` is refreshed by this change's author, the `pr_body_preflight.py` module docstring says the same, and `python3 kb.py drift` and `python3 lint.py` both exit 0.
+  - Blocked by: Admit the inert git and gh verbs between writer and reader
+- [ ] **Cover the remaining shapes in TestSameCallHeredoc** — the PRD's fixture list that no earlier item pins: quoted and unquoted delimiters, `<<-`, a leading `cd`, two readers, a cleanup after the reader, masking — size:M
+  - Accept: `TestSameCallHeredoc` holds, each as a refused body (exit 2, lines equal to `gates.pr_body_problems(body) + [POINTER]`) paired with a passing body (exit 0, `[]`) unless it is a note case: a quoted delimiter; an unquoted delimiter without expansion; `<<-` with tab-indented lines; a leading `cd` to the repository; `cat <<D > F`; two `gh pr create` in one command each bound to its own writer; an `rm F` after `gh pr create` that is still judged; a heredoc inside `"$( … )"` or `X=$(sed q <<A …)` that never pairs with a reader; a PR body holding its own `$(cat <<'B' … B)` snippet judged on the file text; `> log` then `gh pr create -F x.md` judged from disk; and `test_a_body_file_after_another_command_fails_open` is unchanged and passes.
+  - Blocked by: Admit the inert git and gh verbs between writer and reader
+- [ ] **Run the suite and the gates over the finished change** — all four commands the PRD names, plus the one-owner and no-exception checks — size:S
+  - Accept: `python3 run_tests.py`, `python3 lint.py`, `python3 gates.py` and `python3 gates.py --selftest` all exit 0; `TestOneOwner` and `one_owner.py` pass without edit; every test that passed before this run still passes; a fixture feeding `preflight()` a malformed payload and a command whose binding raises an unexpected exception returns exit 0 with one `pr-body-preflight: not checked` line and no exception.
+  - Blocked by: Refresh the kb page and the module docstring; Cover the remaining shapes in TestSameCallHeredoc; Refuse a process substitution in the reader's own command
+- [ ] **Hand the replay and the false-block oracle to Verify** — record the exact specification Verify runs, in Notes, so the 25% and the iff criteria are measured on one frozen snapshot — size:S
+  - Accept: the Notes section of this file holds one dated hand-off entry naming the following, each checkable against prd.md and architecture.md: one frozen, sorted, de-duplicated JSONL snapshot written once at the start of Verify outside the repository at a path the Owner picks; both hooks (the merge-base `pr_body_preflight.py` and the changed one) run over every command; the judged share target of at least 25% with the pre-change count plus the same-call count over the snapshot size as the reported ceiling; the survival funnel stages reported beside it; only the SHA-256 and the count recorded in `verification.md`; and the oracle span built from the writer alone as `cat > <scratch>` followed by the original heredoc operator and delimiter word, run under `sandbox-exec`, with the blind spot (commands between writer and reader never run) stated and every bound command with a command between them listed for the Owner's hand sample.
+  - Blocked by: Run the suite and the gates over the finished change
+
+## Design gaps found
+
+none. Every item's Accept line is derived from a rule, a contract or a reason string architecture.md fixes. The one point that looked like a gap is how Milestone 1 behaves before the invalidation rules exist; it is a sequencing choice inside the architecture's own fail-closed direction, recorded under Notes, not a design decision.
+
+## Notes
+
+- 2026-11-09 (Decompose): PRD success criteria trace. Criterion 1 (demo exits 2 with B's strings and the pointer) and criterion 2 (passing twin exits 0, silent): Bind the adjacent writer through _bound_body. Criterion 3 (judged share at least 25% on one frozen snapshot) and criterion 4 (exit 2 iff B fails the file a real shell writes): Hand the replay and the false-block oracle to Verify, which Verify measures; the items that decide the share are the chain, spelling and inert-list items of Milestones 2 and 3. Criterion 5 (a binding it cannot establish passes with a note, no exception escapes): the note fixtures in every Milestone 2 and 3 item and the final suite item. Criterion 6 (fixture tests for each shape): Pin the demo payload in TestSameCallHeredoc and Cover the remaining shapes in TestSameCallHeredoc. Criterion 7 (one owner of B's patterns): Bind the adjacent writer through _bound_body and Run the suite and the gates over the finished change. Criterion 8 (the four commands): Run the suite and the gates over the finished change.
+- 2026-11-09 (Decompose): Milestone 1 binds only a writer with nothing between it and the reader; any command between them gives the invalidation note. That is the fail-closed end of architecture.md's invalidation rules, so Milestone 1 can ship with no false block, and Milestone 3 relaxes it to the rules. If the Owner prefers one binding item carrying all of the rules, merge Milestones 2 and 3 into Milestone 1; the items do not change.
+- 2026-11-09 (Decompose): The 25% share is a Verify measurement, so no Implement item ends on it. The architecture's probe puts the rules at about 26.5%; a miss at Verify is read from the funnel, not patched in an item.
