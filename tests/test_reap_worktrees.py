@@ -605,6 +605,8 @@ class RealGit(unittest.TestCase):
         return code, buf.getvalue()
 
     def test_hidden_index_flags_keep_the_worktree(self):
+        # No sparse-checkout: the flag is set by hand, so status stays
+        # silent about the edit and only the index-flag check sees it.
         for flag in ("--assume-unchanged", "--skip-worktree"):
             with self.subTest(flag=flag), tempfile.TemporaryDirectory() as t:
                 repo, wt = self.merged_worktree(os.path.realpath(t))
@@ -653,9 +655,9 @@ class RealGit(unittest.TestCase):
             with open(scratch, "w") as f:
                 f.write("unsaved")
             code, out = self.reap(repo)
+            self.assertTrue(os.path.exists(scratch), out)
             self.assertEqual(code, 0, out)
             self.assertIn("contains worktree", out)
-            self.assertTrue(os.path.exists(scratch))
             self.assertTrue(os.path.isdir(outer))
 
     def test_sparse_worktree_with_absent_skip_files_is_reaped(self):
@@ -674,19 +676,6 @@ class RealGit(unittest.TestCase):
             self.assertEqual(code, 0, out)
             self.assertNotIn("hidden index flags", out)
             self.assertFalse(os.path.exists(wt))
-
-    def test_skip_worktree_flag_on_a_present_file_keeps_the_worktree(self):
-        # No sparse-checkout: the flag is set by hand, so status stays
-        # silent about the edit and only the index-flag check sees it.
-        with tempfile.TemporaryDirectory() as t:
-            repo, wt = self.merged_worktree(os.path.realpath(t))
-            self.git("update-index", "--skip-worktree", "tracked.txt", cwd=wt)
-            with open(os.path.join(wt, "tracked.txt"), "w") as f:
-                f.write("edited\n")
-            code, out = self.reap(repo)
-            self.assertEqual(code, 0, out)
-            self.assertIn("dirty (hidden index flags)", out)
-            self.assertTrue(os.path.isdir(wt))
 
     def test_sparse_worktree_keeps_an_edit_to_a_present_cone_file(self):
         # In sparse mode git clears skip-worktree on a present file, so
