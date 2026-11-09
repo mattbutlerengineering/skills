@@ -96,6 +96,16 @@ Build one candidate register for the week:
   (quote the rule and the violation), or *gate/scope/graduation
   implication* (escalate only — ADR-0033 keeps those human-only).
 
+The *new rule* class follows the [operate](../../skills/operate/SKILL.md)
+skill's environment retrospective (its step 6): name the check, pointer
+or rule that would have caught the mistake, and classify it as
+**mechanical** (a lint rule, hook, CI job or gate detector would have
+caught it) or **judgement** (only a reader could). A mechanical
+candidate proposes a check as its carrier, never a prose rule: a prose
+rule is what the mistake already slipped past. This routine runs
+unattended, so it takes that classification and never runs the skill's
+interview.
+
 ## 4 Pick exactly one
 
 Modes from §1 gate this section. In normal mode, first match wins:

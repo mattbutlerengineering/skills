@@ -77,6 +77,12 @@ Check in order; the first hit sets the run mode.
 7. `docs/backlog.md`, and the run directories its `(from: ...)` and
    `(claimed: ...)` markers name.
 
+Read a run directory by the protocol's orientation tables, as the
+[next](../../skills/next/SKILL.md) skill does: a stage is complete when
+its artifact exists, and the first incomplete stage is where the run
+stands. A run with a `release.md` at `outcome: prepared` is waiting on
+the pull request its `pending-merge:` names, not abandoned.
+
 ## 3 Survey
 
 Classify each open work-order issue; one line per finding, with the

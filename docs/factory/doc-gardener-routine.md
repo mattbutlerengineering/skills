@@ -101,6 +101,15 @@ protocol files), and `factory/CHARTERS.md`. Run artifacts, ADRs and
 eval results are historical records: a stale reference there is
 reported, never edited.
 
+Knowledge-base pages under `docs/kb/` go stale by the
+[knowledge-base](../../skills/knowledge-base/SKILL.md) skill's own rule:
+`python3 kb.py lint` flags a page whose cited source changed since its
+`verified` date. A stale or broken-source line it prints is a Survey
+finding, and a fix is proposed as that skill's itemised page edit, never
+applied by this routine. A finding of any kind counts only once
+reproduced, the [audit](../../skills/audit/SKILL.md) skill's bar;
+anything less is reported as a suspicion.
+
 ## 4 Pick exactly one
 
 Modes from §1 gate this section. In normal mode, first match wins:

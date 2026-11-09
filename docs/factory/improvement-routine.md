@@ -151,6 +151,8 @@ pipeline wants everywhere; the routine gets no exemption.
   toolsmith charters demand. Full verify suite green before push; if
   the routine's own change turned it red and the fix isn't obvious,
   abandon the branch and report honestly.
+- The discipline is the [implement](../../skills/implement/SKILL.md)
+  skill's test-first slice, scaled to one bounded change.
 - If anything under `factory/templates/**` or any root file in
   `factory_init.MIRRORS` changed: `python3 factory_init.py
   update-manifest`, manifest committed with the change (detector E).
@@ -200,6 +202,11 @@ Harvest the correction stream since last-scan:
   event, quoted as the queue states it, with the queue issue's
   permalink. A queue line and a harvested comment that record the same
   rejection are one event, not two.
+
+Classify each candidate rule as the [operate](../../skills/operate/SKILL.md)
+skill's environment retrospective does: **mechanical** (a deterministic
+check would have caught it) or **judgement** (only a reader could). A
+mechanical candidate names a check as its carrier, never a prose rule.
 
 Rules, all from the toolsmith charter:
 
