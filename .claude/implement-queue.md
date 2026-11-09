@@ -150,15 +150,28 @@ that moment before the next PR starts (`docs/kb/cross-pr-merge-hazards.md`).
 
 ## reap
 
-Run after `git fetch origin --prune`. For each worktree that
-`git worktree list --porcelain` lists under `.claude/worktrees/agent-*`,
+The hook is `python3 reap_worktrees.py --apply` (no flag: a dry run that
+removes no worktree or branch; `--no-fetch` makes the dry run offline);
+that tool implements this section, and the rules below are its
+definition. It runs `git fetch origin --prune` first, which prunes
+remote-tracking refs, and removes nothing if the fetch fails. For each worktree that
+`git worktree list --porcelain` lists under `.claude/worktrees/`,
 apply all four tests; any failure leaves the worktree and its branch
 alone and reports the path with the failed test. `<branch>` below is
 the porcelain `branch` line without its `refs/heads/` prefix, and
 `<tip>` is the worktree's `HEAD` commit:
 
-1. **Clean.** `git -C <path> status --porcelain` exits 0 and prints
-   nothing on stdout. A failed `git` call is a failure, not a clean tree.
+1. **Clean.** `git -C <path> status --porcelain --untracked-files=all
+   --ignore-submodules=none` exits 0 and prints nothing on stdout (the
+   two flags override a repo's `status.showUntrackedFiles` and
+   `diff.ignoreSubmodules`, which would hide untracked files or a dirty
+   submodule). `git -C <path> ls-files -v` also exits 0, and any line
+   whose tag is lowercase (assume-unchanged) or `S` (skip-worktree) is
+   dirty, because those flags hide edits from `status`. A failed `git`
+   call is a failure, not a clean tree. "Clean" means exactly that:
+   gitignored files (for example `.env`, `plugin-evals/results/`,
+   `__pycache__`) are not checked and are deleted with the worktree, on
+   purpose.
 2. **Idle.** `lsof` is on `PATH`, `<path>` exists, and `lsof -w +D
    <path>` prints nothing on stdout or stderr. `-w` silences all of
    lsof's warnings, so one on an unreadable mount cannot block every
@@ -172,13 +185,19 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
 4. **Positive evidence that this tip merged.** Either `<tip>` is a
    `headRefOid` in `gh pr list --head <branch> --base main --state
    merged --json headRefOid`, or `git merge-base --is-ancestor <tip>
-   origin/main` exits 0. A merged PR for the branch *name* is not
+   refs/remotes/origin/main` exits 0 (the full ref: a bare `origin/main`
+   resolves a local branch or tag of that name first, and an unmerged
+   branch so named would pass). A merged PR for the branch *name* is not
    evidence: a branch that gained commits after its PR merged, or
    reused the name, fails here. A tip no merged PR carries, on a branch
    with no PR, is unmerged work, never reaped.
 
 On a pass, `git worktree remove <path>` (never `--force`), then, if it
-had a branch, `git branch -D <branch>`: the squash merge leaves the
-branch off `origin/main`'s history, so `-d` would refuse a branch that
-test 4 already proved merged. Never touch a worktree outside
+had a branch other than `main`, `git branch -D <branch>`: the squash merge leaves the
+branch off `refs/remotes/origin/main`'s history, so `-d` would refuse a branch that
+test 4 already proved merged. A locked worktree (`git worktree lock`) is kept, never
+reaped, and so is a worktree whose path contains another listed
+worktree (`.git/info/exclude` hides the nested one from the outer's
+`status` and from `git worktree remove`'s own check, so reaping the outer
+would delete the inner's work). Never touch a worktree outside
 `.claude/worktrees/`, and never the checkout the session runs in.

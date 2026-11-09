@@ -62,6 +62,7 @@ VERBS = {
     "npx-bundle": ("npx_bundle", "argv"),
     "one-owner": ("one_owner", "argv"),
     "pr-body-preflight": ("pr_body_preflight", "argv"),
+    "reap-worktrees": ("reap_worktrees", "argv"),
     "rejection-mining": ("rejection_mining", "argv"),
     "reviewer-verdict": ("reviewer_verdict", "argv"),
     "run-tests": ("run_tests", "argv"),

@@ -148,3 +148,4 @@ the canonical vocabulary.
 | [0125](0125-a-kb-page-declares-its-outside-check-and-lint-ages-it-offline.md) | A knowledge-base page declares its outside check, and lint ages it offline | provisional |
 | [0126](0126-kb-harvest-reads-memory-frontmatter-through-protocol-and-joins-its-root-only-importers.md) | kb_harvest reads a memory file's frontmatter through protocol.frontmatter_end and joins the root-only importers of protocol.py | provisional |
 | [0127](0127-work-queue-folds-into-implement-queue.md) | work-queue folds into implement-queue | accepted |
+| [0128](0128-reap-worktrees-is-root-only-and-joins-the-cli-py-row.md) | reap_worktrees is a root-only tool and joins the cli.py row of the dual-membership set | provisional |
