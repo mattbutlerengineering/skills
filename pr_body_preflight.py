@@ -552,6 +552,17 @@ INERT_VERBS = frozenset({
     "echo", "printf", "true", ":", "sleep",
     "cat", "grep", "egrep", "fgrep", "head", "tail", "wc", "ls", "test", "[",
     "diff", "cmp", "stat"})
+# The git subcommands that only read, and `gh` commands that only read as
+# (group, command); `git config --get` and `git branch --show-current` are
+# read by their one flag.
+GIT_VERBS = frozenset({"status", "diff", "log", "rev-parse"})
+GIT_CONFIG_SCOPES = frozenset({"--global", "--local", "--system", "--worktree"})
+GH_VERBS = frozenset({
+    ("pr", "view"), ("pr", "list"), ("pr", "status"), ("pr", "checks"),
+    ("pr", "diff"), ("issue", "view"), ("issue", "list")})
+# `gh api` options that send a body, choose a method or write a file.
+GH_API_WRITES = frozenset({
+    "--output", "--method", "--field", "--raw-field", "--input"})
 # Redirections that only read, so they never unbind.
 READ_OPERATORS = frozenset({"<", "<<", "<<<", "<&"})
 BLOCK_CLOSERS = ("}", "done", "fi", "esac")
@@ -586,12 +597,56 @@ def _write_redirect(record):
 
 
 def _removed_by(record):
-    """The command word a note names: the name of an assignment (its value
-    may be long), else the verb."""
-    verb = _verb(record)
+    """What a note names: the name of an assignment (its value may be
+    long), `git` or `gh` with the word that picks the command, else the
+    verb."""
+    verb, words = _verb(record), record.words
     if ASSIGNMENT.match(verb):
         return verb.split("=", 1)[0] + "="
+    if verb == "git":
+        return " ".join(words[:2])
+    if verb == "gh":
+        two = len(words) < 3 or words[1] == "api" or words[1].startswith("-")
+        return " ".join(words[:2 if two else 3])
     return verb
+
+
+def _long_option(word, name):
+    """True when WORD spells the long option NAME, or an abbreviation of
+    it git's parser would accept (`--outp=F`), or an option NAME begins."""
+    option = word.split("=", 1)[0]
+    return (len(option) > 2 and option.startswith("--")
+            and (name.startswith(option) or option.startswith(name)))
+
+
+def _inert_git(words, spelling):
+    """True for the read-only git forms of the architecture's list whose
+    arguments neither spell SPELLING nor name an output or config file."""
+    if len(words) < 2 or any(spelling in word for word in words[2:]):
+        return False
+    verb, args = words[1], words[2:]
+    if verb == "branch":
+        return args == ["--show-current"]
+    if verb == "config":
+        return args[:1] == ["--get"] and all(
+            arg in GIT_CONFIG_SCOPES or not arg.startswith("-")
+            for arg in args[1:])
+    return verb in GIT_VERBS and not any(
+        _long_option(arg, "--output") or _long_option(arg, "--file")
+        or (arg.startswith("-f") and not arg.startswith("--"))
+        for arg in args)
+
+
+def _inert_gh(words):
+    """True for the read-only gh commands of the architecture's list and
+    `gh api` with no option that sends a body, picks a method or writes."""
+    if words[1:2] == ["api"]:
+        return not any(
+            word.split("=", 1)[0] in GH_API_WRITES
+            or (word.startswith("-") and word[1:2] != "-"
+                and set(word[1:]) & set("XfF"))
+            for word in words[2:])
+    return tuple(words[1:3]) in GH_VERBS
 
 
 def _inert(record, spelling):
@@ -611,6 +666,10 @@ def _inert(record, spelling):
         return not any(word.split("=", 1)[0] in held for word in assignments)
     if words[0] == "printf" and any(w.startswith("-v") for w in words[1:]):
         return False
+    if words[0] == "git":
+        return _inert_git(words, spelling)
+    if words[0] == "gh":
+        return _inert_gh(words)
     return words[0] in INERT_VERBS
 
 

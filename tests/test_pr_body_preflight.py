@@ -1037,6 +1037,115 @@ class TestSameCallHeredoc(unittest.TestCase):
             refused(self.BAD + "\n"))
 
 
+    # --- Milestone 3, rule 4: the inert git and gh verbs ------------------
+    INERT_GIT_GH = (
+        "git status", "git status --short", "git diff", "git diff HEAD~1",
+        "git log", "git log --oneline -3", "git rev-parse HEAD",
+        "git rev-parse --show-toplevel", "git branch --show-current",
+        "git config --get user.name", "git config --get --global user.name",
+        "gh pr view", "gh pr view 12 --json title", "gh pr list",
+        "gh pr status", "gh pr checks 12", "gh pr diff 12",
+        "gh issue view 12", "gh issue list", "gh api repos/o/r",
+        "gh api repos/o/r --jq .name", 'gh api -H "Accept: x" repos/o/r',
+        "gh api --paginate user", "gh api -i user", "gh api --cache 1h user", 'gh api ""',
+        "git status 2>&1", "gh pr view 12 > /dev/null")
+
+    def test_an_inert_git_or_gh_verb_between_writer_and_reader_is_judged(self):
+        for between in self.INERT_GIT_GH:
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    refused(self.BAD + "\n"))
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", self.GOOD,
+                                     between=between + "\n")), (0, []))
+
+    def test_a_git_or_gh_verb_off_the_list_between_is_a_note(self):
+        for between, what in (
+                ("git commit -m x", "git commit"), ("git push", "git push"),
+                ("git fetch", "git fetch"), ("git add .", "git add"),
+                ("git checkout x", "git checkout"), ("git pull", "git pull"),
+                ("git stash", "git stash"), ("git reset --hard", "git reset"),
+                ("git branch", "git branch"), ("git branch -D x", "git branch"),
+                ("git branch --show-current x", "git branch"),
+                ("git config user.name x", "git config"),
+                ("git config --get-all x", "git config"),
+                ("git config --unset x", "git config"),
+                ("git config --get x --unset", "git config"),
+                ("git -C d status", "git -C"), ("git", "git"),
+                ("gh pr checkout 1", "gh pr checkout"),
+                ("gh pr edit 1", "gh pr edit"),
+                ("gh pr merge 1 --delete-branch", "gh pr merge"),
+                ("gh issue create", "gh issue create"),
+                ("gh repo sync", "gh repo sync"),
+                ("gh repo clone o/r", "gh repo clone"),
+                ("gh gist clone x", "gh gist clone"),
+                ("gh extension install x", "gh extension install"),
+                ("gh alias set x y", "gh alias set"), ("gh foo", "gh foo"),
+                ("gh -R o/r pr view", "gh -R"), ("gh", "gh")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    self.unbound(what))
+
+    def test_a_git_verb_with_an_option_that_writes_is_a_note(self):
+        for between, what in (
+                ("git diff --output=/tmp/b.md", "git diff"),
+                ("git diff --output /tmp/b.md", "git diff"),
+                ("git diff --outp=/tmp/x", "git diff"),
+                ("git diff --output-indicator-new=+", "git diff"),
+                ("git log --output=/tmp/x", "git log"),
+                ("git status -f /tmp/x", "git status"),
+                ("git status -f/tmp/x", "git status"),
+                ("git diff --file /tmp/x", "git diff"),
+                ("git rev-parse --fil=/tmp/x", "git rev-parse"),
+                ("git config -f /tmp/x --get a", "git config"),
+                ("git config --file /tmp/x --get a", "git config"),
+                ("git config --file=/tmp/x --get a", "git config"),
+                ("git config --get a --file /tmp/x", "git config"),
+                ("git config --get a -f /tmp/x", "git config"),
+                ("git diff /tmp/b.md", "git diff"),
+                ("git log -- /tmp/b.md", "git log"),
+                ("git rev-parse :/tmp/b.md", "git rev-parse")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    self.unbound(what))
+        for between in ("git diff --output=/tmp/x > /tmp/b.md",
+                        "git log >> /tmp/b.md", "git status | tee /tmp/b.md",
+                        "git diff $(git rev-parse HEAD)",
+                        "git log `echo x`"):
+            with self.subTest(between=between):
+                self.assert_a_note(
+                    self.spelled("/tmp/b.md", between=between + "\n"))
+
+    def test_a_gh_api_with_a_write_option_is_a_note(self):
+        for options in ("--input x", "--input=x", "-X POST", "-XPOST",
+                        "--method POST", "--method=POST", "-X GET",
+                        "-f a=b", "-fa=b", "-F a=b", "-Fa=b", "--field a=b",
+                        "--field=a=b", "--raw-field a=b", "--raw-field=a=b",
+                        "--output /tmp/b.md", "--output=/tmp/b.md",
+                        "-iX POST", "--paginate -f a=b"):
+            with self.subTest(options=options):
+                self.assertEqual(
+                    run(self.spelled(
+                        "/tmp/b.md",
+                        between=f"gh api {options} repos/o/r\n")),
+                    self.unbound("gh api"))
+
+    def test_a_git_verb_between_leaves_a_relative_file_to_the_cd_rule(self):
+        self.assertEqual(
+            run(self.spelled("b.md", between="git status\n")),
+            refused(self.BAD + "\n"))
+        self.assertEqual(
+            run(self.spelled("$S/b.md", before="S=/tmp\n",
+                             between="git diff HEAD\n")),
+            refused(self.BAD + "\n"))
+        self.assertEqual(
+            run(self.spelled("b.md", between="git diff b.md\n")),
+            self.unbound("git diff", "b.md"))
+
+
 
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
