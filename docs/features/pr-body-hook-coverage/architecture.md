@@ -146,7 +146,7 @@ The first row is why "a `--body-file` that names a different file" needs no row 
 |---|---|
 | Demo payload exits 2 with B's two strings then the pointer | binding returns the heredoc text; `_body` hands it to `gates.pr_body_problems` |
 | Same payload with a passing body exits 0 and prints nothing | the same path; a body B accepts yields no lines |
-| Judged share ≥ 40% on one frozen snapshot, ceiling re-derived | spelling-identity rule (so `$S/x` paths bind); replay, snapshot and the survival funnel are Verify's; the probe's risk to this criterion is stated under Decisions |
+| Judged share ≥ 25% on one frozen snapshot, ceiling re-derived | spelling-identity rule (so `$S/x` paths bind); replay, snapshot and the survival funnel are Verify's; the probe's risk to this criterion is stated under Decisions |
 | Exit 2 iff B fails the file a real shell writes | writer shape, literal rule and the chain and inert-list rules exist for this; sandbox oracle is Verify's |
 | Unestablishable binding passes with a note, no exception escapes | `_Unreadable` reasons table above; `preflight()`'s catch-all, unchanged |
 | Fixtures: each shape plus quoted, unquoted, `<<-`, leading `cd` | `TestSameCallHeredoc` |
@@ -200,7 +200,7 @@ New I/O, stated once: the binding reads no file. A newly bound body is judged on
 - **The replay snapshot is a local, uncommitted file and only its SHA-256 and count are recorded in `verification.md`** over committing the corpus: the commands carry PR bodies from the Owner's private repositories. Frozen means one sorted, de-duplicated JSONL file written once, at the start of Verify, outside the repository (the Owner picks the path); both the baseline and the changed hook run over it, and `verification.md` records the extraction command, the count, the SHA-256 and each measured number so a rerun on the same file reproduces them. The replay harness is a throwaway script, not a repository tool. Answers open question 3 as a recommendation; the Owner confirms at Verify.
 - **`--body "$(cat F)"` after a same-call writer keeps today's note** over binding it too: the PRD names `--body-file`, and it is a separate spelling that the replay did not count.
 
-### Risk to the 40% criterion: the survival funnel (a rough probe, not the Verify measurement)
+### The 25% criterion and the survival funnel (a rough probe, not the Verify measurement)
 
 The probe ran the tightened rules through the real tokenizer over the 1817 re-extracted commands. Of 1064 not-first body-file readers, 548 name a file that a `cat >`-style writer wrote earlier in the same command. Survival:
 
@@ -214,7 +214,9 @@ The probe ran the tightened rules through the real tokenizer over the 1817 re-ex
 | chain rule: a `|`, `(`, `)` or lone `&` between | 26 | 336 |
 | between-commands rule (off the inert list: `python3` 11, `gh` 2) | 13 | 323 |
 
-So **323 bind**: a judged share of (158 + 323) / 1817 = 26.5%. Two further figures bound the criterion: binding every writer with no rule at all gives (158 + 548) / 1817 = 38.9%, and the writer-behind-`&&` rule alone costs 102 commands, 5.6 points. A relaxation, not adopted because the Owner asked for the stricter rule, lets a writer behind `&&` bind when everything before it in that `&&` run is `cd`, `pushd`, `export` or a plain assignment: it binds 410 (31.3%). **On this probe no rule set reaches 40%**, and the gap to #1633's ceiling (839) is the 681 against 548 difference, which the probe cannot explain. This is not a design failure to hide: the PRD already requires Verify to re-derive the reachable ceiling on its own snapshot and report it beside the 40% result. Recommended Verify report: the funnel above, row by row, on the frozen snapshot, beside the ceiling and the share, so a miss names its cause; if the re-derived ceiling is under 40%, the Owner decides whether to lower the criterion or to take the relaxation, with that table in hand.
+So **323 bind**: a judged share of (158 + 323) / 1817 = 26.5%. Two further figures bound the criterion: binding every writer with no rule at all gives (158 + 548) / 1817 = 38.9%, and the writer-behind-`&&` rule alone costs 102 commands, 5.6 points. A relaxation, not adopted because the Owner asked for the stricter rule, lets a writer behind `&&` bind when everything before it in that `&&` run is `cd`, `pushd`, `export` or a plain assignment: it binds 410 (31.3%). **On this probe no rule set reaches 40%, the target before the Owner's decision**, and the gap to #1633's ceiling (839) is the 681 against 548 difference, which the probe cannot explain. This is not a design failure to hide: the PRD already requires Verify to re-derive the reachable ceiling on its own snapshot and report it beside the 25% result. Recommended Verify report: the funnel above, row by row, on the frozen snapshot, beside the ceiling and the share, so a miss names its cause; if the re-derived share misses 25%, the Owner decides with that table in hand whether to take the relaxation or revisit the target.
+
+**Decision (Owner, 2026-11-09):** the target is lowered from 40% to 25% and every safety rule above is kept. Reason: the safe design's probe share is about 26.5%, and #1633's 681 same-call count was not reproduced (the probe found 548). The PRD's criterion is amended to match. idea.md's 40% ("Success in one sentence") is superseded; idea.md is a historical artifact and is left unedited.
 
 ## ADRs
 
