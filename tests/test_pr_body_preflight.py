@@ -289,6 +289,25 @@ class TestHeredoc(unittest.TestCase):
         self.assertEqual(run(command), refused("plain text"))
 
 
+class TestSameCallHeredoc(unittest.TestCase):
+    """A `gh pr create --body-file F` that is not the compound's first
+    command, where a `cat > F <<D` earlier in the same call wrote F: the
+    hook judges the heredoc text. Full payloads through `preflight()`."""
+
+    @staticmethod
+    def demo(body, delim="'EOF'", path="/tmp/b.md"):
+        return (f"cat > {path} <<{delim}\n{body}\nEOF\n"
+                f"gh pr create --title t --body-file {path}")
+
+    def test_the_demo_payload_is_refused_before_the_pr_exists(self):
+        body = "A summary with no work order and no link."
+        self.assertEqual(run(self.demo(body)), refused(body + "\n"))
+
+    def test_its_passing_twin_is_silent(self):
+        body = "No work order: a demo.\n\nCloses #12"
+        self.assertEqual(run(self.demo(body)), (0, []))
+
+
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
         reason = note("the body holds $ or a backtick the hook cannot expand")
