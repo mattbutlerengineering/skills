@@ -82,8 +82,9 @@ message, one worktree per worker. Each worker's prompt must carry:
 4. Its dollar budget from the plan, and the ADR-0034 rule that exhausting
    it means stopping and handing off, never quietly continuing.
 5. The PR body follows the protocol's Pull request body section
-   (`../../../docs/pipeline-protocol.md`), with item 2's `Closes #N` line
-   and the work-order id citation detector B reads kept first.
+   (`../../docs/pipeline-protocol.md`, relative to this skill's base
+   directory), with item 2's `Closes #N` line and the work-order id
+   citation detector B reads kept first.
 6. Confirm the branch base is the remote's default-branch tip before
    writing anything, and reset onto that tip if it is not.
 7. Merge or rebase the remote's default-branch tip into the branch before
