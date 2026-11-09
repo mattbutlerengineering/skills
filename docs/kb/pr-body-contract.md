@@ -15,10 +15,14 @@ silently** — `python3 gates.py` passes on your machine and the
 One local catch exists: `pr_body_preflight.py`, a PreToolUse hook in
 `.claude/settings.json`, refuses a `gh pr create` whose body fails B
 (exit 2, B's strings from `gates.pr_body_problems`, the rule's one
-owner). It fails open: a body it cannot read (`--fill`, `--web`, a
-shell expansion, another repository) gets a "not checked" note and
-passes. A PR opened any other way, or edited later, is judged by CI's B
-alone.
+owner). It reads an inline body, a heredoc substitution, a body file
+that exists, and a same-call heredoc: `cat > F <<'EOF'` followed in the
+same command by `gh pr create --body-file F` is judged on the heredoc's
+text, when the writer surely ran and nothing between it and the reader
+could have changed F. It fails open: a body it cannot read (`--fill`,
+`--web`, a shell expansion, another repository, a binding it cannot
+establish) gets a "not checked" note and passes. A PR opened any other
+way, or edited later, is judged by CI's B alone.
 
 The body must carry both:
 

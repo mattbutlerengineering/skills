@@ -8,6 +8,15 @@ CI event, so locally it skips and only fails once the PR is open
 (docs/kb/pr-body-contract.md). This applies the same rule, through B's one
 owner gates.pr_body_problems, before the PR exists.
 
+A `--body-file F` is read from disk when `gh pr create` is the compound's
+first command. A same-call heredoc is also a readable shape: a not-first
+reader whose file an earlier `cat > F <<D` writes is judged on that
+heredoc's text, with no disk read, when the writer surely ran (its
+execution is implied by the reader's), F is spelled identically in both,
+and no command between them may have changed F (a write redirect, a
+process substitution, a hostile joiner or any command off the inert
+list). Any binding the hook cannot establish is a "not checked" note.
+
   exit 2   a body the hook read exactly and B judged failing: B's strings
            on stderr, one per line, then a pointer at the kb page
   exit 0   everything else: silent, or one `pr-body-preflight: not checked
