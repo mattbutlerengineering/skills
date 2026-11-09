@@ -411,6 +411,103 @@ class TestSameCallHeredoc(unittest.TestCase):
                     self.split(f"a;&{op[1:]}f"),
                     [Simple(["a"], [], ""), Simple([], [(op, "f")], ";")])
 
+    BAD = "A summary with no work order and no link."
+    GOOD = "No work order: a demo.\n\nCloses #12"
+    NOT_FIRST = note("a body file is read only from the first command")
+
+    @staticmethod
+    def write(body, path="/tmp/b.md", delim="'EOF'", order="redirect first"):
+        """A `cat > F <<D` writer line with its body and closing line."""
+        operators = (f"> {path} <<{delim}" if order == "redirect first"
+                     else f"<<{delim} > {path}")
+        return f"cat {operators}\n{body}\nEOF\n"
+
+    READ = "gh pr create --title t --body-file /tmp/b.md"
+
+    def test_the_writer_is_found_in_both_orders(self):
+        for order in ("redirect first", "heredoc first"):
+            with self.subTest(order=order):
+                self.assertEqual(
+                    run(self.write(self.BAD, order=order) + self.READ),
+                    refused(self.BAD + "\n"))
+                self.assertEqual(
+                    run(self.write(self.GOOD, order=order) + self.READ),
+                    (0, []))
+
+    def test_a_later_writer_of_the_same_spelling_replaces_an_earlier_one(self):
+        self.assertEqual(
+            run(self.write(self.GOOD) + self.write(self.BAD) + self.READ),
+            refused(self.BAD + "\n"))
+        self.assertEqual(
+            run(self.write(self.BAD) + self.write(self.GOOD) + self.READ),
+            (0, []))
+
+    def test_a_reader_naming_a_different_file_keeps_todays_note(self):
+        self.assertEqual(
+            run(self.write(self.BAD) + "gh pr create --body-file /tmp/o.md"),
+            (0, [self.NOT_FIRST]))
+
+    def test_a_relative_file_is_not_bound_yet(self):
+        self.assertEqual(
+            run(self.write(self.BAD, path="b.md")
+                + "gh pr create --body-file b.md"),
+            (0, [self.NOT_FIRST]))
+
+    def test_an_unquoted_delimiter_with_an_expansion_is_a_note(self):
+        reason = note("an unquoted heredoc body holds $, a backtick "
+                      "or a backslash")
+        for body in ("WO-0003 $X", "WO-0003 `x`", "WO-0003 a\\b"):
+            with self.subTest(body=body):
+                self.assertEqual(
+                    run(self.write(body, delim="EOF") + self.READ),
+                    (0, [reason]))
+
+    def test_an_unquoted_delimiter_without_expansion_is_judged(self):
+        self.assertEqual(
+            run(self.write(self.BAD, delim="EOF") + self.READ),
+            refused(self.BAD + "\n"))
+
+    def test_an_unterminated_heredoc_is_a_note(self):
+        command = ("cat > /tmp/b.md <<'EOF' && gh pr create --title t "
+                   "--body-file /tmp/b.md\nbody\n")
+        self.assertEqual(
+            run(command),
+            (0, [note("the heredoc that writes /tmp/b.md has no closing "
+                      "delimiter")]))
+
+    def test_append_and_tee_are_not_writers(self):
+        for writer in ("cat >> /tmp/b.md <<'EOF'\nx\nEOF\n",
+                       "tee /tmp/b.md <<'EOF'\nx\nEOF\n",
+                       "cat /tmp/b.md > /tmp/b.md <<'EOF'\nx\nEOF\n"):
+            with self.subTest(writer=writer):
+                self.assertEqual(run(writer + self.READ), (0, [self.NOT_FIRST]))
+
+    def test_any_command_between_writer_and_reader_is_a_note(self):
+        reason = ("/tmp/b.md may be rewritten or removed by {} between "
+                  "the heredoc and gh pr create")
+        for between, what in (("echo hi\n", "echo"), ("rm /tmp/b.md\n", "rm"),
+                              ("> /tmp/b.md\n", "> /tmp/b.md")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.write(self.BAD) + between + self.READ),
+                    (0, [note(reason.format(what))]))
+
+    def test_body_file_stdin_is_checked_ahead_of_the_binding(self):
+        stdin = note("--body-file - reads the body from stdin")
+        for path in ("/tmp/b.md", "-"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    run(self.write(self.BAD, path=path)
+                        + "gh pr create --title t --body-file -"),
+                    (0, [stdin]))
+
+    def test_a_cat_substitution_after_a_writer_keeps_todays_note(self):
+        self.assertEqual(
+            run(self.write(self.BAD)
+                + 'gh pr create --title t --body "$(cat /tmp/b.md)"'),
+            (0, [self.NOT_FIRST]))
+
+
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
         reason = note("the body holds $ or a backtick the hook cannot expand")

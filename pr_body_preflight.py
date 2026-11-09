@@ -460,6 +460,51 @@ def _read_body_file(path, context):
     return text
 
 
+def _writer_of(record, spelling):
+    """The statement heredoc's index when record is exactly
+    `cat > SPELLING <<D` (the two redirects in either order), else None."""
+    if record.words != ["cat"] or len(record.redirects) != 2:
+        return None
+    by_operator = dict(record.redirects)
+    if len(by_operator) != 2 or by_operator.get(">") != spelling:
+        return None
+    placeholder = PLACEHOLDER_WORD.fullmatch(by_operator.get("<<", ""))
+    return int(placeholder[1]) if placeholder else None
+
+
+def _bound_body(spelling, context):
+    """The text `cat > SPELLING <<D` leaves at an absolute SPELLING when
+    it is the command right before this gh pr create. Raises _Unreadable:
+    today's note when no such writer wrote that spelling, else the reason
+    the heredoc cannot be trusted."""
+    not_first = _Unreadable("a body file is read only from the first command")
+    records, at = context["records"], context["record"]
+    if not re.fullmatch(r"/[^\s$`'\"\\*?\[\]{}~]*", spelling):
+        raise not_first
+    for index in range(at - 1, -1, -1):
+        number = _writer_of(records[index], spelling)
+        if number is not None:
+            break
+    else:
+        raise not_first
+    heredoc = context["statements"][number]
+    if not heredoc.terminated:
+        raise _Unreadable(
+            f"the heredoc that writes {spelling} has no closing delimiter")
+    if not heredoc.literal:
+        raise _Unreadable(
+            "an unquoted heredoc body holds $, a backtick or a backslash")
+    # lean: only the adjacent writer binds; the chain, spelling and inert-list
+    # rules (architecture.md) relax this in Milestones 2 and 3.
+    if index != at - 1:
+        between = records[index + 1]
+        what = (between.words[0] if between.words
+                else " ".join(between.redirects[0]))
+        raise _Unreadable(f"{spelling} may be rewritten or removed by {what} "
+                          "between the heredoc and gh pr create")
+    return heredoc.text
+
+
 def _resolve(value, context):
     """The body a --body value stands for. A placeholder alone is its
     heredoc; `$(cat PATH)` / `$(< PATH)` is that file; any other $ or
@@ -490,6 +535,8 @@ def _body(args, context):
         raise _Unreadable("more than one body source")
     kind, value = sources[0]
     if kind == "file":
+        if value != "-" and not context["first"]:
+            return _bound_body(value, context), repos
         return _read_body_file(value, context), repos
     return _resolve(value, context), repos
 
@@ -605,12 +652,14 @@ def _check_target(repos, context):
 def _verdicts(command, cwd, environ):
     """(failed, notes-and-problems lines) over every gh pr create."""
     masked, heredocs, originals = _mask_heredocs(command)
+    unrun = _Unrun(masked, originals)
     try:
-        tokens = _tokens(_Unrun(masked, originals).run())
+        tokens = _tokens(unrun.run())
     except ValueError as exc:
         return False, [NOTE.format(f"cannot parse the command: {exc}")]
-    commands = [record.words for record in _simple_commands(tokens)
-                if record.words]
+    records = _simple_commands(tokens)
+    commands = [record.words for record in records if record.words]
+    with_words = [at for at, record in enumerate(records) if record.words]
     candidates = [(position, args) for position, args in
                   enumerate(map(_create_args, commands)) if args is not None]
     if not candidates:
@@ -621,6 +670,8 @@ def _verdicts(command, cwd, environ):
         words = commands[position]
         context = {"first": position == 0, "cwd": cwd, "heredocs": heredocs,
                    "commands": commands, "position": position,
+                   "records": records, "record": with_words[position],
+                   "statements": unrun.heredocs,
                    "prefix": words[:len(words) - len(args) - 3],
                    "environ": environ}
         try:
