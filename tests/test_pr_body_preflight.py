@@ -1260,6 +1260,163 @@ class TestSameCallHeredoc(unittest.TestCase):
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
                     self.unbound(what))
 
+    # --- Milestone 4: the PRD's remaining shapes --------------------------
+    def assert_pair(self, build, cwd=None):
+        """`build(body)` is refused for BAD and silent for GOOD."""
+        self.assertEqual(run(build(self.BAD), cwd), refused(self.BAD + "\n"))
+        self.assertEqual(run(build(self.GOOD), cwd), (0, []))
+
+    def test_a_quoted_delimiter_is_judged_verbatim(self):
+        for delim in ("'EOF'", '"EOF"', "\\EOF"):
+            with self.subTest(delim=delim):
+                self.assert_pair(
+                    lambda body: self.write(body, delim=delim) + self.READ)
+        bad, good = self.BAD + " $HOME `x` \\n", self.GOOD + "\n$X `y`"
+        self.assertEqual(run(self.write(bad) + self.READ),
+                         refused(bad + "\n"))
+        self.assertEqual(run(self.write(good) + self.READ), (0, []))
+
+    def test_an_unquoted_delimiter_without_expansion_is_a_pair(self):
+        self.assert_pair(
+            lambda body: self.write(body, delim="EOF") + self.READ)
+
+    def test_a_dash_heredoc_with_tab_indented_lines_is_a_pair(self):
+        for opener in ("<<-EOF", "<<-'EOF'"):
+            with self.subTest(opener=opener):
+                self.assert_pair(
+                    lambda body: (
+                        f"cat > /tmp/b.md {opener}\n"
+                        + "".join(f"\t{line}\n" for line in body.split("\n"))
+                        + "\tEOF\n" + self.READ))
+
+    def test_a_leading_cd_to_the_repository_is_a_pair(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            (top / "d").mkdir()
+            for name, build in (
+                    ("newline", lambda body: "cd d\n" + self.write(body)
+                     + self.READ),
+                    ("semicolon", lambda body: "cd d; " + self.write(body)
+                     + self.READ),
+                    ("and on one line", lambda body: (
+                        "cd d && cat > /tmp/b.md <<'EOF' && gh pr create "
+                        f"--title t --body-file /tmp/b.md\n{body}\nEOF\n"))):
+                with self.subTest(shape=name):
+                    self.assert_pair(build, top)
+            for command in ("cd d &&\n" + self.write(self.BAD) + self.READ,
+                            "cd .. && " + self.write(self.BAD) + self.READ):
+                with self.subTest(note=command):
+                    code, lines = run(command, top)
+                    self.assertEqual(code, 0)
+                    self.assertEqual(len(lines), 1)
+                    self.assertNotIn("B:", lines[0])
+
+    def test_two_readers_are_each_bound_to_their_own_writer(self):
+        def two(first, second, path="/tmp/b.md"):
+            return (self.write(first, path=path)
+                    + f"gh pr create --title t --body-file {path}\n"
+                    + self.write(second, path=path)
+                    + f"gh pr create --title u --body-file {path}")
+
+        self.assertEqual(
+            run(two(self.BAD, self.GOOD)), refused(self.BAD + "\n"))
+        self.assertEqual(
+            run(two(self.GOOD, self.BAD)), refused(self.BAD + "\n"))
+        self.assertEqual(
+            run(two(self.BAD, self.BAD)),
+            (2, gates.pr_body_problems(self.BAD + "\n") * 2 + [POINTER]))
+        self.assertEqual(run(two(self.GOOD, self.GOOD)), (0, []))
+        self.assertEqual(run(two(self.BAD, self.GOOD, "/tmp/c.md")),
+                         refused(self.BAD + "\n"))
+
+    def test_a_second_reader_with_no_writer_of_its_own_is_a_note(self):
+        """A reader between writer and the second reader is off the inert
+        list, so the second reader's binding is a note."""
+        for first in (self.BAD, self.GOOD):
+            with self.subTest(first=first):
+                code, lines = run(
+                    self.write(first) + self.READ + "\n" + self.READ)
+                self.assertEqual(code, 2 if first == self.BAD else 0)
+                self.assertEqual(
+                    lines[-1 if first == self.GOOD else -2],
+                    note("/tmp/b.md may be rewritten or removed by gh pr "
+                         "create between the heredoc and gh pr create"))
+
+    def test_a_cleanup_after_the_reader_does_not_unbind(self):
+        for cleanup in ("\nrm /tmp/b.md", " && rm -f /tmp/b.md",
+                        "; rm /tmp/b.md", "\nrm /tmp/b.md\n> /tmp/b.md"):
+            with self.subTest(cleanup=cleanup):
+                self.assert_pair(
+                    lambda body: self.write(body) + self.READ + cleanup)
+
+    def test_a_heredoc_inside_a_substitution_never_pairs_with_a_reader(self):
+        for first in ('echo "$(cat > /tmp/b.md <<\'A\'\n{}\nA\n)"\n',
+                      "X=$(sed q > /tmp/b.md <<'A'\n{}\nA\n)\n",
+                      'echo "$(sed q <<A\n{}\nA\n)" > /tmp/b.md\n'):
+            with self.subTest(first=first):
+                self.assertEqual(
+                    run(first.format(self.BAD) + self.READ),
+                    (0, [self.NOT_FIRST]))
+        # a writer-shaped command inside `$(`: the chain rule refuses it
+        # (its own joiner is `(`), a note either way and never a verdict
+        self.assert_a_note("X=$(cat > /tmp/b.md <<'A'\n" + self.BAD
+                           + "\nA\n)\n" + self.READ)
+
+    def test_a_heredoc_inside_a_substitution_does_not_shift_the_pairing(self):
+        """The substitution's heredoc is queued first; the real writer
+        after it still pairs with its own text, not the earlier one."""
+        first = 'echo "$(sed q <<A\n{}\nA\n)"\n'
+        self.assertEqual(
+            run(first.format(self.GOOD) + self.write(self.BAD) + self.READ),
+            refused(self.BAD + "\n"))
+        self.assertEqual(
+            run(first.format(self.BAD) + self.write(self.GOOD) + self.READ),
+            (0, []))
+        # after `X=$(…)` the next line's joiner is `)` plus a newline, which
+        # the chain rule does not read as a start: a note, never a verdict
+        self.assert_a_note("X=$(sed q <<A\n" + self.GOOD + "\nA\n)\n"
+                           + self.write(self.BAD) + self.READ)
+
+    def test_a_body_holding_its_own_heredoc_snippet_is_judged_on_the_text(self):
+        """The file text, not the placeholder the masking leaves behind:
+        a snippet holding both required lines satisfies B on its own."""
+        passing = "```\n$(cat <<'B'\nWO-0003\nCloses #9\nB\n)\n```"
+        self.assertEqual(gates.pr_body_problems(passing + "\n"), [])
+        self.assertEqual(run(self.write(passing) + self.READ), (0, []))
+        failing = "```\n$(cat <<'B'\ninner\nB\n)\n```\n" + self.BAD
+        self.assertEqual(run(self.write(failing) + self.READ),
+                         refused(failing + "\n"))
+        self.assert_a_note(self.write(passing, delim="EOF") + self.READ)
+
+    def test_a_log_redirect_before_a_first_command_body_file_reads_from_disk(
+            self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "x.md").write_text(self.GOOD, encoding="utf-8")
+            self.assertEqual(
+                run("> log\ngh pr create -F x.md", cwd=tmp), (0, []))
+            (Path(tmp) / "x.md").write_text(self.BAD, encoding="utf-8")
+            self.assertEqual(
+                run("> log\ngh pr create -F x.md", cwd=tmp),
+                refused(self.BAD))
+
+    def test_a_malformed_payload_or_a_raising_binding_fails_open(self):
+        for text in ("not json", "[1, 2]", json.dumps({"tool_input": {}}),
+                     json.dumps({"tool_input": {"command": 5}})):
+            with self.subTest(payload=text):
+                self.assertEqual(
+                    pr_body_preflight.preflight(text), (0, []))
+        command = self.write(self.BAD) + self.READ
+        with mock.patch("pr_body_preflight._bound_body",
+                        side_effect=RuntimeError("boom")):
+            code, lines = run(command)
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            lines, [note("RuntimeError: boom")])
+        self.assertEqual(
+            sum(line.startswith("pr-body-preflight: not checked")
+                for line in lines), 1)
+
 
 
 class TestUnreadableShapes(unittest.TestCase):
