@@ -93,12 +93,12 @@ class SharedPassageHasOneOwner(unittest.TestCase):
                                  f"{rel} still says to match the copy")
 
 
-class WorkQueuePromptListIsNumberedInOrder(unittest.TestCase):
+class WorkOrderBriefListIsNumberedInOrder(unittest.TestCase):
 
-    def test_step_four_items_number_one_to_n(self):
-        text = (ROOT / "skills/work-queue/SKILL.md").read_text(
-            encoding="utf-8")
-        section = text.split("### 4.", 1)[1].split("### 5.", 1)[0]
+    def test_worker_brief_items_number_one_to_n(self):
+        text = (ROOT / "skills/implement-queue/references/work-orders.md"
+                ).read_text(encoding="utf-8")
+        section = text.split("## Worker brief", 1)[1].split("\n## ", 1)[0]
         numbers = [int(n) for n in
                    re.findall(r"^(\d+)\. ", section, flags=re.MULTILINE)]
         self.assertEqual(numbers, list(range(1, len(numbers) + 1)))

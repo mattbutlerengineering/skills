@@ -1,13 +1,15 @@
 ---
 name: implement-queue
-description: Use when a repo's backlog of ready GitHub issues should be drained without the Owner answering each step — "work the queue", "drain the backlog", "implement the ready issues", "run the queue on a loop", a scheduled routine, or a direct invocation. Claims a batch of independent ready issues, implements each in its own worktree with a TDD worker agent, gates every PR through CI and a review by a distinct agent, then runs a serial merge train. It stops at reviewed, green PRs unless the repo's queue profile opts in to auto-merge (ADR-0087). Everything repo-specific — label transitions, gate commands, the required check, specialist reviewers, locks — comes from the repo's queue profile, never improvised. Not work-queue (factory work orders, never merges) and not conduct (the Owner answers every ask in session).
+description: Use when a repo's backlog of ready GitHub issues, or of factory work orders, should be drained without the Owner answering each step — "work the queue", "drain the backlog", "implement the ready issues", "run the queue on a loop", a scheduled routine, or a direct invocation. Claims a batch of independent ready issues, implements each in its own worktree with a TDD worker agent, gates every PR through CI and a review by a distinct agent, then runs a serial merge train. It stops at reviewed, green PRs unless the repo's queue profile opts in to auto-merge (ADR-0087). Everything repo-specific — label transitions, gate commands, the required check, specialist reviewers, locks — comes from the repo's queue profile, never improvised. Work orders never merge here (ADR-0033 gate 3). Many items, nobody present — not conduct (the Owner present, answering every ask in session) and not autorun (one run through every stage).
 ---
 
 # Implement Queue
 
 Drain a repo's `ready` issues: parallel implementation, serial merging.
 This skill is the loop; the repo's **queue profile** supplies every
-fact about that repo.
+fact about that repo. It is the unattended one of the three skills that
+drive work; the README's "Driving a run: which one" table says when
+`autorun` or `conduct` fits instead.
 
 ```
 Phase 0: Pre-flight   main green? open PRs first
@@ -29,6 +31,7 @@ Frontmatter keys (all optional):
 
 | Key              | Default                                                        | Meaning                                                                                |
 | ---------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `source`         | `issues`                                                       | `issues`: plain `ready` issues. `work-orders`: factory work orders, per [references/work-orders.md](references/work-orders.md). An invocation that asks for work orders overrides it for that run. |
 | `merge`          | `off`                                                          | `off`: stop at reviewed, green PRs. `auto`: enqueue them for merge (see Merge policy). |
 | `max_workers`    | `3`                                                            | Workers in flight at once.                                                             |
 | `required_check` | none                                                           | The check name that must be present and green (e.g. a CI gate job).                    |
@@ -95,6 +98,10 @@ file's Rules section.
 
 ## Phase 1: Claim a batch
 
+Under `source: work-orders`, the planner and the `wo:*` claim in
+[references/work-orders.md](references/work-orders.md) replace this
+phase.
+
     gh issue list --label ready --state open --json number,title,body,labels
 
 In a cloud session (see Cloud sessions above):
@@ -107,6 +114,8 @@ issue always gets a slot. Drop any issue that:
 
 - names an open dependency (`Depends on: #N` with `#N` open);
 - carries `in-progress`, `stealable`, or a `hold_labels` label;
+- carries a `wo:*` label: a factory work order belongs to
+  `source: work-orders`, so the two sources never race for one issue;
 - would touch the same files as an issue already taken (run the
   `compose` hook when the profile has one).
 
@@ -126,6 +135,9 @@ resolves. Dispatch is never held by the merge-train lock: capacity
 (`max_workers`) is the only limit on starting work.
 
 ### Worker brief
+
+Under `source: work-orders`, use the work-order brief in
+[references/work-orders.md](references/work-orders.md) instead.
 
 Every worker prompt carries:
 
@@ -199,6 +211,9 @@ Under `merge: off` (the default) a PR that passes the gate is labelled
 for the human merge, ADR-0033's gate 3, and the report lists it as
 **reviewed, green, awaiting merge**. This skill merges nothing.
 
+Under `source: work-orders` the merge is always off, whatever `merge:`
+says: a work order's merge is the human's (ADR-0033 gate 3).
+
 Under `merge: auto` (ADR-0087) the profile is the Owner's standing
 consent, and a PR that passes every gate step is enqueued with the
 `merge-command` hook. The consent never covers a PR that:
@@ -255,7 +270,9 @@ Release every lock you took when the train ends, on any exit.
 - More ready issues and budget left → Phase 0. Three consecutive failures
   (workers or train) → release locks, stop and report.
 - Report: issues claimed, PRs opened, PRs merged or awaiting merge, and
-  every failure with its cause.
+  every failure with its cause. Under `source: work-orders`, also the
+  planner's deferrals, each order's spend record, and every released
+  order ([references/work-orders.md](references/work-orders.md)).
 
 Recurring use: `/loop 30m` with this skill.
 

@@ -138,7 +138,6 @@ table's Moment column.
 | `autorun` | Driving a run | Drives a whole run end to end from a one-time brief, one fresh subagent per stage, logging an assumption wherever the brief runs out. |
 | `conduct` | Driving a run | Takes a batch of the owner's issues from a priced plan to merged or blocked: one metered headless worker per step on the policy's model and effort, one question at a time with a recommendation, and merges in order only under an answer; ends with a scorecard. |
 | `implement-queue` | Driving a run | Drains a repo's ready GitHub issues unattended: one TDD worktree worker per issue, CI and a distinct reviewer on every PR, then a serial merge train; stops at reviewed, green PRs unless the repo's queue profile opts in to auto-merge. |
-| `work-queue` | Driving a run | Works several ready work orders at once, one worktree-isolated agent each, bounded and priced by the factory's caps; stops at merge-ready PRs. |
 | `address-pr-review` | Around a pull request | Acts on the feedback reviewers left on your PR: fixes what the comments ask, pushes, replies to and resolves every thread, and merges the base branch when behind. |
 | `launch-demo` | Around a pull request | Writes a shipped feature's launch copy in plain words and records a short narrated video whose every line is a sentence of it, from the run's artifacts or the pull request; copy only, with the reason, when a recorder is missing. |
 | `mermaid` | Drawing pictures | Turns a process or system into a digestible mermaid diagram, styled with explicit colors that hold contrast in light and dark renderers. |
@@ -151,6 +150,24 @@ table's Moment column.
 | `doctor` | Installing the factory | Answers whether the install is actually wired up, tier by tier and read-only, reporting each problem with the fix rather than applying it. |
 | `prisma-migrations` | Looking things up | Reference for getting a Prisma schema change to every database safely: `migrate dev` versus `migrate deploy` versus `db push`, deploy ordering, baselining a database built without migrations, CI/CD wiring and failed-migration recovery, with copyable workflow and script templates. |
 | `house-voice` | Around every reply | Sets a voice for the agent's own replies: the answer first, no ceremony or tells of generated prose, every fact and payload kept, and full length where safety needs it; an opt-in output style carries it into every session, and it never rewrites persisted artifacts. |
+
+### Driving a run: which one
+
+Three skills drive work without a person moving it stage by stage. Each
+answers a different question: one run or many issues, the Owner present
+or not, merged or stopped at a PR
+([ADR-0125](docs/adr/0125-work-queue-folds-into-implement-queue.md)).
+
+| | `autorun` | `conduct` | `implement-queue` |
+|---|---|---|---|
+| **Why it exists** | One run, every stage: a feature goes from idea to ship on a brief collected once, instead of the live interview `next` asks at every stage | Many issues taken through merge with the Owner present: each step priced and metered, every merge under an Owner answer | Many issues with nobody present: a routine or loop drains the ready issues, or factory work orders |
+| **Scope** | 1 run, idea → ship | The Owner's chosen issues, plan → merged | Ready issues or work orders, implement → PR |
+| **Owner's time** | The brief up front, then only a stop-and-surface gap or a ship or merge decision | The whole batch, one question at a time | None while it runs; reads the report |
+| **Sessions** | 1, the orchestrator | 1 Conductor (the Owner's session), plus 1 headless Worker session per step | 1, local or a scheduled cloud routine |
+| **Agents in flight** | 1 fresh subagent per stage, in sequence | Workers up to the factory's wip_cap | Workers up to the profile's max_workers, plus a distinct reviewer per PR (none on the fast path) |
+| **Worktrees** | None; works in the run's checkout | 1 batch worktree, plus 1 per item | 1 per worker |
+| **Merges** | Never; a green PR waits for the Owner | Under an Owner answer or standing consent | Only when the queue profile opts in; never for work orders |
+| **Started by** | The Owner | The Owner | A routine or loop, or the Owner |
 
 This repo's own assembly line is live at
 [mattbutlerengineering.github.io/skills](https://mattbutlerengineering.github.io/skills/),

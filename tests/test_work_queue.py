@@ -1,4 +1,4 @@
-"""work_queue.py — the work-queue skill's batch planner.
+"""work_queue.py — implement-queue's work-order batch planner (ADR-0125).
 
 Same discipline as test_label_sync/test_gate_digest: the gh CLI is
 injected through the shared fake (tests/fake_gh.py, never the network),

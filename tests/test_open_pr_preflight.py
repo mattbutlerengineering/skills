@@ -3,9 +3,10 @@
 docs/pipeline-protocol.md's "Open pull requests first" section is the
 one owner of the rule that open pull requests are drained before new
 work starts. Every skill that can start new work names that section
-rather than restating the rule in its own words: the two queue skills
-that already stated it, and the three that never looked (`next`,
-`conduct`, `autorun`).
+rather than restating the rule in its own words: the queue skill that
+already stated it, and the three that never looked (`next`, `conduct`,
+`autorun`). work-queue, the second queue skill, folded into
+implement-queue (ADR-0125).
 
 Pins the section name, the rule's sentence, and the two clauses a
 reciter could not safely lose: no merge without the Owner's answer, and
@@ -26,10 +27,9 @@ RULE = "Open PRs come before new work"
 HAZARD_PAGE = "docs/kb/cross-pr-merge-hazards.md"
 
 # Every skill that can start new work: a run (next), a run's stages
-# (autorun), a batch (conduct), or a batch of queued items (the two
-# queue skills, which stated the rule before it had one home).
-WORK_STARTING = ("next", "conduct", "autorun", "work-queue",
-                 "implement-queue")
+# (autorun), a batch (conduct), or a batch of queued items (the queue
+# skill, which stated the rule before it had one home).
+WORK_STARTING = ("next", "conduct", "autorun", "implement-queue")
 
 
 def flat(text):

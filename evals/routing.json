@@ -550,43 +550,43 @@
       "notes": "adjacency: factory-init vs doctor — the remedy is a re-stamp, which is a write; doctor only names it"
     },
     {
-      "id": "work-queue-1",
+      "id": "implement-queue-work-orders-1",
       "kind": "direct",
-      "expected": "work-queue",
+      "expected": "implement-queue",
       "query": "Work the ready queue — take the next few work orders and run them in parallel instead of one at a time"
     },
     {
-      "id": "work-queue-2",
+      "id": "implement-queue-work-orders-2",
       "kind": "situational",
-      "expected": "work-queue",
+      "expected": "implement-queue",
       "query": "There are several work orders sitting at ready-for-agent and I'd rather not babysit them one by one — drain the backlog and open a PR for each"
     },
     {
-      "id": "work-queue-3",
+      "id": "implement-queue-work-orders-3",
       "kind": "situational",
-      "expected": "work-queue",
+      "expected": "implement-queue",
       "query": "Can we run three of the approved work orders at once, each in its own worktree, and stop at merge-ready PRs?"
     },
     {
-      "id": "work-queue-vs-autorun-1",
+      "id": "implement-queue-vs-autorun-1",
       "kind": "near-miss",
-      "expected": "work-queue",
+      "expected": "implement-queue",
       "query": "Run the ready work orders concurrently and open a PR for each one",
-      "notes": "adjacency: work-queue vs autorun — many work orders through one stage at once, not one run driven through every stage"
+      "notes": "adjacency: implement-queue vs autorun — many work orders through one stage at once, not one run driven through every stage"
     },
     {
-      "id": "autorun-vs-work-queue-1",
+      "id": "autorun-vs-implement-queue-1",
       "kind": "near-miss",
       "expected": "autorun",
       "query": "Take this one feature brief and drive it from idea all the way through to ship without stopping to interview me",
-      "notes": "adjacency: autorun vs work-queue — a single run advanced stage by stage, not a batch of already-approved work orders"
+      "notes": "adjacency: autorun vs implement-queue — a single run advanced stage by stage, not a batch of already-approved work orders"
     },
     {
-      "id": "work-queue-vs-implement-1",
+      "id": "implement-queue-vs-implement-1",
       "kind": "near-miss",
       "expected": "implement",
       "query": "Implement WO-0007 — just that one work order, following its acceptance criteria",
-      "notes": "adjacency: implement vs work-queue — one named work order is the stage skill; a batch is the queue"
+      "notes": "adjacency: implement vs implement-queue — one named work order is the stage skill; a batch is the queue"
     },
     {
       "id": "conduct-1",
@@ -607,11 +607,11 @@
       "query": "Pick the batch I opened yesterday back up and keep it moving — launch whatever is ready and show me the next decision"
     },
     {
-      "id": "conduct-vs-work-queue-1",
+      "id": "conduct-vs-implement-queue-1",
       "kind": "near-miss",
       "expected": "conduct",
       "query": "Take these issues from spec through review, each reviewed by a different agent, merge them in order, and give me a scorecard at the end",
-      "notes": "adjacency: conduct vs work-queue — issues driven from spec to merged under the owner's answers, not ready work orders stopped at merge-ready PRs"
+      "notes": "adjacency: conduct vs implement-queue — issues driven from spec to merged under the owner's answers, not a ready queue stopped at reviewed PRs"
     },
     {
       "id": "audit-1",
@@ -1329,13 +1329,6 @@
       "kind": "situational",
       "expected": "implement-queue",
       "query": "We have nine issues labelled ready and nobody to babysit them overnight. Get them turned into reviewed PRs while I'm away"
-    },
-    {
-      "id": "implement-queue-vs-work-queue-1",
-      "kind": "near-miss",
-      "expected": "work-queue",
-      "query": "Run the work orders that are at wo:ready-for-agent in parallel and stop at merge-ready PRs",
-      "notes": "adjacency: implement-queue vs work-queue — factory work orders from breakdown rows are work-queue's; plain ready issues are implement-queue's"
     },
     {
       "id": "implement-queue-vs-conduct-1",

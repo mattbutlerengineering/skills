@@ -42,7 +42,8 @@ exists: tests/test_factory_init.py
 exists: docs/pipeline-protocol.md
 exists: docs/factory/improvement-routine.md
 exists: skills/next/SKILL.md
-exists: skills/work-queue/SKILL.md
+# skills/work-queue/SKILL.md was retired by ADR-0125; its text moved here:
+exists: skills/implement-queue/references/work-orders.md
 exists: skills/ship/SKILL.md
 exists: skills/ship/TEMPLATE.md
 exists: skills/operate/SKILL.md

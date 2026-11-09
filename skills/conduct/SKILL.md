@@ -1,6 +1,6 @@
 ---
 name: conduct
-description: Use when the Owner wants several of their own GitHub issues taken from plan to merged as one batch — "run these issues as a batch", "conduct these five issues", "fan these out and merge them in order", "pick the batch back up", or a direct invocation. The Owner's session becomes the Conductor. It prices the batch before any spend, launches one metered headless Worker per step in that item's own worktree on the model and effort the Owner's policy names, presents the decision queue one question at a time with a recommendation, records only answers the Owner gives in this session, drives the merge turns those answers cover, and closes the batch with a scorecard. The conductor.py tool holds every rule; this skill never writes or reviews an item's code. Not work-queue (ready work orders through one stage, never merging) and not autorun (one run through every stage, never merging).
+description: Use when the Owner wants several of their own GitHub issues taken from plan to merged as one batch — "run these issues as a batch", "conduct these five issues", "fan these out and merge them in order", "pick the batch back up", or a direct invocation. The Owner's session becomes the Conductor. It prices the batch before any spend, launches one metered headless Worker per step in that item's own worktree on the model and effort the Owner's policy names, presents the decision queue one question at a time with a recommendation, records only answers the Owner gives in this session, drives the merge turns those answers cover, and closes the batch with a scorecard. The conductor.py tool holds every rule; this skill never writes or reviews an item's code. Many items, the Owner present — not implement-queue (a ready queue drained with nobody present) and not autorun (one run through every stage, never merging).
 ---
 
 # Conduct (the Conductor)
@@ -11,7 +11,9 @@ session running this skill is the **Conductor**. `conductor.py` (repo
 root) holds every rule that can be written as a rule: pricing, policy,
 number reservation, the item state machine, the stall rule, the merge
 precondition and the scorecard. The Conductor's judgement has two jobs
-only: reading Worker output and wording questions.
+only: reading Worker output and wording questions. It is the attended
+skill of the three that drive work; the README's "Driving a run: which
+one" table says when `autorun` or `implement-queue` fits instead.
 
 Find the tool before anything else. It is `conductor.py` at the root of
 this plugin's own repo, and `tools/factory/conductor.py` in a repo
