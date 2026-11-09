@@ -20,6 +20,7 @@ Root-only (not mirrored).
 
   python3 pr_body_preflight.py < payload.json
 """
+import collections
 import json
 import os
 import re
@@ -56,6 +57,12 @@ HEREDOC_OPEN = re.compile(
 HEREDOC_CLOSE = re.compile(r"\s*\)")
 PLACEHOLDER = "__pr_body_preflight_heredoc_{}__"
 PLACEHOLDER_WORD = re.compile(r"__pr_body_preflight_heredoc_(\d+)__")
+# One statement-level heredoc: the bytes a shell writes, whether the shell
+# would expand nothing in them, and whether the delimiter line closed it.
+Heredoc = collections.namedtuple("Heredoc", "text literal terminated")
+# One simple command: its words, its redirections as (operator, target) in
+# written order, and the punctuation that joined it to the previous one.
+Simple = collections.namedtuple("Simple", "words redirects joiner")
 # `$(cat PATH)` or `$(< PATH)` with a plain path: read as a body file.
 CAT_FILE = re.compile(
     r"\$\(\s*(?:cat\s+|<\s*)(?P<path>[^\s$`'\"()<>|;&\\]+)\s*\)")
@@ -89,11 +96,13 @@ def _heredoc_at(command, match):
 
 
 def _mask_heredocs(command):
-    """(masked command, [heredoc bodies]): each heredoc substitution is
-    cut from the raw string and replaced by a placeholder word before
-    shlex sees it, because shlex does not know $( ) opens a new quoting
-    context and would strip the body's inner quotes."""
-    pieces, bodies, start = [], [], 0
+    """(masked command, [heredoc bodies], [(placeholder, original span)]):
+    each heredoc substitution is cut from the raw string and replaced by a
+    placeholder word before shlex sees it, because shlex does not know
+    $( ) opens a new quoting context and would strip the body's inner
+    quotes. The pairs let _Unrun restore a span that sits inside a
+    statement-level heredoc body."""
+    pieces, bodies, originals, start = [], [], [], 0
     for match in HEREDOC_OPEN.finditer(command):
         if match.start() < start:
             continue
@@ -101,12 +110,13 @@ def _mask_heredocs(command):
         if found is None:
             continue
         body, end = found
-        pieces += [command[start:match.start()],
-                   PLACEHOLDER.format(len(bodies))]
+        placeholder = PLACEHOLDER.format(len(bodies))
+        pieces += [command[start:match.start()], placeholder]
         bodies.append(body)
+        originals.append((placeholder, command[match.start():end]))
         start = end
     pieces.append(command[start:])
-    return "".join(pieces), bodies
+    return "".join(pieces), bodies, originals
 
 
 # Characters after which an unquoted `#` starts a comment: whitespace and
@@ -122,14 +132,21 @@ class _Unrun:
     shape it cannot classify (an unclosed quote, substitution or
     backtick, or a heredoc delimiter it cannot read), which the caller
     turns into a note: the shell would reject the first kinds, and the
-    last fails open."""
+    last fails open. Each statement-level heredoc is recorded in
+    `heredocs` (a Heredoc, in queue order) and its operator and delimiter
+    are rewritten to `<<` plus a numbered placeholder word; originals are
+    the (placeholder, span) pairs _mask_heredocs cut, restored in a body
+    before `literal` is decided."""
 
-    def __init__(self, text):
+    def __init__(self, text, originals=()):
         self.text, self.pos, self.out = text, 0, []
         self.pending, self.boundary, self.braces = [], True, 0
+        self.originals, self.heredocs = originals, []
 
     def run(self):
         self._normal(nested=False)
+        if self.pending:  # a heredoc operator on the last line: no body
+            self._bodies()
         return "".join(self.out)
 
     def _take(self, end, boundary=False):
@@ -243,11 +260,12 @@ class _Unrun:
         index += dash
         while index < len(text) and text[index] in " \t":
             index += 1
-        delim = []
+        delim, quoted = [], False
         while index < len(text) and text[index] not in WORD_BREAK:
             ch = text[index]
             if ch in "$`":
                 raise ValueError("a heredoc delimiter the hook cannot read")
+            quoted = quoted or ch in "'\"\\"
             if ch in "'\"":
                 close = text.find(ch, index + 1)
                 if close < 0:
@@ -260,21 +278,41 @@ class _Unrun:
                 index += step
         if not "".join(delim):
             raise ValueError("a heredoc with no delimiter")
-        self.pending.append(("".join(delim), dash))
-        self._take(index)
+        self.out.append(
+            "<<" + PLACEHOLDER.format(len(self.heredocs)))
+        self.pos, self.boundary = index, False
+        self.pending.append(
+            (len(self.heredocs), "".join(delim), dash, quoted))
+        self.heredocs.append(None)
 
     def _bodies(self):
-        """Drop each queued heredoc's body and delimiter line. A body
-        whose delimiter line never comes runs to the end, as in bash."""
+        """Capture each queued heredoc's body and delimiter line, and cut
+        them from the output. A body whose delimiter line never comes runs
+        to the end, as in bash."""
         text = self.text
-        for delim, dash in self.pending:
+        for number, delim, dash, quoted in self.pending:
+            lines, terminated = [], False
             while self.pos < len(text):
                 end = text.find("\n", self.pos)
                 end = len(text) if end < 0 else end
                 line = text[self.pos:end]
                 self.pos = min(end + 1, len(text))
-                if (line.lstrip("\t") if dash else line) == delim:
+                if dash:
+                    line = line.lstrip("\t")
+                if line == delim:
+                    terminated = True
                     break
+                lines.append(line)
+            body = "".join(line + "\n" for line in lines)
+            for placeholder, original in self.originals:
+                body = body.replace(placeholder, original)
+            literal = quoted or not any(ch in body for ch in "$`\\")
+            # a restored span with a line of its own equal to this
+            # delimiter ends the heredoc early in the shell
+            terminated = terminated and not any(
+                (line.lstrip("\t") if dash else line) == delim
+                for line in body.split("\n"))
+            self.heredocs[number] = Heredoc(body, literal, terminated)
         self.pending = []
 
 
@@ -293,21 +331,40 @@ def _is_punctuation(token):
 
 
 def _simple_commands(tokens):
-    """Word lists between control operators. A redirection (a punctuation
-    token starting with < or >) drops itself and its target word."""
-    commands, words, skip = [], [], False
+    """One Simple per command between control operators, including a
+    redirect-only command. A redirection is a punctuation run holding `<`
+    or `>`, split off from any separator before it (a lone `&` directly
+    before `>` stays in the operator: `&>`, `&>>`) and paired with the
+    word that follows (a `<(` or `>(` is kind `procsub` and takes none);
+    the joiner is every separator run since the
+    previous record."""
+    records, joiner = [], ""
+    words, redirects, operator = [], [], None
     for token in tokens:
-        if skip:
-            skip = False
-        elif _is_punctuation(token) and token[0] in "<>":
-            skip = True
+        if operator:
+            redirects.append((operator, token))
+            operator = None
         elif _is_punctuation(token):
-            commands.append(words)
-            words = []
+            cut = next((i for i, ch in enumerate(token) if ch in "<>"), None)
+            head = token if cut is None else token[:cut]
+            if cut is not None and head.endswith("&") and token[cut] == ">" \
+                    and not head.endswith("&&"):
+                head, cut = head[:-1], cut - 1
+            if head:
+                if words or redirects:
+                    records.append(Simple(words, redirects, joiner))
+                    words, redirects, joiner = [], [], ""
+                joiner += head
+            if cut is not None:
+                if token[cut:] in ("<(", ">("):  # opens a command, no target
+                    redirects.append(("procsub", token[cut:]))
+                else:
+                    operator = token[cut:]
         else:
             words.append(token)
-    commands.append(words)
-    return [words for words in commands if words]
+    if words or redirects:
+        records.append(Simple(words, redirects, joiner))
+    return records
 
 
 def _create_args(words):
@@ -414,6 +471,56 @@ def _read_body_file(path, context):
     return text
 
 
+def _writer_of(record, spelling):
+    """The statement heredoc's index when record is exactly
+    `cat > SPELLING <<D` (the two redirects in either order), else None."""
+    if record.words != ["cat"] or len(record.redirects) != 2:
+        return None
+    by_operator = dict(record.redirects)
+    if len(by_operator) != 2 or by_operator.get(">") != spelling:
+        return None
+    placeholder = PLACEHOLDER_WORD.fullmatch(by_operator.get("<<", ""))
+    return int(placeholder[1]) if placeholder else None
+
+
+def _bound_body(spelling, context):
+    """The text `cat > SPELLING <<D` leaves at an absolute SPELLING when
+    it is the command right before this gh pr create. Raises _Unreadable:
+    today's note when no such writer wrote that spelling, else the reason
+    the heredoc cannot be trusted."""
+    not_first = _Unreadable("a body file is read only from the first command")
+    records, at = context["records"], context["record"]
+    if not re.fullmatch(r"/[^\s$`'\"\\*?\[\]{}~]*", spelling):
+        raise not_first
+    for index in range(at - 1, -1, -1):
+        number = _writer_of(records[index], spelling)
+        if number is not None:
+            break
+    else:
+        raise not_first
+    heredoc = context["statements"][number]
+    if not heredoc.terminated:
+        raise _Unreadable(
+            f"the heredoc that writes {spelling} has no closing delimiter")
+    if not heredoc.literal:
+        raise _Unreadable(
+            "an unquoted heredoc body holds $, a backtick or a backslash")
+    # lean: only the adjacent writer binds; the chain, spelling and inert-list
+    # rules (architecture.md) relax this in Milestones 2 and 3.
+    if index != at - 1:
+        between = records[index + 1]
+        what = (between.words[0] if between.words
+                else " ".join(between.redirects[0]))
+        raise _Unreadable(f"{spelling} may be rewritten or removed by {what} "
+                          "between the heredoc and gh pr create")
+    # fail closed: the writer must surely run, and the reader only after it
+    if not (re.fullmatch(r"[;\n]*", records[index].joiner)
+            and re.fullmatch(r"(?:[;\n]|&&)+", records[at].joiner)):
+        raise _Unreadable(f"the heredoc that writes {spelling} is not "
+                          "certain to run before gh pr create")
+    return heredoc.text
+
+
 def _resolve(value, context):
     """The body a --body value stands for. A placeholder alone is its
     heredoc; `$(cat PATH)` / `$(< PATH)` is that file; any other $ or
@@ -437,6 +544,10 @@ def _resolve(value, context):
 def _body(args, context):
     """(body text, [-R/--repo values]) for one gh pr create. Raises
     _Unreadable."""
+    if any(kind == "procsub" for kind, _ in
+           context["records"][context["record"]].redirects):
+        raise _Unreadable(
+            "a process substitution in gh pr create hides the body file")
     sources, repos = _body_sources(args)
     if not sources:
         raise _Unreadable("no --body or --body-file")
@@ -444,6 +555,8 @@ def _body(args, context):
         raise _Unreadable("more than one body source")
     kind, value = sources[0]
     if kind == "file":
+        if value != "-" and not context["first"]:
+            return _bound_body(value, context), repos
         return _read_body_file(value, context), repos
     return _resolve(value, context), repos
 
@@ -558,12 +671,15 @@ def _check_target(repos, context):
 
 def _verdicts(command, cwd, environ):
     """(failed, notes-and-problems lines) over every gh pr create."""
-    masked, heredocs = _mask_heredocs(command)
+    masked, heredocs, originals = _mask_heredocs(command)
+    unrun = _Unrun(masked, originals)
     try:
-        tokens = _tokens(_Unrun(masked).run())
+        tokens = _tokens(unrun.run())
     except ValueError as exc:
         return False, [NOTE.format(f"cannot parse the command: {exc}")]
-    commands = _simple_commands(tokens)
+    records = _simple_commands(tokens)
+    commands = [record.words for record in records if record.words]
+    with_words = [at for at, record in enumerate(records) if record.words]
     candidates = [(position, args) for position, args in
                   enumerate(map(_create_args, commands)) if args is not None]
     if not candidates:
@@ -574,6 +690,8 @@ def _verdicts(command, cwd, environ):
         words = commands[position]
         context = {"first": position == 0, "cwd": cwd, "heredocs": heredocs,
                    "commands": commands, "position": position,
+                   "records": records, "record": with_words[position],
+                   "statements": unrun.heredocs,
                    "prefix": words[:len(words) - len(args) - 3],
                    "environ": environ}
         try:

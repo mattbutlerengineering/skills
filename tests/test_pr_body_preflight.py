@@ -289,6 +289,297 @@ class TestHeredoc(unittest.TestCase):
         self.assertEqual(run(command), refused("plain text"))
 
 
+class TestSameCallHeredoc(unittest.TestCase):
+    """A `gh pr create --body-file F` that is not the compound's first
+    command, where a `cat > F <<D` earlier in the same call wrote F: the
+    hook judges the heredoc text. Full payloads through `preflight()`."""
+
+    @staticmethod
+    def demo(body, delim="'EOF'", path="/tmp/b.md"):
+        return (f"cat > {path} <<{delim}\n{body}\nEOF\n"
+                f"gh pr create --title t --body-file {path}")
+
+    def test_the_demo_payload_is_refused_before_the_pr_exists(self):
+        body = "A summary with no work order and no link."
+        self.assertEqual(run(self.demo(body)), refused(body + "\n"))
+
+    def test_its_passing_twin_is_silent(self):
+        body = "No work order: a demo.\n\nCloses #12"
+        self.assertEqual(run(self.demo(body)), (0, []))
+
+
+    def capture(self, command, pairs=()):
+        unrun = pr_body_preflight._Unrun(command, pairs)
+        return unrun.run(), unrun.heredocs
+
+    def test_a_statement_heredoc_is_captured_with_its_text(self):
+        out, heredocs = self.capture(
+            "cat > F <<'EOF'\nline one\nline two\nEOF\n")
+        self.assertEqual(
+            heredocs,
+            [pr_body_preflight.Heredoc("line one\nline two\n", True, True)])
+        self.assertEqual(out, "cat > F <<__pr_body_preflight_heredoc_0__\n")
+
+    def test_a_dash_heredoc_strips_leading_tabs_from_its_text(self):
+        _, heredocs = self.capture("cat <<-EOF > F\n\ta\n\t\tb\n\tEOF\n")
+        self.assertEqual(heredocs[0].text, "a\nb\n")
+        self.assertTrue(heredocs[0].terminated)
+
+    def test_a_delimiter_that_never_closes_is_unterminated(self):
+        _, heredocs = self.capture("cat > F <<EOF\nplain\nnever closed")
+        self.assertEqual(
+            heredocs,
+            [pr_body_preflight.Heredoc("plain\nnever closed\n", True, False)])
+
+    def test_a_here_string_is_not_a_heredoc(self):
+        out, heredocs = self.capture("cat > F <<< text\n")
+        self.assertEqual((out, heredocs), ("cat > F <<< text\n", []))
+
+    def test_literal_follows_the_quoting_and_the_body(self):
+        for command, literal in (
+                ("cat <<'D'\n$X\nD\n", True), ('cat <<"D"\n$X\nD\n', True),
+                ("cat <<\\D\n$X\nD\n", True), ("cat <<D\nplain\nD\n", True),
+                ("cat <<D\n$X\nD\n", False), ("cat <<D\n`x`\nD\n", False),
+                ("cat <<D\na\\b\nD\n", False)):
+            with self.subTest(command=command):
+                self.assertEqual(self.capture(command)[1][0].literal, literal)
+
+    def test_heredocs_are_numbered_in_queue_order(self):
+        out, heredocs = self.capture("cat <<A; cat <<B\none\nA\ntwo\nB\n")
+        self.assertEqual([h.text for h in heredocs], ["one\n", "two\n"])
+        self.assertEqual(out, "cat <<__pr_body_preflight_heredoc_0__; "
+                              "cat <<__pr_body_preflight_heredoc_1__\n")
+
+    def test_literal_and_text_are_decided_on_the_unmasked_body(self):
+        """A body that documents a `$(cat <<'B' ... B)` snippet: the masked
+        placeholder is restored before `literal` is decided, and `text` is
+        the original span (P3 gap 7)."""
+        snippet = "$(cat <<'B'\ninner\nB\n)"
+        masked, _, pairs = pr_body_preflight._mask_heredocs(
+            f"cat > F <<'EOF'\nsee {snippet} here\nEOF\n")
+        self.assertNotIn("inner", masked)
+        _, heredocs = self.capture(masked, pairs)
+        self.assertEqual(heredocs[0].text, f"see {snippet} here\n")
+        _, unquoted = self.capture(
+            masked.replace("<<'EOF'", "<<EOF"), pairs)
+        self.assertEqual(unquoted[0].text, f"see {snippet} here\n")
+        self.assertFalse(unquoted[0].literal)
+
+
+    def split(self, command):
+        tokens = pr_body_preflight._tokens(
+            pr_body_preflight._Unrun(command).run())
+        return pr_body_preflight._simple_commands(tokens)
+
+    def test_a_redirect_only_command_is_a_record_with_its_joiner(self):
+        Simple = pr_body_preflight.Simple
+        self.assertEqual(
+            self.split("a\n> /tmp/b.md\nb"),
+            [Simple(["a"], [], ""),
+             Simple([], [(">", "/tmp/b.md")], "\n"),
+             Simple(["b"], [], "\n")])
+
+    def test_a_heredoc_redirect_keeps_its_written_order(self):
+        ph = "__pr_body_preflight_heredoc_0__"
+        Simple = pr_body_preflight.Simple
+        for command, redirects in (
+                ("cat > F <<D\nx\nD\n", [(">", "F"), ("<<", ph)]),
+                ("cat <<D > F\nx\nD\n", [("<<", ph), (">", "F")])):
+            with self.subTest(command=command):
+                self.assertEqual(self.split(command),
+                                 [Simple(["cat"], redirects, "")])
+
+    def test_a_word_less_record_does_not_make_a_body_file_not_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "x.md").write_text("x\n", encoding="utf-8")
+            self.assertEqual(
+                run("> log\ngh pr create -F x.md", cwd=tmp), refused("x\n"))
+
+    def test_a_mixed_run_splits_before_its_redirection_operator(self):
+        Simple = pr_body_preflight.Simple
+        self.assertEqual(
+            self.split("a;>f"),
+            [Simple(["a"], [], ""), Simple([], [(">", "f")], ";")])
+
+    def test_a_lone_ampersand_before_a_redirect_stays_in_the_operator(self):
+        Simple = pr_body_preflight.Simple
+        for op in ("&>", "&>>"):
+            with self.subTest(op=op):
+                self.assertEqual(self.split(f"cmd {op} f"),
+                                 [Simple(["cmd"], [(op, "f")], "")])
+                self.assertEqual(
+                    self.split(f"a;&{op[1:]}f"),
+                    [Simple(["a"], [], ""), Simple([], [(op, "f")], ";")])
+
+    BAD = "A summary with no work order and no link."
+    GOOD = "No work order: a demo.\n\nCloses #12"
+    NOT_FIRST = note("a body file is read only from the first command")
+
+    @staticmethod
+    def write(body, path="/tmp/b.md", delim="'EOF'", order="redirect first"):
+        """A `cat > F <<D` writer line with its body and closing line."""
+        operators = (f"> {path} <<{delim}" if order == "redirect first"
+                     else f"<<{delim} > {path}")
+        return f"cat {operators}\n{body}\nEOF\n"
+
+    READ = "gh pr create --title t --body-file /tmp/b.md"
+
+    def test_the_writer_is_found_in_both_orders(self):
+        for order in ("redirect first", "heredoc first"):
+            with self.subTest(order=order):
+                self.assertEqual(
+                    run(self.write(self.BAD, order=order) + self.READ),
+                    refused(self.BAD + "\n"))
+                self.assertEqual(
+                    run(self.write(self.GOOD, order=order) + self.READ),
+                    (0, []))
+
+    def test_a_later_writer_of_the_same_spelling_replaces_an_earlier_one(self):
+        self.assertEqual(
+            run(self.write(self.GOOD) + self.write(self.BAD) + self.READ),
+            refused(self.BAD + "\n"))
+        self.assertEqual(
+            run(self.write(self.BAD) + self.write(self.GOOD) + self.READ),
+            (0, []))
+
+    def test_a_reader_naming_a_different_file_keeps_todays_note(self):
+        self.assertEqual(
+            run(self.write(self.BAD) + "gh pr create --body-file /tmp/o.md"),
+            (0, [self.NOT_FIRST]))
+
+    def test_a_relative_file_is_not_bound_yet(self):
+        self.assertEqual(
+            run(self.write(self.BAD, path="b.md")
+                + "gh pr create --body-file b.md"),
+            (0, [self.NOT_FIRST]))
+
+    def test_an_unquoted_delimiter_with_an_expansion_is_a_note(self):
+        reason = note("an unquoted heredoc body holds $, a backtick "
+                      "or a backslash")
+        for body in ("WO-0003 $X", "WO-0003 `x`", "WO-0003 a\\b"):
+            with self.subTest(body=body):
+                self.assertEqual(
+                    run(self.write(body, delim="EOF") + self.READ),
+                    (0, [reason]))
+
+    def test_an_unquoted_delimiter_without_expansion_is_judged(self):
+        self.assertEqual(
+            run(self.write(self.BAD, delim="EOF") + self.READ),
+            refused(self.BAD + "\n"))
+
+    def test_an_unterminated_heredoc_is_a_note(self):
+        command = ("cat > /tmp/b.md <<'EOF' && gh pr create --title t "
+                   "--body-file /tmp/b.md\nbody\n")
+        self.assertEqual(
+            run(command),
+            (0, [note("the heredoc that writes /tmp/b.md has no closing "
+                      "delimiter")]))
+
+    def test_append_and_tee_are_not_writers(self):
+        for writer in ("cat >> /tmp/b.md <<'EOF'\nx\nEOF\n",
+                       "tee /tmp/b.md <<'EOF'\nx\nEOF\n",
+                       "cat /tmp/b.md > /tmp/b.md <<'EOF'\nx\nEOF\n"):
+            with self.subTest(writer=writer):
+                self.assertEqual(run(writer + self.READ), (0, [self.NOT_FIRST]))
+
+    def test_any_command_between_writer_and_reader_is_a_note(self):
+        reason = ("/tmp/b.md may be rewritten or removed by {} between "
+                  "the heredoc and gh pr create")
+        for between, what in (("echo hi\n", "echo"), ("rm /tmp/b.md\n", "rm"),
+                              ("> /tmp/b.md\n", "> /tmp/b.md")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.write(self.BAD) + between + self.READ),
+                    (0, [note(reason.format(what))]))
+
+    def test_body_file_stdin_is_checked_ahead_of_the_binding(self):
+        stdin = note("--body-file - reads the body from stdin")
+        for path in ("/tmp/b.md", "-"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    run(self.write(self.BAD, path=path)
+                        + "gh pr create --title t --body-file -"),
+                    (0, [stdin]))
+
+    def test_a_cat_substitution_after_a_writer_keeps_todays_note(self):
+        self.assertEqual(
+            run(self.write(self.BAD)
+                + 'gh pr create --title t --body "$(cat /tmp/b.md)"'),
+            (0, [self.NOT_FIRST]))
+
+
+    PROCSUB = note("a process substitution in gh pr create hides the body file")
+
+    def test_a_process_substitution_in_the_reader_is_a_note(self):
+        """As the compound's first command and after a writer, with no
+        disk read of `a`: its text would fail B if it were read."""
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "a").write_text("x\n", encoding="utf-8")
+            for command in (
+                    "gh pr create --title t -F <(cat a c)",
+                    "gh pr create --title t --body-file >(cat a c)",
+                    self.write(self.BAD)
+                    + "gh pr create --title t -F <(cat a c)"):
+                with self.subTest(command=command):
+                    self.assertEqual(run(command, cwd=tmp), (0, [self.PROCSUB]))
+
+    def test_the_splitter_records_a_process_substitution_anywhere(self):
+        for command, op in (("diff <(a) b", "<("), ("echo x >(tee f)", ">(")):
+            with self.subTest(command=command):
+                records = self.split(command)
+                self.assertIn(("procsub", op), records[0].redirects)
+
+    def test_a_here_string_is_never_a_writer(self):
+        self.assertEqual(
+            run('cat > /tmp/b.md <<< "x"\n' + self.READ), (0, [self.NOT_FIRST]))
+
+
+    def test_a_writer_the_shell_can_skip_is_a_note(self):
+        reason = note("the heredoc that writes /tmp/b.md is not certain to "
+                      "run before gh pr create")
+        body = f"{self.BAD}\nEOF\n"
+        read = "gh pr create --title t --body-file /tmp/b.md"
+        for name, command in (
+                ("a", f"test -f /tmp/b.md || cat > /tmp/b.md <<'EOF'\n{body}{read}"),
+                ("b", f"test -f /tmp/b.md || cat > /tmp/b.md <<'EOF' && {read}\n{body}"),
+                ("c", f"cat > /tmp/b.md <<'EOF' || {read}\n{body}"),
+                ("d", f"cat > /tmp/b.md <<'EOF' &\n{body}{read}"),
+                ("e", f"cat > /tmp/b.md <<'EOF' | {read}\n{body}"),
+                ("f", f"git push && cat > /tmp/b.md <<'EOF'\n{body}{read}")):
+            with self.subTest(shape=name):
+                self.assertEqual(run(command), (0, [reason]))
+
+    def test_a_writer_that_surely_runs_is_still_judged(self):
+        body = f"{self.BAD}\nEOF\n"
+        read = "gh pr create --title t --body-file /tmp/b.md"
+        for name, command in (
+                ("start", f"cat > /tmp/b.md <<'EOF'\n{body}{read}"),
+                ("semicolon", f"true; cat > /tmp/b.md <<'EOF'\n{body}{read}"),
+                ("and", f"cat > /tmp/b.md <<'EOF' && {read}\n{body}"),
+                ("and newline", f"cat > /tmp/b.md <<'EOF' &&\n{body}{read}"),
+                ("reader after semicolon",
+                 f"cat > /tmp/b.md <<'EOF' ; {read}\n{body}")):
+            with self.subTest(shape=name):
+                self.assertEqual(run(command), refused(self.BAD + "\n"))
+
+    def test_a_heredoc_with_no_newline_after_it_has_no_closing_delimiter(self):
+        self.assertEqual(
+            run("cat > /tmp/b.md <<'EOF' && gh pr create --title t "
+                "--body-file /tmp/b.md"),
+            (0, [note("the heredoc that writes /tmp/b.md has no closing "
+                      "delimiter")]))
+
+    def test_a_restored_span_holding_the_outer_delimiter_is_unterminated(self):
+        masked, _, pairs = pr_body_preflight._mask_heredocs(
+            "cat > F <<'EOF'\nSee $(cat <<'B'\nEOF\nB\n)\nEOF\n")
+        _, heredocs = self.capture(masked, pairs)
+        self.assertFalse(heredocs[0].terminated)
+        masked, _, pairs = pr_body_preflight._mask_heredocs(
+            "cat > F <<-'EOF'\n\tSee $(cat <<'B'\n\tEOF\nB\n)\n\tEOF\n")
+        _, heredocs = self.capture(masked, pairs)
+        self.assertFalse(heredocs[0].terminated)
+
+
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
         reason = note("the body holds $ or a backtick the hook cannot expand")
