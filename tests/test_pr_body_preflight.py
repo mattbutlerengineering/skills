@@ -534,6 +534,52 @@ class TestSameCallHeredoc(unittest.TestCase):
             run('cat > /tmp/b.md <<< "x"\n' + self.READ), (0, [self.NOT_FIRST]))
 
 
+    def test_a_writer_the_shell_can_skip_is_a_note(self):
+        reason = note("the heredoc that writes /tmp/b.md is not certain to "
+                      "run before gh pr create")
+        body = f"{self.BAD}\nEOF\n"
+        read = "gh pr create --title t --body-file /tmp/b.md"
+        for name, command in (
+                ("a", f"test -f /tmp/b.md || cat > /tmp/b.md <<'EOF'\n{body}{read}"),
+                ("b", f"test -f /tmp/b.md || cat > /tmp/b.md <<'EOF' && {read}\n{body}"),
+                ("c", f"cat > /tmp/b.md <<'EOF' || {read}\n{body}"),
+                ("d", f"cat > /tmp/b.md <<'EOF' &\n{body}{read}"),
+                ("e", f"cat > /tmp/b.md <<'EOF' | {read}\n{body}"),
+                ("f", f"git push && cat > /tmp/b.md <<'EOF'\n{body}{read}")):
+            with self.subTest(shape=name):
+                self.assertEqual(run(command), (0, [reason]))
+
+    def test_a_writer_that_surely_runs_is_still_judged(self):
+        body = f"{self.BAD}\nEOF\n"
+        read = "gh pr create --title t --body-file /tmp/b.md"
+        for name, command in (
+                ("start", f"cat > /tmp/b.md <<'EOF'\n{body}{read}"),
+                ("semicolon", f"true; cat > /tmp/b.md <<'EOF'\n{body}{read}"),
+                ("and", f"cat > /tmp/b.md <<'EOF' && {read}\n{body}"),
+                ("and newline", f"cat > /tmp/b.md <<'EOF' &&\n{body}{read}"),
+                ("reader after semicolon",
+                 f"cat > /tmp/b.md <<'EOF' ; {read}\n{body}")):
+            with self.subTest(shape=name):
+                self.assertEqual(run(command), refused(self.BAD + "\n"))
+
+    def test_a_heredoc_with_no_newline_after_it_has_no_closing_delimiter(self):
+        self.assertEqual(
+            run("cat > /tmp/b.md <<'EOF' && gh pr create --title t "
+                "--body-file /tmp/b.md"),
+            (0, [note("the heredoc that writes /tmp/b.md has no closing "
+                      "delimiter")]))
+
+    def test_a_restored_span_holding_the_outer_delimiter_is_unterminated(self):
+        masked, _, pairs = pr_body_preflight._mask_heredocs(
+            "cat > F <<'EOF'\nSee $(cat <<'B'\nEOF\nB\n)\nEOF\n")
+        _, heredocs = self.capture(masked, pairs)
+        self.assertFalse(heredocs[0].terminated)
+        masked, _, pairs = pr_body_preflight._mask_heredocs(
+            "cat > F <<-'EOF'\n\tSee $(cat <<'B'\n\tEOF\nB\n)\n\tEOF\n")
+        _, heredocs = self.capture(masked, pairs)
+        self.assertFalse(heredocs[0].terminated)
+
+
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
         reason = note("the body holds $ or a backtick the hook cannot expand")

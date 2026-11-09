@@ -145,6 +145,8 @@ class _Unrun:
 
     def run(self):
         self._normal(nested=False)
+        if self.pending:  # a heredoc operator on the last line: no body
+            self._bodies()
         return "".join(self.out)
 
     def _take(self, end, boundary=False):
@@ -305,6 +307,11 @@ class _Unrun:
             for placeholder, original in self.originals:
                 body = body.replace(placeholder, original)
             literal = quoted or not any(ch in body for ch in "$`\\")
+            # a restored span with a line of its own equal to this
+            # delimiter ends the heredoc early in the shell
+            terminated = terminated and not any(
+                (line.lstrip("\t") if dash else line) == delim
+                for line in body.split("\n"))
             self.heredocs[number] = Heredoc(body, literal, terminated)
         self.pending = []
 
@@ -506,6 +513,11 @@ def _bound_body(spelling, context):
                 else " ".join(between.redirects[0]))
         raise _Unreadable(f"{spelling} may be rewritten or removed by {what} "
                           "between the heredoc and gh pr create")
+    # fail closed: the writer must surely run, and the reader only after it
+    if not (re.fullmatch(r"[;\n]*", records[index].joiner)
+            and re.fullmatch(r"(?:[;\n]|&&)+", records[at].joiner)):
+        raise _Unreadable(f"the heredoc that writes {spelling} is not "
+                          "certain to run before gh pr create")
     return heredoc.text
 
 
