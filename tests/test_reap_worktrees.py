@@ -119,7 +119,7 @@ class Passing(Case):
         self.assertEqual(fake.ran("remove"),
                          [["git", "worktree", "remove", self.wt]])
         self.assertEqual(fake.ran("branch-D"),
-                         [["git", "branch", "-D", "work"]])
+                         [["git", "branch", "-D", "--", "work"]])
         self.assertIn(f"reap: removed {self.wt} (100 B, branch work deleted)",
                       out)
         self.assertIn("reap: removed 1, kept 0, freed 100 B (100 bytes)", out)
@@ -151,7 +151,7 @@ class Passing(Case):
         self.go(fake)
         self.assertTrue(fake.ran("remove"))
         self.assertFalse(fake.ran("branch-D"))
-        self.assertNotIn(["git", "branch", "-D", "main"], fake.calls)
+        self.assertNotIn(["git", "branch", "-D", "--", "main"], fake.calls)
 
     def test_status_overrides_repo_config_that_hides_files(self):
         fake = Fake(self.listing())
@@ -209,7 +209,7 @@ class Passing(Case):
         code, out = self.go(fake)
         self.assertEqual(code, 1)
         self.assertIn(f"reap: {self.wt}: branch work not deleted: "
-                      "`git branch -D work` exited 1: boom", out)
+                      "`git branch -D -- work` exited 1: boom", out)
 
 
 class Scope(Case):
@@ -321,17 +321,17 @@ class FailsClosed(Case):
         for tag in ("h", "S", "s", "x"):
             with self.subTest(tag=tag):
                 fake = Fake(self.listing(), over={
-                    "ls-files": proc(f"H a\n{tag} b\n")})
+                    "ls-files": proc(f"H a\0{tag} f\0")})
                 self.keep(fake, "dirty (hidden index flags)")
 
     def test_normal_index_tags_are_clean(self):
-        fake = Fake(self.listing(), over={"ls-files": proc("H a\nM b\n")})
+        fake = Fake(self.listing(), over={"ls-files": proc("H a\0M b\0")})
         code, _ = self.go(fake)
         self.assertEqual(code, 0)
         self.assertTrue(self.removed(fake))
 
     def test_failed_ls_files_fails_closed(self):
-        r = (f"`git -C {self.wt} ls-files -v` exited 128: bad")
+        r = (f"`git -C {self.wt} ls-files -v -z` exited 128: bad")
         self.keep(Fake(self.listing(),
                        over={"ls-files": proc(rc=128, err="bad")}), r, r)
 
@@ -631,6 +631,79 @@ class RealGit(unittest.TestCase):
             self.assertIn(f"contains worktree {inner}", out)
             self.assertTrue(os.path.exists(scratch))
             self.assertTrue(os.path.isdir(outer))
+
+    def test_nested_worktree_under_a_case_variant_path_survives(self):
+        with tempfile.TemporaryDirectory() as t:
+            t = os.path.realpath(t)
+            probe = os.path.join(t, "Probe")
+            os.mkdir(probe)
+            if os.path.exists(os.path.join(t, "pROBE")):
+                pass
+            else:
+                self.skipTest("case-sensitive filesystem")
+            repo, outer = self.merged_worktree(t, "outer")
+            variant = os.path.join(repo, ".claude", "worktrees", "OUTER")
+            inner = os.path.join(variant, ".claude", "worktrees", "inner")
+            self.git("worktree", "add", "-q", "-b", "inner", inner, cwd=outer)
+            self.git("commit", "-q", "--allow-empty", "-m", "unpushed",
+                     cwd=inner)
+            scratch = os.path.join(inner, "scratch.txt")
+            with open(scratch, "w") as f:
+                f.write("unsaved")
+            code, out = self.reap(repo)
+            self.assertEqual(code, 0, out)
+            self.assertIn("contains worktree", out)
+            self.assertTrue(os.path.exists(scratch))
+            self.assertTrue(os.path.isdir(outer))
+
+    def test_sparse_worktree_with_absent_skip_files_is_reaped(self):
+        with tempfile.TemporaryDirectory() as t:
+            repo, wt = self.merged_worktree(os.path.realpath(t))
+            for d in ("keep", "other"):
+                os.mkdir(os.path.join(wt, d))
+                with open(os.path.join(wt, d, "f.txt"), "w") as f:
+                    f.write("x\n")
+            self.git("add", ".", cwd=wt)
+            self.git("commit", "-q", "-m", "dirs", cwd=wt)
+            self.git("push", "-q", "origin", "w:main", cwd=wt)
+            self.git("sparse-checkout", "set", "keep", cwd=wt)
+            self.assertFalse(os.path.exists(os.path.join(wt, "other")))
+            code, out = self.reap(repo)
+            self.assertEqual(code, 0, out)
+            self.assertNotIn("hidden index flags", out)
+            self.assertFalse(os.path.exists(wt))
+
+    def test_sparse_worktree_keeps_an_edit_to_a_present_skip_file(self):
+        with tempfile.TemporaryDirectory() as t:
+            repo, wt = self.merged_worktree(os.path.realpath(t))
+            os.mkdir(os.path.join(wt, "other"))
+            with open(os.path.join(wt, "other", "f.txt"), "w") as f:
+                f.write("x\n")
+            self.git("add", ".", cwd=wt)
+            self.git("commit", "-q", "-m", "dirs", cwd=wt)
+            self.git("push", "-q", "origin", "w:main", cwd=wt)
+            self.git("sparse-checkout", "set", "keep", cwd=wt)
+            os.makedirs(os.path.join(wt, "other"), exist_ok=True)
+            with open(os.path.join(wt, "other", "f.txt"), "w") as f:
+                f.write("edited\n")
+            code, out = self.reap(repo)
+            self.assertEqual(code, 0, out)
+            self.assertIn("dirty", out)
+            self.assertTrue(os.path.isdir(wt))
+
+    def test_branch_named_like_an_option_is_deleted(self):
+        with tempfile.TemporaryDirectory() as t:
+            repo, wt = self.merged_worktree(os.path.realpath(t))
+            self.git("update-ref", "refs/heads/-x", "HEAD", cwd=wt)
+            self.git("symbolic-ref", "HEAD", "refs/heads/-x", cwd=wt)
+            code, out = self.reap(repo)
+            self.assertEqual(code, 0, out)
+            self.assertIn("branch -x deleted", out)
+            self.assertFalse(os.path.exists(wt))
+            ref = subprocess.run(
+                ["git", "show-ref", "--verify", "--quiet", "refs/heads/-x"],
+                cwd=repo)
+            self.assertNotEqual(ref.returncode, 0)
 
     def test_a_truly_merged_tip_is_reaped(self):
         with tempfile.TemporaryDirectory() as t:
