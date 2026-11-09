@@ -95,11 +95,9 @@ Ranked. Nothing is critical.
   Owner's corpus, which is the point of the proposal, but one Owner's history
   is one sample.
 - Standard: none (`stdlib-only` is untouched).
-- Decision: proposed defer. Reason: the cut touches the live hook and the
-  25% margin is 24 commands, so it needs a fresh Verify replay (the harness
-  hashes are in `verification.md`) and should be measured, not guessed. Open a
-  lean sweep issue after Ship that re-runs the funnel with each branch
-  disabled and cuts the ones that lose 0. Owner arbitrates.
+- Decision: deferred by the Owner on 2026-11-09, reason: the cut touches
+  the live hook and the 25% margin is 24 commands, so it needs a fresh
+  Verify replay and should be measured, not guessed. Issue #1677.
 
 ### Minor: architecture.md describes a binding the code is not; the deltas live only in breakdown Notes
 
@@ -130,8 +128,9 @@ Ranked. Nothing is critical.
   route Architect. Open issues #1664, #1667, #1670 mean this is already
   half-queued; the unrecorded part is the ledger.
 - Standard: none.
-- Decision: proposed defer to the Architect re-entry that closes those
-  issues; it blocks nothing in Ship.
+- Decision: deferred by the Owner on 2026-11-09, reason: rides with the
+  Architect re-entry that closes #1664, #1667 and #1670; blocks nothing in
+  Ship. Issue #1679.
 
 ### Minor: parallel heredoc representations and a duplicated literal rule
 
@@ -160,8 +159,8 @@ Ranked. Nothing is critical.
   `_literal(text, quoted)` helper; one place that names each shared reason;
   index the context once.
 - Standard: none.
-- Decision: proposed defer to the `deepen` handoff below (it is a shape
-  cleanup, no behaviour change).
+- Decision: deferred by the Owner on 2026-11-09, reason: a shape cleanup
+  with no behaviour change, handled with the deepen handoff. Issue #1678.
 
 ### Minor: the first-command path reads disk when a leading redirect-only command truncates the same file
 
@@ -182,8 +181,8 @@ Ranked. Nothing is critical.
   compare spellings for invalidation" principle, so this is a real
   trade-off, not an oversight.
 - Standard: none.
-- Decision: proposed defer (log as accepted limit in the kb page). It needs
-  an Architect call and has no user.
+- Decision: deferred by the Owner on 2026-11-09, reason: it needs an
+  Architect call and has no user (under-block only). Issue #1679.
 
 ### Minor: the not-first note blames "first command" when a same-call writer exists
 
@@ -200,7 +199,8 @@ Ranked. Nothing is critical.
   `no heredoc writer with this exact spelling precedes it`; leave the old
   text for the no-writer case. Update the one pinned test.
 - Standard: none.
-- Decision: proposed defer; wording only, no behaviour change.
+- Decision: deferred by the Owner on 2026-11-09, reason: wording only, no
+  behaviour change. Issue #1678.
 
 ### Minor: the kb page does not say which writers bind
 
@@ -217,7 +217,8 @@ Ranked. Nothing is critical.
   writer after `&&` followed by a newline, and any command that may write F
   between are notes. `kb.py drift` must be re-stamped after.
 - Standard: none.
-- Decision: proposed fix with the next edit to the page; no urgency.
+- Decision: deferred by the Owner on 2026-11-09, reason: no urgency; fix
+  with the next edit to the page. Issue #1678.
 
 ### Minor: tests pin private structure at seven sites
 
@@ -235,8 +236,9 @@ Ranked. Nothing is critical.
   an earlier rule fires first. The 65-mutant run says that weakness is not
   currently letting a rule go uncovered.
 - Standard: none.
-- Decision: proposed defer with the deepen handoff; convert the private-API
-  fixtures to preflight() fixtures when the module is reshaped.
+- Decision: deferred by the Owner on 2026-11-09, reason: a shape cleanup
+  with no behaviour change; converting the private-API fixtures waits for
+  the module reshape. Issue #1678.
 
 ## Passes with no findings
 
@@ -332,11 +334,14 @@ Ranked. Nothing is critical.
 
 ## Verdict
 
-Ready to ship. No critical finding: I found no plausible agent command the
-hook blocks wrongly and no plausible form that makes it judge a different
-body than gh reads; the one residual (a leading truncation of the same file)
-under-blocks and is implausible. One Major (the lean cut) and five Minors are
-proposed deferrals the Owner arbitrates.
+Ready to ship. Summary: no finding is critical (I found no plausible agent
+command the hook blocks wrongly and no plausible form that makes it judge a
+different body than gh reads; the one residual, a leading truncation of the
+same file, under-blocks and is implausible); one major deferred; six minors
+deferred. All seven deferrals were made by the Owner on 2026-11-09 as
+proposed, and are routed to #1677 (lean sweep), #1678 (minors, findings 3
+to 7 and the deepen handoff) and #1679 (Architect amendment, findings 2 and
+4, collecting #1664, #1667 and #1670).
 
 Unknowns, counted and not read as a pass: (1) the between-commands rule beyond
 the 8 corpus cases (verification's own unknown, carried; my fixtures and the
