@@ -2,7 +2,8 @@
 stage: ship
 run: feature:kb-from-knowledge-work-plugins
 date: 2026-11-08
-outcome: prepared
+outcome: released
+released-at: 2026-11-09
 pending-merge: https://github.com/mattbutlerengineering/skills/pull/1609
 assumptions:
   - "Release authorization is none (autorun-brief.md, Release authorization), so this pass prepares and stops: push, one pull request, no merge, tag, version bump, branch deletion or issue close."
