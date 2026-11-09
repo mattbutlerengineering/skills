@@ -77,7 +77,7 @@ When this milestone is done, the fail-closed invalidation is complete: any write
 
 When this milestone is done, the kb page and module docstring describe what is read, every gate passes, and Verify holds the exact replay specification to run on a frozen snapshot.
 
-- [ ] **Refresh the kb page and the module docstring** — `docs/kb/pr-body-contract.md` and the module docstring say a same-call heredoc is now a readable shape — size:S
+- [x] **Refresh the kb page and the module docstring** — `docs/kb/pr-body-contract.md` and the module docstring say a same-call heredoc is now a readable shape — size:S
   - Accept: the one-paragraph description of the hook in `docs/kb/pr-body-contract.md` names the same-call heredoc as a readable shape, its `verified:` is refreshed by this change's author, the `pr_body_preflight.py` module docstring says the same, and `python3 kb.py drift` and `python3 lint.py` both exit 0.
   - Blocked by: Admit the inert git and gh verbs between writer and reader
 - [ ] **Cover the remaining shapes in TestSameCallHeredoc** — the PRD's fixture list that no earlier item pins: quoted and unquoted delimiters, `<<-`, a leading `cd`, two readers, a cleanup after the reader, masking — size:M
