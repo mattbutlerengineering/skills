@@ -118,3 +118,26 @@ as awaiting a human merge and never retried by another route
 The skill's default, stated because the merge train depends on it: one
 PR at a time, `update-branch`, then a green `check` against the main of
 that moment before the next PR starts (`docs/kb/cross-pr-merge-hazards.md`).
+
+## reap
+
+Run after `git fetch origin --prune`. For each worktree that
+`git worktree list --porcelain` lists under `.claude/worktrees/agent-*`,
+apply all four tests; any failure leaves the worktree and its branch
+alone and reports the path with the failed test:
+
+1. **Clean.** `git -C <path> status --porcelain` prints nothing.
+2. **Idle.** `lsof +D <path>` finds no process. An `lsof` that did not
+   run is a failure.
+3. **No open PR.** `gh pr list --head <branch> --state open` is empty. A
+   detached worktree has no branch and skips this test.
+4. **Positive evidence of a merge.** `gh pr list --head <branch> --state
+   merged` is non-empty, or `git merge-base --is-ancestor <HEAD>
+   origin/main` exits 0. A branch with no PR and commits not on
+   `origin/main` is unmerged work, never reaped.
+
+On a pass, `git worktree remove <path>` (never `--force`), then, if it
+had a branch, `git branch -D <branch>`: the squash merge leaves the
+branch off `origin/main`'s history, so `-d` would refuse a branch that
+test 4 already proved merged. Never touch a worktree outside
+`.claude/worktrees/`, and never the checkout the session runs in.
