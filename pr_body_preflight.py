@@ -485,6 +485,16 @@ def _writer_of(record, spelling):
 
 # A joiner the chain rule reads: one `;`, `&&` or newline, then newlines.
 # Anything else (`||`, `|`, `&`, a paren, `;;`, `&& ;`) is hostile.
+# Names a shell changes without an assignment, so two spellings of one are
+# not one file.
+SHELL_MAINTAINED = frozenset({
+    "RANDOM", "SRANDOM", "SECONDS", "EPOCHSECONDS", "EPOCHREALTIME", "LINENO",
+    "BASHPID", "PIPESTATUS", "HISTCMD", "PWD", "OLDPWD", "_"})
+NAME_FORM = re.compile(
+    r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+# An argument that runs a command or assigns: a substitution (the tokenizer
+# splits `$(` after its `$`), a backtick, `$[`, or `${NAME=` / `${NAME:=`.
+UNSAFE_ARGUMENT = re.compile(r"`|\$\(|\$\[|\$$|\$\{[^}]*=")
 SEQUENTIAL = re.compile(r"(?:;|&&|\n)\n*")
 START_OR_SEMICOLON = re.compile(r"(?:[;\n]\n*)?")
 ONLY_AND = re.compile(r"&&\n*")
@@ -510,15 +520,37 @@ def _surely_ran(records, index, at):
                for record in [records[index]] + after)
 
 
+def _comparable(spelling):
+    """True when SPELLING names a file the hook can compare by identity:
+    no backtick, `$(`, glob, brace outside `${NAME}` or leading `~`, and
+    every `$` begins `$NAME` or `${NAME}` of a name the shell leaves to
+    assignments."""
+    names = [m[1] or m[2] for m in NAME_FORM.finditer(spelling)]
+    return not (spelling.startswith("~")
+                or re.search(r"[`$*?\[\]{}]", NAME_FORM.sub("", spelling))
+                or any(name in SHELL_MAINTAINED or name.startswith("BASH")
+                       for name in names))
+
+
+def _directory_change(record):
+    """True when record is a bare cd, pushd or popd whose arguments run
+    nothing and assign nothing."""
+    return bool(record.words and record.words[0] in DIRECTORY_CHANGERS
+                and not record.redirects
+                and not any(UNSAFE_ARGUMENT.search(word)
+                            for word in record.words[1:]))
+
+
 def _bound_body(spelling, context):
-    """The text `cat > SPELLING <<D` leaves at an absolute SPELLING when
-    it is the command right before this gh pr create. Raises _Unreadable:
-    today's note when no such writer wrote that spelling, else the reason
-    the heredoc cannot be trusted."""
+    """The text `cat > SPELLING <<D` leaves at SPELLING when it surely ran
+    before this gh pr create. Raises _Unreadable: today's note when no such
+    writer wrote that spelling, else the reason the heredoc cannot be
+    trusted."""
     not_first = _Unreadable("a body file is read only from the first command")
     records, at = context["records"], context["record"]
-    if not re.fullmatch(r"/[^\s$`'\"\\*?\[\]{}~]*", spelling):
-        raise not_first
+    if not _comparable(spelling):
+        raise _Unreadable(f"{spelling} names a file through an expansion "
+                          "the hook cannot compare")
     for index in range(at - 1, -1, -1):
         number = _writer_of(records[index], spelling)
         if number is not None:
@@ -535,14 +567,18 @@ def _bound_body(spelling, context):
     if not _surely_ran(records, index, at):
         raise _Unreadable(f"the heredoc that writes {spelling} is not "
                           "certain to run before gh pr create")
-    # lean: only the adjacent writer binds; the spelling and inert-list
-    # rules (architecture.md) relax this in Milestones 2 and 3.
-    if index != at - 1:
-        between = records[index + 1]
-        what = (between.words[0] if between.words
-                else " ".join(between.redirects[0]))
-        raise _Unreadable(f"{spelling} may be rewritten or removed by {what} "
-                          "between the heredoc and gh pr create")
+    # lean: a directory change is the only command admitted between writer
+    # and reader; the rest of the inert list (architecture.md) arrives in
+    # Milestone 3, so any other command unbinds.
+    for between in records[index + 1:at]:
+        if not _directory_change(between):
+            what = (between.words[0] if between.words
+                    else " ".join(between.redirects[0]))
+            raise _Unreadable(f"{spelling} may be rewritten or removed by "
+                              f"{what} between the heredoc and gh pr create")
+        if not spelling.startswith("/"):
+            raise _Unreadable("a cd between the heredoc and gh pr create "
+                              f"may change what {spelling} names")
     return heredoc.text
 
 
