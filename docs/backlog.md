@@ -254,3 +254,8 @@ Seed inbox — advisory only, never orientation state; grammar and read moments 
 - Re-run the Operate scan of Owner transcripts for the PR-body hook one week after 2026-11-09, count sessions, blocks, retries and any block on a command that is not a real PR creation, and record the counts in a follow-up retro (from: feature:pr-body-hook-coverage)
 - Turn the launch-demo dry-run block on a contrived quoted-string command into a fixture, and decide whether the hook may judge a `gh pr create` that sits inside a quoted string at all (from: feature:pr-body-hook-coverage)
 - Keep the reviewer's 40000-variant token-insertion fuzz of `pr_body_preflight.py` as a test, so the fail-open contract and the no-exception rule are held by a deterministic check (from: feature:pr-body-hook-coverage)
+- Run `gates.py` detector O at the end of Decompose, so a breakdown without work-order ids and PRD citations is caught before Implement starts (from: feature:polish-blockers-and-patterns)
+- Anchor the `focus` floor phrase in `tests/test_polish_shape.py` to the floor item's full wording so the check cannot pass on any use of the word (from: feature:polish-blockers-and-patterns)
+- Add a gates detector that fails a `release.md` whose Outcome section contradicts its frontmatter `outcome:` after the Ship write-back (from: feature:polish-blockers-and-patterns)
+- Run the owed kill test: `polish` code-only on one fixture UI on `eff46d2` and on current `main`, and record which table rows each run named (from: feature:polish-blockers-and-patterns)
+- Re-run this Operate scan after one week of use and count sessions that ran `polish` on a UI, so the outcomes can leave `unobserved` (from: feature:polish-blockers-and-patterns)
