@@ -1203,11 +1203,10 @@ class TestSameCallHeredoc(unittest.TestCase):
     def test_a_here_string_that_runs_a_command_is_a_note(self):
         """`cat <<< 'literal $(x)'` holds `$(` in its argument, which the
         rule reads whether or not the shell quoted it."""
-        code, lines = run(self.spelled(
-            "/tmp/b.md", between="cat <<< 'literal $(x)'\n"))
-        self.assertEqual(code, 0)
-        self.assertEqual(len(lines), 1)
-        self.assertIn("may be rewritten or removed by", lines[0])
+        self.assertEqual(
+            run(self.spelled("/tmp/b.md",
+                             between="cat <<< 'literal $(x)'\n")),
+            self.unbound("<<< literal $(x)"))
 
     def test_a_masked_substitution_in_an_argument_or_value_is_a_note(self):
         for between in ('echo "$(cat <<B\n$(rm -f /tmp/b.md)\nB\n)"',
@@ -1259,17 +1258,51 @@ class TestSameCallHeredoc(unittest.TestCase):
                 ("$2>&1", "$2"), ("2 > /dev/null", "2"),
                 ("2> /tmp/b.md", "2> /tmp/b.md"),
                 ("2>/tmp/b.md", "2> /tmp/b.md"),
-                ("5</tmp/x", "5< /tmp/x"),
-                ("2> /dev/null", "2> /dev/null"),
+                ("2>> /tmp/b.md", "2>> /tmp/b.md"),
+                ("2>| /tmp/b.md", "2>| /tmp/b.md"),
+                ("1>&2 > /tmp/b.md", "> /tmp/b.md"),
+                ("2>&1>/tmp/b.md", "> /tmp/b.md"),
+                ("echo hi 2>&1>/tmp/b.md", "> /tmp/b.md"),
                 ("&> /tmp/b.md", "&> /tmp/b.md"),
                 ("2>&1 > /tmp/b.md", "> /tmp/b.md"),
                 ("2>&1 2>/tmp/b.md", "2> /tmp/b.md"),
+                ("2>&1x", "2>& 1x"),
                 ("3<<'X'\nx\nX", "3<< __pr_body_preflight_heredoc_1__"),
                 ("3<> /tmp/b.md", "3<> /tmp/b.md")):
             with self.subTest(between=between):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
                     self.unbound(what))
+
+    def test_a_prefixed_read_or_null_redirect_is_judged_wherever_it_sits(self):
+        for between in ("git status 2>/dev/null", "ls x 2>/dev/null",
+                        "echo hi 1>/dev/null", "cat 2<&0", "cat 0< /tmp/x",
+                        "echo hi 2>> /dev/null", "echo hi 2>| /dev/null",
+                        "echo hi 2>/dev/stderr", "5< /tmp/x"):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    refused(self.BAD + "\n"))
+        for tail in (" 2>/dev/null", " 1>/dev/null", " 2<&0"):
+            with self.subTest(reader=tail):
+                self.assertEqual(run(self.spelled("/tmp/b.md") + tail),
+                                 refused(self.BAD + "\n"))
+        for tail, what in ((" 2>/tmp/b.md", "2> /tmp/b.md"),
+                           (" 1>&2 > /tmp/b.md", "> /tmp/b.md"),
+                           (" 3<> /tmp/b.md", "3<> /tmp/b.md")):
+            with self.subTest(reader=tail):
+                self.assertEqual(run(self.spelled("/tmp/b.md") + tail),
+                                 self.unbound(what))
+        for closer in ("}", "done", "fi"):
+            opener = {"}": "{", "done": "while true; do",
+                      "fi": "if true; then"}[closer]
+            with self.subTest(closer=closer):
+                self.assertEqual(
+                    run(self.closed(opener, closer, " 2>/dev/null")),
+                    refused(self.BAD + "\n"))
+                self.assertEqual(
+                    run(self.closed(opener, closer, " 2>/tmp/b.md")),
+                    self.unbound("2> /tmp/b.md"))
 
     def test_a_descriptor_prefix_is_never_part_of_a_writer(self):
         for writer in ("cat 1> /tmp/b.md <<'EOF'\nx\nEOF\n",
@@ -1323,44 +1356,86 @@ class TestSameCallHeredoc(unittest.TestCase):
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
                     self.unbound(what))
 
+    def before(self, what, spelling="/tmp/b.md"):
+        return (0, [note(f"{spelling} may be rewritten or removed by {what} "
+                         "before the heredoc")])
+
     def test_an_exec_behind_a_keyword_group_or_time_before_the_writer(self):
         for before in ("{ exec > /tmp/b.md; }\n", "{ exec 3> /tmp/b.md; }\n",
                        "if true; then exec 3> /tmp/b.md; fi\n",
                        "if true; then\nexec 3> /tmp/b.md\nfi\n",
                        "time exec 3> /tmp/b.md\n", "! exec 3> /tmp/b.md\n",
                        "while true; do exec 3>> /tmp/b.md; done\n",
-                       "echo exec > /tmp/log\n"):
+                       "echo exec > /tmp/log\n",
+                       "X=1 exec 3> /tmp/b.md\n", "command exec 3> /tmp/b.md\n",
+                       "builtin exec 3>> /tmp/b.md\n",
+                       "X=1 Y=2 command exec 3<> /tmp/b.md\n",
+                       "exec 5<<'X'\nx\nX\n"):
             with self.subTest(before=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before,
                                      between="echo hi >&3\n")),
-                    self.unbound("exec"))
+                    self.before("an open descriptor"))
         for before in ("{ exec 3>&1; }\n", "time exec 2>&1\n",
                        "if true; then exec > /dev/null; fi\n",
-                       "{ echo exec; }\n", "{ true; }\n"):
+                       "{ echo exec; }\n", "{ true; }\n", "X=1 exec 3>&1\n",
+                       "exec 2>/dev/null\n", "exec 1>/dev/null\n",
+                       "exec 3<&0\n", "exec 4>&-\n"):
             with self.subTest(judged=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before)),
                     refused(self.BAD + "\n"))
 
-    def test_a_name_that_steers_a_command_before_the_writer_unbinds(self):
-        for before, what in (
-                ("PATH=/x\n", "PATH="), ("export PATH=/x\n", "export"),
-                ("export GIT_EXTERNAL_DIFF=x\n", "export"),
-                ("export GIT_TRACE=1\n", "export"), ("HOME=/x\n", "HOME="),
-                ("export HOME=/x\n", "export"),
-                ("XDG_CONFIG_HOME=/x\n", "XDG_CONFIG_HOME="),
-                ("BROWSER=x\n", "BROWSER="), ("export PAGER=x\n", "export"),
-                ("IFS=,\n", "IFS="), ("GH_REPO=o/r\n", "GH_REPO="),
-                ("LD_PRELOAD=x\n", "LD_PRELOAD="),
-                ("if true; then PATH=/x; fi\n", "PATH="),
-                ("{ export HOME=/x; }\n", "export"),
-                ("T=1 PATH=/x\n", "PATH=")):
+    def test_a_named_descriptor_opened_onto_a_file_before_the_writer_unbinds(
+            self):
+        for before in ("true {fd}> /tmp/b.md\n", "true {fd}>> /tmp/b.md\n",
+                       "{ true; } {fd}> /tmp/b.md\n", "exec {fd}> /tmp/b.md\n"):
             with self.subTest(before=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before,
-                                     between="git status\n")),
-                    self.unbound(what))
+                                     between="echo hi >&10\n")),
+                    self.before("an open descriptor"))
+        for before in ("true {fd}>&2\n", "true {fd}> /dev/null\n",
+                       "echo {x}\n"):
+            with self.subTest(judged=before):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", before=before)),
+                    refused(self.BAD + "\n"))
+
+    WRITER_STEERING = ("PATH=/x", "export PATH=/x", "LD_PRELOAD=x",
+                       "DYLD_INSERT_LIBRARIES=x", "BASH_ENV=x", "ENV=x",
+                       "if true; then PATH=/x; fi", "T=1 PATH=/x")
+    COMMAND_STEERING = ("export GIT_EXTERNAL_DIFF=x", "export GIT_TRACE=1",
+                        "HOME=/x", "export HOME=/x", "XDG_CONFIG_HOME=/x",
+                        "BROWSER=x", "export PAGER=cat", "export GH_PAGER=cat",
+                        "export GIT_EDITOR=true", "IFS=,", "GH_HOST=h",
+                        "{ export HOME=/x; }")
+
+    def test_a_name_that_changes_the_writer_unbinds_wherever_it_is_set(self):
+        for before in self.WRITER_STEERING:
+            what = ("export" if before.startswith("export")
+                    else before.split("=")[0].split()[-1] + "=")
+            for between in ("", "git status\n"):
+                with self.subTest(before=before, between=between):
+                    command = self.spelled("/tmp/b.md", before=before + "\n",
+                                           between=between)
+                    code, lines = run(command)
+                    self.assertEqual(code, 0)
+                    self.assertEqual(len(lines), 1)
+                    self.assertIn("before the heredoc", lines[0])
+
+    def test_another_steering_name_matters_only_with_a_command_between(self):
+        for before in self.COMMAND_STEERING:
+            with self.subTest(before=before, between="git status"):
+                code, lines = run(self.spelled(
+                    "/tmp/b.md", before=before + "\n", between="git status\n"))
+                self.assertEqual(code, 0)
+                self.assertEqual(len(lines), 1)
+                self.assertIn("before the heredoc", lines[0])
+            with self.subTest(before=before, between="none"):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", before=before + "\n")),
+                    refused(self.BAD + "\n"))
         for before in ("export T=1\n", "T=1\n", "PATH=/x git status\n",
                        "echo PATH=/x\n", "echo $HOME\n", "export S=/tmp\n"):
             with self.subTest(judged=before):
@@ -1374,36 +1449,28 @@ class TestSameCallHeredoc(unittest.TestCase):
                 ("ls() { rm /tmp/b.md; }\n", "a function definition"),
                 ("ls () { rm /tmp/b.md; }\n", "a function definition"),
                 ("function ls { rm /tmp/b.md; }\n", "a function definition"),
+                ("{ function ls { :; }; }\n", "a function definition"),
                 ("ls()\n{\nrm /tmp/b.md\n}\n", "a function definition"),
                 ("alias ls='rm /tmp/b.md'\n", "alias"),
                 ("trap 'rm /tmp/b.md' DEBUG\n", "trap"),
+                ("trap 'rm /tmp/b.md' ERR\n", "trap"),
+                ("trap 'x' EXIT DEBUG\n", "trap"), ("trap -p\n", "trap"),
                 ("{ alias ls=x; }\n", "alias"),
                 ("command trap 'x' ERR\n", "trap")):
             with self.subTest(before=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before,
                                      between="ls /tmp\n")),
-                    self.unbound(what))
+                    self.before(what))
         for before in ("echo alias ls\n", "echo trap\n", "unalias ls\n",
-                       "echo 'ls() { :; }'\n"):
+                       "echo 'ls() { :; }'\n", "grep -n function src.js\n",
+                       "echo function\n", "trap 'rm -f /tmp/b.md' EXIT\n",
+                       "trap 'x' 0\n", "trap 'x' EXIT EXIT\n"):
             with self.subTest(judged=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before,
                                      between="ls /tmp\n")),
                     refused(self.BAD + "\n"))
-
-    def test_an_exec_behind_a_prefix_or_wrapper_unbinds(self):
-        for before in ("X=1 exec 3> /tmp/b.md\n", "command exec 3> /tmp/b.md\n",
-                       "builtin exec 3>> /tmp/b.md\n",
-                       "X=1 Y=2 command exec 3<> /tmp/b.md\n"):
-            with self.subTest(before=before):
-                self.assertEqual(
-                    run(self.spelled("/tmp/b.md", before=before,
-                                     between="echo hi >&3\n")),
-                    self.unbound("exec"))
-        self.assertEqual(
-            run(self.spelled("/tmp/b.md", before="X=1 exec 3>&1\n")),
-            refused(self.BAD + "\n"))
 
     def test_an_assignment_to_a_name_that_steers_a_command_is_a_note(self):
         for between, what in (
@@ -1467,10 +1534,10 @@ class TestSameCallHeredoc(unittest.TestCase):
             for command in ("cd d &&\n" + self.write(self.BAD) + self.READ,
                             "cd .. && " + self.write(self.BAD) + self.READ):
                 with self.subTest(note=command):
-                    code, lines = run(command, top)
-                    self.assertEqual(code, 0)
-                    self.assertEqual(len(lines), 1)
-                    self.assertNotIn("B:", lines[0])
+                    self.assertEqual(run(command, top), (0, [self.CHAIN_NOTE]))
+            self.assertEqual(
+                run("cd ..\n" + self.write(self.BAD) + self.READ, top),
+                (0, [note("a cd before gh pr create leaves this repository")]))
 
     def test_two_readers_are_each_bound_to_their_own_writer(self):
         def two(first, second, path="/tmp/b.md"):

@@ -18,8 +18,10 @@ One local catch exists: `pr_body_preflight.py`, a PreToolUse hook in
 owner). It reads an inline body, a heredoc substitution, a body file
 that exists, and a same-call heredoc: `cat > F <<'EOF'` followed in the
 same command by `gh pr create --body-file F` is judged on the heredoc's
-text, when the writer surely ran and nothing between it and the reader
-could have changed F. It fails open: a body it cannot read (`--fill`,
+text, when the writer surely ran, nothing between it and the reader
+could have changed F, and nothing before the writer opens a descriptor
+onto F or redefines the commands that run. It fails open: a body it
+cannot read (`--fill`,
 `--web`, a shell expansion, another repository, a binding it cannot
 establish) gets a "not checked" note and passes. A PR opened any other
 way, or edited later, is judged by CI's B alone.

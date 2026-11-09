@@ -15,7 +15,9 @@ heredoc's text, with no disk read, when the writer surely ran (its
 execution is implied by the reader's), F is spelled identically in both,
 and no command between them may have changed F (a write redirect, a
 process substitution, a hostile joiner or any command off the inert
-list). Any binding the hook cannot establish is a "not checked" note.
+list) and nothing before the writer opens a descriptor onto F or
+redefines the commands that run. Any binding the hook cannot establish is
+a "not checked" note.
 
   exit 2   a body the hook read exactly and B judged failing: B's strings
            on stderr, one per line, then a pointer at the kb page
@@ -194,7 +196,8 @@ class _Unrun:
         """True after replacing a digit word that touches a `<` or `>` (at
         a word boundary, outside `${ }`) with its marker word."""
         text, end = self.text, self.pos
-        if not (self.boundary and not self.braces and ch in DIGITS):
+        if not (self.boundary and not self.braces and ch in DIGITS
+                and not "".join(self.out[-2:]).endswith((">&", "<&"))):
             return False
         while end < len(text) and text[end] in DIGITS:
             end += 1
@@ -628,29 +631,60 @@ def _verb(record):
 
 # Words that open a command without being it.
 LEADERS = SHELL_KEYWORDS | {"time", "command", "builtin"}
+NULL_TARGETS = ("/dev/null", "/dev/stderr")
+# Names that can change the writer `cat` itself, so they unbind wherever
+# they are set; every other steering name matters only to a command that
+# runs between writer and reader.
+WRITER_STEERING = re.compile(r"PATH|LD_.*|DYLD_.*|BASH_ENV|ENV")
+FD_NAME = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+_BEFORE = "{} may be rewritten or removed by {} before the heredoc"
 
 
-def _shadows(record):
+def _unmark(text):
+    """text with a descriptor-prefix marker word written back as digits."""
+    return FD_WORD.sub(r"\1", text)
+
+
+def _opens_descriptor(record):
+    """True when record, before the writer, keeps a descriptor open onto
+    a file for the rest of the shell: an `exec`, or a `{NAME}` word, that
+    carries a write redirect."""
+    return ("exec" in record.words
+            or any(FD_NAME.fullmatch(word) for word in record.words)
+            ) and bool(_write_redirect(record))
+
+
+def _shadows(record, between):
     """What in record, a command before the writer, may change how a later
-    admitted verb behaves, else None: a function definition (`name()` leaves
-    `()` in the joiner of the record after it, or the `function` keyword),
-    an alias, a trap, or a standalone assignment or `export` of a steering
-    name. `eval` and `source` before the writer are an accepted limit."""
-    if "()" in record.joiner or "function" in record.words:
+    command behaves, else None: a function definition (`name()` leaves `()`
+    in the joiner of the record after it, or the `function` keyword as the
+    command word), an alias, a trap other than on EXIT, or a standalone
+    assignment or `export` of a name that can change the writer itself
+    (WRITER_STEERING) or, when a command sits between writer and reader
+    (`between`), of any steering name. `eval`, `source`, `declare -x`,
+    `export NAME other`, `for NAME in` and `NAME+=` are accepted limits."""
+    if "()" in record.joiner:
         return "a function definition"
     words = list(record.words)
     while words and words[0] in LEADERS:
-        words.pop(0)
+        if words.pop(0) == "function":
+            return "a function definition"
     if not words:
         return None
-    if words[0] in ("alias", "trap"):
-        return words[0]
+    if words[0] == "alias":
+        return "alias"
+    if words[0] == "trap":
+        signals = words[2:]
+        if len(words) < 3 or any(s not in ("EXIT", "0") for s in signals):
+            return "trap"
+        return None
     exported = words[0] == "export"
     assignments = words[1:] if exported else words
     if assignments and all(ASSIGNMENT.match(w) for w in assignments):
         for word in assignments:
             name = word.split("=", 1)[0]
-            if STEERING_NAME.fullmatch(name):
+            if WRITER_STEERING.fullmatch(name) or (
+                    between and STEERING_NAME.fullmatch(name)):
                 return "export" if exported else name + "="
     return None
 
@@ -670,7 +704,7 @@ def _running_redirect(record, statements):
                     or not statements[number].terminated):
                 return "<< an unquoted heredoc"
         elif _runs(target):
-            return f"{operator} {target}"
+            return _unmark(f"{operator} {target}")
     return None
 
 
@@ -683,12 +717,15 @@ def _write_redirect(record):
         if operator == "procsub":
             return target
         bare = operator.lstrip(DIGITS)
-        if bare == operator and (operator in READ_OPERATORS or target in (
-                "/dev/null", "/dev/stderr")):
-            continue
+        if bare == operator:
+            if operator in READ_OPERATORS or target in NULL_TARGETS:
+                continue
+        elif bare in ("<", "<&") or (bare in (">", ">>", ">|")
+                                      and target in NULL_TARGETS):
+            continue  # a prefixed read, or a prefixed write to /dev/null
         if bare == ">&" and (target.isdigit() or target == "-"):
             continue  # a duplication or a close, with or without a prefix
-        return f"{operator} {target}"
+        return _unmark(f"{operator} {target}")
     return None
 
 
@@ -802,12 +839,13 @@ def _bound_body(spelling, context):
                           "certain to run before gh pr create")
     if context["ansi_c"] and index + 1 < at:  # `$'\\''` hides what follows
         raise _Unreadable(_REWRITTEN.format(spelling, "$'...'"))
+    anything_between = index + 1 < at
     for earlier in records[:index]:
-        if "exec" in earlier.words and _write_redirect(earlier):
-            raise _Unreadable(_REWRITTEN.format(spelling, "exec"))
-        shadow = _shadows(earlier)
+        if _opens_descriptor(earlier):
+            raise _Unreadable(_BEFORE.format(spelling, "an open descriptor"))
+        shadow = _shadows(earlier, anything_between)
         if shadow:
-            raise _Unreadable(_REWRITTEN.format(spelling, shadow))
+            raise _Unreadable(_BEFORE.format(spelling, shadow))
     for between in records[index + 1:at + 1]:
         redirect = (_write_redirect(between)
                     or _running_redirect(between, context["statements"]))
