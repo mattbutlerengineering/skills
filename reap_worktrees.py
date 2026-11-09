@@ -211,10 +211,15 @@ def _nested_in(inner, outer):
     """True if `outer` is a parent directory of `inner`, by file identity:
     a string compare misses a case-variant spelling on a case-insensitive
     filesystem (`OUTER` vs `outer`)."""
+    try:
+        target = os.stat(outer)
+    except OSError:
+        return False
     parent = os.path.dirname(inner)
     while True:
         try:
-            if os.path.samefile(parent, outer):
+            st = os.stat(parent)
+            if (st.st_dev, st.st_ino) == (target.st_dev, target.st_ino):
                 return True
         except OSError:
             pass

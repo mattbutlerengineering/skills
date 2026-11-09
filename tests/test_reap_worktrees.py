@@ -637,11 +637,13 @@ class RealGit(unittest.TestCase):
             t = os.path.realpath(t)
             probe = os.path.join(t, "Probe")
             os.mkdir(probe)
-            if os.path.exists(os.path.join(t, "pROBE")):
-                pass
-            else:
+            if not os.path.exists(os.path.join(t, "pROBE")):
                 self.skipTest("case-sensitive filesystem")
             repo, outer = self.merged_worktree(t, "outer")
+            # As in the real repo, the nested worktree dir is ignored, so
+            # the outer reads clean and only the nesting guard keeps it.
+            with open(os.path.join(repo, ".git", "info", "exclude"), "a") as f:
+                f.write(".claude/worktrees/\n")
             variant = os.path.join(repo, ".claude", "worktrees", "OUTER")
             inner = os.path.join(variant, ".claude", "worktrees", "inner")
             self.git("worktree", "add", "-q", "-b", "inner", inner, cwd=outer)
@@ -673,7 +675,22 @@ class RealGit(unittest.TestCase):
             self.assertNotIn("hidden index flags", out)
             self.assertFalse(os.path.exists(wt))
 
-    def test_sparse_worktree_keeps_an_edit_to_a_present_skip_file(self):
+    def test_skip_worktree_flag_on_a_present_file_keeps_the_worktree(self):
+        # No sparse-checkout: the flag is set by hand, so status stays
+        # silent about the edit and only the index-flag check sees it.
+        with tempfile.TemporaryDirectory() as t:
+            repo, wt = self.merged_worktree(os.path.realpath(t))
+            self.git("update-index", "--skip-worktree", "tracked.txt", cwd=wt)
+            with open(os.path.join(wt, "tracked.txt"), "w") as f:
+                f.write("edited\n")
+            code, out = self.reap(repo)
+            self.assertEqual(code, 0, out)
+            self.assertIn("dirty (hidden index flags)", out)
+            self.assertTrue(os.path.isdir(wt))
+
+    def test_sparse_worktree_keeps_an_edit_to_a_present_cone_file(self):
+        # In sparse mode git clears skip-worktree on a present file, so
+        # status itself reports the edit.
         with tempfile.TemporaryDirectory() as t:
             repo, wt = self.merged_worktree(os.path.realpath(t))
             os.mkdir(os.path.join(wt, "other"))
@@ -688,7 +705,7 @@ class RealGit(unittest.TestCase):
                 f.write("edited\n")
             code, out = self.reap(repo)
             self.assertEqual(code, 0, out)
-            self.assertIn("dirty", out)
+            self.assertIn("dirty: uncommitted changes", out)
             self.assertTrue(os.path.isdir(wt))
 
     def test_branch_named_like_an_option_is_deleted(self):
