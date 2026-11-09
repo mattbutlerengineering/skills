@@ -233,3 +233,7 @@ Seed inbox — advisory only, never orientation state; grammar and read moments 
 - Resolved in the world — the seed "A grep-able detection-pattern table in `polish`'s `inspect` move (`skills/polish/reference" is closed in code: skills/polish/references/moves.md holds the detection-pattern rows (from: session:2026-11-09)
 - Resolved in the world — the seed "A mechanical check in `architecture-diagram`'s step 7 (and the pure-SVG path of `animated-" is closed in code: svg_check.py exists and both diagram skills invoke it (from: session:2026-11-09)
 - Resolved in the world — the seed "Add `**/autorun-brief.md` to the fast-path gate list and the queue profile's `gate_paths`" is closed in code: fast_path.py puts every autorun-brief.md on the gate-path list (ADR-0122) (from: session:2026-11-09)
+- Re-measure `pr_body_preflight.py` coverage over the heredoc-masked parser: replay the 210 historical `gh pr create` commands the review used (9 judged) and record the judged share, so the review's open decision has a number (from: feature:pr-body-preflight)
+- Bind a heredoc to the file it writes (`cat > F <<D`) so a later `--body-file F` in the same compound command is judged: the shape behind 74 of the 210 unjudged commands (from: feature:pr-body-preflight)
+- Log each refusal the PR-body hook makes (one line to a gitignored file), so a retro can count what the hook actually stopped (from: feature:pr-body-preflight)
+- Observe `CLAUDE_PROJECT_DIR` in one cloud routine run, to settle whether the PR-body hook is a no-op there (from: feature:pr-body-preflight)
