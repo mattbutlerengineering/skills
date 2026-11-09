@@ -115,6 +115,17 @@ def test_clean(runner, path):
         return False, _failed(args, proc), True
     if proc.stdout.strip():
         return False, "dirty: uncommitted changes", False
+    # assume-unchanged (lowercase tag) and skip-worktree (S) files hide
+    # their edits from status, so read the index flags too.
+    args = ["git", "-C", path, "ls-files", "-v"]
+    proc, why = _try(runner, args)
+    if why:
+        return False, why, True
+    if proc.returncode != 0:
+        return False, _failed(args, proc), True
+    for line in proc.stdout.splitlines():
+        if line[:1].islower() or line[:1] == "S":
+            return False, "dirty (hidden index flags)", False
     return True, "", False
 
 
@@ -217,6 +228,7 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
     repo = trees[0]["path"]
     scope = os.path.realpath(os.path.join(repo, SCOPE))
     seen = {os.path.realpath(repo)}
+    reals = {os.path.realpath(w["path"]) for w in trees[1:]}
     freed = candidates = kept = 0
     for wt in trees[1:]:
         path = wt["path"]
@@ -227,6 +239,13 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
         if not _within(real, scope) or real == scope:
             out(f"{LABEL}: skip {shown(path)} (outside {SCOPE}, "
                 f"{human(size(path)) if os.path.isdir(path) else 'missing'})")
+            continue
+        inner = min((r for r in reals if r != real and _within(r, real)),
+                    default=None)
+        if inner is not None:
+            kept += 1
+            out(f"{LABEL}: keep {shown(path)} "
+                f"(contains worktree {shown(inner)})")
             continue
         if _within(cwd, real):
             kept += 1

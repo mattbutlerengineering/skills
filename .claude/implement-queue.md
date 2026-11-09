@@ -165,7 +165,13 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
    --ignore-submodules=none` exits 0 and prints nothing on stdout (the
    two flags override a repo's `status.showUntrackedFiles` and
    `diff.ignoreSubmodules`, which would hide untracked files or a dirty
-   submodule). A failed `git` call is a failure, not a clean tree.
+   submodule). `git -C <path> ls-files -v` also exits 0, and any line
+   whose tag is lowercase (assume-unchanged) or `S` (skip-worktree) is
+   dirty, because those flags hide edits from `status`. A failed `git`
+   call is a failure, not a clean tree. "Clean" means exactly that:
+   gitignored files (for example `.env`, `plugin-evals/results/`,
+   `__pycache__`) are not checked and are deleted with the worktree, on
+   purpose.
 2. **Idle.** `lsof` is on `PATH`, `<path>` exists, and `lsof -w +D
    <path>` prints nothing on stdout or stderr. `-w` silences all of
    lsof's warnings, so one on an unreadable mount cannot block every
@@ -190,5 +196,8 @@ On a pass, `git worktree remove <path>` (never `--force`), then, if it
 had a branch other than `main`, `git branch -D <branch>`: the squash merge leaves the
 branch off `refs/remotes/origin/main`'s history, so `-d` would refuse a branch that
 test 4 already proved merged. A locked worktree (`git worktree lock`) is kept, never
-reaped. Never touch a worktree outside
+reaped, and so is a worktree whose path contains another listed
+worktree (`.git/info/exclude` hides the nested one from the outer's
+`status` and from `git worktree remove`'s own check, so reaping the outer
+would delete the inner's work). Never touch a worktree outside
 `.claude/worktrees/`, and never the checkout the session runs in.

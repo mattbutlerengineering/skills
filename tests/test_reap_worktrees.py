@@ -52,6 +52,8 @@ class Fake:
             return "gh-open" if "open" in a else "gh-merged"
         if "status" in a:
             return "status"
+        if "ls-files" in a:
+            return "ls-files"
         if "fetch" in a:
             return "fetch"
         if "list" in a:
@@ -315,6 +317,38 @@ class FailsClosed(Case):
         self.keep(Fake(self.listing(),
                        over={"status": proc(rc=128, err="fatal")}), r, r)
 
+    def test_hidden_index_flags_are_dirty(self):
+        for tag in ("h", "S", "s", "x"):
+            with self.subTest(tag=tag):
+                fake = Fake(self.listing(), over={
+                    "ls-files": proc(f"H a\n{tag} b\n")})
+                self.keep(fake, "dirty (hidden index flags)")
+
+    def test_normal_index_tags_are_clean(self):
+        fake = Fake(self.listing(), over={"ls-files": proc("H a\nM b\n")})
+        code, _ = self.go(fake)
+        self.assertEqual(code, 0)
+        self.assertTrue(self.removed(fake))
+
+    def test_failed_ls_files_fails_closed(self):
+        r = (f"`git -C {self.wt} ls-files -v` exited 128: bad")
+        self.keep(Fake(self.listing(),
+                       over={"ls-files": proc(rc=128, err="bad")}), r, r)
+
+    def test_worktree_containing_another_is_kept(self):
+        inner = os.path.join(self.wt, ".claude", "worktrees", "B")
+        os.makedirs(inner)
+        text = self.listing(extra=False) + z(
+            self.repo, OTHER, None, (inner, TIP, "refs/heads/inner"))[
+                len(f"worktree {self.repo}\0HEAD {OTHER}\0detached\0\0"):]
+        fake = Fake(text)
+        for apply in (False, True):
+            code, out = self.go(fake, apply=apply)
+            self.assertIn(
+                f"reap: keep {self.wt} (contains worktree {inner})", out)
+        self.assertEqual(code, 0)
+        self.assertNotIn(["git", "worktree", "remove", self.wt], fake.calls)
+
     def test_busy_directory(self):
         self.keep(Fake(self.listing(), over={"lsof": proc("COMMAND\n")}),
                   "busy: open files under the path")
@@ -548,6 +582,55 @@ class RealGit(unittest.TestCase):
             self.assertEqual(code, 0, buf.getvalue())
             self.assertIn("dirty: uncommitted changes", buf.getvalue())
             self.assertTrue(os.path.exists(os.path.join(wt, "scratch.txt")))
+
+    def merged_worktree(self, t, name="w"):
+        origin, repo = os.path.join(t, "o.git"), os.path.join(t, "r")
+        git_repo.init(origin, "--bare", "-b", "main")
+        git_repo.clone(origin, repo)
+        with open(os.path.join(repo, "tracked.txt"), "w") as f:
+            f.write("one\n")
+        self.git("add", "tracked.txt", cwd=repo)
+        self.git("commit", "-q", "-m", "base", cwd=repo)
+        wt = os.path.join(repo, ".claude", "worktrees", name)
+        self.git("worktree", "add", "-q", "-b", name, wt, cwd=repo)
+        self.git("push", "-q", "origin", f"{name}:main", cwd=wt)
+        return repo, wt
+
+    def reap(self, repo):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = reap_worktrees.main(
+                ["--apply"], runner=self.runner, cwd=repo,
+                size=lambda p: 1, which=lambda b: "x")
+        return code, buf.getvalue()
+
+    def test_hidden_index_flags_keep_the_worktree(self):
+        for flag in ("--assume-unchanged", "--skip-worktree"):
+            with self.subTest(flag=flag), tempfile.TemporaryDirectory() as t:
+                repo, wt = self.merged_worktree(os.path.realpath(t))
+                self.git("update-index", flag, "tracked.txt", cwd=wt)
+                with open(os.path.join(wt, "tracked.txt"), "w") as f:
+                    f.write("edited\n")
+                code, out = self.reap(repo)
+                self.assertEqual(code, 0, out)
+                self.assertIn("dirty (hidden index flags)", out)
+                self.assertTrue(os.path.isdir(wt))
+
+    def test_nested_worktree_survives_reaping_its_outer(self):
+        with tempfile.TemporaryDirectory() as t:
+            repo, outer = self.merged_worktree(os.path.realpath(t), "A")
+            inner = os.path.join(outer, ".claude", "worktrees", "B")
+            self.git("worktree", "add", "-q", "-b", "B", inner, cwd=outer)
+            self.git("commit", "-q", "--allow-empty", "-m", "unpushed",
+                     cwd=inner)
+            scratch = os.path.join(inner, "scratch.txt")
+            with open(scratch, "w") as f:
+                f.write("unsaved")
+            code, out = self.reap(repo)
+            self.assertEqual(code, 0, out)
+            self.assertIn(f"contains worktree {inner}", out)
+            self.assertTrue(os.path.exists(scratch))
+            self.assertTrue(os.path.isdir(outer))
 
     def test_a_truly_merged_tip_is_reaped(self):
         with tempfile.TemporaryDirectory() as t:
