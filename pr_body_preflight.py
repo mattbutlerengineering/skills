@@ -60,6 +60,9 @@ PLACEHOLDER_WORD = re.compile(r"__pr_body_preflight_heredoc_(\d+)__")
 # One statement-level heredoc: the bytes a shell writes, whether the shell
 # would expand nothing in them, and whether the delimiter line closed it.
 Heredoc = collections.namedtuple("Heredoc", "text literal terminated")
+# One simple command: its words, its redirections as (operator, target) in
+# written order, and the punctuation that joined it to the previous one.
+Simple = collections.namedtuple("Simple", "words redirects joiner")
 # `$(cat PATH)` or `$(< PATH)` with a plain path: read as a body file.
 CAT_FILE = re.compile(
     r"\$\(\s*(?:cat\s+|<\s*)(?P<path>[^\s$`'\"()<>|;&\\]+)\s*\)")
@@ -321,21 +324,36 @@ def _is_punctuation(token):
 
 
 def _simple_commands(tokens):
-    """Word lists between control operators. A redirection (a punctuation
-    token starting with < or >) drops itself and its target word."""
-    commands, words, skip = [], [], False
+    """One Simple per command between control operators, including a
+    redirect-only command. A redirection is a punctuation run holding `<`
+    or `>`, split off from any separator before it (a lone `&` directly
+    before `>` stays in the operator: `&>`, `&>>`) and paired with the
+    word that follows; the joiner is every separator run since the
+    previous record."""
+    records, joiner = [], ""
+    words, redirects, operator = [], [], None
     for token in tokens:
-        if skip:
-            skip = False
-        elif _is_punctuation(token) and token[0] in "<>":
-            skip = True
+        if operator:
+            redirects.append((operator, token))
+            operator = None
         elif _is_punctuation(token):
-            commands.append(words)
-            words = []
+            cut = next((i for i, ch in enumerate(token) if ch in "<>"), None)
+            head = token if cut is None else token[:cut]
+            if cut is not None and head.endswith("&") and token[cut] == ">" \
+                    and not head.endswith("&&"):
+                head, cut = head[:-1], cut - 1
+            if head:
+                if words or redirects:
+                    records.append(Simple(words, redirects, joiner))
+                    words, redirects, joiner = [], [], ""
+                joiner += head
+            if cut is not None:
+                operator = token[cut:]
         else:
             words.append(token)
-    commands.append(words)
-    return [words for words in commands if words]
+    if words or redirects:
+        records.append(Simple(words, redirects, joiner))
+    return records
 
 
 def _create_args(words):
@@ -591,7 +609,8 @@ def _verdicts(command, cwd, environ):
         tokens = _tokens(_Unrun(masked, originals).run())
     except ValueError as exc:
         return False, [NOTE.format(f"cannot parse the command: {exc}")]
-    commands = _simple_commands(tokens)
+    commands = [record.words for record in _simple_commands(tokens)
+                if record.words]
     candidates = [(position, args) for position, args in
                   enumerate(map(_create_args, commands)) if args is not None]
     if not candidates:

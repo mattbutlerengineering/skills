@@ -366,6 +366,51 @@ class TestSameCallHeredoc(unittest.TestCase):
         self.assertFalse(unquoted[0].literal)
 
 
+    def split(self, command):
+        tokens = pr_body_preflight._tokens(
+            pr_body_preflight._Unrun(command).run())
+        return pr_body_preflight._simple_commands(tokens)
+
+    def test_a_redirect_only_command_is_a_record_with_its_joiner(self):
+        Simple = pr_body_preflight.Simple
+        self.assertEqual(
+            self.split("a\n> /tmp/b.md\nb"),
+            [Simple(["a"], [], ""),
+             Simple([], [(">", "/tmp/b.md")], "\n"),
+             Simple(["b"], [], "\n")])
+
+    def test_a_heredoc_redirect_keeps_its_written_order(self):
+        ph = "__pr_body_preflight_heredoc_0__"
+        Simple = pr_body_preflight.Simple
+        for command, redirects in (
+                ("cat > F <<D\nx\nD\n", [(">", "F"), ("<<", ph)]),
+                ("cat <<D > F\nx\nD\n", [("<<", ph), (">", "F")])):
+            with self.subTest(command=command):
+                self.assertEqual(self.split(command),
+                                 [Simple(["cat"], redirects, "")])
+
+    def test_a_word_less_record_does_not_make_a_body_file_not_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "x.md").write_text("x\n", encoding="utf-8")
+            self.assertEqual(
+                run("> log\ngh pr create -F x.md", cwd=tmp), refused("x\n"))
+
+    def test_a_mixed_run_splits_before_its_redirection_operator(self):
+        Simple = pr_body_preflight.Simple
+        self.assertEqual(
+            self.split("a;>f"),
+            [Simple(["a"], [], ""), Simple([], [(">", "f")], ";")])
+
+    def test_a_lone_ampersand_before_a_redirect_stays_in_the_operator(self):
+        Simple = pr_body_preflight.Simple
+        for op in ("&>", "&>>"):
+            with self.subTest(op=op):
+                self.assertEqual(self.split(f"cmd {op} f"),
+                                 [Simple(["cmd"], [(op, "f")], "")])
+                self.assertEqual(
+                    self.split(f"a;&{op[1:]}f"),
+                    [Simple(["a"], [], ""), Simple([], [(op, "f")], ";")])
+
 class TestUnreadableShapes(unittest.TestCase):
     def test_a_body_with_a_dollar_or_backtick_fails_open(self):
         reason = note("the body holds $ or a backtick the hook cannot expand")
