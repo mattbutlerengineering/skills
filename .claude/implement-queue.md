@@ -111,6 +111,18 @@ Owner grants outside this repo. A merge the runtime denies is reported
 as awaiting a human merge and never retried by another route
 (ADR-0087).
 
+`--delete-branch` has left the remote branch behind in this repo (#1636),
+so once `gh pr view <N> --json state,headRefName,headRefOid` reports
+`MERGED`, delete the remote branch yourself, but only when
+`git ls-remote --heads origin <headRefName>` prints the same commit as
+`headRefOid`:
+
+    git push origin --delete <headRefName>
+
+A branch whose remote tip differs from the merged head carries later
+commits and is left alone, reported with its name. This step never
+touches `main` or a branch another open PR uses as its base.
+
 ## update-branch
 
     gh pr update-branch <N>
