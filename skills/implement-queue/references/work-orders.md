@@ -4,7 +4,7 @@ This page holds what changes when the queue drains factory work orders
 instead of plain `ready` issues. Its source is the queue profile's
 `source: work-orders`, or an invocation that asks for work orders, which
 overrides the profile for that run. Everything not named here runs as
-SKILL.md says. This page replaced the `work-queue` skill (ADR-0125).
+SKILL.md says. This page replaced the `work-queue` skill (ADR-0127).
 
 The queue is **opt-in by construction**. A work order is eligible only
 when both planes agree (ADR-0032): its breakdown row is unchecked with

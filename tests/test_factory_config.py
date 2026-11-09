@@ -241,9 +241,9 @@ class TestResolveModel(unittest.TestCase):
     single routing source of truth (ADR-0004/0034)."""
 
     def test_each_band_resolves_to_its_model(self):
-        for band, model in (("mechanical", "claude-haiku-4-5"),
-                            ("implementation", "claude-sonnet-5"),
-                            ("architecture_review", "claude-fable-5")):
+        for band, model in (("mechanical", "claude-haiku-5-5"),
+                            ("implementation", "claude-sonnet-5-5"),
+                            ("architecture_review", "claude-fable-5-1")):
             self.assertEqual(factory_config.resolve_model(band, CONFIG),
                              (model, []), band)
 

@@ -270,7 +270,7 @@ class TestRunResolve(unittest.TestCase):
             self.assertEqual(outputs["wo"], "WO-0005")
             self.assertEqual(outputs["charter"], "swe")
             self.assertEqual(outputs["band"], "implementation")
-            self.assertEqual(outputs["model"], "claude-sonnet-5")
+            self.assertEqual(outputs["model"], "claude-sonnet-5-5")
             self.assertIn("WO-0005", outputs["prompt"])
             self.assertEqual(outputs["branch"], "wo-0005")
 

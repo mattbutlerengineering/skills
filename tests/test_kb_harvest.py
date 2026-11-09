@@ -17,6 +17,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -278,6 +279,430 @@ class TestMine(Tree):
         self.assertEqual(problems, [])
         self.assertEqual(result["scanned"]["skipped_lines"], 1)
         self.assertEqual(result["scanned"]["transcripts"], 1)
+
+
+class Talk(Session):
+    """A transcript with human and agent text turns besides tool calls,
+    the shape an interactive session has."""
+
+    def _add(self, kind, content, **extra):
+        self.lines.append(json.dumps({
+            "type": kind, "sessionId": self.sid, "cwd": self.cwd,
+            "timestamp": f"2026-10-01T00:00:{len(self.lines):02d}Z",
+            "message": {"role": kind, "content": content}, **extra}))
+        return self
+
+    def human(self, text, **extra):
+        return self._add("user", text, **extra)
+
+    def say(self, text, **extra):
+        return self._add("assistant", [{"type": "text", "text": text}],
+                         **extra)
+
+    def at(self, index):
+        return f"2026-10-01T00:00:{index:02d}Z"
+
+
+class TestHumanTurns(Tree):
+    """Human corrections and answered questions, mined only from
+    top-level interactive transcripts, under their own key."""
+
+    def turns(self, talk, name=None, **kwargs):
+        self.save(talk, name=name)
+        result, problems = self.harvest(**kwargs)
+        self.assertEqual(problems, [])
+        return result["human_turns"]
+
+    def test_a_correction_after_an_agent_action(self):
+        talk = (Talk().human("fix the build")
+                .bash("make check", "ok")
+                .human("No, don't run make check here; use run_tests.py."))
+        self.assertEqual(self.turns(talk), [{
+            "kind": "correction", "signal": "correction-wording",
+            "human": "No, don't run make check here; use run_tests.py.",
+            "agent": "Bash: make check",
+            "session": "s1", "at": talk.at(3)}])
+
+    def test_an_edit_is_named_by_its_path(self):
+        talk = (Talk().human("tidy it").edit(f"{REPO}/src/a.py")
+                .human("Revert that, it was right."))
+        turn, = self.turns(talk)
+        self.assertEqual((turn["kind"], turn["agent"]),
+                         ("correction", "Edit: src/a.py"))
+
+    def test_excerpts_are_capped(self):
+        talk = (Talk().human("go").say("x" * 300)
+                .human("Actually " + "y" * 300))
+        turn, = self.turns(talk)
+        self.assertLessEqual(len(turn["human"]), kb_harvest.EXCERPT)
+        self.assertLessEqual(len(turn["agent"]), kb_harvest.EXCERPT)
+
+    def test_an_answer_to_a_text_question(self):
+        talk = (Talk().human("rename the flag")
+                .say("I found two callers.\n\nShould I keep the old flag?")
+                .human([{"type": "text",
+                         "text": "Keep it, the CI scripts still pass it."}]))
+        self.assertEqual(self.turns(talk), [{
+            "kind": "answer", "signal": "after-agent-question",
+            "human": "Keep it, the CI scripts still pass it.",
+            "agent": "Should I keep the old flag?",
+            "session": "s1", "at": talk.at(2)}])
+
+    def test_an_answer_through_the_question_tool(self):
+        talk = (Talk().human("ship it")
+                .tool("AskUserQuestion",
+                      {"questions": [{"question": "Which branch?"}]},
+                      "User has answered your questions: release"))
+        self.assertEqual(self.turns(talk), [{
+            "kind": "answer", "signal": "question-tool",
+            "human": "User has answered your questions: release",
+            "agent": "AskUserQuestion: Which branch?",
+            "session": "s1", "at": talk.at(2)}])
+
+    def test_a_question_tool_error_is_no_answer(self):
+        talk = (Talk().human("ship it")
+                .tool("AskUserQuestion",
+                      {"questions": [{"question": "Which branch?"}]},
+                      "Exit code 1\ntool failed", error=True))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_approvals_are_not_answers(self):
+        for reply in ("go ahead", "OK.", "Yes!", "sounds good"):
+            with self.subTest(reply=reply):
+                talk = (Talk().human("push it").say("Shall I push now?")
+                        .human(reply))
+                self.assertEqual(self.turns(talk), [])
+
+    def test_a_plain_instruction_is_not_listed(self):
+        talk = (Talk().human("add the test").say("Added the test.")
+                .human("Now update the README too."))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_meta_and_tagged_turns_are_skipped(self):
+        talk = (Talk().human("start").say("Done.")
+                .human("No, that is injected.", isMeta=True)
+                .human("<command-name>/clear</command-name> no"))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_injected_text_after_the_human_words_is_dropped(self):
+        reminder = "<system-reminder>MEMORY-SENTINEL</system-reminder>"
+        for content in (
+                [{"type": "text", "text": "No, revert that."},
+                 {"type": "text", "text": reminder}],
+                f"No, revert that.\n{reminder}"):
+            with self.subTest(content=content):
+                talk = Talk().human("start").say("Done.").human(content)
+                turn, = self.turns(talk)
+                self.assertEqual((turn["kind"], turn["human"]),
+                                 ("correction", "No, revert that."))
+
+    def test_compound_approvals_are_not_answers(self):
+        for reply in ("yes, go ahead", "Yes please, do it.", "ok thanks"):
+            with self.subTest(reply=reply):
+                talk = (Talk().human("push it").say("Shall I push now?")
+                        .human(reply))
+                self.assertEqual(self.turns(talk), [])
+        talk = (Talk().human("push it").say("Shall I push now?")
+                .human("Yes, but keep the old flag."))
+        self.assertEqual([t["kind"] for t in self.turns(talk)], ["answer"])
+
+    def test_two_human_turns_in_a_row_yield_at_most_one(self):
+        talk = (Talk().human("start").say("Use the new parser?")
+                .human("No, keep the old one.")
+                .human("Wait, actually stop."))
+        self.assertEqual(len(self.turns(talk)), 1)
+
+    def test_an_autonomous_transcript_yields_none(self):
+        talk = (Talk().human("Work the queue. Never ask.")
+                .bash("make check", "Exit code 1\nboom", error=True)
+                .edit(f"{REPO}/a.py").bash("make check", "ok"))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_a_subagent_file_yields_none(self):
+        talk = (Talk().human("start").bash("ls", "a")
+                .human("No, do not list."))
+        self.assertEqual(self.turns(talk, name="agent-x.jsonl", days=7), [])
+
+    def test_sidechain_records_yield_none(self):
+        talk = (Talk().human("start", isSidechain=True)
+                .say("Should I stop?", isSidechain=True)
+                .human("Stop, wrong file.", isSidechain=True))
+        self.assertEqual(self.turns(talk), [])
+
+    def test_existing_kinds_are_unchanged_and_the_key_is_empty(self):
+        self.save(Session()
+                  .bash("make check", "Exit code 2\nboom", error=True)
+                  .edit(f"{REPO}/a.py")
+                  .bash("make check", "ok"))
+        result, problems = self.harvest()
+        self.assertEqual(problems, [])
+        self.assertEqual(sorted(result), ["arcs", "human_turns",
+                                          "recurring_errors", "scanned"])
+        self.assertEqual(result["human_turns"], [])
+        self.assertEqual(result["scanned"], {
+            "transcripts": 1, "skipped_lines": 0,
+            "dirs": [str(self.dir)]})
+        self.assertEqual(result["recurring_errors"], [])
+        self.assertEqual([a["check"] for a in result["arcs"]],
+                         ["make check"])
+
+    def test_main_prints_the_key(self):
+        self.save(Talk().human("go").say("Keep it?").human("Drop it."))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = kb.main(["harvest", REPO, "--projects-dir",
+                            str(self.projects)])
+        self.assertEqual(code, 0)
+        self.assertEqual([t["kind"] for t in json.loads(
+            out.getvalue())["human_turns"]], ["answer"])
+
+
+def memory_file(name, description="A lesson.", kind="project",
+                nested=False, extra=""):
+    """A fixture memory entry: frontmatter with name, description and a
+    type, top-level or nested under metadata, then a body."""
+    type_line = f"metadata:\n  type: {kind}" if nested else f"type: {kind}"
+    return (f"---\nname: {name}\ndescription: {description}\n{type_line}\n"
+            f"{extra}---\n\nBody written for the test.\n")
+
+
+PAGES = ("cross-pr-merge-hazards", "manifest-regen", "pr-body-contract")
+
+
+class TestMemory(Tree):
+    """Auto-memory entries as candidates, read only on request, paired
+    with pages by file name, user scope never shown."""
+
+    def setUp(self):
+        super().setUp()
+        self.repo = Path(self._tmp.name) / "repo"
+        self.memory = self.dir / "memory"
+        self.memory.mkdir()
+        for slug in PAGES:
+            (self.repo / "docs" / "kb").mkdir(parents=True, exist_ok=True)
+            (self.repo / "docs" / "kb" / f"{slug}.md").write_text(
+                f"---\nsummary: {slug}\n---\n", encoding="utf-8")
+        self.pages = {slug: f"docs/kb/{slug}.md" for slug in PAGES}
+
+    def remember(self, stem, text):
+        path = self.memory / f"{stem}.md"
+        if isinstance(text, bytes):
+            path.write_bytes(text)
+        else:
+            path.write_text(text, encoding="utf-8")
+        return path
+
+    def seed(self):
+        self.remember("cross-pr-hazard-pairwise-merge-test", memory_file(
+            "Cross-PR hazard", "Two green PRs can go red together."))
+        self.remember("manifest-regen-stray-patch-files", memory_file(
+            "Manifest regen", "Delete stray patch files first.",
+            kind="feedback", nested=True))
+        self.remember("pr-body-no-work-order-waiver", memory_file(
+            "PR body waiver", "A PR body needs its waiver line.",
+            kind="reference"))
+        self.remember("gh-pr-edit-broken-use-rest", memory_file(
+            "gh pr edit is broken", "Use the REST API to edit a PR body."))
+
+    def harvest_memory(self, **kwargs):
+        with mock.patch.object(kb_harvest, "main_checkout",
+                               lambda root: Path(REPO)):
+            return kb_harvest.harvest(self.repo, self.projects,
+                                      now=self.now, memory=True, **kwargs)
+
+    def test_memory_type_reads_one_scope(self):
+        cases = {
+            memory_file("a"): "project",
+            memory_file("a", kind="feedback", nested=True): "feedback",
+            memory_file("a", kind="reference"): "reference",
+            memory_file("a", kind="user"): "user",
+            "no frontmatter at all\n": None,
+            "---\nname: a\ndescription: b\n---\n": None,
+            memory_file("a", extra="metadata:\n  type: user\n"): None,
+            memory_file("a", kind="secret"): None,
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(kb_harvest.memory_type(text), expected)
+
+    def test_pair_by_shared_file_name_tokens(self):
+        self.assertEqual(
+            kb_harvest.pair("cross-pr-hazard-pairwise-merge-test", PAGES),
+            ("cross-pr-merge-hazards", ["cross", "pr", "merge", "hazard"]))
+        self.assertEqual(
+            kb_harvest.pair("manifest-regen-stray-patch-files", PAGES),
+            ("manifest-regen", ["manifest", "regen"]))
+        self.assertEqual(
+            kb_harvest.pair("pr-body-no-work-order-waiver", PAGES),
+            ("pr-body-contract", ["pr", "body"]))
+        self.assertEqual(
+            kb_harvest.pair("gh-pr-edit-broken-use-rest", PAGES), (None, []))
+
+    def test_a_tie_goes_to_the_first_slug_in_sorted_order(self):
+        self.assertEqual(
+            kb_harvest.pair("alpha-beta", ["alpha-beta-y", "alpha-beta-x"]),
+            ("alpha-beta-x", ["alpha", "beta"]))
+
+    def test_candidates_pair_three_and_leave_one_unpaired(self):
+        self.seed()
+        memory = kb_harvest.memory_candidates(self.memory, self.pages)
+        self.assertEqual(memory["dir"], str(self.memory))
+        self.assertEqual((memory["listed"], memory["user_scoped"],
+                          memory["skipped"]), (4, 0, 0))
+        self.assertEqual(
+            [(c["file"], c["page"], c["shared"], c["type"])
+             for c in memory["candidates"]],
+            [("cross-pr-hazard-pairwise-merge-test.md",
+              "docs/kb/cross-pr-merge-hazards.md",
+              ["cross", "pr", "merge", "hazard"], "project"),
+             ("gh-pr-edit-broken-use-rest.md", None, [], "project"),
+             ("manifest-regen-stray-patch-files.md",
+              "docs/kb/manifest-regen.md", ["manifest", "regen"],
+              "feedback"),
+             ("pr-body-no-work-order-waiver.md",
+              "docs/kb/pr-body-contract.md", ["pr", "body"], "reference")])
+        first = memory["candidates"][0]
+        self.assertEqual((first["name"], first["description"]),
+                         ("Cross-PR hazard",
+                          "Two green PRs can go red together."))
+
+    def test_user_scope_and_the_index_never_reach_the_output(self):
+        self.seed()
+        self.remember("owner-private-habit", memory_file(
+            "Private", "SENTINEL-7Q personal detail", kind="user"))
+        self.remember("MEMORY", "- INDEX-SENTINEL pointer line\n")
+        result, problems = self.harvest_memory(kb_dir="docs/kb")
+        self.assertEqual(problems, [])
+        printed = json.dumps(result)
+        for secret in ("owner-private-habit", "SENTINEL-7Q", "Private",
+                       "MEMORY.md", "INDEX-SENTINEL"):
+            self.assertNotIn(secret, printed)
+        self.assertEqual(result["memory"]["user_scoped"], 1)
+        self.assertEqual(result["memory"]["listed"], 4)
+
+    def test_a_user_type_in_a_list_or_flow_map_is_skipped(self):
+        for extra in ("tags:\n  - type: user\n",
+                      "metadata: {type: user}\n"):
+            with self.subTest(extra=extra):
+                self.assertIsNone(kb_harvest.memory_type(
+                    memory_file("a", kind="feedback", extra=extra)))
+
+    def test_a_symlinked_entry_is_skipped_never_read(self):
+        self.seed()
+        index = self.remember("MEMORY", memory_file(
+            "Index", "INDEX-SENTINEL", kind="feedback"))
+        outside = Path(self._tmp.name) / "elsewhere.md"
+        outside.write_text(memory_file("Out", "OUTSIDE-SENTINEL"),
+                           encoding="utf-8")
+        (self.memory / "alias.md").symlink_to(index)
+        (self.memory / "outside.md").symlink_to(outside)
+        memory = kb_harvest.memory_candidates(self.memory, self.pages)
+        printed = json.dumps(memory)
+        for secret in ("INDEX-SENTINEL", "OUTSIDE-SENTINEL", "alias",
+                       "outside"):
+            self.assertNotIn(secret, printed)
+        self.assertEqual((memory["listed"], memory["user_scoped"],
+                          memory["skipped"]), (4, 0, 2))
+
+    def test_every_skip_reason_is_counted(self):
+        self.seed()
+        self.remember("no-block", "Just prose, no frontmatter.\n")
+        self.remember("no-type", "---\nname: x\ndescription: y\n---\n")
+        self.remember("two-types", memory_file(
+            "x", extra="metadata:\n  type: feedback\n"))
+        self.remember("unknown-type", memory_file("x", kind="secret"))
+        self.remember("undecodable", b"---\ntype: project\n\xff\xfe\n---\n")
+        self.remember("someone", memory_file("x", kind="user"))
+        examined = len([p for p in self.memory.glob("*.md")
+                        if p.name != "MEMORY.md"])
+        memory = kb_harvest.memory_candidates(self.memory, self.pages)
+        self.assertEqual((memory["listed"], memory["user_scoped"],
+                          memory["skipped"]), (4, 1, 5))
+        self.assertEqual(memory["listed"] + memory["user_scoped"]
+                         + memory["skipped"], examined)
+
+    def test_descriptions_are_capped(self):
+        self.remember("long-lesson", memory_file("Long", "z" * 400))
+        candidate, = kb_harvest.memory_candidates(
+            self.memory, self.pages)["candidates"]
+        self.assertLessEqual(len(candidate["description"]),
+                             kb_harvest.EXCERPT)
+
+    def test_harvest_pairs_with_the_kb_dir_it_is_given(self):
+        self.seed()
+        result, problems = self.harvest_memory(kb_dir="docs/kb")
+        self.assertEqual(problems, [])
+        self.assertEqual(
+            sorted(c["page"] or "" for c in result["memory"]["candidates"]),
+            ["", "docs/kb/cross-pr-merge-hazards.md",
+             "docs/kb/manifest-regen.md", "docs/kb/pr-body-contract.md"])
+
+    def test_no_kb_dir_leaves_every_candidate_unpaired(self):
+        self.seed()
+        result, problems = self.harvest_memory()
+        self.assertEqual(problems, [])
+        self.assertEqual({c["page"] for c in result["memory"]["candidates"]},
+                         {None})
+
+    def test_no_memory_directory_is_one_problem(self):
+        self.memory.rmdir()
+        result, problems = self.harvest_memory(kb_dir="docs/kb")
+        self.assertIsNone(result)
+        self.assertEqual(problems, [
+            f"harvest: no memory directory at {self.memory}"])
+
+    def test_without_the_flag_there_is_no_memory_key(self):
+        self.seed()
+        self.save(Session().bash("ls", "a"))
+        result, _ = self.harvest()
+        self.assertNotIn("memory", result)
+
+    def test_harvest_writes_nothing(self):
+        self.seed()
+        self.remember("someone", memory_file("x", kind="user"))
+        self.save(Talk().human("go").say("Keep it?").human("Drop it."))
+        tree = Path(self._tmp.name)
+
+        def snapshot():
+            return {path: path.read_bytes() for path in tree.rglob("*")
+                    if path.is_file()}
+
+        before = snapshot()
+        result, problems = self.harvest_memory(kb_dir="docs/kb")
+        self.assertEqual(problems, [])
+        self.assertEqual(snapshot(), before)
+
+    def run_main(self, argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), mock.patch.object(
+                kb_harvest, "main_checkout", lambda root: Path(REPO)):
+            code = kb.main(argv)
+        return code, out.getvalue()
+
+    def test_kb_main_passes_the_page_directory(self):
+        self.seed()
+        code, out = self.run_main(["harvest", str(self.repo), "--memory",
+                                   "--projects-dir", str(self.projects)])
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            sum(c["page"] is not None
+                for c in json.loads(out)["memory"]["candidates"]), 3)
+
+    def test_main_with_no_memory_directory_prints_no_json(self):
+        self.memory.rmdir()
+        code, out = self.run_main(["harvest", str(self.repo), "--memory",
+                                   "--projects-dir", str(self.projects)])
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            f"harvest: no memory directory at {self.memory}",
+            "harvest: 1 problem(s)"])
+
+    def test_usage_names_the_flag(self):
+        for argv in (["harvest", "--help"], ["harvest", "--bogus"]):
+            with self.subTest(argv=argv):
+                code, out = self.run_main(argv)
+                self.assertEqual(code, 2)
+                self.assertIn("[--memory]", out)
 
 
 class TestMain(Tree):

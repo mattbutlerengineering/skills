@@ -156,7 +156,7 @@ table's Moment column.
 Three skills drive work without a person moving it stage by stage. Each
 answers a different question: one run or many issues, the Owner present
 or not, merged or stopped at a PR
-([ADR-0125](docs/adr/0125-work-queue-folds-into-implement-queue.md)).
+([ADR-0127](docs/adr/0127-work-queue-folds-into-implement-queue.md)).
 
 | | `autorun` | `conduct` | `implement-queue` |
 |---|---|---|---|

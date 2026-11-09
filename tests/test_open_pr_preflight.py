@@ -6,7 +6,7 @@ work starts. Every skill that can start new work names that section
 rather than restating the rule in its own words: the queue skill that
 already stated it, and the three that never looked (`next`, `conduct`,
 `autorun`). work-queue, the second queue skill, folded into
-implement-queue (ADR-0125).
+implement-queue (ADR-0127).
 
 Pins the section name, the rule's sentence, and the two clauses a
 reciter could not safely lose: no merge without the Owner's answer, and

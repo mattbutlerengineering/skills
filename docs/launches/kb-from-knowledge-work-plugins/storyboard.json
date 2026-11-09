@@ -1,0 +1,12 @@
+{"title": "Outside facts that age",
+ "tagline": "The knowledge base learns what it cannot see",
+ "intro": "This update teaches a project's knowledge base about the things it could not see before.",
+ "steps": [
+  {"say": "A note about an outside system now carries the date it was last checked and how long that check stays good.",
+   "do": ["sed -n 6,8p docs/kb/main-unprotected.md"]},
+  {"say": "Once that time runs out, the routine check names the note and asks for a re-check, without going online.",
+   "do": ["python3 -m unittest -v tests.test_kb.TestAge.test_on_the_due_date_it_is_still_fresh tests.test_kb.TestAge.test_one_day_past_due_is_one_problem"]},
+  {"say": "The gathering step lists the moments a person corrected the agent or answered its question, and it pairs saved memories with the notes that already cover them.",
+   "do": ["python3 -m unittest tests.test_kb_harvest.TestHumanTurns tests.test_kb_harvest.TestMemory"]}
+ ],
+ "outro": "Facts about the world outside the code stop being trusted forever just because nobody looked again."}

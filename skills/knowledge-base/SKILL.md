@@ -23,6 +23,7 @@ artifact. The run artifacts are the **knowledge plane**; this is the
 | The ask | Flow |
 |---|---|
 | No `docs/kb/` yet | **Setup** — step 1 |
+| "What do newcomers to this repo get wrong?", with `docs/kb/` already there | **Newcomer question** — step 1, item 3, alone |
 | A merged PR, a retro, a research note, a hard-won lesson | **Ingest** — step 2 |
 | "What did the last sessions keep tripping over?" | **Ingest from transcripts** — step 2a |
 | "Is it still true?", or before trusting a page | **Lint and maintain** — step 3 |
@@ -38,7 +39,7 @@ two directories above this skill's directory in the same checkout:
     python3 <this skill's directory>/../../kb.py lint  [repo root]
     python3 <this skill's directory>/../../kb.py stats [repo root]
     python3 <this skill's directory>/../../kb.py drift [repo root]
-    python3 <this skill's directory>/../../kb.py harvest [repo root] [--days N] [--session ID]
+    python3 <this skill's directory>/../../kb.py harvest [repo root] [--days N] [--session ID] [--memory]
 
 `index` writes one line per page — `- docs/kb/<slug>.md: <summary>` —
 between managed markers in every always-loaded file present (`CLAUDE.md`,
@@ -56,13 +57,25 @@ re-derive what the tool states.
    that say "fix" twice for the same thing, and anything the always-loaded
    file warns about at length. Do **not** seed from the README, a
    directory listing or module docstrings — that is inferable.
-3. Propose at most five pages to the user as a numbered list: slug,
+3. Ask the human for what the record does not hold: "What mistake do
+   people new to this repo make that the code would not warn them
+   about?" Ask one question per turn, at most three, and give each a
+   recommendation drawn from the strongest candidate item 2 found (its
+   one line and its source), for the human to confirm, correct or
+   replace. Answers are candidates like the others: they go into item
+   4's list, inside the same five-page cap, and nothing is written
+   until the user promotes it (`references/ingest.md` says how to judge
+   one). When no human is present (an autonomous run), skip this item
+   and say that you skipped it. A repo that already has `docs/kb/` runs
+   this item alone from the flow table, its answers going through
+   step 2.
+4. Propose at most five pages to the user as a numbered list: slug,
    one-line summary, the cited sources, and the one sentence that makes
    the page non-inferable. Write only the ones the user approves.
-4. Move "do not X" guardrails you found into the always-loaded file
+5. Move "do not X" guardrails you found into the always-loaded file
    itself, not into pages — a guardrail must be in front of the agent
    at the moment it is about to act.
-5. Run `kb.py index`, then `kb.py lint`.
+6. Run `kb.py index`, then `kb.py lint`.
 
 Done when: `kb.py lint` prints `kb: 0 problem(s)` and the user has seen
 the managed block in the always-loaded file.
@@ -95,12 +108,17 @@ written, and lint is clean.
 ## 2a. Ingest from transcripts — harvest
 
 Autonomous sessions rarely produce a human correction; their lessons
-are discovered — a check fails, the agent edits, the check passes. Run
-`kb.py harvest` (newest session) or `kb.py harvest --days N`, then read
-`references/ingest.md`'s harvest section. The tool prints candidate
-arcs and recurring errors as JSON; turning a candidate into a claim is
-judgement, and the step 2 rules apply unchanged — every candidate is
-proposed, most are NOOP, and a human promotes.
+are discovered — a check fails, the agent edits, the check passes.
+Interactive sessions do produce them. Run `kb.py harvest` (newest
+session) or `kb.py harvest --days N`, then read `references/ingest.md`'s
+harvest section. The tool prints candidate arcs, recurring errors and
+`human_turns` (a human correcting the agent, or answering its question)
+as JSON. Add `--memory` to also list entries from the harness's
+auto-memory for this repo, where the harness keeps one, each beside the
+page it may duplicate; entries scoped to the user are only counted.
+Turning a candidate into a claim is judgement, and the step 2 rules
+apply unchanged — every candidate is proposed, most are NOOP, and a
+human promotes.
 
 The target is the consumer's choice: `docs/kb/` by default, or the file
 the user names (some repos keep gotchas in a rules file such as
@@ -122,10 +140,21 @@ Run `kb.py lint`. For each problem:
   proposal; a claim another source still backs stays. Delete the page
   only when nothing on it survives.
 - **summary over its cap** — rewrite it as the one fact the page holds.
+- **past its declared age** — the page's outside check is due:
+  re-run the page's check (the page says how). If the claim still
+  holds, set `checked` to today's date; if not, propose UPDATE or
+  DELETE per claim. Never move `checked` without re-running the check.
+- **a malformed outside-check declaration** — `missing field`: declare
+  all three of `checked-against`, `checked` and `max-age`, or drop the
+  pair; `empty 'checked-against'`: say what the claim was checked
+  against; `not a YYYY-MM-DD date` or `after today`: write the real date
+  of the check; `not a whole number of days`: write `max-age` like
+  `30d`. `references/page-rubric.md` says when a page declares them.
 - **missing frontmatter, broken related or link** — fix the page, or
   delete it if nothing on it survives.
-- **over budget** — shorten summaries, merge pages, or delete the page
-  that pays least. `kb.py stats` shows page sizes. Past the budget, the
+- **over budget** — shorten summaries, merge pages, fold three or more
+  pages that share a cause into one class page
+  (`references/page-rubric.md`), or delete the page that pays least. `kb.py stats` shows page sizes. Past the budget, the
   answer is fewer pages, not a search engine.
 
 Lint cannot see a note that is wrong about code nobody changed. When a
@@ -196,6 +225,16 @@ cites one. It is a convention, not a gate.
 
 Done when: the user has the tool's output, or its problem string, and
 nothing else was stated as a repo fact.
+
+## Credit
+
+The outside-check age, auto-memory and human corrections as harvest
+sources, class pages, symptom-first gotcha summaries, the newcomer
+question, the wrong/right pair and saying what a claim was checked
+against all adapt practices from anthropics/knowledge-work-plugins
+([github.com/anthropics/knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins),
+Apache-2.0). They are restated here in this pipeline's terms; none of
+its text is copied.
 
 ## Graduation
 

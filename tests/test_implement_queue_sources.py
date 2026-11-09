@@ -1,4 +1,4 @@
-"""implement-queue's two claim sources (ADR-0125).
+"""implement-queue's two claim sources (ADR-0127).
 
 work-queue folded into implement-queue as `source: work-orders`. Three
 promises keep the fold from loosening a gate, and each is pinned here
