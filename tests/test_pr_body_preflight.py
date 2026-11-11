@@ -1086,6 +1086,34 @@ class TestSameCallHeredoc(unittest.TestCase):
             run(self.spelled("b.md", between="git status\n")),
             self.unbound("git status", "b.md"))
 
+    def test_a_git_or_gh_verb_off_the_list_between_is_a_note(self):
+        for between, what in (
+                ("git commit -m x", "git commit"), ("git push", "git push"),
+                ("git fetch", "git fetch"), ("git add .", "git add"),
+                ("git checkout x", "git checkout"), ("git pull", "git pull"),
+                ("git stash", "git stash"), ("git reset --hard", "git reset"),
+                ("git branch", "git branch"), ("git branch -D x", "git branch"),
+                ("git branch --show-current x", "git branch"),
+                ("git config user.name x", "git config"),
+                ("git config --get-all x", "git config"),
+                ("git config --unset x", "git config"),
+                ("git config --get x --unset", "git config"),
+                ("git -C d status", "git -C"), ("git", "git"),
+                ("gh pr checkout 1", "gh pr checkout"),
+                ("gh pr edit 1", "gh pr edit"),
+                ("gh pr merge 1 --delete-branch", "gh pr merge"),
+                ("gh issue create", "gh issue create"),
+                ("gh repo sync", "gh repo sync"),
+                ("gh repo clone o/r", "gh repo clone"),
+                ("gh gist clone x", "gh gist clone"),
+                ("gh extension install x", "gh extension install"),
+                ("gh alias set x y", "gh alias set"), ("gh foo", "gh foo"),
+                ("gh -R o/r pr view", "gh -R"), ("gh", "gh")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    self.unbound(what))
+
     def test_an_assignment_or_export_between_is_a_note(self):
         for between, what in (("T=1", "T="), ("export T=1", "export"),
                               ("T=1 U=2", "T="), ("export T=1 U=2", "export"),

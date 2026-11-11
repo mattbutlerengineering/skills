@@ -272,7 +272,7 @@ On the earlier head of this branch (all four cuts), 7056 commands: 649 went from
 - A standalone steering assignment or `export` that carries a digit-prefixed redirect (`PATH=… 2>/dev/null`, `export BASH_ENV=… 2>/dev/null`, `LD_PRELOAD=… 2>&1`), before the writer or, for the names that only matter with a command between, between writer and reader. Without the marker the digit is a word of the command, `_shadows` reads the assignment as a one-shot prefix of a command named by that digit and stops flagging it. This is a false block (the reviewer showed it): with a fake `cat` first on `PATH`, the body the shell writes passes B while the hook refuses. The issue says `_shadows` guards against false blocks and must not be cut; cutting the marker weakened it in behaviour.
 - Prefixed redirects that were a note and became a refusal though none writes the body file: `3<> /dev/null`, `3<>/dev/stderr`, `1>&/dev/null` and `2>&/dev/null` between writer and reader or after the reader, and before the writer `exec 3<> /dev/null`, `exec 3<<<x`, `exec 2>&/dev/null` and `exec 3<<EOF` with an expanding body.
 
-The earlier entry's claim that the only place a cut adds a judgement is a prefixed here-document or here-string was therefore wrong, and is withdrawn: the marker cut also adds refusals. Cutting it fails the issue's rule, so the marker, its constants and its tests are as on `origin/main`.
+At commit `28660ca` this entry claimed that the only place a cut added a judgement was a prefixed here-document or here-string. That was wrong: the marker cut also adds refusals. Cutting it fails the issue's rule, so the marker, its constants and its tests are as on `origin/main`.
 
 ### Final hook
 
