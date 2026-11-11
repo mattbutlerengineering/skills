@@ -49,6 +49,71 @@ block on a non-PR command", and not verified here. It is an anecdote (one
 case), and it is the one place a false block may already have happened; the
 seed below turns it into a fixture.
 
+### Amendment 2026-11-11: re-scan over both transcript stores (#1694)
+
+The population above and the frontmatter are the first scan's, left as
+written. That scan read only the Claude Code projects directory, whose newest
+event was 2026-11-09T05:10Z. This entry re-runs it over that directory and the
+omp session store (`~/.omp/agent/sessions`), which holds this machine's omp
+sessions. Counts and timestamps only; no command, body or session path text.
+
+Method: every main and subagent `.jsonl` in both stores, all repositories (the
+first scan was not filtered by repository either), events after
+2026-11-09T18:53Z. A `gh pr create` call is a Bash tool call whose command
+text contains that string (the first scan's rule, so it counts a mention as
+well as a run). A hook block is, in the Claude store, a PreToolUse
+`hook_blocking_error` record naming the preflight command; in the omp store, a
+failing bash result that carries the hook's stderr strings. A corrected retry
+is a blocked `gh pr create` followed in the same session by an unblocked one.
+A session is the Claude `sessionId` or the omp session directory (subagent
+files grouped under their parent). The two stores share no session id (0
+overlap), so no session needed deduplicating.
+
+| Measure | Claude store | omp store | Total |
+|---|---|---|---|
+| Transcripts scanned | 6617 | 828 | 7445 |
+| Newest event | 2026-11-11T17:26Z | 2026-11-11T17:27Z | 2026-11-11T17:27Z |
+| Sessions with a `gh pr create` Bash call | 0 | 30 | 30 |
+| `gh pr create` Bash calls | 0 | 78 | 78 |
+| Hook blocks | 0 | 0 | 0 |
+| Blocks followed by a corrected retry | 0 | 0 | 0 |
+| Blocks on a command that is not `gh pr create` | 0 | 0 | 0 |
+
+What the numbers are and are not:
+
+- Observed: the transcript counts, the newest timestamps, the 30 sessions and
+  78 calls in the omp store, and 0 `gh pr create` Bash calls in the Claude
+  store after the merge (3 other Claude lines mention the string inside an
+  Agent prompt, not a Bash call, and are not counted).
+- The omp store holds 4 failing bash results that quote the hook's strings (2 of
+  them its exact exit-2 stderr). All 4 come from commands that name the
+  preflight script themselves, which a worker ran by hand to probe it, so none
+  is a hook decision; they are not counted as blocks.
+- Inferred, not observed: that the hook does not run in omp sessions. The hook
+  is a Claude Code PreToolUse command registered in `.claude/settings.json`.
+  The omp hook docs describe only TypeScript/JavaScript factories found under
+  `.omp/hooks/pre` and `.omp/hooks/post`, and neither the repository nor the
+  user agent directory has such a directory; the docs never mention a
+  `PreToolUse` command or `settings.json` hooks. A block would show in an omp
+  transcript as a failing bash result carrying the stderr strings, so the store
+  could record one, but none of its 78 calls shows a hook decision, and with no
+  evidence the hook runs there, the omp 0 is not an observed 0 for the hook:
+  it is the absence of a hook that was likely never live. The omp
+  sessions are real `gh pr create` use, but not use of the hook.
+- The Claude store is the only one where the hook should have run. Its 0 is
+  an observed 0 for blocks and retries, over 0 calls: nobody ran a Bash
+  `gh pr create` there after the merge, so it says nothing about false blocks.
+- Still not seen: the hook logs nothing, so a block that left no transcript
+  record, or a session whose transcript was never written, is invisible. The
+  quoted-string anecdote above is still uncounted.
+
+`users-observed` stays 0: no hook decision exists in either store after the
+merge. The newest-event gap the first scan reported (13.7 hours before the
+merge) is closed: both stores now reach 2026-11-11. The frontmatter is left
+unchanged: the skill's form carries one population figure there, which is
+unchanged at 0, and the dated body entry keeps the first scan's figure
+readable beside this one.
+
 ## Outcomes vs. intent
 
 ### The demo is refused before the PR exists (PRD criteria 1 and 2)
