@@ -308,86 +308,81 @@ class TestSameCallHeredoc(unittest.TestCase):
         self.assertEqual(run(self.demo(body)), (0, []))
 
 
-    def capture(self, command, pairs=()):
-        unrun = pr_body_preflight._Unrun(command, pairs)
-        return unrun.run(), unrun.heredocs
-
-    def test_a_statement_heredoc_is_captured_with_its_text(self):
-        out, heredocs = self.capture(
-            "cat > F <<'EOF'\nline one\nline two\nEOF\n")
-        self.assertEqual(
-            heredocs,
-            [pr_body_preflight.Heredoc("line one\nline two\n", True, True)])
-        self.assertEqual(out, "cat > F <<__pr_body_preflight_heredoc_0__\n")
+    # The statement-heredoc capture and the command splitter are exercised
+    # through `preflight()`: each case is a full payload whose verdict
+    # depends on the behaviour it names (review finding 7).
+    def test_a_statement_heredoc_is_judged_on_its_text(self):
+        body = "line one\nline two"
+        self.assertEqual(run(self.write(body) + self.READ),
+                         refused(body + "\n"))
 
     def test_a_dash_heredoc_strips_leading_tabs_from_its_text(self):
-        _, heredocs = self.capture("cat <<-EOF > F\n\ta\n\t\tb\n\tEOF\n")
-        self.assertEqual(heredocs[0].text, "a\nb\n")
-        self.assertTrue(heredocs[0].terminated)
+        for writer in ("cat <<-EOF > /tmp/b.md\n\ta\n\t\tb\n\tEOF\n",
+                       "cat > /tmp/b.md <<-'EOF'\n\ta\n\t\tb\n\tEOF\n"):
+            with self.subTest(writer=writer):
+                self.assertEqual(run(writer + self.READ), refused("a\nb\n"))
 
     def test_a_delimiter_that_never_closes_is_unterminated(self):
-        _, heredocs = self.capture("cat > F <<EOF\nplain\nnever closed")
-        self.assertEqual(
-            heredocs,
-            [pr_body_preflight.Heredoc("plain\nnever closed\n", True, False)])
+        reason = note("the heredoc that writes /tmp/b.md has no closing "
+                      "delimiter")
+        for tail in ("plain\nnever closed", "plain\nnever closed\n"):
+            with self.subTest(tail=tail):
+                self.assertEqual(
+                    run("cat > /tmp/b.md <<EOF && gh pr create --title t "
+                        "--body-file /tmp/b.md\n" + tail),
+                    (0, [reason]))
 
     def test_a_here_string_is_not_a_heredoc(self):
-        out, heredocs = self.capture("cat > F <<< text\n")
-        self.assertEqual((out, heredocs), ("cat > F <<< text\n", []))
+        self.assertEqual(
+            run("cat > /tmp/b.md <<< text\n" + self.READ),
+            (0, [self.NOT_FIRST]))
 
     def test_literal_follows_the_quoting_and_the_body(self):
-        for command, literal in (
-                ("cat <<'D'\n$X\nD\n", True), ('cat <<"D"\n$X\nD\n', True),
-                ("cat <<\\D\n$X\nD\n", True), ("cat <<D\nplain\nD\n", True),
-                ("cat <<D\n$X\nD\n", False), ("cat <<D\n`x`\nD\n", False),
-                ("cat <<D\na\\b\nD\n", False)):
-            with self.subTest(command=command):
-                self.assertEqual(self.capture(command)[1][0].literal, literal)
+        unquoted = note("an unquoted heredoc body holds $, a backtick or a "
+                        "backslash")
+        for delim, tail, literal in (
+                ("'D'", "$X", True), ('"D"', "$X", True),
+                ("\\D", "$X", True), ("D", "", True),
+                ("D", "$X", False), ("D", "`x`", False),
+                ("D", "a\\b", False)):
+            body = self.BAD + ("\n" + tail if tail else "")
+            command = (f"cat > /tmp/b.md <<{delim}\n{body}\nD\n" + self.READ)
+            with self.subTest(delim=delim, tail=tail):
+                self.assertEqual(
+                    run(command),
+                    refused(body + "\n") if literal else (0, [unquoted]))
 
     def test_heredocs_are_numbered_in_queue_order(self):
-        out, heredocs = self.capture("cat <<A; cat <<B\none\nA\ntwo\nB\n")
-        self.assertEqual([h.text for h in heredocs], ["one\n", "two\n"])
-        self.assertEqual(out, "cat <<__pr_body_preflight_heredoc_0__; "
-                              "cat <<__pr_body_preflight_heredoc_1__\n")
+        """Two writers on one line queue two bodies; a reader of the second
+        is judged on the second body, not the first."""
+        def command(first, second):
+            return (f"cat > /tmp/a.md <<'A'; cat > /tmp/b.md <<'B'\n"
+                    f"{first}\nA\n{second}\nB\n" + self.READ)
+        self.assertEqual(run(command(self.BAD, self.GOOD)), (0, []))
+        self.assertEqual(run(command(self.GOOD, self.BAD)),
+                         refused(self.BAD + "\n"))
 
     def test_literal_and_text_are_decided_on_the_unmasked_body(self):
         """A body that documents a `$(cat <<'B' ... B)` snippet: the masked
-        placeholder is restored before `literal` is decided, and `text` is
-        the original span (P3 gap 7)."""
+        placeholder is restored before `literal` is decided, and the text
+        judged is the original span (P3 gap 7)."""
         snippet = "$(cat <<'B'\ninner\nB\n)"
-        masked, _, pairs = pr_body_preflight._mask_heredocs(
-            f"cat > F <<'EOF'\nsee {snippet} here\nEOF\n")
-        self.assertNotIn("inner", masked)
-        _, heredocs = self.capture(masked, pairs)
-        self.assertEqual(heredocs[0].text, f"see {snippet} here\n")
-        _, unquoted = self.capture(
-            masked.replace("<<'EOF'", "<<EOF"), pairs)
-        self.assertEqual(unquoted[0].text, f"see {snippet} here\n")
-        self.assertFalse(unquoted[0].literal)
-
-
-    def split(self, command):
-        tokens = pr_body_preflight._tokens(
-            pr_body_preflight._Unrun(command).run())
-        return pr_body_preflight._simple_commands(tokens)
-
-    def test_a_redirect_only_command_is_a_record_with_its_joiner(self):
-        Simple = pr_body_preflight.Simple
+        body = f"see {snippet} here"
+        self.assertEqual(run(self.write(body) + self.READ),
+                         refused(body + "\n"))
         self.assertEqual(
-            self.split("a\n> /tmp/b.md\nb"),
-            [Simple(["a"], [], ""),
-             Simple([], [(">", "/tmp/b.md")], "\n"),
-             Simple(["b"], [], "\n")])
+            run(self.write(body, delim="EOF") + self.READ),
+            (0, [note("an unquoted heredoc body holds $, a backtick or a "
+                      "backslash")]))
 
-    def test_a_heredoc_redirect_keeps_its_written_order(self):
-        ph = "__pr_body_preflight_heredoc_0__"
-        Simple = pr_body_preflight.Simple
-        for command, redirects in (
-                ("cat > F <<D\nx\nD\n", [(">", "F"), ("<<", ph)]),
-                ("cat <<D > F\nx\nD\n", [("<<", ph), (">", "F")])):
-            with self.subTest(command=command):
-                self.assertEqual(self.split(command),
-                                 [Simple(["cat"], redirects, "")])
+    def test_a_redirect_only_command_between_is_a_command_with_its_joiner(
+            self):
+        for between, what in (("a\n> /tmp/b.md\nb\n", "> /tmp/b.md"),
+                              ("true;>/tmp/b.md\n", "> /tmp/b.md")):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.write(self.BAD) + between + self.READ),
+                    self.unbound(what))
 
     def test_a_word_less_record_does_not_make_a_body_file_not_first(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -396,20 +391,22 @@ class TestSameCallHeredoc(unittest.TestCase):
                 run("> log\ngh pr create -F x.md", cwd=tmp), refused("x\n"))
 
     def test_a_mixed_run_splits_before_its_redirection_operator(self):
-        Simple = pr_body_preflight.Simple
         self.assertEqual(
-            self.split("a;>f"),
-            [Simple(["a"], [], ""), Simple([], [(">", "f")], ";")])
+            run(self.write(self.BAD) + "true;>/tmp/b.md\n" + self.READ),
+            self.unbound("> /tmp/b.md"))
+        # after the reader the redirect is a command of its own, not the
+        # reader's redirect
+        self.assertEqual(
+            run(self.write(self.BAD) + self.READ + ";>/tmp/o.txt"),
+            refused(self.BAD + "\n"))
 
     def test_a_lone_ampersand_before_a_redirect_stays_in_the_operator(self):
-        Simple = pr_body_preflight.Simple
         for op in ("&>", "&>>"):
-            with self.subTest(op=op):
-                self.assertEqual(self.split(f"cmd {op} f"),
-                                 [Simple(["cmd"], [(op, "f")], "")])
-                self.assertEqual(
-                    self.split(f"a;&{op[1:]}f"),
-                    [Simple(["a"], [], ""), Simple([], [(op, "f")], ";")])
+            for between in (f"cmd {op} /tmp/b.md", f"true;{op}/tmp/b.md"):
+                with self.subTest(between=between):
+                    self.assertEqual(
+                        run(self.write(self.BAD) + between + "\n" + self.READ),
+                        self.unbound(f"{op} /tmp/b.md"))
 
     BAD = "A summary with no work order and no link."
     GOOD = "No work order: a demo.\n\nCloses #12"
@@ -442,10 +439,27 @@ class TestSameCallHeredoc(unittest.TestCase):
             run(self.write(self.BAD) + self.write(self.GOOD) + self.READ),
             (0, []))
 
-    def test_a_reader_naming_a_different_file_keeps_todays_note(self):
-        self.assertEqual(
-            run(self.write(self.BAD) + "gh pr create --body-file /tmp/o.md"),
-            (0, [self.NOT_FIRST]))
+    NO_EXACT_WRITER = note("no heredoc writer with this exact spelling "
+                           "precedes it")
+
+    def test_a_writer_of_another_spelling_is_not_blamed_on_first_command(self):
+        """Finding 5: a same-call `cat > F <<D` writer exists, so "read only
+        from the first command" is misleading; the reader's spelling is."""
+        for writer_path, reader in (
+                ("b.md", "./b.md"), ("/tmp/b.md", "/tmp/o.md"),
+                ("link/b.md", "sub/b.md")):
+            with self.subTest(writer=writer_path, reader=reader):
+                self.assertEqual(
+                    run(self.write(self.BAD, path=writer_path)
+                        + f"gh pr create --body-file {reader}"),
+                    (0, [self.NO_EXACT_WRITER]))
+
+    def test_a_body_file_with_no_heredoc_writer_keeps_todays_note(self):
+        for earlier in ("printf x > /tmp/b.md\n", "echo hi\n",
+                        "cd /tmp\n"):
+            with self.subTest(earlier=earlier):
+                self.assertEqual(run(earlier + self.READ),
+                                 (0, [self.NOT_FIRST]))
 
     def test_an_unquoted_delimiter_with_an_expansion_is_a_note(self):
         reason = note("an unquoted heredoc body holds $, a backtick "
@@ -517,12 +531,6 @@ class TestSameCallHeredoc(unittest.TestCase):
                 with self.subTest(command=command):
                     self.assertEqual(run(command, cwd=tmp), (0, [self.PROCSUB]))
 
-    def test_the_splitter_records_a_process_substitution_anywhere(self):
-        for command, op in (("diff <(a) b", "<("), ("echo x >(tee f)", ">(")):
-            with self.subTest(command=command):
-                records = self.split(command)
-                self.assertIn(("procsub", op), records[0].redirects)
-
     def test_a_here_string_is_never_a_writer(self):
         self.assertEqual(
             run('cat > /tmp/b.md <<< "x"\n' + self.READ), (0, [self.NOT_FIRST]))
@@ -564,14 +572,15 @@ class TestSameCallHeredoc(unittest.TestCase):
                       "delimiter")]))
 
     def test_a_restored_span_holding_the_outer_delimiter_is_unterminated(self):
-        masked, _, pairs = pr_body_preflight._mask_heredocs(
-            "cat > F <<'EOF'\nSee $(cat <<'B'\nEOF\nB\n)\nEOF\n")
-        _, heredocs = self.capture(masked, pairs)
-        self.assertFalse(heredocs[0].terminated)
-        masked, _, pairs = pr_body_preflight._mask_heredocs(
-            "cat > F <<-'EOF'\n\tSee $(cat <<'B'\n\tEOF\nB\n)\n\tEOF\n")
-        _, heredocs = self.capture(masked, pairs)
-        self.assertFalse(heredocs[0].terminated)
+        for command in (
+                "cat > /tmp/b.md <<'EOF'\nSee $(cat <<'B'\nEOF\nB\n)\nEOF\n",
+                "cat > /tmp/b.md <<-'EOF'\n\tSee $(cat <<'B'\n\tEOF\nB\n)"
+                "\n\tEOF\n"):
+            with self.subTest(command=command):
+                self.assertEqual(
+                    run(command + self.READ),
+                    (0, [note("the heredoc that writes /tmp/b.md has no "
+                              "closing delimiter")]))
 
 
     # --- Milestone 2, chain rule: the writer's joiners ---------------------
@@ -711,10 +720,10 @@ class TestSameCallHeredoc(unittest.TestCase):
     def test_a_different_spelling_does_not_bind(self):
         self.assertEqual(
             run(self.write(self.BAD, path="b.md")
-                + "gh pr create --body-file ./b.md"), (0, [self.NOT_FIRST]))
+                + "gh pr create --body-file ./b.md"), (0, [self.NO_EXACT_WRITER]))
         self.assertEqual(
             run("S=/tmp\n" + self.write(self.BAD, path="$S/b.md")
-                + "gh pr create --body-file ${S}/b.md"), (0, [self.NOT_FIRST]))
+                + "gh pr create --body-file ${S}/b.md"), (0, [self.NO_EXACT_WRITER]))
 
     def test_a_spelling_the_hook_cannot_compare_is_a_note(self):
         for spelling in ("/tmp/$RANDOM.md", "$PWD/b.md", "${PWD}/b.md",
@@ -779,12 +788,14 @@ class TestSameCallHeredoc(unittest.TestCase):
         return (0, [note(f"{spelling} may be rewritten or removed by {what} "
                          "between the heredoc and gh pr create")])
 
-    def assert_a_note(self, command, cwd=None):
-        code, lines = run(command, cwd)
-        self.assertEqual(code, 0, command)
-        self.assertEqual(len(lines), 1, command)
-        self.assertTrue(lines[0].startswith("pr-body-preflight: not checked"),
-                        command)
+    def assert_note(self, command, expected, cwd=None):
+        """The exact `(0, [note])` `expected` names, so a case pinning one
+        rule fails when a different rule fires first."""
+        self.assertEqual(run(command, cwd), expected, command)
+
+    def not_certain(self, spelling="/tmp/b.md"):
+        return (0, [note(f"the heredoc that writes {spelling} is not "
+                         "certain to run before gh pr create")])
 
     def test_a_write_redirect_between_is_a_note(self):
         for between, what in (
@@ -836,10 +847,13 @@ class TestSameCallHeredoc(unittest.TestCase):
 
     def test_a_process_substitution_between_is_a_note(self):
         for between in ("cat <(echo hi)\n", "diff <(a) <(b)\n",
-                        "tee >(cat)\n", ": <(rm /tmp/b.md)\n"):
+                        "tee >(cat)\n", ": <(rm /tmp/b.md)\n",
+                        "diff <(a) b\n", "echo x >(tee f)\n",
+                        "cat 2<(echo hi)\n"):
             with self.subTest(between=between):
-                self.assert_a_note(
-                    self.spelled("/tmp/b.md", between=between))
+                self.assert_note(
+                    self.spelled("/tmp/b.md", between=between),
+                    self.not_certain())
 
     def test_a_hostile_joiner_or_keyword_between_is_a_note(self):
         for between in ("true | true\n", "true || true\n", "true &\n",
@@ -862,18 +876,22 @@ class TestSameCallHeredoc(unittest.TestCase):
                     self.unbound(what, "$S/b.md"))
 
     def test_an_exec_with_a_write_redirect_unbinds(self):
-        for name, command in (
+        for name, command, expected in (
                 ("between", self.spelled("/tmp/b.md",
-                                         between="exec > /tmp/log\n")),
+                                         between="exec > /tmp/log\n"),
+                 self.unbound("> /tmp/log")),
                 ("descriptor before the writer",
                  self.spelled("/tmp/b.md", before="exec 3> /tmp/b.md\n",
-                              between="echo hi >&3\n")),
+                              between="echo hi >&3\n"),
+                 self.before("an open descriptor")),
                 ("append before the writer",
-                 self.spelled("/tmp/b.md", before="exec 3>> /tmp/b.md\n")),
+                 self.spelled("/tmp/b.md", before="exec 3>> /tmp/b.md\n"),
+                 self.before("an open descriptor")),
                 ("read-write before the writer",
-                 self.spelled("/tmp/b.md", before="exec 3<> /tmp/b.md\n"))):
+                 self.spelled("/tmp/b.md", before="exec 3<> /tmp/b.md\n"),
+                 self.before("an open descriptor"))):
             with self.subTest(shape=name):
-                self.assert_a_note(command)
+                self.assert_note(command, expected)
         self.assertEqual(
             run(self.spelled("/tmp/b.md", before="exec 2>&1\n")),
             refused(self.BAD + "\n"))
@@ -893,7 +911,9 @@ class TestSameCallHeredoc(unittest.TestCase):
             for tail, what in ((" > /tmp/b.md", "> /tmp/b.md"),
                                (" >> /tmp/log", ">> /tmp/log"),
                                (" &> /tmp/log", "&> /tmp/log"),
-                               (" 2>&1 > /tmp/log", "> /tmp/log")):
+                               (" 2>&1 > /tmp/log", "> /tmp/log"),
+                               (" >(tee /tmp/log)", ">("),
+                               (" 2>(tee /tmp/log)", ">(")):
                 with self.subTest(closer=closer, tail=tail):
                     self.assertEqual(run(self.closed(opener, closer, tail)),
                                      self.unbound(what))
@@ -984,8 +1004,9 @@ class TestSameCallHeredoc(unittest.TestCase):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
                     self.unbound(what))
-        self.assert_a_note(
-            self.spelled("/tmp/b.md", between="cat x | tee /tmp/b.md\n"))
+        self.assert_note(
+            self.spelled("/tmp/b.md", between="cat x | tee /tmp/b.md\n"),
+            self.not_certain())
 
     def test_an_inert_verb_that_runs_or_assigns_in_an_argument_is_a_note(self):
         for verb in ("echo", "printf", "cat", "grep x", "ls", "test -f", "[",
@@ -999,17 +1020,19 @@ class TestSameCallHeredoc(unittest.TestCase):
                         self.unbound(verb.split()[0]))
             for argument in ("$(rm /tmp/b.md)", "$((1+1))", "$((S=1))"):
                 with self.subTest(verb=verb, argument=argument):
-                    self.assert_a_note(
+                    self.assert_note(
                         self.spelled("/tmp/b.md",
-                                     between=f"{verb} {argument}\n"))
+                                     between=f"{verb} {argument}\n"),
+                        self.not_certain())
 
     def test_a_bracket_expansion_in_an_inert_argument_unbinds(self):
         """P3 gap 2: `echo $[1+1]` unbinds like `$((1+1))`."""
         self.assertEqual(
             run(self.spelled("/tmp/b.md", between="echo $[1+1]\n")),
             self.unbound("echo"))
-        self.assert_a_note(
-            self.spelled("/tmp/b.md", between="echo $((1+1))\n"))
+        self.assert_note(
+            self.spelled("/tmp/b.md", between="echo $((1+1))\n"),
+            self.not_certain())
 
     def test_printf_with_v_assigns_and_is_a_note(self):
         for between in ("printf -vS x", "printf -v S x", "printf -v S",
@@ -1035,8 +1058,9 @@ class TestSameCallHeredoc(unittest.TestCase):
                         run(self.spelled(spelling, before="S=/tmp\n",
                                          between=between + "\n")),
                         self.unbound(what, spelling))
-        self.assert_a_note(self.spelled("$S/b.md", before="S=/tmp\n",
-                                        between="echo $((S=1))\n"))
+        self.assert_note(self.spelled("$S/b.md", before="S=/tmp\n",
+                                      between="echo $((S=1))\n"),
+                         self.not_certain("$S/b.md"))
         self.assertEqual(
             run(self.spelled("$S/b.md", before="S=/tmp\n",
                              between="T=1\nexport U=1\n")),
@@ -1052,13 +1076,15 @@ class TestSameCallHeredoc(unittest.TestCase):
                     self.unbound(what))
         for between in ("T=$(date)", "export T=$(date)", "T=$((1+1))"):
             with self.subTest(between=between):
-                self.assert_a_note(
-                    self.spelled("/tmp/b.md", between=between + "\n"))
+                self.assert_note(
+                    self.spelled("/tmp/b.md", between=between + "\n"),
+                    self.not_certain())
 
     def test_an_exec_descriptor_opened_onto_the_file_unbinds_a_dup(self):
-        self.assert_a_note(
+        self.assert_note(
             self.spelled("/tmp/b.md", before="exec 3> /tmp/b.md\n",
-                         between="echo hi >&3\n"))
+                         between="echo hi >&3\n"),
+            self.before("an open descriptor"))
         self.assertEqual(
             run(self.spelled("/tmp/b.md", between="echo hi >&3\n")),
             refused(self.BAD + "\n"))
@@ -1215,6 +1241,8 @@ class TestSameCallHeredoc(unittest.TestCase):
                 ("$2>&1", "$2"), ("2 > /dev/null", "2"),
                 ("2> /tmp/b.md", "2> /tmp/b.md"),
                 ("2>/tmp/b.md", "2> /tmp/b.md"),
+                ("cat 2>f", "2> f"), ("cat 12>/tmp/f", "12> /tmp/f"),
+                ("true;2>/tmp/f", "2> /tmp/f"),
                 ("2>> /tmp/b.md", "2>> /tmp/b.md"),
                 ("2>| /tmp/b.md", "2>| /tmp/b.md"),
                 ("1>&2 > /tmp/b.md", "> /tmp/b.md"),
@@ -1235,7 +1263,8 @@ class TestSameCallHeredoc(unittest.TestCase):
         for between in ("cat x 2>/dev/null", "ls x 2>/dev/null",
                         "echo hi 1>/dev/null", "cat 2<&0", "cat 0< /tmp/x",
                         "echo hi 2>> /dev/null", "echo hi 2>| /dev/null",
-                        "echo hi 2>/dev/stderr", "5< /tmp/x"):
+                        "echo hi 2>/dev/stderr", "5< /tmp/x",
+                        "true;2>&1", "cat 12< /tmp/x"):
             with self.subTest(between=between):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
@@ -1269,33 +1298,24 @@ class TestSameCallHeredoc(unittest.TestCase):
                 self.assertEqual(run(writer + self.READ),
                                  (0, [self.NOT_FIRST]))
 
-    def test_the_splitter_reads_a_descriptor_prefix_off_the_source(self):
-        Simple = pr_body_preflight.Simple
-        for command, expected in (
-                ("a 2>&1", [Simple(["a"], [("2>&", "1")], "")]),
-                ("a 2 >&1", [Simple(["a", "2"], [(">&", "1")], "")]),
-                ("a 2>f", [Simple(["a"], [("2>", "f")], "")]),
-                ("a;2>&1", [Simple(["a"], [], ""),
-                            Simple([], [("2>&", "1")], ";")]),
-                ("a 12<f", [Simple(["a"], [("12<", "f")], "")]),
-                ('a "2">&1', [Simple(["a", "2"], [(">&", "1")], "")]),
-                ("a x2>&1", [Simple(["a", "x2"], [(">&", "1")], "")]),
-                ("a 2<(b)", [Simple(["a", "b"], [("procsub", "<(")], "")])):
-            with self.subTest(command=command):
-                got = self.split(command)
-                self.assertEqual(got[:len(expected)], expected)
-
-    def test_an_ansi_c_string_sets_a_flag_only_when_it_is_one(self):
-        for command, flagged in (
-                ("echo $'a'", True), ("echo $'\\''; x; \\'", True),
-                ("grep -n 'TODO$' x", False), ("echo 'costs $'", False),
-                ("gh pr create -t 'costs $'", False),
-                ('echo "$\'a\'"', False), ("cat <<'E'\n$'x'\nE\n", False),
-                ("echo $'a' # c", True), ("echo # $'a'", False)):
-            with self.subTest(command=command):
-                unrun = pr_body_preflight._Unrun(command)
-                unrun.run()
-                self.assertEqual(unrun.ansi_c, flagged)
+    def test_an_ansi_c_string_between_is_a_note_only_when_it_is_one(self):
+        """A `$'...'` string can hide a quote the tokenizer misreads, so
+        anything between the writer and reader is unbound; a `$` that only
+        ends a quoted string, a heredoc body or a comment is not one."""
+        judged = refused(self.BAD + "\n")
+        for between, expected in (
+                ("echo $'a'", self.unbound("$'...'")),
+                ("echo $'\\''; x; \\'", self.unbound("$'...'")),
+                ("echo $'a' # c", self.unbound("$'...'")),
+                ("grep -n 'TODO$' x", self.unbound("grep")),
+                ("echo 'costs $'", self.unbound("echo")),
+                ('echo "$\'a\'"', judged),
+                ("cat <<'E'\n$'x'\nE", judged),
+                ("echo # $'a'", judged)):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between + "\n")),
+                    expected)
 
     def test_a_string_ending_in_a_dollar_between_is_not_an_ansi_c_string(self):
         """The `$'` in `'a $'b` is a closing quote after a dollar, not an
@@ -1379,27 +1399,40 @@ class TestSameCallHeredoc(unittest.TestCase):
         """A digit that touches its operator is a descriptor, not a word of
         the command: a standalone steering assignment or export that carries
         one is still the assignment, so it stays a note, never exit 2."""
-        for before in ("PATH=/x 2>/dev/null", 'export PATH="$HOME/bin:$PATH" 2>/dev/null',
-                       "LD_PRELOAD=/x/e.so 2>&1", "export BASH_ENV=/x 2>/dev/null",
-                       "DYLD_INSERT_LIBRARIES=/x 2>/dev/null"):
+        for before, cause in (
+                ("PATH=/x 2>/dev/null", "PATH="),
+                ('export PATH="$HOME/bin:$PATH" 2>/dev/null', "export"),
+                ("LD_PRELOAD=/x/e.so 2>&1", "LD_PRELOAD="),
+                ("export BASH_ENV=/x 2>/dev/null", "export"),
+                ("DYLD_INSERT_LIBRARIES=/x 2>/dev/null",
+                 "DYLD_INSERT_LIBRARIES=")):
             with self.subTest(before=before):
-                self.assert_a_note(self.spelled("/tmp/b.md", before=before + "\n"))
-        for before in ("GH_HOST=h 2>/dev/null", "export PAGER=x 2>&1"):
-            with self.subTest(between=before):
-                self.assert_a_note(
-                    self.spelled("/tmp/b.md", between=before + "\n"))
+                self.assert_note(
+                    self.spelled("/tmp/b.md", before=before + "\n"),
+                    self.before(cause))
+        for between, cause in (("GH_HOST=h 2>/dev/null", "GH_HOST="),
+                               ("export PAGER=x 2>&1", "export")):
+            with self.subTest(between=between):
+                self.assert_note(
+                    self.spelled("/tmp/b.md", between=between + "\n"),
+                    self.unbound(cause))
 
     def test_a_descriptor_redirect_is_never_a_refusal_it_was_not_before(self):
-        for between in ("echo hi 3<> /dev/null", "echo hi 3<>/dev/stderr",
-                        "echo hi 1>&/dev/null", "echo hi 2>&/dev/null"):
+        for between, what in (
+                ("echo hi 3<> /dev/null", "3<> /dev/null"),
+                ("echo hi 3<>/dev/stderr", "3<> /dev/stderr"),
+                ("echo hi 1>&/dev/null", "1>& /dev/null"),
+                ("echo hi 2>&/dev/null", "2>& /dev/null")):
             for command in (self.spelled("/tmp/b.md", between=between + "\n"),
                             self.spelled("/tmp/b.md") + between[len("echo hi"):]):
                 with self.subTest(command=command):
-                    self.assert_a_note(command)
+                    self.assert_note(command, self.unbound(what))
         for before in ("exec 3<> /dev/null", "exec 3<<<x",
                        "exec 2>&/dev/null", "exec 3<<EOF\n$HOME\nEOF"):
             with self.subTest(before=before):
-                self.assert_a_note(self.spelled("/tmp/b.md", before=before + "\n"))
+                self.assert_note(
+                    self.spelled("/tmp/b.md", before=before + "\n"),
+                    self.before("an open descriptor"))
 
     def test_a_name_that_changes_the_writer_unbinds_wherever_it_is_set(self):
         for before, cause in self.WRITER_STEERING:
@@ -1586,8 +1619,8 @@ class TestSameCallHeredoc(unittest.TestCase):
                     (0, [self.NOT_FIRST]))
         # a writer-shaped command inside `$(`: the chain rule refuses it
         # (its own joiner is `(`), a note either way and never a verdict
-        self.assert_a_note("X=$(cat > /tmp/b.md <<'A'\n" + self.BAD
-                           + "\nA\n)\n" + self.READ)
+        self.assert_note("X=$(cat > /tmp/b.md <<'A'\n" + self.BAD
+                         + "\nA\n)\n" + self.READ, self.not_certain())
 
     def test_a_heredoc_inside_a_substitution_does_not_shift_the_pairing(self):
         """The substitution's heredoc is queued first; the real writer
@@ -1601,8 +1634,9 @@ class TestSameCallHeredoc(unittest.TestCase):
             (0, []))
         # after `X=$(…)` the next line's joiner is `)` plus a newline, which
         # the chain rule does not read as a start: a note, never a verdict
-        self.assert_a_note("X=$(sed q <<A\n" + self.GOOD + "\nA\n)\n"
-                           + self.write(self.BAD) + self.READ)
+        self.assert_note("X=$(sed q <<A\n" + self.GOOD + "\nA\n)\n"
+                         + self.write(self.BAD) + self.READ,
+                         self.not_certain())
 
     def test_a_body_holding_its_own_heredoc_snippet_is_judged_on_the_text(self):
         """The file text, not the placeholder the masking leaves behind:
@@ -1613,7 +1647,9 @@ class TestSameCallHeredoc(unittest.TestCase):
         failing = "```\n$(cat <<'B'\ninner\nB\n)\n```\n" + self.BAD
         self.assertEqual(run(self.write(failing) + self.READ),
                          refused(failing + "\n"))
-        self.assert_a_note(self.write(passing, delim="EOF") + self.READ)
+        self.assert_note(self.write(passing, delim="EOF") + self.READ,
+                         (0, [note("an unquoted heredoc body holds $, a backtick "
+                               "or a backslash")]))
 
     def test_a_log_redirect_before_a_first_command_body_file_reads_from_disk(
             self):
@@ -1632,16 +1668,15 @@ class TestSameCallHeredoc(unittest.TestCase):
             with self.subTest(payload=text):
                 self.assertEqual(
                     pr_body_preflight.preflight(text), (0, []))
-        command = self.write(self.BAD) + self.READ
-        with mock.patch("pr_body_preflight._bound_body",
-                        side_effect=RuntimeError("boom")):
-            code, lines = run(command)
+        # a crash anywhere in the verdict (here a non-mapping environment
+        # in the target check) is one note and exit 0, never a block
+        code, lines = pr_body_preflight.preflight(
+            payload(self.write(self.BAD) + self.READ), environ=5)
         self.assertEqual(code, 0)
+        self.assertEqual(len(lines), 1)
         self.assertEqual(
-            lines, [note("RuntimeError: boom")])
-        self.assertEqual(
-            sum(line.startswith("pr-body-preflight: not checked")
-                for line in lines), 1)
+            lines, [note("AttributeError: 'int' object has no attribute "
+                         "'get'")])
 
 
 
