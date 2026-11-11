@@ -243,7 +243,7 @@ class TestResolveModel(unittest.TestCase):
     def test_each_band_resolves_to_its_model(self):
         for band, model in (("mechanical", "claude-haiku-5-5"),
                             ("implementation", "claude-sonnet-5-5"),
-                            ("architecture_review", "claude-fable-5-1")):
+                            ("architecture_review", "claude-fable-5-2")):
             self.assertEqual(factory_config.resolve_model(band, CONFIG),
                              (model, []), band)
 
