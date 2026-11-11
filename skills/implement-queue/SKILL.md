@@ -67,29 +67,63 @@ GraphQL-backed `gh issue|pr` subcommands (`list`, `view`, `edit`,
 `checks`, `merge`, `update-branch`) return HTTP 403 while `gh api`
 REST calls succeed, so a profile written for a cloud session names the
 REST twin of each default above (`preflight`'s `gh run list` is REST
-already):
+already). Where `gh` is absent altogether (`spawn gh ENOENT`), the REST
+twins have no binary to run through, and the MCP twin is the way:
 
+- `preflight`: REST as above. MCP: `actions_list` with
+  `method: list_workflow_runs`, filtered to `main`.
+- Open PRs (Phase 0): MCP `list_pull_requests`, state open.
+- Claim (Phase 1): MCP `list_issues` with `labels: ["ready"]`, state
+  open; no entry carries a `pull_request` key there, so nothing to drop.
 - `transition`: `gh api -X POST repos/{owner}/{repo}/issues/<N>/labels -f 'labels[]=<to>'`
   then `gh api -X DELETE repos/{owner}/{repo}/issues/<N>/labels/<from>`,
-  one pair per swap in the Labels table.
+  one pair per swap in the Labels table. MCP: `issue_read` with
+  `method: get_labels`, then `issue_write` with `method: update` and
+  `labels` set to the full resulting set, never only the label added.
 - `ci-status`: `gh api repos/{owner}/{repo}/commits/<head-sha>/check-runs`,
   with `<head-sha>` from `gh api repos/{owner}/{repo}/pulls/<N> --jq .head.sha`.
+  MCP: `pull_request_read` with `method: get_check_runs`.
+- `changed-files`: no MCP twin. `pull_request_read` with
+  `method: get_files` is not a source until a run records that it
+  reports a rename's `previous_filename`; with neither `gh` nor a
+  checkout the list is unavailable and the PR needs a human merge.
 - `merge-command`: `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f merge_method=squash`
   once `ci-status` is green, then
   `gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/<branch>`.
   REST has no `--auto`: the train merges a green PR itself instead of
-  enqueuing it.
+  enqueuing it. MCP: `merge_pull_request` with `merge_method: squash`
+  and `expectedHeadSha` set to the head the gate saw; it has no
+  branch-delete twin, so the branch is left to the repo's
+  delete-on-merge setting and reported.
 - `update-branch`: `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/update-branch`.
+  MCP: `update_pull_request_branch`.
+- The verdict comment (gate step 5): MCP `add_issue_comment`, which
+  takes a pull request number too.
+
+Tool names are the GitHub MCP server's; a host may prefix them. With
+neither `gh` nor an MCP tool for the intent, a stated hook cannot run:
+fail closed. Claim nothing you cannot transition, merge nothing you
+cannot check, and report the missing capability.
 
 A hook can tighten a default rule; it can never loosen a rule in this
 file's Rules section.
 
 ## Phase 0: Pre-flight
 
-1. Run the `preflight` hook. If main is red, fixing it **is** this
+1. Check the profile against the two tables above and
+   [references/profile-migration.md](references/profile-migration.md):
+   every `## <name>` section is a row of the hook table, every
+   frontmatter key a row of the key table. Report each hook the profile
+   lacks together with the consequence the reference gives for it (a
+   profile that predates `verdict` holds every reviewed PR for a human,
+   even under `merge: auto`, and nothing else says so), and each section
+   or key the tables do not name as ignored, never run. A gap never
+   stops the run and never loosens a rule; the findings lead the final
+   report.
+2. Run the `preflight` hook. If main is red, fixing it **is** this
    iteration: claim or file the CI-fix issue, work it through Phase 2,
    and skip to Phase 3.
-2. List open PRs. Unfinished PRs come before new issues: green ones go
+3. List open PRs. Unfinished PRs come before new issues: green ones go
    to the Phase 2 gate, pending ones wait, failed ones get fixed or
    their issue labelled `agent-failed`. Claim nothing new while an open
    PR is failed. This is the protocol's "Open pull requests first"
@@ -151,6 +185,14 @@ Every worker prompt carries:
    `main`. Never merge.
 6. Never commit secrets or credentials; validate external input at
    boundaries; an existing vulnerability found on the way is fixed first.
+7. Run every subprocess in the foreground under a time bound
+   (`timeout 600 <cmd>` or the tool's own timeout; state a longer bound
+   for a slow step such as a code regeneration or a CLI build). Never
+   start a background or watch process and wait on it. A command that
+   hits its bound is killed and its output recorded, never retried
+   unchanged. Stall-abort: after two resumes without a new commit, or
+   two resumes that each hit a bound, stop: commit what works, open a
+   draft PR if anything is usable, and report the blocking command.
 
 When a worker finishes, label its issue with the `transition` hook:
 
@@ -163,6 +205,18 @@ When a worker finishes, label its issue with the `transition` hook:
 
 Then run the `telemetry` hook, if any, with the worker's real usage.
 Leave cost empty when the usage carries none; never estimate it.
+
+**Reconcile before Phase 4.** A worker's `transition` can fail without
+a trace, so the orchestrator checks it instead of trusting it. For every
+issue claimed this session, read its labels and the PRs that close it
+(`Closes #<N>` on the PR list), and run the `transition` hook wherever
+the label disagrees with the table: an open PR with green gates →
+`has-pr`; a draft PR, or an open PR with red gates and no live worker
+→ `needs-review`; no PR → `agent-failed`. No issue keeps `in-progress`
+unless a live worker holds it. A worker resumed twice with no new
+commit counts as stalled: stop it, do not resume it again, and
+reconcile its issue the same way. Report each repair as drift, with the
+count of issues claimed against the count repaired.
 
 ### The gate, per PR
 
@@ -185,9 +239,17 @@ as that PR's CI settles; it can overlap with workers still running.
    the `reviewers` hook matches to the changed files, with the input
    [the reviewer contract](references/reviewer-contract.md) defines. A
    reviewer is never the PR's author.
+   - Dispatch each reviewer into its own detached worktree at the PR's
+     head (`git worktree add --detach <path> <head-sha>`), never into
+     the shared checkout, and never let it switch that checkout's
+     branch. A reviewer with no worktree reads through the API and
+     cannot run code.
    - Snapshot `git status --porcelain` before each reviewer dispatch and
-     compare it afterwards. A reviewer that changed the checkout has
-     produced an invalid review: inspect, restore, re-dispatch.
+     compare it afterwards. The snapshot detects a change, it does not
+     prevent one. A reviewer that changed the checkout has produced an
+     invalid review: restore it by the procedure in
+     [the reviewer contract](references/reviewer-contract.md), then
+     re-dispatch.
    - A review that timed out or errored is recorded as `error`, never as
      `pass`.
 5. **Verdict.** Run the `verdict` hook on the universal reviewer's
@@ -266,7 +328,14 @@ Release every lock you took when the train ends, on any exit.
 - Run the `reap` hook. A worker that committed keeps its worktree, so
   nothing else reclaims it; a reaper must refuse any worktree with an
   open PR or a live process, and needs positive evidence of a merge.
-- Persist telemetry the session appended: an ephemeral checkout loses it.
+- Persist the telemetry the session appended, once per iteration, not
+  per worker: an ephemeral checkout loses it, and one PR per row races
+  its own auto-merge. Batch every row the iteration appended into one
+  commit on one branch. Name the branch for the session as well as the
+  date (`chore/queue-telemetry-<date>-<session-id>`), so two sessions
+  never share one. Restore or rebase the tracked metrics file from
+  `origin/main` after `git fetch origin`, never from the local `main`,
+  which may be stale.
 - More ready issues and budget left → Phase 0. Three consecutive failures
   (workers or train) → release locks, stop and report.
 - Report: issues claimed, PRs opened, PRs merged or awaiting merge, and

@@ -264,6 +264,20 @@ plugin include cloud routines, prompts that GitHub Actions hand to an agent,
 and agents dispatched by name (a classifier's routing table, for example).
 If any of them calls it, keep it.
 
+**Follow a skill by path from a pinned commit.** A cloud routine or
+GitHub Actions job that clones this repo and follows
+`skills/implement-queue/SKILL.md` by path gets whatever `main` holds when
+it starts, so a change lands under an unattended run with no review on the
+consumer's side (#1697). This repo publishes no tags or releases, so the
+only pin is a commit SHA. Check out one in the bootstrap
+(`git clone <this repo>`, then `git -C <clone> checkout <sha>`) rather than
+following `main`, and keep that SHA in the consumer's own repo, where a PR
+moves it. The `version` in `.claude-plugin/plugin.json` at a SHA names the
+wave it belongs to (ADR-0095). Moving the SHA is the moment to run the
+skill's Phase 0 profile check against the new skill, because a hook the
+table gained since is the usual way a consumer's profile goes stale
+(`skills/implement-queue/references/profile-migration.md`).
+
 **Tools-only (Conductor-only) stamp.** A repo that wants the Conductor and
 none of the CI can install just two pieces: `tools/factory/` and
 `.github/factory.json` with its `conductor` table. Leave out the workflows,
