@@ -672,10 +672,15 @@ def _shadows(record, between):
     """What in record, a command before the writer, may change how a later
     command behaves, else None: a function definition (`name()` leaves `()`
     in the joiner of the record after it, or the `function` keyword as the
-    command word), an alias, a trap other than on EXIT, or a standalone
+    command word), an alias, a trap, or a standalone
     assignment or `export` of a name that can change the writer itself
     (WRITER_STEERING) or, when a command sits between writer and reader
-    (`between`), of any steering name. `eval`, `source`, `declare -x`,
+    (`between`), of any steering name. Leading `NAME=value` assignments
+    are stripped when a command follows. A trap is admitted only as a
+    reset (`trap - SIG`), a print or list (`trap -p`, `trap -l`) or an
+    action whose every signal is EXIT, 0, INT, TERM or HUP (TRAP_SAFE),
+    each print/list signal held to the same set; DEBUG, ERR, RETURN and
+    every other signal stay notes. `eval`, `source`, `declare -x`,
     `export NAME other`, `for NAME in` and `NAME+=` are accepted limits."""
     if "()" in record.joiner:
         return "a function definition"
@@ -697,9 +702,11 @@ def _shadows(record, between):
         return "alias"
     if words[0] == "trap":
         args = words[1:]
-        if args[:1] == ["--"]:
+        if args[:1] in (["-p"], ["-l"]):  # print or list: safe signals only
+            return None if all(s in TRAP_SAFE for s in args[1:]) else "trap"
+        if args[:1] == ["--"]:  # after `--`, `-p` and `-l` are the action
             args = args[1:]
-        if args[:1] in (["-p"], ["-l"], ["-"]):  # print, list or reset
+        if args[:1] == ["-"]:  # reset
             return None
         if len(args) < 2 or any(s not in TRAP_SAFE for s in args[1:]):
             return "trap"
