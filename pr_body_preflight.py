@@ -45,7 +45,16 @@ POINTER = ("pr-body-preflight: the body contract is "
 NOT_SEEN = 'saw "gh pr create" but found no such command'
 
 PUNCTUATION = ";&|()<>\n"
-ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+# A shell variable name; every pattern that reads one builds on this.
+NAME = r"[A-Za-z_][A-Za-z0-9_]*"
+ASSIGNMENT = re.compile(NAME + "=")
+# Reasons two paths raise, each worded once. UNQUOTED_BODY: the heredoc is
+# not literal. NOT_FIRST: a body file from a command that is not the
+# compound's first, with no heredoc writer anywhere before it. NO_WRITER:
+# the same, once a `cat > F <<D` writer of another spelling exists.
+UNQUOTED_BODY = "an unquoted heredoc body holds $, a backtick or a backslash"
+NOT_FIRST = "a body file is read only from the first command"
+NO_WRITER = "no heredoc writer with this exact spelling precedes it"
 # gh pr create flags whose next argument is their value, so that value is
 # never mistaken for a flag of its own.
 VALUE_FLAGS = frozenset({
@@ -64,7 +73,7 @@ REMOTE_URL = re.compile(r"(?:push)?url\s*=\s*(?P<url>\S+)$")
 # The opening of a heredoc command substitution, `$(cat <<'D'` and kin.
 HEREDOC_OPEN = re.compile(
     r"\$\(\s*cat\s+<<(?P<dash>-?)[ \t]*(?P<quote>['\"]?)"
-    r"(?P<delim>[A-Za-z_][A-Za-z0-9_]*)(?P=quote)[ \t]*\n")
+    r"(?P<delim>" + NAME + r")(?P=quote)[ \t]*\n")
 HEREDOC_CLOSE = re.compile(r"\s*\)")
 PLACEHOLDER = "__pr_body_preflight_heredoc_{}__"
 PLACEHOLDER_WORD = re.compile(r"__pr_body_preflight_heredoc_(\d+)__")
@@ -77,7 +86,7 @@ FD_WORD = re.compile(r"__pr_body_preflight_fd_(\d+)__")
 # spelling that opens a named descriptor; a `{NAME}` elsewhere is a plain word.
 FD_NAME_PREFIX = "__pr_body_preflight_fdname_{}__"
 FD_NAME_WORD = re.compile(r"__pr_body_preflight_fdname_([A-Za-z0-9_]+)__")
-FD_NAME_SOURCE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}(?=[<>])")
+FD_NAME_SOURCE = re.compile(r"\{(" + NAME + r")\}(?=[<>])")
 DIGITS = "0123456789"
 # One statement-level heredoc: the bytes a shell writes, whether the shell
 # would expand nothing in them, and whether the delimiter line closed it.
@@ -90,12 +99,18 @@ CAT_FILE = re.compile(
     r"\$\(\s*(?:cat\s+|<\s*)(?P<path>[^\s$`'\"()<>|;&\\]+)\s*\)")
 
 
+def _literal(text, quoted):
+    """True when the shell leaves a heredoc body as written: a quoted
+    delimiter, or a body with no $, backtick or backslash, which the shell
+    would expand or join."""
+    return quoted or not any(ch in text for ch in "$`\\")
+
+
 def _heredoc_at(command, match):
-    """(body, end) for the heredoc substitution whose opening is match,
-    or None when its delimiter line or closing paren is missing. body is
-    (text, literal): $() drops trailing newlines, <<- drops leading tabs,
-    and an unquoted delimiter's body is literal only with no $,
-    backtick or backslash, since the shell would expand or join it."""
+    """(Heredoc, end) for the heredoc substitution whose opening is match,
+    or None when its delimiter line or closing paren is missing. $() drops
+    trailing newlines and <<- drops leading tabs; a substitution that got
+    this far found its delimiter, so the Heredoc is terminated."""
     delim, dash = match["delim"], bool(match["dash"])
     lines, offset = [], match.end()
     while True:
@@ -113,12 +128,12 @@ def _heredoc_at(command, match):
     if close is None:
         return None
     text = "\n".join(lines).rstrip("\n")
-    literal = bool(match["quote"]) or not any(ch in text for ch in "$`\\")
-    return (text, literal), close.end()
+    literal = _literal(text, bool(match["quote"]))
+    return Heredoc(text, literal, True), close.end()
 
 
 def _mask_heredocs(command):
-    """(masked command, [heredoc bodies], [(placeholder, original span)]):
+    """(masked command, [Heredoc], [(placeholder, original span)]):
     each heredoc substitution is cut from the raw string and replaced by a
     placeholder word before shlex sees it, because shlex does not know
     $( ) opens a new quoting context and would strip the body's inner
@@ -355,7 +370,7 @@ class _Unrun:
             body = "".join(line + "\n" for line in lines)
             for placeholder, original in self.originals:
                 body = body.replace(placeholder, original)
-            literal = quoted or not any(ch in body for ch in "$`\\")
+            literal = _literal(body, quoted)
             # a restored span with a line of its own equal to this
             # delimiter ends the heredoc early in the shell
             terminated = terminated and not any(
@@ -511,7 +526,7 @@ def _read_body_file(path, context):
     if path == "-":
         raise _Unreadable("--body-file - reads the body from stdin")
     if not context["first"]:
-        raise _Unreadable("a body file is read only from the first command")
+        raise _Unreadable(NOT_FIRST)
     target = Path(path)
     if not target.is_absolute():
         if not isinstance(context["cwd"], str):
@@ -527,11 +542,14 @@ def _read_body_file(path, context):
 
 def _writer_of(record, spelling):
     """The statement heredoc's index when record is exactly
-    `cat > SPELLING <<D` (the two redirects in either order), else None."""
+    `cat > SPELLING <<D` (the two redirects in either order), else None.
+    A spelling of None matches a writer of any file."""
     if record.words != ["cat"] or len(record.redirects) != 2:
         return None
     by_operator = dict(record.redirects)
-    if len(by_operator) != 2 or by_operator.get(">") != spelling:
+    target = by_operator.get(">")
+    if len(by_operator) != 2 or target is None or (
+            spelling is not None and target != spelling):
         return None
     placeholder = PLACEHOLDER_WORD.fullmatch(by_operator.get("<<", ""))
     return int(placeholder[1]) if placeholder else None
@@ -543,8 +561,7 @@ SHELL_MAINTAINED = frozenset({
     "RANDOM", "SRANDOM", "SECONDS", "EPOCHSECONDS", "EPOCHREALTIME", "LINENO",
     "BASHPID", "PIPESTATUS", "HISTCMD", "DIRSTACK", "status", "pipestatus",
     "PWD", "OLDPWD", "_"})
-NAME_FORM = re.compile(
-    r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))")
+NAME_FORM = re.compile(r"\$(?:\{(" + NAME + r")\}|(" + NAME + "))")
 # An argument that runs a command or assigns: a substitution (the tokenizer
 # splits `$(` after its `$`), a backtick, `$[`, or `${NAME=` / `${NAME:=`.
 UNSAFE_ARGUMENT = re.compile(r"`|\$\(|\$\[|\$$|\$\{[^}]*=")
@@ -787,7 +804,6 @@ def _bound_body(spelling, context):
     before this gh pr create. Raises _Unreadable: today's note when no such
     writer wrote that spelling, else the reason the heredoc cannot be
     trusted."""
-    not_first = _Unreadable("a body file is read only from the first command")
     records, at = context["records"], context["record"]
     if not _comparable(spelling):
         if spelling.endswith("$"):  # the tokenizer cut `$(` after its `$`
@@ -800,14 +816,15 @@ def _bound_body(spelling, context):
         if number is not None:
             break
     else:
-        raise not_first
+        other = any(_writer_of(record, None) is not None
+                    for record in records[:at])
+        raise _Unreadable(NO_WRITER if other else NOT_FIRST)
     heredoc = context["statements"][number]
     if not heredoc.terminated:
         raise _Unreadable(
             f"the heredoc that writes {spelling} has no closing delimiter")
     if not heredoc.literal:
-        raise _Unreadable(
-            "an unquoted heredoc body holds $, a backtick or a backslash")
+        raise _Unreadable(UNQUOTED_BODY)
     if not _surely_ran(records, index, at):
         raise _Unreadable(f"the heredoc that writes {spelling} is not "
                           "certain to run before gh pr create")
@@ -847,11 +864,10 @@ def _resolve(value, context):
     backtick is a shell expansion the hook cannot do."""
     placeholder = PLACEHOLDER_WORD.fullmatch(value)
     if placeholder:
-        text, literal = context["heredocs"][int(placeholder[1])]
-        if not literal:
-            raise _Unreadable(
-                "an unquoted heredoc body holds $, a backtick or a backslash")
-        return text
+        heredoc = context["heredocs"][int(placeholder[1])]
+        if not heredoc.literal:
+            raise _Unreadable(UNQUOTED_BODY)
+        return heredoc.text
     cat = CAT_FILE.fullmatch(value)
     if cat:
         return _read_body_file(cat["path"], context)
@@ -968,7 +984,8 @@ def _check_target(repos, context):
     repository: B is this repository's rule (review finding 3). Named
     repositories (-R/--repo, GH_REPO) are compared with the cwd
     checkout's remotes; a cd must stay inside the cwd's checkout."""
-    earlier = context["commands"][:context["position"]]
+    earlier = [record.words for record in context["records"][:context["record"]]
+               if record.words]
     named = repos + _gh_repo(earlier, context["prefix"], context["environ"])
     if named:
         slugs = _remote_slugs(context["cwd"])
@@ -1010,7 +1027,6 @@ def _verdicts(command, cwd, environ):
     for position, args in candidates:
         words = commands[position]
         context = {"first": position == 0, "cwd": cwd, "heredocs": heredocs,
-                   "commands": commands, "position": position,
                    "records": records, "record": with_words[position],
                    "statements": unrun.heredocs, "ansi_c": unrun.ansi_c,
                    "prefix": words[:len(words) - len(args) - 3],

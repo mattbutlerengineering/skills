@@ -43,7 +43,7 @@ Hooks (each a `## <name>` section with the exact command or rule):
 
 | Hook             | Default when absent                                                                                   |
 | ---------------- | ----------------------------------------------------------------------------------------------------- |
-| `preflight`      | `gh run list --branch main --limit 5` — any failure means main is red                                 |
+| `preflight`      | the gate's own green on the head SHA of `origin/main`, read from its check runs (Phase 0, step 2)     |
 | `transition`     | `gh issue edit` swapping the state labels in the Labels table                                         |
 | `compose`        | take candidates in priority order, skipping any that names the same files as one already taken        |
 | `base-freshness` | `git fetch origin` and confirm this checkout shares history with `origin/main`                        |
@@ -72,12 +72,21 @@ through `gh api`, and either carries it out. In Claude Code Remote the
 GraphQL-backed `gh issue|pr` subcommands (`list`, `view`, `edit`,
 `checks`, `merge`, `update-branch`) return HTTP 403 while `gh api`
 REST calls succeed, so a profile written for a cloud session names the
-REST twin of each default above (`preflight`'s `gh run list` is REST
+REST twin of each default above (`preflight`'s check-runs read is REST
 already). Where `gh` is absent altogether (`spawn gh ENOENT`), the REST
 twins have no binary to run through, and the MCP twin is the way:
 
-- `preflight`: REST as above. MCP: `actions_list` with
-  `method: list_workflow_runs`, filtered to `main`.
+- `preflight`: REST `gh api repos/{owner}/{repo}/commits/<sha>/check-runs`
+  (Phase 0, step 2), with `<sha>` from
+  `gh api repos/{owner}/{repo}/branches/main --jq .commit.sha` and the
+  push-run read as `gh api 'repos/{owner}/{repo}/actions/runs?head_sha=<sha>&event=push'`.
+  MCP: `actions_list` with `method: list_workflow_runs`, filtered to
+  `branch: main` and `event: push`, keeping only runs whose `head_sha`
+  is the head; with a `required_check`, `method: list_workflow_jobs` on
+  each kept run to find the job of that name (missing once every kept
+  run has settled is red, as above). The re-run: REST
+  `gh api -X POST repos/{owner}/{repo}/actions/runs/<run-id>/rerun-failed-jobs`;
+  MCP `actions_run_trigger` with `method: rerun_failed_jobs`.
 - Open PRs (Phase 0): MCP `list_pull_requests`, state open.
 - Claim (Phase 1): MCP `list_issues` with `labels: ["ready"]`, state
   open; no entry carries a `pull_request` key there, so nothing to drop.
@@ -130,9 +139,52 @@ file's Rules section.
    or key the tables do not name as ignored, never run. A gap never
    stops the run and never loosens a rule; the findings lead the final
    report.
-2. Run the `preflight` hook. If main is red, fixing it **is** this
-   iteration: claim or file the CI-fix issue, work it through Phase 2,
-   and skip to Phase 3.
+2. Run the `preflight` hook. Its default judges the head SHA of
+   `origin/main` by the gate's own definition, never the last few runs
+   of any workflow (event-driven workflows crowd a run-list window, and
+   a cancelled run whose gate job failed passes a failure-only filter).
+   `git fetch origin`, take `<sha>` from `git rev-parse refs/remotes/origin/main`,
+   then:
+   - With a `required_check`: read
+     `gh api repos/{owner}/{repo}/commits/<sha>/check-runs --paginate`
+     for that check, and
+     `gh api 'repos/{owner}/{repo}/actions/runs?head_sha=<sha>&event=push'`
+     for the head's push-triggered runs (issue-triggered workflows also
+     run against the head and never decide it). That check present and
+     `completed` with `success` is green. Queued or in progress is
+     pending. Red is every completed conclusion other than `success`
+     (`failure`, `cancelled`, `timed_out`, `skipped`, `neutral`,
+     `action_required`, `startup_failure`, `stale`), and the check
+     missing once every push-triggered run of the head has settled.
+     Missing while a push-triggered run of the head is still queued or
+     in progress is pending.
+   - Without one: read
+     `gh run list --branch main --commit <sha> --event push --json databaseId,name,status,conclusion`.
+     A failed, cancelled or timed-out run is red; a run still queued or
+     in progress is pending; green needs at least one completed
+     `success` and no red run. No completed push run at all is not green.
+   - Pending, or no push run yet, waits: poll the same read once a
+     minute for up to 15 minutes (a profile's `preflight` hook may set
+     another bound). Still not settled is unproven: claim nothing,
+     report main as unproven and stop the iteration. Never claim a
+     CI-fix issue or new work on an unproven main.
+   - If main is red, read the failing job's log first. When it shows no
+     repo cause (a runner or network failure, a cancelled or timed-out
+     job), re-run the failed jobs once per head SHA: a run whose
+     `run_attempt` is above 1 (`gh run view <run-id> --json attempt`)
+     has had its re-run, so a later iteration on the same red head does
+     not re-run it again. The `<run-id>` of a check run is in its
+     `details_url` (`/actions/runs/<run-id>/job/<job-id>`; the check
+     run's own `id` is the job id), and the push-runs read above lists
+     it directly. Re-run with `gh run rerun <run-id> --failed` (cloud
+     twin in the list above), then wait and judge the head again by the
+     same read. Green on that final run is green. Only a second failure,
+     or a failure with a repo cause, makes fixing main **this**
+     iteration: claim or file the CI-fix issue, work it through Phase 2,
+     and skip to Phase 3. A profile's `preflight` hook may say how to
+     re-run instead. The re-run is never a way to skip CI or to declare
+     main green without the check present and successful on the final
+     run.
 3. List open PRs. Unfinished PRs come before new issues: green ones go
    to the Phase 2 gate, pending ones wait, failed ones get fixed or
    their issue labelled `agent-failed`. Claim nothing new while an open
