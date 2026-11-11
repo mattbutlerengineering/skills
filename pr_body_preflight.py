@@ -774,7 +774,7 @@ def _removed_by(record):
     if verb == "gh":
         two = len(words) < 3 or words[1] == "api" or words[1].startswith("-")
         return " ".join(words[:2 if two else 3])
-    return verb
+    return _unmark(verb)
 
 
 def _long_option(word, name):

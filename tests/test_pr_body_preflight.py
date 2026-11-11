@@ -802,6 +802,13 @@ class TestSameCallHeredoc(unittest.TestCase):
                     run(self.spelled("/tmp/b.md", between=between)),
                     self.unbound(what))
 
+    def test_a_named_descriptor_command_between_is_noted_by_its_word(self):
+        for between in ("{fd}</dev/null true\n", "{fd}>&2 true\n"):
+            with self.subTest(between=between):
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", between=between)),
+                    self.unbound("{fd}"))
+
     def test_a_file_descriptor_or_null_redirect_between_is_judged(self):
         for between in ("> /dev/null\n", ">&2\n", ">&-\n", ">/dev/stderr\n",
                         "&> /dev/null\n", "< /tmp/x\n"):
