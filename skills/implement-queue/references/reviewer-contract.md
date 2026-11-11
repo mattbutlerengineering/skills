@@ -19,6 +19,7 @@ author is the independent second opinion. It catches what CI cannot:
 | `acceptanceCriteria` | The issue's criteria, one string each.                                                  |
 | `changedFiles`       | Paths the diff touches.                                                                 |
 | `commitMessage`      | The worker's commit message.                                                            |
+| `headSha`            | The head SHA the gate recorded; the worktree is at it, and the review covers only it.   |
 
 On a truncation marker the reviewer reads the missing region from its
 worktree at the PR's head instead of guessing.

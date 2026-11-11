@@ -104,10 +104,12 @@ not a source until a run records that it reports `previous_filename`.
 
 ## merge-command
 
-    gh pr merge <N> --auto --squash --delete-branch
+    gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>
 
 The skill's default, stated because it needs a session permission the
-Owner grants outside this repo. A merge the runtime denies is reported
+Owner grants outside this repo. `<sha>` is the gated head (the skill's
+gate step 1), so an `--auto` merge is enabled only at the head the
+review saw. A merge the runtime denies is reported
 as awaiting a human merge and never retried by another route
 (ADR-0087).
 
