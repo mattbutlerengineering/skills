@@ -270,11 +270,12 @@ GitHub Actions job that clones this repo and follows
 it starts, so a change lands under an unattended run with no review on the
 consumer's side (#1697). This repo publishes no tags or releases, so the
 only pin is a commit SHA. Fetch exactly that commit in the bootstrap
-(`git init`, `git fetch --depth 1 origin <sha>`, `git checkout
-FETCH_HEAD`: a `git clone --depth 1` followed by `checkout <sha>` fails
-for a SHA off the tip) rather than following `main`, and keep the SHA in
-the consumer's own repo, where a PR moves it. The `version` in
-`.claude-plugin/plugin.json` moves once per wave (ADR-0095), so it only
+(`git init`, `git remote add origin <repo-url>`, `git fetch --depth 1
+origin <sha>`, `git checkout FETCH_HEAD`: a `git clone --depth 1`
+followed by `checkout <sha>` fails for a SHA off the tip) rather than
+following `main`, and keep the SHA in the consumer's own repo, where a
+PR moves it. The `version` in `.claude-plugin/plugin.json` moves at each
+wave's release PR and each Conductor merge (ADR-0095), so it only
 roughly dates a SHA. Moving the SHA is the moment to run the skill's
 Phase 0 profile check against the new skill, because a hook the table
 gained since is the usual way a consumer's profile goes stale

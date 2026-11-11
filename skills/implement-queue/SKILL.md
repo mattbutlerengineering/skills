@@ -85,8 +85,10 @@ twins have no binary to run through, and the MCP twin is the way:
   MCP: `pull_request_read` with `method: get_check_runs`.
 - `changed-files`: no MCP twin. `pull_request_read` with
   `method: get_files` is not a source until a run records that it
-  reports a rename's `previous_filename`; with neither `gh` nor a
-  checkout the list is unavailable and the PR needs a human merge.
+  reports a rename's `previous_filename`. With no `gh` the default
+  cannot run, so every PR needs a human merge, unless the profile's own
+  `changed-files` hook names another source that lists both paths of a
+  rename.
 - `merge-command`: `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f merge_method=squash`
   once `ci-status` is green, then
   `gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/<branch>`.
@@ -207,19 +209,20 @@ Then run the `telemetry` hook, if any, with the worker's real usage.
 Leave cost empty when the usage carries none; never estimate it.
 
 **Reconcile before Phase 4.** A worker's `transition` can fail without
-a trace, so the orchestrator checks it instead of trusting it. For every
-issue claimed this session that still carries `in-progress` or no state
-label, read the PRs that close it (`Closes #<N>` on the PR list) and run
-the `transition` hook where the label disagrees with the table: an open
-PR with green gates → `has-pr`; a draft PR, or an open PR with red gates
-and no live worker → `needs-review`; no PR at all → `agent-failed`. An
-issue whose PR merged is delivered: leave it to GitHub's close. Never
-remove a `hold_labels` label or `stealable`, whatever the PR looks like:
-the gate put them there on purpose. No issue keeps `in-progress` unless
-a live worker holds it. A worker resumed twice with no new commit
-counts as stalled: stop it, do not resume it again, and reconcile its
-issue the same way. Report each repair as drift, with the count of
-issues claimed against the count repaired.
+a trace, so the orchestrator checks it instead of trusting it. Skip
+any issue a live worker still holds. For every other issue claimed this
+session that still carries `in-progress` or no state label, read the
+PRs that close it (`Closes #<N>` on the PR list) and run the
+`transition` hook where the label disagrees with the table: an open PR
+with green or pending gates → `has-pr` (the gate still runs); a draft
+PR → `needs-review`; an open PR with red gates, a PR closed unmerged,
+or no PR at all → `agent-failed`. An issue whose PR merged is
+delivered: leave it to GitHub's close. Never remove a `hold_labels`
+label or `stealable`, whatever the PR looks like: the gate put them
+there on purpose. A worker resumed twice with no new commit counts as
+stalled: stop it, do not resume it again, and reconcile its issue the
+same way. Report each repair as drift, with the count of issues claimed
+against the count repaired.
 
 ### The gate, per PR
 
@@ -246,7 +249,8 @@ as that PR's CI settles; it can overlap with workers still running.
      head (`git worktree add --detach <path> <head-sha>`), never into
      the shared checkout, and never let it switch that checkout's
      branch. A reviewer with no worktree reads through the API and
-     cannot run code.
+     cannot run code. Remove the worktree (`git worktree remove
+     <path>`) once the review is recorded.
    - Snapshot `git status --porcelain`, the current branch and `HEAD`
      before each reviewer dispatch and compare all three afterwards.
      The snapshot detects a change, it does not prevent one. A reviewer
