@@ -235,3 +235,64 @@ none. The judged share is 26.36%, at or above 25%, and the oracle found 0 false 
 - A recorded PR body was not used as a reference (by the PRD's design); whether the PRs those commands opened passed B in CI was not checked.
 - The pre-change 158 of #1633 reproduces only with no cwd; with the row's cwd the pre-change hook judges 229 (relative body files that exist on disk today). Why #1633's 681 same-call count differs from 549 here is not explained.
 - Throwaway harness (outside the repository, `~/.cache/pr-body-hook-coverage-verify/harness/`), SHA-256: `extract.py` aec56556fa41f3eeef6b60c048a757b660d5b162e2e6c018dc25f039ccf822f7; `run_hook.py` b021449b52949573044e7ef03ff89b58658dc6b644e19dca825e35a4724fbb19; `cli_check.py` ded7809fb8d9f303afbbbfbad1c553a46068707107d9648492c74a9e80646358; `funnel.py` 95f510245aa565d040207eb48874731660134410c372894510f02e42856a8313; `oracle.py` e7e5a87da054bb3b6fac511b2fa8ac0d7b6b2d03e61dc077233e484342acf6e6; `between.py` (edited once after the run to print one more column; hash is of the edited version) cced8047d0e8c86814cace74c5d3e6362d679b4ff8c3254612efd0ddff3b2b18; `nocwd.py` 59e44643c52d11cf8c4e4c399ba4bafdf1bfe4a48ca978ce00ba1c11c84d0294; `sandbox_check.py` 252f06d103d2e914c7ac02e411e5dbf82e20d6cc8ff89dfc9b8e9bf1628fa2b3. The snapshot is not committed (private PR bodies); the Owner holds it.
+
+## Re-verification 2026-11-11: the lean sweep (issue #1677)
+
+An addition; nothing above is rewritten. Review finding 1 of #1676 (deferred by the Owner on 2026-11-09, cut-list tag speculative) named branches of `pr_body_preflight.py` that no corpus command uses. Each was disabled one at a time, the frozen snapshot replayed through the hook, and every one that lost nothing was cut. The release's carried-risks paragraph required a fresh Verify after any edit to the live hook; this is it.
+
+### What was run
+
+- Snapshot: the frozen `~/.cache/pr-body-hook-coverage-verify/snapshot.jsonl`, read in place, SHA-256 `71c8ffb8327b4444167fd98f256296ba12070f6cf8d62a8d81294ddca781d99f`, 1817 rows, unchanged. Nothing in that directory was written: the harness scripts were copied to a scratch directory, `run_hook.py` was pointed at a copy of each hook tree, and `oracle.py` (two path edits: the tree and the results file) wrote its `oracle.json` to the scratch directory. The frozen results and hashes above stand.
+- Hooks: baseline is `origin/main` at 6499643 (both post-Verify commits, 157d568 and f74c247, included); each variant is that tree with one branch disabled; final is the tree with all cuts. Empty environment, the row's cwd, in process, as in Criterion 3. Judged is as defined above: exit 2, or exit 0 with no "not checked" line.
+- Compared per command (by snapshot row), not by total: a branch counts as losing a command when the row goes from judged to not judged, and as gaining a refusal when the row goes to exit 2 from a code that was not 2. A third column compares every row's exit code, judged flag, note flag and line count, so a changed note is seen too.
+
+### Baseline
+
+Baseline today: 474 of 1817 judged (26.09%), 357 exit 2, 0 errors, 307 commands bound through the heredoc, 249 of them judged (58 stopped at the target check: 56 `a cd the hook cannot place`, 2 `the PR targets another repository / remote unreadable`). The 2026-11-09 run recorded 479 (26.36%) and 250: the five-command difference is the disk (see below), not a code change by this sweep. 455 are needed for 25%, so the margin is 19 commands today, not 24.
+
+### Per-branch result
+
+Each row is the baseline against the hook with only that branch disabled. "Rows changed" counts every row whose exit code, judged flag, note flag or line count differs.
+
+| Branch disabled | Judged | Commands lost | Gained a refusal | Rows changed | Decision |
+|---|---|---|---|---|---|
+| `_inert_git` (with `_long_option`, `GIT_VERBS`, `GIT_CONFIG_SCOPES`) | 474 | 0 | 0 | 0 | cut |
+| `_inert_gh` (with `GH_VERBS`, `GH_API_WRITES`) | 474 | 0 | 0 | 0 | cut |
+| assignment and `export` branch of `_inert` (with its `STEERING_NAME` read) | 474 | 0 | 0 | 0 | cut |
+| descriptor-prefix marker (`FD_PREFIX`, `FD_WORD`, `_unmark`'s digit part, `_Unrun`'s digit branch, the digit absorption in `_simple_commands`, the `lstrip(DIGITS)` branch of `_write_redirect`) | 474 | 0 | 0 | 0 | cut |
+
+`_long_option` and the constant sets are called only from the two `_inert_*` functions, so they were measured with them. The marker is one mechanism spread over six sites, so it was disabled at its source (`_Unrun` stops producing digit markers) and the rest then has nothing to read. `_shadows` and `_opens_descriptor` were not disabled and are untouched, as the issue says. The `{NAME}` marker (`FD_NAME_PREFIX`, `FD_NAME_WORD`) was not on the list and stays: `_opens_descriptor` reads it.
+
+### Final hook
+
+All four cuts together, replayed the same way: 474 of 1817 judged (26.09%), 357 exit 2, 0 errors, 307 bound, 0 commands lost against the baseline, 0 gained a refusal, 0 rows changed in any column. 474 is above the 455 needed: margin 19.
+
+False-block oracle on the final hook, `oracle.py` as recorded (writer span alone under `sandbox-exec`, B on the file a real shell wrote):
+
+```
+bound commands judged-through-binding, readers: 249 bound commands not judged: 58
+pairs 249 unpaired 0 disagreements 0 cmd-level disagree 0 identical text 249
+refusals by hook among pairs: 166 by oracle: 166
+false blocks (hook refuses, B on shell file does not): 0  missed (hook passes, B refuses file): 0
+```
+
+0 disagreements on 249 pairs. The baseline hook gives the identical oracle figures (249 pairs, 0 disagreements, 166 refusals each side), so the cuts changed none of them.
+
+### Behaviour the cuts change, outside the corpus
+
+None of this moves a corpus command; it is the change in the shapes the cut branches used to see through, all pinned in `TestSameCallHeredoc`:
+
+- A `git` or `gh` command, a standalone `NAME=value` and an `export` between writer and reader are now a note naming the command (`git status`, `gh pr view`, `gh api`, `T=`, `export`), where the read-only forms were judged.
+- A bare `2>&1`, `1>&2`, `2>&-` or `10>&1` between writer and reader is now a note naming its digit, where it was judged; after a command (`echo hi 2>&1`) and on the reader it is still judged. A write through a prefixed operator names the bare operator in its note (`2>F` is `> F`).
+- One shape moves the other way, and it is the only place a cut adds a judgement: a prefixed here-document or here-string, which the marker made a note (`exec 5<<D` before the writer, `echo hi 3<<<x` between), is now read as the read it is and judged. It writes nothing, so it is no false block, and no corpus command has the shape (0 rows changed). It is recorded here, in architecture.md and in the tests rather than hidden.
+
+### State the figures depend on
+
+- The disk and cwd of 2026-11-11: 263 rows carry no cwd (unchanged) and 980 rows name a cwd directory that no longer exists (873 on 2026-11-09). The first-command body files read from disk and the `cd` placements are the part that moves: 474 here against 479 then, with the same hook logic. A run on another day or machine can differ again.
+- Both trees ran from copies outside the repository, with the real `gates.py` of that copy. `run_tests.py`, `lint.py`, `kb.py drift` and `gates.py` with its selftest are reported in the pull request, not here.
+
+### Not verified
+
+- The between-commands rule is still unverified by the oracle by construction (the oracle never runs the commands between), and the corpus still has only 8 such commands (5 `cd`, 3 `grep`), so none of these cuts was tested against a command that used the cut branches: the 0 lost is the absence of a user, not a measured equivalence. The new fixtures pin the new notes and nothing else.
+- The margin over 25% is 19 commands and rests on the disk of this day.
+- Whether any session outside this snapshot (later commands, other machines) uses a cut shape was not checked; for such a command the cost is a "not checked" note, never a refusal, apart from the prefixed-read case above.

@@ -68,17 +68,11 @@ HEREDOC_OPEN = re.compile(
 HEREDOC_CLOSE = re.compile(r"\s*\)")
 PLACEHOLDER = "__pr_body_preflight_heredoc_{}__"
 PLACEHOLDER_WORD = re.compile(r"__pr_body_preflight_heredoc_(\d+)__")
-# A file-descriptor prefix (`2` in `2>&1`): a digit word touching its
-# redirect operator in the unquoted source, which the tokenizer cannot tell
-# from a command word once a space separates the two. _Unrun marks it.
-FD_PREFIX = "__pr_body_preflight_fd_{}__"
-FD_WORD = re.compile(r"__pr_body_preflight_fd_(\d+)__")
 # A `{NAME}` word that touches its redirect operator (`{fd}> out`), the one
 # spelling that opens a named descriptor; a `{NAME}` elsewhere is a plain word.
 FD_NAME_PREFIX = "__pr_body_preflight_fdname_{}__"
 FD_NAME_WORD = re.compile(r"__pr_body_preflight_fdname_([A-Za-z0-9_]+)__")
 FD_NAME_SOURCE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}(?=[<>])")
-DIGITS = "0123456789"
 # One statement-level heredoc: the bytes a shell writes, whether the shell
 # would expand nothing in them, and whether the delimiter line closed it.
 Heredoc = collections.namedtuple("Heredoc", "text literal terminated")
@@ -158,8 +152,8 @@ class _Unrun:
     `heredocs` (a Heredoc, in queue order) and its operator and delimiter
     are rewritten to `<<` plus a numbered placeholder word; originals are
     the (placeholder, span) pairs _mask_heredocs cut, restored in a body
-    before `literal` is decided. A digit word that touches its `<` or `>`
-    (a descriptor prefix) is replaced by a marker word, and `ansi_c` is
+    before `literal` is decided. A `{NAME}` word that touches its `<` or
+    `>` (a named descriptor) is replaced by a marker word, and `ansi_c` is
     set when an unquoted `$'...'` string was cut."""
 
     def __init__(self, text, originals=()):
@@ -184,7 +178,7 @@ class _Unrun:
         depth, text = 0, self.text
         while self.pos < len(text):
             ch = text[self.pos]
-            if self._fd_prefix(ch):
+            if self._fd_name(ch):
                 continue
             if ch == ")" and nested and depth == 0:
                 return self._take(self.pos + 1)
@@ -197,25 +191,15 @@ class _Unrun:
         if nested:
             raise ValueError("an unclosed command substitution")
 
-    def _fd_prefix(self, ch):
-        """True after replacing a digit word that touches a `<` or `>` (at
-        a word boundary, outside `${ }`) with its marker word."""
-        text, end = self.text, self.pos
-        named = FD_NAME_SOURCE.match(text, end) if (
+    def _fd_name(self, ch):
+        """True after replacing a `{NAME}` word that touches a `<` or `>`
+        (at a word boundary, outside `${ }`) with its marker word."""
+        named = FD_NAME_SOURCE.match(self.text, self.pos) if (
             ch == "{" and self.boundary and not self.braces) else None
-        if named:
-            self.out.append(FD_NAME_PREFIX.format(named[1]))
-            self.pos, self.boundary = named.end(), False
-            return True
-        if not (self.boundary and not self.braces and ch in DIGITS
-                and not "".join(self.out[-2:]).endswith((">&", "<&"))):
+        if not named:
             return False
-        while end < len(text) and text[end] in DIGITS:
-            end += 1
-        if end >= len(text) or text[end] not in "<>":
-            return False
-        self.out.append(FD_PREFIX.format(text[self.pos:end]))
-        self.pos, self.boundary = end, False
+        self.out.append(FD_NAME_PREFIX.format(named[1]))
+        self.pos, self.boundary = named.end(), False
         return True
 
     def _special(self, ch):
@@ -385,10 +369,7 @@ def _simple_commands(tokens):
     or `>`, split off from any separator before it (a lone `&` directly
     before `>` stays in the operator: `&>`, `&>>`) and paired with the
     word that follows (a `<(` or `>(` is kind `procsub` and takes none);
-    the joiner is every separator run since the previous record. A digit
-    word _Unrun marked as touching its operator is that redirect's
-    descriptor prefix and is written into the operator (`2>&`), not left
-    as a word."""
+    the joiner is every separator run since the previous record."""
     records, joiner = [], ""
     words, redirects, operator = [], [], None
     for token in tokens:
@@ -407,13 +388,10 @@ def _simple_commands(tokens):
                     words, redirects, joiner = [], [], ""
                 joiner += head
             if cut is not None:
-                fd = FD_WORD.fullmatch(words[-1]) if words and not head else None
-                if fd:  # `2>&1`: the digits belong to the operator
-                    words.pop()
                 if token[cut:] in ("<(", ">("):  # opens a command, no target
                     redirects.append(("procsub", token[cut:]))
                 else:
-                    operator = (fd[1] if fd else "") + token[cut:]
+                    operator = token[cut:]
         else:
             words.append(token)
     if words or redirects:
@@ -613,21 +591,11 @@ INERT_VERBS = frozenset({
     "cat", "grep", "egrep", "fgrep", "head", "tail", "wc", "ls", "test", "[",
     "diff", "cmp", "stat"})
 # Names whose value steers a later command (git, gh, a pager, the search
-# path, word splitting, a startup file, the loader): never a plain assignment.
+# path, word splitting, a startup file, the loader): an assignment or export
+# of one before the writer is a note when a command sits between writer and reader.
 STEERING_NAME = re.compile(
     r"GIT_.*|GH_.*|.*PAGER|PATH|IFS|BASH_ENV|ENV|LD_.*|DYLD_.*|HOME|XDG_.*"
     r"|BROWSER")
-# The git subcommands that only read, and `gh` commands that only read as
-# (group, command); `git config --get` and `git branch --show-current` are
-# read by their one flag.
-GIT_VERBS = frozenset({"status", "diff", "log", "rev-parse"})
-GIT_CONFIG_SCOPES = frozenset({"--global", "--local", "--system", "--worktree"})
-GH_VERBS = frozenset({
-    ("pr", "view"), ("pr", "list"), ("pr", "status"), ("pr", "checks"),
-    ("pr", "diff"), ("issue", "view"), ("issue", "list")})
-# `gh api` options that send a body, choose a method or write a file.
-GH_API_WRITES = frozenset({
-    "--output", "--method", "--field", "--raw-field", "--input"})
 # Redirections that only read, so they never unbind.
 READ_OPERATORS = frozenset({"<", "<<", "<<<", "<&"})
 BLOCK_CLOSERS = ("}", "done", "fi", "esac")
@@ -653,9 +621,9 @@ _BEFORE = "{} may be rewritten or removed by {} before the heredoc"
 
 
 def _unmark(text):
-    """text with a descriptor-prefix marker word written back as it was
+    """text with a named-descriptor marker word written back as it was
     written and a heredoc placeholder rendered as `a heredoc`."""
-    text = FD_NAME_WORD.sub(r"{\1}", FD_WORD.sub(r"\1", text))
+    text = FD_NAME_WORD.sub(r"{\1}", text)
     return PLACEHOLDER_WORD.sub("a heredoc", text)
 
 
@@ -749,15 +717,10 @@ def _write_redirect(record):
     for operator, target in record.redirects:
         if operator == "procsub":
             return target
-        bare = operator.lstrip(DIGITS)
-        if bare == operator:
-            if operator in READ_OPERATORS or target in NULL_TARGETS:
-                continue
-        elif bare in ("<", "<&") or (bare in (">", ">>", ">|")
-                                      and target in NULL_TARGETS):
-            continue  # a prefixed read, or a prefixed write to /dev/null
-        if bare == ">&" and (target.isdigit() or target == "-"):
-            continue  # a duplication or a close, with or without a prefix
+        if operator in READ_OPERATORS or target in NULL_TARGETS:
+            continue
+        if operator == ">&" and (target.isdigit() or target == "-"):
+            continue  # a duplication or a close
         return _unmark(f"{operator} {target}")
     return None
 
@@ -777,48 +740,9 @@ def _removed_by(record):
     return _unmark(verb)
 
 
-def _long_option(word, name):
-    """True when WORD spells the long option NAME, or an abbreviation of
-    it git's parser would accept (`--outp=F`), or an option NAME begins."""
-    option = word.split("=", 1)[0]
-    return (len(option) > 2 and option.startswith("--")
-            and (name.startswith(option) or option.startswith(name)))
-
-
-def _inert_git(words, spelling):
-    """True for the read-only git forms of the architecture's list whose
-    arguments neither spell SPELLING nor name an output or config file."""
-    if len(words) < 2 or any(spelling in word for word in words[2:]):
-        return False
-    verb, args = words[1], words[2:]
-    if verb == "branch":
-        return args == ["--show-current"]
-    if verb == "config":
-        return args[:1] == ["--get"] and all(
-            arg in GIT_CONFIG_SCOPES or not arg.startswith("-")
-            for arg in args[1:])
-    return verb in GIT_VERBS and not any(
-        _long_option(arg, "--output") or _long_option(arg, "--file")
-        or (arg.startswith("-f") and not arg.startswith("--"))
-        for arg in args)
-
-
-def _inert_gh(words):
-    """True for the read-only gh commands of the architecture's list and
-    `gh api` with no option that sends a body, picks a method or writes."""
-    if words[1:2] == ["api"]:
-        return not any(
-            word.split("=", 1)[0] in GH_API_WRITES
-            or (word.startswith("-") and word[1:2] != "-"
-                and set(word[1:]) & set("XfF"))
-            for word in words[2:])
-    return tuple(words[1:3]) in GH_VERBS
-
-
-def _inert(record, spelling):
-    """True when record, a command between writer and reader, leaves
-    SPELLING alone: a bare cd, a standalone assignment or `export` of a
-    name SPELLING does not hold, or an inert verb with no argument that
+def _inert(record):
+    """True when record, a command between writer and reader, leaves the
+    body file alone: a bare cd, or an inert verb with no argument that
     runs or assigns and, for printf, no `-v`. Write redirects are judged
     before this."""
     words = record.words
@@ -826,18 +750,8 @@ def _inert(record, spelling):
         return True
     if any(_runs(word) for word in words):
         return False
-    assignments = words[1:] if words[0] == "export" else words
-    if assignments and all(ASSIGNMENT.match(word) for word in assignments):
-        held = _names(spelling)
-        names = [word.split("=", 1)[0] for word in assignments]
-        return not any(name in held or STEERING_NAME.fullmatch(name)
-                       for name in names)
     if words[0] == "printf" and any(w.startswith("-v") for w in words[1:]):
         return False
-    if words[0] == "git":
-        return _inert_git(words, spelling)
-    if words[0] == "gh":
-        return _inert_gh(words)
     return words[0] in INERT_VERBS
 
 
@@ -892,7 +806,7 @@ def _bound_body(spelling, context):
                 raise _Unreadable(_REWRITTEN.format(spelling, redirect))
     for between in records[index + 1:at]:
         verb = _verb(between)
-        if verb and not _inert(between, spelling):
+        if verb and not _inert(between):
             raise _Unreadable(_REWRITTEN.format(spelling, _removed_by(between)))
         if verb in DIRECTORY_CHANGERS and not spelling.startswith("/"):
             raise _Unreadable("a cd between the heredoc and gh pr create "
