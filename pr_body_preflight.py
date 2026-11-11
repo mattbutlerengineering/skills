@@ -73,6 +73,11 @@ PLACEHOLDER_WORD = re.compile(r"__pr_body_preflight_heredoc_(\d+)__")
 # from a command word once a space separates the two. _Unrun marks it.
 FD_PREFIX = "__pr_body_preflight_fd_{}__"
 FD_WORD = re.compile(r"__pr_body_preflight_fd_(\d+)__")
+# A `{NAME}` word that touches its redirect operator (`{fd}> out`), the one
+# spelling that opens a named descriptor; a `{NAME}` elsewhere is a plain word.
+FD_NAME_PREFIX = "__pr_body_preflight_fdname_{}__"
+FD_NAME_WORD = re.compile(r"__pr_body_preflight_fdname_([A-Za-z0-9_]+)__")
+FD_NAME_SOURCE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}(?=[<>])")
 DIGITS = "0123456789"
 # One statement-level heredoc: the bytes a shell writes, whether the shell
 # would expand nothing in them, and whether the delimiter line closed it.
@@ -196,6 +201,12 @@ class _Unrun:
         """True after replacing a digit word that touches a `<` or `>` (at
         a word boundary, outside `${ }`) with its marker word."""
         text, end = self.text, self.pos
+        named = FD_NAME_SOURCE.match(text, end) if (
+            ch == "{" and self.boundary and not self.braces) else None
+        if named:
+            self.out.append(FD_NAME_PREFIX.format(named[1]))
+            self.pos, self.boundary = named.end(), False
+            return True
         if not (self.boundary and not self.braces and ch in DIGITS
                 and not "".join(self.out[-2:]).endswith((">&", "<&"))):
             return False
@@ -636,13 +647,16 @@ NULL_TARGETS = ("/dev/null", "/dev/stderr")
 # they are set; every other steering name matters only to a command that
 # runs between writer and reader.
 WRITER_STEERING = re.compile(r"PATH|LD_.*|DYLD_.*|BASH_ENV|ENV")
-FD_NAME = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+# Signals whose trap cannot run a command mid-script before the writer.
+TRAP_SAFE = frozenset({"EXIT", "0", "INT", "TERM", "HUP"})
 _BEFORE = "{} may be rewritten or removed by {} before the heredoc"
 
 
 def _unmark(text):
-    """text with a descriptor-prefix marker word written back as digits."""
-    return FD_WORD.sub(r"\1", text)
+    """text with a descriptor-prefix marker word written back as it was
+    written and a heredoc placeholder rendered as `a heredoc`."""
+    text = FD_NAME_WORD.sub(r"{\1}", FD_WORD.sub(r"\1", text))
+    return PLACEHOLDER_WORD.sub("a heredoc", text)
 
 
 def _opens_descriptor(record):
@@ -650,7 +664,7 @@ def _opens_descriptor(record):
     a file for the rest of the shell: an `exec`, or a `{NAME}` word, that
     carries a write redirect."""
     return ("exec" in record.words
-            or any(FD_NAME.fullmatch(word) for word in record.words)
+            or any(FD_NAME_WORD.fullmatch(word) for word in record.words)
             ) and bool(_write_redirect(record))
 
 
@@ -658,10 +672,15 @@ def _shadows(record, between):
     """What in record, a command before the writer, may change how a later
     command behaves, else None: a function definition (`name()` leaves `()`
     in the joiner of the record after it, or the `function` keyword as the
-    command word), an alias, a trap other than on EXIT, or a standalone
+    command word), an alias, a trap, or a standalone
     assignment or `export` of a name that can change the writer itself
     (WRITER_STEERING) or, when a command sits between writer and reader
-    (`between`), of any steering name. `eval`, `source`, `declare -x`,
+    (`between`), of any steering name. Leading `NAME=value` assignments
+    are stripped when a command follows. A trap is admitted only as a
+    reset (`trap - SIG`), a print or list (`trap -p`, `trap -l`) or an
+    action whose every signal is EXIT, 0, INT, TERM or HUP (TRAP_SAFE),
+    each print/list signal held to the same set; DEBUG, ERR, RETURN and
+    every other signal stay notes. `eval`, `source`, `declare -x`,
     `export NAME other`, `for NAME in` and `NAME+=` are accepted limits."""
     if "()" in record.joiner:
         return "a function definition"
@@ -669,13 +688,27 @@ def _shadows(record, between):
     while words and words[0] in LEADERS:
         if words.pop(0) == "function":
             return "a function definition"
+    lead = 0
+    while lead < len(words) and ASSIGNMENT.match(words[lead]):
+        lead += 1
+    if lead < len(words):  # a command follows: its assignments are its own
+        words = words[lead:]
+        while words and words[0] in LEADERS:
+            if words.pop(0) == "function":
+                return "a function definition"
     if not words:
         return None
     if words[0] == "alias":
         return "alias"
     if words[0] == "trap":
-        signals = words[2:]
-        if len(words) < 3 or any(s not in ("EXIT", "0") for s in signals):
+        args = words[1:]
+        if args[:1] in (["-p"], ["-l"]):  # print or list: safe signals only
+            return None if all(s in TRAP_SAFE for s in args[1:]) else "trap"
+        if args[:1] == ["--"]:  # after `--`, `-p` and `-l` are the action
+            args = args[1:]
+        if args[:1] == ["-"]:  # reset
+            return None
+        if len(args) < 2 or any(s not in TRAP_SAFE for s in args[1:]):
             return "trap"
         return None
     exported = words[0] == "export"
