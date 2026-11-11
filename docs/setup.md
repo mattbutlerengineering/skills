@@ -264,6 +264,23 @@ plugin include cloud routines, prompts that GitHub Actions hand to an agent,
 and agents dispatched by name (a classifier's routing table, for example).
 If any of them calls it, keep it.
 
+**Follow a skill by path from a pinned commit.** A cloud routine or
+GitHub Actions job that clones this repo and follows
+`skills/implement-queue/SKILL.md` by path gets whatever `main` holds when
+it starts, so a change lands under an unattended run with no review on the
+consumer's side (#1697). This repo publishes no tags or releases, so the
+only pin is a commit SHA. Fetch exactly that commit in the bootstrap
+(`git init`, `git remote add origin <repo-url>`, `git fetch --depth 1
+origin <sha>`, `git checkout FETCH_HEAD`: a `git clone --depth 1`
+followed by `checkout <sha>` fails for a SHA off the tip) rather than
+following `main`, and keep the SHA in the consumer's own repo, where a
+PR moves it. The `version` in `.claude-plugin/plugin.json` moves at each
+wave's release PR and each Conductor merge (ADR-0095), so it only
+roughly dates a SHA. Moving the SHA is the moment to run the skill's
+Phase 0 profile check against the new skill, because a hook the table
+gained since is the usual way a consumer's profile goes stale
+(`skills/implement-queue/references/profile-migration.md`).
+
 **Tools-only (Conductor-only) stamp.** A repo that wants the Conductor and
 none of the CI can install just two pieces: `tools/factory/` and
 `.github/factory.json` with its `conductor` table. Leave out the workflows,
