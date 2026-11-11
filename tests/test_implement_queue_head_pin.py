@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SKILL = ROOT / "skills" / "implement-queue" / "SKILL.md"
 CONTRACT = ROOT / "skills" / "implement-queue" / "references" / "reviewer-contract.md"
 MIGRATION = ROOT / "skills" / "implement-queue" / "references" / "profile-migration.md"
+ROUTINE = ROOT / "docs" / "factory" / "merge-train-routine.md"
 PROFILE = ROOT / ".claude" / "implement-queue.md"
 
 DEFAULT_MERGE = ("gh pr merge <N> --auto --squash --delete-branch "
@@ -52,7 +53,7 @@ class TestTheGateRecordsOneHead(unittest.TestCase):
         self.assertIn("headRefOid", step)
         self.assertIn("pulls/<N> --jq .head.sha", step)
         self.assertIn("pull_request_read", step)
-        self.assertIn("once", step)
+        self.assertIn("Record the PR's head SHA once, here", step)
 
     def test_later_steps_use_the_recorded_sha(self):
         step3, step4, step5 = gate_step(3), gate_step(4), gate_step(5)
@@ -66,6 +67,14 @@ class TestTheGateRecordsOneHead(unittest.TestCase):
         step = gate_step(1)
         self.assertIn("differs from the recorded head", step)
         self.assertIn("restarts from step 1", step)
+
+    def test_the_head_is_read_again_at_three_points(self):
+        step = gate_step(1)
+        self.assertIn(
+            "Read the PR's head again before the review is dispatched, "
+            "before the verdict comment and immediately before the merge; "
+            "if it differs from the recorded head, the gate restarts "
+            "from step 1 on the new head", step)
 
     def test_the_changed_file_hook_reads_the_recorded_head(self):
         text = flat(SKILL)
@@ -107,6 +116,78 @@ class TestPhaseThreeComparesHeads(unittest.TestCase):
         phase = section(SKILL, "Phase 3: Merge train")
         self.assertLess(phase.index("--disable-auto"),
                         phase.index("`update-branch` hook"))
+
+
+def sentence(text, needle):
+    """The sentence of `text` holding `needle`, so an assertion cannot
+    pass on words from a neighbouring sentence."""
+    for s in re.split(r"(?<=[.;:]) ", text):
+        if needle in s:
+            return s
+    return ""
+
+
+def phase3_step(number):
+    phase = section(SKILL, "Phase 3: Merge train")
+    m = re.search(rf"(?:^| ){number}\. (.*?)(?= \d\. [A-Z]|"
+                  r" Release every lock| ?\Z)", phase)
+    return m.group(1) if m else ""
+
+
+class TestPhaseThreeStructure(unittest.TestCase):
+    def test_the_comparison_runs_for_every_enqueued_pr_first(self):
+        step = phase3_step(1)
+        self.assertIn("every enqueued PR", step)
+        self.assertIn("--disable-auto", step)
+        self.assertNotIn("update-branch", phase3_step(1))
+
+    def test_no_gated_head_is_a_mismatch(self):
+        s = sentence(phase3_step(1), "A PR with no gated head")
+        self.assertIn("is a mismatch", s)
+        self.assertIn("run `gh pr merge <N> --disable-auto`", phase3_step(1))
+
+    def test_the_gated_head_is_read_only_from_the_queues_own_verdict(self):
+        step = phase3_step(1)
+        self.assertIn("gh api user --jq .login", step)
+        self.assertIn("user.login", step)
+        self.assertIn("`reviewer-verdict:`", step)
+        self.assertIn("otherwise the PR has no gated head", step)
+
+    def test_the_locks_are_released_on_any_exit(self):
+        phase = section(SKILL, "Phase 3: Merge train")
+        self.assertTrue(phase.endswith(
+            "Release every lock you took when the train ends, on any exit."))
+
+    def test_the_adoption_rule_needs_a_new_two_parent_merge_commit(self):
+        s = phase3_step(3)
+        self.assertIn("adopt the head after the hook as the gated head "
+                      "only when the hook exited 0", s)
+        self.assertIn("new commit", s)
+        self.assertIn("exactly two parents", s)
+        self.assertIn("the head read just before the hook first", s)
+        self.assertIn("`refs/remotes/origin/main` second", s)
+        self.assertIn("is a mismatch", sentence(s, "any other head"))
+        self.assertIn("up-to-date", s)
+
+    def test_the_rules_section_names_the_one_exception(self):
+        rules = section(SKILL, "Rules")
+        self.assertIn("The one exception is the commit the `update-branch` "
+                      "hook itself makes", rules)
+        s = sentence(rules, "exception")
+        self.assertIn("`update-branch` hook", s)
+        self.assertIn("Phase 3 step 3", s)
+
+
+class TestTheTrainRoutineFollowsPhaseThree(unittest.TestCase):
+    def test_section_four_compares_heads_and_pins_the_merge(self):
+        text = section_by_regex(ROUTINE, r"4 Phase 3: the train")
+        self.assertIn("gated head", text)
+        self.assertIn("gh pr merge <N> --disable-auto", text)
+        self.assertIn("`<sha>` is the gated head", text)
+
+
+def section_by_regex(path, heading):
+    return section(path, heading)
 
 
 class TestTheOneHeadRule(unittest.TestCase):
