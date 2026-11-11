@@ -7,7 +7,7 @@
   "routing": {
     "mechanical": "claude-haiku-5-5",
     "implementation": "claude-sonnet-5-5",
-    "architecture_review": "claude-fable-5-1"
+    "architecture_review": "claude-fable-5-2"
   },
   "effort": {
     "mechanical": "low",
