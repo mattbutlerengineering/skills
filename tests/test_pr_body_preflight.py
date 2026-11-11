@@ -796,7 +796,7 @@ class TestSameCallHeredoc(unittest.TestCase):
                 ("> ./b.md\n", "> ./b.md"),
                 ("<> /tmp/b.md\n", "<> /tmp/b.md"),
                 (">&2 > /tmp/b.md\n", "> /tmp/b.md"),
-                ("2> /tmp/b.md\n", "> /tmp/b.md")):
+                ("2> /tmp/b.md\n", "2> /tmp/b.md")):
             with self.subTest(between=between):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", between=between)),
@@ -977,7 +977,7 @@ class TestSameCallHeredoc(unittest.TestCase):
                 ("printf hi > /tmp/b.md", "> /tmp/b.md"),
                 ("cat > /tmp/b.md", "> /tmp/b.md"),
                 ("cat x > ./b.md", "> ./b.md"),
-                ("true 2> /tmp/b.md", "> /tmp/b.md"),
+                ("true 2> /tmp/b.md", "2> /tmp/b.md"),
                 ("echo hi &> /tmp/b.md", "&> /tmp/b.md"),
                 ("echo hi >| /tmp/b.md", ">| /tmp/b.md")):
             with self.subTest(between=between):
@@ -1095,14 +1095,6 @@ class TestSameCallHeredoc(unittest.TestCase):
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
                     self.unbound(what))
 
-    def test_a_bare_descriptor_duplication_between_is_a_note_by_its_digit(self):
-        for between, what in (("2>&1", "2"), ("1>&2", "1"), ("2>&-", "2"),
-                              ("10>&1", "10"), ("2>&1 2>&1", "2")):
-            with self.subTest(between=between):
-                self.assertEqual(
-                    run(self.spelled("/tmp/b.md", between=between + "\n")),
-                    self.unbound(what))
-
 
     # --- Milestone 3 review fixes -----------------------------------------
     def test_a_redirect_target_that_runs_a_command_is_a_note(self):
@@ -1177,12 +1169,13 @@ class TestSameCallHeredoc(unittest.TestCase):
                 self.assertIn("may be rewritten or removed by", lines[0])
         self.assertEqual(run(self.spelled("/tmp/b.md")), refused(self.BAD + "\n"))
 
-    def test_a_descriptor_digit_is_a_word_of_its_command(self):
-        """No marker tells a descriptor prefix from a word: a duplication
-        or a close that follows a command is judged, a bare one is a
-        command named by its digit, and a prefixed write names only its
-        operator."""
-        for between in ("echo hi 2>&1", "true 2>&1 >&2", "echo hi 3<<<x"):
+    def test_a_descriptor_prefix_is_told_from_a_command_word(self):
+        """A digit word touching its redirect operator is a descriptor
+        prefix: `2>&1` and the other duplications and closes are judged.
+        A digit word a space away is a command, and every other prefixed
+        redirect is a note."""
+        for between in ("2>&1", "echo hi 2>&1", "1>&2", "2>&-", "10>&1",
+                        "true 2>&1 >&2", "2>&1 2>&1"):
             with self.subTest(judged=between):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
@@ -1192,19 +1185,19 @@ class TestSameCallHeredoc(unittest.TestCase):
                 ("2 > /tmp/b.md", "> /tmp/b.md"),
                 ('"2">&1', "2"), ("\\2>&1", "2"), ("x2>&1", "x2"),
                 ("$2>&1", "$2"), ("2 > /dev/null", "2"),
-                ("2> /tmp/b.md", "> /tmp/b.md"),
-                ("2>/tmp/b.md", "> /tmp/b.md"),
-                ("2>> /tmp/b.md", ">> /tmp/b.md"),
-                ("2>| /tmp/b.md", ">| /tmp/b.md"),
+                ("2> /tmp/b.md", "2> /tmp/b.md"),
+                ("2>/tmp/b.md", "2> /tmp/b.md"),
+                ("2>> /tmp/b.md", "2>> /tmp/b.md"),
+                ("2>| /tmp/b.md", "2>| /tmp/b.md"),
                 ("1>&2 > /tmp/b.md", "> /tmp/b.md"),
                 ("2>&1>/tmp/b.md", "> /tmp/b.md"),
                 ("echo hi 2>&1>/tmp/b.md", "> /tmp/b.md"),
                 ("&> /tmp/b.md", "&> /tmp/b.md"),
                 ("2>&1 > /tmp/b.md", "> /tmp/b.md"),
-                ("2>&1 2>/tmp/b.md", "> /tmp/b.md"),
-                ("2>&1x", ">& 1x"),
-                ("3<<'X'\nx\nX", "3"),
-                ("3<> /tmp/b.md", "<> /tmp/b.md")):
+                ("2>&1 2>/tmp/b.md", "2> /tmp/b.md"),
+                ("2>&1x", "2>& 1x"),
+                ("3<<'X'\nx\nX", "3<< a heredoc"),
+                ("3<> /tmp/b.md", "3<> /tmp/b.md")):
             with self.subTest(between=between):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
@@ -1214,7 +1207,7 @@ class TestSameCallHeredoc(unittest.TestCase):
         for between in ("cat x 2>/dev/null", "ls x 2>/dev/null",
                         "echo hi 1>/dev/null", "cat 2<&0", "cat 0< /tmp/x",
                         "echo hi 2>> /dev/null", "echo hi 2>| /dev/null",
-                        "echo hi 2>/dev/stderr"):
+                        "echo hi 2>/dev/stderr", "5< /tmp/x"):
             with self.subTest(between=between):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
@@ -1223,9 +1216,9 @@ class TestSameCallHeredoc(unittest.TestCase):
             with self.subTest(reader=tail):
                 self.assertEqual(run(self.spelled("/tmp/b.md") + tail),
                                  refused(self.BAD + "\n"))
-        for tail, what in ((" 2>/tmp/b.md", "> /tmp/b.md"),
+        for tail, what in ((" 2>/tmp/b.md", "2> /tmp/b.md"),
                            (" 1>&2 > /tmp/b.md", "> /tmp/b.md"),
-                           (" 3<> /tmp/b.md", "<> /tmp/b.md")):
+                           (" 3<> /tmp/b.md", "3<> /tmp/b.md")):
             with self.subTest(reader=tail):
                 self.assertEqual(run(self.spelled("/tmp/b.md") + tail),
                                  self.unbound(what))
@@ -1238,7 +1231,7 @@ class TestSameCallHeredoc(unittest.TestCase):
                     refused(self.BAD + "\n"))
                 self.assertEqual(
                     run(self.closed(opener, closer, " 2>/tmp/b.md")),
-                    self.unbound("> /tmp/b.md"))
+                    self.unbound("2> /tmp/b.md"))
 
     def test_a_descriptor_prefix_is_never_part_of_a_writer(self):
         for writer in ("cat 1> /tmp/b.md <<'EOF'\nx\nEOF\n",
@@ -1248,19 +1241,18 @@ class TestSameCallHeredoc(unittest.TestCase):
                 self.assertEqual(run(writer + self.READ),
                                  (0, [self.NOT_FIRST]))
 
-    def test_the_splitter_leaves_a_descriptor_digit_a_word(self):
+    def test_the_splitter_reads_a_descriptor_prefix_off_the_source(self):
         Simple = pr_body_preflight.Simple
         for command, expected in (
-                ("a 2>&1", [Simple(["a", "2"], [(">&", "1")], "")]),
+                ("a 2>&1", [Simple(["a"], [("2>&", "1")], "")]),
                 ("a 2 >&1", [Simple(["a", "2"], [(">&", "1")], "")]),
-                ("a 2>f", [Simple(["a", "2"], [(">", "f")], "")]),
+                ("a 2>f", [Simple(["a"], [("2>", "f")], "")]),
                 ("a;2>&1", [Simple(["a"], [], ""),
-                            Simple(["2"], [(">&", "1")], ";")]),
-                ("a 12<f", [Simple(["a", "12"], [("<", "f")], "")]),
+                            Simple([], [("2>&", "1")], ";")]),
+                ("a 12<f", [Simple(["a"], [("12<", "f")], "")]),
                 ('a "2">&1', [Simple(["a", "2"], [(">&", "1")], "")]),
                 ("a x2>&1", [Simple(["a", "x2"], [(">&", "1")], "")]),
-                ("a 2<(b)", [Simple(["a", "2", "b"],
-                                    [("procsub", "<(")], "")])):
+                ("a 2<(b)", [Simple(["a", "b"], [("procsub", "<(")], "")])):
             with self.subTest(command=command):
                 got = self.split(command)
                 self.assertEqual(got[:len(expected)], expected)
@@ -1306,7 +1298,8 @@ class TestSameCallHeredoc(unittest.TestCase):
                        "echo exec > /tmp/log\n",
                        "X=1 exec 3> /tmp/b.md\n", "command exec 3> /tmp/b.md\n",
                        "builtin exec 3>> /tmp/b.md\n",
-                       "X=1 Y=2 command exec 3<> /tmp/b.md\n"):
+                       "X=1 Y=2 command exec 3<> /tmp/b.md\n",
+                       "exec 5<<'X'\nx\nX\n"):
             with self.subTest(before=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before,
@@ -1316,7 +1309,7 @@ class TestSameCallHeredoc(unittest.TestCase):
                        "if true; then exec > /dev/null; fi\n",
                        "{ echo exec; }\n", "{ true; }\n", "X=1 exec 3>&1\n",
                        "exec 2>/dev/null\n", "exec 1>/dev/null\n",
-                       "exec 3<&0\n", "exec 4>&-\n", "exec 5<<'X'\nx\nX\n"):
+                       "exec 3<&0\n", "exec 4>&-\n"):
             with self.subTest(judged=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before)),
@@ -1353,6 +1346,32 @@ class TestSameCallHeredoc(unittest.TestCase):
         ("export GH_PAGER=cat", "export"), ("export GIT_EDITOR=true", "export"),
         ("IFS=,", "IFS="), ("GH_HOST=h", "GH_HOST="),
         ("{ export HOME=/x; }", "export"))
+
+    def test_a_steering_assignment_with_a_descriptor_redirect_is_never_a_refusal(self):
+        """A digit that touches its operator is a descriptor, not a word of
+        the command: a standalone steering assignment or export that carries
+        one is still the assignment, so it stays a note, never exit 2."""
+        for before in ("PATH=/x 2>/dev/null", 'export PATH="$HOME/bin:$PATH" 2>/dev/null',
+                       "LD_PRELOAD=/x/e.so 2>&1", "export BASH_ENV=/x 2>/dev/null",
+                       "DYLD_INSERT_LIBRARIES=/x 2>/dev/null"):
+            with self.subTest(before=before):
+                self.assert_a_note(self.spelled("/tmp/b.md", before=before + "\n"))
+        for before in ("GH_HOST=h 2>/dev/null", "export PAGER=x 2>&1"):
+            with self.subTest(between=before):
+                self.assert_a_note(
+                    self.spelled("/tmp/b.md", between=before + "\n"))
+
+    def test_a_descriptor_redirect_is_never_a_refusal_it_was_not_before(self):
+        for between in ("echo hi 3<> /dev/null", "echo hi 3<>/dev/stderr",
+                        "echo hi 1>&/dev/null", "echo hi 2>&/dev/null"):
+            for command in (self.spelled("/tmp/b.md", between=between + "\n"),
+                            self.spelled("/tmp/b.md") + between[len("echo hi"):]):
+                with self.subTest(command=command):
+                    self.assert_a_note(command)
+        for before in ("exec 3<> /dev/null", "exec 3<<<x",
+                       "exec 2>&/dev/null", "exec 3<<EOF\n$HOME\nEOF"):
+            with self.subTest(before=before):
+                self.assert_a_note(self.spelled("/tmp/b.md", before=before + "\n"))
 
     def test_a_name_that_changes_the_writer_unbinds_wherever_it_is_set(self):
         for before, cause in self.WRITER_STEERING:

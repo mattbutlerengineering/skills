@@ -238,12 +238,12 @@ none. The judged share is 26.36%, at or above 25%, and the oracle found 0 false 
 
 ## Re-verification 2026-11-11: the lean sweep (issue #1677)
 
-An addition; nothing above is rewritten. Review finding 1 of #1676 (deferred by the Owner on 2026-11-09, cut-list tag speculative) named branches of `pr_body_preflight.py` that no corpus command uses. Each was disabled one at a time, the frozen snapshot replayed through the hook, and every one that lost nothing was cut. The release's carried-risks paragraph required a fresh Verify after any edit to the live hook; this is it.
+An addition; nothing above is rewritten. Review finding 1 of #1676 (deferred by the Owner on 2026-11-09, cut-list tag speculative) named branches of `pr_body_preflight.py` that no corpus command uses. Each was disabled one at a time, the frozen snapshot replayed through the hook, and every one that lost nothing and added no refusal was cut. The release's carried-risks paragraph required a fresh Verify after any edit to the live hook; this is it.
 
 ### What was run
 
 - Snapshot: the frozen `~/.cache/pr-body-hook-coverage-verify/snapshot.jsonl`, read in place, SHA-256 `71c8ffb8327b4444167fd98f256296ba12070f6cf8d62a8d81294ddca781d99f`, 1817 rows, unchanged. Nothing in that directory was written: the harness scripts were copied to a scratch directory, `run_hook.py` was pointed at a copy of each hook tree, and `oracle.py` (two path edits: the tree and the results file) wrote its `oracle.json` to the scratch directory. The frozen results and hashes above stand.
-- Hooks: baseline is `origin/main` at 6499643 (both post-Verify commits, 157d568 and f74c247, included); each variant is that tree with one branch disabled; final is the tree with all cuts. Empty environment, the row's cwd, in process, as in Criterion 3. Judged is as defined above: exit 2, or exit 0 with no "not checked" line.
+- Hooks: baseline is `origin/main` at 6499643 (both post-Verify commits, 157d568 and f74c247, included); each variant is that tree with one branch disabled; final is the tree with the three cuts that stand. Empty environment, the row's cwd, in process, as in Criterion 3. Judged is as defined above: exit 2, or exit 0 with no "not checked" line.
 - Compared per command (by snapshot row), not by total: a branch counts as losing a command when the row goes from judged to not judged, and as gaining a refusal when the row goes to exit 2 from a code that was not 2. A third column compares every row's exit code, judged flag, note flag and line count, so a changed note is seen too.
 
 ### Baseline
@@ -259,13 +259,24 @@ Each row is the baseline against the hook with only that branch disabled. "Rows 
 | `_inert_git` (with `_long_option`, `GIT_VERBS`, `GIT_CONFIG_SCOPES`) | 474 | 0 | 0 | 0 | cut |
 | `_inert_gh` (with `GH_VERBS`, `GH_API_WRITES`) | 474 | 0 | 0 | 0 | cut |
 | assignment and `export` branch of `_inert` (with its `STEERING_NAME` read) | 474 | 0 | 0 | 0 | cut |
-| descriptor-prefix marker (`FD_PREFIX`, `FD_WORD`, `_unmark`'s digit part, `_Unrun`'s digit branch, the digit absorption in `_simple_commands`, the `lstrip(DIGITS)` branch of `_write_redirect`) | 474 | 0 | 0 | 0 | cut |
+| descriptor-prefix marker (`FD_PREFIX`, `FD_WORD`, `_unmark`'s digit part, `_Unrun`'s digit branch, the digit absorption in `_simple_commands`, the `lstrip(DIGITS)` branch of `_write_redirect`) | 474 | 0 | 0 | 0 | **kept** (see below) |
 
-`_long_option` and the constant sets are called only from the two `_inert_*` functions, so they were measured with them. The marker is one mechanism spread over six sites, so it was disabled at its source (`_Unrun` stops producing digit markers) and the rest then has nothing to read. `_shadows` and `_opens_descriptor` were not disabled and are untouched, as the issue says. The `{NAME}` marker (`FD_NAME_PREFIX`, `FD_NAME_WORD`) was not on the list and stays: `_opens_descriptor` reads it.
+`_long_option` and the constant sets are called only from the two `_inert_*` functions, so they were measured with them. The marker is one mechanism spread over six sites, so it was disabled at its source (`_Unrun` stops producing digit markers) and the rest then has nothing to read. It lost 0 commands on the snapshot, but the snapshot has no command that carries a standalone steering assignment or a digit-prefixed redirect between writer and reader, so 0 rows changed says nothing about the shapes below, and the differential check (next section) found that cutting it adds refusals. The issue's own rule is that a cut only adds notes, never a refusal, so the marker was put back, byte for byte as on `origin/main` (code and tests). `_shadows` and `_opens_descriptor` were not disabled and are untouched, as the issue says. The `{NAME}` marker (`FD_NAME_PREFIX`, `FD_NAME_WORD`) was not on the list and stays: `_opens_descriptor` reads it.
+
+### Why the marker is kept: the differential check
+
+Measuring commands lost on the snapshot is not enough for a cut that "only adds notes": the snapshot cannot show a refusal on a shape it does not hold. A throwaway differential harness (outside the repository) imported the hook of `origin/main` and the hook under test, generated commands from a list of snippets, and ran both on every command with a passing and with a failing body. Snippets: a steering assignment or `export` (`PATH`, `LD_*`, `DYLD_*`, `BASH_ENV`, `GH_*`, `*PAGER`, `HOME`, `IFS`) and plain ones, alone and carrying a digit-prefixed redirect; digit-prefixed duplications, closes, reads, writes to `/dev/null`, `<>`, `>&file`, here-strings and here-documents (expanding and literal); `exec` with each; a `git` or `gh` read and write; each placed before the writer, between writer and reader, after the reader, and with a command between writer and reader as well, for two writer spellings.
+
+On the earlier head of this branch (all four cuts), 7056 commands: 649 went from exit 0 to exit 2 (and 1298 went from note to judged). The classes:
+
+- A standalone steering assignment or `export` that carries a digit-prefixed redirect (`PATH=… 2>/dev/null`, `export BASH_ENV=… 2>/dev/null`, `LD_PRELOAD=… 2>&1`), before the writer or, for the names that only matter with a command between, between writer and reader. Without the marker the digit is a word of the command, `_shadows` reads the assignment as a one-shot prefix of a command named by that digit and stops flagging it. This is a false block (the reviewer showed it): with a fake `cat` first on `PATH`, the body the shell writes passes B while the hook refuses. The issue says `_shadows` guards against false blocks and must not be cut; cutting the marker weakened it in behaviour.
+- Prefixed redirects that were a note and became a refusal though none writes the body file: `3<> /dev/null`, `3<>/dev/stderr`, `1>&/dev/null` and `2>&/dev/null` between writer and reader or after the reader, and before the writer `exec 3<> /dev/null`, `exec 3<<<x`, `exec 2>&/dev/null` and `exec 3<<EOF` with an expanding body.
+
+The earlier entry's claim that the only place a cut adds a judgement is a prefixed here-document or here-string was therefore wrong, and is withdrawn: the marker cut also adds refusals. Cutting it fails the issue's rule, so the marker, its constants and its tests are as on `origin/main`.
 
 ### Final hook
 
-All four cuts together, replayed the same way: 474 of 1817 judged (26.09%), 357 exit 2, 0 errors, 307 bound, 0 commands lost against the baseline, 0 gained a refusal, 0 rows changed in any column. 474 is above the 455 needed: margin 19.
+The three cuts that stand (`_inert_git`, `_inert_gh`, the assignment and `export` branch of `_inert`), replayed the same way: 474 of 1817 judged (26.09%), 357 exit 2, 0 errors, 307 bound, 0 commands lost against the baseline, 0 gained a refusal, 0 rows changed in any column. 474 is above the 455 needed: margin 19. The final tree is the head recorded in the pull request; `_shadows` and `_opens_descriptor` are byte-identical to `origin/main`.
 
 False-block oracle on the final hook, `oracle.py` as recorded (writer span alone under `sandbox-exec`, B on the file a real shell wrote):
 
@@ -278,13 +289,13 @@ false blocks (hook refuses, B on shell file does not): 0  missed (hook passes, B
 
 0 disagreements on 249 pairs. The baseline hook gives the identical oracle figures (249 pairs, 0 disagreements, 166 refusals each side), so the cuts changed none of them.
 
+Differential check on the final hook against `origin/main`, the same generator: 7056 commands (each with a passing and a failing body), 0 went from exit 0 to exit 2, 0 went from note to judged, and 592 went from judged to a note. The 592 are the expected effect of the three cuts: a `git` or `gh` command, or a standalone assignment or `export`, between writer and reader (plain or with a redirect) is now a note naming the command, where the read-only and non-steering forms were judged. No exit code changed from 0 to 2 for any of the reviewer's shapes (every steering-with-redirect and prefixed-redirect shape above gives the same exit code as `origin/main`).
+
 ### Behaviour the cuts change, outside the corpus
 
-None of this moves a corpus command; it is the change in the shapes the cut branches used to see through, all pinned in `TestSameCallHeredoc`:
+None of this moves a corpus command; it is the change in the shapes the cut branches used to see through, pinned in `TestSameCallHeredoc`:
 
-- A `git` or `gh` command, a standalone `NAME=value` and an `export` between writer and reader are now a note naming the command (`git status`, `gh pr view`, `gh api`, `T=`, `export`), where the read-only forms were judged.
-- A bare `2>&1`, `1>&2`, `2>&-` or `10>&1` between writer and reader is now a note naming its digit, where it was judged; after a command (`echo hi 2>&1`) and on the reader it is still judged. A write through a prefixed operator names the bare operator in its note (`2>F` is `> F`).
-- One shape moves the other way, and it is the only place a cut adds a judgement: a prefixed here-document or here-string, which the marker made a note (`exec 5<<D` before the writer, `echo hi 3<<<x` between), is now read as the read it is and judged. It writes nothing, so it is no false block, and no corpus command has the shape (0 rows changed). It is recorded here, in architecture.md and in the tests rather than hidden.
+- A `git` or `gh` command, a standalone `NAME=value` and an `export` between writer and reader are now a note naming the command (`git status`, `gh pr view`, `gh api`, `T=`, `export`), where the read-only forms were judged. Nothing else changes: the digit prefix is as on `origin/main`.
 
 ### State the figures depend on
 
@@ -293,6 +304,7 @@ None of this moves a corpus command; it is the change in the shapes the cut bran
 
 ### Not verified
 
-- The between-commands rule is still unverified by the oracle by construction (the oracle never runs the commands between), and the corpus still has only 8 such commands (5 `cd`, 3 `grep`), so none of these cuts was tested against a command that used the cut branches: the 0 lost is the absence of a user, not a measured equivalence. The new fixtures pin the new notes and nothing else.
+- The between-commands rule is still unverified by the oracle by construction (the oracle never runs the commands between), and the corpus still has only 8 such commands (5 `cd`, 3 `grep`), so none of the three cuts was tested against a command that used the cut branches: the 0 lost is the absence of a user, not a measured equivalence. The new fixtures pin the new notes and nothing else.
 - The margin over 25% is 19 commands and rests on the disk of this day.
-- Whether any session outside this snapshot (later commands, other machines) uses a cut shape was not checked; for such a command the cost is a "not checked" note, never a refusal, apart from the prefixed-read case above.
+- Whether any session outside this snapshot (later commands, other machines) uses a cut shape was not checked; for such a command the cost is a "not checked" note, never a refusal (the differential check found no exit-0 to exit-2 change on 7056 generated commands, which is a sample of shapes, not a proof).
+- The differential generator is a fixed list of snippets; a shape outside it was not tried. It compares exit code and the not-checked line only, not the note text. It ran each hook in process with an empty environment and no cwd.

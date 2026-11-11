@@ -68,11 +68,17 @@ HEREDOC_OPEN = re.compile(
 HEREDOC_CLOSE = re.compile(r"\s*\)")
 PLACEHOLDER = "__pr_body_preflight_heredoc_{}__"
 PLACEHOLDER_WORD = re.compile(r"__pr_body_preflight_heredoc_(\d+)__")
+# A file-descriptor prefix (`2` in `2>&1`): a digit word touching its
+# redirect operator in the unquoted source, which the tokenizer cannot tell
+# from a command word once a space separates the two. _Unrun marks it.
+FD_PREFIX = "__pr_body_preflight_fd_{}__"
+FD_WORD = re.compile(r"__pr_body_preflight_fd_(\d+)__")
 # A `{NAME}` word that touches its redirect operator (`{fd}> out`), the one
 # spelling that opens a named descriptor; a `{NAME}` elsewhere is a plain word.
 FD_NAME_PREFIX = "__pr_body_preflight_fdname_{}__"
 FD_NAME_WORD = re.compile(r"__pr_body_preflight_fdname_([A-Za-z0-9_]+)__")
 FD_NAME_SOURCE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}(?=[<>])")
+DIGITS = "0123456789"
 # One statement-level heredoc: the bytes a shell writes, whether the shell
 # would expand nothing in them, and whether the delimiter line closed it.
 Heredoc = collections.namedtuple("Heredoc", "text literal terminated")
@@ -152,8 +158,8 @@ class _Unrun:
     `heredocs` (a Heredoc, in queue order) and its operator and delimiter
     are rewritten to `<<` plus a numbered placeholder word; originals are
     the (placeholder, span) pairs _mask_heredocs cut, restored in a body
-    before `literal` is decided. A `{NAME}` word that touches its `<` or
-    `>` (a named descriptor) is replaced by a marker word, and `ansi_c` is
+    before `literal` is decided. A digit word that touches its `<` or `>`
+    (a descriptor prefix) is replaced by a marker word, and `ansi_c` is
     set when an unquoted `$'...'` string was cut."""
 
     def __init__(self, text, originals=()):
@@ -178,7 +184,7 @@ class _Unrun:
         depth, text = 0, self.text
         while self.pos < len(text):
             ch = text[self.pos]
-            if self._fd_name(ch):
+            if self._fd_prefix(ch):
                 continue
             if ch == ")" and nested and depth == 0:
                 return self._take(self.pos + 1)
@@ -191,15 +197,25 @@ class _Unrun:
         if nested:
             raise ValueError("an unclosed command substitution")
 
-    def _fd_name(self, ch):
-        """True after replacing a `{NAME}` word that touches a `<` or `>`
-        (at a word boundary, outside `${ }`) with its marker word."""
-        named = FD_NAME_SOURCE.match(self.text, self.pos) if (
+    def _fd_prefix(self, ch):
+        """True after replacing a digit word that touches a `<` or `>` (at
+        a word boundary, outside `${ }`) with its marker word."""
+        text, end = self.text, self.pos
+        named = FD_NAME_SOURCE.match(text, end) if (
             ch == "{" and self.boundary and not self.braces) else None
-        if not named:
+        if named:
+            self.out.append(FD_NAME_PREFIX.format(named[1]))
+            self.pos, self.boundary = named.end(), False
+            return True
+        if not (self.boundary and not self.braces and ch in DIGITS
+                and not "".join(self.out[-2:]).endswith((">&", "<&"))):
             return False
-        self.out.append(FD_NAME_PREFIX.format(named[1]))
-        self.pos, self.boundary = named.end(), False
+        while end < len(text) and text[end] in DIGITS:
+            end += 1
+        if end >= len(text) or text[end] not in "<>":
+            return False
+        self.out.append(FD_PREFIX.format(text[self.pos:end]))
+        self.pos, self.boundary = end, False
         return True
 
     def _special(self, ch):
@@ -369,7 +385,10 @@ def _simple_commands(tokens):
     or `>`, split off from any separator before it (a lone `&` directly
     before `>` stays in the operator: `&>`, `&>>`) and paired with the
     word that follows (a `<(` or `>(` is kind `procsub` and takes none);
-    the joiner is every separator run since the previous record."""
+    the joiner is every separator run since the previous record. A digit
+    word _Unrun marked as touching its operator is that redirect's
+    descriptor prefix and is written into the operator (`2>&`), not left
+    as a word."""
     records, joiner = [], ""
     words, redirects, operator = [], [], None
     for token in tokens:
@@ -388,10 +407,13 @@ def _simple_commands(tokens):
                     words, redirects, joiner = [], [], ""
                 joiner += head
             if cut is not None:
+                fd = FD_WORD.fullmatch(words[-1]) if words and not head else None
+                if fd:  # `2>&1`: the digits belong to the operator
+                    words.pop()
                 if token[cut:] in ("<(", ">("):  # opens a command, no target
                     redirects.append(("procsub", token[cut:]))
                 else:
-                    operator = token[cut:]
+                    operator = (fd[1] if fd else "") + token[cut:]
         else:
             words.append(token)
     if words or redirects:
@@ -621,9 +643,9 @@ _BEFORE = "{} may be rewritten or removed by {} before the heredoc"
 
 
 def _unmark(text):
-    """text with a named-descriptor marker word written back as it was
+    """text with a descriptor-prefix marker word written back as it was
     written and a heredoc placeholder rendered as `a heredoc`."""
-    text = FD_NAME_WORD.sub(r"{\1}", text)
+    text = FD_NAME_WORD.sub(r"{\1}", FD_WORD.sub(r"\1", text))
     return PLACEHOLDER_WORD.sub("a heredoc", text)
 
 
@@ -717,10 +739,15 @@ def _write_redirect(record):
     for operator, target in record.redirects:
         if operator == "procsub":
             return target
-        if operator in READ_OPERATORS or target in NULL_TARGETS:
-            continue
-        if operator == ">&" and (target.isdigit() or target == "-"):
-            continue  # a duplication or a close
+        bare = operator.lstrip(DIGITS)
+        if bare == operator:
+            if operator in READ_OPERATORS or target in NULL_TARGETS:
+                continue
+        elif bare in ("<", "<&") or (bare in (">", ">>", ">|")
+                                      and target in NULL_TARGETS):
+            continue  # a prefixed read, or a prefixed write to /dev/null
+        if bare == ">&" and (target.isdigit() or target == "-"):
+            continue  # a duplication or a close, with or without a prefix
         return _unmark(f"{operator} {target}")
     return None
 
