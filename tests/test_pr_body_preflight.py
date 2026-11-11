@@ -1267,7 +1267,7 @@ class TestSameCallHeredoc(unittest.TestCase):
                 ("2>&1 > /tmp/b.md", "> /tmp/b.md"),
                 ("2>&1 2>/tmp/b.md", "2> /tmp/b.md"),
                 ("2>&1x", "2>& 1x"),
-                ("3<<'X'\nx\nX", "3<< __pr_body_preflight_heredoc_1__"),
+                ("3<<'X'\nx\nX", "3<< a heredoc"),
                 ("3<> /tmp/b.md", "3<> /tmp/b.md")):
             with self.subTest(between=between):
                 self.assertEqual(
@@ -1396,42 +1396,44 @@ class TestSameCallHeredoc(unittest.TestCase):
                                      between="echo hi >&10\n")),
                     self.before("an open descriptor"))
         for before in ("true {fd}>&2\n", "true {fd}> /dev/null\n",
-                       "echo {x}\n"):
+                       "echo {x}\n", "printf '%s' {a} > /tmp/o.txt\n",
+                       "echo {x} > /tmp/o.txt\n"):
             with self.subTest(judged=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before)),
                     refused(self.BAD + "\n"))
 
-    WRITER_STEERING = ("PATH=/x", "export PATH=/x", "LD_PRELOAD=x",
-                       "DYLD_INSERT_LIBRARIES=x", "BASH_ENV=x", "ENV=x",
-                       "if true; then PATH=/x; fi", "T=1 PATH=/x")
-    COMMAND_STEERING = ("export GIT_EXTERNAL_DIFF=x", "export GIT_TRACE=1",
-                        "HOME=/x", "export HOME=/x", "XDG_CONFIG_HOME=/x",
-                        "BROWSER=x", "export PAGER=cat", "export GH_PAGER=cat",
-                        "export GIT_EDITOR=true", "IFS=,", "GH_HOST=h",
-                        "{ export HOME=/x; }")
+    WRITER_STEERING = (
+        ("PATH=/x", "PATH="), ("export PATH=/x", "export"),
+        ("LD_PRELOAD=x", "LD_PRELOAD="),
+        ("DYLD_INSERT_LIBRARIES=x", "DYLD_INSERT_LIBRARIES="),
+        ("BASH_ENV=x", "BASH_ENV="), ("ENV=x", "ENV="),
+        ("if true; then PATH=/x; fi", "PATH="), ("T=1 PATH=/x", "PATH="))
+    COMMAND_STEERING = (
+        ("export GIT_EXTERNAL_DIFF=x", "export"),
+        ("export GIT_TRACE=1", "export"), ("HOME=/x", "HOME="),
+        ("export HOME=/x", "export"), ("XDG_CONFIG_HOME=/x", "XDG_CONFIG_HOME="),
+        ("BROWSER=x", "BROWSER="), ("export PAGER=cat", "export"),
+        ("export GH_PAGER=cat", "export"), ("export GIT_EDITOR=true", "export"),
+        ("IFS=,", "IFS="), ("GH_HOST=h", "GH_HOST="),
+        ("{ export HOME=/x; }", "export"))
 
     def test_a_name_that_changes_the_writer_unbinds_wherever_it_is_set(self):
-        for before in self.WRITER_STEERING:
-            what = ("export" if before.startswith("export")
-                    else before.split("=")[0].split()[-1] + "=")
+        for before, cause in self.WRITER_STEERING:
             for between in ("", "git status\n"):
                 with self.subTest(before=before, between=between):
-                    command = self.spelled("/tmp/b.md", before=before + "\n",
-                                           between=between)
-                    code, lines = run(command)
-                    self.assertEqual(code, 0)
-                    self.assertEqual(len(lines), 1)
-                    self.assertIn("before the heredoc", lines[0])
+                    self.assertEqual(
+                        run(self.spelled("/tmp/b.md", before=before + "\n",
+                                         between=between)),
+                        self.before(cause))
 
     def test_another_steering_name_matters_only_with_a_command_between(self):
-        for before in self.COMMAND_STEERING:
+        for before, cause in self.COMMAND_STEERING:
             with self.subTest(before=before, between="git status"):
-                code, lines = run(self.spelled(
-                    "/tmp/b.md", before=before + "\n", between="git status\n"))
-                self.assertEqual(code, 0)
-                self.assertEqual(len(lines), 1)
-                self.assertIn("before the heredoc", lines[0])
+                self.assertEqual(
+                    run(self.spelled("/tmp/b.md", before=before + "\n",
+                                     between="git status\n")),
+                    self.before(cause))
             with self.subTest(before=before, between="none"):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before + "\n")),
@@ -1454,7 +1456,13 @@ class TestSameCallHeredoc(unittest.TestCase):
                 ("alias ls='rm /tmp/b.md'\n", "alias"),
                 ("trap 'rm /tmp/b.md' DEBUG\n", "trap"),
                 ("trap 'rm /tmp/b.md' ERR\n", "trap"),
-                ("trap 'x' EXIT DEBUG\n", "trap"), ("trap -p\n", "trap"),
+                ("trap 'x' EXIT DEBUG\n", "trap"),
+                ("trap -- 'x' DEBUG\n", "trap"),
+                ("trap 'x' INT DEBUG\n", "trap"),
+                ("trap 'x' RETURN\n", "trap"),
+                ("X=1 trap 'x' DEBUG\n", "trap"),
+                ("X=1 Y=2 command trap 'x' ERR\n", "trap"),
+                ("X=1 alias ls='rm /tmp/b.md'\n", "alias"),
                 ("{ alias ls=x; }\n", "alias"),
                 ("command trap 'x' ERR\n", "trap")):
             with self.subTest(before=before):
@@ -1465,7 +1473,11 @@ class TestSameCallHeredoc(unittest.TestCase):
         for before in ("echo alias ls\n", "echo trap\n", "unalias ls\n",
                        "echo 'ls() { :; }'\n", "grep -n function src.js\n",
                        "echo function\n", "trap 'rm -f /tmp/b.md' EXIT\n",
-                       "trap 'x' 0\n", "trap 'x' EXIT EXIT\n"):
+                       "trap 'x' 0\n", "trap 'x' EXIT EXIT\n",
+                       "trap -- 'x' EXIT\n", "trap 'x' INT TERM HUP\n",
+                       "trap -p\n", "trap -l\n", "trap - INT\n",
+                       "trap -p EXIT\n", "X=1 trap 'x' EXIT\n",
+                       "X=1 echo alias\n"):
             with self.subTest(judged=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before,
