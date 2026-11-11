@@ -308,3 +308,76 @@ None of this moves a corpus command; it is the change in the shapes the cut bran
 - The margin over 25% is 19 commands and rests on the disk of this day.
 - Whether any session outside this snapshot (later commands, other machines) uses a cut shape was not checked; for such a command the cost is a "not checked" note, never a refusal (the differential check found no exit-0 to exit-2 change on 7056 generated commands, which is a sample of shapes, not a proof).
 - The differential generator is a fixed list of snippets; a shape outside it was not tried. It compares exit code and the not-checked line only, not the note text. It ran each hook in process with an empty environment and no cwd.
+
+## Re-verification 2026-11-11: review minors, findings 3, 5 and 7 (issue #1678)
+
+An addition; nothing above is rewritten. The review's findings 3, 5 and 7 (all Minor, deferred by the Owner on 2026-11-09) edited the live hook, so the release's carried-risks paragraph requires a fresh Verify. Finding 6 (the kb page) already landed in 6499643, and the `deepen` handoff (a seam to split the module) is a design question for the Architect and was not started.
+
+### What changed
+
+- Finding 3, behaviour-preserving: `_heredoc_at` returns `Heredoc(text, literal, True)` and `_mask_heredocs` a list of them, so `_resolve` reads `.literal` and `.text` like the binding; `_literal(text, quoted)` is the one literal-delimiter rule (the capture and `_heredoc_at` both call it); `UNQUOTED_BODY` and `NOT_FIRST` are each worded once; `NAME` is the one variable-name pattern behind `ASSIGNMENT`, `HEREDOC_OPEN`, `FD_NAME_SOURCE` and `NAME_FORM`; the context carries `records` and `record` only (the word-bearing commands before the reader are derived where `_check_target` needs them).
+- Finding 5, the one wording change: a not-first `--body-file F` with no writer of that exact spelling, where some `cat > G <<D` writer of any spelling precedes the reader, now says `no heredoc writer with this exact spelling precedes it` (`NO_WRITER`); with no heredoc writer of any spelling the text stays `a body file is read only from the first command`. A `--body "$(cat F)"` reader after a writer keeps the old text, because it never reaches the binding. Red first: three new subtests failed on the old wording before the hook changed. Pinned tests that carried the old wording and changed: `test_a_different_spelling_does_not_bind` (both assertions) and `test_a_reader_naming_a_different_file_keeps_todays_note`, which is replaced by `test_a_writer_of_another_spelling_is_not_blamed_on_first_command` (the case `/tmp/b.md` then `/tmp/o.md` is now a different-spelling writer case). `test_a_body_file_with_no_heredoc_writer_keeps_todays_note` pins the old text where no heredoc writer exists. Every other pin of the old text (`tee`, `>>`, here-string, descriptor-prefixed writers, a cat substitution after a writer, `cd x &&`) is unchanged and still passes.
+- Finding 7: no test calls `_Unrun`, `_mask_heredocs`, `_tokens` or `_simple_commands`, or patches `_bound_body`, any more. Each is now a payload through `preflight()` (capture: the judged text, `<<-` tabs, an unterminated delimiter, a here-string, the literal table, queue numbering, the unmasked body, a restored span holding the outer delimiter; splitter: a redirect-only record between, `a;>f`, `&>` and `&>>`, descriptor prefixes, a `>(`/`<(` after a block closer and between; the `$'` flag; the fail-open guard, now reached by a non-mapping environment in the target check instead of a patched binding). `assert_a_note`, which accepted any note, is replaced by `assert_note(command, expected)`, which compares the exact `(0, [note])`; each of its 15 call sites now names the note its rule gives. Three private-structure assertions are not kept as such, because the shape of a `Simple` record and the `<<__pr_body_preflight_heredoc_N__` text of the masked command are internal and no payload reaches them apart from the behaviour the new tests pin. Nothing whose subject is live behaviour was deleted: the test count went from 167 to 165 only because `test_a_heredoc_redirect_keeps_its_written_order` (both orders, subsumed by the existing `test_the_writer_is_found_in_both_orders`), `test_the_splitter_records_a_process_substitution_anywhere` and `test_the_splitter_reads_a_descriptor_prefix_off_the_source` became cases inside existing and new payload tests.
+
+### Mutation proof for the conversions
+
+Each mutation was applied to a scratch copy of the final hook (never the repository) and the full test module run against it; the named converted test fails in every row, and the row also fails other tests where noted by the harness.
+
+| Mutation | Converted test that fails |
+|---|---|
+| `_literal` always true | `test_literal_follows_the_quoting_and_the_body`, `test_literal_and_text_are_decided_on_the_unmasked_body` |
+| `<<-` keeps its tabs | `test_a_dash_heredoc_strips_leading_tabs_from_its_text` |
+| a heredoc never counted unterminated | `test_a_delimiter_that_never_closes_is_unterminated` |
+| the restored-span early end ignored | `test_a_restored_span_holding_the_outer_delimiter_is_unterminated` |
+| `<<<` read as a heredoc | `test_a_here_string_is_not_a_heredoc` |
+| every placeholder numbered 0 | `test_heredocs_are_numbered_in_queue_order` |
+| no restore of masked spans before `literal` | `test_literal_and_text_are_decided_on_the_unmasked_body` |
+| redirect-only records dropped | `test_a_redirect_only_command_between_is_a_command_with_its_joiner` |
+| no split before `>` in `;>` | `test_a_mixed_run_splits_before_its_redirection_operator` |
+| a lone `&` stays in the joiner | `test_a_lone_ampersand_before_a_redirect_stays_in_the_operator` |
+| `<(` / `>(` not recorded | `test_a_closer_after_the_reader_with_a_write_redirect_unbinds` |
+| descriptor prefix never read, or digits not moved into the operator | `test_a_prefixed_read_or_null_redirect_is_judged_wherever_it_sits` |
+| the `$'` flag never set / always set | `test_an_ansi_c_string_between_is_a_note_only_when_it_is_one` |
+| the `except Exception` guard removed | `test_a_malformed_payload_or_a_raising_binding_fails_open` (and one more) |
+| the writer must list `>` before `<<` | `test_the_writer_is_found_in_both_orders` |
+| the reader's first-ness computed over all records | `test_a_word_less_record_does_not_make_a_body_file_not_first` |
+| finding 5 text never raised, or always raised | `test_a_writer_of_another_spelling_is_not_blamed_on_first_command`, `test_a_different_spelling_does_not_bind`; `test_a_body_file_with_no_heredoc_writer_keeps_todays_note` |
+
+Specificity of `assert_note`: replacing the open-descriptor note with an unrelated note (`some other rule`) leaves the old `assert_a_note` condition true (exit 0, one "not checked" line) and fails five tests with `assert_note`.
+
+### Differential against the hook of `origin/main` (da64b4c)
+
+`pr_body_preflight.py` of da64b4c was copied to a scratch directory and, with `preflight` wrapped to run both hooks on the same payload, environment and filesystem state, the suite was run and a generated set added (quoted, `"` quoted, backslashed and unquoted delimiters, `<<-`, bodies with `$`, a backtick, a backslash and a masked heredoc snippet, writers spelled two ways, a writer after `&&`, `;`, `||` and blank lines, relative, absolute, `$S`, symlinked and `sub/../` paths, with and without a cwd, `cd` before, `rm` between, `printf` and `tee` writers, unclosed heredocs, heredoc substitutions, and the unreadable-body flags).
+
+```
+unique (payload, environment) inputs: 70278   identical: 43217
+differences: 27061, every one the finding-5 wording (exit 0 on both sides, same line count, only the note text)
+unexpected differences: 0   (exit 2 inputs among them: 673, all identical)
+```
+
+The same harness run with the original `tests/test_pr_body_preflight.py` of da64b4c as the input source: 70620 inputs, 27374 wording-only differences, 0 unexpected (the 2 failures of that file against the new hook are the two finding-5 pins named above; the 4 errors are the file being run from a scratch directory).
+
+### Fresh Verify: the frozen snapshot with the final hook
+
+- Snapshot: `~/.cache/pr-body-hook-coverage-verify/snapshot.jsonl`, read in place, SHA-256 `71c8ffb8327b4444167fd98f256296ba12070f6cf8d62a8d81294ddca781d99f`, 1817 rows, unchanged. Nothing in that directory was written: the harness was copied to a scratch directory and the oracle's tree path edited there. Baseline tree: `origin/main` at da64b4c; final tree: this branch.
+- Replay (`run_hook.py`, empty environment, the row's cwd, in process):
+  ```
+  base  rows 1817 judged 474 exit2 357 err 0 bound_cmds 307
+  final rows 1817 judged 474 exit2 357 err 0 bound_cmds 307
+  ```
+  474 of 1817 judged (26.09%), at or above 25% (455 needed, margin 19). Rows changed in exit code, judged flag, not-checked flag, line count or error: 0 of 1817. The bound text of all 1817 rows is identical. Rows whose stderr lines differ in any way: 0 of 1817, so finding 5's new wording does not occur on this corpus.
+- False-block oracle on the final hook (`oracle.py`, writer span alone under `sandbox-exec`, B on the file a real shell wrote):
+  ```
+  bound commands judged-through-binding, readers: 249 bound commands not judged: 58
+  pairs 249 unpaired 0 disagreements 0 cmd-level disagree 0 identical text 249
+  refusals by hook among pairs: 166 by oracle: 166
+  false blocks (hook refuses, B on shell file does not): 0  missed (hook passes, B refuses file): 0
+  ```
+  0 disagreements on 249 pairs, as on the baseline.
+
+### Not verified
+
+- Finding 5's new wording has no corpus user: the snapshot holds no command that reaches it, so its only evidence is the fixtures and the generated differential.
+- The differential generator is a fixed list of shapes; a shape outside it was not tried, and it compares exit code and note lines of the same filesystem state only, with an empty environment.
+- The margin over 25% is 19 commands and rests on the disk of 2026-11-11, as in the earlier entries; the oracle never runs the commands between writer and reader.
+- The `deepen` handoff (the lexer/record seam) was not started: it is a design question for the Architect. A `--body "$(cat F)"` reader after a same-call writer still says `a body file is read only from the first command`, which finding 5's scenario also lists; fixing that path needs its own reason and was not part of the pinned wording.
