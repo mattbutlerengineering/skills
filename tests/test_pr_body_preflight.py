@@ -923,8 +923,7 @@ class TestSameCallHeredoc(unittest.TestCase):
         "cat /tmp/x", "grep -q x /tmp/x", "egrep -q x /tmp/x",
         "fgrep -q x /tmp/x", "head -1 /tmp/x", "tail -1 /tmp/x",
         "wc -l /tmp/x", "ls /tmp", "test -f /tmp/x", "[ -f /tmp/x ]",
-        "diff /tmp/x /tmp/y", "cmp /tmp/x /tmp/y", "stat /tmp/x", "T=1",
-        "export T=1", "T=1 U=2", "export T=1 U=2",
+        "diff /tmp/x /tmp/y", "cmp /tmp/x /tmp/y", "stat /tmp/x",
         "echo hi 2>&1", "echo hi > /dev/null", "echo hi >&2",
         "cat < /tmp/x", "grep x < /tmp/x")
 
@@ -1041,7 +1040,7 @@ class TestSameCallHeredoc(unittest.TestCase):
         self.assertEqual(
             run(self.spelled("$S/b.md", before="S=/tmp\n",
                              between="T=1\nexport U=1\n")),
-            refused(self.BAD + "\n"))
+            self.unbound("T=", "$S/b.md"))
 
     def test_an_assignment_whose_value_runs_a_command_is_a_note(self):
         for between, what in (("T=`date`", "T="), ("T=$[1+1]", "T="),
@@ -1065,28 +1064,27 @@ class TestSameCallHeredoc(unittest.TestCase):
             refused(self.BAD + "\n"))
 
 
-    # --- Milestone 3, rule 4: the inert git and gh verbs ------------------
-    INERT_GIT_GH = (
-        "git status", "git status --short", "git diff", "git diff HEAD~1",
-        "git log", "git log --oneline -3", "git rev-parse HEAD",
-        "git rev-parse --show-toplevel", "git branch --show-current",
-        "git config --get user.name", "git config --get --global user.name",
-        "gh pr view", "gh pr view 12 --json title", "gh pr list",
-        "gh pr status", "gh pr checks 12", "gh pr diff 12",
-        "gh issue view 12", "gh issue list", "gh api repos/o/r",
-        "gh api repos/o/r --jq .name", 'gh api -H "Accept: x" repos/o/r',
-        "gh api --paginate user", "gh api -i user", "gh api --cache 1h user", 'gh api ""',
-        "git status 2>&1", "gh pr view 12 > /dev/null")
-
-    def test_an_inert_git_or_gh_verb_between_writer_and_reader_is_judged(self):
-        for between in self.INERT_GIT_GH:
+    # --- Lean sweep (#1677): what the cut branches used to see through ----
+    def test_a_git_or_gh_command_between_is_a_note(self):
+        for between, what in (
+                ("git status", "git status"), ("git diff HEAD~1", "git diff"),
+                ("git log --oneline -3", "git log"),
+                ("git rev-parse HEAD", "git rev-parse"),
+                ("git branch --show-current", "git branch"),
+                ("git config --get user.name", "git config"),
+                ("git status 2>&1", "git status"),
+                ("gh pr view 12 --json title", "gh pr view"),
+                ("gh pr checks 12", "gh pr checks"),
+                ("gh issue list", "gh issue list"),
+                ("gh api repos/o/r --jq .name", "gh api"),
+                ("gh pr view 12 > /dev/null", "gh pr view")):
             with self.subTest(between=between):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
-                    refused(self.BAD + "\n"))
-                self.assertEqual(
-                    run(self.spelled("/tmp/b.md", self.GOOD,
-                                     between=between + "\n")), (0, []))
+                    self.unbound(what))
+        self.assertEqual(
+            run(self.spelled("b.md", between="git status\n")),
+            self.unbound("git status", "b.md"))
 
     def test_a_git_or_gh_verb_off_the_list_between_is_a_note(self):
         for between, what in (
@@ -1116,62 +1114,14 @@ class TestSameCallHeredoc(unittest.TestCase):
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
                     self.unbound(what))
 
-    def test_a_git_verb_with_an_option_that_writes_is_a_note(self):
-        for between, what in (
-                ("git diff --output=/tmp/b.md", "git diff"),
-                ("git diff --output /tmp/b.md", "git diff"),
-                ("git diff --outp=/tmp/x", "git diff"),
-                ("git diff --output-indicator-new=+", "git diff"),
-                ("git log --output=/tmp/x", "git log"),
-                ("git status -f /tmp/x", "git status"),
-                ("git status -f/tmp/x", "git status"),
-                ("git diff --file /tmp/x", "git diff"),
-                ("git rev-parse --fil=/tmp/x", "git rev-parse"),
-                ("git config -f /tmp/x --get a", "git config"),
-                ("git config --file /tmp/x --get a", "git config"),
-                ("git config --file=/tmp/x --get a", "git config"),
-                ("git config --get a --file /tmp/x", "git config"),
-                ("git config --get a -f /tmp/x", "git config"),
-                ("git diff /tmp/b.md", "git diff"),
-                ("git log -- /tmp/b.md", "git log"),
-                ("git rev-parse :/tmp/b.md", "git rev-parse")):
+    def test_an_assignment_or_export_between_is_a_note(self):
+        for between, what in (("T=1", "T="), ("export T=1", "export"),
+                              ("T=1 U=2", "T="), ("export T=1 U=2", "export"),
+                              ("GH_HOST=h", "GH_HOST=")):
             with self.subTest(between=between):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", between=between + "\n")),
                     self.unbound(what))
-        for between in ("git diff --output=/tmp/x > /tmp/b.md",
-                        "git log >> /tmp/b.md", "git status | tee /tmp/b.md",
-                        "git diff $(git rev-parse HEAD)",
-                        "git log `echo x`"):
-            with self.subTest(between=between):
-                self.assert_a_note(
-                    self.spelled("/tmp/b.md", between=between + "\n"))
-
-    def test_a_gh_api_with_a_write_option_is_a_note(self):
-        for options in ("--input x", "--input=x", "-X POST", "-XPOST",
-                        "--method POST", "--method=POST", "-X GET",
-                        "-f a=b", "-fa=b", "-F a=b", "-Fa=b", "--field a=b",
-                        "--field=a=b", "--raw-field a=b", "--raw-field=a=b",
-                        "--output /tmp/b.md", "--output=/tmp/b.md",
-                        "-iX POST", "--paginate -f a=b"):
-            with self.subTest(options=options):
-                self.assertEqual(
-                    run(self.spelled(
-                        "/tmp/b.md",
-                        between=f"gh api {options} repos/o/r\n")),
-                    self.unbound("gh api"))
-
-    def test_a_git_verb_between_leaves_a_relative_file_to_the_cd_rule(self):
-        self.assertEqual(
-            run(self.spelled("b.md", between="git status\n")),
-            refused(self.BAD + "\n"))
-        self.assertEqual(
-            run(self.spelled("$S/b.md", before="S=/tmp\n",
-                             between="git diff HEAD\n")),
-            refused(self.BAD + "\n"))
-        self.assertEqual(
-            run(self.spelled("b.md", between="git diff b.md\n")),
-            self.unbound("git diff", "b.md"))
 
 
     # --- Milestone 3 review fixes -----------------------------------------
@@ -1282,7 +1232,7 @@ class TestSameCallHeredoc(unittest.TestCase):
                     self.unbound(what))
 
     def test_a_prefixed_read_or_null_redirect_is_judged_wherever_it_sits(self):
-        for between in ("git status 2>/dev/null", "ls x 2>/dev/null",
+        for between in ("cat x 2>/dev/null", "ls x 2>/dev/null",
                         "echo hi 1>/dev/null", "cat 2<&0", "cat 0< /tmp/x",
                         "echo hi 2>> /dev/null", "echo hi 2>| /dev/null",
                         "echo hi 2>/dev/stderr", "5< /tmp/x"):
@@ -1425,9 +1375,35 @@ class TestSameCallHeredoc(unittest.TestCase):
         ("IFS=,", "IFS="), ("GH_HOST=h", "GH_HOST="),
         ("{ export HOME=/x; }", "export"))
 
+    def test_a_steering_assignment_with_a_descriptor_redirect_is_never_a_refusal(self):
+        """A digit that touches its operator is a descriptor, not a word of
+        the command: a standalone steering assignment or export that carries
+        one is still the assignment, so it stays a note, never exit 2."""
+        for before in ("PATH=/x 2>/dev/null", 'export PATH="$HOME/bin:$PATH" 2>/dev/null',
+                       "LD_PRELOAD=/x/e.so 2>&1", "export BASH_ENV=/x 2>/dev/null",
+                       "DYLD_INSERT_LIBRARIES=/x 2>/dev/null"):
+            with self.subTest(before=before):
+                self.assert_a_note(self.spelled("/tmp/b.md", before=before + "\n"))
+        for before in ("GH_HOST=h 2>/dev/null", "export PAGER=x 2>&1"):
+            with self.subTest(between=before):
+                self.assert_a_note(
+                    self.spelled("/tmp/b.md", between=before + "\n"))
+
+    def test_a_descriptor_redirect_is_never_a_refusal_it_was_not_before(self):
+        for between in ("echo hi 3<> /dev/null", "echo hi 3<>/dev/stderr",
+                        "echo hi 1>&/dev/null", "echo hi 2>&/dev/null"):
+            for command in (self.spelled("/tmp/b.md", between=between + "\n"),
+                            self.spelled("/tmp/b.md") + between[len("echo hi"):]):
+                with self.subTest(command=command):
+                    self.assert_a_note(command)
+        for before in ("exec 3<> /dev/null", "exec 3<<<x",
+                       "exec 2>&/dev/null", "exec 3<<EOF\n$HOME\nEOF"):
+            with self.subTest(before=before):
+                self.assert_a_note(self.spelled("/tmp/b.md", before=before + "\n"))
+
     def test_a_name_that_changes_the_writer_unbinds_wherever_it_is_set(self):
         for before, cause in self.WRITER_STEERING:
-            for between in ("", "git status\n"):
+            for between in ("", "echo hi\n"):
                 with self.subTest(before=before, between=between):
                     self.assertEqual(
                         run(self.spelled("/tmp/b.md", before=before + "\n",
@@ -1436,21 +1412,21 @@ class TestSameCallHeredoc(unittest.TestCase):
 
     def test_another_steering_name_matters_only_with_a_command_between(self):
         for before, cause in self.COMMAND_STEERING:
-            with self.subTest(before=before, between="git status"):
+            with self.subTest(before=before, between="echo hi"):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before + "\n",
-                                     between="git status\n")),
+                                     between="echo hi\n")),
                     self.before(cause))
             with self.subTest(before=before, between="none"):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before + "\n")),
                     refused(self.BAD + "\n"))
-        for before in ("export T=1\n", "T=1\n", "PATH=/x git status\n",
+        for before in ("export T=1\n", "T=1\n", "PATH=/x echo hi\n",
                        "echo PATH=/x\n", "echo $HOME\n", "export S=/tmp\n"):
             with self.subTest(judged=before):
                 self.assertEqual(
                     run(self.spelled("/tmp/b.md", before=before,
-                                     between="git status\n")),
+                                     between="echo hi\n")),
                     refused(self.BAD + "\n"))
 
     def test_a_function_alias_or_trap_before_the_writer_unbinds(self):
