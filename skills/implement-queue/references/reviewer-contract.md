@@ -20,8 +20,8 @@ author is the independent second opinion. It catches what CI cannot:
 | `changedFiles`       | Paths the diff touches.                                                                 |
 | `commitMessage`      | The worker's commit message.                                                            |
 
-On a truncation marker the reviewer reads the missing region from the
-worker's worktree instead of guessing.
+On a truncation marker the reviewer reads the missing region from its
+worktree at the PR's head instead of guessing.
 
 ## Output
 
@@ -73,13 +73,17 @@ Start at 10 and deduct.
 
 ## Restoring a voided review
 
-When the after-snapshot differs from the before-snapshot, undo exactly
-the difference and nothing else. The Owner's uncommitted work is in the
-checkout too.
+When the branch, `HEAD` or `git status --porcelain` after the review
+differs from before it, undo exactly the difference and nothing else.
+The Owner's uncommitted work is in the checkout too. A plain branch
+switch leaves `--porcelain` unchanged, so the branch and `HEAD` are
+compared too, not only the status.
 
 1. Record the branch (`git branch --show-current`) and `git rev-parse
-   HEAD` before every dispatch. If either moved, `git switch <branch>`
-   (or `git switch --detach <sha>` when HEAD was detached).
+   HEAD` before every dispatch. If the branch changed, `git switch
+   <branch>` (or `git switch --detach <sha>` when HEAD was detached). If
+   `HEAD` moved on the same branch (a commit or a reset), stop and hold
+   the PR for a human: undoing it would rewrite the Owner's branch.
 2. List the paths whose `--porcelain` line is new or changed. A path
    that was already dirty before the dispatch cannot be told apart from
    the reviewer's edit to it: stop and hold the PR for a human.

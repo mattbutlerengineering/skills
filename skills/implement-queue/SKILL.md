@@ -208,15 +208,18 @@ Leave cost empty when the usage carries none; never estimate it.
 
 **Reconcile before Phase 4.** A worker's `transition` can fail without
 a trace, so the orchestrator checks it instead of trusting it. For every
-issue claimed this session, read its labels and the PRs that close it
-(`Closes #<N>` on the PR list), and run the `transition` hook wherever
-the label disagrees with the table: an open PR with green gates →
-`has-pr`; a draft PR, or an open PR with red gates and no live worker
-→ `needs-review`; no PR → `agent-failed`. No issue keeps `in-progress`
-unless a live worker holds it. A worker resumed twice with no new
-commit counts as stalled: stop it, do not resume it again, and
-reconcile its issue the same way. Report each repair as drift, with the
-count of issues claimed against the count repaired.
+issue claimed this session that still carries `in-progress` or no state
+label, read the PRs that close it (`Closes #<N>` on the PR list) and run
+the `transition` hook where the label disagrees with the table: an open
+PR with green gates → `has-pr`; a draft PR, or an open PR with red gates
+and no live worker → `needs-review`; no PR at all → `agent-failed`. An
+issue whose PR merged is delivered: leave it to GitHub's close. Never
+remove a `hold_labels` label or `stealable`, whatever the PR looks like:
+the gate put them there on purpose. No issue keeps `in-progress` unless
+a live worker holds it. A worker resumed twice with no new commit
+counts as stalled: stop it, do not resume it again, and reconcile its
+issue the same way. Report each repair as drift, with the count of
+issues claimed against the count repaired.
 
 ### The gate, per PR
 
@@ -244,10 +247,11 @@ as that PR's CI settles; it can overlap with workers still running.
      the shared checkout, and never let it switch that checkout's
      branch. A reviewer with no worktree reads through the API and
      cannot run code.
-   - Snapshot `git status --porcelain` before each reviewer dispatch and
-     compare it afterwards. The snapshot detects a change, it does not
-     prevent one. A reviewer that changed the checkout has produced an
-     invalid review: restore it by the procedure in
+   - Snapshot `git status --porcelain`, the current branch and `HEAD`
+     before each reviewer dispatch and compare all three afterwards.
+     The snapshot detects a change, it does not prevent one. A reviewer
+     that changed the checkout has produced an invalid review: restore
+     it by the procedure in
      [the reviewer contract](references/reviewer-contract.md), then
      re-dispatch.
    - A review that timed out or errored is recorded as `error`, never as

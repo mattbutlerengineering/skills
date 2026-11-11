@@ -269,13 +269,15 @@ GitHub Actions job that clones this repo and follows
 `skills/implement-queue/SKILL.md` by path gets whatever `main` holds when
 it starts, so a change lands under an unattended run with no review on the
 consumer's side (#1697). This repo publishes no tags or releases, so the
-only pin is a commit SHA. Check out one in the bootstrap
-(`git clone <this repo>`, then `git -C <clone> checkout <sha>`) rather than
-following `main`, and keep that SHA in the consumer's own repo, where a PR
-moves it. The `version` in `.claude-plugin/plugin.json` at a SHA names the
-wave it belongs to (ADR-0095). Moving the SHA is the moment to run the
-skill's Phase 0 profile check against the new skill, because a hook the
-table gained since is the usual way a consumer's profile goes stale
+only pin is a commit SHA. Fetch exactly that commit in the bootstrap
+(`git init`, `git fetch --depth 1 origin <sha>`, `git checkout
+FETCH_HEAD`: a `git clone --depth 1` followed by `checkout <sha>` fails
+for a SHA off the tip) rather than following `main`, and keep the SHA in
+the consumer's own repo, where a PR moves it. The `version` in
+`.claude-plugin/plugin.json` moves once per wave (ADR-0095), so it only
+roughly dates a SHA. Moving the SHA is the moment to run the skill's
+Phase 0 profile check against the new skill, because a hook the table
+gained since is the usual way a consumer's profile goes stale
 (`skills/implement-queue/references/profile-migration.md`).
 
 **Tools-only (Conductor-only) stamp.** A repo that wants the Conductor and
