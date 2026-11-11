@@ -43,8 +43,10 @@ Check in order; the first hit sets the run mode.
 3. The queue profile is missing, or its `merge` key is not `auto` →
    **report-only mode**: the Owner's consent is the profile, and
    without it this routine merges nothing (ADR-0087).
-4. `main` is red — the `preflight` hook (`gh run list --branch main
-   --limit 5` by default) shows a failed `check` → **report-only
+4. `main` is red — the `preflight` hook (by default the `check` run
+   on the head SHA of `origin/main`, judged as the skill's Phase 0
+   defines) shows it failed, cancelled, timed out or missing, after the
+   skill's one re-run of a failure with no repo cause → **report-only
    mode**, naming the run. Fixing `main` is a human's or the daily
    routine's work, never this routine's.
 5. Otherwise → **normal mode**.
