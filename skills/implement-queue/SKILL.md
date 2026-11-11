@@ -77,7 +77,8 @@ twins have no binary to run through, and the MCP twin is the way:
   MCP: `actions_list` with `method: list_workflow_runs`, filtered to
   `branch: main` and `event: push`, keeping only runs whose `head_sha`
   is the head; with a `required_check`, `method: list_workflow_jobs` on
-  each kept run to find the job of that name. The re-run: REST
+  each kept run to find the job of that name (missing once every kept
+  run has settled is red, as above). The re-run: REST
   `gh api -X POST repos/{owner}/{repo}/actions/runs/<run-id>/rerun-failed-jobs`;
   MCP `actions_run_trigger` with `method: rerun_failed_jobs`.
 - Open PRs (Phase 0): MCP `list_pull_requests`, state open.
@@ -137,12 +138,18 @@ file's Rules section.
    `git fetch origin`, take `<sha>` from `git rev-parse refs/remotes/origin/main`,
    then:
    - With a `required_check`: read
-     `gh api repos/{owner}/{repo}/commits/<sha>/check-runs --paginate`.
-     That check present and `completed` with `success` is green. Queued
-     or in progress is pending. `failure`, `cancelled`, `timed_out`, or
-     missing once every other run of the head has settled is red; missing
-     while another run of the head is still queued or in progress is
-     pending.
+     `gh api repos/{owner}/{repo}/commits/<sha>/check-runs --paginate`
+     for that check, and
+     `gh api 'repos/{owner}/{repo}/actions/runs?head_sha=<sha>&event=push'`
+     for the head's push-triggered runs (issue-triggered workflows also
+     run against the head and never decide it). That check present and
+     `completed` with `success` is green. Queued or in progress is
+     pending. Red is every completed conclusion other than `success`
+     (`failure`, `cancelled`, `timed_out`, `skipped`, `neutral`,
+     `action_required`, `startup_failure`, `stale`), and the check
+     missing once every push-triggered run of the head has settled.
+     Missing while a push-triggered run of the head is still queued or
+     in progress is pending.
    - Without one: read
      `gh run list --branch main --commit <sha> --event push --json databaseId,name,status,conclusion`.
      A failed, cancelled or timed-out run is red; a run still queued or
@@ -155,15 +162,21 @@ file's Rules section.
      CI-fix issue or new work on an unproven main.
    - If main is red, read the failing job's log first. When it shows no
      repo cause (a runner or network failure, a cancelled or timed-out
-     job), re-run the failed jobs once:
-     `gh run rerun <run-id> --failed` (cloud twin in the list above),
-     then wait and judge the head again by the same read. Green on that
-     final run is green. Only a second failure, or a failure with a repo
-     cause, makes fixing main **this** iteration: claim or file the
-     CI-fix issue, work it through Phase 2, and skip to Phase 3. A
-     profile's `preflight` hook may say how to re-run instead. The
-     re-run is never a way to skip CI or to declare main green without
-     the check present and successful on the final run.
+     job), re-run the failed jobs once per head SHA: a run whose
+     `run_attempt` is above 1 (`gh run view <run-id> --json attempt`)
+     has had its re-run, so a later iteration on the same red head does
+     not re-run it again. The `<run-id>` of a check run is in its
+     `details_url` (`/actions/runs/<run-id>/job/<job-id>`; the check
+     run's own `id` is the job id), and the push-runs read above lists
+     it directly. Re-run with `gh run rerun <run-id> --failed` (cloud
+     twin in the list above), then wait and judge the head again by the
+     same read. Green on that final run is green. Only a second failure,
+     or a failure with a repo cause, makes fixing main **this**
+     iteration: claim or file the CI-fix issue, work it through Phase 2,
+     and skip to Phase 3. A profile's `preflight` hook may say how to
+     re-run instead. The re-run is never a way to skip CI or to declare
+     main green without the check present and successful on the final
+     run.
 3. List open PRs. Unfinished PRs come before new issues: green ones go
    to the Phase 2 gate, pending ones wait, failed ones get fixed or
    their issue labelled `agent-failed`. Claim nothing new while an open
