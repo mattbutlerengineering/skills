@@ -31,7 +31,7 @@ skill's Rules section.
 
 | Hook             | Consequence when absent                                                                                  |
 | ---------------- | -------------------------------------------------------------------------------------------------------- |
-| `preflight`      | `gh run list --branch main --limit 5`. Needs `gh`; a cloud session names the REST or MCP twin.            |
+| `preflight`      | The gate's own green on `origin/main`'s head SHA: the required check present and successful, else its push-triggered runs. Needs `gh`; a cloud session names the REST or MCP twin. A hook that reads a run-list window is crowded out by event-driven workflows, and a `failure`-only filter misses a cancelled run whose gate job failed. |
 | `transition`     | `gh issue edit`. Fails under a cloud session's GraphQL 403; name the REST or MCP twin.                    |
 | `compose`        | Candidates are taken in priority order, skipping only issues that name the same files.                    |
 | `base-freshness` | `git fetch origin` and a shared-history check against `origin/main`.                                      |
