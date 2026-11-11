@@ -461,6 +461,18 @@ class TestSameCallHeredoc(unittest.TestCase):
                 self.assertEqual(run(earlier + self.READ),
                                  (0, [self.NOT_FIRST]))
 
+    def test_a_writer_after_the_reader_does_not_change_the_note(self):
+        """Only a writer that precedes the reader can explain a spelling
+        mismatch; one that comes after it leaves today's note."""
+        later = self.write(self.BAD, path="/tmp/o.md")
+        self.assertEqual(
+            run("echo hi\n" + self.READ + "\n" + later),
+            (0, [self.NOT_FIRST]))
+        self.assertEqual(
+            run("echo hi\n" + "gh pr create --body-file ./b.md\n"
+                + self.write(self.BAD, path="b.md")),
+            (0, [self.NOT_FIRST]))
+
     def test_an_unquoted_delimiter_with_an_expansion_is_a_note(self):
         reason = note("an unquoted heredoc body holds $, a backtick "
                       "or a backslash")

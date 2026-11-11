@@ -365,7 +365,7 @@ The same harness run with the original `tests/test_pr_body_preflight.py` of da64
   base  rows 1817 judged 474 exit2 357 err 0 bound_cmds 307
   final rows 1817 judged 474 exit2 357 err 0 bound_cmds 307
   ```
-  474 of 1817 judged (26.09%), at or above 25% (455 needed, margin 19). Rows changed in exit code, judged flag, not-checked flag, line count or error: 0 of 1817. The bound text of all 1817 rows is identical. Rows whose stderr lines differ in any way: 0 of 1817, so finding 5's new wording does not occur on this corpus.
+  474 of 1817 judged (26.09%), at or above 25% (455 needed, margin 19). Rows changed in exit code, judged flag, not-checked flag, line count or error: 0 of 1817. The bound text of all 1817 rows is identical. The first draft of this entry said 0 rows differ in stderr; that was not measured (`run_hook.py` stores the line count and the not-checked flag, never the note text). Corrected 2026-11-11 by comparing the `preflight()` stderr lines of the `origin/main` tree and this branch directly over all 1817 rows: 7 rows differ, 0-based rows 97, 141, 159, 737, 808, 881 and 1611 (1-based 98, 142, 160, 738, 809, 882, 1612). In each the old note `a body file is read only from the first command` is now `no heredoc writer with this exact spelling precedes it`, with exit code, judged flag and line count unchanged.
 - False-block oracle on the final hook (`oracle.py`, writer span alone under `sandbox-exec`, B on the file a real shell wrote):
   ```
   bound commands judged-through-binding, readers: 249 bound commands not judged: 58
@@ -377,7 +377,7 @@ The same harness run with the original `tests/test_pr_body_preflight.py` of da64
 
 ### Not verified
 
-- Finding 5's new wording has no corpus user: the snapshot holds no command that reaches it, so its only evidence is the fixtures and the generated differential.
+- Finding 5's new wording reaches 7 of 1817 snapshot rows (indexes above); only its text changes there. The by-hand read of those 7 against the shell (that each writer really is a different spelling of the reader's file) was not done beyond the fixtures and the generated differential.
 - The differential generator is a fixed list of shapes; a shape outside it was not tried, and it compares exit code and note lines of the same filesystem state only, with an empty environment.
 - The margin over 25% is 19 commands and rests on the disk of 2026-11-11, as in the earlier entries; the oracle never runs the commands between writer and reader.
 - The `deepen` handoff (the lexer/record seam) was not started: it is a design question for the Architect. A `--body "$(cat F)"` reader after a same-call writer still says `a body file is read only from the first command`, which finding 5's scenario also lists; fixing that path needs its own reason and was not part of the pinned wording.
