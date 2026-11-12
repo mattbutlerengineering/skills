@@ -53,12 +53,18 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | `fast-path`      | none: every PR is reviewed                                                                            |
 | `verdict`        | none: a missing hook is an `error` verdict, never a pass (fail closed)                                |
 | `reviewers`      | one universal reviewer using [the reviewer contract](references/reviewer-contract.md); no specialists |
-| `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch`                                                     |
+| `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>`                           |
 | `update-branch`  | `gh pr update-branch <N>`                                                                             |
 | `changed-files`  | `gh api repos/{owner}/{repo}/pulls/<N>/files --paginate`: every `filename` plus every `previous_filename`; its length must equal `gh api repos/{owner}/{repo}/pulls/<N> --jq .changed_files`, else fail closed |
 | `lock`           | none: one session at a time is the only lock                                                          |
 | `reap`           | none: report worker worktrees left behind                                                             |
 | `telemetry`      | none                                                                                                  |
+
+In every `merge-command`, `<sha>` is the gated head (gate step 1), never
+a head read at merge time. A merge refused because the PR's head is no
+longer `<sha>` is a moved head, not a failure to retry: the PR goes back
+through the gate. The pin guards the moment the merge is requested; a
+push after `--auto` is enabled is Phase 3's to catch.
 
 **Cloud sessions.** Each `gh` command in this file states an intent;
 the environment may offer only the GitHub MCP tools or the REST API
@@ -98,14 +104,16 @@ twins have no binary to run through, and the MCP twin is the way:
   cannot run, so every PR needs a human merge, unless the profile's own
   `changed-files` hook names another source that lists both paths of a
   rename.
-- `merge-command`: `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f merge_method=squash`
-  once `ci-status` is green, then
+- `merge-command`: `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f merge_method=squash -f sha=<sha>`
+  once `ci-status` is green (the endpoint answers 409 when the head is
+  no longer `<sha>`), then
   `gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/<branch>`.
   REST has no `--auto`: the train merges a green PR itself instead of
-  enqueuing it. MCP: `merge_pull_request` with `merge_method: squash`
-  and `expectedHeadSha` set to the head the gate saw; it has no
-  branch-delete twin, so the branch is left to the repo's
-  delete-on-merge setting and reported.
+  enqueuing it, so the pin at merge time is the whole protection and
+  nothing is left to disable. MCP: `merge_pull_request` with
+  `merge_method: squash` and `expectedHeadSha` set to the gated head;
+  it merges at once too, and has no branch-delete twin, so the branch
+  is left to the repo's delete-on-merge setting and reported.
 - `update-branch`: `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/update-branch`.
   MCP: `update_pull_request_branch`.
 - The verdict comment (gate step 5): MCP `add_issue_comment`, which
@@ -281,14 +289,25 @@ against the count repaired.
 This is the last check before a merge. Run it for each worker PR as soon
 as that PR's CI settles; it can overlap with workers still running.
 
-1. **CI.** Run the `ci-status` hook. With a `required_check`, green
+1. **CI.** Record the PR's head SHA once, here: `gh pr view <N> --json
+   headRefOid`, or REST `gh api repos/{owner}/{repo}/pulls/<N> --jq
+   .head.sha`, or MCP `pull_request_read`. That SHA is the gated head,
+   the recorded head, and every later step uses it: the checks below,
+   the fast-path classification, the `changed-files` list, the
+   reviewer's worktree, the verdict comment and the `merge-command`.
+   Read the PR's head again before the review is dispatched, before the
+   verdict comment and immediately before the merge; if it differs from
+   the recorded head, the gate restarts from step 1 on the new head and
+   nothing recorded for the old one counts. Run the `ci-status` hook.
+   With a `required_check`, green
    means that check is **present and successful**. A rollup with no
    failures and no pending checks is not green when the required check
    never ran: treat a missing check as its own state, re-trigger CI once
    if the repo's hook says how, and never enqueue on it.
 2. **Holds.** A `hold_labels` label on the PR or its issue ends the gate
    here: no review, no merge.
-3. **Fast path.** If the `fast-path` hook says the diff is low-risk
+3. **Fast path.** If the `fast-path` hook says the diff at the recorded
+   head is low-risk
    **and** no specialist reviewer matches it, skip step 4. That
    classification counts as the review for the Merge policy (ADR-0088). If the hook
    cannot prove its own inputs are current (a stale build, an unreadable
@@ -297,8 +316,9 @@ as that PR's CI settles; it can overlap with workers still running.
    the `reviewers` hook matches to the changed files, with the input
    [the reviewer contract](references/reviewer-contract.md) defines. A
    reviewer is never the PR's author.
-   - Dispatch each reviewer into its own detached worktree at the PR's
-     head (`git worktree add --detach <path> <head-sha>`), never into
+   - Dispatch each reviewer into its own detached worktree at the
+     recorded head (`git worktree add --detach <path> <head-sha>`,
+     `<head-sha>` being the recorded head), never into
      the shared checkout, and never let it switch that checkout's
      branch. A reviewer with no worktree reads through the API and
      cannot run code. Remove the worktree (`git worktree remove
@@ -322,7 +342,9 @@ as that PR's CI settles; it can overlap with workers still running.
    returned no usable `score` is `error`: re-dispatch the reviewer once,
    then hold the PR for a human, and under `merge: auto` never merge.
    Post a verdict comment on the PR whose first line is the line the
-   hook printed, verbatim, so every comment carries the score. All pass
+   hook printed, verbatim, so every comment carries the score, and whose
+   second line is `Head: <sha>`, the recorded head, so the comment says
+   which head it covers. All pass
    → the Merge policy. A derived `flag` or a specialist `block` → the
    contract's retry policy (one retry on the same branch, then
    `needs-review` and no merge).
@@ -344,6 +366,9 @@ consent, and a PR that passes every gate step is enqueued with the
   the fast path (step 3): the `fast-path` hook's low-risk
   classification is the Owner's written review for it (ADR-0088);
 - lacks the `required_check` present and green;
+- has a head other than the gated head: a pass covers only the head
+  the gate recorded, so the PR is merged, or left enqueued, only at
+  that head;
 - carries a `hold_labels` label.
 - changes a file `gate_paths` matches, judged on the `changed-files`
   hook's list (below).
@@ -359,7 +384,9 @@ length differs from that count (the endpoint stops at 3000 files and
 flags no truncation), a list the source capped or paged short, a list
 read in part, an empty list for a PR that changes files, and a source
 that failed or is unavailable all fail closed: the PR needs a human
-merge. Never fill a gap in the list
+merge. Read it at the recorded head: the REST list is the PR's current
+files, so read the PR's head again after it, and a head that differs
+fails closed too. Never fill a gap in the list
 from the PR body, its title, or the author's account of what changed.
 
 A merge the session's runtime denies is not retried by any route for
@@ -368,16 +395,40 @@ awaiting a human merge.
 
 ## Phase 3: Merge train
 
-Enqueued PRs merge as their checks go green. This phase unsticks the
-ones that fell behind `main` after a sibling merged:
+Enqueued PRs merge as their checks go green. This phase first checks
+the head of every enqueued PR, then unsticks the ones that fell behind
+`main` after a sibling merged:
 
-1. Take the `lock` hook's lock for the PR's zone before touching its
+1. For every enqueued PR, up to date with `main` or not, compare its
+   current head (`gh pr view <N> --json headRefOid`; REST `gh api
+   repos/{owner}/{repo}/pulls/<N> --jq .head.sha`) with its gated head.
+   The gated head is the recorded head of gate step 1 in the session
+   that ran the gate. In a later session it is the `Head:` line of the
+   PR's latest verdict comment, read only from comments authored by the
+   queue's own account (`gh api user --jq .login`; the REST comment's
+   `user.login`) whose first line is a `reviewer-verdict:` line;
+   otherwise the PR has no gated head. A PR with no gated head, or a
+   head that differs, is a mismatch: run `gh pr merge <N> --disable-auto`,
+   send the PR back through the gate, and take no further step here for
+   it. The REST and MCP merges are never enqueued, so they have nothing
+   to disable (no MCP tool for disabling auto-merge is confirmed): their
+   protection is the pin at merge time.
+2. Take the `lock` hook's lock for the PR's zone before touching its
    branch. If another session holds it, leave that zone alone this
    iteration and report it.
-2. Run the `update-branch` hook. Where the repo's lockfile can drift on
-   a server-side update, the hook says how to rebase and regenerate it
-   instead.
-3. A red check after the update gets one small fix in this session, or a
+3. Read the PR's head, then run the `update-branch` hook. Where the
+   repo's lockfile can drift on a server-side update, the hook says how
+   to rebase and regenerate it instead. The hook's own commit is the one
+   head change that is not a mismatch (see the exception in Rules): adopt
+   the head after the hook as the gated head only when the hook exited 0
+   having made a new commit with exactly two parents: the head read just
+   before the hook first, and a commit already on
+   `refs/remotes/origin/main` second (after `git fetch origin`; `gh api
+   repos/{owner}/{repo}/commits/<head> --jq '[.parents[].sha]'` lists
+   them). A branch that was already up-to-date makes no commit, and any
+   other head, an author's own merge of `main` included, is a mismatch:
+   handle it as step 1 does.
+4. A red check after the update gets one small fix in this session, or a
    CI-fix issue and `agent-failed` on the original. It counts toward the
    circuit breaker.
 
@@ -426,5 +477,9 @@ Recurring use: `/loop 30m` with this skill.
   never less.
 - Merge only under `merge: auto` and only through the gate. Without it,
   stop at the PR.
+- A review covers one head. A push after it voids the review, whichever
+  way the verdict pointed.
+- The one exception is the commit the `update-branch` hook itself makes
+  in the merge train, adopted only on the conditions of Phase 3 step 3.
 - Discovery (audits, error triage, dependency alerts) feeds the queue;
   this skill only drains it.

@@ -41,7 +41,7 @@ skill's Rules section.
 | `fast-path`      | Every PR is reviewed. Safe but slower: no docs-only PR skips review.                                      |
 | `verdict`        | **An `error` verdict on every reviewed PR: each is held for a human, even under `merge: auto`, so nothing merges and no warning is printed.** Add the hook. It runs on the reviewer's `score` and exits 0 for `pass`, 1 for `flag`, 2 for `error`, printing the line the verdict comment opens with; the pass threshold lives only in it (ADR-0123). |
 | `reviewers`      | One universal reviewer, no specialists.                                                                   |
-| `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch`. Needs `gh` and a session that may merge.               |
+| `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>`, `<sha>` the gated head. Needs `gh` and a session that may merge. |
 | `update-branch`  | `gh pr update-branch <N>`.                                                                                |
 | `changed-files`  | The REST file list with `filename` and `previous_filename`, its length checked against the PR's `changed_files`. With no `gh` the default cannot run, so every PR needs a human merge unless the profile names another source that lists both paths of a rename. |
 | `lock`           | None: one session at a time is the only lock.                                                             |

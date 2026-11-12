@@ -104,18 +104,25 @@ goes in the journal whatever the mode.
 In normal mode only, over the PRs whose verdict is **merge**, oldest
 first, one at a time:
 
-1. If the PR's branch is behind `main`, run the `update-branch` hook
-   and wait for `required_check` to finish on the new head. Red →
+1. Compare the PR's current head with its gated head as the skill's
+   Phase 3 step 1 defines (the `Head:` line of the latest verdict
+   comment authored by the queue's own account). A mismatch, or no
+   gated head, is a failed re-check: run `gh pr merge <N> --disable-auto`,
+   merge nothing from the PR, report it as **head moved after review**,
+   and go to the next PR.
+2. If the PR's branch is behind `main`, run the `update-branch` hook
+   (its new head becomes the gated head only as the skill's Phase 3
+   step 3 allows) and wait for `required_check` to finish on the new head. Red →
    comment the failing job on the PR, report it as **failed after
    update**, and go to the next PR. The consent never covers a head
    that has not passed on the `main` it will land on
    (`docs/kb/cross-pr-merge-hazards.md`).
-2. Re-check the four conditions on the current head: a label or a
+3. Re-check the four conditions on the current head: a label or a
    review can change while the train waits.
-3. Run the `merge-command` hook. A merge the runtime denies is
+4. Run the `merge-command` hook, where `<sha>` is the gated head. A merge the runtime denies is
    reported as **awaiting a human merge** with the denial, and is
    never retried by any other route in this run (ADR-0087).
-4. Wait for the merge to land on `main` and for `main`'s `check` to
+5. Wait for the merge to land on `main` and for `main`'s `check` to
    finish before the next PR starts. Red `main` → stop the train,
    report it as §1's mode 4 would, and leave the remaining PRs for the
    next run.
@@ -127,8 +134,8 @@ three consecutive **failed after update** verdicts.
 ## 5 Report lines
 
 Every PR's verdict and reason from §3, then for each PR the train
-touched: updated / merged / failed after update / awaiting a human
-merge, with the run or denial it cites. PRs in **human gate** are
+touched: updated / merged / failed after update / head moved after review /
+awaiting a human merge, with the run or denial it cites. PRs in **human gate** are
 listed with the path or label so the Owner's next session is a list,
 not a search.
 
@@ -147,7 +154,7 @@ Exactly one journal comment per run:
 <!-- merge-train-state last-run=<this run's start, ISO-8601 UTC> -->
 **YYYY-MM-DD HH:MM — <normal | report-only | stopped>**: <merged N, awaiting human M, failed K>
 - Verdicts: <one line per open PR: number, verdict, reason>
-- Train: <per PR touched: updated / merged / failed after update / awaiting a human merge, with the citation>
+- Train: <per PR touched: updated / merged / failed after update / head moved after review / awaiting a human merge, with the citation>
 - Health: <main red, profile missing, denials, marker repairs>
 - Proposals: <amendments to this file or the profile, as diffs>
 - Spend: <estimate for this run>
