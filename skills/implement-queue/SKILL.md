@@ -203,7 +203,12 @@ file's Rules section.
    to the Phase 2 gate unchanged, because the gate and the Merge policy
    run per PR and protect any PR. A foreign failed PR is never fixed by
    this queue unless a ready issue says so, is reported, and does not
-   block claiming. Claim nothing new while a failed PR of this queue is
+   block claiming. Never fixed means never edited, pushed to or
+   updated; the infrastructure re-run of the last cause below applies to
+   a foreign PR too, whichever of the no-linked-issue and held causes it
+   matched, unless it matches the must-not-merge cause: it is not a fix,
+   and the PR stays foreign and non-blocking whatever the outcome. Claim
+   nothing new while a failed PR of this queue is
    open and matches none of the causes below. This is the protocol's
    "Open pull requests first" pre-flight
    (`../../docs/pipeline-protocol.md`) with this skill's mechanics;
@@ -229,27 +234,31 @@ file's Rules section.
      claiming; the re-run is no exemption.
 
    A green PR is settled when its head commit is at least 15 minutes
-   old, so a PR first seen with an old head commit goes to the gate at
-   once, which keeps a one-pass session (nothing claimed) gating its
-   green PRs. A head first seen with a commit younger than 15 minutes is
-   settled only once it equals the head recorded in an earlier
-   iteration, so it waits exactly one iteration and then goes to the
-   gate. Step 3 records every open PR's head SHA in each iteration. A
-   head that differs from the head recorded in an earlier iteration is
-   not settled whatever its date, is recorded anew, and restarts the
-   wait. A head named in this session's own worker result as the head
-   that worker pushed counts as settled at once while the PR's head
-   still equals it; a head pushed by anyone else gets no such exception.
-   The head commit's date is read from the commit itself with
+   old and its head SHA has not changed since this session recorded it.
+   Step 3 records every open PR's head SHA in each iteration. A PR with
+   no record is judged on age alone, so a PR first seen with an old head
+   commit goes to the gate at once, which keeps a one-pass session
+   (nothing claimed) gating its green PRs. A young head waits until its
+   commit is 15 minutes old, whatever the iteration. A head that changed
+   since it was recorded is not settled whatever its date, and is
+   recorded anew. A head named in this session's own worker result as
+   the head that worker pushed counts as settled at once while the PR's
+   head still equals it; this wins over the changed-since-recorded rule
+   for that head only, and a head pushed by anyone else gets no such
+   exception. The head commit's date is read first with
    `gh api repos/{owner}/{repo}/commits/<headRefOid> --jq .commit.committer.date`,
    `<headRefOid>` being the head from the list above (no MCP twin is
-   verified). A date read from any commit other than the PR's current
-   head SHA leaves the PR not settled. The committer date is a proxy,
-   since GitHub does not expose push time: `git rebase` resets it, and
-   the real failure is a commit made earlier and pushed later, which
-   looks old when it was just pushed; the recorded-head comparison
-   catches that from the second iteration on, and a one-pass session
-   accepts it. A date that cannot be read
+   verified). Where `gh` cannot read it, run
+   `git fetch --depth=1 origin pull/<N>/head`, confirm
+   `git rev-parse FETCH_HEAD` equals the head SHA, then run
+   `git show -s --format=%cI <sha>`. A date read from any commit other
+   than the PR's current head SHA leaves the PR not settled. The
+   committer date is a proxy, since GitHub does not expose push time:
+   `git rebase` resets it, and the real failure is a commit made earlier
+   and pushed later, which looks old when it was just pushed; the
+   recorded-head comparison catches that from the second iteration on,
+   and a one-pass session accepts it. A date that cannot be read by
+   either source
    leaves the PR not settled. An unsettled green PR waits this
    iteration, is not reviewed, and is reported; a failed PR keeps its
    disposition above.

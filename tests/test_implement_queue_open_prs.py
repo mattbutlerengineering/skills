@@ -7,7 +7,7 @@ Each promise is pinned to its own sentence so a swapped remedy fails.
 import re
 import unittest
 
-from tests.test_implement_queue_head_pin import SKILL, section
+from tests.test_implement_queue_head_pin import ROUTINE, SKILL, section
 
 
 def step3():
@@ -107,39 +107,53 @@ class TestFailedPrDispositions(unittest.TestCase):
 
 
 class TestSettled(unittest.TestCase):
-    def test_an_old_head_is_settled_on_first_sight(self):
+    def test_the_age_rule_has_one_condition_besides_the_recorded_head(self):
         s = sentence(step3(), "is settled when")
         self.assertIn("at least 15 minutes old", s)
-        self.assertIn("first seen with an old head commit", s)
+        self.assertIn("has not changed since this session recorded it", s)
+
+    def test_a_pr_with_no_record_is_judged_on_age_alone(self):
+        s = sentence(step3(), "no record")
+        self.assertIn("judged on age alone", s)
         self.assertIn("goes to the gate at once", s)
         self.assertIn("one-pass session", s)
 
-    def test_a_recent_first_seen_head_waits_exactly_one_iteration(self):
-        s = sentence(step3(), "younger than 15 minutes")
-        self.assertIn("equals the head recorded in an earlier iteration", s)
-        self.assertIn("waits exactly one iteration", s)
-        self.assertIn("then goes to the gate", s)
+    def test_a_young_head_waits_until_it_is_fifteen_minutes_old(self):
+        s = sentence(step3(), "A young head")
+        self.assertIn("waits until its commit is 15 minutes old", s)
+        self.assertNotIn("earlier iteration", s)
 
     def test_step_three_records_every_head_each_iteration(self):
         s = sentence(step3(), "records every open PR's head SHA")
         self.assertIn("in each iteration", s)
 
     def test_a_changed_head_is_not_settled_whatever_its_date(self):
-        s = sentence(step3(), "differs from the head recorded")
+        s = sentence(step3(), "changed since it was recorded")
         self.assertIn("not settled whatever its date", s)
-        self.assertIn("restarts the wait", s)
+        self.assertIn("recorded anew", s)
 
     def test_the_worker_exception_names_only_this_sessions_worker(self):
         s = sentence(step3(), "own worker result")
         self.assertIn("this session's own worker result", s)
         self.assertIn("counts as settled at once", s)
         self.assertIn("while the PR's head still equals it", s)
+        self.assertIn("wins over the changed-since-recorded rule for that head only", s)
         self.assertNotIn("any worker", s)
         self.assertIn("anyone else gets no such exception", s)
 
-    def test_the_date_is_read_from_the_head_commit_itself(self):
+    def test_the_date_is_read_with_gh_first(self):
         s = sentence(step3(), "commits/<headRefOid>")
         self.assertIn("--jq .commit.committer.date", s)
+        self.assertIn("first", s)
+
+    def test_the_git_source_follows_when_gh_cannot_read_it(self):
+        s = sentence(step3(), "git fetch --depth=1")
+        self.assertIn("origin pull/<N>/head", s)
+        self.assertIn("git rev-parse FETCH_HEAD", s)
+        self.assertIn("git show -s --format=%cI <sha>", s)
+        self.assertIn("gh", s)
+        self.assertLess(step3().index("commits/<headRefOid>"),
+                        step3().index("git fetch --depth=1"))
 
     def test_a_date_from_another_commit_is_not_settled(self):
         s = sentence(step3(), "any commit other than")
@@ -152,14 +166,46 @@ class TestSettled(unittest.TestCase):
         self.assertIn("recorded-head comparison", s)
         self.assertIn("from the second iteration on", s)
 
-    def test_an_unreadable_date_is_unsettled(self):
-        s = sentence(step3(), "cannot be read")
+    def test_a_date_unreadable_by_both_sources_is_unsettled(self):
+        s = sentence(step3(), "cannot be read by either")
         self.assertIn("not settled", s)
 
     def test_an_unsettled_green_pr_waits_unreviewed_and_reported(self):
         s = sentence(step3(), "unsettled green PR")
         for w in ("waits", "not reviewed", "reported"):
             self.assertIn(w, s)
+
+
+class TestForeignInfrastructure(unittest.TestCase):
+    def test_the_rerun_applies_to_a_foreign_pr_and_is_not_a_fix(self):
+        s = sentence(step3(), "Never fixed means")
+        self.assertIn("never edited, pushed to or updated", s)
+        self.assertIn("applies to a foreign PR too", s)
+        self.assertIn("is not a fix", s)
+        self.assertIn("foreign and non-blocking whatever the outcome", s)
+        self.assertIn("unless it matches the must-not-merge cause", s)
+
+
+def routine_verdicts():
+    return section(ROUTINE, "3 Phase 0: verdict per PR")
+
+
+class TestMergeTrainVerdicts(unittest.TestCase):
+    def test_an_unsettled_pr_has_the_wait_verdict(self):
+        s = sentence(routine_verdicts(), "**wait**")
+        self.assertIn("not settled", s)
+        self.assertIn("15 minutes", s)
+
+    def test_a_must_not_merge_pr_is_report_only_and_never_gated(self):
+        s = sentence(routine_verdicts(), "**report only**")
+        self.assertIn("must not merge", s)
+        self.assertIn("in any check state", s)
+        s = sentence(routine_verdicts(), "never gated")
+        self.assertIn("never gated, re-run or merged here", s)
+
+    def test_report_only_wins_over_every_other_verdict(self):
+        s = sentence(routine_verdicts(), "whatever else matches")
+        self.assertIn("report only", s)
 
 
 class TestTheListIsComplete(unittest.TestCase):
